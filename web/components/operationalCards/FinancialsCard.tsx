@@ -46,6 +46,8 @@ export default function FinancialsCard({
     span = "row",
     onDetails,
     onAddCharge,
+    onPayNow,
+    onManagePayment,
 }: {
     evidence: FinancialsEvidence;
     /**
@@ -63,8 +65,20 @@ export default function FinancialsCard({
     span?: 1 | "row";
     onDetails?: () => void;
     onAddCharge?: () => void;
+    /** Wired by the Focus Panel; the lab leaves them undefined and the buttons are inert. */
+    onPayNow?: () => void;
+    onManagePayment?: () => void;
 }) {
-    if (span === 1) return <FinancialsCompactCard evidence={evidence} onDetails={onDetails} onAddCharge={onAddCharge} />;
+    if (span === 1) {
+        return (
+            <FinancialsCompactCard
+                evidence={evidence}
+                onDetails={onDetails}
+                onAddCharge={onAddCharge}
+                onPayNow={onPayNow}
+            />
+        );
+    }
     const { period, pastDue } = evidence;
 
     return (
@@ -125,7 +139,9 @@ export default function FinancialsCard({
                                     <p className="alloy-os-billing__decline">{pastDue.note}</p>
                                 ) : null}
                                 <ActionRow>
-                                    <Action primary>Pay now</Action>
+                                    <Action primary onClick={onPayNow}>
+                                        Pay now
+                                    </Action>
                                 </ActionRow>
                             </>
                         ) : (
@@ -169,7 +185,7 @@ export default function FinancialsCard({
                         </div>
                         {/* Manage payment owns payers, split, methods, autopay and recovery — so it
                             sits under the payment facts, not in a generic footer. */}
-                        <FooterAction>Manage payment →</FooterAction>
+                        <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
                     </section>
                     </div>
                 </div>
@@ -204,10 +220,12 @@ function FinancialsCompactCard({
     evidence,
     onDetails,
     onAddCharge,
+    onPayNow,
 }: {
     evidence: FinancialsEvidence;
     onDetails?: () => void;
     onAddCharge?: () => void;
+    onPayNow?: () => void;
 }) {
     const c = evidence.compact;
     return (
@@ -243,7 +261,9 @@ function FinancialsCompactCard({
                 </p>
                 {evidence.pastDue ? (
                     <ActionRow>
-                        <Action primary>Pay now</Action>
+                        <Action primary onClick={onPayNow}>
+                            Pay now
+                        </Action>
                     </ActionRow>
                 ) : null}
             </UniversalCard>

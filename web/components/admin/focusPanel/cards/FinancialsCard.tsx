@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
+import { adaptFinancialsVmToFinancialsCard } from "@/lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -252,6 +254,50 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      */
     const showBands = !expanded;
     const showLedger = expanded;
+
+    /*
+     * ── THE SUMMARY IS THE APPROVED CARD, RENDERED BY THE APPROVED COMPONENT ──
+     *
+     * Everything above this line is the card's DATA work — loading the account, narrowing to a
+     * subject, running Add charge. None of it is presentation, and none of it changes here.
+     *
+     * What changes is that the summary no longer draws itself. It renders
+     * `components/operationalCards/FinancialsCard`, the same component the design lab renders, so
+     * there is one presentation of this card rather than a locked specimen and a production
+     * approximation of it. The approximation opened with a hero line the specimen does not have,
+     * showed two of the seven arithmetic lines, drew its actions as bordered buttons rather than
+     * quiet links, and left a band of empty white below the zones.
+     *
+     * The EXPANDED path below is untouched: the ledger is the expanded representation and is not
+     * part of the approved summary specimen.
+     */
+    if (!expanded && vm && reconciliation && !vm.unavailableReason) {
+        const periodRows = vm.rows.filter(
+            (r) =>
+                r.periodKey === vm.period.key
+                && (subjectFilter === "all" || r.subjectMemberId === subjectFilter),
+        );
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-subject={subjectFilter}
+            >
+                <ApprovedFinancialsCard
+                    evidence={adaptFinancialsVmToFinancialsCard({
+                        vm,
+                        reconciliation,
+                        pastDue,
+                        rows: periodRows,
+                        currency,
+                    })}
+                    span={model.span === 1 ? 1 : "row"}
+                    onDetails={() => setExpanded(true)}
+                    onAddCharge={() => setSubjectFilter(subjectFilter)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="alloy-os-financials" data-financials-card="true" data-financials-subject={subjectFilter}>

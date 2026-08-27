@@ -489,3 +489,338 @@
 }
 
 .alloy-os-process__anchor { display: none; }
+
+
+/* ══ FINANCIALS ═══════════════════════════════════════════════════════════════
+ *
+ * Extracted from the design lab's stylesheet so the approved Financials card renders identically in
+ * the lab and in the real Focus Panel. Production carried ZERO billing rules before this — the same
+ * gap the progression band had, and with the same symptom: the right DOM, the right class names,
+ * and none of the approved appearance.
+ *
+ * Copied verbatim rather than re-authored. The previous extraction was re-typed and silently
+ * inverted the stage rail; `tests/operationalCards/sharedStylesheetContract.test.ts` now guards the
+ * class of error, but not re-typing is the cheaper protection.
+ */
+
+/* ── billing ────────────────────────────────────────────────────────────── */
+
+.alloy-os-billing__zones {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.72fr) minmax(0, 1.23fr);
+  gap: 10px 34px;
+  min-width: 0;
+  margin-top: 2px;
+}
+/* Current Period is the primary financial explanation and needs width for the arithmetic.
+ * Past Due and Payment answer one related question — what needs collecting, and how — so they
+ * stack in a narrower right column instead of holding equal authority. */
+.alloy-os-billing__zones--two {
+  grid-template-columns: minmax(0, 60fr) minmax(0, 40fr);
+  gap: 10px 36px;
+}
+.alloy-os-billing__collect {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-billing__zone--payment {
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-billing__zone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-billing__zone {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+/* Each zone announces itself in the family's in-body section-head grammar; the boundary is the
+ * 34px gap and the alignment, not a rule. */
+.alloy-os-billing__zone-head {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-billing__period {
+  margin: -2px 0 2px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* zone 1 — the arithmetic */
+.alloy-os-billing__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Cap the arithmetic's measure. At full column width the label and its amount drift apart and
+   * the stack stops reading as a sum. */
+  max-width: 380px;
+}
+.alloy-os-billing__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.alloy-os-billing__line-label {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* Only meaningful totals carry weight; individual rows stay regular and tabular. */
+.alloy-os-billing__line-value {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  min-width: 76px;
+  text-align: right;
+}
+/* The one rule the card carries — a financial subtotal, not a section divider. */
+.alloy-os-billing__line--emphasis {
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 20%, transparent);
+}
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billing__due {
+  margin: 3px 0 0;
+  max-width: 380px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__due strong {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* zone 2 — past due. The amount is the one number readable from across the room. */
+.alloy-os-billing__lines--compact {
+  max-width: none;
+  margin-top: 2px;
+}
+.alloy-os-billing__autopay--compact {
+  font-size: 0.76rem;
+  font-weight: 600;
+  margin-top: 5px;
+}
+
+.alloy-os-billing__amount {
+  margin: 2px 0 0;
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__age {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #b45309;
+}
+.alloy-os-billing__decline {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__clear {
+  margin: 4px 0 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billing__clear-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* zone 3 — a ledger, not an activity feed: fixed columns, tabular figures, uniform row height. */
+.alloy-os-billing__ledger {
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-billing__entry {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 82px;
+  gap: 12px;
+  align-items: baseline;
+  min-width: 0;
+  height: 20px;
+}
+.alloy-os-billing__entry > :last-child {
+  text-align: right;
+}
+.alloy-os-billing__entry--head {
+  height: 16px;
+}
+.alloy-os-billing__entry--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billing__entry-when {
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-label {
+  font-size: 0.74rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-amount {
+  font-size: 0.74rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-amount--credit {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* zone 3, composition B — how the bill is expected to be paid */
+.alloy-os-billing__autopay {
+  margin: 2px 0 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__autopay[data-autopay-ok="true"] {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billing__next {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__payer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 5px;
+}
+.alloy-os-billing__payer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+/* A funding source is not an ordinary parent payer, so it is not drawn as one. */
+.alloy-os-billing__payer-row[data-funding="true"] .alloy-os-billing__payer-name,
+.alloy-os-billing__payer[data-funding="true"] .alloy-os-billing__payer-name {
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__method-issue {
+  color: #b45309;
+  font-weight: 600;
+}
+/* When the ledger steps out of a primary zone it becomes one supporting line. */
+.alloy-os-billing__history {
+  margin: 9px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* payer strip — full width, below the zones, deliberately placed rather than left over. */
+.alloy-os-billing__payers {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alloy-os-billing__payer-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 3px 34px;
+}
+.alloy-os-billing__payer {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+.alloy-os-billing__payer-name {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  white-space: nowrap;
+}
+.alloy-os-billing__payer-share {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__payer-method {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One place for the financial management actions, so they stop scattering across the zones. */
+.alloy-os-billing__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+}
+
+/* The section head inside the arithmetic column, shared with the detail composition. */
+.alloy-os-billingdetail__group {
+  margin: 6px 0 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}

@@ -15,7 +15,7 @@ import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPa
 
 import AttendanceCard from "@/components/cardLab/AttendanceCard";
 import AddChargeCommand from "@/components/cardLab/AddChargeCommand";
-import FinancialsCard from "@/components/cardLab/FinancialsCard";
+import FinancialsCard from "@/components/operationalCards/FinancialsCard";
 import FinancialsDetailCard from "@/components/cardLab/FinancialsDetailCard";
 import HealthDetailCard from "@/components/cardLab/HealthDetailCard";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
