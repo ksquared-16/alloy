@@ -9,7 +9,9 @@ import { test } from "@playwright/test";
 
 const TOKEN = process.env.PARTICIPANT_TOKEN ?? "";
 const MAX_TURNS = Number(process.env.R1_TURNS ?? "40");
-test.use({ storageState: { cookies: [], origins: [] } });
+/** A phone when asked for one — 375px is the width the parent actually holds. */
+const VIEWPORT = process.env.R1_VIEWPORT === "mobile" ? { width: 375, height: 812 } : undefined;
+test.use({ storageState: { cookies: [], origins: [] }, ...(VIEWPORT ? { viewport: VIEWPORT } : {}) });
 
 /** Source labels that must never reach a parent, in any phase. */
 const SOURCE_NAMES = ["Childs Last Name", "Var History", "Signature1", "Prov Sp", "Module Sp", "subject_line"];
@@ -43,6 +45,8 @@ test("hold the conversation until the paperwork is ready", async ({ page }) => {
 
     await page.goto(`/forms/embed/${TOKEN}`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(8000);
+    console.log(`viewport: ${JSON.stringify(page.viewportSize())}`);
+    let widestOverflow = 0;
 
     const leaks = new Set<string>();
     let handedOver = false;
@@ -58,6 +62,10 @@ test("hold the conversation until the paperwork is ready", async ({ page }) => {
 
         const visible = await page.evaluate(() => document.body.innerText);
         for (const n of SOURCE_NAMES) if (visible.includes(n)) leaks.add(n);
+        const over = await page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        if (over > widestOverflow) widestOverflow = over;
 
         const question = (await page.locator("[data-participant-thread] p, [data-participant-thread] div").last().innerText().catch(() => "")).slice(0, 120);
         console.log(
@@ -141,5 +149,6 @@ test("hold the conversation until the paperwork is ready", async ({ page }) => {
     console.log("=== handed over:", handedOver, "===");
     console.log("=== final objective:", JSON.stringify(await objective()), "===");
     console.log("=== source labels seen in the conversation:", JSON.stringify([...leaks]), "===");
+    console.log(`=== worst horizontal overflow during the conversation: ${widestOverflow}px ===`);
     console.log("=== console errors:", JSON.stringify(errors.slice(0, 5)), "===");
 });

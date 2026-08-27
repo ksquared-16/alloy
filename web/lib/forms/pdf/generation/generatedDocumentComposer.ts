@@ -374,6 +374,18 @@ export async function composeGeneratedDocument(input: {
 
             if (!isRenderableValueField(field)) continue;
 
+            /*
+             * A read-only destination with nothing in it has nothing to say.
+             *
+             * A blank the PARENT left is meaningful and still prints as "—"; a blank the PLATFORM
+             * was going to fill and could not is not the parent's answer to anything. The captured
+             * Admissions form carries an email `subject_line` of exactly this kind, and it opened
+             * the family's completed application with a labelled dash.
+             */
+            const held = input.values[field.id];
+            const empty = held === undefined || held === null || held === "";
+            if (field.read_only === true && empty) continue;
+
             const question = presentableQuestion(field.label);
             const answer = displayAnswer(field, input.values[field.id]);
             if (answer !== "—") answeredCount += 1;
