@@ -5,10 +5,10 @@
  * governed actions now exist for three separate decisions — create, grant access, sign in — because
  * collapsing any two of them would let one approval imply another the operator never gave.
  *
- * The request carries a lane id and nothing else. Identity, slot and role come from the registry and
- * from this module's own constant; the organization is derived inside the trusted child from the
- * organization existing staging admins already belong to, and ambiguity is refused rather than
- * resolved.
+ * The request carries a lane id and nothing else. Identity and slot come from the registry, the role
+ * is this module's own constant, and the organization is resolved inside the trusted child from the
+ * configured seeded staging organization (`DEV_QUEUE_ORG_ID`), falling back to derivation from
+ * existing staging admins. Ambiguity is refused rather than resolved.
  */
 import { redactAuthText } from "./browser-auth.mjs";
 import { getDurableLane } from "./development-lane.mjs";
@@ -95,6 +95,7 @@ export function executeAssignQaAccessSync({
         mutated: out.mutated === true,
         memberships_for_user: out.memberships_for_user ?? null,
         candidate_orgs_seen: out.candidate_orgs_seen ?? null,
+        org_source: out.org_source ?? null,
         // Granting access is not signing in; this action can never assert a verified session.
         verified: false,
         assigned_at: new Date(nowMs).toISOString(),

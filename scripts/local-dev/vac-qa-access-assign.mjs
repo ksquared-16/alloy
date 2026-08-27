@@ -6,10 +6,11 @@
  * because they are separate decisions: an account that can sign in but reach nothing is a safe
  * default, and access should be granted deliberately rather than as a side effect of creation.
  *
- * The organization is DERIVED, never supplied. It is the organization that existing staging admins
- * already belong to, and it must be unambiguous: if the directory shows zero or several such
- * organizations this refuses rather than picking one, because guessing which tenant a QA identity
- * joins is exactly the mistake that would matter.
+ * The organization is RESOLVED, never supplied by the caller. `DEV_QUEUE_ORG_ID` from the trusted
+ * env is the authority - the seeded staging organization the rest of the tooling already treats as
+ * canonical - and it is confirmed to exist before use. Where that is unset the organization is
+ * derived from existing staging admins, and ambiguity is refused rather than resolved: guessing
+ * which tenant a QA identity joins is exactly the mistake that would matter.
  *
  * Prints METADATA ONLY - ids and counts, never tokens, keys or provider payloads.
  */
@@ -83,14 +84,7 @@ for (let page = 1; page <= MAX_PAGES && !user; page++) {
 }
 if (!user) fail("identity_not_registered", "provision the identity before assigning access");
 
-/*
- * Derive the canonical staging organization.
- *
- * The organization QA admins already belong to IS the canonical one — that is what "the same
- * organization used by Slot 5's real Work Views and existing staging QA admin fixtures" means in
- * data. Ambiguity is refused rather than resolved: with several candidates there is no evidence for
- * choosing, and a wrong tenant is not a recoverable mistake.
- */
+/* Existing memberships, used for the idempotent path and as the derivation fallback below. */
 const roles = await admin.from("user_roles").select("user_id, org_id, role").eq("role", role);
 if (roles.error) fail("user_roles_read_failed", roles.error.message);
 const rows = Array.isArray(roles.data) ? roles.data : [];
@@ -108,15 +102,43 @@ if (existingForUser.length > 0) {
         user_id: user.id, org_id: existingForUser[0].org_id, role,
         memberships_for_user: existingForUser.length,
         candidate_orgs_seen: candidateOrgs.length,
+        org_source: "existing_membership",
     })}\n`);
     process.exit(0);
 }
 
-if (candidateOrgs.length === 0) fail("no_canonical_org_found", `no existing ${role} membership to derive the organization from`);
-if (candidateOrgs.length > 1) {
-    fail("canonical_org_ambiguous", `${candidateOrgs.length} organizations have ${role} members; refusing to choose`);
+/*
+ * The CONFIGURED organization is the authority; derivation is only a fallback.
+ *
+ * `DEV_QUEUE_ORG_ID` is the seeded staging organization the rest of the tooling already treats as
+ * canonical — `ensureEnrollmentPipelineWorkUnitV1`, the placement-priority seed, the status
+ * definition reseed and the existing QA capture all resolve through it. That is what "the same
+ * configured/seeded organization used by Slot 5's real Work Views" means in practice.
+ *
+ * Deriving from "whichever organization has admins" was too weak: this directory has several, and
+ * the first attempt correctly refused as `canonical_org_ambiguous` rather than guessing. Configuration
+ * settles it; derivation stays as the fallback for a host without the variable, and still refuses
+ * ambiguity rather than choosing.
+ */
+const configuredOrg = String(env.DEV_QUEUE_ORG_ID || "").trim();
+let orgId;
+let orgSource;
+if (configuredOrg) {
+    // Confirm it is a real organization rather than a stale or mistyped id: a membership row
+    // pointing at nothing would look assigned and grant nothing.
+    const orgRow = await admin.from("organizations").select("id").eq("id", configuredOrg).maybeSingle();
+    if (orgRow.error) fail("organization_read_failed", orgRow.error.message);
+    if (!orgRow.data?.id) fail("configured_org_not_found", "DEV_QUEUE_ORG_ID does not match an existing organization");
+    orgId = configuredOrg;
+    orgSource = "configured";
+} else {
+    if (candidateOrgs.length === 0) fail("no_canonical_org_found", `no existing ${role} membership to derive the organization from`);
+    if (candidateOrgs.length > 1) {
+        fail("canonical_org_ambiguous", `${candidateOrgs.length} organizations have ${role} members and DEV_QUEUE_ORG_ID is unset; refusing to choose`);
+    }
+    orgId = candidateOrgs[0];
+    orgSource = "derived";
 }
-const orgId = candidateOrgs[0];
 
 const inserted = await admin.from("user_roles").insert({ user_id: user.id, org_id: orgId, role }).select("user_id, org_id, role");
 if (inserted.error) fail("assignment_failed", inserted.error.message);
@@ -133,4 +155,5 @@ process.stdout.write(`${JSON.stringify({
     user_id: user.id, org_id: orgId, role,
     memberships_for_user: mine.length,
     candidate_orgs_seen: candidateOrgs.length,
+    org_source: orgSource,
 })}\n`);
