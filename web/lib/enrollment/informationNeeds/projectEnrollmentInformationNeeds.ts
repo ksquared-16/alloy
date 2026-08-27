@@ -122,9 +122,13 @@ export function projectEnrollmentInformationNeeds(
 
     for (const form of input.forms) {
         // Per artifact: which of its destinations are waiting for a person rather than an answer.
-        const partySlots = input.partyRoles?.length
-            ? broadcastingPartyFieldIds(form.schema, input.partyRoles)
-            : new Set<string>();
+        /*
+         * Always on. Role detection is owned by `relationshipDefinitions.ts`, which needs no tenant
+         * list — the tenant vocabulary is only a narrow fallback for roles the relationship model
+         * does not define. Gating recognition on that list meant a tenant with no configured
+         * `customer_person_role_types` rows kept broadcasting one phone number across six people.
+         */
+        const partySlots = broadcastingPartyFieldIds(form.schema, input.partyRoles ?? []);
         // The authored section each destination sits in — read once per Form, not per field.
         const sectionByFieldId = new Map<string, string>();
         for (const sec of ((form.schema as { sections?: { title?: string; field_ids?: string[] }[] }).sections ?? [])) {

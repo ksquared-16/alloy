@@ -70,11 +70,17 @@ describe("reading the real packet's party slots", () => {
         expect(slotFor("field_14"), "the household's own address is not a party slot").toBeUndefined();
     });
 
-    it("admits an un-numbered single party where the form prints a name for it", () => {
+    it("recognises the physician and the dentist as CANONICAL roles", () => {
+        /*
+         * They were canonical all along. `relationshipDefinitions.ts` carries `child_physicians`
+         * and `child_dentists` as full definitions; they were invisible here only because this
+         * module read `customer_person_role_types` — the CUSTOMER-scoped vocabulary, which does not
+         * carry child-scoped provider roles.
+         */
         expect(slotFor("field_37")).toMatchObject({ role: "physician", ordinal: 1, attribute: "phone" });
         expect(slotFor("field_39")).toMatchObject({ role: "dentist", ordinal: 1, attribute: "phone" });
-        // Neither is a canonical Alloy role, so neither gets a canonical relationship written.
-        expect(slotFor("field_37")!.canonical_role).toBe(false);
+        expect(slotFor("field_37")!.canonical_role, "a canonical relationship can be written").toBe(true);
+        expect(slotFor("field_39")!.canonical_role).toBe(true);
     });
 
     it("leaves ordinary questions alone", () => {
@@ -101,10 +107,13 @@ describe("reading the real packet's party slots", () => {
 
 describe("the role vocabulary decides, not this file", () => {
     it("prefers the most specific canonical role, deterministically", () => {
-        expect(matchCanonicalRole("parent_guardian", ROLES)).toBe("guardian");
-        expect(matchCanonicalRole("parent_guardian", [...ROLES].reverse())).toBe("guardian");
-        expect(matchCanonicalRole("emergency_contact", ROLES)).toBe("emergency_contact");
-        expect(matchCanonicalRole("mailing", ROLES)).toBeNull();
+        // The canonical detector owns this, priority-ordered, so "Emergency Contact" can never be
+        // claimed by the parent/guardian definition.
+        expect(matchCanonicalRole("Parent/Guardian ")).toBe("guardian");
+        expect(matchCanonicalRole("LOCAL Emergency Contact ")).toBe("emergency_contact");
+        expect(matchCanonicalRole("Primary Physician ")).toBe("physician");
+        expect(matchCanonicalRole("Dentist ")).toBe("dentist");
+        expect(matchCanonicalRole("Mailing ")).toBeNull();
     });
 
     it("works for a tenant whose roles this program has never seen", () => {

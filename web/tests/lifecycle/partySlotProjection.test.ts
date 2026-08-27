@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    artifactSlotCapacity,
     minimumPartiesRequired,
     projectPartiesIntoSlots,
     withRole,
@@ -47,15 +48,25 @@ describe("a family smaller than the form", () => {
         expect(projection.unplaced).toEqual([]);
     });
 
-    it("asks for ONE of a role the form offers, never one per box", () => {
+    it("requires NOTHING because the form offers a role", () => {
         /*
-         * The whole point. Four emergency rows is a ceiling on what can be PRINTED, never a floor
-         * on what must be COLLECTED — a parent must not be walked through "Emergency Contact #3"
-         * because a PDF has three rows.
+         * Capacity is never obligation. Four emergency rows means "this artifact can PROJECT up to
+         * four", never "this family must produce one" — so with no configured semantic requirement
+         * the minimum is zero and a family with no emergency contact is never walked through one.
          */
-        expect(minimumPartiesRequired(SLOTS, "emergency_contact")).toBe(1);
-        expect(minimumPartiesRequired(SLOTS, "guardian")).toBe(1);
-        expect(minimumPartiesRequired(SLOTS, "payer")).toBe(0);
+        expect(minimumPartiesRequired(SLOTS, "emergency_contact")).toBe(0);
+        expect(minimumPartiesRequired(SLOTS, "guardian")).toBe(0);
+        expect(artifactSlotCapacity(SLOTS, "emergency_contact"), "capacity is still four").toBe(4);
+    });
+
+    it("takes a minimum ONLY from an explicit semantic requirement", () => {
+        expect(minimumPartiesRequired(SLOTS, "guardian", { required: true })).toBe(1);
+        expect(minimumPartiesRequired(SLOTS, "emergency_contact", { required: true, minimum: 2 })).toBe(2);
+        // A count without the requirement is not a requirement.
+        expect(minimumPartiesRequired(SLOTS, "emergency_contact", { required: false, minimum: 2 })).toBe(0);
+        // And a configured count above the artifact's capacity is still the truth; the artifact
+        // simply cannot print them all, which `unplaced` already reports.
+        expect(minimumPartiesRequired(SLOTS, "authorized_pickup", { required: true, minimum: 3 })).toBe(3);
     });
 });
 
@@ -127,6 +138,7 @@ describe("a form with a different shape entirely", () => {
         );
         expect(projection.assignments.filter((a) => a.party_id).map((a) => a.party_id)).toEqual(["x", "y"]);
         expect(projection.assignments.find((a) => a.slot_id === "t3")!.party_id).toBeNull();
-        expect(minimumPartiesRequired(trustDeed, "trustee")).toBe(1);
+        expect(minimumPartiesRequired(trustDeed, "trustee"), "three slots require nothing").toBe(0);
+        expect(minimumPartiesRequired(trustDeed, "trustee", { required: true })).toBe(1);
     });
 });

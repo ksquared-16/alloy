@@ -38,6 +38,7 @@
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
+import { detectRelationshipDefinitionForTitle } from "@/lib/fields/relationship/relationshipDefinitions";
 
 /** The universal person attributes a slot can ask for. Not packet-specific. */
 export const PARTY_ATTRIBUTES = [
@@ -107,33 +108,35 @@ function roleSlug(phrase: string): string {
  * resolves to the one whose key shares more tokens with it, so neither is arbitrarily preferred.
  */
 export function matchCanonicalRole(
-    slug: string,
-    vocabulary: readonly string[],
+    phrase: string,
+    vocabulary: readonly string[] = [],
 ): string | null {
-    const tokens = new Set(slug.split("_").filter(Boolean));
-    let best: { key: string; score: number } | null = null;
-    for (const key of vocabulary) {
-        const keyTokens = key.split("_").filter(Boolean);
-        const score = keyTokens.filter((t) => tokens.has(t)).length;
-        if (score === 0 || score < keyTokens.length) continue;
-        /*
-         * Most specific wins, deterministically.
-         *
-         * "Parent/Guardian" names both `parent` and `guardian`, and picking whichever the
-         * vocabulary listed first would make the mapping depend on row order. More matched tokens
-         * first, then the longer key, then alphabetical — so the answer is a property of the words,
-         * not of the table.
-         */
-        if (
-            !best ||
-            score > best.score ||
-            (score === best.score && key.length > best.key.length) ||
-            (score === best.score && key.length === best.key.length && key < best.key)
-        ) {
-            best = { key, score };
-        }
-    }
-    return best?.key ?? null;
+    /*
+     * THE CANONICAL OWNER DETECTS ITS OWN ROLES.
+     *
+     * `relationshipDefinitions.ts` is the source of truth for configured relationships, and it
+     * already carries `detection_patterns` plus a priority order — which is why "Emergency Contact"
+     * cannot be claimed by the parent/guardian definition. Delegating here means physician and
+     * dentist were canonical roles all along; they were invisible only because this module was
+     * reading `customer_person_role_types`, the CUSTOMER-scoped vocabulary, which does not carry
+     * child-scoped provider roles.
+     *
+     * Adding a role therefore remains ONE definition row, exactly as that module's own
+     * future-proof rule promises. No vocabulary is authored here.
+     */
+    const detected = detectRelationshipDefinitionForTitle(phrase);
+    if (detected) return detected.operational_role_key;
+
+    /*
+     * A tenant vocabulary the relationship model does not (yet) define.
+     *
+     * Kept as a narrow fallback so a tenant whose forms say "Owner" or "Trustee" still groups its
+     * slots by role — those slots are recognised and stop broadcasting even though no canonical
+     * relationship exists to write. Exact token match only; the canonical detector owns anything
+     * resembling a real relationship.
+     */
+    const slug = roleSlug(phrase);
+    return vocabulary.find((key) => key === slug) ?? null;
 }
 
 /**
@@ -185,7 +188,7 @@ export function partySlotForField(
     const slug = roleSlug(phrase);
     if (!slug) return null;
 
-    const canonical = matchCanonicalRole(slug, vocabulary);
+    const canonical = matchCanonicalRole(phrase, vocabulary);
     return {
         field_id: field.id,
         role: canonical ?? slug,

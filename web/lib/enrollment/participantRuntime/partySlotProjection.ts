@@ -136,9 +136,45 @@ export function projectPartiesIntoSlots(
  * a complete answer for a family with one, and a parent must never be walked through "Emergency
  * Contact #3" because a PDF has three rows.
  */
-export function minimumPartiesRequired(slots: readonly ArtifactPartySlot[], role: PartyRoleKey): number {
-    // A role the artifact offers at all is worth asking about once; beyond that the family decides.
-    return slots.some((s) => s.role === role) ? 1 : 0;
+export type SemanticPartyRequirement = {
+    /** An explicit configured requirement that this role be present at all. */
+    readonly required: boolean;
+    /** An explicit configured COUNT. Only this may produce a minimum above one. */
+    readonly minimum?: number;
+};
+
+export function minimumPartiesRequired(
+    slots: readonly ArtifactPartySlot[],
+    role: PartyRoleKey,
+    requirement?: SemanticPartyRequirement,
+): number {
+    /*
+     * SOURCE SLOT COUNT IS NEVER A COLLECTION MINIMUM.
+     *
+     * This used to return 1 whenever the artifact offered the role at all, which quietly made
+     * capacity into obligation: a packet printing three emergency contact rows would have required
+     * a family to produce one. It means only "this artifact can PROJECT up to three".
+     *
+     * The minimum comes from a configured semantic requirement or from nowhere:
+     *
+     *   no configured requirement          -> 0
+     *   explicitly required, no count      -> 1
+     *   explicitly required with a count   -> that count
+     *
+     * A family with no emergency contact is therefore never walked through one because a PDF had a
+     * row for it, and a process that genuinely requires two says so in its own configuration.
+     */
+    if (!requirement?.required) return 0;
+    const explicit = requirement.minimum;
+    if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) {
+        return Math.floor(explicit);
+    }
+    return 1;
+}
+
+/** How many of a role this artifact can PRINT. Capacity, never obligation. */
+export function artifactSlotCapacity(slots: readonly ArtifactPartySlot[], role: PartyRoleKey): number {
+    return slots.filter((s) => s.role === role).length;
 }
 
 /**
