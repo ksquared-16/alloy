@@ -1,7 +1,7 @@
 "use client";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import ProgressionBand from "@/components/cardLab/ProgressionBand";
+import ProgressionBand from "@/components/operationalCards/ProgressionBand";
 import { FooterAction } from "@/components/cardLab/CardLabKit";
 import type { JourneyEvidence } from "@/lib/cardLab/cardLabTypes";
 

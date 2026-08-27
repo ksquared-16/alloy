@@ -18,7 +18,7 @@ import AddChargeCommand from "@/components/cardLab/AddChargeCommand";
 import FinancialsCard from "@/components/cardLab/FinancialsCard";
 import FinancialsDetailCard from "@/components/cardLab/FinancialsDetailCard";
 import HealthDetailCard from "@/components/cardLab/HealthDetailCard";
-import ProcessCard from "@/components/cardLab/ProcessCard";
+import ProcessCard from "@/components/operationalCards/ProcessCard";
 import SafetySignals from "@/components/cardLab/SafetySignals";
 import CareTeamCard from "@/components/cardLab/CareTeamCard";
 import HealthSafetyCard from "@/components/cardLab/HealthSafetyCard";

@@ -1,3 +1,5 @@
+@import "./operationalCardsShared.css";
+
 /*
  * Alloy OS runtime — additive, flag-gated styling (first slice).
  *
@@ -9543,91 +9545,6 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   font-size: 0.8125rem;
   line-height: 1.45;
   color: color-mix(in srgb, #78350f 88%, #273f52);
-}
-
-/* ── BUSINESS PROCESS CARD ────────────────────────────────────────────────────────────────────
- * The journey rail: configured stages left to right, the case marker on the current one, and
- * participant markers beneath the stage each is actually at. Wide and shallow on purpose — the
- * card answers "where is this record" before it answers anything else. */
-.alloy-os-process__rail {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  overflow-x: auto;
-}
-.alloy-os-process__rail-stage {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px 6px 0;
-}
-/* The node carries stage state; the CURRENT node is the case marker, and nothing a participant
- * does may move it. */
-.alloy-os-process__rail-node {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  border: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, transparent);
-  background: #fff;
-}
-.alloy-os-process__rail-stage[data-process-stage-state="done"] .alloy-os-process__rail-node {
-  border-color: var(--alloy-os-bend-pine, #00a283);
-  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 35%, #fff);
-}
-.alloy-os-process__rail-stage[data-process-stage-state="current"] .alloy-os-process__rail-node {
-  border-color: var(--alloy-os-bend-pine, #00a283);
-  background: var(--alloy-os-bend-pine, #00a283);
-}
-.alloy-os-process__rail-label {
-  margin: 2px 0 0;
-  font-size: 0.8rem;
-  font-weight: 650;
-  color: var(--alloy-os-text-secondary, #4b5563);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.alloy-os-process__rail-stage[data-process-stage-state="current"] .alloy-os-process__rail-label {
-  color: var(--alloy-os-midnight, #273f52);
-}
-.alloy-os-process__rail-support {
-  margin: 0;
-  font-size: 0.72rem;
-  color: var(--alloy-os-text-tertiary, #9ca3af);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.alloy-os-process__rail-participants {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-}
-.alloy-os-process__marker {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px 2px 2px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
-}
-/* A scoped participant is emphasised, never substituted for the case subject. */
-.alloy-os-process__marker[data-process-participant-scoped="true"] {
-  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 16%, #fff);
-}
-.alloy-os-process__marker-name {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--alloy-os-midnight, #273f52);
-}
-.alloy-os-process__marker-more {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 
 /* ── ATTENDANCE CARD ──────────────────────────────────────────────────────────────────────────

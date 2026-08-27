@@ -11,6 +11,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { buildBusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
+import { adaptBusinessProcessEvidenceToProcessCard } from "@/lib/adminV2/runtime/focusPanel/businessProcess/adaptBusinessProcessEvidenceToProcessCard";
+import ProcessCard from "@/components/operationalCards/ProcessCard";
 import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import { currentWorkActivityRowKey } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActivityRowKey";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -62,10 +64,9 @@ export default function BusinessProcessCard({ model, context, receded = false, c
     );
 
     const viewerTimeZone = useAdminViewerTimezone();
-    // The SAME canonical projection the Current Work card reads. No Process-local activity store,
-    // and no separate fetch: `limit` is generous because the closed card shows no rows at all —
-    // the bound belongs to the menu's height, never to the record.
-    const activityItems = useMemo(
+    // The SAME canonical projection the Focus Panel activity mode reads. No Process-local activity
+    // store and no separate fetch.
+    const activity = useMemo(
         () =>
             buildCurrentWorkActivityPreviewItemsFromContext(context, {
                 timeZone: viewerTimeZone,
@@ -74,196 +75,48 @@ export default function BusinessProcessCard({ model, context, receded = false, c
         [context, viewerTimeZone],
     );
 
-    const stages = evidence.stages;
-    const hasRail = stages.length > 0;
+    /*
+     * CANONICAL ACTIONS, RESOLVED BY THE PROVIDER.
+     *
+     * Business Process replaced Journey + What's Next precisely so progression and the work's
+     * commands live together, and the card was rendering no actions at all. These are the registry's
+     * own resolved actions for this record — primary first, then secondary — never a hardcoded
+     * Waitlist button. The registry decides emphasis; the card only renders it.
+     */
+    const actions = useMemo(() => {
+        const slots = context.recordHeaderActions ?? null;
+        if (!slots) return [];
+        return [
+            ...(slots.primary ?? []).map((a) => ({ key: a.key, label: a.label, primary: true })),
+            ...(slots.secondary ?? []).map((a) => ({ key: a.key, label: a.label, primary: false })),
+        ];
+    }, [context.recordHeaderActions]);
 
-    return (
-        <div className="alloy-os-process" data-business-process-card="true">
-            <UniversalCard
-                /*
-                 * THE CARD'S OWN IDENTITY — deliberately NOT `evidence.processLabel`.
-                 *
-                 * `processLabel` resolves to `context.businessProcess.label`, which is the STAGE
-                 * label. Using it made the title read "WAITLIST" directly above a rail whose current
-                 * column already says Waitlist — the card saying the same thing twice, which is the
-                 * exact duplication the locked composition removed when it merged Journey and
-                 * What's Next.
-                 *
-                 * The tenant's Business Process NAME would be the right title. The provisioning
-                 * answer knows it (`process.name`) but nothing carries it into the operational
-                 * context, so the registered card identity stands in until that is plumbed. It is
-                 * generic, but it is not a lie and it is not the predecessor's "What's Next".
-                 */
-                title={model.title}
-                insight=""
-                iconName={model.iconName}
-                tier={model.tier}
-                archetype={model.archetype}
-                density="compact"
-                gridSpan="row"
-                receded={receded}
-                data-universal-card-key="business_process"
-                footerAction={null}
-            >
-                {/* 1 · THE JOURNEY. Configured stages, the case marker, participants beneath. */}
-                {hasRail ? (
-                    <div className="alloy-os-process__rail" data-process-rail="true">
-                        {stages.map((stage) => (
-                            <div
-                                key={stage.key}
-                                className="alloy-os-process__rail-stage"
-                                data-process-stage={stage.key}
-                                data-process-stage-state={stage.state}
-                            >
-                                <span className="alloy-os-process__rail-node" aria-hidden />
-                                <p className="alloy-os-process__rail-label">{stage.label}</p>
-                                {/* Two configured slots. There is never a third. */}
-                                {stage.primarySupport ? (
-                                    <p className="alloy-os-process__rail-support">{stage.primarySupport}</p>
-                                ) : null}
-                                {stage.secondarySupport ? (
-                                    <p className="alloy-os-process__rail-support">{stage.secondarySupport}</p>
-                                ) : null}
-                                {stage.participants.length > 0 && !evidence.participantsAligned ? (
-                                    <div className="alloy-os-process__rail-participants">
-                                        {visibleMarkers(stage.participants).map((p) => (
-                                            <span
-                                                key={p.id}
-                                                className="alloy-os-process__marker"
-                                                data-process-participant={p.id}
-                                                data-process-participant-scoped={p.scoped ? "true" : undefined}
-                                            >
-                                                <CardAvatar
-                                                    name={p.name}
-                                                    imageUrl={p.imageUrl}
-                                                    size={18}
-                                                    role="child"
-                                                    recordId={p.id}
-                                                />
-                                                <span className="alloy-os-process__marker-name">{p.firstName}</span>
-                                            </span>
-                                        ))}
-                                        {hiddenCount(stage.participants) > 0 ? (
-                                            <span className="alloy-os-process__marker-more">
-                                                +{hiddenCount(stage.participants)}
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                ) : null}
-                            </div>
-                        ))}
-                    </div>
-                ) : null}
-
-                {/* 2 · CURRENT WORK — its own owner's answer, phrased compactly. */}
-                {evidence.currentWork && !evidence.currentWork.isEmpty ? (
-                    <div className="alloy-os-process__work" data-process-work="true">
-                        <div className="alloy-os-process__work-main">
-                            <p className="alloy-os-process__work-label">
-                                Case{evidence.caseStageLabel ? ` · ${evidence.caseStageLabel}` : ""}
-                            </p>
-                            <p className="alloy-os-process__work-line">{evidence.currentWork.answerLine}</p>
-                            {evidence.currentWork.supportingLine ? (
-                                <p className="alloy-os-process__needed">{evidence.currentWork.supportingLine}</p>
-                            ) : null}
-                        </div>
-                    </div>
-                ) : null}
-
-                {/* 3 · FOOT ROW — participants left, activity right, on one line. */}
-                {evidence.selectedParticipant || activityItems.length > 0 ? (
-                    <div className="alloy-os-process__foot">
-                        <div className="alloy-os-process__foot-left">
-                            {evidence.selectedParticipant ? (
-                                <div className="alloy-os-process__scoped" data-process-scoped-participant="true">
-                                    <CardAvatar
-                                        name={evidence.selectedParticipant.name}
-                                        imageUrl={evidence.selectedParticipant.imageUrl}
-                                        size={22}
-                                        role="child"
-                                        recordId={evidence.selectedParticipant.id}
-                                    />
-                                    <span className="alloy-os-process__scoped-name">
-                                        {evidence.selectedParticipant.name}
-                                    </span>
-                                    {evidence.selectedParticipant.stageLabel ? (
-                                        <span className="alloy-os-process__participant-stage">
-                                            {evidence.selectedParticipant.stageLabel}
-                                        </span>
-                                    ) : null}
-                                </div>
-                            ) : null}
-                        </div>
-                        <div className="alloy-os-process__foot-right">
-                            {activityItems.length > 0 ? (
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <button
-                                            type="button"
-                                            className="alloy-os-process__activity-trigger"
-                                            data-process-activity-trigger="true"
-                                        >
-                                            Recent activity
-                                            <span className="alloy-os-process__activity-count">
-                                                {activityItems.length}
-                                            </span>
-                                            <span aria-hidden="true">▾</span>
-                                        </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent
-                                        align="end"
-                                        sideOffset={4}
-                                        data-process-activity-menu="true"
-                                        className="alloy-os-currentwork__tour-menu alloy-os-process__activity-menu"
-                                    >
-                                        {activityItems.map((item, index) => (
-                                            <DropdownMenuItem
-                                                // THE canonical owner of an activity row's identity.
-                                                // Keying on label+formatted-time is the collision this
-                                                // function exists to remove.
-                                                key={currentWorkActivityRowKey(item, index)}
-                                                className="alloy-os-currentwork__tour-menu-item alloy-os-process__activity-item"
-                                            >
-                                                <span className="alloy-os-currentwork__recent-activity-label">
-                                                    {item.label}
-                                                </span>
-                                                <span className="alloy-os-currentwork__recent-activity-when">
-                                                    {item.occurredAt}
-                                                </span>
-                                            </DropdownMenuItem>
-                                        ))}
-                                        <DropdownMenuItem
-                                            className="alloy-os-currentwork__tour-menu-item alloy-os-process__activity-all"
-                                            data-process-activity-all="true"
-                                            onSelect={() => coordination?.openFocusPanelMode?.("activity")}
-                                        >
-                                            View all activity →
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            ) : null}
-                        </div>
-                    </div>
-                ) : null}
-            </UniversalCard>
-        </div>
+    const processEvidence = useMemo(
+        () =>
+            adaptBusinessProcessEvidenceToProcessCard({
+                evidence,
+                subjectLabel: context.subject?.label ?? null,
+                // `occurredAt` is already the formatted, viewer-timezone string the previous card
+                // rendered; the locked component calls that field `when`.
+                activity: activity.map((a) => ({ id: a.id ?? null, label: a.label, when: a.occurredAt ?? "" })),
+                actions,
+            }),
+        [evidence, context.subject?.label, activity, actions],
     );
-}
 
-/**
- * Bounded markers — but a SCOPED participant is never the one dropped.
- *
- * The cap exists so a large family cannot destroy the rail. A scoped participant disappearing into
- * `+N` would defeat the reason the operator scoped them, so they take a visible slot and the
- * ordinary bounded identities give one up.
- */
-function visibleMarkers<T extends { scoped: boolean }>(participants: readonly T[]): T[] {
-    if (participants.length <= MAX_MARKERS_PER_STAGE) return [...participants];
-    const scoped = participants.filter((p) => p.scoped);
-    const rest = participants.filter((p) => !p.scoped);
-    return [...scoped, ...rest].slice(0, MAX_MARKERS_PER_STAGE);
-}
-
-function hiddenCount(participants: readonly unknown[]): number {
-    return Math.max(0, participants.length - MAX_MARKERS_PER_STAGE);
+    /*
+     * ONE PRESENTATION. This file no longer draws a card — it supplies canonical evidence to the
+     * locked component the design lab renders from fixtures. Maintaining a production approximation
+     * beside the approved specimen is what QA failed, and the only way that cannot recur is for
+     * there to be nothing here to drift.
+     */
+    return (
+        <ProcessCard
+            evidence={processEvidence}
+            receded={receded}
+            fallbackTitle={model.title}
+            onViewAllActivity={() => coordination?.openFocusPanelMode?.("activity")}
+        />
+    );
 }

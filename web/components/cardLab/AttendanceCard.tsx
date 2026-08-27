@@ -1,7 +1,7 @@
 "use client";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import ProgressionBand from "@/components/cardLab/ProgressionBand";
+import ProgressionBand from "@/components/operationalCards/ProgressionBand";
 import { Action, ActionRow, CardBody, EmptyLine, FooterAction } from "@/components/cardLab/CardLabKit";
 import { projectAttendanceDay } from "@/lib/cardLab/attendanceDayProjection";
 import type { AttendanceEvidence } from "@/lib/cardLab/cardLabTypes";

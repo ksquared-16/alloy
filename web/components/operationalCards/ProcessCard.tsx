@@ -3,7 +3,7 @@
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import ProgressionBand from "@/components/cardLab/ProgressionBand";
+import ProgressionBand from "@/components/operationalCards/ProgressionBand";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { Action, ActionRow, FooterAction } from "@/components/cardLab/CardLabKit";
 import {
@@ -90,8 +90,18 @@ import type { ProcessEvidence, RailParticipant } from "@/lib/cardLab/cardLabType
 export default function ProcessCard({
     evidence,
     onViewAllActivity,
+    receded = false,
+    fallbackTitle,
 }: {
     evidence: ProcessEvidence;
+    /** Production dims non-focused cards; the lab never does. Presentation only. */
+    receded?: boolean;
+    /**
+     * Used only when the process has no name yet. The lab's specimens always name their process;
+     * a production context whose canonical process name has not been resolved falls back rather
+     * than rendering an empty title.
+     */
+    fallbackTitle?: string;
     /**
      * Switches the Focus Panel to its existing ACTIVITY mode —
      * `coordination.openFocusPanelMode("activity")`. Not a Process detail surface: the Process
@@ -126,13 +136,14 @@ export default function ProcessCard({
     return (
         <div className="alloy-os-process" data-process-card="true">
             <UniversalCard
-                title={evidence.processLabel}
+                title={evidence.processLabel || fallbackTitle || ""}
                 insight=""
                 iconName="GitBranch"
                 tier="work"
                 archetype="action"
                 density="compact"
                 gridSpan="row"
+                receded={receded}
                 data-universal-card-key="business_process"
                 footerAction={null}
             >
@@ -217,7 +228,7 @@ export default function ProcessCard({
                                                   .replace(/ren$/, "")
                                                   .replace(/s$/, "")
                                             : evidence.participantsLabel.toLowerCase()}
-                                    </span>
+                                    </span>{" "}
                                     all at {evidence.currentStageLabel}
                                 </p>
                             ) : null}

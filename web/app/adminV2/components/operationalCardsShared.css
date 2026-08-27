@@ -1,0 +1,469 @@
+/*
+ * THE LOCKED OPERATIONAL CARD STYLES — one definition, loaded by both surfaces.
+ *
+ * These rules lived only in the design lab's stylesheet, so the production Focus Panel rendered the
+ * approved component's DOM with NONE of its appearance: 32 progression-band rules and 19 process
+ * rules simply were not there. The card was structurally right and visually unrecognisable, which is
+ * most of what QA was failing.
+ *
+ * Sharing the COMPONENT was necessary and not sufficient — a shared component with a private
+ * stylesheet is still two presentations. This file is imported by `alloyOsRuntime.css` (production)
+ * and by `cardLab.css` (the lab), so neither can drift from the other.
+ */
+
+/* ── progression band — Journey stages and the Attendance day ───────────── */
+
+.alloy-os-progression {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.alloy-os-progression__step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 12px 8px 8px;
+  border-radius: 8px;
+}
+
+/* Journey is an orientation strip: tighter rhythm, one folded supporting line. */
+.alloy-os-progression--compact .alloy-os-progression__step {
+  gap: 3px;
+  padding: 3px 12px 3px 6px;
+}
+
+.alloy-os-progression--compact .alloy-os-progression__glyph {
+  width: 12px;
+  height: 12px;
+}
+
+.alloy-os-progression--compact .alloy-os-progression__value {
+  font-size: 0.78rem;
+}
+
+/* A projection artefact, not an event — it reads as an affordance, never as a stage. */
+.alloy-os-progression__collapsed {
+  align-self: flex-start;
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-midnight, #273f52) 26%, transparent);
+  background: transparent;
+  border-radius: 999px;
+  padding: 1px 9px;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.alloy-os-progression__collapsed:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 50%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-progression__step[data-progression-state="collapsed"] .alloy-os-progression__rail {
+  opacity: 0.55;
+}
+
+/* The current column takes the Children --focused treatment: tint, no border, no banner. */
+.alloy-os-progression__step--current {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+
+.alloy-os-progression__rail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.alloy-os-progression__glyph {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  box-sizing: border-box;
+}
+
+.alloy-os-progression__glyph[data-glyph="done"] {
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+
+.alloy-os-progression__glyph[data-glyph="current"] {
+  background: var(--alloy-os-bend-pine, #00a283);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 22%, transparent);
+}
+
+.alloy-os-progression__glyph[data-glyph="collapsed"] {
+  background: #fff;
+  border: 1.5px dashed color-mix(in srgb, var(--alloy-os-midnight, #273f52) 26%, transparent);
+}
+
+.alloy-os-progression__glyph[data-glyph="future"] {
+  background: #fff;
+  border: 1.5px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef));
+}
+
+.alloy-os-progression__connector {
+  flex: 1 1 auto;
+  height: 1.5px;
+  border-radius: 1px;
+  min-width: 8px;
+}
+
+.alloy-os-progression__connector[data-connector="done"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+}
+
+.alloy-os-progression__connector[data-connector="ahead"] {
+  background: var(--alloy-os-border, #e5e9ef);
+}
+
+.alloy-os-progression__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.alloy-os-progression__value {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__value {
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-progression__detail {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+.alloy-os-progression__note {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__note,
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__detail {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-progression,
+  .alloy-os-attendance__recent {
+    grid-auto-flow: row;
+  }
+
+/* ── process card: the work band under the stage band ─────────────────────── */
+.alloy-os-process__work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+  gap: 10px 24px;
+  align-items: start;
+  margin-top: 7px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+
+.alloy-os-process__work-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.alloy-os-process__work-label {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-process__work-line {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-process__due {
+  font-weight: 500;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* Participants projected onto the rail, under the stage each is actually at. Bounded: at most
+ * three avatars per stage, then a count — a busy family cannot destroy the rail. */
+.alloy-os-progression__participants {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+  padding-left: 1px;
+  min-height: 20px;
+}
+
+/* Avatar + first name — the rail identifies the participant, it does not abstract them. */
+.alloy-os-progression__marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 1px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, #fff);
+  min-width: 0;
+}
+
+.alloy-os-progression__marker-name {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+
+/* The existing selected/focused treatment — the same mint the Children card uses. */
+.alloy-os-progression__marker[data-scoped="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+}
+
+.alloy-os-progression__marker[data-scoped="true"] .alloy-os-progression__marker-name {
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 700;
+}
+
+.alloy-os-progression__marker-more {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+/* Bounded activity — a supporting region, never the card's body. */
+/* ── THE FOOT ROW ────────────────────────────────────────────────────────────────────────────
+ * Participants left, activity right, on ONE line. Two bands became one: the participant band and
+ * the activity band each used to claim its own height plus its own top rule. Halves, because the
+ * right side is an affordance and not a column of facts — it needs room to sit at the edge, not
+ * room to hold content. */
+.alloy-os-process__foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 24px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+
+.alloy-os-process__foot-left {
+  min-width: 0;
+}
+
+.alloy-os-process__foot-right {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* The trigger is the ONLY thing activity costs the card face. */
+.alloy-os-process__activity-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  margin-right: -4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--alloy-os-bend-pine, #00a283);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.alloy-os-process__activity-trigger:hover,
+.alloy-os-process__activity-trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
+}
+
+/* The count is what makes the closed state informative — an operator can tell whether opening it
+ * is worth the click without opening it. */
+.alloy-os-process__activity-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* The menu bounds its own HEIGHT; it never truncates the record. */
+.alloy-os-process__activity-menu {
+  min-width: 19rem;
+  max-height: 17rem;
+  overflow-y: auto;
+}
+
+.alloy-os-process__activity-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.alloy-os-process__activity-item .alloy-os-currentwork__recent-activity-when {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-process__activity-all {
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  border-radius: 0 0 6px 6px;
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 650;
+}
+
+/* The one row that survives the rail: a scoped child with its own action. */
+.alloy-os-process__scoped {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 4px 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+  min-width: 0;
+}
+
+.alloy-os-process__scoped-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  white-space: nowrap;
+}
+
+.alloy-os-process__scoped .alloy-os-process__participant-actions {
+  margin-left: auto;
+}
+
+.alloy-os-process__participants {
+  margin-top: 7px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.alloy-os-process__participants-head {
+  margin: 0 0 1px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-process__participant {
+  display: grid;
+  grid-template-columns: 26px minmax(120px, 190px) 108px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 8px;
+  min-width: 0;
+}
+
+/* A scoped child is emphasised and ordered first — never substituted for the subject. */
+.alloy-os-process__participant[data-scoped="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+
+.alloy-os-process__participant-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alloy-os-process__participant-stage {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.alloy-os-process__participant-since {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alloy-os-process__participant-actions {
+  display: inline-flex;
+  gap: 12px;
+  justify-self: end;
+}
+
+/* Every child matches the case — one line instead of a per-child list. */
+/* The rule and the spacing now belong to the foot row that contains this line. */
+.alloy-os-process__aligned {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-process__aligned .alloy-os-process__needed-label {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-process__needed {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-process__needed-label {
+  margin-right: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+
+.alloy-os-process__anchor { display: none; }
