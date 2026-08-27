@@ -135,10 +135,21 @@ test("walk every artifact to completion", async ({ page }) => {
 
         const tap = page.getByText(/tap to sign/i);
         if (await tap.count()) {
+            /*
+             * MEASURED, not waited out — the same mistake as the finish interval.
+             *
+             * `waitForTimeout(2500)` then reporting the elapsed time reports 2.5s for every
+             * artifact, which is the harness's own sleep and says nothing about the product. The
+             * interval that matters is tap -> the capture surface is usable.
+             */
             const tTap = Date.now();
             await tap.first().click();
-            await page.waitForTimeout(2500);
-            console.log(`  tap->capture ready ms: ${Date.now() - tTap}`);
+            await page
+                .getByRole("checkbox")
+                .last()
+                .waitFor({ state: "visible", timeout: 30_000 })
+                .catch(() => undefined);
+            console.log(`  tap -> capture usable: ${Date.now() - tTap} ms`);
             const pad = page.locator("canvas").last();
             const box = await pad.boundingBox();
             if (box) {
@@ -166,10 +177,20 @@ test("walk every artifact to completion", async ({ page }) => {
             }
             const done = page.getByRole("button", { name: /^done$/i }).first();
             console.log("  Done enabled after acknowledgement:", await done.isEnabled());
+            /* Done -> the regenerated document is on screen again, not a fixed sleep. */
             const tDone = Date.now();
             await done.click({ timeout: 20_000 });
-            await page.waitForTimeout(9000);
-            console.log(`  done->persisted ms: ${Date.now() - tDone}`);
+            await page
+                .getByRole("checkbox")
+                .last()
+                .waitFor({ state: "detached", timeout: 30_000 })
+                .catch(() => undefined);
+            await page
+                .locator("[data-participant-document] canvas")
+                .first()
+                .waitFor({ state: "attached", timeout: 60_000 })
+                .catch(() => undefined);
+            console.log(`  done -> signed document back on screen: ${Date.now() - tDone} ms`);
         } else {
             console.log("  no tap-to-sign affordance on this artifact");
         }
