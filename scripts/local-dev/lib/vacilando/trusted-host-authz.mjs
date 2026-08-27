@@ -76,6 +76,119 @@ export function grantMissionAuthorization({
   return { ok: true, authorization: auth };
 }
 
+
+/**
+ * AUTHORIZATION CLASSES, MADE EXPLICIT.
+ *
+ * The store used to carry scope strings with no stated contract, and the
+ * matcher ended its single-action filter with `|| !a.used_at` — so an UNUSED
+ * single-action authorization matched ANY request. A grant minted for one
+ * staging push could authorise a different request, including a production
+ * one. Unused is not transferable, and that fallback is now gone.
+ *
+ * exact_request     valid for ONE governed request/content identity, nothing else
+ * mission_standing  intentionally reusable inside its declared mission/action/content scope
+ *
+ * An unknown scope is NOT reusable. Defaulting to reusable is how an
+ * authorization class becomes a loophole.
+ */
+export const AUTHORIZATION_CLASSES = Object.freeze({
+  EXACT_REQUEST: "exact_request",
+  MISSION_STANDING: "mission",
+});
+
+/** Environments a derived execution authority may NEVER cover. */
+export const AUTHZ_OPERATOR_ONLY_ENVIRONMENTS = Object.freeze([
+  "production", "prod", "alloy_deployed_primary", "deployed_primary",
+]);
+
+const normEnv = (v) => String(v ?? "").trim().toLowerCase();
+export function isOperatorOnlyAuthzEnvironment(env) {
+  return AUTHZ_OPERATOR_ONLY_ENVIRONMENTS.includes(normEnv(env));
+}
+
+/**
+ * Execution authority derived from a governed decision. Bound to one exact
+ * content identity and refused outright for operator-only environments, so a
+ * misconfigured policy still cannot produce production authority.
+ */
+export function grantExactRequestAuthorization({
+  missionId,
+  requestId,
+  contentFingerprint,
+  actionType,
+  environment,
+  repository = null,
+  sourceSha = null,
+  decisionId = null,
+  decisionActor = "director",
+  policyId = null,
+  policyVersion = null,
+  ttlMs = 30 * 60 * 1000,
+  nowMs,
+} = {}) {
+  if (!missionId || !requestId || !contentFingerprint || !actionType) {
+    return { ok: false, error: "incomplete_exact_authorization" };
+  }
+  // DEFENCE IN DEPTH. The Director already refuses production; this refuses to
+  // MINT production authority even if that guard were wrong or bypassed.
+  if (isOperatorOnlyAuthzEnvironment(environment)) {
+    return { ok: false, error: "production_authority_refused" };
+  }
+  const store = readStore(missionId);
+  const auth = {
+    authorizationId: newAuthId(),
+    scope: AUTHORIZATION_CLASSES.EXACT_REQUEST,
+    missionId,
+    requestId,
+    contentFingerprint,
+    actionType,
+    environment: normEnv(environment) || null,
+    repository: repository || null,
+    sourceSha: sourceSha ? String(sourceSha).toLowerCase() : null,
+    decisionId,
+    decisionActor,
+    policyId,
+    policyVersion,
+    // Kept for the legacy matcher, which keys pushes and promotions on it.
+    queryHash: sourceSha ? String(sourceSha).toLowerCase() : null,
+    databaseTarget: normEnv(environment) || DEFAULT_TARGET,
+    riskClass: "privileged_write",
+    status: "active",
+    granted_at: iso(nowMs),
+    granted_by: decisionActor,
+    expires_at: iso((nowMs ?? Date.now()) + ttlMs),
+    used_at: null,
+  };
+  store.authorizations.push(auth);
+  writeStore(store);
+  return { ok: true, authorization: auth };
+}
+
+/**
+ * Does this exact-request authorization cover this exact execution?
+ * Every bound field must match. A difference in ANY of them is a different
+ * decision.
+ */
+export function exactAuthorizationCovers(auth, {
+  requestId = null,
+  contentFingerprint = null,
+  actionType = null,
+  environment = null,
+  repository = null,
+  sourceSha = null,
+} = {}) {
+  if (!auth || auth.scope !== AUTHORIZATION_CLASSES.EXACT_REQUEST) return false;
+  if (isOperatorOnlyAuthzEnvironment(auth.environment) || isOperatorOnlyAuthzEnvironment(environment)) return false;
+  if (!auth.contentFingerprint || auth.contentFingerprint !== contentFingerprint) return false;
+  if (!auth.actionType || auth.actionType !== actionType) return false;
+  if (normEnv(auth.environment) !== normEnv(environment)) return false;
+  if (auth.requestId && requestId && auth.requestId !== requestId) return false;
+  if (auth.repository && repository && auth.repository !== repository) return false;
+  if (auth.sourceSha && sourceSha && auth.sourceSha !== String(sourceSha).toLowerCase()) return false;
+  return true;
+}
+
 export function grantSingleActionAuthorization({
   missionId,
   actionType,
@@ -155,6 +268,10 @@ export function findAuthorization({
   databaseTarget = DEFAULT_TARGET,
   queryHash = null,
   actionRequestId = null,
+  requestId = null,
+  contentFingerprint = null,
+  environment = null,
+  repository = null,
   nowMs = Date.now(),
 } = {}) {
   const auths = listAuthorizations(missionId)
@@ -171,14 +288,30 @@ export function findAuthorization({
       }
       return !a.queryHash || !queryHash || a.queryHash === queryHash;
     })
-    .filter((a) => a.scope !== "single_action" || !a.actionRequestId || a.actionRequestId === actionRequestId || !a.used_at);
+    // UNUSED IS NOT TRANSFERABLE. This filter used to end `|| !a.used_at`,
+    // which let an unused single-action grant match any request at all.
+    .filter((a) => {
+      if (a.scope === AUTHORIZATION_CLASSES.EXACT_REQUEST) {
+        return exactAuthorizationCovers(a, {
+          requestId, contentFingerprint, actionType,
+          environment: environment ?? databaseTarget,
+          repository, sourceSha: queryHash,
+        });
+      }
+      if (a.scope === "single_action") {
+        return Boolean(a.actionRequestId) && a.actionRequestId === actionRequestId;
+      }
+      if (a.scope === AUTHORIZATION_CLASSES.MISSION_STANDING) return true;
+      // An unrecognised class is never reusable.
+      return false;
+    });
 
-  // Prefer mission-scoped, then unused single-action
-  auths.sort((a, b) => {
-    if (a.scope === "mission" && b.scope !== "mission") return -1;
-    if (b.scope === "mission" && a.scope !== "mission") return 1;
-    return Date.parse(b.granted_at) - Date.parse(a.granted_at);
-  });
+  // Prefer the TIGHTEST binding. An exact-request authorization describes this
+  // one execution; a standing grant describes a class. Answering "who
+  // authorised this exact execution" truthfully means preferring the specific
+  // one when both are present.
+  const rank = (a) => (a.scope === AUTHORIZATION_CLASSES.EXACT_REQUEST ? 0 : (a.scope === "single_action" ? 1 : 2));
+  auths.sort((a, b) => rank(a) - rank(b) || Date.parse(b.granted_at) - Date.parse(a.granted_at));
   return auths[0] || null;
 }
 

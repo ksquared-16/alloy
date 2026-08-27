@@ -39,6 +39,7 @@ import {
 import {
   findAuthorization,
   grantMissionAuthorization,
+  grantExactRequestAuthorization,
 } from "./trusted-host-authz.mjs";
 import {
   fulfillRepositoryPushForMission,
@@ -1975,6 +1976,15 @@ function proposalForRequest(rec) {
 
 function defaultExecute(rec, { nowMs, actor, root } = {}) {
   const scope = authorityScopeFor(rec);
+  // Director-derived authority for THIS exact request, if any was minted.
+  const authorizationId = rec.director_approval?.authorization_id || null;
+  const exactContext = authorizationId ? {
+    requestId: rec.request_id,
+    contentFingerprint: rec.director_approval?.content_fingerprint || null,
+    environment: rec.director_decision?.environment || null,
+    repository: rec.inputs?.repository || null,
+    sourceSha: rec.inputs?.expectedHeadSha || rec.inputs?.expected_head_sha || rec.inputs?.expectedSha || null,
+  } : null;
   // Present only on the repository-authorized path. A mission-bound request is
   // authorized exactly as before and never looks at this.
   const grant = rec.grant_id ? getGrant(rec.grant_id, root) : null;
@@ -1987,6 +1997,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
@@ -1997,6 +2009,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
@@ -2007,6 +2021,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
@@ -2021,6 +2037,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
@@ -2031,6 +2049,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
@@ -2041,6 +2061,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
@@ -2051,6 +2073,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   /*
@@ -2248,6 +2272,37 @@ export function processGovernedAction(requestId, {
         content_fingerprint: policy.director_decision.content_fingerprint,
         at: policy.director_decision.evaluated_at,
       };
+      // THE DECISION IS FINAL, SO EXECUTION AUTHORITY MAY NOW BE DERIVED.
+      //
+      // V1 authorised the decision and not the execution, so a Director-
+      // approved push still stopped at the trusted host and interrupted the
+      // operator anyway. This mints authority for ONE exact content identity:
+      // request id, content fingerprint, action, normalised environment,
+      // repository, source SHA and deciding policy. It expires, it is refused
+      // outright for operator-only environments, and it is VERIFIED again at
+      // the execution boundary rather than merely presented.
+      const dInputs = rec.inputs || {};
+      const dGranted = grantExactRequestAuthorization({
+        missionId: rec.mission_id,
+        requestId: rec.request_id,
+        contentFingerprint: policy.director_decision.content_fingerprint,
+        actionType: rec.action_key,
+        environment: policy.director_decision.environment,
+        repository: dInputs.repository || null,
+        sourceSha: dInputs.expectedHeadSha || dInputs.expected_head_sha || dInputs.expectedSha || null,
+        decisionId: rec.decision_id || null,
+        decisionActor: "director",
+        policyId: policy.director_decision.matched_policy,
+        policyVersion: policy.director_decision.policy_version,
+        nowMs: nowMs ?? Date.now(),
+      });
+      if (dGranted && dGranted.ok && dGranted.authorization) {
+        rec.director_approval.authorization_id = dGranted.authorization.authorizationId;
+      } else if (dGranted && dGranted.error) {
+        // Failing to derive authority is the safe direction: the action simply
+        // escalates at the execution boundary, exactly as it did before.
+        rec.director_approval.authorization_error = dGranted.error;
+      }
     } else {
       rec.escalation_reason = policy.director_decision.escalation_reason || null;
     }
