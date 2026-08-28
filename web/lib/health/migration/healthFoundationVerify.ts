@@ -112,7 +112,15 @@ export async function verifyHealthFoundation(
             allergyNotesEntityType: allergy?.entity_type ?? null,
             allergyNotesMapping: allergy?.crm_mapping_key ?? null,
             medicationFlagEntityType: medication?.entity_type ?? null,
-            medicationFlagDeprecated: Boolean(medication?.deprecated_reason),
+            /*
+             * READ DEFENSIVELY — `deprecated_reason` is a field the M1 registry rebinding adds, and
+             * that rebinding is a separate program that has not been promoted. Against the registry
+             * staging actually ships, the property is simply absent, and a verifier that hard-fails
+             * on a field its own migration has not landed yet is checking the wrong thing.
+             */
+            medicationFlagDeprecated: Boolean(
+                (medication as { deprecated_reason?: unknown } | null)?.deprecated_reason,
+            ),
             definitionsStillAtEnrollmentGrain: (strayDefs ?? []).length,
         },
         permissions: {

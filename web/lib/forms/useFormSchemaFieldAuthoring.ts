@@ -15,7 +15,6 @@ import {
     type FieldDefinitionPickerRow,
 } from "@/lib/fields/formFieldRegistryPicker";
 import {
-    AUTHORABLE_FORM_SYSTEM_FIELDS,
     OPERATIONAL_FORM_SYSTEM_FIELDS,
     type SystemFieldRegistryEntry,
 } from "@/lib/forms/systemFieldRegistry";
@@ -118,7 +117,7 @@ export function useFormSchemaFieldAuthoring(
     onChange: (next: FormSchemaV1) => void,
     options?: FormSchemaFieldAuthoringOptions,
 ) {
-    const systemFields = options?.systemFields ?? AUTHORABLE_FORM_SYSTEM_FIELDS;
+    const systemFields = options?.systemFields ?? OPERATIONAL_FORM_SYSTEM_FIELDS;
     const relationshipFields = options?.relationshipFields ?? [];
     const systemFieldById = useMemo(
         () => systemFieldByIdFromPicker([...systemFields, ...relationshipFields]),

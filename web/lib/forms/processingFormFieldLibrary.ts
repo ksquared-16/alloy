@@ -21,7 +21,6 @@ import {
 } from "@/lib/forms/processingFormBuilderLibrary";
 import type { BuilderFieldType } from "@/lib/forms/formBuilderSchema";
 import {
-    AUTHORABLE_FORM_SYSTEM_FIELDS,
     OPERATIONAL_FORM_SYSTEM_FIELDS,
     SYSTEM_FIELD_BY_ID,
     type SystemFieldRegistryEntry,
@@ -88,8 +87,7 @@ const ENTITY_GROUP: Record<LifecycleRequirementEntityKey | string, ProcessingBui
  * entries are exactly registry field keys. Join on that.
  */
 const REGISTRY_BY_CAPTURE_KEY = new Map<string, SystemFieldRegistryEntry>();
-// Deprecated entries resolve but are never OFFERED — see AUTHORABLE_FORM_SYSTEM_FIELDS.
-for (const entry of AUTHORABLE_FORM_SYSTEM_FIELDS) {
+for (const entry of OPERATIONAL_FORM_SYSTEM_FIELDS) {
     for (const key of [entry.id, entry.field_key, entry.shared_value_key]) {
         if (key && !REGISTRY_BY_CAPTURE_KEY.has(key)) REGISTRY_BY_CAPTURE_KEY.set(key, entry);
     }
