@@ -89,6 +89,7 @@ const HEALTHY_PROBES = {
   // A steward that has completed a cycle within cadence. Absent status is a
   // PROBLEM by design (silence is not health), so the healthy fixture supplies one.
   decision_reconciliation: { pending_count: 0, projected_count: 0, violations: [], consistent: true },
+  bridge_reconciliation: { bridge_count: 0, live_count: 0, violations: [], consistent: true },
   steward_status: {
     enabled: true, stale: false, last_cycle_at: new Date().toISOString(), last_cycle_ms: 2300,
     cycles_recorded: 4, actions_executed: 0, actions_refused: 0, escalations: [], history: [],

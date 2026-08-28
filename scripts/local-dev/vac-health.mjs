@@ -31,6 +31,8 @@ import { classifyWorkload } from "./lib/vacilando/workload-classification.mjs";
 import { concurrentWeightedCost } from "./lib/vacilando/workload-observation.mjs";
 import { hostCapability, computeCapacityPolicy } from "./lib/vacilando/capacity-policy.mjs";
 import { stewardStatus } from "./lib/vacilando/host-steward-cycle.mjs";
+import { listBridges, reconcileProviderBridges } from "./lib/vacilando/provider-governed-bridge.mjs";
+import { readGovernedActionStore } from "./lib/vacilando/governed-action-request.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac health [--json] [--check <name>] [--quiet]
@@ -359,6 +361,22 @@ const report = composeReport({
         return stewardStatus({
           root: process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway"),
         });
+      } catch { return null; }
+    })(),
+    /*
+     * The provider→governed bridge, read from its own durable store.
+     *
+     * Supplied here rather than derived inside the check for the same reason the
+     * decision reconciliation is: the defect class is two stores disagreeing, and
+     * a check that computes both halves itself can never see it.
+     */
+    bridge_reconciliation: (() => {
+      try {
+        const root = process.env.ALLOY_RUNTIME_ROOT
+          || join(homedir(), ".local", "state", "alloy-dev", "gateway", "vacilando");
+        const bridges = listBridges({ root });
+        const store = readGovernedActionStore();
+        return reconcileProviderBridges({ bridges, governedActions: store?.requests || [] });
       } catch { return null; }
     })(),
     disk_pressure: Boolean(disk && disk.free_pct != null && disk.free_pct < 10),

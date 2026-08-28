@@ -73,6 +73,23 @@ export const STATE_FAMILIES = Object.freeze([
     restore: true,
   },
   {
+    /**
+     * The provider prompt → governed action bridge.
+     *
+     * AUTHORITATIVE, and durable for one specific reason: a bridge is the only
+     * record that a provider is blocked behind a modal whose work is being done
+     * somewhere else. Losing it on restart would leave a session waiting on a
+     * decision nothing remembers making, which is precisely the stranded state
+     * this family exists to prevent.
+     */
+    id: "provider_prompt_bridges",
+    class: "AUTHORITATIVE",
+    paths: ["provider-prompts/bridges.json", "provider-prompts/decisions.json"],
+    backup: true,
+    restore: true,
+    notes: "Prompt identity is bound to session + run; a restored bridge is re-verified against a fresh capture before any answer.",
+  },
+  {
     id: "admissions",
     class: "AUTHORITATIVE",
     paths: ["execution-runs/admissions.json", "execution-runs/admission-events.jsonl"],

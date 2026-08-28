@@ -47,6 +47,7 @@ export const CHECKS = Object.freeze([
   "toolkit.retention",
   "steward.cadence",
   "operator.decisions",
+  "provider.governed_bridge",
 ]);
 
 /** Severity ordering, so a report's verdict is the worst finding it contains. */
@@ -854,6 +855,47 @@ export function checkOperatorDecisions({ reconciliation = null }) {
   });
 }
 
+/**
+ * The provider→governed bridge invariant.
+ *
+ * A provider prompt that resolves to a registered capability must produce
+ * exactly one governed request, and a governed request that has taken effect
+ * must not leave its provider sitting behind the original modal. Both halves are
+ * control-plane failures: the first strands the work outside governance, the
+ * second strands the provider inside a decision that has already been made.
+ *
+ * Consumes a reconciliation for the same reason `operator.decisions` does — the
+ * defect is a disagreement between two stores, and a check that derives both
+ * could not see it.
+ */
+export function checkProviderGovernedBridge({ reconciliation = null }) {
+  if (!reconciliation) {
+    return incompleteFinding("provider.governed_bridge",
+      "no bridge reconciliation was supplied; health does not infer whether a governed prompt was carried anywhere");
+  }
+  const v = reconciliation.violations || [];
+  return finding({
+    check: "provider.governed_bridge",
+    severity: v.length ? "problem" : "healthy",
+    owner_resource: "vacilando.provider_governed_bridge",
+    measurements: {
+      bridges: reconciliation.bridge_count,
+      live: reconciliation.live_count,
+      violations: v.length,
+      kinds: [...new Set(v.map((x) => x.kind))],
+    },
+    evidence: v.length
+      ? v.slice(0, 5).map((x) => `${x.kind}: ${x.detail}`)
+      : [`${reconciliation.live_count} live bridge(s), each with exactly one governed request`],
+    summary: v.length
+      ? "A provider prompt was governed but not filed, or its governed action resolved while the provider stayed blocked."
+      : "Every governed provider prompt has exactly one governed request, and every resolved request reached its provider.",
+    operator_action: v.length
+      ? "Resolve through the canonical bridge continuation; do not answer the provider modal directly."
+      : null,
+  });
+}
+
 export function checkStewardCadence({ status = null }) {
   if (!status) {
     return incompleteFinding("steward.cadence",
@@ -989,6 +1031,7 @@ export function composeReport({
   }));
   safe("steward.cadence", () => checkStewardCadence({ status: probeResults.steward_status || null }));
   safe("operator.decisions", () => checkOperatorDecisions({ reconciliation: probeResults.decision_reconciliation || null }));
+  safe("provider.governed_bridge", () => checkProviderGovernedBridge({ reconciliation: probeResults.bridge_reconciliation || null }));
 
   const counts = { healthy: 0, watch: 0, problem: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
