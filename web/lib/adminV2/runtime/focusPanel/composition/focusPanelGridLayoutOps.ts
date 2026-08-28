@@ -92,29 +92,84 @@ function sameStackColumn(a: FocusPanelGridArea, b: FocusPanelGridArea): boolean 
     return Math.abs(a.colStart - b.colStart) <= Math.floor(narrower / 2);
 }
 
-/** Resolve overlapping cards in the same column into a vertical stack. PURE. */
+/** True rectangle overlap between two placed regions. PURE. */
+function regionsCollide(a: FocusPanelGridArea, b: FocusPanelGridArea): boolean {
+    const hOverlap = a.colStart < b.colStart + b.colSpan && b.colStart < a.colStart + a.colSpan;
+    const vOverlap = a.rowStart < b.rowStart + b.rowSpan && b.rowStart < a.rowStart + a.rowSpan;
+    return hOverlap && vOverlap;
+}
+
+/**
+ * Resolve overlapping cards into a vertical stack. PURE.
+ *
+ * ── TWO PASSES, AND WHY BOTH ARE NEEDED ──
+ *
+ * `sameStackColumn` is a PREFERENCE: it decides which cards read as belonging to
+ * one visual column, so a card dropped onto a column pushes that column down
+ * rather than shouldering into a neighbour. It is a heuristic and it is right to
+ * be one.
+ *
+ * It was also, until now, the ONLY thing standing between the model and an
+ * overlap — and a heuristic cannot carry an invariant. Two cards that genuinely
+ * collide but fail the "same column" test were simply left on top of each other:
+ *
+ *   attendance 1/8 vs staff 7/6   → 2 columns of overlap, narrower span 6,
+ *                                   2 < 80% of 6, so not "the same column"
+ *   business_process 1/12 vs health_safety 9/4
+ *                                 → colStarts 8 apart, so not "the same column"
+ *
+ * Both were produced by ordinary drags in the real builder and both left one card
+ * sitting on another. So the heuristic still runs first, for the layout it
+ * produces — and then a second pass ENFORCES the invariant the product actually
+ * promises: at rest, no two cards occupy the same cell. A card that still
+ * collides is pushed below everything it collides with, which terminates because
+ * every push moves it strictly downward.
+ */
 export function normalizeGridColumnStacking(grid: FocusPanelGridLayout): FocusPanelGridLayout {
     const order = new Map(grid.areas.map((area, index) => [area.card, index]));
     const sorted = [...grid.areas].sort((a, b) => {
-        if (a.colStart !== b.colStart) return a.colStart - b.colStart;
         if (a.rowStart !== b.rowStart) return a.rowStart - b.rowStart;
-        // Same start row: later array entry (just-placed move target) wins the slot
+        if (a.colStart !== b.colStart) return a.colStart - b.colStart;
+        // Same start cell: later array entry (just-placed move target) wins the slot
         // so insert-above / swap onto the top of a column works.
         return (order.get(b.card) ?? 0) - (order.get(a.card) ?? 0);
     });
     const placed: FocusPanelGridArea[] = [];
     for (const area of sorted) {
         let rowStart = area.rowStart;
+        // Pass 1 — the column-stacking preference.
         for (const prior of placed) {
             if (!sameStackColumn(prior, area)) continue;
             const priorEnd = prior.rowStart + prior.rowSpan;
             const areaEnd = rowStart + area.rowSpan;
-            const overlaps = rowStart < priorEnd && areaEnd > prior.rowStart;
-            if (overlaps) rowStart = priorEnd;
+            if (rowStart < priorEnd && areaEnd > prior.rowStart) rowStart = priorEnd;
+        }
+        // Pass 2 — the invariant. Repeat until nothing collides: pushing below one
+        // card can move this one into another.
+        for (let guard = 0; guard < placed.length + 1; guard += 1) {
+            const candidate = { ...area, rowStart };
+            const hit = placed.find((prior) => regionsCollide(prior, candidate));
+            if (!hit) break;
+            rowStart = hit.rowStart + hit.rowSpan;
         }
         placed.push(clampArea(grid, { ...area, rowStart }));
     }
     return { ...grid, areas: placed };
+}
+
+/** Every pair of regions that occupy a common cell. PURE — for guards and diagnostics. */
+export function gridOverlaps(
+    grid: FocusPanelGridLayout,
+): Array<{ a: FocusPanelCardKey; b: FocusPanelCardKey }> {
+    const out: Array<{ a: FocusPanelCardKey; b: FocusPanelCardKey }> = [];
+    for (let i = 0; i < grid.areas.length; i += 1) {
+        for (let j = i + 1; j < grid.areas.length; j += 1) {
+            if (regionsCollide(grid.areas[i]!, grid.areas[j]!)) {
+                out.push({ a: grid.areas[i]!.card, b: grid.areas[j]!.card });
+            }
+        }
+    }
+    return out;
 }
 
 /** Place (or replace) a card's region. Snaps/clamps to the grid. PURE. */
