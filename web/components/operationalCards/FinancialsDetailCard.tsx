@@ -77,7 +77,16 @@ export default function FinancialsDetailCard({
                 data-universal-card-key="financials_detail"
             >
                 {/* Condensed overview — the detail must not re-render the summary card. */}
-                <div className="alloy-os-fdetail__strip">
+                {/*
+                    ONE SHALLOW COMMAND BAR — the rollup and its commands on the same row.
+                    It used to read summary -> action strip -> filters, three stacked bands before
+                    any ledger, which is how a workstation detail ends up spending its height on a
+                    header. The facts sit left, the two commands sit top-right of the same region,
+                    and the ledger starts immediately under it.
+                */}
+                <div className="alloy-os-fdetail__rollup">
+                    <div className="alloy-os-fdetail__rollup-facts">
+                    <div className="alloy-os-fdetail__strip">
                     <Stat label="Balance" value={period.currentBalance} strong />
                     <Stat label="Past due" value={pastDue ? pastDue.amount : "None"} tone={pastDue ? "due" : "ok"} />
                     <Stat label="Responsibility" value={period.familyResponsibility} />
@@ -110,11 +119,13 @@ export default function FinancialsDetailCard({
                     `Add charge` stays a peer because it changes what is OWED rather than settling
                     it, which is a different verb with a different consequence.
                 */}
-                <div className="alloy-os-fdetail__actions">
-                    <Action primary onClick={onPayment}>
-                        Payment
-                    </Action>
-                    <Action onClick={onAddCharge}>Add charge</Action>
+                    </div>
+                    <div className="alloy-os-fdetail__actions">
+                        <Action primary onClick={onPayment}>
+                            Payment
+                        </Action>
+                        <Action onClick={onAddCharge}>Add charge</Action>
+                    </div>
                 </div>
 
                 {/* The ledger owns the detail. */}

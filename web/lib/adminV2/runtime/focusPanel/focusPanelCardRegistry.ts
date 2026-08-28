@@ -1,4 +1,5 @@
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { CardAuthoring } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import type { CardLifecycle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
     declarationAppliesToGrain,
@@ -71,7 +72,8 @@ export type CardIdentity = {
 export type CardDefinition = CardIdentity &
     Partial<CardLifecycle> &
     Partial<CardGrainApplicability> &
-    Partial<CardSupersession>;
+    Partial<CardSupersession> &
+    Partial<CardAuthoring>;
 
 /**
  * The declared cards. Each carries only the concern slices it opts into: a reserved-cell `title`
@@ -90,7 +92,15 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     },
     // The combined Business Process card — successor to `current_work` as a card presentation.
     // Same work-completion ownership, because it is the same operating question at a fuller depth.
-    { key: "business_process", title: "What's Next", ownsWorkCompletion: true },
+    /*
+     * "Business Process", not "What's Next".
+     *
+     * The successor was carrying its PREDECESSOR's title, so every surface that reads
+     * `cardTitle` — the Surface Builder library above all — offered the current card under the
+     * retired card's name. The runtime card already renders its configured process name; this is
+     * the identity an operator picks it by.
+     */
+    { key: "business_process", title: "Business Process", ownsWorkCompletion: true },
     /**
      * Declared for the durable FAMILY as well as the case — and the declaration is what makes the
      * durable Household surface exist at all. Silence would have left it case-only by the

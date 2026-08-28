@@ -1,0 +1,189 @@
+/**
+ * AUTHORING concern — which cards an operator may newly place on a Surface, and in which shapes.
+ *
+ * ── WHY THIS IS A CONCERN AND NOT A LIST ──
+ *
+ * The Surface Builder used to offer `FOCUS_PANEL_CARD_CATALOG`: a hand-kept array living beside the
+ * registry and agreeing with it only by discipline. It had drifted in every direction at once —
+ * it offered `billing_preview` beside Financials as though they were peers, it offered cards under
+ * their PREDECESSOR's name, it listed keys with no registered card behind them, and it omitted
+ * Staff entirely. An operator authoring from it was picking legacy React components out of a
+ * registry rather than laying out an operational workspace.
+ *
+ * So authorability is derived, not listed. `authorableFocusPanelCards()` reads the SAME registry
+ * and the SAME supersession contract the runtime composes from, which is what makes it impossible
+ * for the builder and the renderer to disagree about what a card is.
+ *
+ * ── THE THREE REASONS A CARD IS NOT AUTHORABLE ──
+ *
+ * SUPERSEDED — a canonical successor now owns its presentation. `current_work` is not offered
+ * because `business_process` is what it became. Read from `successorForDeclaration`, never from a
+ * second list, so retiring a card is one edit in one place.
+ *
+ * NOT AN OPERATIONAL CARD HERE — the identity is real and may belong elsewhere in the product, but
+ * it is not a peer of the operational cards on this surface. `billing_preview` answers "is billing
+ * CONFIGURED?", which is a genuine question and a configuration one; sitting beside Financials in
+ * the Focus Panel library it read as a second, competing financial card. It stays fully supported
+ * for existing layouts and migration — hidden from new authoring is not removed.
+ *
+ * UNREGISTERED — a key with no card behind it can be authored and will never render. Nothing is
+ * hard-coded here: the check is membership in the registry itself.
+ *
+ * ── PLACEMENT VARIANTS ARE NOT IDENTITIES ──
+ *
+ * Financials is ONE canonical card with two supported placements. The builder offers them as two
+ * choices because the consequence differs, and stores the same `cardKey` with a different density
+ * and span. Inventing `financials_compact` as a second key would have been the easy move and would
+ * have put two identities in the registry for one card — the exact duplication the supersession
+ * contract exists to prevent.
+ *
+ * A variant is only declared where the presentation is ACTUALLY implemented. The compact Financials
+ * card exists (`FinancialsCompactCard`); nothing here invents a density a component cannot render.
+ */
+
+import {
+    FOCUS_PANEL_CARDS,
+    cardDefinition,
+    cardTitle,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import { successorForDeclaration } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardSupersession";
+import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type {
+    FocusPanelCardDensity,
+    FocusPanelCardSpan,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
+
+/** The authoring slice a card declaration may opt into. */
+export type CardAuthoring = {
+    /**
+     * False withholds the card from NEW authoring while leaving it fully renderable.
+     *
+     * Absent means authorable: a card has to be deliberately withheld, so adding one to the
+     * registry does not silently fail to appear in the builder.
+     */
+    authorable?: boolean;
+    /** Why it is withheld — shown to whoever asks, never invented at the call site. */
+    authoringNote?: string;
+};
+
+/**
+ * Cards that are canonical and renderable but not offered as new Focus Panel placements.
+ *
+ * Declared here rather than in the registry because this is a SURFACE-AUTHORING judgement, not a
+ * property of the card: `billing_preview` is a perfectly good card and may be authorable on a
+ * configuration-focused surface later. Keeping the reason beside the key is the point — a bare
+ * exclusion list decays into folklore.
+ */
+const WITHHELD_FROM_AUTHORING: Partial<Record<FocusPanelCardKey, string>> = {
+    billing_preview:
+        "Answers whether billing is CONFIGURED, which is a configuration question rather than an "
+        + "operational one. Beside Financials it read as a second financial card. Existing layouts "
+        + "keep rendering it.",
+    child_identity:
+        "The durable child composes as the one member of its own Children collection; `children` is "
+        + "the canonical identity.",
+    health:
+        "Enrollment Health is a pipeline metric, not the child's health record. Health & Safety is "
+        + "the operational health card.",
+};
+
+/** One authorable choice in the builder — a card identity plus the shape it is placed in. */
+export type AuthorableCardOption = {
+    cardKey: FocusPanelCardKey;
+    /** The card's CURRENT product name. Never a predecessor's. */
+    label: string;
+    /** Present only when the card offers more than one supported placement. */
+    variantLabel?: string;
+    density: FocusPanelCardDensity;
+    span: FocusPanelCardSpan;
+    /** Columns of the 12-track grid this placement occupies, for the builder's own copy. */
+    columns: number;
+};
+
+/**
+ * Placement variants, for the cards that genuinely have more than one implemented presentation.
+ *
+ * A card absent from this map is offered once, at its standard placement. Nothing is invented: each
+ * entry names a density a real component renders.
+ */
+const PLACEMENT_VARIANTS: Partial<Record<FocusPanelCardKey, readonly Omit<AuthorableCardOption, "cardKey" | "label">[]>> =
+    {
+        financials: [
+            {
+                variantLabel: "Summary",
+                density: "standard",
+                span: 1,
+                columns: 8,
+            },
+            {
+                variantLabel: "Compact",
+                density: "compact",
+                span: 1,
+                columns: 4,
+            },
+        ],
+    };
+
+/** The standard placement for a card with no declared variants. */
+const DEFAULT_COLUMNS: Partial<Record<FocusPanelCardKey, number>> = {
+    business_process: 12,
+    attendance: 8,
+    children: 6,
+    scheduling: 4,
+    household: 4,
+    health_safety: 4,
+    staff: 6,
+};
+
+/**
+ * Is this card offered for NEW authoring?
+ *
+ * Total and derived. A caller never needs a second opinion, and there is nowhere else to encode one.
+ */
+export function isAuthorableCard(key: FocusPanelCardKey): boolean {
+    const declaration = cardDefinition(key);
+    // Unregistered: authoring it would place a card that can never render.
+    if (!declaration) return false;
+    // Superseded globally: the successor is what an operator means.
+    if (successorForDeclaration(declaration)) return false;
+    if (key in WITHHELD_FROM_AUTHORING) return false;
+    return declaration.authorable !== false;
+}
+
+/** Why a card is not authorable, for the builder's own explanation. Null when it is. */
+export function authoringWithholdingReason(key: FocusPanelCardKey): string | null {
+    const declaration = cardDefinition(key);
+    if (!declaration) return "No card is registered under this key.";
+    const successor = successorForDeclaration(declaration);
+    if (successor) return `Superseded by ${cardTitle(successor) ?? successor}.`;
+    return WITHHELD_FROM_AUTHORING[key] ?? declaration.authoringNote ?? null;
+}
+
+/**
+ * THE AUTHORABLE LIBRARY — every current card, in every placement it actually supports.
+ *
+ * Derived from the registry in registry order, so a card added there appears here without anyone
+ * remembering to add it, and a card superseded there disappears from authoring in the same edit.
+ */
+export function authorableFocusPanelCards(): readonly AuthorableCardOption[] {
+    const options: AuthorableCardOption[] = [];
+    for (const declaration of FOCUS_PANEL_CARDS) {
+        const key = declaration.key;
+        if (!isAuthorableCard(key)) continue;
+        // The card's own title is its CURRENT product name; the builder never renames a card.
+        const label = cardTitle(key) ?? key;
+        const variants = PLACEMENT_VARIANTS[key];
+        if (variants?.length) {
+            for (const v of variants) options.push({ cardKey: key, label, ...v });
+            continue;
+        }
+        options.push({
+            cardKey: key,
+            label,
+            density: "standard",
+            span: 1,
+            columns: DEFAULT_COLUMNS[key] ?? 6,
+        });
+    }
+    return options;
+}

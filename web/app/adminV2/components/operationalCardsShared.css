@@ -1917,3 +1917,34 @@
   justify-content: flex-end;
   margin-top: 2px;
 }
+
+/* ── Financials detail: one shallow command bar ────────────────────────────────
+ *
+ * The rollup and its two commands share a row: facts grow on the left, commands sit top-right of
+ * the same region. Previously this was summary -> action strip -> filters, three stacked bands
+ * before any ledger — which is how a workstation detail spends its height on a header.
+ */
+.alloy-os-fdetail__rollup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 24px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+}
+
+.alloy-os-fdetail__rollup-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 420px;
+}
+
+/* Top-aligned with the facts, never stretched: two commands, sized to their labels. */
+.alloy-os-fdetail__rollup .alloy-os-fdetail__actions {
+  margin: 0;
+  flex: 0 0 auto;
+  align-self: flex-start;
+}

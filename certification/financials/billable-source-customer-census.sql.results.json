@@ -1,0 +1,30 @@
+{
+  "trusted_host_action_id": "tha_1ddc4b6cf922c3",
+  "query_hash": "e670afd7a68d40ed36bfea64503e3a619830e9a61e5cd859d96eb93425304443",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-08-28T01:59:13.855Z",
+    "question_ids": [
+      "charges",
+      "ledger_transactions"
+    ],
+    "questions": {
+      "charges": {
+        "question_id": "charges",
+        "row_count": null,
+        "rows": [
+          "CHECK (((billable_source_type IS NULL) OR (billable_source_type = ANY (ARRAY['job'::text, 'enrollment_agreement'::text]))))|f",
+          "CHECK (((job_id IS NOT NULL) OR ((billable_source_type IS NOT NULL) AND (billable_source_id IS NOT NULL))))|f"
+        ]
+      },
+      "ledger_transactions": {
+        "question_id": "ledger_transactions",
+        "row_count": null,
+        "rows": [
+          "CHECK (((billable_source_type IS NULL) OR (billable_source_type = ANY (ARRAY['job'::text, 'enrollment_agreement'::text]))))|f"
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}
