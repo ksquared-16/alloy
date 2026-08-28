@@ -296,3 +296,13 @@ await test("NC13 — a TERMINAL run never counts as awaiting the operator", () =
     runs: [{ run_id: "e", state: "COMPLETE", state_reason: "operator approved" }],
   }).length, 0);
 });
+
+await test("NC14 — provider→governed bridge failures reach operator.decisions", () => {
+  const out = D.reconcileOperatorDecisions({
+    governedActions: [], projected: [],
+    bridgeViolations: [{ kind: "request_complete_provider_still_blocked", bridge_id: "b1",
+      detail: "the governed action completed but the provider was never continued" }],
+  });
+  assert.equal(out.consistent, false);
+  assert.ok(out.violations.some((v) => v.kind === "request_complete_provider_still_blocked"));
+});

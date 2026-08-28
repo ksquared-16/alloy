@@ -42,6 +42,7 @@ export function reconcileOperatorDecisions({
   runs = [],
   projected = null,
   providerPromptBlocks = [],
+  bridgeViolations = [],
 } = {}) {
   const pending = governedActions.filter((a) => PENDING_STATUSES.includes(norm(a?.status)));
   const projectedIds = new Set((projected || []).map((p) => p?.request_id ?? p?.id).filter(Boolean));
@@ -97,6 +98,11 @@ export function reconcileOperatorDecisions({
     if (n > 1) violations.push({ kind: "conflicting_pending_decisions", fingerprint: key, count: n,
       detail: "more than one live decision exists for the same exact request" });
   }
+
+  // 4b. Provider→governed bridge failures. Supplied by the bridge owner rather
+  // than recomputed, for the same reason the projection is: a check that derives
+  // its own view of the bridge could never see the bridge disagreeing with it.
+  for (const b of bridgeViolations) violations.push(b);
 
   // 5. A provider blocked on a native prompt with nothing decidable in Vacilando.
   for (const b of providerPromptBlocks) {
