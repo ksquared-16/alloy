@@ -160,6 +160,25 @@ const BLOCKER_SIGNATURES = Object.freeze([
  * "> " caret plus a footer hint; either half is accepted, both are anchored to
  * the tail so scrollback cannot supply them.
  */
+/*
+ * HORIZONTAL SPACE, INCLUDING U+00A0.
+ *
+ * Claude Code pads its EMPTY composer with a non-breaking space: the idle line
+ * is "\u276F\u00A0", not "\u276F ". `[ \t]` never matches that, so the caret
+ * patterns below have never once matched an idle Claude composer — affordance
+ * detection has been carried entirely by the footer hints, and anything that
+ * needed the caret specifically silently got nothing. Found by dumping
+ * codepoints from the live Trust Runtime pane after the caret pattern insisted
+ * a visible "\u276F" was absent.
+ */
+const HSPACE = "[ \\t\\u00A0]";
+
+/** The composer caret alone — the footer hints below are not proof of a settled pane. */
+const COMPOSER_CARET = Object.freeze([
+  new RegExp(`(^|\\n)${HSPACE}*[│|]?${HSPACE}*[>❯]${HSPACE}`),
+  new RegExp(`(^|\\n)${HSPACE}*[│|]?${HSPACE}*[>❯]${HSPACE}*(\\n|$)`),
+]);
+
 const PROMPT_AFFORDANCES = Object.freeze([
   // The composer caret. Claude Code draws U+276F ("❯"); other TUIs draw ">".
   // Matching only ">" false-negatives every real Claude prompt.
@@ -170,8 +189,9 @@ const PROMPT_AFFORDANCES = Object.freeze([
   // was the last line of the capture, and a composer holding text is neither:
   // the TUI footer always follows it. A live pane reading `❯ merge it` was
   // therefore classified "unknown" and the send refused.
-  /(^|\n)[ \t]*[│|]?[ \t]*[>❯][ \t]/,
-  /(^|\n)[ \t]*[│|]?[ \t]*[>❯][ \t]*(\n|$)/,
+  // Same NBSP correction as COMPOSER_CARET above: an empty Claude composer is
+  // caret + U+00A0, which `[ \t]` does not match.
+  ...COMPOSER_CARET,
   // Footer hints. Claude Code varies this line by mode and context, so match
   // any of its stable fragments rather than one full phrasing.
   /\? for shortcuts/i,
@@ -242,7 +262,60 @@ function turnTerminatorAt(line) {
   return TURN_FINISHED_RE.test(line) || TURN_INTERRUPTED_RE.test(line);
 }
 
+/**
+ * Positive evidence that the turn has ENDED, when no "Cooked for …" stamp exists.
+ *
+ * A LIVE INCIDENT. Trust Runtime sat QUEUED for 82 minutes on
+ * `waiting_for_ready_prompt` while its pane was plainly idle: 0.39 seconds of
+ * CPU per minute, no spinner, a bare composer. Its last turn ended on
+ * "Listed 3 directories, ran 16 shell commands" and never printed a terminator,
+ * so the ⏺ narration above it stayed "current" forever and every delivery was
+ * refused as mid-turn.
+ *
+ * The narration fallback below is deliberate and stays — it catches an agent
+ * whose spinner has scrolled out of the capture. What was missing is the other
+ * half: evidence a turn has FINISHED that does not depend on a stamp the pane
+ * may never print.
+ *
+ * THE DISCRIMINATOR IS THE INTERRUPT AFFORDANCE, USED IN ONE DIRECTION ONLY.
+ * Its presence proves nothing — the footer carries "esc to interrupt" whenever a
+ * background shell runs, idle or not, which is exactly the false-busy this file
+ * already fixed once. But a running turn ALWAYS offers a way to interrupt it, so
+ * its ABSENCE means no turn is running. Verified across all six live panes: every
+ * pane with a spinner also offered the interrupt, and every pane without a
+ * spinner offered neither.
+ */
+export function turnFinishedByAffordance(text) {
+  const tail = tailOf(text);
+  if (!tail.trim()) return false;
+  const lines = tail.split("\n");
+  // The composer must be the SETTLED TAIL, not merely present. When a new turn
+  // starts, Claude Code draws its narration BELOW the composer and footer — so a
+  // pane can hold both a caret and a live turn. Narration after the last caret
+  // means the turn is running, which is exactly the scrolled-off-spinner case
+  // the narration fallback exists to catch.
+  let lastCaret = -1;
+  let lastNarr = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (COMPOSER_CARET.some((re) => re.test(`\n${lines[i]}`))) lastCaret = i;
+    if (NARRATION_LINE.test(lines[i])) lastNarr = i;
+  }
+  if (lastCaret < 0) return false;
+  if (lastNarr > lastCaret) return false;
+  // Anything offering an interrupt is a turn in progress.
+  if (TURN_ESC_LINE.test(tail)) return false;
+  // Any spinner at all means the turn is running.
+  for (const line of tail.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    if (TURN_SPINNER_LINE.test(t) || TURN_GLYPH_SPINNER.test(t) || GENERATING_LINE.test(t)) return false;
+  }
+  return true;
+}
+
 export function liveNarrationIsCurrentTurn(text) {
+  // Leftover narration cannot outrank positive proof the turn is over.
+  if (turnFinishedByAffordance(text)) return false;
   const lines = String(text ?? "").split("\n");
   let lastNarr = -1;
   let lastCooked = -1;
