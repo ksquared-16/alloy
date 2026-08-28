@@ -4,6 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ApprovedAttendanceCard from "@/components/operationalCards/AttendanceCard";
+import AttendanceDetailCard from "@/components/operationalCards/AttendanceDetailCard";
+import {
+    useDismissSignal,
+    useReportPerspective,
+} from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import { adaptAttendanceVmToAttendanceCard } from "@/lib/adminV2/runtime/focusPanel/attendance/adaptAttendanceVmToAttendanceCard";
 import {
     DropdownMenu,
@@ -46,10 +51,13 @@ const MAX_MOVEMENTS = 2;
  * destroy the row, while arrival, the latest room and departure — the three facts an operator scans
  * for — always survive.
  */
-export default function AttendanceCard({ model, context, receded = false }: Props) {
+export default function AttendanceCard({ model, context, receded = false, coordination }: Props) {
     const scope = context.participantScope ?? null;
     const memberId = scope?.customerMemberId ?? null;
     const [vm, setVm] = useState<AttendanceCardVM | null>(null);
+    /* The record over time, in the shared workstation host — the same depth layer the Financials
+       and Health details use. Not a second surface and not a bigger copy of today. */
+    const [showHistory, setShowHistory] = useState(false);
     const [loading, setLoading] = useState(false);
     const [running, setRunning] = useState<string | null>(null);
     const [commandError, setCommandError] = useState<string | null>(null);
@@ -62,7 +70,7 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
         setLoading(true);
         try {
             const res = await fetch(
-                `/api/admin/attendance/card?customer_member_id=${encodeURIComponent(memberId)}`,
+                `/api/admin/attendance/card?customer_member_id=${encodeURIComponent(memberId)}&recent_days=31`,
                 { credentials: "include" },
             );
             const json = (await res.json()) as { ok?: boolean; vm?: AttendanceCardVM };
@@ -130,6 +138,21 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
         void load();
     }, [load]);
 
+    useReportPerspective(coordination, "attendance", showHistory ? "focused" : "base");
+    useDismissSignal(coordination, "attendance", () => setShowHistory(false));
+
+    if (showHistory && vm) {
+        return (
+            <div className="alloy-os-attendance" data-attendance-card="true" data-attendance-overlay="detail">
+                <AttendanceDetailCard
+                    childLabel={scope?.displayName ?? "This child"}
+                    history={vm.history}
+                    onClose={() => setShowHistory(false)}
+                />
+            </div>
+        );
+    }
+
     const name = scope?.displayName ?? null;
 
     /*
@@ -158,6 +181,7 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
                 data-attendance-subject={memberId ?? undefined}
             >
                 <ApprovedAttendanceCard
+                    onViewHistory={() => setShowHistory(true)}
                     evidence={adaptAttendanceVmToAttendanceCard(vm)}
                     /*
                      * NO COMMANDS WHEN THERE IS NOTHING TO COMMAND. A child with no attendable

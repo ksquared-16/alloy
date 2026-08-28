@@ -67,7 +67,13 @@ export default function AttendanceCard({
                 density="compact"
                 gridSpan="row"
                 data-universal-card-key="attendance"
-                footerAction={<FooterAction onClick={onViewHistory}>View history →</FooterAction>}
+                /*
+                 * NOT the footer. `.alloy-os-ucard--archetype-timeline .alloy-os-ucard__footer` is
+                 * `display: none` by design, so a footer action on this card renders and is never
+                 * visible. Details lives in the body instead, rather than un-hiding a footer rule
+                 * every other timeline card depends on.
+                 */
+                footerAction={null}
             >
                 {isEmpty ? (
                     <CardBody>
@@ -86,6 +92,9 @@ export default function AttendanceCard({
                                 <Action onClick={commands.markAbsent}>Mark absent</Action>
                             </ActionRow>
                         ) : null}
+                        <div className="alloy-os-attendance__detaillink">
+                            <FooterAction onClick={onViewHistory}>Details →</FooterAction>
+                        </div>
                     </CardBody>
                 ) : (
                     <CardBody className="alloy-os-attendance__body">
@@ -127,6 +136,10 @@ export default function AttendanceCard({
                                 Check out
                             </Action>
                         </ActionRow>
+
+                        <div className="alloy-os-attendance__detaillink">
+                            <FooterAction onClick={onViewHistory}>Details →</FooterAction>
+                        </div>
 
                         <div className="alloy-os-currentwork__recent-activity">
                             <p className="alloy-os-cardlab__section-head">Last 5 days</p>

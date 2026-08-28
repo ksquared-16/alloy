@@ -161,7 +161,7 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * (when and where are they scheduled), and is deliberately NOT folded in here.
      */
     { key: "staff", title: "Staff", grains: ["person"] },
-    { key: "attendance", title: "Attendance", grains: ["opportunity", "child"] },
+    { key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"] },
     /*
      * FINANCIALS — "what is owed, what happened, and what can I do about it".
      *

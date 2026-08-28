@@ -26,7 +26,10 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { buildChildAttendanceReadModel } from "@/lib/childcareOperational/attendance/childAttendanceReadModel";
+import {
+    buildChildAttendanceReadModel,
+    type ChildAttendanceReadModel,
+} from "@/lib/childcareOperational/attendance/childAttendanceReadModel";
 import { listAttendanceEvents } from "@/lib/childcareOperational/attendance/attendanceService";
 import { resolveAttendanceSubject } from "@/lib/childcareOperational/attendance/resolveAttendanceSubject";
 import { fetchScheduleExpectations } from "@/lib/childcareOperational/expectations/fetchScheduleExpectations";
@@ -49,6 +52,40 @@ export type AttendanceDayVM = {
     missingCheckout: boolean;
 };
 
+/** One event on a day's sequence — the append-only record, projected, never flattened. */
+export type AttendanceHistoryEventVM = {
+    eventId: string;
+    at: string;
+    kind: "check_in" | "check_out" | "movement" | "absence";
+    roomLabel: string | null;
+    fromRoomLabel: string | null;
+    /**
+     * This event has been corrected or reversed by a LATER event.
+     *
+     * Attendance is append-only: a correction does not edit the original, it supersedes it. The
+     * history shows both and marks the superseded one, because an operator checking whether a day
+     * was recorded correctly needs to see that a correction happened — hiding it would be the
+     * second history store this card must never become.
+     */
+    corrected: boolean;
+    entryType: string;
+};
+
+/** A day of the child's attendance record. Grouped, not aggregated into a new store. */
+export type AttendanceHistoryDayVM = {
+    date: string;
+    expectedRoomLabel: string | null;
+    checkInAt: string | null;
+    checkOutAt: string | null;
+    /** Null when the day has no checkout — an open day has no duration, and 0 would be a lie. */
+    attendedMinutes: number | null;
+    present: boolean;
+    absent: boolean;
+    missingCheckout: boolean;
+    corrected: boolean;
+    events: AttendanceHistoryEventVM[];
+};
+
 export type AttendanceCardVM = {
     participant: { customerMemberId: string; displayName: string | null } | null;
     date: string;
@@ -63,6 +100,14 @@ export type AttendanceCardVM = {
     /** COMPLETE and ordered. Bounding belongs to the card. */
     movements: AttendanceMovementVM[];
     recentDays: AttendanceDayVM[];
+    /**
+     * The child's attendance record over the requested window — the Details experience.
+     *
+     * Projected from the SAME canonical fold the summary uses (`checkInOutTimeline`,
+     * `roomMovementTimeline`, `absences`, `corrections`, `actualPresenceSummary`). There is no
+     * second attendance model and no new ledger: this groups what the fold already returned.
+     */
+    history: AttendanceHistoryDayVM[];
     /** True when today's record carries a correction or reversal. */
     corrected: boolean;
     /**
@@ -86,6 +131,99 @@ function shiftDays(date: string, delta: number): string {
     const d = new Date(`${date}T00:00:00.000Z`);
     d.setUTCDate(d.getUTCDate() + delta);
     return ymd(d);
+}
+
+
+/**
+ * THE CHILD'S ATTENDANCE RECORD OVER TIME — grouped, never re-derived.
+ *
+ * Everything here comes from the fold the summary already computed. Days are the grouping because
+ * that is how an operator reads attendance ("was Tuesday recorded right?"), and each day carries its
+ * own event sequence so the question "what actually happened" is one expand away rather than a
+ * separate screen.
+ *
+ * Corrections are PRESENT, not applied. `corrections` names the event each correction supersedes,
+ * so the superseded event is marked and both remain visible. Flattening them would produce a tidier
+ * history that no longer matches the append-only record it claims to show.
+ */
+function buildAttendanceHistory(
+    read: ChildAttendanceReadModel,
+    roomLabels: Map<string, string>,
+    expectedRoomLabelByDate: Map<string, string | null>,
+): AttendanceHistoryDayVM[] {
+    const label = (id: string | null): string | null => (id ? roomLabels.get(id) ?? null : null);
+    const correctedEventIds = new Set(read.corrections.map((c) => c.correctsEventId));
+
+    const byDate = new Map<string, AttendanceHistoryEventVM[]>();
+    const push = (date: string, e: AttendanceHistoryEventVM) => {
+        const list = byDate.get(date);
+        if (list) list.push(e);
+        else byDate.set(date, [e]);
+    };
+
+    for (const t of read.checkInOutTimeline) {
+        push(t.serviceDate, {
+            eventId: t.eventId,
+            at: t.at,
+            kind: t.kind,
+            roomLabel: label(t.roomLocationId),
+            fromRoomLabel: null,
+            corrected: correctedEventIds.has(t.eventId),
+            entryType: t.entryType,
+        });
+    }
+    for (const m of read.roomMovementTimeline) {
+        push(m.serviceDate, {
+            eventId: m.eventId,
+            at: m.at,
+            kind: "movement",
+            roomLabel: label(m.toRoomLocationId),
+            fromRoomLabel: label(m.fromRoomLocationId),
+            corrected: correctedEventIds.has(m.eventId),
+            entryType: "movement",
+        });
+    }
+    for (const a of read.absences) {
+        push(a.serviceDate, {
+            eventId: a.eventId,
+            at: a.at,
+            kind: "absence",
+            roomLabel: null,
+            fromRoomLabel: null,
+            corrected: correctedEventIds.has(a.eventId),
+            entryType: a.classification ?? "absence",
+        });
+    }
+
+    const summaryByDate = new Map(read.actualPresenceSummary.map((d) => [d.serviceDate, d]));
+    const dates = [...new Set([...byDate.keys(), ...summaryByDate.keys()])].sort((a, b) =>
+        b.localeCompare(a),
+    );
+
+    return dates.map((date) => {
+        const events = (byDate.get(date) ?? []).sort((a, b) => a.at.localeCompare(b.at));
+        const day = summaryByDate.get(date);
+        const inAt = day?.firstCheckInAt ?? null;
+        const outAt = day?.lastCheckOutAt ?? null;
+        // No checkout means no duration. Zero would read as "attended nothing", which is a
+        // different and wronger claim than "the day is still open".
+        const attendedMinutes =
+            inAt && outAt ?
+                Math.max(0, Math.round((new Date(outAt).getTime() - new Date(inAt).getTime()) / 60000))
+            :   null;
+        return {
+            date,
+            expectedRoomLabel: expectedRoomLabelByDate.get(date) ?? null,
+            checkInAt: inAt,
+            checkOutAt: outAt,
+            attendedMinutes,
+            present: Boolean(day?.present),
+            absent: Boolean(day?.absent),
+            missingCheckout: Boolean(day?.missingCheckout),
+            corrected: events.some((e) => e.corrected) || events.some((e) => e.entryType === "correction"),
+            events,
+        };
+    });
 }
 
 export async function buildAttendanceCardVM(
@@ -116,6 +254,7 @@ export async function buildAttendanceCardVM(
         currentRoomLabel: null,
         movements: [],
         recentDays: [],
+        history: [],
         corrected: false,
         unavailableReason: null,
     };
@@ -214,6 +353,16 @@ export async function buildAttendanceCardVM(
                 missingCheckout: d.missingCheckout,
             })),
         corrected: read.corrections.some((c) => events.some((e) => e.id === c.correctsEventId)),
+        history: buildAttendanceHistory(
+            read,
+            roomLabels,
+            // Expected room per day, from the same expectation set the summary reads.
+            new Map(
+                (expectations?.expectedAttendance ?? [])
+                    .filter((e) => e.customerMemberId === args.customerMemberId)
+                    .map((e) => [e.date, e.roomLocationId ? roomLabels.get(e.roomLocationId) ?? null : null]),
+            ),
+        ),
     };
 }
 

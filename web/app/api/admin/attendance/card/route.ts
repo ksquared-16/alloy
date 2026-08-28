@@ -35,6 +35,12 @@ export async function GET(request: NextRequest) {
             customerMemberId,
             displayName: searchParams.get("display_name")?.trim() || null,
             date: searchParams.get("date")?.trim() || null,
+            // The Details experience asks for a wider window than the summary's five days.
+            // Bounded here so a caller cannot ask for an unbounded history.
+            recentDays: Math.min(
+                Math.max(Number(searchParams.get("recent_days") ?? 5) || 5, 1),
+                120,
+            ),
         });
         return NextResponse.json({ ok: true, vm });
     } catch (e) {
