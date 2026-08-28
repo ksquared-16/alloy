@@ -72,6 +72,7 @@ SUITES=(
   "development-worktree-retirement.test.mjs"
   "development-certification-sha-reachability.test.mjs"
   "development-host-steward.test.mjs"
+  "development-host-steward-automation.test.mjs"
 )
 
 PASS=0

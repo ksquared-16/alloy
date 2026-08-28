@@ -45,6 +45,7 @@ export const CHECKS = Object.freeze([
   "ports.registry",
   "worktrees.registry",
   "toolkit.retention",
+  "steward.cadence",
 ]);
 
 /** Severity ordering, so a report's verdict is the worst finding it contains. */
@@ -800,6 +801,54 @@ export function checkWorktreesRegistry({ onDisk = 0, registered = 0, unmanaged =
  * PROBLEM, because the honest reading of "we cannot tell" here is that nothing
  * can be safely reclaimed.
  */
+/**
+ * Host Steward cadence.
+ *
+ * A steward that has not run is not neutral — it is the difference between
+ * "the host is clean" and "nobody has looked". Silence must read as a finding,
+ * which is why an absent status is a PROBLEM rather than an omitted check.
+ *
+ * Like retention, this consumes the steward's own status and never recomputes
+ * it; a health check that can answer without its owner will drift from it.
+ */
+export function checkStewardCadence({ status = null }) {
+  if (!status) {
+    return incompleteFinding("steward.cadence",
+      "the Host Steward did not report a status; health does not infer whether it ran");
+  }
+  const sev = status.stale ? "problem" : "healthy";
+  return finding({
+    check: "steward.cadence",
+    severity: sev,
+    owner_resource: "vacilando.host_steward",
+    measurements: {
+      enabled: status.enabled === true,
+      last_cycle_at: status.last_cycle_at,
+      last_cycle_ms: status.last_cycle_ms,
+      cycles_recorded: status.cycles_recorded,
+      actions_executed: status.actions_executed,
+      actions_refused: status.actions_refused,
+      escalations: (status.escalations || []).length,
+      admission_before: status.admission_before,
+      admission_after: status.admission_after,
+      stale_after_ms: status.stale_after_ms,
+    },
+    evidence: [
+      status.last_cycle_at
+        ? `last cycle ${status.last_cycle_at}${status.last_cycle_ms != null ? ` (${status.last_cycle_ms}ms)` : ""}`
+        : "no cycle has completed",
+      `${status.actions_executed || 0} executed · ${status.actions_refused || 0} refused across recent cycles`,
+      ...(status.escalations || []).slice(0, 3).map((e) => `escalation: ${e.resource || e.action} — ${e.why}`),
+    ],
+    summary: status.stale
+      ? "The Host Steward has not completed a cycle within its cadence."
+      : "The Host Steward is reconciling on cadence.",
+    operator_action: status.stale
+      ? "Check the Gateway is running and that the steward timer is installed; nothing is being reconciled automatically while this is stale."
+      : null,
+  });
+}
+
 export function checkToolkitRetention({ plan = null, severity = null, diskPressure = false }) {
   if (!plan) {
     return incompleteFinding("toolkit.retention",
@@ -895,6 +944,7 @@ export function composeReport({
     severity: probeResults.toolkit_severity || null,
     diskPressure: probeResults.disk_pressure === true,
   }));
+  safe("steward.cadence", () => checkStewardCadence({ status: probeResults.steward_status || null }));
 
   const counts = { healthy: 0, watch: 0, problem: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;

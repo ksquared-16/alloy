@@ -86,6 +86,13 @@ const HEALTHY_PROBES = {
   },
   validation_bypasses: [],
   toolkit_plan: toolkitPlan({ total: 5, retained: 5, prunable: 0 }),
+  // A steward that has completed a cycle within cadence. Absent status is a
+  // PROBLEM by design (silence is not health), so the healthy fixture supplies one.
+  steward_status: {
+    enabled: true, stale: false, last_cycle_at: new Date().toISOString(), last_cycle_ms: 2300,
+    cycles_recorded: 4, actions_executed: 0, actions_refused: 0, escalations: [], history: [],
+    stale_after_ms: 900000, admission_before: "HEALTHY", admission_after: "HEALTHY",
+  },
   toolkit_severity: { severity: "healthy", why: "toolkit retention is within the configured envelope" },
   configured_max: 3,
   capacity: {
