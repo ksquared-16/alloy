@@ -5688,8 +5688,20 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 10%, transparent);
   outline: 2px dashed color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 45%, transparent);
 }
+/*
+ * THE COMPOSER'S ROWS SIZE TO CONTENT, exactly as the runtime's do.
+ *
+ * They were pinned to a fixed 76px so the drag maths could assume a constant row
+ * pitch. A fixed row cannot grow, so any card taller than `rowSpan × 76` overflowed
+ * its grid area and painted over the card declared beneath it — Financials
+ * overflowed by 309px and covered Health & Safety by 298px. The declared areas
+ * never overlapped; the rendered cards did, which is the overlap QA kept seeing.
+ *
+ * The constant pitch is not missed: composer geometry is read from the browser's
+ * own resolved track sizes now, so it stays correct whatever the rows do.
+ */
 .alloy-os-fp-composer .alloy-os-fp-canvas--grid {
-  grid-auto-rows: 76px;
+  grid-auto-rows: minmax(76px, auto);
 }
 .alloy-os-fp-composer__tray {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
