@@ -480,3 +480,119 @@ test("the registry is the only capability catalog", () => {
     assert.ok(registered.has(r.action_key), `${c} → ${r.action_key}`);
   }
 });
+
+// ── The composed flow, end to end ────────────────────────────────────────────
+
+/** The same modal shape, with any command in it. */
+const paneFor = (cmd) => `
+ Bash command
+
+   ${cmd}
+   Apply the Health & Safety migration
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again for this project
+   3. No
+`;
+
+/**
+ * The same migration content aimed at a PROVISIONED environment. `--linked` is
+ * the Supabase project binding, so this resolves to `staging` rather than the
+ * local docker stack.
+ */
+const STAGING_CMD =
+  "supabase db push --linked --file supabase/migrations/20260826120000_h1_person_health_facts.sql";
+
+/** The real modal shape, carrying the real Trust Runtime command. */
+const MIGRATION_PANE = `
+ Bash command
+
+   ${MIGRATION_CMD}
+   Apply the Health & Safety migration to the certification database
+
+ │ Auto mode classifier requires confirmation for this command.
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again for this project
+   3. No
+`;
+
+test("the live Trust Runtime prompt bridges end to end, and files nothing it cannot execute", () => {
+  const cls = A.classifyProviderPrompt({ paneText: MIGRATION_PANE, sessionId: "sess_trust", runId: "run_trust" });
+  assert.equal(cls.auto_answerable, false);
+
+  const out = B.bridgeProviderPrompt({
+    root: root(), classification: cls, laneId: "lane_trust", laneName: "Trust Runtime",
+    runId: "run_trust", sessionId: "sess_trust", repoRoot: REPO,
+  });
+
+  assert.equal(out.bridged, true);
+  assert.equal(out.resolution.action_key, "database.apply_migration");
+  assert.equal(out.executor.provider_raw_command_authorized, false);
+  // Content IS resolvable — the migration is on staging. The refusal is the
+  // environment, and the card must say which.
+  assert.equal(out.identity.ok, true);
+  assert.equal(out.filed, false);
+  assert.equal(out.blocked.refusal, "environment_unprovisioned");
+  assert.match(out.card.headline, /blocked$/);
+  assert.equal(out.card.decision, null);
+});
+
+test("a bridgeable prompt on a provisioned environment produces an exact request and an approvable card", () => {
+  const cls = A.classifyProviderPrompt({ paneText: paneFor(STAGING_CMD), sessionId: "s", runId: "r" });
+  const out = B.bridgeProviderPrompt({
+    root: root(), classification: cls, laneId: "lane_trust", laneName: "Trust Runtime",
+    runId: "r", sessionId: "s", repoRoot: REPO,
+  });
+  assert.equal(out.bridged, true);
+  assert.equal(out.filed, true);
+  assert.equal(out.governed_request.action_key, "database.apply_migration");
+  assert.deepEqual(Object.keys(out.governed_request.inputs).sort(), ["environment", "expectedSha", "migrations"]);
+  assert.equal(out.governed_request.inputs.environment, "staging");
+  assert.deepEqual(out.card.decision, ["Approve", "Deny"]);
+  assert.match(out.card.headline, /^Apply /);
+  assert.ok(!/Do you want to proceed/.test(JSON.stringify(out.card.headline)));
+});
+
+test("an exact pending request is attached to rather than filed twice", () => {
+  const r = root();
+  const cls = A.classifyProviderPrompt({ paneText: paneFor(STAGING_CMD), sessionId: "s", runId: "r" });
+  const first = B.bridgeProviderPrompt({ root: r, classification: cls, laneId: "l", runId: "r", sessionId: "s", repoRoot: REPO });
+  assert.equal(first.filed, true);
+  const second = B.bridgeProviderPrompt({
+    root: r, classification: cls, laneId: "l", runId: "r", sessionId: "s", repoRoot: REPO,
+    governedActions: [{ request_id: "gar_x", content_fingerprint: first.identity.content_fingerprint, status: "awaiting_operator" }],
+  });
+  assert.equal(second.filed, false);
+  assert.equal(second.dedupe.action, "attach_pending");
+  assert.equal(B.listBridges({ root: r }).length, 1);
+});
+
+test("the routine path is returned untouched by the composed flow", () => {
+  const pane = `
+ Bash command
+
+   ls /Users/Kelly/.local/share/alloy/toolkit/3c07d1074460/
+   List toolkit commands
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+`;
+  const cls = A.classifyProviderPrompt({ paneText: pane, sessionId: "s", runId: "r" });
+  assert.equal(cls.classification, "routine_tool_permission");
+  const out = B.bridgeProviderPrompt({ root: root(), classification: cls, repoRoot: REPO });
+  assert.equal(out.bridged, false);
+  assert.match(out.reason, /adapter under V1 authority/);
+});
+
+test("the exit from a governed-elsewhere modal is a narrow No, never Escape and never Yes", () => {
+  const decline = A.declineOption(MIGRATION_PANE);
+  assert.equal(decline.label, "No");
+  assert.equal(decline.grants_permission, false);
+  // …and it is a different option from the affirmative, which is what makes
+  // "decline" a real answer rather than a relabelled approval.
+  assert.notEqual(decline.option, A.affirmativeOption(MIGRATION_PANE).option);
+});

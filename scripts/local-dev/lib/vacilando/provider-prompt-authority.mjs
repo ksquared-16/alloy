@@ -251,6 +251,34 @@ export function affirmativeOption(paneText) {
   return null;
 }
 
+/**
+ * Which option DECLINES, for a prompt whose work is being done elsewhere.
+ *
+ * Escape is the wrong instrument here. `prompt-block-dismiss` deliberately
+ * refuses to escape a `permission` modal — "those ask a real question, and
+ * dismissing one is answering it" — and that is right: an escaped permission
+ * prompt leaves the turn ambiguous, and the provider may simply ask again.
+ *
+ * "No" is not a dismissal. It is the correct NARROW answer when Vacilando has
+ * decided that this provider must not run this command — either because a
+ * trusted executor already performed the action, or because the operator denied
+ * it. It closes the question definitely, in the provider's own vocabulary, and
+ * it grants nothing.
+ */
+export function declineOption(paneText) {
+  const lines = String(paneText || "").split("\n");
+  for (const line of lines) {
+    const m = line.match(/^[│|\s❯>]*\s*(\d+)\.\s*(.+)$/);
+    if (!m) continue;
+    const label = m[2].trim();
+    if (/^no$/i.test(label) || /^no[,.]?\s*(thanks|cancel|stop)?$/i.test(label)
+      || /^(cancel|decline|don'?t\s+(run|proceed))\b/i.test(label)) {
+      return { option: Number(m[1]), label, grants_permission: false };
+    }
+  }
+  return null;
+}
+
 /** A decision is only usable against the exact prompt it was minted for. */
 export function answerMatchesPrompt(decision, fresh) {
   if (!decision || !fresh) return false;

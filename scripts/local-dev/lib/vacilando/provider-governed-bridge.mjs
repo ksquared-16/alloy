@@ -760,6 +760,108 @@ function prerequisiteFor(executable) {
   return { refusal: executable.refusal || executable.code || "unknown", detail: executable.detail || null };
 }
 
+// ── The composed flow ────────────────────────────────────────────────────────
+
+/**
+ * ONE entry point, so wiring the bridge is a call rather than a re-implementation.
+ *
+ * The observer that captures a prompt hands the classification here and gets
+ * back everything the control plane needs: what the attempted action is, whether
+ * it has a registered home, the exact governed identity, whether it can execute
+ * on this host at all, what to file (or attach to), and the card the operator
+ * should see. It performs no side effect beyond opening the bridge record —
+ * filing the governed action stays with the canonical requester, and answering
+ * the provider stays with the adapter.
+ *
+ * A classification this stage does not own is returned untouched. The routine
+ * read-only path in particular is settled by V1, and a second stage that could
+ * reclassify it would re-open a certified decision.
+ */
+export function bridgeProviderPrompt({
+  root,
+  classification = null,
+  laneId = null,
+  laneName = null,
+  runId = null,
+  sessionId = null,
+  governedActions = [],
+  repoRoot = null,
+  ref = "origin/staging",
+  nowMs = Date.now(),
+} = {}) {
+  if (!classification) return { ok: false, error: "missing_classification" };
+  const cls = String(classification.classification || "");
+  if (cls === "routine_tool_permission") {
+    return { ok: true, bridged: false, reason: "routine prompts are answered by the adapter under V1 authority" };
+  }
+  if (cls === "informational_input") {
+    return { ok: true, bridged: false, reason: "an informational question is answered by a person, not by a capability" };
+  }
+
+  const command = classification.requested?.command ?? null;
+  const resolution = resolveProviderCapability({
+    classification: cls, command, tool: classification.requested?.tool ?? null,
+  });
+
+  if (resolution.resolution !== "registered_governed_capability") {
+    // Truthful, and deliberately still surfaced: an unresolvable prompt is an
+    // operator decision, not a silent hold.
+    return {
+      ok: true, bridged: false, resolution,
+      surface: {
+        headline: resolution.resolution === "unsupported_privileged_action"
+          ? "Provider requested a privileged action Vacilando does not govern"
+          : "Provider needs a decision",
+        why_not_automatic: resolution.reason,
+        provider_command: command,
+        operator_action: "review_and_decide",
+      },
+    };
+  }
+
+  const executor = selectExecutor(resolution.action_key);
+  const identity = canonicalIdentityFor(resolution.attempted_operation, { repoRoot, ref });
+  const executable = identity.ok ? assertBridgeExecutable(identity) : { ok: false, refusal: identity.code, detail: identity.detail };
+
+  const opened = openBridge({
+    root,
+    promptFingerprint: classification.fingerprint,
+    laneId, runId, sessionId,
+    attemptedOperation: resolution.attempted_operation,
+    resolution, identity: identity.ok ? identity : null, executor,
+    nowMs,
+  });
+
+  const card = bridgeApprovalCard({
+    bridge: opened.bridge, identity: identity.ok ? identity : null, executable, laneName,
+  });
+
+  // A capability that cannot execute here is REPORTED, never filed. An approval
+  // the executor would refuse is worse than no approval: it spends the
+  // operator's attention and ends in the same place.
+  if (!identity.ok || executable.ok === false) {
+    return {
+      ok: true, bridged: true, filed: false,
+      bridge: opened.bridge, resolution, executor,
+      identity: identity.ok ? identity : null,
+      blocked: executable.ok === false ? executable : { refusal: identity.code, detail: identity.detail },
+      card,
+    };
+  }
+
+  const dedupe = dedupeDecision({ identity, governedActions });
+  const inputs = governedInputsFor({ identity });
+
+  return {
+    ok: true, bridged: true, filed: dedupe.action === "file_new",
+    bridge: opened.bridge, resolution, executor, identity, dedupe,
+    governed_request: dedupe.action === "file_new"
+      ? { action_key: identity.action_key, inputs: inputs.inputs, content_fingerprint: identity.content_fingerprint, evidence: identity.evidence }
+      : null,
+    card,
+  };
+}
+
 // ── Health ───────────────────────────────────────────────────────────────────
 
 /**
