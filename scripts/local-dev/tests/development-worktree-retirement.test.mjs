@@ -606,3 +606,21 @@ await test("NC37 — a process running INSIDE the worktree path does occupy it",
   assert.ok(measured.blocked_by.includes("no_live_provider"));
   assert.ok(measured.blocked_by.includes("no_live_dev_server"), "a next dev in the path is a dev server");
 });
+
+await test("NC38 — the requester identity comes from the record, in every consumer", () => {
+  // The live defect: the evidence collector read inputs.requestingWorktree,
+  // which the CLI never sends, so not_self_retirement was unmeasured there
+  // while the CLI had measured it. Different gate sets, different fingerprints,
+  // and a correct retirement was denied as stale. Wiring a rule in two of three
+  // places is not wiring it.
+  const src = readFileSync(new URL("../lib/vacilando/director-evidence.mjs", import.meta.url), "utf8");
+  assert.ok(
+    /requestingWorktree:\s*rec\?\.worktree_path/.test(src),
+    "the evidence collector must take the requester from the record",
+  );
+  const ga = readFileSync(new URL("../lib/vacilando/governed-action-request.mjs", import.meta.url), "utf8");
+  assert.ok(
+    /requestingWorktree:\s*rec\.worktree_path/.test(ga),
+    "defaultExecute must take the requester from the record",
+  );
+});

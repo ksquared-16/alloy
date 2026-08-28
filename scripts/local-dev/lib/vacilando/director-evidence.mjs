@@ -199,7 +199,13 @@ export function collectDirectorEvidence(rec, {
         s7Worktrees: [{ path: wt, state: inputs.s7State || "retirable", in_git_worktree_list: inGit, reasons: [] }],
         processes,
         worktreeParent: parent,
-        requestingWorktree: inputs.requestingWorktree || null,
+        // THE REQUESTER COMES FROM THE RECORD, never from inputs. A worker
+        // that could name its own requester could name someone else's and
+        // retire the tree it is running in. This is the same rule defaultExecute
+        // applies; wiring it in two of the three places left not_self_retirement
+        // unmeasured here, which changed the gate set and therefore the
+        // fingerprint, and a correct request was refused as stale.
+        requestingWorktree: rec?.worktree_path || inputs.requestingWorktree || null,
         repository: inputs.repository || "repo_alloy",
       })[0];
       if (measured) {
