@@ -230,11 +230,27 @@ describe("the conversation actually happens, and the paperwork arrives filled", 
         expect(selector).not.toContain(".filter((need) => need.requires_participant_action)");
     });
 
-    it("skipping writes the honest answer, so the question does not come back forever", () => {
+    it("skipping settles the question without answering it, and it does not come back", () => {
+        /*
+         * This guard used to demand the defect.
+         *
+         * The invariant is right and unchanged — a null write leaves the need `missing` and it is
+         * re-asked on the next recompute, forever. The mechanism was wrong: writing the shortcut's
+         * own LABEL as the answer is what put "Middle name: Nothing to add" on a signed Oregon
+         * health form. Settlement now lives beside the D-99 confirmations, and the value stays
+         * absent.
+         */
         const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
-        // A null write leaves the need `missing` and it is re-asked on the next recompute.
-        expect(card).toContain("submit({ value: skipLabel");
+        expect(card).toContain("submit({ decline: true");
+        expect(card).not.toContain("submit({ value: skipLabel");
         expect(card).not.toContain("submit({ value: null");
+
+        // The need leaves the queue because its STATE changed, not because a value appeared.
+        const projection = code("lib/enrollment/informationNeeds/projectEnrollmentInformationNeeds.ts");
+        expect(projection).toContain('state: "declined"');
+        expect(projection).toContain("declineSatisfiesAbsence");
+        const selector = code("lib/enrollment/participantRuntime/selectNextParticipantTurn.ts");
+        expect(selector).toContain('need.state === "known_requires_confirmation" || need.state === "missing"');
     });
 
     it("an operator's authoring note never reaches a parent", () => {

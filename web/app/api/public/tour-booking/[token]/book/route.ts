@@ -231,7 +231,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // revoke a booking the parent successfully made.
         const actionModel = buildTourParentActionModel({
             actions: minted.ok ? minted.actions : [],
-            baseUrl: resolvePublicBaseUrl(request),
+            baseUrl: resolvePublicBaseUrl(),
             bookingStatusKey: booking.status_key,
         });
         await runTourCommsOrchestratorBestEffort("public_book_confirmed", () =>

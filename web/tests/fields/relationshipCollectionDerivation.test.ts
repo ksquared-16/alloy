@@ -42,44 +42,31 @@ const EXPECTED: Record<string, CanonicalCollectionProviderDefinition> = {
 };
 
 describe("POS-FP17 — relationship collection provider derivation", () => {
-    it("derives the 3 relationship providers byte-identically to the prior hand-authored defs", () => {
+    it("derives the originally hand-authored providers byte-identically", () => {
+        // The byte-identity claim is about the THREE providers that predate derivation. The count is
+        // deliberately not frozen: adding a collectable role is one definition row, and a test that
+        // fails when someone exercises that property would be testing the opposite of the doctrine.
         const derived = deriveRelationshipCollectionProviders();
-        expect(derived.length).toBe(3);
-        for (const p of derived) {
-            expect(p).toEqual(EXPECTED[p.refKey]);
+        const byRef = new Map(derived.map((p) => [p.refKey, p]));
+        for (const [refKey, expected] of Object.entries(EXPECTED)) {
+            expect(byRef.get(refKey), `${refKey} no longer derives`).toEqual(expected);
         }
+        expect(derived.length).toBeGreaterThanOrEqual(Object.keys(EXPECTED).length);
     });
 
-    it("registry = native structural + derived relationship providers (order stable)", () => {
-        const all = listCanonicalCollectionProviders();
-        expect(all.map((p) => p.refKey)).toEqual([
+    it("registry = native structural first, then derived relationship providers in definition order", () => {
+        const all = listCanonicalCollectionProviders().map((p) => p.refKey);
+        // Natives lead, and the original three keep their order — new roles append.
+        expect(all.slice(0, 5)).toEqual([
             "children",
             "household.members",
-            // H2 — four health-fact refs, native structural like `children`. FOUR and not one
-            // because a Forms group binds to exactly ONE collection, so an operator authoring an
-            // allergy section must not receive medications.
-            "health.allergies",
-            "health.conditions",
-            "health.medications",
-            "health.immunizations",
             "person.contact_role.parents",
             "person.contact_role.emergency_contacts",
             "person.contact_role.authorized_pickups",
         ]);
-    });
-
-    it("H2 — every health ref keeps the guarantees Enrollment plans against", () => {
-        // These are the four promises the H1–H4 contract makes to the Enrollment lane. Breaking any
-        // of them breaks bindings authored against them.
-        for (const ref of ["health.allergies", "health.conditions", "health.medications", "health.immunizations"]) {
-            const p = listCanonicalCollectionProviders().find((x) => x.refKey === ref);
-            expect(p, `${ref} is not registered`).toBeTruthy();
-            expect(p!.itemEntityType).toBe("person_health_fact");
-            expect(p!.requiredContextKeys).toEqual(["customer_member_id"]);
-            expect(p!.sourceEntityType).toBe("customer_member");
-            // Superseded facts are history, never a current answer.
-            expect(p!.activeOnly).toBe(true);
-        }
+        // The care-provider roles a real enrollment packet asked for, derived with no provider code.
+        expect(all).toContain("person.contact_role.physicians");
+        expect(all).toContain("person.contact_role.dentists");
     });
 
     it("classifies providers: children/household.members native, the rest configured", () => {

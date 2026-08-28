@@ -81,6 +81,8 @@ export const STRUCTURED_CANDIDATE_KINDS = [
     "corrected_value",
     "unresolved",
     "clarification_needed",
+    /** The participant used the optional way out. There is no value, and that is the answer. */
+    "declined",
 ] as const;
 
 export type StructuredCandidateKind = (typeof STRUCTURED_CANDIDATE_KINDS)[number];
@@ -101,6 +103,14 @@ export type StructuredCandidate = {
 export type CandidateDisposition =
     | { readonly action: "confirm_value"; readonly value: unknown }
     | { readonly action: "write_shared_value"; readonly value: unknown }
+    /**
+     * ASKED, AND LEFT BLANK ON PURPOSE — settlement without a value.
+     *
+     * The need stops being asked and counts as settled, and NOTHING is written to `shared_values`.
+     * Recording the shortcut's own label as the answer is what put "Nothing to add" in the middle-
+     * name box of a signed Oregon health form.
+     */
+    | { readonly action: "decline_value" }
     | { readonly action: "no_change"; readonly reason: "unresolved" | "clarification_needed" }
     /**
      * READ, BUT NOT TRUSTED — the participant is asked, and NOTHING is persisted.

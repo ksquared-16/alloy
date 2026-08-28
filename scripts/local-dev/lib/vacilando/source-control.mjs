@@ -333,6 +333,7 @@ export async function maybeCreateCheckpoint({
   laneId,
   origin = "governor",
   summary = null,
+  paths = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
   requireExplicit = SCM_POLICY.checkpoint_requires_explicit,
@@ -343,6 +344,28 @@ export async function maybeCreateCheckpoint({
   const path = rec?.binding?.worktree_path || run?.worktree_path;
   emitScmEvent("checkpoint_requested", { lane_id: id, run_id: run?.run_id }, root, { origin });
 
+  // THE GATE THAT WASN'T. This used to read
+  // `requireExplicit && !run?.checkpoint_ready`, and the only caller that
+  // reached it was `vac run-status --checkpoint-ready`, which set that very flag
+  // moments earlier in the same call. The check could not refuse the one path it
+  // existed to govern, and 67 unrelated files went into a lane branch twice.
+  //
+  // A checkpoint is now a manifest operation. Without an explicit list of paths
+  // there is no authorization to commit anything, and there is no flag that
+  // restores the old behaviour — see checkpoint-create for the sanctioned owner.
+  const manifest = Array.isArray(paths) ? paths.map(String).filter(Boolean) : [];
+  if (!manifest.length) {
+    emitScmEvent("checkpoint_refused", { lane_id: id, run_id: run?.run_id }, root, {
+      error: "checkpoint_requires_manifest",
+      origin,
+    });
+    return {
+      ok: false,
+      skipped: true,
+      error: "checkpoint_requires_manifest",
+      detail: "A checkpoint must name the paths it commits. Use vac checkpoint-create.",
+    };
+  }
   if (requireExplicit && !run?.checkpoint_ready) {
     return { ok: false, skipped: true, error: "checkpoint_not_explicit" };
   }
@@ -376,10 +399,10 @@ export async function maybeCreateCheckpoint({
 
   let committed;
   try {
-    if (commitImpl) committed = await commitImpl({ path, message, laneId: id });
+    if (commitImpl) committed = await commitImpl({ path, message, laneId: id, paths: manifest });
     else {
       const { commitWorktreeCheckpoint } = await import("./alloy-dev-adapter.mjs");
-      committed = await commitWorktreeCheckpoint({ path, message });
+      committed = await commitWorktreeCheckpoint({ path, message, paths: manifest });
     }
   } catch (e) {
     committed = { ok: false, error: String(e && e.message || e) };

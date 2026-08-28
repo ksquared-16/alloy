@@ -49,6 +49,9 @@ const AFFIRMATIVE = new Set([
 
 const NEGATIVE = new Set(["n", "no", "nope", "incorrect", "wrong", "not right"]);
 
+/** Controls whose value simply IS the words the participant wrote. */
+const FREE_TEXT_CONTROLS = new Set(["text", "textarea", "string"]);
+
 const UNKNOWN = new Set([
     "i don't know",
     "i dont know",
@@ -116,6 +119,54 @@ export function interpretParticipantResponseDeterministically(
         if (NEGATIVE.has(normalized)) return { kind: "clarification_needed" };
     }
 
+    /*
+     * A PLAIN answer to a PLAIN question is the answer.
+     *
+     * "Enrollment must remain usable when the provider is disabled, unavailable, timing out or
+     * refused" is this module's first paragraph, and it was not true: every free-text need reached
+     * the provider or nowhere. A parent asked "What is your name?" typed "Alex Sigwalk", the
+     * deterministic layer declined to read it, D-101 does not admit `guardian_name`, and the
+     * runtime answered "Sorry — I didn't catch that" forever. There was no way past that question
+     * on any path.
+     *
+     * This is not natural-language parsing and does not become it. Nothing is EXTRACTED: the words
+     * are taken whole, and only where taking them whole cannot be wrong —
+     *
+     *   • a COLLECT turn, so there is no proposed value that an answer could be agreeing with;
+     *   • a free-text control, so a date, a number and a choice all still require their own control
+     *     and are never guessed at from prose;
+     *   • not an affirmation or a refusal, which are conversation about a value rather than a value.
+     *
+     * "actually she was born 5/6/21" is still refused, because a date need is not free text. What
+     * is admitted is the case where the parent answered the question they were asked.
+     */
+    if (input.turn.kind === "collect_missing_value" && acceptsWholeText(input.turn)) {
+        const spoken = (input.text ?? "").trim();
+        if (spoken && !isUnambiguousAffirmation(normalized) && !NEGATIVE.has(normalized)) {
+            return { kind: "corrected_value", value: spoken };
+        }
+    }
+
     // Anything else is natural language this layer does not pretend to parse.
     return { kind: "clarification_needed" };
+}
+
+/**
+ * Can this need's whole answer be its typed words?
+ *
+ * Only a free-text control. A date, a number or a choice carries a shape the words would have to be
+ * PARSED into, and parsing is exactly what this layer refuses to do — those needs keep their own
+ * deterministic control, which is the always-available path they already had.
+ */
+function acceptsWholeText(turn: ParticipantTurn): boolean {
+    const occurrences = turn.need?.occurrences ?? [];
+    if (occurrences.length === 0) return false;
+    /*
+     * EVERY destination has to be free text.
+     *
+     * One need can fill several controls, and a shape that fits one of them is not an answer for
+     * the others: if any occurrence is a date, a choice or a number, the words would have to be
+     * parsed into that shape somewhere, and that is what this layer refuses to do.
+     */
+    return occurrences.every((o) => FREE_TEXT_CONTROLS.has(o.field_type) && o.options.length === 0);
 }

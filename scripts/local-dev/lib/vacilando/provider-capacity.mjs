@@ -144,9 +144,25 @@ export function correlateProviderProcesses({ panes = [], lanes = [], sessions = 
  * think. A parked conversation, a queued instruction with no process, a
  * finished run, an idle session — none of them do.
  */
-export function processConsumesCapacity(proc, { suspended = false } = {}) {
+export function processConsumesCapacity(proc, { suspended = false, seatState = null } = {}) {
   if (!proc) return false;
   if (suspended) return false;
+  // ── S8 ────────────────────────────────────────────────────────────────────
+  //
+  // When a canonical seat state has been resolved, IT governs, and it says
+  // something the legacy rule below does not: a live provider idling at a
+  // prompt still holds the resource. S4 derives the provider ceiling from
+  // memory per LIVE PROCESS, so an idle agent costs its six gigabytes exactly
+  // like a working one — the legacy rule counted "is it thinking", which is a
+  // different question from the one the ceiling was built to answer.
+  //
+  // This was NOT safe to say before S8. Counting an idle seat without a way to
+  // yield it deadlocks: three quiet agents and a fourth lane that can never
+  // start. Contention-driven reclamation is what makes the honest count
+  // survivable, which is why the two land together.
+  //
+  // Callers that resolve no seat state keep the legacy rule unchanged.
+  if (seatState) return seatState !== "dormant";
   const run = proc.run_state || null;
   const session = proc.session_state || null;
   if (STARTING_SESSION_STATES.includes(session)) return true;
@@ -182,6 +198,7 @@ export function assessProviderCapacity({
   sessions = [],
   suspendedLaneIds = [],
   runStateFor = null,
+  seatStates = null,
   ceiling = configuredProviderCeiling(),
 } = {}) {
   if (!Array.isArray(panes)) {
@@ -200,7 +217,17 @@ export function assessProviderCapacity({
   }
   const suspended = new Set(suspendedLaneIds || []);
   const processes = correlateProviderProcesses({ panes, lanes, sessions, runStateFor });
-  const counted = processes.filter((p) => processConsumesCapacity(p, { suspended: suspended.has(p.lane_id) }));
+  // S8: a resolved seat state, when the caller has one, decides whether the
+  // process holds the resource. Keyed by lane, because that is the only
+  // identity a seat and a lane share.
+  const stateByLane = new Map();
+  for (const s of seatStates || []) {
+    if (s?.lane_id) stateByLane.set(s.lane_id, s.state);
+  }
+  const counted = processes.filter((p) => processConsumesCapacity(p, {
+    suspended: suspended.has(p.lane_id),
+    seatState: stateByLane.get(p.lane_id) || null,
+  }));
   const active = counted.length;
   const available = Math.max(0, ceiling - active);
   return {
@@ -211,8 +238,10 @@ export function assessProviderCapacity({
     active,
     available,
     processes,
+    seat_states: seatStates || null,
     holders: counted.map((p) => ({
       lane_id: p.lane_id,
+      seat_state: stateByLane.get(p.lane_id) || null,
       name: p.lane_name || p.worktree_path,
       worktree_path: p.worktree_path,
       pid: p.pid,
@@ -235,4 +264,283 @@ export function suggestCapacityRelease(capacity) {
   const idle = holders.find((h) => !h.run_state);
   if (idle) return { ...idle, why: "session_open_without_work", interrupts: false };
   return null;
+}
+
+// ── S8: resolving canonical seat state from live evidence ────────────────────
+
+/**
+ * When did anything meaningful last happen on this lane?
+ *
+ * MEANINGFUL, NOT MERELY RECENT. Process start time is deliberately absent: an
+ * agent alive since Tuesday that answered an instruction a minute ago is not
+ * idle, and one started an hour ago that has never been spoken to is. Age of
+ * the process says nothing about whether its seat is wanted.
+ *
+ * The sources are the durable ones — the run ledger, the session record, the
+ * lane — plus the observed pane, so a turn that produced no run still counts
+ * as interaction.
+ */
+export function lastMeaningfulActivityAt({ lane = null, session = null, runs = [], observedAt = null } = {}) {
+  const stamps = [];
+  const push = (v) => {
+    const t = typeof v === "number" ? v : Date.parse(v || "");
+    if (Number.isFinite(t)) stamps.push(t);
+  };
+  for (const r of runs || []) {
+    push(r?.updated_at); push(r?.completed_at); push(r?.started_at); push(r?.created_at);
+  }
+  push(session?.resumed_at); push(session?.oriented_at); push(session?.last_orientation_attempt_at);
+  push(session?.updated_at); push(session?.started_at);
+  push(lane?.updated_at);
+  push(observedAt);
+  return stamps.length ? Math.max(...stamps) : null;
+}
+
+/**
+ * Resolve the canonical seat state for every provider on this host.
+ *
+ * Every expensive input is INJECTED so the caller decides what it can afford:
+ * `activityFor` captures panes, `descendantsFor` reads S1 attribution,
+ * `claimsFor` reads the S5 ledger. Anything not supplied is reported as
+ * unknown, and unknown never becomes `idle` — the resolver refuses to conclude
+ * "nothing is happening" from "we did not look".
+ */
+export async function observeProviderSeats({
+  panes = null,
+  lanes = [],
+  sessions = [],
+  runStateFor = null,
+  runsFor = null,
+  activityFor = null,
+  descendantsFor = null,
+  claimsFor = null,
+  deliveryInFlightFor = null,
+  now = Date.now(),
+  graceMs = null,
+} = {}) {
+  const { classifySeat, configuredIdleGrace, IDLE_GRACE_POLICY_V1 } = await import("./provider-seat-state.mjs");
+  const grace = Number.isFinite(graceMs) ? graceMs : configuredIdleGrace();
+  const seats = [];
+  const seen = new Set();
+
+  const processes = Array.isArray(panes)
+    ? correlateProviderProcesses({ panes, lanes, sessions, runStateFor })
+    : [];
+
+  // tmux's own record of when this session last produced OUTPUT.
+  //
+  // This is the signal S8 needed and the durable stores could not give: an
+  // agent can work, finish a turn and sit at a prompt without any Vacilando run
+  // ever opening, and the lane record would still read as a day old. It is
+  // interaction, not process age — the pane that has printed nothing for nine
+  // days is exactly the seat worth yielding, and the one that printed a second
+  // ago is not, however long its process has been alive.
+  const paneActivityMs = new Map();
+  for (const pane of panes || []) {
+    if (!Number.isFinite(pane?.session_activity)) continue;
+    const ms = pane.session_activity * 1000;
+    for (const key of [pane.pane_id, pane.pid == null ? null : String(pane.pid)]) {
+      if (!key) continue;
+      paneActivityMs.set(key, Math.max(paneActivityMs.get(key) || 0, ms));
+    }
+  }
+
+  for (const proc of processes) {
+    const lane = lanes.find((l) => l.lane_id === proc.lane_id) || null;
+    const session = sessions.find((s) => s.lane_id === proc.lane_id) || null;
+    const runs = typeof runsFor === "function" ? (runsFor(proc.lane_id) || []) : [];
+    const activityRec = typeof activityFor === "function" ? await activityFor(proc) : null;
+    const descendants = typeof descendantsFor === "function" ? descendantsFor(proc) : null;
+    const claims = typeof claimsFor === "function" ? (claimsFor(proc) || []) : [];
+    const active = runs.find((r) => ACTIVE_RUN_STATES.includes(r.state))
+      || runs.find((r) => !["COMPLETE", "FAILED", "CANCELLED"].includes(r.state))
+      || null;
+
+    if (proc.lane_id) seen.add(proc.lane_id);
+    seats.push(classifySeat({
+      lane_id: proc.lane_id,
+      lane_name: proc.lane_name,
+      provider: proc.provider,
+      pid: proc.pid,
+      tmux_session: proc.tmux_session,
+      worktree_path: proc.worktree_path,
+      agent_session_id: session?.agent_session_id || null,
+      session_state: proc.session_state || session?.state || null,
+      run: active,
+      activity: activityRec?.activity || null,
+      blocker_kind: activityRec?.blocker_kind || null,
+      descendants: descendants || [],
+      descendants_known: descendants != null,
+      validation_claims: claims,
+      delivery_in_flight: typeof deliveryInFlightFor === "function" ? Boolean(deliveryInFlightFor(proc)) : false,
+      pending_operator_interaction: active?.state === "NEEDS_INPUT",
+      last_meaningful_activity_at: lastMeaningfulActivityAt({
+        lane, session, runs,
+        // NOT the time we looked. Observing a quiet pane is not interaction
+        // with it — passing the observation timestamp here made every readable
+        // seat permanently "active one second ago", which quietly made `idle`
+        // unreachable on a live host.
+        observedAt: paneActivityMs.get(proc.pane_id) ?? paneActivityMs.get(proc.pid == null ? "" : String(proc.pid)) ?? null,
+      }),
+    }, { now, graceMs: grace, policy: IDLE_GRACE_POLICY_V1 }));
+  }
+
+  // Dormant lanes are not processes, so no pane will produce them — but an
+  // operator asking "where did my seats go" must be able to see that the work
+  // is intact and resumable, not gone.
+  for (const lane of lanes) {
+    if (seen.has(lane.lane_id)) continue;
+    const session = sessions.find((s) => s.lane_id === lane.lane_id) || null;
+    if (session?.state !== "SUSPENDED") continue;
+    seats.push(classifySeat({
+      lane_id: lane.lane_id,
+      lane_name: lane.name || null,
+      provider: lane.preferred_provider || lane.binding?.provider || session?.provider || null,
+      pid: null,
+      activity: "absent",
+      session_state: "SUSPENDED",
+      agent_session_id: session.agent_session_id,
+      worktree_path: lane.binding?.worktree_path || null,
+      dormant_since: session.dormant_since || session.suspended_at || null,
+      resume_count: session.resume_count || 0,
+      last_resume_result: session.last_resume_result || null,
+    }, { now, graceMs: grace }));
+  }
+
+  return seats;
+}
+
+/**
+ * Assemble the live inputs a seat classification needs, on this host, now.
+ *
+ * Bounded and best-effort by design. Every probe that fails degrades to
+ * "unknown", and unknown never yields `idle` — so a machine where `ps` or tmux
+ * is unavailable simply never reclaims anything, which is the safe direction.
+ */
+export async function observeLiveSeats({ root = undefined, now = Date.now(), graceMs = null } = {}) {
+  const [{ listDurableLanes }, { listCurrentAgentSessions }, { listTmuxPanesRaw, parseTmuxPaneLines, capturePaneText },
+    { listExecutionRunsForLane }, { classifyProviderActivity, ACTIVITY_CAPTURE_LINES }] = await Promise.all([
+    import("./development-lane.mjs"),
+    import("./agent-session.mjs"),
+    import("./lanes.mjs"),
+    import("./execution-run.mjs"),
+    import("./lane-provider-activity.mjs"),
+  ]);
+
+  const lanes = listDurableLanes(root);
+  const sessions = listCurrentAgentSessions(root);
+  let panes = null;
+  try {
+    const raw = await listTmuxPanesRaw();
+    if (raw?.ok) panes = parseTmuxPaneLines(raw.stdout);
+  } catch { panes = null; }
+
+  // S1 is the authority on descendants. No process table means no claim about
+  // what a seat owns — reported as unknown, never as none.
+  let index = null;
+  let rows = null;
+  try {
+    const { probeProcessTable } = await import("./health-probes.mjs");
+    const { parseProcessTable, buildProcessIndex } = await import("./process-attribution.mjs");
+    const text = await probeProcessTable({});
+    if (text) {
+      rows = parseProcessTable(text);
+      index = buildProcessIndex(rows);
+    }
+  } catch { index = null; rows = null; }
+
+  // S5 is the authority on validation claims.
+  let claims = [];
+  try {
+    const { readClaimStore } = await import("./validation-admission.mjs");
+    claims = readClaimStore({ root }).claims || [];
+  } catch { claims = []; }
+
+  const { resolveOwningSeat } = await import("./process-attribution.mjs");
+  const { looksLikeValidation } = await import("./health-probes.mjs");
+
+  return observeProviderSeats({
+    panes, lanes, sessions,
+    runStateFor: (laneId) => {
+      try {
+        const runs = listExecutionRunsForLane(laneId, root) || [];
+        return runs.find((r) => ACTIVE_RUN_STATES.includes(r.state))?.state || null;
+      } catch { return null; }
+    },
+    runsFor: (laneId) => {
+      try { return listExecutionRunsForLane(laneId, root) || []; } catch { return []; }
+    },
+    activityFor: async (proc) => {
+      const target = proc.pane_id || proc.tmux_session;
+      if (!target) return null;
+      try {
+        const out = await capturePaneText(target, ACTIVITY_CAPTURE_LINES);
+        const text = typeof out === "string" ? out : String(out?.text || "");
+        if (!text.trim()) return null;
+        return { ...classifyProviderActivity(text, { provider: proc.provider }), observed_at: now };
+      } catch { return null; }
+    },
+    descendantsFor: (proc) => {
+      // tmux reports pane_pid as a STRING, and the process table parses pids as
+      // NUMBERS. An unconverted compare made every seat report "descendants
+      // unknown", which is conservative but wrong — no seat could ever be idle.
+      const pid = Number(proc.pid);
+      if (!index || !rows || !Number.isInteger(pid)) return null;
+      const seatPids = new Set([pid]);
+      return rows.filter((r) => r.pid !== pid
+        && looksLikeValidation(r.command)
+        && resolveOwningSeat(r.pid, index, seatPids).seat_pid === pid);
+    },
+    claimsFor: (proc) => claims.filter((c) => c.lane_id === proc.lane_id || c.root_provider_pid === proc.pid),
+    now, graceMs,
+  });
+}
+
+/**
+ * A waiting admission needs a seat. Free the minimum number, or free none.
+ *
+ * This is the ONLY thing that reclaims a provider. It is called from the
+ * admission path when the ceiling has actually bound — never on a schedule,
+ * never from a sweep, and never with an empty `waiting` list.
+ */
+export async function reclaimForWaitingAdmission({
+  waiting = [],
+  availableSeats = 0,
+  root = undefined,
+  nowMs = Date.now(),
+  origin = "provider-capacity",
+} = {}) {
+  if (!waiting.length) {
+    return { ok: true, reclaimed: [], plan: { reason: "no_contention", reclaim: [] } };
+  }
+  const { planReclamation } = await import("./provider-seat-state.mjs");
+  const seats = await observeLiveSeats({ root, now: nowMs });
+  const plan = planReclamation({
+    seats,
+    contention: { waiting, available_seats: availableSeats },
+    now: nowMs,
+  });
+  if (!plan.reclaim.length) return { ok: true, reclaimed: [], plan, seats };
+
+  const { reclaimIdleProviderSeat } = await import("./provider-suspension.mjs");
+  const reclaimed = [];
+  const refused = [];
+  for (const target of plan.reclaim) {
+    const out = await reclaimIdleProviderSeat({
+      laneId: target.lane_id,
+      reclaimedFor: target.reclaimed_for,
+      origin,
+      nowMs,
+      root,
+      // The recheck reads the machine again, for this lane only, at the last
+      // possible moment. A plan is evidence, never permission.
+      recheckSeat: async ({ laneId }) => {
+        const fresh = await observeLiveSeats({ root, now: Date.now() });
+        return fresh.find((s) => s.lane_id === laneId) || null;
+      },
+    });
+    if (out.ok) reclaimed.push({ lane_id: target.lane_id, reclaimed_for: target.reclaimed_for, rank: target.rank });
+    else refused.push({ lane_id: target.lane_id, error: out.error, observed_state: out.observed_state ?? null });
+  }
+  return { ok: true, reclaimed, refused, plan, seats };
 }

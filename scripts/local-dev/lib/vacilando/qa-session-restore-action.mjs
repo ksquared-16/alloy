@@ -1,0 +1,243 @@
+/**
+ * `environment.restore_qa_session` — resolution, guarding and execution.
+ *
+ * The request a worker may make is deliberately the smallest one expressible: a lane id. Every other
+ * dimension — slot, worktree, port, base URL, Supabase project, storage path and the QA identity
+ * itself — is resolved HERE from the canonical registries. A caller cannot name an email, a URL or a
+ * storage path, so there is no input to smuggle a different target through; refusing such fields
+ * would still leave the shape suggesting they were negotiable, and they are not.
+ *
+ * Approval is not a parameter. `authorizeQaBootstrap` still takes `operatorApproved`, but the only
+ * caller that may set it is this executor, and it sets it from an operator GRANT that the governed
+ * action layer issued — never from a CLI flag, an environment variable or an agent's assertion.
+ */
+import {
+    laneSlot,
+    qaIdentityForSlot,
+    redactAuthText,
+    slotAuthStoragePath,
+    validateBrowserAuthRequest,
+    verifyBrowserAuth,
+    verifyBrowserAuthSync,
+} from "./browser-auth.mjs";
+import { getDurableLane } from "./development-lane.mjs";
+import { authorizeQaBootstrap, consumeQaBootstrap, openQaBootstrap } from "./qa-session-bootstrap.mjs";
+import { runQaSessionMint, runQaSessionMintSync } from "./qa-session-mint-runner.mjs";
+
+/** Inputs a caller may never supply. Present so the refusal is explicit rather than implied. */
+export const FORBIDDEN_RESTORE_INPUTS = Object.freeze([
+    "email", "identity", "expectedIdentity", "supabaseUrl", "supabaseProject", "projectRef",
+    "serviceUrl", "redirectUrl", "redirectTo", "storagePath", "storage",
+    "worktree", "port", "slot", "baseUrl", "token", "password", "serviceRoleKey", "accessToken",
+]);
+/*
+ * `worktreePath` is deliberately NOT in that list. The governed layer injects the run's own
+ * worktree into every validator, so refusing it by name would refuse the layer's own request, and a
+ * validator cannot tell an injected value from a caller's. The protection is stronger than a name
+ * check anyway: `resolveRestoreTarget` derives the worktree from the lane registry and never reads
+ * this field, so supplying one changes nothing about where a restore lands.
+ */
+
+/**
+ * Validate the request shape. Only `laneId` is accepted; anything else is refused by name so a
+ * caller learns the boundary rather than silently having a field ignored.
+ */
+/**
+ * Keys the governed layer itself adds before calling `validateInputs`.
+ *
+ * `validateAgainstRegistry` spreads `queryArtifactPath`, `databaseTarget` and — when the run knows
+ * it — `worktreePath`/`worktree_path` into every action's validator. They are the FRAMEWORK's
+ * values, not the caller's, so refusing them rejected the layer's own request. They are ignored
+ * rather than honoured: the executor resolves the worktree from the registry regardless, so
+ * accepting-and-discarding this one cannot redirect a restore anywhere.
+ */
+const FRAMEWORK_INJECTED_INPUTS = Object.freeze([
+    "queryArtifactPath", "databaseTarget", "worktreePath", "worktree_path", "artifactRoot",
+]);
+
+export function validateRestoreQaSessionInputs(rawInputs = {}) {
+    // Stripped regardless of value: the layer passes `queryArtifactPath: undefined` for actions
+    // that have no artifact, and a key present with an undefined value is still a key.
+    const inputs = Object.fromEntries(
+        Object.entries(rawInputs || {}).filter(([k]) => !FRAMEWORK_INJECTED_INPUTS.includes(k)),
+    );
+    const supplied = Object.keys(inputs);
+    const offending = supplied.filter((k) => FORBIDDEN_RESTORE_INPUTS.includes(k));
+    if (offending.length) {
+        return { ok: false, error: "caller_supplied_forbidden_input", detail: offending.join(", ") };
+    }
+    const laneId = inputs.laneId || inputs.lane_id || null;
+    if (!laneId || !/^lane_[A-Za-z0-9]+$/.test(String(laneId))) {
+        return { ok: false, error: "lane_id_required" };
+    }
+    const unknown = supplied.filter((k) => !["laneId", "lane_id", "registrationToken", "registration_token"].includes(k));
+    if (unknown.length) {
+        return { ok: false, error: "unexpected_input", detail: unknown.join(", ") };
+    }
+    return { ok: true, normalized: { laneId: String(laneId) } };
+}
+
+/**
+ * Resolve every privileged dimension from the registries. Nothing here reads caller input beyond
+ * the lane id, so a disagreement between lane, slot, worktree or port fails rather than picking one.
+ */
+export function resolveRestoreTarget(laneId, { getLane = getDurableLane } = {}) {
+    const lane = getLane(laneId);
+    if (!lane?.lane_id) return { ok: false, error: "unregistered_lane" };
+    const slot = laneSlot(lane);
+    if (!Number.isInteger(Number(slot))) return { ok: false, error: "lane_has_no_managed_slot" };
+    const identity = qaIdentityForSlot(Number(slot));
+    if (!identity) return { ok: false, error: "no_registered_qa_identity" };
+    const validated = validateBrowserAuthRequest({ lane, slot, expectedIdentity: identity });
+    if (!validated.ok) return { ok: false, error: validated.error, detail: validated.detail || null };
+    return { ok: true, validated };
+}
+
+/**
+ * Execute an APPROVED restore.
+ *
+ * `grant` is the operator's decision. Without one that authorizes exactly this action, nothing
+ * privileged runs — the mint child is not spawned, so a denied or pending request cannot reach
+ * Supabase at all. `restored` is still decided by the fresh-context verification, never by the mint.
+ */
+export function executeRestoreQaSessionSync({
+    action,
+    grant,
+    grantCheck,
+    nowMs = Date.now(),
+    mint = runQaSessionMintSync,
+    verify = verifyBrowserAuthSync,
+    getLane = getDurableLane,
+} = {}) {
+    /*
+     * The governed path is synchronous.
+     *
+     * `processGovernedAction` calls its executor WITHOUT awaiting, and every trusted-host action
+     * beside this one does its real work through `spawnSync` — git for push, gh for merge. An async
+     * executor hands that path a Promise, which it scores as a failed execution. Both injected
+     * defaults here are therefore the synchronous forms, and this function returns a value.
+     */
+    const prepared = prepareRestore({ action, grant, grantCheck, nowMs, getLane });
+    if (!prepared.ok) return prepared.failure;
+    const { validated } = prepared;
+
+    openQaBootstrap({ slot: validated.slot, nowMs });
+    const minted = mint(validated, { storagePath: slotAuthStoragePath(validated.slot) });
+    const consumed = consumeQaBootstrap({ slot: validated.slot, nowMs });
+    const afterMint = checkMint({ validated, minted, consumed });
+    if (afterMint) return afterMint;
+
+    return finishRestore({ validated, verified: verify(validated), nowMs });
+}
+
+/** Async form, kept for callers outside the governed path (and for the tests that inject fakes). */
+export async function executeRestoreQaSession({
+    action,
+    grant,
+    grantCheck,
+    nowMs = Date.now(),
+    mint = runQaSessionMint,
+    verify = verifyBrowserAuth,
+    getLane = getDurableLane,
+} = {}) {
+    const prepared = prepareRestore({ action, grant, grantCheck, nowMs, getLane });
+    if (!prepared.ok) return prepared.failure;
+    const { validated } = prepared;
+
+    openQaBootstrap({ slot: validated.slot, nowMs });
+    const minted = await mint(validated, { storagePath: slotAuthStoragePath(validated.slot) });
+    const consumed = consumeQaBootstrap({ slot: validated.slot, nowMs });
+    const afterMint = checkMint({ validated, minted, consumed });
+    if (afterMint) return afterMint;
+
+    return finishRestore({ validated, verified: await verify(validated), nowMs });
+}
+
+/**
+ * Every decision made before anything privileged happens.
+ *
+ * Pure and shared by both orchestrators, so the sync and async forms cannot diverge on who may
+ * restore what. If this returns a failure, the mint child is never spawned.
+ */
+function prepareRestore({ action, grant, grantCheck, nowMs, getLane }) {
+    if (!grant) return { ok: false, failure: safeFailure({ code: "grant_missing" }) };
+    const authorized = grantCheck ? grantCheck(grant, action, { nowMs }) : { ok: true };
+    if (!authorized.ok) return { ok: false, failure: safeFailure({ code: authorized.error || "grant_rejected" }) };
+
+    const inputCheck = validateRestoreQaSessionInputs(action?.inputs || {});
+    if (!inputCheck.ok) return { ok: false, failure: safeFailure({ code: inputCheck.error, detail: inputCheck.detail }) };
+
+    const resolved = resolveRestoreTarget(inputCheck.normalized.laneId, { getLane });
+    if (!resolved.ok) return { ok: false, failure: safeFailure({ code: resolved.error, detail: resolved.detail }) };
+    const validated = resolved.validated;
+
+    // Operator approval is carried from the grant. This is the ONLY place it may be true.
+    const allowed = authorizeQaBootstrap({
+        validated,
+        requestedIdentity: null,
+        operatorApproved: true,
+        repositoryProfile: "alloy",
+        nowMs,
+    });
+    if (!allowed.ok) {
+        return { ok: false, failure: safeFailure({ code: allowed.error, lane: validated.lane_id, slot: validated.slot }) };
+    }
+    return { ok: true, validated };
+}
+
+/** Returns a failure result when the mint or its single-use consumption did not succeed. */
+function checkMint({ validated, minted, consumed }) {
+    if (minted.ok && consumed.ok) return null;
+    return safeFailure({
+        code: minted.ok ? consumed.error : minted.error,
+        lane: validated.lane_id,
+        slot: validated.slot,
+        identity: validated.expected_identity,
+        storageWritten: false,
+    });
+}
+
+/** `restored` is decided here, by the fresh-context verification — never by the mint. */
+function finishRestore({ validated, verified, nowMs }) {
+    const ok = verified.ok === true;
+    return {
+        ok,
+        status: ok ? "restored" : "verification_failed",
+        lane_id: validated.lane_id,
+        slot: validated.slot,
+        registered_identity: validated.expected_identity,
+        storage_written: true,
+        verified: ok,
+        verified_at: ok ? new Date(nowMs).toISOString() : null,
+        failure_code: ok ? null : "verification_failed",
+    };
+}
+
+/**
+ * The only result shape this action may return.
+ *
+ * Allow-listed by construction: there is no field a token, cookie, link or child error could occupy,
+ * so a future edit cannot leak one by forgetting to redact. A restore returns a RESTORE result —
+ * never an unrelated census-shaped envelope, which is what made an earlier failure unreadable.
+ */
+export function safeFailure({ code, detail = null, lane = null, slot = null, identity = null, storageWritten = false }) {
+    return {
+        ok: false,
+        status: "failed",
+        lane_id: lane,
+        slot,
+        registered_identity: identity,
+        storage_written: storageWritten,
+        verified: false,
+        verified_at: null,
+        // A code, never a message: child text could carry anything.
+        failure_code: String(code || "unknown").slice(0, 64),
+        /*
+         * Redact BEFORE truncating. Truncation alone is not a defence: a child error beginning
+         * "access_token=eyJ..." stays a usable token in its first 120 characters. Caught by the
+         * control below rather than by review, which is why the control asserts on the value and
+         * not merely on the field name.
+         */
+        failure_detail: detail == null ? null : redactAuthText(String(detail)).slice(0, 120),
+    };
+}

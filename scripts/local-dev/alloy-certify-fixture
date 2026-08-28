@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# =============================================================================
+# alloy-certify-fixture — run ONE allowlisted certification fixture operation
+# with trusted local-stack credentials.
+#
+# WHY THIS EXISTS. Privileged local-stack values are injected only into
+# toolkit-owned processes and never into a worktree. That is correct, and it
+# left a lane holding a working certification fixture with no way to run it —
+# so the only route left was the Director running the seed by hand, which is
+# exactly what Vacilando exists to remove.
+#
+# WHY IT IS NOT A BACK DOOR.
+#   - The fixture name and the operation are both matched against a closed list
+#     HERE, not merely upstream. A caller that reaches this script directly gets
+#     the same refusals.
+#   - Each pair resolves to a FIXED npm script and a FIXED argument vector. No
+#     caller string is ever concatenated into a command line.
+#   - Credentials are loaded by the toolkit's own
+#     alloy_load_trusted_server_env_exports, which already refuses a remote
+#     Supabase host. There is one owner of that injection, not two.
+#   - Values are never printed. The runner echoes names and counts only.
+#
+# Usage (invoked by vac certify-fixture; direct use is possible and equally bounded):
+#   alloy-certify-fixture <fixture> <operation> <worktree> [--identity-decision <d>] [--org <uuid>]
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Same bootstrap every other toolkit command uses: common.sh loads the operator
+# config (which is what sets ALLOY_REPO), and verify.sh owns the trusted env
+# preflight and loader. Reusing them is the point — a second copy of credential
+# injection is exactly what this must not become.
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+alloy_load_config
+
+die() { printf 'alloy-certify-fixture: %s\n' "$1" >&2; exit "${2:-2}"; }
+
+FIXTURE="${1:-}"; OPERATION="${2:-}"; WORKTREE="${3:-}"
+shift 3 2>/dev/null || true
+
+IDENTITY_DECISION=""
+ORG_ID=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --identity-decision) IDENTITY_DECISION="${2:-}"; shift 2 ;;
+    --org) ORG_ID="${2:-}"; shift 2 ;;
+    *) die "unexpected argument: $1" ;;
+  esac
+done
+
+[[ -n "$FIXTURE" && -n "$OPERATION" && -n "$WORKTREE" ]] \
+  || die "usage: alloy-certify-fixture <fixture> <operation> <worktree> [--identity-decision <d>]"
+
+# ── the allowlist, restated here on purpose ──────────────────────────────────
+# Defence in depth: this script must refuse the same things whether it was
+# reached through vac or directly.
+case "$FIXTURE" in
+  operational_cards_certification) NPM_SCRIPT="dev:seed:operational-cards-certification" ;;
+  *) die "fixture_not_allowlisted: $FIXTURE" 3 ;;
+esac
+
+case "$OPERATION" in
+  ensure) FIXTURE_ARGS=() ;;
+  verify) FIXTURE_ARGS=("--verify") ;;
+  reset)  FIXTURE_ARGS=("--remove") ;;
+  *) die "operation_not_allowlisted: $OPERATION" 3 ;;
+esac
+
+case "$IDENTITY_DECISION" in
+  ""|create_new_person|reuse_existing|refuse_ambiguous) : ;;
+  *) die "identity_decision_not_allowlisted: $IDENTITY_DECISION" 3 ;;
+esac
+
+# The org id is a bounded FIXTURE PARAMETER, not forwarded environment. It is
+# accepted only in canonical UUID form, so nothing else can ride in on it.
+if [[ -n "$ORG_ID" ]]; then
+  [[ "$ORG_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] \
+    || die "org_id_not_a_uuid" 3
+fi
+
+[[ -d "$WORKTREE" ]] || die "worktree_missing: $WORKTREE" 3
+[[ -f "$WORKTREE/web/package.json" ]] || die "fixture_script_not_present: no web/package.json" 3
+grep -q "\"${NPM_SCRIPT}\"" "$WORKTREE/web/package.json" \
+  || die "fixture_script_not_present: web/package.json has no ${NPM_SCRIPT}" 3
+
+# ── trusted credentials, into THIS process only ──────────────────────────────
+# alloy_trusted_server_env_preflight checks the source exists and the required
+# NAMES are present; it never reads or prints a value. The loader then exports
+# them, and refuses outright if a Supabase URL points anywhere but this machine.
+alloy_trusted_server_env_preflight
+alloy_load_trusted_server_env_exports \
+  || die "trusted server env could not be loaded" 4
+
+# ── the target is only knowable HERE ─────────────────────────────────────────
+# The Node entry point cannot enforce this: it runs before the trusted env is
+# loaded and never sees SUPABASE_URL, so a check there passes vacuously no matter
+# what it says. This is the first line in the whole path where the real target is
+# known, so this is where a prohibited target has to be refused.
+#
+# alloy_is_production_supabase_url is the toolkit's own predicate — an
+# operator-linked project is permitted unless ALLOY_BLOCK_REMOTE_SUPABASE says
+# otherwise, and a plainly production host never is. Reusing it keeps one
+# definition of "prohibited target" on this machine.
+CERT_TARGET_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"
+[[ -n "$CERT_TARGET_URL" ]] || die "certification_target_unknown: no Supabase URL in the trusted env" 5
+if alloy_is_production_supabase_url "$CERT_TARGET_URL"; then
+  # The host, never a key.
+  die "certification_target_prohibited: ${CERT_TARGET_URL%%\?*} is not permitted for fixture execution" 5
+fi
+case "$CERT_TARGET_URL" in
+  *.supabase.co*|*.supabase.in*)
+    # A hosted project is allowed only because the operator configured it. Say so
+    # out loud rather than letting a remote target look like a local one.
+    printf 'certification_target=hosted url=%s\n' "${CERT_TARGET_URL%%\?*}"
+    ;;
+  *) printf 'certification_target=local url=%s\n' "${CERT_TARGET_URL%%\?*}" ;;
+esac
+
+printf 'fixture=%s operation=%s worktree=%s trusted_env_names=%s\n' \
+  "$FIXTURE" "$OPERATION" "$WORKTREE" "${ALLOY_TRUSTED_ENV_LOADED_COUNT:-0}"
+[[ -n "$IDENTITY_DECISION" ]] && printf 'identity_decision=%s\n' "$IDENTITY_DECISION"
+
+# ── run the fixture, and only the fixture ────────────────────────────────────
+# `npm run <fixed script> -- <fixed args>` in the lane's own worktree. The
+# fixture is the lane's code; this boundary supplies credentials, not logic.
+cd "$WORKTREE/web"
+# Exported for the fixture only, and only when explicitly supplied.
+[[ -n "$ORG_ID" ]] && export ALLOY_CERT_ORG_ID="$ORG_ID"
+if [[ -n "$IDENTITY_DECISION" ]]; then
+  exec npm run --silent "$NPM_SCRIPT" -- "${FIXTURE_ARGS[@]+"${FIXTURE_ARGS[@]}"}" --identity-decision "$IDENTITY_DECISION"
+fi
+exec npm run --silent "$NPM_SCRIPT" -- "${FIXTURE_ARGS[@]+"${FIXTURE_ARGS[@]}"}"

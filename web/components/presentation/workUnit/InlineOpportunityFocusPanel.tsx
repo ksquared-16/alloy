@@ -75,6 +75,10 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
+import {
+    beginDrawerTabPrefetchEpoch,
+    endDrawerTabPrefetchEpoch,
+} from "@/lib/admin/drawerTabPrefetchEpoch";
 import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
@@ -240,6 +244,23 @@ export function InlineOpportunityFocusPanel() {
             has_preview: Boolean(displayVm.activity?.communicationsPreviewVm),
         });
     }, [prewarmSubjectId, displayVm?.structureSettled, displayVm?.activity?.communicationsPreviewVm]);
+    /**
+     * THE ONE OWNER OF SPECULATIVE DRAWER-TAB WORK.
+     *
+     * The panel's subject binding already knows every way that work can go stale, so declaring the
+     * epoch here covers all of them with a single effect rather than a cleanup call at each: the
+     * subject changing re-runs it, a Work Unit change re-runs or remounts it, returning to the
+     * Workspace unmounts it, and a newer intent is just the next subject. Whatever was queued for
+     * the epoch it supersedes can no longer execute.
+     *
+     * This replaces `invalidateOpportunityDrawerTabPrefetch`, which had no production caller at all.
+     */
+    useEffect(() => {
+        if (!prewarmSubjectId) return;
+        const epoch = beginDrawerTabPrefetchEpoch(prewarmSubjectId);
+        return () => endDrawerTabPrefetchEpoch(epoch);
+    }, [prewarmSubjectId]);
+
     const modePrewarm = useMemo(
         () => ({
             activity: () => {

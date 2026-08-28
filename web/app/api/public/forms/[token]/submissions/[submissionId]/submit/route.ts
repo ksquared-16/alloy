@@ -38,6 +38,8 @@ import {
     emitOpportunityEnrollmentPacketStepCompletedSafe,
 } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
+import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
+import { fetchOrgTimeZoneIana } from "@/lib/admin/orgLocalDayBounds";
 import {
     extractCollectionSubmissionEnvelope,
     validateCollectionPayloadOrgSecurity,
@@ -158,6 +160,34 @@ export async function POST(
         payloadToValidate = {
             ...payloadToValidate,
             values: filterPayloadValuesToSchemaFields(schema, (payloadToValidate.values ?? {}) as Record<string, unknown>),
+        };
+    }
+
+    /*
+     * Derived destinations are filled HERE — before validation, because this is the moment the
+     * source means.
+     *
+     * "Today's Date" beside a signature is the day the family signed, and that instant does not
+     * exist until now. Filling it after validation would reject the submission for a blank the
+     * platform was about to write itself; filling it earlier would stamp the wrong day. The
+     * organisation's own zone decides which calendar day this is — a 9pm Pacific signature is not
+     * tomorrow.
+     */
+    const derivedValues = resolveFormDerivedValues(
+        schema,
+        (payloadToValidate.values ?? {}) as Record<string, unknown>,
+        {
+            executedAtIso: new Date().toISOString(),
+            timeZone: await fetchOrgTimeZoneIana(supabase, ctx.orgId),
+            // A signature date is the date of THAT signature — so whether it applies depends on
+            // whether the participant actually made it.
+            signatures: (payloadToValidate.signatures ?? null) as Record<string, unknown> | null,
+        },
+    );
+    if (Object.keys(derivedValues).length > 0) {
+        payloadToValidate = {
+            ...payloadToValidate,
+            values: { ...((payloadToValidate.values ?? {}) as Record<string, unknown>), ...derivedValues },
         };
     }
 
@@ -446,7 +476,9 @@ export async function POST(
         supabase,
         ctx.orgId,
         submissionId,
-        (finalPayload.values ?? {}) as Record<string, unknown>
+        (finalPayload.values ?? {}) as Record<string, unknown>,
+        // Which artifact these values are FROM. Without it a field id is a position, not a fact.
+        { schema: validated.schema, formDefinitionId: ctx.formDefinitionId }
     );
     if (adv.error) {
         console.error("[public submit] packet advance failed:", adv.error.message);

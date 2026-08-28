@@ -6,3 +6,7 @@ node_modules/
 
 # R11 measurement working state (raw subject ids — never committed)
 .r11-out/
+
+# Certification probe scratch + Playwright report output.
+.certrun/
+playwright-report/

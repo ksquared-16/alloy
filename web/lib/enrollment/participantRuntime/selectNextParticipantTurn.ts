@@ -40,6 +40,15 @@ export function deterministicPrompt(need: EnrollmentInformationNeed): string {
     if (need.state === "known_requires_confirmation") {
         return `We have ${label} as ${formatValue(need.current_value)}. Is that correct?`;
     }
+    /*
+     * A label that is ALREADY a question is asked as written.
+     *
+     * Wrapping produced "What is How would you describe your child's gender??" — the school's own
+     * sentence with a stem bolted onto the front and a second question mark on the end. The
+     * participant surface re-composes this wording, so no parent has read it; a deterministic
+     * fallback that is unusable when it is reached is not a fallback.
+     */
+    if (/\?\s*$/.test(label)) return label;
     return `What is ${label}?`;
 }
 

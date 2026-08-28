@@ -377,6 +377,14 @@ async function queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reas
   }
 }
 
+/**
+ * Delivery refusals that are transient, not failures.
+ *
+ * Kept in step with execution-resume's RETRYABLE set: a lane whose send lock is
+ * momentarily held will accept the same instruction a moment later.
+ */
+export const RETRYABLE_DELIVERY_REFUSALS = new Set(["send_in_progress"]);
+
 function refused(laneId, error, nowMs, size, run = null) {
   return decorate({
     ok: false,
@@ -752,6 +760,19 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
       return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
     }
   } catch { /* retain FAILED for true delivery failure */ }
+
+  // A RETRYABLE refusal is not a delivery failure.
+  //
+  // `send_in_progress` means another send for this lane is momentarily in
+  // flight. execution-resume already lists it as RETRYABLE, yet this path failed
+  // the run on it — producing runs that were FAILED with reason
+  // "send_in_progress" while `delivery.acknowledged` was true, i.e. the
+  // instruction HAD reached the provider. Three S5 instructions were recorded
+  // that way. A transient condition now becomes a bounded wait, which is exactly
+  // what the S6 waiting contract is for.
+  if (RETRYABLE_DELIVERY_REFUSALS.has(out.error)) {
+    return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason: out.error });
+  }
 
   const failed = transitionExecutionRun(run.run_id, "FAILED", {
     reason: out.error || "delivery_failed",

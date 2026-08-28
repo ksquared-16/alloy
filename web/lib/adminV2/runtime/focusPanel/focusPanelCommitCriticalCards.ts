@@ -42,9 +42,23 @@ function hasSubjectIdentityTruth(context: OperationalContext): boolean {
 
 export const COMMIT_CRITICAL_CARD_SPECS: readonly CommitCriticalCardSpec[] = [
     {
-        // The answer OWNS Current Work — always ready, even with no active stage work (honest empty).
+        /*
+         * The answer OWNS Current Work — but owning a question is not the same as having answered it.
+         *
+         * This alone read `isKnowable: () => true` while every sibling below gates on truth it can
+         * actually see. That is the whole defect: a card admitted to the ready set contributes no
+         * `reserved` cell, so the grid stops holding a place for it and the card renders its
+         * content perspective over a null runtime — a header with nothing under it, reported ready.
+         *
+         * Resolved-empty is still ready, and must stay ready: an answer that resolved and found no
+         * active work carries a projection whose items are empty, and that is a legitimate empty
+         * result, not missing data. What is NOT ready is an answer that has said nothing about the
+         * work yet — no projection and no next action. Then the card reserves, the grid keeps the
+         * cell, and Settlement fills it in place.
+         */
         key: "current_work",
-        isKnowable: () => true,
+        isKnowable: (context) =>
+            context.stageWorkRuntime != null || context.signals.work.nextActionLabel != null,
         build: (context) =>
             buildCurrentWorkCardModel({
                 stageWorkRuntime: context.stageWorkRuntime ?? null,

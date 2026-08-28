@@ -2,6 +2,7 @@
  * Shared identity field composition — child, person/contact, and employee subjects.
  */
 
+import { childProfileFieldKeyFromRef, childProfileSubjectProperty } from "@/lib/fields/customerMemberProfileSurfaces";
 import type { ChildrenEvidenceChild } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type {
     HouseholdEvidenceChild,
@@ -302,8 +303,27 @@ const NAME_FIELD_REFS = new Set([
     "employee.name",
 ]);
 
+/**
+ * Any child-profile manifest field, resolved without a hand-written resolver.
+ *
+ * The five original config fields each had one, which is why adding a sixth meant editing this file.
+ * Every manifest field is a `field_values` entry on the child, exposed on the subject under a
+ * predictable property — so the resolver is derivable, and the hand-written ones above stay only
+ * because three legacy keys use property names that predate the manifest.
+ * @see lib/fields/customerMemberProfileSurfaces
+ */
+function resolveChildProfileManifestValue(subject: IdentityComposeSubject, fieldRef: string): string | null {
+    if (subject.kind !== "child") return null;
+    const fieldKey = childProfileFieldKeyFromRef(fieldRef);
+    if (!fieldKey) return null;
+    const value = subject.value as Record<string, unknown>;
+    const property = childProfileSubjectProperty(fieldKey);
+    const raw = value[property] ?? value[fieldKey];
+    return typeof raw === "string" ? raw : raw == null ? null : String(raw);
+}
+
 export function resolveIdentityFieldValue(subject: IdentityComposeSubject, fieldRef: string): string | null {
-    const raw = RESOLVERS[fieldRef]?.(subject) ?? null;
+    const raw = RESOLVERS[fieldRef]?.(subject) ?? resolveChildProfileManifestValue(subject, fieldRef) ?? null;
     return raw?.trim() || null;
 }
 

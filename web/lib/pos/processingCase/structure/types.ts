@@ -40,6 +40,21 @@ export interface DocumentStructureField {
     bbox?: [number, number, number, number];
     /** Choice options recognized from the document (select fields; native-layout only). */
     options?: string[];
+    /**
+     * Set when this destination is one occurrence of a repeating structure the page's geometry
+     * declares — a dose column, a table row, a checkbox option. The field remains a real
+     * destination; the group is what the operator decides about. @see ./repeatingFieldGroups
+     */
+    repeat_group_id?: string;
+    /**
+     * Validation the SOURCE declared — a max length, a pattern, a numeric range. These are source
+     * semantics like requiredness and choices are: the author wrote them, and dropping them at the
+     * draft would publish a form that claims fidelity it does not have. Only what the source
+     * actually states; nothing inferred.
+     */
+    validate?: { pattern?: string; min?: number; max?: number; min_length?: number; max_length?: number };
+    /** For signature destinations: the initial required signature, or an update / re-sign line. */
+    signature_variant?: import("./signatureFieldName").SignatureVariant;
 }
 
 export interface DocumentStructureSection {
@@ -93,6 +108,24 @@ export interface StructureDiagnostics {
 export interface DocumentStructureCandidate {
     sections: DocumentStructureSection[];
     warnings: string[];
+    /**
+     * Repeating structures recognized from field geometry (dose schedules, table rows, checkbox
+     * groups). Repeated DESTINATIONS are not repeated FACTS: this is how a document that writes one
+     * value five times is reviewed once. @see ./repeatingFieldGroups
+     */
+    repeating_groups?: import("./repeatingFieldGroups").RepeatingFieldGroup[];
+    /**
+     * Logical artifacts inside this ONE source document — a hosted submission that is really four
+     * agreements, a PDF that carries two. Signatures and acknowledgements are scoped to these, so a
+     * signature on one cannot satisfy another. @see ./logicalArtifacts
+     */
+    logical_artifacts?: import("./logicalArtifacts").LogicalArtifact[];
+    /**
+     * Whether the source is something to fill in or something to read. A reference document yields
+     * sections, prose, acknowledgements and evidence obligations — but no participant fields.
+     * @see ./documentFillIntent
+     */
+    fill_intent?: import("./documentFillIntent").FillIntentVerdict;
     /** Detection diagnostics (always present from the detector; optional for back-compat). */
     diagnostics?: StructureDiagnostics;
 }

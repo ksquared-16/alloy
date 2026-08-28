@@ -33,6 +33,13 @@ function mapDraftField(f: DraftFormField): FormField {
         ...(description ? { description } : {}),
         ...(f.layout_width ? { layout_width: f.layout_width } : {}),
         ...(field_source ? { field_source } : {}),
+        // Placement without interrogation: the destination renders, the participant is not asked.
+        ...(f.read_only ? { read_only: true } : {}),
+        // …and, when Alloy fills it, the declaration of what fills it.
+        ...(f.derived ? { derived: f.derived } : {}),
+        // Source-declared validation travels onto the published field. `formValidateRulesSchema` is
+        // the existing owner; nothing new is invented here.
+        ...(f.validate && Object.keys(f.validate).length ? { validate: f.validate } : {}),
     };
     switch (f.type) {
         case "number":
@@ -45,6 +52,20 @@ function mapDraftField(f: DraftFormField): FormField {
             return { ...base, type: "file_ref" };
         case "signature":
             return { ...base, type: "signature" };
+        case "select":
+        case "multiselect": {
+            // The source DECLARED these choices. Publishing them as free text would lose the one
+            // thing the author was explicit about. `static_options` is the schema's own inline-choice
+            // construct — no `option_sets` row is required, and the values are the labels verbatim so
+            // a submitted answer reads the way the source wrote it.
+            const options = (f.options ?? []).map((o) => o.trim()).filter(Boolean);
+            if (options.length === 0) return { ...base, type: "text" };
+            const seen = new Set<string>();
+            const static_options = options
+                .filter((o) => (seen.has(o) ? false : (seen.add(o), true)))
+                .map((o) => ({ value: o, label: o }));
+            return { ...base, type: f.type, static_options };
+        }
         case "text":
         default:
             return { ...base, type: "text" };
@@ -157,12 +178,33 @@ export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSche
             for (const fid of s.field_ids) usedIds.add(fid);
         }
 
+        // 2b. Approved CLAUSE-LEVEL document obligations.
+        //
+        // Emitted for every disposition, deliberately. A static or acknowledgement section drops the
+        // field prompts the source drew — but this is not a prompt the source drew, it is an
+        // obligation the source stated in a sentence, and dropping it published four discovered
+        // document requirements as zero participant asks.
+        //
+        // Placed after the section's own content so the family reads the clause before the control
+        // that satisfies it.
+        for (const upload of s.clause_uploads ?? []) {
+            outFields.push({
+                id: upload.id,
+                type: "file_ref",
+                label: upload.label,
+                required: upload.required,
+                description: upload.description,
+                ...(upload.document_type ? { document_type: upload.document_type } : {}),
+            });
+            ids.push(upload.id);
+        }
+
         // 3. Emit the disposition's required control when the section doesn't already contain one.
         if (disposition === "acknowledgement") {
             const id = synthId("ack");
             outFields.push({ id, type: "boolean", label: "I acknowledge the above", required: true });
             ids.push(id);
-        } else if (disposition === "upload" && !sectionHasType(detectedInSection, "file_ref")) {
+        } else if (disposition === "upload" && !sectionHasType(detectedInSection, "file_ref") && !(s.clause_uploads ?? []).length) {
             const id = synthId("upload");
             outFields.push({ id, type: "file_ref", label: s.title || "Upload document", required: true });
             ids.push(id);

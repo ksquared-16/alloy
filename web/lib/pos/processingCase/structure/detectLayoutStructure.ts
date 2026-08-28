@@ -18,6 +18,7 @@
  */
 
 import type { SectionDisposition } from "../formDraft/sectionDisposition";
+import { classifyDocumentFillIntent } from "./documentFillIntent";
 import type { LayoutDocument, LayoutLine, LayoutPage } from "./pdfLayoutTypes";
 import { labelBbox, lineBbox } from "./layoutFieldGeometry";
 import type {
@@ -386,9 +387,23 @@ export function detectLayoutStructure(doc: LayoutDocument | null): DocumentStruc
         });
     }
 
+    // A document with nowhere to write has no participant fields, whatever its colons suggest.
+    // Sections, policy prose, acknowledgements and evidence obligations all survive — only the
+    // editable destinations it never had are dropped. Never silent: the verdict travels in warnings.
+    const intent = classifyDocumentFillIntent(doc);
+    if (intent.intent === "reference") {
+        const dropped = out.reduce((n, s) => n + s.fields.length, 0);
+        for (const s of out) s.fields = [];
+        warnings.push(
+            `Read as a reference document, not a form: ${intent.signals.join("; ")}.` +
+                (dropped > 0 ? ` ${dropped} prompt-looking line(s) were kept as content instead of becoming fields.` : "")
+        );
+        return { sections: out.filter((s) => s.static_text || s.disposition), warnings, fill_intent: intent };
+    }
+
     const totalFields = out.reduce((n, s) => n + s.fields.length, 0);
     if (totalFields === 0) warnings.push("No labelled fields were detected in the document layout.");
     if (out.some((s) => s.duplicate)) warnings.push("A later page looks like an output/classroom copy of earlier information — it was marked read-only, not a new set of questions.");
 
-    return { sections: out, warnings };
+    return { sections: out, warnings, fill_intent: intent };
 }

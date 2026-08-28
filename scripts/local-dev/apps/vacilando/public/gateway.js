@@ -990,6 +990,9 @@ function paint() {
     lastInstruction: lastInstructionFor(G.selected),
     statusOpen: statusOpenNow(),
     asideOpen: asideOpenNow(),
+    // Only the mobile drawer is ever actually hidden; the desktop pane is a
+    // permanent column, so it must never be inert.
+    asideInert: isMobileWidth() && !asideOpenNow(),
     userMessageExpanded: G.userMessageExpanded,
     attentionByLane: map,
     telemetry: G.telemetry?.lane_id === G.selected ? G.telemetry : null,
@@ -1171,6 +1174,36 @@ function startOutputPoll(laneId) {
   }));
 }
 
+/**
+ * Repaint the global pending-approvals bar.
+ *
+ * Kept independent of the lane projection on purpose: an approval must be
+ * reachable even when no lane is selected, which is exactly the state the
+ * operator was in when they could not find one.
+ */
+async function refreshApprovals() {
+  try {
+    const r = await gwFetch("/api/v2/governed-actions/pending");
+    const out = await r.json().catch(() => ({}));
+    G.approvals = Array.isArray(out.approvals) ? out.approvals : [];
+  } catch { G.approvals = G.approvals || []; }
+  paintApprovals();
+}
+
+function paintApprovals() {
+  const el = document.getElementById("approvals-bar");
+  if (!el) return;
+  const rows = G.approvals || [];
+  el.innerHTML = View.renderPendingApprovalsBar(rows);
+  el.hidden = rows.length === 0;
+  const badge = document.getElementById("nb-needs");
+  if (badge) {
+    badge.textContent = String(rows.length);
+    badge.hidden = rows.length === 0;
+    badge.setAttribute("aria-hidden", rows.length === 0 ? "true" : "false");
+  }
+}
+
 function startListPoll() {
   stopListPoll();
   G.pollList = setInterval(async () => {
@@ -1179,6 +1212,7 @@ function startListPoll() {
     G.listInflight = true;
     try {
       await fetchLanes();
+      await refreshApprovals();
       paintRail();
       if (G.selected) {
         const listed = View.knownLane(G.lanes, G.selected);
@@ -1456,6 +1490,10 @@ async function show(r) {
   if (gen !== G.showGen) return;
   startListPoll();
   paint();
+  // Paint pending approvals on first show, not only on the next poll tick —
+  // an approval the operator cannot see for 20 seconds is one they will not
+  // find at all.
+  refreshApprovals().catch(() => {});
   if (!G.notifyRestored) {
     G.notifyRestored = true;
     restoreGatewayNotifications().catch(() => {});
@@ -1693,9 +1731,79 @@ document.addEventListener("toggle", (e) => {
   View.writeStatusOpen(details.open, storage());
 }, true);
 
+// Browser-session recovery. The button STARTS a sign-in; a person completes it.
+// Nothing typed into that browser comes back through here — the response carries
+// a state name and never credential material.
+async function runBrowserAuthAction(btn, action) {
+  const laneId = btn.getAttribute("data-lane-id") || "";
+  if (!laneId) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = action === "sign-in" ? "Waiting for you to sign in…" : "Checking…";
+  try {
+    const r = await gwFetch(`/api/v2/browser-auth/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lane_id: laneId, slot: btn.getAttribute("data-slot") || undefined }),
+    });
+    const body = await r.json().catch(() => ({}));
+    const host = btn.closest("[data-gw-browser-auth]");
+    const copy = host?.querySelector(".gw-work-stale-copy");
+    if (copy && body?.headline) copy.textContent = body.headline;
+    if (copy && body?.detail) copy.title = body.detail;
+  } catch (err) {
+    if (err?.status !== 401) {
+      const host = btn.closest("[data-gw-browser-auth]");
+      const copy = host?.querySelector(".gw-work-stale-copy");
+      // Say what happened. A silent failure here is what sent the Director to a
+      // terminal in the first place.
+      if (copy) copy.textContent = "Sign-in could not be started on this machine.";
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+    // The lane poll repaints the card from the server's own state; updating the
+    // headline here only keeps the button honest while the request is in flight.
+  }
+}
+
 document.addEventListener("click", async (e) => {
   if (e.target?.closest?.("#gw-login")) {
     e.stopPropagation();
+    return;
+  }
+  const dismissBlock = e.target?.closest?.("[data-gw-dismiss-block]");
+  if (dismissBlock) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dismissBlock.disabled) {
+      dismissBlock.disabled = true;
+      const label = dismissBlock.textContent;
+      dismissBlock.textContent = "Closing\u2026";
+      try {
+        await gwFetch("/api/v2/lanes/prompt-block/dismiss", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ lane_id: dismissBlock.getAttribute("data-lane-id") || "" }),
+        });
+      } catch { /* the lane poll reports the real state */ }
+      dismissBlock.disabled = false;
+      dismissBlock.textContent = label;
+    }
+    return;
+  }
+  const signIn = e.target?.closest?.("[data-gw-browser-auth-signin]");
+  if (signIn) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!signIn.disabled) await runBrowserAuthAction(signIn, "sign-in");
+    return;
+  }
+  const recheck = e.target?.closest?.("[data-gw-browser-auth-recheck]");
+  if (recheck) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!recheck.disabled) await runBrowserAuthAction(recheck, "verify");
     return;
   }
   const enable = e.target?.closest?.("[data-gw-notify-enable]");
@@ -1880,9 +1988,11 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     const btn = governedApprove || governedDeny;
     if (btn.disabled) return;
-    const requestId = btn.getAttribute("data-request-id")
-      || G.lane?.governed_action?.request_id
-      || G.lane?.execution_run?.governed_action?.request_id;
+    const ga = G.lane?.governed_action
+      || G.lane?.execution_run?.governed_action
+      || G.lane?.previous_run?.governed_action;
+    const requestId = btn.getAttribute("data-request-id") || ga?.request_id;
+    const row = (G.approvals || []).find((a) => a && a.request_id === requestId) || null;
     if (!requestId) return;
     btn.disabled = true;
     try {
@@ -1890,19 +2000,36 @@ document.addEventListener("click", async (e) => {
       const r = await gwFetch(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ request_id: requestId }),
+        body: JSON.stringify({
+          request_id: requestId,
+          // What the operator actually read. The server refuses the decision if
+          // the request has moved on since this card was drawn.
+          content_fingerprint: btn.getAttribute("data-content-fingerprint") || null,
+        }),
       });
       const out = await r.json().catch(() => ({}));
-      G.notice = out.ok
-        ? { kind: "ok", text: governedApprove ? "Census authorized. Director is executing." : "Census denied." }
-        : { kind: "err", text: out.error || "Could not resolve the census decision." };
+      G.notice = View.governedDecisionNotice({
+        approve: Boolean(governedApprove),
+        already: out.already === true,
+        error: out.ok ? null : (out.error || "approve_failed"),
+        actionKey: row?.action_key || ga?.action_key,
+        // The row the operator actually pressed — G.lane can be a different
+        // lane entirely when the decision came from the global bar.
+        title: row ? View.governedActionLabel(row) : (ga ? View.governedActionLabel(ga) : null),
+        approveLabel: row?.approve_label || ga?.approve_label,
+      });
       const laneId = G.selected || G.lane?.lane_id;
+      await refreshApprovals();
       await fetchLanes();
       if (laneId) await fetchLane(laneId);
       paint();
     } catch {
       btn.disabled = false;
-      G.notice = { kind: "err", text: "Could not resolve the census decision." };
+      G.notice = View.governedDecisionNotice({
+        approve: Boolean(governedApprove),
+        error: "unreachable",
+        actionKey: ga?.action_key,
+      });
       paint();
     }
     return;
@@ -2038,7 +2165,8 @@ document.addEventListener("click", async (e) => {
     // Interrupting real work needs an explicit yes; taking back something the
     // agent never received does not.
     const delivered = cancelRun.getAttribute("data-gw-cancel-delivered") === "1";
-    if (delivered && !window.confirm(View.cancelConfirmCopy(run))) return;
+    const idle = G.lane?.provider_activity?.activity === "ready";
+    if (delivered && !idle && !window.confirm(View.cancelConfirmCopy(run))) return;
     G.cancelPending = true;
     paint();
     try {

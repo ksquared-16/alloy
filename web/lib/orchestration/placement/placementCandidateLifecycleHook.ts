@@ -3,6 +3,7 @@
  * Idempotent — does not delete candidates.
  */
 
+import { PLACEMENT_CANDIDATE_QUEUE_SELECT } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
 import {
     loadActiveCandidatesBySubject,
     movePlacementCandidateToDerivedCohort,
@@ -240,7 +241,18 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
         /** Org program categories, already loaded by the caller (process-cached). id -> key. */
         programKeyByCategoryId?: ReadonlyMap<string, string>;
     },
-): Promise<{ attempted: number; created: number; skipped_existing: number }> {
+): Promise<{
+    attempted: number;
+    created: number;
+    skipped_existing: number;
+    /**
+     * The candidate rows this pass already read, in the queue loader's own shape.
+     *
+     * Only safe to reuse when nothing was inserted: these rows were read BEFORE the insert below, so
+     * a pass that created candidates must let the loader re-read. The caller enforces that.
+     */
+    candidateRows?: readonly Record<string, unknown>[];
+}> {
     if (!isPlacementLifecycleCandidateHookEnabled()) {
         return { attempted: 0, created: 0, skipped_existing: 0 };
     }
@@ -264,7 +276,21 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
             .in("context_id", opportunityIds)
             .in("subject_id", memberIds),
         supabase.from("customer_members").select("id, person_id, dob").eq("org_id", orgId).in("id", memberIds),
-        supabase.from("placement_candidates").select("seed_key").eq("org_id", orgId).in("opportunity_id", opportunityIds),
+        /*
+         * Widened from `seed_key` to the queue's own column list.
+         *
+         * This read already sits inside the concurrent wave above, so asking it for more columns
+         * costs no additional round trip here — while it lets the caller skip
+         * `bulkLoadPlacementCandidatesByOpportunity`, which read this same table with this same
+         * org + opportunity filter as the NEXT SERIAL step on the queue-critical path.
+         *
+         * Seed-key deduplication below is unchanged; it just reads `seed_key` off richer rows.
+         */
+        supabase
+            .from("placement_candidates")
+            .select(PLACEMENT_CANDIDATE_QUEUE_SELECT)
+            .eq("org_id", orgId)
+            .in("opportunity_id", opportunityIds),
         loadActiveCandidatesBySubject(supabase, { orgId, opportunityIds }),
     ]);
 
@@ -295,8 +321,9 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
             });
         }
     }
+    const existingCandidateRows = (existingRes.data ?? []) as Array<Record<string, unknown>>;
     const existingSeedKeys = new Set<string>();
-    for (const r of (existingRes.data ?? []) as Array<Record<string, unknown>>) {
+    for (const r of existingCandidateRows) {
         if (typeof r.seed_key === "string") existingSeedKeys.add(r.seed_key);
     }
 
@@ -395,9 +422,11 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
      * use. They are deliberately unreachable from here.
      */
 
-    if (!rows.length) return { attempted: children.length, created: 0, skipped_existing: skippedExisting };
+    if (!rows.length) {
+        return { attempted: children.length, created: 0, skipped_existing: skippedExisting, candidateRows: existingCandidateRows };
+    }
     const { error } = await supabase.from("placement_candidates").insert(rows);
-    if (error) return { attempted: children.length, created: 0, skipped_existing: skippedExisting };
+    if (error) return { attempted: children.length, created: 0, skipped_existing: skippedExisting, candidateRows: existingCandidateRows };
     return { attempted: children.length, created: rows.length, skipped_existing: skippedExisting };
 }
 

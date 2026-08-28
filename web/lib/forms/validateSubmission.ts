@@ -642,7 +642,33 @@ export function validateFormPayload(input: {
         }
     }
 
-    const rootLookup = mergeLookup([payload.values]);
+    /*
+     * A SIGNATURE'S VALUE IS THE SIGNATURE.
+     *
+     * A condition may legitimately ask whether a signature was made — the Oregon CIS's "Update
+     * signature — Date" applies only when there is an update signature — and a signature does not
+     * live in `values`. Reading only `values` made such a field permanently hidden here while the
+     * document renderer, which does consult `signatures`, considered it applicable. The two
+     * disagreed, and the submission was refused for a value the platform had just written.
+     *
+     * `values` still wins where a field id appears in both, so nothing about existing conditions
+     * changes: only signature ids, which never appear in `values`, resolve differently.
+     */
+    const signatureIds = new Set<string>();
+    for (const field of schema.fields) {
+        if (field.type === "signature") signatureIds.add(field.id);
+        if (field.type === "group") {
+            for (const child of (field as { fields: FormField[] }).fields) {
+                if (child.type === "signature") signatureIds.add(child.id);
+            }
+        }
+    }
+    const rootValues = mergeLookup([payload.values]);
+    const rootLookup = (fieldId: string): unknown => {
+        const fromValues = rootValues(fieldId);
+        if (fromValues !== undefined || !signatureIds.has(fieldId)) return fromValues;
+        return payload.signatures?.[fieldId] ?? null;
+    };
 
     for (const field of schema.fields) {
         if (field.type === "group") {

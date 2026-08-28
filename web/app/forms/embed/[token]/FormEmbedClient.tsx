@@ -4,6 +4,14 @@ import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCa
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { ParticipantUploads } from "./ParticipantUploads";
+import { ParticipantArtifactHeader } from "./ParticipantArtifactHeader";
+import { participantArtifactStatus } from "@/lib/enrollment/participantRuntime/participantArtifactStatus";
+import {
+    outstandingUploadRequests,
+    participantUploadRequests,
+    uploadIsOnFile,
+} from "@/lib/enrollment/participantRuntime/participantUploadRequests";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -111,13 +119,45 @@ function withSharedPrefill(payload: FormPayload, packet: ResolvePacketMeta | nul
  *
  * Title and section titles are stripped deliberately: the review owns the document's presentation,
  * and on the certification form the authored section titles are OCR page markers ("Page 1") that
- * must not resurface as headings beside a single input. The FIELDS are untouched — type, options,
- * validation and signature semantics all remain the Form's.
+ * must not resurface as headings beside a single input. Type, options, validation and signature
+ * semantics are untouched — they all remain the Form's.
+ *
+ * LABELS pass through the participant seam, and this is the one place that happens for every
+ * rendered control. An imported Form's label is often the source PDF's internal widget name
+ * (`Var history`, `Prov Sp`, `Signature1`), which is not a question and must never be printed to a
+ * parent. `participant_label` is null for exactly those, and a control with no words of its own is
+ * captioned by the artifact rather than by the source system.
  */
-function reviewControlSubSchema(schema: FormSchemaV1, fieldIds: string[]): FormSchemaV1 {
+function reviewControlSubSchema(
+    schema: FormSchemaV1,
+    fieldIds: string[],
+    participantLabels?: ReadonlyMap<string, string | null>,
+): FormSchemaV1 {
     const sub = subSchemaForFieldsGrouped(schema, fieldIds, "");
-    return { ...sub, sections: sub.sections.map((s) => ({ id: s.id, field_ids: s.field_ids })) };
+    const relabel = (fields: FormField[]): FormField[] =>
+        fields.map((f) => {
+            if (f.type === "group") {
+                return { ...f, fields: relabel((f as { fields: FormField[] }).fields) } as FormField;
+            }
+            if (!participantLabels?.has(f.id)) return f;
+            const words = participantLabels.get(f.id) ?? null;
+            return { ...f, label: words ?? UNNAMED_SOURCE_CONTROL_LABEL } as FormField;
+        });
+    return {
+        ...sub,
+        fields: relabel(sub.fields as FormField[]),
+        sections: sub.sections.map((s) => ({ id: s.id, field_ids: s.field_ids })),
+    };
 }
+
+/**
+ * What a control is called when the source document named it and nobody else did.
+ *
+ * Not a guess at the question — a statement that the words live on the page in front of the parent.
+ * Reached only if such a control is ever rendered as a captioned input; on a source-fidelity
+ * artifact it is presented at its authored placement instead.
+ */
+const UNNAMED_SOURCE_CONTROL_LABEL = "Marked on your document";
 
 type ResolveOk = {
     ok: true;
@@ -250,6 +290,20 @@ export function FormEmbedClient({
      * the semantic review stands and the parent is never shown a blank.
      */
     const [originalDocument, setOriginalDocument] = useState(false);
+    /**
+     * What the RENDERER says this artifact is — the one answer that spans both engines.
+     *
+     * `originalDocument` above is a duck read of the fidelity mapping and therefore true only for a
+     * source replica. Using it to decide whether to show a document at all sent every generated
+     * agreement — the completed Admissions application, the Tuition and Handbook agreements — down
+     * the semantic fallback, where the parent met an HTML form instead of the document Alloy had
+     * composed for them.
+     */
+    const [artifactModel, setArtifactModel] = useState<{
+        renderer: "source_fidelity" | "generated_document";
+        page_count: number;
+        signatures: Array<{ field_id: string; page: number; x: number; y: number; width: number; height: number }>;
+    } | null>(null);
     const [documentRev, setDocumentRev] = useState(0);
     const [documentUnavailable, setDocumentUnavailable] = useState(false);
     const documentRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -266,6 +320,13 @@ export function FormEmbedClient({
         typedName?: string;
         drawnDataUrl?: string;
     } | null>(null);
+    /**
+     * The version's `pdf_mapping_json`, held so the compiled artifact can tell an authored label
+     * from the source document's own widget name. Null for a generated document.
+     */
+    const [sourceMapping, setSourceMapping] = useState<unknown>(null);
+    /** Filenames for what the parent attached, so the row can say WHICH file is on file. */
+    const [attachedFilenames, setAttachedFilenames] = useState<Record<string, string>>({});
     /** The version's authored signature placement — where on the document signing happens. */
     const [signaturePlacement, setSignaturePlacement] = useState<{
         field_id: string;
@@ -352,34 +413,61 @@ export function FormEmbedClient({
             }
             setSchema(withoutAuthoringNotes(parsedSchema));
             setOriginalDocument(hasOriginalDocument(json.data.pdf_mapping_json));
+            setSourceMapping(json.data.pdf_mapping_json ?? null);
+            setAttachedFilenames({});
             setDocumentUnavailable(false);
             setDocumentRev(0);
             setReviewStep("handoff");
             setCapturedSignature(null);
-            {
-                // The authored placement, straight off the version's mapping — a duck read for the
-                // same reason as `hasOriginalDocument`: the server re-validates everything.
-                const placements = (json.data.pdf_mapping_json as {
-                    signature_placements?: Array<{
-                        field_id?: string;
-                        page?: number;
-                        x?: number;
-                        y?: number;
-                        width?: number;
-                        height?: number;
-                    }>;
-                } | null)?.signature_placements;
-                const first = Array.isArray(placements) ? placements[0] : null;
-                setSignaturePlacement(
-                    first &&
+            /*
+             * Where this artifact is signed comes from the RENDERER, not from the mapping.
+             *
+             * A composed document has no mapping — its signature block is reserved by the layout —
+             * so reading `pdf_mapping_json` here found nothing on the generated Tuition and
+             * Handbook agreements, and the parent was given a text box beside the document instead
+             * of the signature line on it. `enrollment-artifact` answers for both engines.
+             */
+            setSignaturePlacement(null);
+            setArtifactModel(null);
+            void (async () => {
+                try {
+                    const res = await fetch(`/api/public/forms/${encToken}/enrollment-artifact`);
+                    const body = (await res.json()) as {
+                        ok?: boolean;
+                        data?: {
+                            renderer?: "source_fidelity" | "generated_document";
+                            page_count?: number;
+                            signatures?: Array<Record<string, unknown>>;
+                        };
+                    };
+                    const slots = Array.isArray(body?.data?.signatures) ? body.data.signatures : [];
+                    if (body?.ok && body.data?.renderer) {
+                        setArtifactModel({
+                            renderer: body.data.renderer,
+                            page_count: typeof body.data.page_count === "number" ? body.data.page_count : 1,
+                            signatures: slots as NonNullable<typeof artifactModel>["signatures"],
+                        });
+                    }
+                    /*
+                     * The FIRST placement is the signature this artifact asks this parent for.
+                     *
+                     * The Oregon CIS carries two — "Signature*" and "Update signature" — and the
+                     * second is for a later re-verification, not for enrolling. Signing one must
+                     * never satisfy the other, and it does not: each is its own destination with its
+                     * own evidence row.
+                     */
+                    const first = slots[0];
+                    if (
+                        first &&
                         typeof first.field_id === "string" &&
-                        [first.page, first.x, first.y, first.width, first.height].every(
-                            (n) => typeof n === "number",
-                        )
-                        ? (first as NonNullable<typeof signaturePlacement>)
-                        : null,
-                );
-            }
+                        ["page", "x", "y", "width", "height"].every((k) => typeof first[k] === "number")
+                    ) {
+                        setSignaturePlacement(first as unknown as NonNullable<typeof signaturePlacement>);
+                    }
+                } catch {
+                    /* No placement: the Forms signature control stands, exactly as before. */
+                }
+            })();
             setPacketProgress(json.data.packet ?? null);
             setBrand(json.data.brand ?? null);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
@@ -600,7 +688,15 @@ export function FormEmbedClient({
         return () => {
             cancelled = true;
         };
-    }, [token]);
+        /*
+         * `submissionId` is in the deps because finishing an artifact advances the packet.
+         *
+         * The objective carries how many documents are done, and the header above the paperwork
+         * reads it. Fetched once per token, that count froze: a parent who had just finished their
+         * third document was still told they were on it. A new draft id is exactly the moment the
+         * runtime moved on, so it is the moment to ask again.
+         */
+    }, [token, submissionId]);
 
     if (phase === "loading") {
         return (
@@ -800,8 +896,89 @@ export function FormEmbedClient({
      */
     const enrollmentReview = enrollmentJourney && participantPhase === "artifact_review" && artifactRenderable;
     const compiled = enrollmentReview
-        ? compileParticipantArtifact(schema, (payload.values ?? {}) as Record<string, unknown>)
+        ? compileParticipantArtifact(
+              schema,
+              (payload.values ?? {}) as Record<string, unknown>,
+              sourceMapping as Parameters<typeof compileParticipantArtifact>[2],
+          )
         : null;
+    /**
+     * The words each control may be captioned with — the seam every rendered control passes through.
+     *
+     * Built from the compiled model rather than the schema so the source-provenance rule is applied
+     * in exactly one place, and a null in here is load-bearing: it means the source document named
+     * this box and Alloy has no question for it.
+     */
+    const participantLabels: ReadonlyMap<string, string | null> = new Map(
+        (compiled?.sections.flatMap((s) => s.controls) ?? []).map((c) => [c.field_id, c.participant_label]),
+    );
+
+    /**
+     * The documents this artifact asks the parent to bring.
+     *
+     * Not part of the compiled control model on purpose: an attachment is participant WORK whose
+     * result is evidence, not a value the runtime resolved for them. It is presented as a short list
+     * of things to bring and gates completion the way the artifact itself says it does.
+     */
+    const uploadRequests = schema && enrollmentReview ? participantUploadRequests(schema) : [];
+    const outstandingUploads =
+        schema && enrollmentReview
+            ? outstandingUploadRequests(schema, (payload.values ?? {}) as Record<string, unknown>)
+            : [];
+    const requiredUploadsOutstanding = outstandingUploads.filter((r) => r.required).length;
+    const attachedUploads: Record<string, { document_id: string; filename: string } | undefined> = {};
+    for (const request of uploadRequests) {
+        const held = (payload.values ?? {})[request.field_id];
+        if (uploadIsOnFile(held)) {
+            attachedUploads[request.field_id] = {
+                document_id: String(held),
+                filename: attachedFilenames[request.field_id] ?? "on file",
+            };
+        }
+    }
+
+
+    /** One attachment, through the token-scoped route that files it as a canonical Document. */
+    const uploadParticipantDocument = async (
+        fieldId: string,
+        file: File,
+    ): Promise<{ document_id: string; filename: string } | { error: string }> => {
+        try {
+            const buffer = new Uint8Array(await file.arrayBuffer());
+            let binary = "";
+            for (let i = 0; i < buffer.length; i += 8192) {
+                binary += String.fromCharCode(...buffer.subarray(i, i + 8192));
+            }
+            const res = await fetch(`/api/public/forms/${encToken}/enrollment-upload`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ field_id: fieldId, filename: file.name, file_base64: btoa(binary) }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string;
+                data?: { document_id?: string; filename?: string };
+            };
+            if (!json.ok || !json.data?.document_id) return { error: json.error ?? "That file could not be attached." };
+            return { document_id: json.data.document_id, filename: json.data.filename ?? file.name };
+        } catch {
+            return { error: "That file could not be attached." };
+        }
+    };
+
+    /** A `file_ref` destination holds the document id, and nothing else about the file. */
+    const recordAttachment = (fieldId: string, doc: { document_id: string; filename: string }) => {
+        setAttachedFilenames((prev) => ({ ...prev, [fieldId]: doc.filename }));
+        setValidationErrors(null);
+        setMessage(null);
+        const next = {
+            ...payload,
+            values: { ...((payload.values ?? {}) as Record<string, unknown>), [fieldId]: doc.document_id },
+        } as FormPayload;
+        setPayload(next);
+        void persistDraft(next);
+        scheduleDocumentRefresh();
+    };
     /**
      * Acknowledgment, then signature — STRUCTURALLY, not by document order.
      *
@@ -812,7 +989,29 @@ export function FormEmbedClient({
      */
     const ackFieldIds = compiled ? compiled.acknowledgments.map((c) => c.field_id) : [];
     const signatureFieldIds = compiled ? compiled.signatures.map((c) => c.field_id) : [];
-    const showDocument = originalDocument && !documentUnavailable;
+
+    /**
+     * Where the parent is, in the five words a parent uses.
+     *
+     * Derived on every render from what the artifact still wants, so it cannot drift from the state
+     * of the buttons beneath it.
+     */
+    const artifactStatus = participantArtifactStatus({
+        documentTitle: schema?.title ?? null,
+        step: reviewStep === "edit" ? "edit" : reviewStep === "sign" ? "sign" : "review",
+        requiredUploadsOutstanding,
+        signatureExpected: signaturePlacement != null || signatureFieldIds.length > 0,
+        signatureCaptured: capturedSignature != null,
+        packetTotal: enrollmentObjective?.progress?.total ?? 0,
+        packetSatisfied: enrollmentObjective?.progress?.satisfied ?? 0,
+    });
+    /*
+     * A document is shown when the renderer can produce one — for EITHER engine.
+     *
+     * The replica-only test that stood here is what made "the parent's own document" true of the
+     * two state forms and false of the three the school wrote.
+     */
+    const showDocument = artifactModel != null && !documentUnavailable;
     /** The document-first participant progression applies; otherwise the semantic fallback. */
     const documentFlow = enrollmentReview && compiled != null && showDocument;
     const allowTypedSignature =
@@ -841,7 +1040,7 @@ export function FormEmbedClient({
      * frame is corrected by the next refresh or by submit.
      */
     const scheduleDocumentRefresh = () => {
-        if (!originalDocument || documentUnavailable) return;
+        if (artifactModel == null || documentUnavailable) return;
         if (documentRefreshTimer.current) clearTimeout(documentRefreshTimer.current);
         documentRefreshTimer.current = setTimeout(() => setDocumentRev((r) => r + 1), 1500);
     };
@@ -1025,7 +1224,7 @@ export function FormEmbedClient({
                                 renderInput={(control) => (
                                     <div className="[&_header]:hidden">
                                         <FormEngineRenderer
-                                            schema={reviewControlSubSchema(schema, [control.field_id])}
+                                            schema={reviewControlSubSchema(schema, [control.field_id], participantLabels)}
                                             payload={payload}
                                             onChange={(next) => {
                                                 setValidationErrors(null);
@@ -1047,6 +1246,7 @@ export function FormEmbedClient({
                         </IntakeCard>
                     ) : reviewStep === "sign" ? (
                         <IntakeCard>
+                            <ParticipantArtifactHeader status={artifactStatus} />
                             {/* Acknowledge, then sign AT the document’s own signature line. */}
                             {ackFieldIds.length > 0 ? (
                                 <div className="pb-5 [&_header]:hidden" data-artifact-final-phase="acknowledgment">
@@ -1054,7 +1254,7 @@ export function FormEmbedClient({
                                         Please confirm you&rsquo;ve reviewed the information above.
                                     </p>
                                     <FormEngineRenderer
-                                        schema={reviewControlSubSchema(schema, ackFieldIds)}
+                                        schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
                                         payload={payload}
                                         onChange={(next) => {
                                             setValidationErrors(null);
@@ -1071,7 +1271,7 @@ export function FormEmbedClient({
                                 </div>
                             ) : null}
                             <p className="pb-4 text-[15px] text-alloy-midnight" data-artifact-final-phase="signature">
-                                {participantSignaturePrompt()}
+                                {participantSignaturePrompt(artifactStatus.state !== "complete")}
                             </p>
                             {signaturePlacement ? (
                                 <ParticipantDocumentCanvas
@@ -1097,7 +1297,7 @@ export function FormEmbedClient({
                                 /* No authored placement on this version — the Forms control stands. */
                                 <div className="[&_header]:hidden">
                                     <FormEngineRenderer
-                                        schema={reviewControlSubSchema(schema, signatureFieldIds)}
+                                        schema={reviewControlSubSchema(schema, signatureFieldIds, participantLabels)}
                                         payload={payload}
                                         onChange={(next) => {
                                             setValidationErrors(null);
@@ -1129,6 +1329,7 @@ export function FormEmbedClient({
                         /* REVIEW — the actual filled document, alone. The parent reviews their
                            paperwork; the machinery stays out of sight. */
                         <IntakeCard>
+                            <ParticipantArtifactHeader status={artifactStatus} />
                             <ParticipantDocumentCanvas
                                 url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
                                 onUnavailable={() => setDocumentUnavailable(true)}
@@ -1137,6 +1338,16 @@ export function FormEmbedClient({
                                 <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[13px] text-amber-950">
                                     {message}
                                 </p>
+                            ) : null}
+                            {uploadRequests.length > 0 ? (
+                                <div className="mt-6">
+                                    <ParticipantUploads
+                                        requests={uploadRequests}
+                                        attached={attachedUploads}
+                                        onAttached={recordAttachment}
+                                        onUpload={uploadParticipantDocument}
+                                    />
+                                </div>
                             ) : null}
                             <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-alloy-midnight/[0.07] pt-5">
                                 <span className="text-[14px] text-alloy-midnight/55">Something not right?</span>
@@ -1149,10 +1360,23 @@ export function FormEmbedClient({
                                     Make a change
                                 </button>
                                 <span className="flex-1" />
+                                {/* An attachment the document REQUIRES is part of reviewing it, and
+                                    the parent is told so here rather than at the end by a refusal. */}
+                                {requiredUploadsOutstanding > 0 ? (
+                                    <span className="text-[14px] text-alloy-midnight/55" data-uploads-outstanding="true">
+                                        {requiredUploadsOutstanding === 1
+                                            ? "One more thing to attach above."
+                                            : `${requiredUploadsOutstanding} more things to attach above.`}
+                                    </span>
+                                ) : null}
                                 <button
                                     type="button"
+                                    disabled={requiredUploadsOutstanding > 0}
                                     onClick={() => setReviewStep("sign")}
-                                    className="rounded-xl bg-alloy-midnight px-5 py-2.5 text-[15px] font-medium text-white"
+                                    className={clsx(
+                                        "rounded-xl px-5 py-2.5 text-[15px] font-medium text-white",
+                                        requiredUploadsOutstanding > 0 ? "bg-alloy-midnight/30" : "bg-alloy-midnight",
+                                    )}
                                     data-everything-looks-good="true"
                                 >
                                     Everything looks good
@@ -1174,7 +1398,7 @@ export function FormEmbedClient({
                             // engine renders it, so type, options and validation stay authored.
                             <div className="[&_header]:hidden">
                                 <FormEngineRenderer
-                                    schema={reviewControlSubSchema(schema, [control.field_id])}
+                                    schema={reviewControlSubSchema(schema, [control.field_id], participantLabels)}
                                     payload={payload}
                                     onChange={(next) => {
                                         setValidationErrors(null);
@@ -1201,7 +1425,7 @@ export function FormEmbedClient({
                                 Please confirm you&rsquo;ve reviewed the information above.
                             </p>
                             <FormEngineRenderer
-                                schema={reviewControlSubSchema(schema, ackFieldIds)}
+                                schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
                                 payload={payload}
                                 onChange={(next) => {
                                     setValidationErrors(null);
@@ -1223,10 +1447,10 @@ export function FormEmbedClient({
                             data-artifact-final-phase="signature"
                         >
                             <p className="pb-3 text-[15px] text-alloy-midnight">
-                                {participantSignaturePrompt()}
+                                {participantSignaturePrompt(artifactStatus.state !== "complete")}
                             </p>
                             <FormEngineRenderer
-                                schema={reviewControlSubSchema(schema, signatureFieldIds)}
+                                schema={reviewControlSubSchema(schema, signatureFieldIds, participantLabels)}
                                 payload={payload}
                                 onChange={(next) => {
                                     setValidationErrors(null);

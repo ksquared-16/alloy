@@ -261,14 +261,18 @@ alloy_validate_acquire_lock() {
 
 alloy_validate_status() {
   alloy_ensure_runtime_dirs
-  echo "== validation lease =="
-  if alloy_validate_lock_held; then
-    if alloy_validate_lock_stale; then
-      echo "(stale — will be reclaimed by next waiter)"
-    fi
-    alloy_validate_print_owner
+  # S5 IS THE CAPACITY AUTHORITY. Status reads the claim ledger, not a lease of
+  # its own — `alloy-validate` no longer holds one. Reporting an unheld mutex as
+  # "(idle)" while S5 held four claims would be exactly the misleading status
+  # this section was rewritten to stop producing.
+  echo "== governed validation (S5) =="
+  local s5_dir s5_script
+  s5_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || true)"
+  s5_script="${s5_dir}/vac-validate-status.mjs"
+  if [[ -n "$s5_dir" && -f "$s5_script" ]] && command -v node >/dev/null 2>&1; then
+    node "$s5_script" || echo "(S5 ledger unreadable)"
   else
-    echo "(idle)"
+    echo "(S5 ledger reader unavailable)"
   fi
   echo
   echo "== validation queue =="

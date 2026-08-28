@@ -23,6 +23,8 @@ import {
 } from "../lib/vacilando/execution-run.mjs";
 import { deliverManagedLaneInstruction } from "../lib/vacilando/execution-run-send.mjs";
 import {
+  canOperatorSupersedeRun,
+  OPERATOR_SUPERSEDE_GRACE_MS,
   classifyExecutionRunStale,
   closeStaleExecutionRun,
   collectStaleRunFacts,
@@ -742,6 +744,181 @@ await test("a leftover Cooked pane does not complete a run whose transcript is a
   assert.equal(out.completed, false);
   assert.equal(out.skipped, "last_output_mismatch");
   assert.equal(getExecutionRun(run.run_id, ROOT).state, "EXECUTING");
+});
+
+await test("operator Send can supersede a parked RECOVERING run", async () => {
+  // THE COMMUNICATIONS DEAD END. A recovered run waits for the agent to report
+  // again. When the agent already answered BEFORE the recovery — or its reply
+  // was consumed as a delivery echo — nothing further arrives, and the run parks
+  // in RECOVERING. The stale governor calls that class "active" so it never
+  // collects it, and Send was refused for anything that was not EXECUTING or
+  // NEEDS_INPUT. The lane became unreachable: it sat there 46 minutes with an
+  // idle pane and no way back in.
+  const delivered = Date.now() - (OPERATOR_SUPERSEDE_GRACE_MS + 60_000);
+  const recovering = { state: "RECOVERING", started_at: new Date(delivered).toISOString() };
+  const idle = { session_state: "IDLE", now_ms: Date.now(), delivered_ms: delivered };
+  assert.equal(canOperatorSupersedeRun(recovering, idle), true);
+
+  // POSITIVE CONTROLS. Busy sessions, in-flight continuations and the grace
+  // window still refuse. A leaked GRANTED lock is no longer a trap: completing
+  // the turn releases it, and that is the only way the operator gets the lane
+  // back when the pane is already idle.
+  for (const busy of ["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"]) {
+    assert.equal(canOperatorSupersedeRun(recovering, { ...idle, session_state: busy }), false, busy);
+  }
+  assert.equal(canOperatorSupersedeRun(recovering, { ...idle, open_resource: true }), true,
+    "a leaked grant must not block operator Send");
+  assert.equal(canOperatorSupersedeRun(recovering, { ...idle, in_flight_continuation: true }), false);
+  assert.equal(canOperatorSupersedeRun(recovering, { ...idle, delivered_ms: Date.now() - 1000 }), false,
+    "the grace window still protects a delivery that is still landing");
+
+  // And states that were never supersedable still are not.
+  for (const state of ["QUEUED", "VALIDATING", "WAITING_RESOURCE", "COMPLETE"]) {
+    assert.equal(canOperatorSupersedeRun({ ...recovering, state }, idle), false, state);
+  }
+  // EXECUTING and NEEDS_INPUT are unchanged.
+  assert.equal(canOperatorSupersedeRun({ ...recovering, state: "EXECUTING" }, idle), true);
+  assert.equal(canOperatorSupersedeRun({ state: "NEEDS_INPUT" }, idle), true);
+  assert.equal(canOperatorSupersedeRun({ state: "NEEDS_INPUT", agent_report: { type: "needs_input" } }, idle), false,
+    "a real blocking question is still an operator decision, not a stale turn");
+});
+
+await test("a parked RECOVERING run stops being protected forever", async () => {
+  // WHAT THE OPERATOR SAW. The Communications lane card read "Recovering" and
+  // never changed. RECOVERING was in PROTECTIVE_STATES unconditionally, and
+  // `recovery_state` — a RECORD of a past recovery — was read as "a recovery is
+  // in flight" and never cleared. So a recovered run that never reported again
+  // could not be collected by anything, ever. It sat there 116 minutes with an
+  // idle pane, past settle, no progress and no agent report.
+  const longAgo = new Date(Date.now() - (STALE_SETTLE_MS + 60 * 60 * 1000)).toISOString();
+  const parked = {
+    run_id: "erun_parked", state: "RECOVERING", instruction: "Are you stuck?",
+    started_at: longAgo, updated_at: longAgo,
+    recovery_state: { recovered_at: longAgo, abandoned_reason: "completion_not_attributable" },
+  };
+  const idle = { now_ms: Date.now(), session_state: "IDLE", session_alive: true };
+  const parkedClass = classifyExecutionRunStale(parked, idle);
+  assert.notEqual(parkedClass.class, "active", "a two-hour-old recovery is not in flight");
+  assert.notEqual(parkedClass.reason, "protective_state_recovering");
+
+  // POSITIVE CONTROL 1: a recovery that JUST happened is still protected. If
+  // this ever fails, the fix has become a licence to collect live recoveries.
+  const fresh = { ...parked, recovery_state: { recovered_at: new Date(Date.now() - 60_000).toISOString() } };
+  assert.equal(classifyExecutionRunStale(fresh, idle).class, "active");
+  assert.equal(classifyExecutionRunStale(fresh, idle).reason, "protective_state_recovering");
+
+  // POSITIVE CONTROL 2: with no timestamp to judge by, it stays protected —
+  // unknown timing must never become permission to collect.
+  const undated = { ...parked, recovery_state: { abandoned_reason: "x" }, updated_at: null };
+  assert.equal(classifyExecutionRunStale(undated, idle).class, "active");
+
+  // POSITIVE CONTROL 3: the other protective states are untouched. They wait on
+  // a person or a governed decision, and time alone does not resolve either.
+  for (const state of ["VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT"]) {
+    const c = classifyExecutionRunStale({ ...parked, state }, idle);
+    assert.equal(c.class, "active", state);
+    assert.equal(c.reason, `protective_state_${state.toLowerCase()}`, state);
+  }
+
+  // POSITIVE CONTROL 4: a settled recovery with a BUSY session is still active —
+  // falling through to the ordinary evaluation must not skip the live checks.
+  assert.equal(classifyExecutionRunStale(parked, { ...idle, session_state: "STARTING" }).class, "active");
+  assert.equal(classifyExecutionRunStale(parked, { ...idle, open_resource: true }).class, "active");
+});
+
+await test("recovery is not a one-way trap", async () => {
+  // THE TRAP THE OPERATOR KEPT SEEING. The governor abandons a run it cannot
+  // attribute. An operator recovery moves it to RECOVERING. The governor reaches
+  // the same conclusion again — and abandon was ILLEGAL from RECOVERING, so the
+  // transition was refused and the run could never leave. The lane card read
+  // "Recovering" permanently. Communications sat there for two hours.
+  const { isLegalRunTransition } = await import("../lib/vacilando/execution-run.mjs");
+  assert.equal(isLegalRunTransition("RECOVERING", "ABANDONED"), true,
+    "a recovered run the governor cannot attribute must have somewhere to go");
+
+  // POSITIVE CONTROLS. ABANDONED must not become cheap, and the irreversible
+  // states must stay irreversible.
+  assert.equal(isLegalRunTransition("COMPLETE", "ABANDONED"), false);
+  assert.equal(isLegalRunTransition("FAILED", "ABANDONED"), false);
+  assert.equal(isLegalRunTransition("ABANDONED", "EXECUTING"), false,
+    "RECOVERING is still the only exit from ABANDONED");
+  assert.equal(isLegalRunTransition("ABANDONED", "RECOVERING"), true);
+  // And the states a recovered run could already reach are unchanged.
+  for (const to of ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED"]) {
+    assert.equal(isLegalRunTransition("RECOVERING", to), true, to);
+  }
+});
+
+await test("a leaked grant does not trap the operator", async () => {
+  // THE VACILANDO DEAD END. The pane was idle at a prompt. The run was still
+  // EXECUTING because it held gateway_host_mutation GRANTED with no
+  // continuation in flight. Classify called that "active", so Close returned
+  // run_still_active; Send refused current_run_active; the governor would not
+  // collect it. There was no operator path back in.
+  const start = Date.now() - 2 * 60 * 60 * 1000;
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  seedSend(PRODUCT, start, start + 9_000);
+  const req = ensureResourceRequest({
+    runId: run.run_id,
+    laneId: LANE,
+    resourceKey: "gateway_host_mutation",
+    origin: "agent",
+    nowMs: start + 10 * 60 * 1000,
+    root: ROOT,
+  });
+  patchResourceRequest(req.request.request_id, {
+    state: "GRANTED",
+    continuation: { delivery_state: "DELIVERED" },
+  }, { root: ROOT });
+  const facts = collectStaleRunFacts(run, { root: ROOT, nowMs: now });
+  assert.equal(facts.open_resource, true);
+  assert.equal(facts.in_flight_continuation, false);
+  const cls = classifyExecutionRunStale(run, facts);
+  assert.equal(cls.class, "active");
+  assert.equal(cls.reason, "open_resource");
+  assert.equal(reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE }).count, 0,
+    "the governor still must not auto-collect a grant holder");
+  assert.equal(canOperatorSupersedeRun(run, facts), true);
+  const next = await deliverManagedLaneInstruction(LANE, "New instruction after the leaked grant", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: now + 1_000,
+  });
+  assert.equal(next.ok, true, next.error);
+  assert.equal(next.execution_run.state, "EXECUTING");
+  assert.notEqual(next.execution_run.run_id, run.run_id);
+  const leftover = (readResourceRequestStore(ROOT).requests || [])
+    .find((r) => r.request_id === req.request.request_id);
+  assert.ok(!leftover || leftover.state === "RELEASED");
+});
+
+await test("operator Close releases a leaked grant without Send", async () => {
+  const start = Date.now() - 2 * 60 * 60 * 1000;
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  seedSend(PRODUCT, start, start + 9_000);
+  const req = ensureResourceRequest({
+    runId: run.run_id,
+    laneId: LANE,
+    resourceKey: "gateway_host_mutation",
+    origin: "agent",
+    nowMs: start + 10 * 60 * 1000,
+    root: ROOT,
+  });
+  patchResourceRequest(req.request.request_id, {
+    state: "GRANTED",
+    continuation: { delivery_state: "DELIVERED" },
+  }, { root: ROOT });
+  const governor = closeStaleExecutionRun(run.run_id, { root: ROOT, nowMs: now, origin: "governor" });
+  assert.equal(governor.ok, false);
+  assert.equal(governor.error, "run_still_active");
+  const closed = closeStaleExecutionRun(run.run_id, { root: ROOT, nowMs: now, origin: "operator" });
+  assert.equal(closed.ok, true, closed.error || closed.reason);
+  assert.equal(closed.run.state, "ABANDONED");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

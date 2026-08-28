@@ -8,12 +8,30 @@ import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
+import { validatePushInputs } from "./trusted-host-push.mjs";
+import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
+import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
+import { validateProvisionQaIdentityInputs } from "./qa-identity-provision-action.mjs";
+import { validateAssignQaAccessInputs } from "./qa-access-assign-action.mjs";
+import {
+  validateClosePullRequestInputs,
+  validateDeleteRemoteBranchInputs,
+} from "./trusted-host-repository-housekeeping.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
   REPOSITORY_MERGE_PULL_REQUEST: "repository.merge_pull_request",
+  REPOSITORY_PUSH: "repository.push",
+  PROMOTION_OPEN_PR: "promotion.open_pr",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
+  ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
+  ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
+  ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS: "environment.assign_qa_identity_access",
+  REPOSITORY_CLOSE_PULL_REQUEST: "repository.close_pull_request",
+  REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
+  VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
+  VACILANDO_RETIRE_WORKTREE: "vacilando.retire_worktree",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -225,6 +243,191 @@ function defineRepositoryMergePullRequest() {
   };
 }
 
+function defineRepositoryPush() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_PUSH,
+    version: 1,
+    title: "Push a reviewed branch to the remote",
+    requiredCapability: "trusted_host.repository.push",
+    riskClass: "privileged_write",
+    timeoutMs: 180_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "branch", "expectedHeadSha", "worktreePath"],
+    },
+    outputSchema: { pushedSha: "string", remoteRef: "string" },
+    evidenceSchema: ["repository", "branch", "expected_head_sha", "remote_ref", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validatePushInputs({
+        ...inputs,
+        worktree_path: inputs.worktree_path || inputs.worktreePath,
+      });
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
+function definePromotionOpenPr() {
+  return {
+    actionType: ACTION_TYPES.PROMOTION_OPEN_PR,
+    version: 1,
+    title: "Open a promotion pull request into staging",
+    requiredCapability: "trusted_host.promotion.open_pr",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "base", "headBranch", "expectedHeadSha", "title"],
+    },
+    outputSchema: { pullRequestNumber: "number", url: "string" },
+    evidenceSchema: ["repository", "base", "head_branch", "expected_head_sha", "pull_request", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateOpenPrInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
+
+function defineRetireWorktree() {
+  return {
+    actionType: ACTION_TYPES.VACILANDO_RETIRE_WORKTREE,
+    version: 1,
+    title: "Retire a Vacilando worktree through Git",
+    requiredCapability: "trusted_host.vacilando.retire_worktree",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "worktree", "branch", "headSha", "safetyFingerprint", "s7State"],
+    },
+    outputSchema: { applied: "array", postconditions: "object" },
+    evidenceSchema: ["worktree", "branch", "head_sha", "safety_fingerprint", "gates", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const worktree = String(inputs.worktree || "").trim();
+      const branch = String(inputs.branch || "").trim();
+      const headSha = String(inputs.headSha || "").trim();
+      const fingerprint = String(inputs.safetyFingerprint || "").trim();
+      if (!String(inputs.repository || "").trim()) return { ok: false, code: "missing_repository" };
+      if (!worktree) return { ok: false, code: "missing_worktree" };
+      if (worktree.includes("/") || worktree.includes("..")) return { ok: false, code: "invalid_worktree_identity" };
+      if (!branch) return { ok: false, code: "missing_branch" };
+      // An abbreviated SHA once passed every local check and died inside the
+      // provider. Bind on the full object name or not at all.
+      if (!/^[0-9a-f]{40}$/.test(headSha)) return { ok: false, code: "invalid_head_sha" };
+      if (!/^[0-9a-f]{32}$/.test(fingerprint)) return { ok: false, code: "invalid_safety_fingerprint" };
+      if (!String(inputs.s7State || "").trim()) return { ok: false, code: "missing_s7_state" };
+      // Branch deletion is a different action with a different blast radius. A
+      // retirement request that also asks to delete a branch is malformed, not
+      // convenient.
+      if (inputs.deleteBranch != null || inputs.deleteRemoteBranch != null) {
+        return { ok: false, code: "branch_deletion_is_a_separate_action" };
+      }
+      return {
+        ok: true,
+        normalized: {
+          repository: String(inputs.repository).trim(),
+          worktree, branch, headSha, safetyFingerprint: fingerprint,
+          s7State: String(inputs.s7State).trim(),
+          worktreeParent: inputs.worktreeParent || null,
+          canonicalRoot: inputs.canonicalRoot || null,
+          requestingWorktree: inputs.requestingWorktree || null,
+          // Normalisation DROPS anything it does not name. Omitting this sent
+          // the executor to its runtimeRoot() fallback, which is where the
+          // undefined helper above was hiding.
+          runtimeRoot: inputs.runtimeRoot || null,
+        },
+      };
+    },
+  };
+}
+
+function defineApplyReconciliationPlan() {
+  return {
+    actionType: ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN,
+    version: 1,
+    title: "Apply safe Vacilando reconciliation metadata corrections",
+    requiredCapability: "trusted_host.vacilando.apply_reconciliation_plan",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["planId", "planFingerprint", "generatedAt", "policyVersion", "corrections"],
+    },
+    outputSchema: { applied: "array", skipped: "array", withheld: "array" },
+    evidenceSchema: ["plan_id", "plan_fingerprint", "corrections", "withheld", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const planId = String(inputs.planId || "").trim();
+      const fingerprint = String(inputs.planFingerprint || "").trim();
+      const corrections = Array.isArray(inputs.corrections) ? inputs.corrections : null;
+      const withheld = Array.isArray(inputs.withheld) ? inputs.withheld : [];
+      if (!planId) return { ok: false, code: "missing_plan_id" };
+      if (!/^[0-9a-f]{32}$/.test(fingerprint)) return { ok: false, code: "invalid_plan_fingerprint" };
+      if (!corrections) return { ok: false, code: "missing_corrections" };
+      if (!String(inputs.policyVersion || "").trim()) return { ok: false, code: "missing_policy_version" };
+      if (!String(inputs.generatedAt || "").trim()) return { ok: false, code: "missing_generated_at" };
+      // The executor recomputes the plan itself; an ad hoc correction list
+      // supplied by a caller must never be executable, so the fingerprint is
+      // required and re-derived downstream.
+      return {
+        ok: true,
+        normalized: {
+          planId, planFingerprint: fingerprint, generatedAt: String(inputs.generatedAt),
+          policyVersion: String(inputs.policyVersion), corrections, withheld,
+          runtimeRoot: inputs.runtimeRoot || null,
+          dedupeKey: `reconcile:${planId}#${fingerprint.slice(0, 12)}`,
+        },
+      };
+    },
+  };
+}
+
+function defineRepositoryClosePullRequest() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST,
+    version: 1,
+    title: "Close a disposable pull request without merging",
+    requiredCapability: "trusted_host.repository.close_pull_request",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "pullRequestNumber", "expectedHeadBranch", "expectedHeadSha"],
+    },
+    outputSchema: { pullRequestNumber: "number", state: "string", merged: "boolean" },
+    evidenceSchema: ["repository", "pull_request", "expected_head_sha", "state_before", "state_after", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateClosePullRequestInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
+function defineRepositoryDeleteRemoteBranch() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH,
+    version: 1,
+    title: "Delete a disposable remote branch",
+    requiredCapability: "trusted_host.repository.delete_remote_branch",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "branch", "expectedHeadSha"],
+    },
+    outputSchema: { branch: "string", deleted: "boolean" },
+    evidenceSchema: ["repository", "branch", "expected_head_sha", "remote_head_sha", "dependents", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateDeleteRemoteBranchInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -249,9 +452,96 @@ function defineDatabaseApplyMigration() {
   };
 }
 
+/**
+ * Restore a managed slot's QA browser session.
+ *
+ * The request carries a lane id and nothing else. Slot, worktree, port, base URL, Supabase project,
+ * storage path and the QA identity are all resolved by the trusted executor from the canonical
+ * registries, so there is no input through which a caller could aim this at another identity, tenant
+ * or host. It always requires an operator grant: this is a service-role action, and an agent that
+ * could approve its own is not governed at all.
+ */
+function defineEnvironmentRestoreQaSession() {
+  return {
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
+    version: 1,
+    title: "Restore a managed slot's QA browser session",
+    requiredCapability: "trusted_host.environment.restore_qa_session",
+    riskClass: "privileged_write",
+    alwaysRequiresOperatorApproval: true,
+    timeoutMs: 240_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: { required: ["laneId"] },
+    outputSchema: { status: "string", verified: "boolean", verified_at: "string" },
+    evidenceSchema: ["lane_id", "slot", "registered_identity", "storage_written", "verified", "execution_audit"],
+    validateInputs(inputs = {}) {
+      return validateRestoreQaSessionInputs(inputs);
+    },
+  };
+}
+
+/**
+ * Provision the managed QA identity a slot is registered to.
+ *
+ * Separate from the restore on purpose: creating an account and signing into one are different
+ * decisions, so they get different approvals. Restoration must never quietly create a user.
+ */
+function defineEnvironmentProvisionQaIdentity() {
+  return {
+    actionType: ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY,
+    version: 1,
+    title: "Provision a managed QA identity for a registered slot",
+    requiredCapability: "trusted_host.environment.provision_qa_identity",
+    riskClass: "privileged_write",
+    alwaysRequiresOperatorApproval: true,
+    timeoutMs: 180_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: { required: ["laneId"] },
+    outputSchema: { status: "string", mutated: "boolean", occurrences: "number" },
+    evidenceSchema: ["lane_id", "slot", "registered_identity", "mutated", "occurrences", "execution_audit"],
+    validateInputs(inputs = {}) {
+      return validateProvisionQaIdentityInputs(inputs);
+    },
+  };
+}
+
+/**
+ * Grant a managed QA identity its application access.
+ *
+ * Separate from provisioning: creating an account and granting it a place in the application are
+ * different decisions, and collapsing them would let one approval imply another.
+ */
+function defineEnvironmentAssignQaIdentityAccess() {
+  return {
+    actionType: ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS,
+    version: 1,
+    title: "Assign staging application access to a managed QA identity",
+    requiredCapability: "trusted_host.environment.assign_qa_identity_access",
+    riskClass: "privileged_write",
+    alwaysRequiresOperatorApproval: true,
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: { required: ["laneId"] },
+    outputSchema: { status: "string", org_id: "string", role: "string" },
+    evidenceSchema: ["lane_id", "slot", "registered_identity", "user_id", "org_id", "role", "execution_audit"],
+    validateInputs(inputs = {}) {
+      return validateAssignQaAccessInputs(inputs);
+    },
+  };
+}
+
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
+  [ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, defineEnvironmentRestoreQaSession()],
+  [ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, defineEnvironmentProvisionQaIdentity()],
+  [ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS, defineEnvironmentAssignQaIdentityAccess()],
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],
+  [ACTION_TYPES.REPOSITORY_PUSH, defineRepositoryPush()],
+  [ACTION_TYPES.PROMOTION_OPEN_PR, definePromotionOpenPr()],
+  [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, defineRepositoryClosePullRequest()],
+  [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, defineRepositoryDeleteRemoteBranch()],
+  [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
+  [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
 ]);
 
@@ -262,6 +552,10 @@ export function listRegisteredActions() {
     title: a.title,
     riskClass: a.riskClass,
     requiredCapability: a.requiredCapability,
+    // Surfaced so a lane discovering an action also learns what it must supply.
+    // Without this, discovery tells you an action exists and nothing about how
+    // to propose it, and the next thing you see is a validation refusal.
+    requiredInputs: a.inputSchema?.required || [],
   }));
 }
 

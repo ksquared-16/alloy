@@ -7,15 +7,20 @@ import {
     makeParentPacketTemplateDeps,
 } from "@/lib/pos/packet/createParentPacketFromTemplate";
 import { parseLaunchFromEntityBody } from "@/lib/pos/packet/launchFromEntity";
+import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
 
 export const dynamic = "force-dynamic";
 
-/** Mirror of packet-links route: derive the public embed origin from forwarded headers. */
-function deriveEmbedBaseUrl(request: NextRequest): string | null {
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    if (!host?.trim()) return null;
-    const proto = (request.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() || "https";
-    return `${proto}://${host.trim()}`;
+/**
+ * The origin these packet links are built on.
+ *
+ * Read from the ONE canonical public-origin authority, never from the request: these links
+ * are delivered to recipients, so a caller-supplied `Host` / `X-Forwarded-Host` header must
+ * not be able to decide where they point.
+ */
+function deriveEmbedBaseUrl(): string | null {
+    const decision = resolvePublicAppOrigin();
+    return decision.ok ? decision.origin : null;
 }
 
 /**
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest) {
             orgId: ctx.orgId,
             formDefinitionId,
             publishedByUserId: ctx.userId,
-            embedBaseUrl: deriveEmbedBaseUrl(request),
+            embedBaseUrl: deriveEmbedBaseUrl(),
             ...(name ? { name } : {}),
             ...(autopublish !== undefined ? { autopublish } : {}),
             ...(launchFromEntity ? { launchFromEntity } : {}),

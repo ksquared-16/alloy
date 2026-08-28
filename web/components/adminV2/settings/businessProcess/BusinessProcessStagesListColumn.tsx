@@ -30,25 +30,57 @@ function StageConfigStatus({ stage }: { stage: LifecycleBuilderStageRecord }) {
     return null;
 }
 
+/** The rail's "no filter" option. Not a track — the absence of one. */
+export const ALL_TRACKS_KEY = "__all__" as const;
+
 export default function BusinessProcessStagesListColumn({
     stages,
     activeStageKey,
     onSelect,
     onAddStageClick,
     addingStage,
+    tracks,
+    activeTrackKey,
+    onSelectTrack,
 }: {
     stages: LifecycleBuilderStageRecord[];
     activeStageKey: string;
     onSelect: (stage: LifecycleBuilderStageRecord) => void;
     onAddStageClick: () => void;
     addingStage?: boolean;
+    /** Present when the process has tracks. Absent means this list is the whole process. */
+    tracks?: readonly { key: string; label: string }[];
+    activeTrackKey?: string;
+    onSelectTrack?: (trackKey: string) => void;
 }) {
+    // One track is not a choice, and rendering a switcher for it would imply stages are hidden when
+    // none are.
+    const showTracks = Boolean(tracks && tracks.length > 1 && onSelectTrack);
+    // "All" is the process itself, so it carries no track key. It is first because it is the honest
+    // default view of a process: a filter should be something you choose, not something you are
+    // silently already inside.
+    const options = showTracks ? [{ key: ALL_TRACKS_KEY, label: "All" }, ...tracks!] : [];
+    const activeTrackLabel = tracks?.find((t) => t.key === activeTrackKey)?.label ?? null;
+    const scopeLabel = activeTrackKey === ALL_TRACKS_KEY ? "the whole process" : activeTrackLabel;
+
     return (
         <div className="space-y-3" data-testid="business-process-stages-list-column">
             <div className="flex items-start justify-between gap-2">
                 <div>
                     <h4 className="text-[12px] font-semibold text-alloy-midnight">Stages</h4>
-                    <p className="text-[10px] text-alloy-midnight/45">{stages.length} configured</p>
+                    {/*
+                     * The count says WHICH stages it counted.
+                     *
+                     * It used to read "4 configured" while the process Overview said "8 stages", and
+                     * both were reading the same authority — this list is filtered to one track and
+                     * never said so. An unqualified count on a filtered list is how four stages
+                     * disappeared from the product without anything looking broken.
+                     */}
+                    <p className="text-[10px] text-alloy-midnight/45" data-testid="business-process-stages-count">
+                        {showTracks && scopeLabel
+                            ? `${stages.length} stage${stages.length === 1 ? "" : "s"} in ${scopeLabel}`
+                            : `${stages.length} configured`}
+                    </p>
                 </div>
                 <button
                     type="button"
@@ -59,6 +91,38 @@ export default function BusinessProcessStagesListColumn({
                     {addingStage ? "Adding…" : "+ Add"}
                 </button>
             </div>
+            {showTracks ? (
+                <div
+                    className="flex flex-wrap gap-1"
+                    role="tablist"
+                    aria-label="Stage track"
+                    data-testid="business-process-track-switcher"
+                >
+                    {options.map((track) => {
+                        const active = track.key === activeTrackKey;
+                        return (
+                            <button
+                                key={track.key}
+                                type="button"
+                                role="tab"
+                                aria-selected={active}
+                                data-testid={`business-process-track-${track.key}`}
+                                onClick={() => onSelectTrack!(track.key)}
+                                // Selected state is Alloy pine, per the Configuration Mode doctrine
+                                // in configurationRuntime.css: "selected state uses Alloy pine —
+                                // never blue/slate admin".
+                                className={
+                                    active
+                                        ? "rounded-full bg-alloy-bend-pine/10 px-2.5 py-1 text-[10px] font-semibold text-alloy-bend-pine ring-1 ring-alloy-bend-pine/28"
+                                        : "rounded-full bg-alloy-forge/[0.06] px-2.5 py-1 text-[10px] font-medium text-alloy-forge/70 hover:bg-alloy-bend-pine/[0.06] hover:text-alloy-bend-pine"
+                                }
+                            >
+                                {track.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
             <div className="space-y-1">
                 {stages.map((stage, idx) => {
                     const active = stage.key === activeStageKey;

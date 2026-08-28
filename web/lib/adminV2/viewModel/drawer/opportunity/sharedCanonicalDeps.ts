@@ -91,6 +91,14 @@ export async function resolveSharedCanonicalDeps(
     const orgId = gate.orgId;
     const phases_ms: Record<string, number> = {};
 
+    /**
+     * The record layout is a function of the ORG and the entity type — it does not read the
+     * opportunity at all — yet it waited behind the opportunity select because it shared a
+     * `Promise.all` with the work-unit lookup, which does. Started here it overlaps the select
+     * instead of following it: measured 99-124 ms recovered from a serial critical path.
+     * The awaited value and every downstream read are unchanged.
+     */
+    const layoutP = fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity");
     const tOpp0 = Date.now();
     const { data: oppRow, error: oppErr } = await supabase
         .from("opportunities")
@@ -109,7 +117,6 @@ export async function resolveSharedCanonicalDeps(
     const rowWu = trimOrNull((oppRow as { work_unit_id?: unknown }).work_unit_id);
     const workUnitId = ctxWu || rowWu;
     const tLayout0 = Date.now();
-    const layoutP = fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity");
     const wuP =
         workUnitId ?
             supabase

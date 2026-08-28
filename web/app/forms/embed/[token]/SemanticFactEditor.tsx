@@ -22,6 +22,18 @@ import type {
 } from "@/lib/enrollment/participantRuntime/compileParticipantArtifact";
 import { displayValue, naturalFieldLabel } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 
+/**
+ * What this control is called, when Alloy is entitled to call it anything.
+ *
+ * `participant_label` is null when the label is the source PDF's own widget name, and the fallback
+ * is deliberately NOT the raw label — that is the leak this seam exists to close.
+ */
+function captionFor(control: CompiledArtifactControl): string {
+    const words = naturalFieldLabel(control.participant_label, control.shared_key);
+    if (words && words !== "this") return words;
+    return "Marked on your document";
+}
+
 /** One row per FACT: resolved controls collapsed by shared identity, unbound ones by field. */
 export function uniqueResolvedFacts(artifact: CompiledArtifact): CompiledArtifactControl[] {
     const seen = new Set<string>();
@@ -63,7 +75,7 @@ export function SemanticFactEditor({
                         >
                             <div className="min-w-0">
                                 <div className="text-[13px] text-alloy-midnight/50">
-                                    {naturalFieldLabel(control.label)}
+                                    {captionFor(control)}
                                 </div>
                                 <div className="text-[16px] text-alloy-midnight">
                                     {displayValue(control.value) || "—"}
@@ -89,7 +101,7 @@ export function SemanticFactEditor({
                         className="flex flex-col gap-2 border-b border-alloy-midnight/[0.06] py-3.5"
                     >
                         <label className="text-[13px] text-alloy-midnight/50" htmlFor={`edit-${control.field_id}`}>
-                            {naturalFieldLabel(control.label)}
+                            {captionFor(control)}
                         </label>
                         {/* The SAME semantic control the Form authored — a date stays a date. */}
                         <input

@@ -1,5 +1,5 @@
 import { resolveParticipantCanonicalValues } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
-import { sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
+import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
 import {
@@ -239,10 +239,14 @@ export async function resolvePublicFormEmbedContext(
                 total_steps: totalSteps,
                 current_session_item_id: active.id,
                 step_summaries: stepSummaries ?? undefined,
-                shared_prefill_by_field_id: sharedValuesToFieldIds(
-                    envelope.schemaJson as never,
-                    await participantPrefillValues(supabase, v.orgId, session),
-                ),
+                shared_prefill_by_field_id: await (async () => {
+                    const values = await participantPrefillValues(supabase, v.orgId, session);
+                    return {
+                        ...sharedValuesToFieldIds(envelope.schemaJson as never, values),
+                        // Addressed to one destination on this Form, never claimed by another.
+                        ...processScopedAnswersToFieldIds(envelope.schemaJson as never, values, envelope.formDefinitionId),
+                    };
+                })(),
             },
         },
     };

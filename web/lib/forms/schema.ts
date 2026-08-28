@@ -65,6 +65,24 @@ export const formFieldSourceRelationshipSchema = z
 
 export type FormFieldSourceRelationship = z.infer<typeof formFieldSourceRelationshipSchema>;
 
+/**
+ * A destination Alloy FILLS rather than asks.
+ *
+ * Declared on the field so that every consumer — the value-production gate, prefill, submission —
+ * reads the same statement, and so a derived box is never mistaken for a question nobody answered.
+ * `source_key` and `as_of_key` are field ids within this same schema, because a Form's payload is
+ * keyed by field id.
+ */
+export const formFieldDerivedSchema = z
+    .object({
+        kind: z.enum(["age_from_date_of_birth", "execution_date"]),
+        source_key: z.string().min(1).optional(),
+        as_of_key: z.string().min(1).optional(),
+    })
+    .strict();
+
+export type FormFieldDerived = z.infer<typeof formFieldDerivedSchema>;
+
 export const formFieldSourceSchema = z
     .object({
         entity_type: z.string().min(1),
@@ -116,6 +134,8 @@ type FormFieldBase = {
     field_source?: FormFieldSource;
     /** When true, public PATCH/submit restore values from the saved draft baseline (operator/server wins). */
     read_only?: boolean;
+    /** Alloy fills this destination from canonical truth; it is never asked. @see formFieldDerivedSchema */
+    derived?: FormFieldDerived;
     visibility?: FormVisibility;
     validate?: FormValidateRules;
     entity_hint?: string;
@@ -141,7 +161,17 @@ export type FormField =
           option_set_key?: string;
           static_options?: ReadonlyArray<{ value: string; label: string }>;
       })
-    | (FormFieldBase & { type: "file_ref" })
+    | (FormFieldBase & {
+          type: "file_ref";
+          /**
+           * The canonical document classification this upload satisfies, when one is known.
+           *
+           * Without it every upload requirement is "a file", and a family who uploads a physical
+           * cannot be told they still owe an immunization record. Optional on purpose: an unknown
+           * type stays absent rather than being guessed into the nearest key.
+           */
+          document_type?: string;
+      })
     | (FormFieldBase & { type: "signature"; signature?: FormSignatureConfig })
     | (FormFieldBase & {
           type: "group";
@@ -171,6 +201,7 @@ const fieldCoreSchema = z
         /** Name of PDF mapping slot for this field (hint only; mapping lives in `pdf_mapping_json`). */
         pdf_slot: z.string().min(1).optional(),
         read_only: z.boolean().optional().default(false),
+        derived: formFieldDerivedSchema.optional(),
         field_source: formFieldSourceSchema.optional(),
         layout_width: z.enum(["full", "half", "third", "quarter"]).optional(),
     })
@@ -223,6 +254,7 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
         fieldCoreSchema
             .extend({
                 type: z.literal("file_ref"),
+                document_type: z.string().min(1).optional(),
             })
             .strict(),
         fieldCoreSchema

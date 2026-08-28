@@ -379,3 +379,47 @@ test("list and detail activity merge prefer working over leftover Ready", () => 
   assert.equal(rows[0].provider_activity.activity, "working");
   assert.equal(V.canonicalLaneWorkState(merged).label, V.canonicalLaneWorkState(rows[0]).label);
 });
+
+/**
+ * A finished turn must be recognised whatever verb Claude Code used to end it.
+ *
+ * TURN_FINISHED_RE listed Cooked|Sautéed|Sauted|Baked. Claude Code also ends
+ * turns with "Worked for 14s". An unlisted verb meant no match, so the leftover
+ * ⏺ narration was read as a LIVE turn and the pane — sitting idle at a prompt —
+ * was classified `working`. Delivery refuses a busy pane, so the lane could not
+ * be given its next instruction. That is what stuck the Communications lane,
+ * whose pane ended exactly this way.
+ */
+test("a finished turn is recognised by shape, not by a verb list", async () => {
+  const P = await import("../lib/vacilando/provider-prompt-readiness.mjs");
+  const idlePane = [
+    "⏺ Background command \"Watch for the merge to land\" was stopped",
+    "⏺ Both merge watchers were stopped, so nothing is monitoring PR #510 now.",
+    "✻ Worked for 14s",
+    RULE, `❯${NBSP}`, RULE,
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+  ].join("\n");
+
+  assert.equal(P.TURN_FINISHED_RE.test(idlePane), true, "\"Worked for\" must count as finished");
+  assert.equal(P.detectProviderBusy(idlePane), null, "an idle pane must not read as busy");
+  assert.equal(A.classifyProviderActivity(idlePane, { provider: "claude" }).activity, "ready");
+
+  // Every verb, including the accented one, and durations in each unit.
+  for (const line of ["✻ Worked for 14s", "✻ Cooked for 1m 3s", "  Sautéed for 45s",
+    "✻ Baked for 2h", "  Simmered for 900ms"]) {
+    assert.equal(P.TURN_FINISHED_RE.test(line), true, `${line} should be a completion`);
+  }
+
+  // POSITIVE CONTROLS. Without these the regex could match everything and the
+  // suite would look identical: narration is not completion, a duration needs a
+  // real unit, and a live spinner must still read as busy.
+  for (const line of ["⏺ Searched for 3 files", "⏺ Waited for the merge",
+    "  Ran 19 shell commands", "✻ Forging… (12s · esc to interrupt)"]) {
+    assert.equal(P.TURN_FINISHED_RE.test(line), false, `${line} must not be a completion`);
+  }
+  const busy = [
+    "⏺ Still going", "✻ Forging… (12s · esc to interrupt)",
+    RULE, `❯${NBSP}`, RULE, "  ⏵⏵ auto mode on · esc to interrupt",
+  ].join("\n");
+  assert.equal(A.classifyProviderActivity(busy, { provider: "claude" }).activity, "working");
+});

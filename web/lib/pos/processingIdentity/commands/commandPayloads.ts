@@ -136,3 +136,29 @@ export type ProposeMergePayload = {
     reason: string;
     evidence_ids?: string[];
 };
+
+/**
+ * Propose a safeguarding restriction. PROPOSE — never activate.
+ *
+ * Note what this payload cannot express: there is no `status`, no `review_state`, and no
+ * `approved_by`. A caller could not activate a restriction even by trying, because the vocabulary
+ * for activation is not here. That is deliberate — the boundary is in the TYPE, not in a check a
+ * handler might skip.
+ */
+export type ProposeSafeguardingRestrictionPayload = {
+    /** The child the restriction protects. */
+    customer_member_id: string;
+    restriction_kind: string;
+    operational_effect: string;
+    /** Null when the assertion names nobody Alloy can resolve to a person. */
+    affected_person_id?: string | null;
+    affected_party_description?: string | null;
+    /** `document` requires evidence_document_id; a parent's declaration is evidence of its own kind. */
+    evidence_basis: string;
+    evidence_document_id?: string | null;
+    effective_from?: string | null;
+    effective_to?: string | null;
+    /** Where the assertion came from. Kept distinct from who approved it — nobody has, yet. */
+    source: string;
+    source_reference?: string | null;
+};

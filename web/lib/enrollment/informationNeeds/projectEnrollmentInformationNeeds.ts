@@ -9,7 +9,16 @@
  */
 
 import { fieldIsInsideCollectionBoundGroup } from "@/lib/forms/prefill/formsCollectionPrefill";
-import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
+import { formFieldAsksParticipant } from "@/lib/forms/formFieldCollectsValue";
+import {
+    declineSatisfiesAbsence,
+    type EnrollmentNeedDeclineMap,
+} from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
+import {
+    participantFacingLabel,
+    sourceFieldNamesByFieldId,
+    type SourceFieldMapping,
+} from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import {
@@ -35,6 +44,13 @@ export type PinnedRequirementForm = {
     readonly session_item_id: string;
     /** `schema_json` of THAT version. Never the definition's latest. */
     readonly schema: FormSchemaV1;
+    /**
+     * `pdf_mapping_json` of THAT version, when the artifact is source-fidelity.
+     *
+     * Carried so the projection can tell an authored question from the source document's own name
+     * for a box. Absent for a composed document, where every label is authored by definition.
+     */
+    readonly pdfMapping?: unknown;
 };
 
 export type ProjectNeedsInput = {
@@ -46,6 +62,14 @@ export type ProjectNeedsInput = {
     /** Canonical record prefill, by the same shared key. Lower precedence than session values. */
     readonly canonicalValues?: Readonly<Record<string, unknown>>;
     readonly confirmations: EnrollmentNeedConfirmationMap;
+    /**
+     * Needs the participant was asked about and chose to leave blank.
+     *
+     * Kept apart from `sharedValues` for the reason the decline store states: settlement is not a
+     * value, and storing the shortcut's label as one is what put "Nothing to add" in a middle-name
+     * box on a state health form.
+     */
+    readonly declines?: EnrollmentNeedDeclineMap;
     /**
      * Which canonical keys require participant confirmation for this objective.
      *
@@ -80,14 +104,58 @@ export function projectEnrollmentInformationNeeds(
     const byKey = new Map<string, Accumulator>();
 
     for (const form of input.forms) {
+        // The authored section each destination sits in — read once per Form, not per field.
+        const sectionByFieldId = new Map<string, string>();
+        for (const sec of ((form.schema as { sections?: { title?: string; field_ids?: string[] }[] }).sections ?? [])) {
+            const title = (sec.title ?? "").trim();
+            if (!title) continue;
+            for (const id of sec.field_ids ?? []) if (!sectionByFieldId.has(id)) sectionByFieldId.set(id, title);
+        }
+
+        const sourceFieldNames = sourceFieldNamesByFieldId(form.pdfMapping as SourceFieldMapping);
+
         walkScalarFormFields(form.schema, (field) => {
-            // Display-only content is not a participant need. Without this a handbook paragraph
-            // becomes an artifact-specific item called "Page 3" and counts against the parent.
-            if (!formFieldCollectsValue(field)) return;
+            // Not a participant need unless the participant is the one who supplies it. Display-only
+            // prose was the first case — without it a handbook paragraph became an artifact-specific
+            // item called "Page 3" and counted against the parent. Placed-not-asked destinations and
+            // derived values are the same mistake at scale: 100 boxes the family never fills and 7
+            // the platform writes itself were being counted as work they had to do.
+            if (!formFieldAsksParticipant(field)) return;
+
+            /*
+             * A CONVERSATION CANNOT ASK A QUESTION IT HAS NO WORDS FOR.
+             *
+             * An imported control's label is often the source PDF's internal widget name, so the
+             * runtime asked a parent "Var History?" and "Prov Sp?" — and, having no words, could
+             * not rephrase, could not explain, and could not accept anything but a guess. Suppressing
+             * the label at the review surface (`participant_label`) fixed the printing and left the
+             * conversation asking it out loud.
+             *
+             * These destinations belong to the artifact, and the parent meets them ON the document,
+             * where the school's own sentence sits beside the box. None of the 72 across this packet
+             * is required, so nothing is blocked by declining to ask about them in words — and a
+             * required one would be an authoring defect worth seeing rather than papering over.
+             */
+            if (participantFacingLabel(field.label, sourceFieldNames[field.id]) == null) return;
+
+            /*
+             * A DOCUMENT IS BROUGHT, NOT TYPED.
+             *
+             * An upload destination holds a document id — `validateSubmission` requires exactly
+             * that — so a conversation asking "What is your Immunization record?" can only collect
+             * words that the submission will then refuse. All three certified upload obligations
+             * were projected this way.
+             *
+             * They are not dropped: they are participant WORK, presented at the artifact that asks
+             * for them, where the parent attaches a file and the answer becomes the id of a
+             * canonical Document. The conversation collects values; this is not one.
+             */
+            if (field.type === "file_ref") return;
 
             const identity = resolveEnrollmentNeedIdentity({
                 field,
                 subjectId: input.subjectId,
+                formDefinitionId: form.form_definition_id,
                 insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
                 formDefinitionVersionId: form.form_definition_version_id,
                 sessionItemId: form.session_item_id,
@@ -101,6 +169,7 @@ export function projectEnrollmentInformationNeeds(
                 form_field_id: field.id,
                 label: field.label,
                 required: field.required === true,
+                section_title: sectionByFieldId.get(field.id) ?? null,
                 field_type: field.type,
                 options: readFieldOptions(field),
             };
@@ -130,7 +199,17 @@ export function projectEnrollmentInformationNeeds(
  * shape would be worse than the text box it replaced.
  */
 function readFieldOptions(field: unknown): readonly string[] {
-    const raw = (field as { options?: unknown })?.options;
+    /*
+     * `static_options` is where a realized Form actually keeps its choices.
+     *
+     * `draftFormToFormSchemaV1` publishes an authored choice list as `static_options` — the schema's
+     * own inline-choice construct — and this reader only ever looked at `options`. So every select
+     * need reached the participant with no choices at all, and any answer they gave was refused as
+     * "That is not one of the available choices". A question with no visible answers that rejects
+     * every answer is a loop with no way out; it is how a parent gets stuck.
+     */
+    const f = field as { options?: unknown; static_options?: unknown };
+    const raw = Array.isArray(f?.options) && f.options.length ? f.options : f?.static_options;
     if (!Array.isArray(raw)) return [];
     const out: string[] = [];
     for (const item of raw) {
@@ -154,10 +233,18 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         requirement_ids: [...acc.requirementIds],
     } as const;
 
-    if (identity.artifact_specific || !identity.shared_value_key) {
-        // Never reads or writes the shared namespace, so it has no shared value and cannot be
-        // confirmed as one. Whether the participant must act on it is the Form's own business —
-        // reported here as artifact-specific rather than folded into a datum it is not.
+    /*
+     * Whether a value may be REUSED and whether it is ASKED are different questions.
+     *
+     * This branch used to answer both: no canonical identity meant `artifact_specific`, and
+     * `artifact_specific` meant the conversation skipped it. Sixty-four questions the school
+     * actually asks were therefore never asked out loud — the parent answered twenty turns and was
+     * then handed the raw controls.
+     *
+     * A need with no place to keep an answer is still artifact work. A need with a session key is a
+     * question, whether or not its answer may ever be reused.
+     */
+    if (!identity.session_value_key) {
         return {
             ...base,
             state: "artifact_specific",
@@ -170,8 +257,10 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
 
     // Precedence mirrors `mergeFormPrefillPayload`: the session's own shared value outranks canonical
     // record prefill. Anything else would let a stale record overwrite what the parent just typed.
-    const sessionValue = input.sharedValues[identity.shared_value_key];
-    const canonicalValue = input.canonicalValues?.[identity.shared_value_key];
+    const sessionValue = input.sharedValues[identity.session_value_key];
+    // Canonical prefill can only speak for a canonical datum. A process-scoped answer has no record
+    // behind it by construction, so there is nothing for a record to prefill.
+    const canonicalValue = identity.shared_value_key ? input.canonicalValues?.[identity.shared_value_key] : undefined;
 
     let current_value: unknown = null;
     let value_source: EnrollmentNeedValueSource = "none";
@@ -199,6 +288,25 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
          * what QA did: "na".
          */
         const blocking = acc.occurrences.some((o) => o.required);
+
+        /*
+         * A decline settles an OPTIONAL need and nothing else.
+         *
+         * Where the Form insists on an answer there is nothing to decline, so a stored decline is
+         * ignored rather than honoured — the question comes back, which is the safe direction.
+         */
+        if (!blocking && declineSatisfiesAbsence(input.declines?.[identity.key], false)) {
+            return {
+                ...base,
+                state: "declined",
+                has_value: false,
+                current_value: null,
+                value_source: "none",
+                requires_participant_action: false,
+                optional: true,
+            };
+        }
+
         return {
             ...base,
             state: "missing",
@@ -216,8 +324,10 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         input.confirmations[identity.key],
         current_value,
     );
-    const mustConfirm =
-        input.requiresConfirmation?.has(identity.canonical_key ?? identity.shared_value_key) === true;
+    // Confirmation policy names canonical data. A process-scoped answer has no canonical key, so
+    // nothing can require its confirmation — it is simply asked.
+    const confirmationKey = identity.canonical_key ?? identity.shared_value_key;
+    const mustConfirm = confirmationKey !== null && input.requiresConfirmation?.has(confirmationKey) === true;
 
     let state: EnrollmentNeedState;
     if (confirmed) state = "confirmed";

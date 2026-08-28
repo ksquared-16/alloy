@@ -24,6 +24,13 @@ export type SystemFieldValueKind =
     | "signature";
 
 export type SystemFieldRegistryEntry = {
+    /**
+     * Superseded by a canonical row elsewhere. A deprecated row still RESOLVES — existing forms keep
+     * working — but nothing new should bind to it, and the pickers hide it.
+     */
+    deprecated?: boolean;
+    /** The registry id that replaces a deprecated row. */
+    superseded_by?: string;
     /** Stable id used in admin UI (`sys:<id>`) and as `form_field_id`. */
     id: string;
     entity_type: SystemFieldEntityType;
@@ -41,12 +48,6 @@ export type SystemFieldRegistryEntry = {
     select_options_lines?: string;
     /** Org option set for select fields — preferred over placeholder static_options_lines. */
     default_option_set_key?: string;
-    /**
-     * Superseded by a canonical owner. The entry stays so existing forms keep resolving, but nothing
-     * offers it for NEW authoring — deleting it would break a form that already binds it, while
-     * keeping it offerable would let an operator recreate the duplicate owner it was retired for.
-     */
-    deprecated_reason?: string;
 };
 
 const EMAIL_PATTERN = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
@@ -142,54 +143,63 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         suggested_kind: "phone",
         public_intake_safe: true,
     },
+    /**
+     * M1 — durable child-health truth is CHILD grain, not Enrollment grain (D-H1).
+     *
+     * `allergy_notes` was registered at `enrollment` grain, which says an allergy is a fact about an
+     * admission. It is a fact about a child, and it outlives every admission. The canonical
+     * destination is the child's own `allergies` field, which already exists.
+     *
+     * The correction is ADDITIVE and reversible: the child-grain row below is the canonical one, and
+     * the enrollment-grain row stays, deprecated, sharing the SAME `shared_value_key`. That shared
+     * identity is the no-silent-loss mechanism — ask-once dedupes on `shared_value_key` FIRST, so a
+     * packet asking for allergies at either grain collects the value once and both destinations
+     * receive it. Nothing is deleted, and published forms keep the binding they were stamped with.
+     *
+     * `medication_flag` is NOT given a child-grain replacement. Medication is a Health-foundation
+     * kind (D-H5) and Enrollment must not create a competing destination for it — so the legacy row
+     * stays legacy, marked deprecated, and does not become the new truth.
+     */
     {
-        /*
-         * M1 / D-H1 — RE-BOUND FROM `enrollment` TO THE CHILD.
-         *
-         * An allergy is a property of a CHILD, not of an enrolment episode. Bound to the episode it
-         * did not follow the child into next year's re-enrolment, and two of the three Forms
-         * subsystems already disagreed with the shipped grain: `canonicalBindingSuggestions`
-         * suggests `customer_member` for allergy text, and `sharedValuesToFieldIds`'s canonical
-         * example is literally `customer_member:allergies`.
-         *
-         * `crm_mapping_key` now points at the SAME destination the child profile field already uses,
-         * so there is ONE durable owner rather than `health.allergy_notes` and `child.allergies`
-         * both claiming to be the answer.
-         */
-        id: "allergy_notes",
+        id: "child_allergies",
         entity_type: "child",
-        field_key: "allergy_notes",
-        shared_value_key: "allergy_notes",
+        field_key: "allergies",
+        shared_value_key: "child_allergies",
         crm_mapping_key: "child.allergies",
-        default_label: "Allergy notes",
+        default_label: "Allergies",
         default_description: "Food or environmental allergies staff should know about.",
         default_required: false,
         suggested_kind: "textarea",
         public_intake_safe: true,
     },
     {
-        /*
-         * M3 — DEPRECATED, NOT MIGRATED.
-         *
-         * "This child takes medication" is DERIVABLE from the medication facts once H1 lands, and
-         * keeping both creates two answers to one question — one of which no longer updates when a
-         * medication is added or ended. So the boolean is retired rather than re-bound: it is
-         * re-grained to the child so any existing form keeps resolving, and marked deprecated so
-         * nothing offers it for new authoring.
-         */
+        id: "allergy_notes",
+        entity_type: "enrollment",
+        field_key: "allergy_notes",
+        // Shares the child-grain identity so the two never collect twice or diverge.
+        shared_value_key: "child_allergies",
+        crm_mapping_key: "health.allergy_notes",
+        default_label: "Allergy notes",
+        default_description: "Deprecated — superseded by the child-grain Allergies field.",
+        default_required: false,
+        suggested_kind: "textarea",
+        public_intake_safe: true,
+        deprecated: true,
+        superseded_by: "child_allergies",
+    },
+    {
         id: "medication_flag",
-        entity_type: "child",
+        entity_type: "enrollment",
         field_key: "medication_flag",
         shared_value_key: "medication_flag",
-        crm_mapping_key: "child.medication_flag",
+        crm_mapping_key: "health.medication_flag",
         default_label: "Medication during care",
-        default_description: "Whether the child takes medication while in care.",
+        // Legacy by direction: medication becomes a Health-foundation fact kind, not this boolean.
+        default_description: "Deprecated — medication becomes a Health fact; this flag is not the new truth.",
         default_required: false,
         suggested_kind: "checkbox",
         public_intake_safe: true,
-        deprecated_reason:
-            "Superseded by canonical medication facts (person_health_facts, fact_kind = medication). "
-            + "Derive it from the medication collection instead of storing a second answer.",
+        deprecated: true,
     },
     {
         id: "program_room_preference",
@@ -302,21 +312,6 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
 export const SYSTEM_FIELD_BY_ID: ReadonlyMap<string, SystemFieldRegistryEntry> = new Map(
     OPERATIONAL_FORM_SYSTEM_FIELDS.map((e) => [e.id, e])
 );
-
-/**
- * The fields an operator may bind on a NEW form.
- *
- * Deprecated entries stay in `OPERATIONAL_FORM_SYSTEM_FIELDS` so a form that already binds one keeps
- * resolving — removing them would break live forms — but they are not offered again. Without this
- * split, retiring `medication_flag` would be advice rather than a rule, and the next operator would
- * recreate the second answer it was retired for.
- */
-export const AUTHORABLE_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[] =
-    OPERATIONAL_FORM_SYSTEM_FIELDS.filter((e) => !e.deprecated_reason);
-
-export function isDeprecatedSystemField(id: string): boolean {
-    return Boolean(SYSTEM_FIELD_BY_ID.get(id.trim())?.deprecated_reason);
-}
 
 export function linesToStaticOptions(raw: string): { value: string; label: string }[] {
     const lines = raw

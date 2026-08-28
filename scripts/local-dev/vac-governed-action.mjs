@@ -12,12 +12,38 @@ import { requestGovernedAction } from "./lib/vacilando/governed-action-request.m
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac governed-action --run <run_id> --lane <lane_id> --json '{...}'
+       vac governed-action --list        what this host can be asked to do
+
+A lane discovers what it may propose with --list, then proposes with --json.
 `);
   process.exit(code);
 }
 
+/**
+ * What a lane may actually propose.
+ *
+ * DISCOVERY IS PART OF THE CONTRACT. A lane that cannot find out which actions
+ * exist has to guess an action key, and a wrong guess comes back as
+ * `unsupported_action_key` — indistinguishable from "the host refused me". The
+ * catalog is read from the same registry the executor uses, so it can never
+ * drift from what is really available.
+ */
+async function listActions() {
+  const { listRegisteredActions } = await import("./lib/vacilando/trusted-host-action-registry.mjs");
+  const rows = listRegisteredActions().map((d) => ({
+    action_key: d.actionType,
+    title: d.title,
+    risk: d.riskClass,
+    capability: d.requiredCapability,
+    required_inputs: d.requiredInputs || [],
+  }));
+  process.stdout.write(`${JSON.stringify({ ok: true, actions: rows }, null, 2)}\n`);
+  process.exit(0);
+}
+
 const args = process.argv.slice(2);
 if (!args.length || args[0] === "-h" || args[0] === "--help") usage(args.length ? 0 : 2);
+if (args[0] === "--list" || args[0] === "list") await listActions();
 
 let runId = null;
 let lane = null;
@@ -42,15 +68,26 @@ if (json) {
   }
 }
 
+// Resolve who can vouch for this action BEFORE asking. A lane with no Mission
+// is not automatically ungoverned: its repository's profile may carry governed
+// promotion, in which case the Director gets a proposal to approve instead of
+// this CLI dead-ending on `missing_mission_binding`.
+const { resolveGovernedAuthority } = await import("./lib/vacilando/governed-repository-authority.mjs");
+const authority = await resolveGovernedAuthority(
+  payload.lane_id || payload.laneId || lane,
+);
+
 const out = requestGovernedAction({
   ...payload,
   run_id: payload.run_id || payload.runId || runId,
   lane_id: payload.lane_id || payload.laneId || lane,
   mission_id: payload.mission_id || payload.missionId,
+  __authority: authority,
 }, { processNow: false });
 
 if (!out.ok) {
-  process.stderr.write(`vac governed-action: ${out.error}\n`);
+  const detail = out.detail ? ` — ${out.detail}` : "";
+  process.stderr.write(`vac governed-action: ${out.error}${detail}\n`);
   process.exit(out.error === "missing_mission_binding" ? 4 : 1);
 }
 

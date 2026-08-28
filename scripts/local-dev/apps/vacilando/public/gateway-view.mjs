@@ -310,7 +310,7 @@ export function deliveryNotice(result) {
 export function deliveryErrorText(error) {
   switch (error) {
     case "current_run_active":
-      return "This lane still has an open run. If the agent already finished, send again in a moment — a leftover heartbeat should not block a new instruction.";
+      return "This lane still has an open run. If the agent already finished, send again — or tap Close stale run and continue.";
     case "duplicate_send":
       return "Same instruction was just sent. Wait a moment before sending it again.";
     case "send_in_progress":
@@ -576,6 +576,27 @@ export function staleAdmissionClaim(lane, nowMs = Date.now()) {
 }
 
 export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
+  // DISCOVERABILITY SHARES THE FIX. The lane list already had a NEEDS_APPROVAL
+  // branch, but it read this posture — which carried the same run-state gating
+  // that hid the card. So a pending approval was invisible in the list for the
+  // same reason it was unpressable in the lane: the request was real, and every
+  // surface asked the run about it instead of the lane.
+  //
+  // Deciding it here means the list badge, the group placement and the card all
+  // come from one answer and cannot disagree.
+  const pendingApproval = laneAwaitingOperatorApproval(lane);
+  if (pendingApproval) {
+    return {
+      state: "NEEDS_APPROVAL",
+      label: "Needs approval",
+      mark: "!",
+      hint: governedActionLabel(pendingApproval),
+      headline: `Needs approval — ${governedActionLabel(pendingApproval)}`,
+      tone: "needs",
+      slot: lane?.slot ?? lane?.binding?.slot ?? null,
+      queue_position: null,
+    };
+  }
   const stored = String(lane?.execution_capacity?.state || "").toUpperCase();
   const bound = laneIsBound(lane);
   const liveAgent = liveAgentOnLane(lane);
@@ -616,7 +637,7 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
     const needsApproval = ga?.status === "awaiting_operator";
     const title = refreshing
       ? "Updating governed capabilities"
-      : (ga?.title || run?.resource_wait?.summary || "Governed action requested");
+      : (governedActionLabel(ga) || run?.resource_wait?.summary || "Governed action requested");
     return {
       state: refreshing ? "UPDATING_DIRECTOR" : (needsApproval ? "NEEDS_APPROVAL" : "WAITING_ON_DIRECTOR"),
       label: refreshing ? "Updating Director" : (needsApproval ? "Needs approval" : "Waiting on Director"),
@@ -624,7 +645,7 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
       hint: title,
       headline: refreshing
         ? "Updating Director · governed capabilities"
-        : (needsApproval ? `Needs approval · ${title}` : `Waiting on Director · ${title}`),
+        : (needsApproval ? `Needs approval — ${title}` : `Waiting on Director · ${title}`),
       tone: "run",
       slot,
       queue_position: null,
@@ -674,13 +695,13 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
   if (runState === "WAITING_RESOURCE" && isGovernedDirectorWait(run)) {
     const gaStatus = run?.governed_action?.status;
     const needsApproval = gaStatus === "awaiting_operator";
-    const title = run?.governed_action?.title || run?.resource_wait?.summary || "Governed action requested";
+    const title = governedActionLabel(run?.governed_action) || run?.resource_wait?.summary || "Governed action requested";
     return {
       state: needsApproval ? "NEEDS_APPROVAL" : "WAITING_ON_DIRECTOR",
       label: needsApproval ? "Needs approval" : "Waiting on Director",
       mark: "◷",
       hint: title,
-      headline: needsApproval ? `Needs approval · ${title}` : `Waiting on Director · ${title}`,
+      headline: needsApproval ? `Needs approval — ${title}` : `Waiting on Director · ${title}`,
       tone: "run",
       slot,
       queue_position: null,
@@ -1285,9 +1306,195 @@ export function renderCapacityHolders(capacity) {
   </div>`;
 }
 
+/**
+ * The governed action on this lane that is waiting for a person, if any.
+ *
+ * Looks at every place the projection can carry one, and accepts the states
+ * that genuinely mean "a human must decide" — `awaiting_operator`, and
+ * `requested` where approval is already known to be required, because a request
+ * spends its first seconds there and an operator who looks in that window
+ * should still see the control rather than an empty panel.
+ */
+/**
+ * The governed action a dependency is waiting on, shaped for the approval card.
+ *
+ * A dependency in WAITING_APPROVAL already carries the governed action's
+ * identity; what it lacks is the presentation fields the card reads. This
+ * adapts rather than duplicates, so the operator sees one surface and the two
+ * records cannot describe the same decision differently.
+ */
+export function dependencyGovernedAction(dep) {
+  if (!dep || dep.state !== "WAITING_APPROVAL" && dep.dependency_state !== "WAITING_APPROVAL") return null;
+  const ga = dep.governed_action || null;
+  if (ga) return ga;
+  if (!dep.governed_action_id && !dep.governed_action_key) return null;
+  return {
+    request_id: dep.governed_action_id || null,
+    status: "awaiting_operator",
+    operator_approval_required: true,
+    action_key: dep.governed_action_key || null,
+    target: dep.environment || dep.target_environment || null,
+    title: dep.title || `${dep.governed_action_key || "Governed action"} for ${dep.capability || dep.requested_capability || "required work"}`,
+    reason_worker_cannot_execute: dep.reason || "A dependency is waiting on a governed decision.",
+    purpose: dep.purpose || "Approving lets the dependency dispatch to an authorized executor.",
+    content_fingerprint: dep.content_fingerprint || null,
+    inputs: dep.action_inputs || dep.inputs || {},
+    from_dependency: dep.dependency_id || null,
+  };
+}
+
+export function laneAwaitingOperatorApproval(lane) {
+  const candidates = [
+    lane?.governed_action,
+    lane?.execution_run?.governed_action,
+    lane?.previous_run?.governed_action,
+    // A Governed Dependency in WAITING_APPROVAL is the same human decision
+    // wearing a different record. The operator must not have to care whether
+    // the request came from `vac governed-action`, a dependency, or anything
+    // else canonical — pending human governance is ONE interaction, so the
+    // dependency's governed action feeds the same card rather than a second
+    // component that would drift from it.
+    dependencyGovernedAction(lane?.governed_dependency),
+    dependencyGovernedAction(lane?.execution_run?.governed_dependency),
+  ].filter(Boolean);
+  for (const ga of candidates) {
+    // A decision already made never offers the buttons again, whatever the
+    // status still says — a record can sit in `awaiting_operator` briefly after
+    // it has in fact been approved, and re-offering Approve there would invite
+    // a second, meaningless decision.
+    if (ga.operator_approval) continue;
+    if (ga.status === "awaiting_operator") return ga;
+    if (ga.operator_approval_required === true
+      && (ga.status === "requested" || ga.status === "awaiting_director")) return ga;
+  }
+  return null;
+}
+
+/**
+ * The operator's approval card.
+ *
+ * Written for someone deciding, not someone debugging: what the action is,
+ * where it lands, why it needs a person, and what approving does. The request
+ * id is last and small — it is a handle for support, never the thing being
+ * approved.
+ */
+/**
+ * The operator's name for a governed action.
+ *
+ * The server issues `operator_label`; this only falls back when talking to an
+ * older runtime that predates it. The request id is NEVER a fallback — an
+ * approval announced as "approve gar_4dc7b4d8bcd0e0" is one the operator cannot
+ * match to anything on screen, which is the whole defect.
+ */
+export function governedActionLabel(ga) {
+  if (!ga) return "Governed action";
+  if (ga.operator_label) return ga.operator_label;
+  if (ga.operator_card?.label) return ga.operator_card.label;
+  const i = ga.inputs || {};
+  const pr = i.pullRequestNumber ?? i.pull_request_number;
+  if (ga.action_key === "repository.merge_pull_request" && pr) return `Merge PR #${pr} to ${ga.target || "staging"}`;
+  const branch = i.branch || i.headBranch || i.head_branch;
+  if (ga.action_key === "repository.push" && branch) return `Push ${branch}`;
+  if (ga.action_key === "promotion.open_pr" && branch) return `Open PR ${branch} → ${i.base || ga.target || "staging"}`;
+  if (ga.title) return ga.title;
+  return ga.action_key ? String(ga.action_key).replace(/[._]/g, " ") : "Governed action";
+}
+
+/**
+ * EVERY pending approval, at the top of every route.
+ *
+ * Before this, the only approval surface lived inside a lane — so the operator
+ * had to already know which lane had raised the request in order to find the
+ * request that would have told them. Being told "approve gar_4dc7b4d8bcd0e0"
+ * was unactionable: no surface anywhere carried that string.
+ *
+ * Each row leads with the NAME of the work and carries its own controls, so a
+ * decision costs one tap from wherever the operator already is.
+ */
+export function renderPendingApprovalsBar(approvals) {
+  const rows = Array.isArray(approvals) ? approvals.filter(Boolean) : [];
+  if (!rows.length) return "";
+  const n = rows.length;
+  return `<section class="gw-approvals" data-gw-approvals data-count="${n}" aria-label="Pending approvals">
+    <div class="gw-approvals-h"><span class="gw-approvals-badge">${n}</span> ${n === 1 ? "approval needs you" : "approvals need you"}</div>
+    ${rows.map((ga) => {
+      const rid = esc(ga.request_id || "");
+      const fp = esc(ga.content_fingerprint || "");
+      const ctx = (ga.operator_card?.context || [])
+        .map((c) => `${esc(c.label)} ${esc(c.value)}`).join(" · ");
+      return `<article class="gw-approval-row" data-request-id="${rid}">
+        <div class="gw-approval-row-main">
+          <p class="gw-approval-row-title">${esc(governedActionLabel(ga))}</p>
+          ${ctx ? `<p class="gw-approval-row-ctx">${ctx}</p>` : ""}
+          ${ga.escalation_reason ? `<p class="gw-approval-row-esc"><strong>Why this needs you.</strong> ${esc(ga.escalation_reason)}</p>` : ""}
+          ${ga.purpose ? `<p class="gw-approval-row-why">${esc(ga.purpose)}</p>` : ""}
+        </div>
+        <div class="gw-approval-row-actions">
+          <button type="button" class="btn sm primary" data-gw-governed-approve data-request-id="${rid}" data-content-fingerprint="${fp}">${esc(ga.approve_label || "Approve")}</button>
+          <button type="button" class="btn sm" data-gw-governed-deny data-request-id="${rid}" data-content-fingerprint="${fp}">${esc(ga.deny_label || "Deny")}</button>
+        </div>
+        <p class="gw-approval-row-ref" title="Diagnostic identifier — not the name of the work">Request ${rid}</p>
+      </article>`;
+    }).join("")}
+  </section>`;
+}
+
+export function renderLaneApprovalCard(lane, ga) {
+  const inputs = ga?.inputs || {};
+  const rid = esc(ga?.request_id || "");
+  const facts = [
+    ["Repository", inputs.repository],
+    ["Environment", ga?.target],
+    ["Branch", inputs.branch || inputs.headBranch],
+    ["Commit", String(inputs.expectedHeadSha || inputs.expectedSha || "").slice(0, 12)],
+    ["Pull request", inputs.pullRequestNumber ? `#${inputs.pullRequestNumber}` : null],
+    ["Migrations", Array.isArray(inputs.migrations) ? `${inputs.migrations.length} file(s)` : null],
+  ].filter(([, v]) => v != null && v !== "");
+  const why = ga?.reason_worker_cannot_execute || "This action needs authority the worker does not hold.";
+  const effect = ga?.purpose || "Approving runs this one registered action on the trusted host. The worker never receives credentials.";
+  // Stale protection: the card carries the identity it was rendered for, so an
+  // Approve pressed after the content changed can be refused rather than
+  // silently approving something the operator never read.
+  // The SERVER's identity for this content, not one the client invented — a
+  // fingerprint computed here would only prove the client agreed with itself.
+  const fingerprint = esc(ga?.content_fingerprint || "");
+  return `<aside class="gw-runtime gw-approval" data-gw-runtime data-posture="NEEDS_APPROVAL" data-gw-governed-approval data-request-id="${rid}">
+    <p class="gw-approval-title">${esc(governedActionLabel(ga))}</p>
+    <div class="gw-work-h">Approval required</div>
+    ${facts.length ? `<dl class="gw-approval-facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`).join("")}</dl>` : ""}
+    <p class="gw-runtime-d"><strong>Why this needs you.</strong> ${esc(ga?.escalation_reason || why)}</p>
+    <p class="gw-runtime-d"><strong>Effect.</strong> ${esc(effect)}</p>
+    <div class="gw-runtime-actions gw-approval-actions">
+      <button type="button" class="btn sm primary" data-gw-governed-approve data-request-id="${rid}" data-content-fingerprint="${fingerprint}">${esc(ga?.approve_label || "Approve")}</button>
+      <button type="button" class="btn sm" data-gw-governed-deny data-request-id="${rid}" data-content-fingerprint="${fingerprint}">${esc(ga?.deny_label || "Deny")}</button>
+    </div>
+    <p class="gw-approval-ref" title="Diagnostic identifier — not the name of the work">Request ${rid}</p>
+  </aside>`;
+}
+
 export function renderLaneRuntimeControls(lane, cap, { capacity = null } = {}) {
   if (!lane) return "";
   const posture = cap || deriveLaneExecutionPosture(lane);
+
+  // APPROVAL IS GATED ON THE LANE, NOT ON THE RUN'S WAIT STATE.
+  //
+  // The defect this fixes, reproduced live: with a real pending governed action
+  // on the lane, the operator watched for 60 seconds and no Approve control
+  // ever appeared. The posture stayed RUNNING because the existing approval
+  // surface required ALL THREE of runState === WAITING_RESOURCE, a governed
+  // wait carried on the run, and status === awaiting_operator — and a request
+  // filed through `vac governed-action` sets none of them: the run stays
+  // EXECUTING with resource_wait NULL.
+  //
+  // So the request projected onto the lane, the API worked, the markup existed
+  // and the click handler existed — and the operator still had nothing to
+  // press, because the card keyed off run state the CLI path never writes.
+  //
+  // A pending approval is a fact about the LANE. If one exists, the operator
+  // gets the control, whatever the run happens to be doing.
+  const pendingGa = laneAwaitingOperatorApproval(lane);
+  if (pendingGa) return renderLaneApprovalCard(lane, pendingGa);
+
   const slot = posture.slot;
   const slotNote = slot ? ` · Slot ${slot}` : "";
   const id = esc(lane.lane_id || "");
@@ -2096,11 +2303,43 @@ export function executionRunTone(stateOrRun) {
   return "";
 }
 
-export function renderOperatorDecisionActions(run) {
+/**
+ * The facts of a governed proposal, as a definition list.
+ *
+ * A Director approving a merge from a phone should not have to leave the app to
+ * find out what the pull request is called or whether CI is green. Rendered as
+ * rows rather than a sentence so the same markup reads at any width.
+ */
+export function renderGovernedProposal(proposal) {
+  if (!proposal) return "";
+  const rows = (proposal.facts || [])
+    .map((f) => `<div class="gw-gp-row"><dt class="gw-gp-k">${esc(f.label)}</dt><dd class="gw-gp-v">${esc(f.value)}</dd></div>`)
+    .join("");
+  const consequences = (proposal.consequences || [])
+    .map((c) => `<li>${esc(c)}</li>`)
+    .join("");
+  // Say plainly when the live facts could not be read, rather than showing a
+  // card with gaps that reads as "nothing to report".
+  const staleNote = proposal.snapshot_available
+    ? ""
+    : `<p class="gw-gp-note">GitHub could not be read when this was proposed, so continuous integration and size are not shown. The head commit is still pinned.</p>`;
+  return `<div class="gw-gp" data-gw-governed-proposal>
+      ${proposal.headline ? `<p class="gw-gp-head">${esc(proposal.headline)}</p>` : ""}
+      <dl class="gw-gp-facts">${rows}</dl>
+      ${staleNote}
+      ${proposal.reason ? `<p class="gw-gp-note"><span class="gw-gp-k">Why the lane cannot do this</span> ${esc(proposal.reason)}</p>` : ""}
+      ${consequences ? `<div class="gw-gp-conseq"><p class="gw-gp-k">If you approve</p><ul>${consequences}</ul></div>` : ""}
+      ${proposal.authorization_note ? `<p class="gw-gp-note">${esc(proposal.authorization_note)}</p>` : ""}
+    </div>`;
+}
+
+export function renderOperatorDecisionActions(run, { activity = null } = {}) {
   const ga = run?.governed_action;
   if (ga?.status === "awaiting_operator") {
+    const proposal = renderGovernedProposal(ga.proposal);
     return `<div class="gw-work-stale" data-gw-governed-approval>
       <p class="gw-work-stale-copy">${esc(ga.detail || ga.mission_need || `Read-only database census · Target: ${ga.target || "alloy_deployed_primary"} · Data mode: Read-only`)}</p>
+      ${proposal}
       <div class="gw-work-stale-actions">
         <button type="button" class="btn primary" data-gw-governed-approve data-request-id="${esc(ga.request_id || "")}">${esc(ga.approve_label || "Authorize census")}</button>
         <button type="button" class="btn" data-gw-governed-deny data-request-id="${esc(ga.request_id || "")}">${esc(ga.deny_label || "Deny")}</button>
@@ -2108,9 +2347,15 @@ export function renderOperatorDecisionActions(run) {
     </div>`;
   }
   const lifecycle = run?.run_lifecycle?.class || run?.run_lifecycle?.class;
-  if (lifecycle === "ambiguous" || lifecycle === "stale") {
+  const leakedGrant = run?.run_lifecycle?.reason === "open_resource"
+    && activity === "ready"
+    && !run?.resource_wait?.resuming;
+  if (lifecycle === "ambiguous" || lifecycle === "stale" || leakedGrant) {
+    const copy = leakedGrant
+      ? "This run is holding a shared lock after the agent finished. Close it so you can send again."
+      : "Previous work may not have completed.";
     return `<div class="gw-work-stale">
-    <p class="gw-work-stale-copy">Previous work may not have completed.</p>
+    <p class="gw-work-stale-copy">${esc(copy)}</p>
     <div class="gw-work-stale-actions">
       <button type="button" class="btn primary" data-gw-close-stale data-run-id="${esc(run.run_id || "")}">Close stale run and continue</button>
       <button type="button" class="btn" data-gw-review-run>Review run</button>
@@ -2120,8 +2365,122 @@ export function renderOperatorDecisionActions(run) {
   return "";
 }
 
-export function renderOperatorDecisionBar(run) {
-  const inner = renderOperatorDecisionActions(run);
+/**
+ * Which run should the operator's decision bar read?
+ *
+ * The bar used to be handed `lane.execution_run` alone. `attachLaneRuns` reports
+ * only a NON-TERMINAL run as active, so the moment a lane's turn finished its
+ * `execution_run` became null — and a governed request still sitting at
+ * `awaiting_operator` had nowhere to render. Communications filed a merge
+ * request for PR #510, completed its turn while waiting, and the Director was
+ * left with a decision to make and no card to make it on.
+ *
+ * An approval is the LANE's, not the turn's. It is answered after the work that
+ * asked for it has stopped — that is the normal case, not the exception.
+ *
+ * Deliberately narrow: the fallback applies ONLY when an approval is actually
+ * waiting. With nothing pending this returns exactly what it returned before,
+ * so the stale-run branch below cannot start firing on finished runs.
+ */
+/**
+ * What the last governed decision actually did.
+ *
+ * The approval card is only present while a decision is PENDING, so approving
+ * makes it vanish — the same way whether the action worked or failed. The
+ * operator clicks "Authorize push", the card disappears, and nothing says what
+ * happened. This is the answer, in the place the question was asked.
+ *
+ * Deliberately quiet: one line, no controls, and nothing at all when there has
+ * never been a governed decision on this lane.
+ */
+/**
+ * Browser-session recovery, where the Director is already looking.
+ *
+ * A lane whose Playwright session has gone stale used to show nothing at all —
+ * the run simply failed somewhere with `refresh_token_not_found` and the only
+ * way back was a terminal. This is the status and the one action that replaces
+ * that: the Director signs in through a browser Vacilando opens, and nothing
+ * they type passes through the agent.
+ */
+export function renderBrowserAuthRecovery(lane) {
+  const a = lane?.browser_auth;
+  if (!a || !a.blocks_execution) return "";
+  return `<div class="gw-decision-bar" data-gw-decision-bar data-kind="auth">
+    <div class="gw-decision-h">Browser session</div>
+    <div class="gw-work-stale" data-gw-browser-auth>
+      <p class="gw-work-stale-copy">${esc(a.headline)}</p>
+      <dl class="gw-kv">
+        <dt>Slot</dt><dd>${esc(String(a.slot ?? "—"))}</dd>
+        <dt>Address</dt><dd>${esc(a.base_url || "—")}</dd>
+        <dt>Sign in as</dt><dd>${esc(a.expected_identity || "—")}</dd>
+        ${a.storage_captured_at ? `<dt>Last captured</dt><dd>${esc(ago(Date.parse(a.storage_captured_at)))} ago</dd>` : ""}
+      </dl>
+      <p class="gw-gv-text">A browser opens on this machine. What you type goes to the app and nowhere else — not to the agent, not into the run, not into any log.</p>
+      <div class="gw-work-stale-actions">
+        <button type="button" class="btn primary" data-gw-browser-auth-signin data-lane-id="${esc(lane.lane_id || "")}" data-slot="${esc(String(a.slot ?? ""))}">Sign in</button>
+        <button type="button" class="btn" data-gw-browser-auth-recheck data-lane-id="${esc(lane.lane_id || "")}">Re-check</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+export function renderGovernedOutcome(lane) {
+  const o = lane?.last_governed_outcome;
+  if (!o) return "";
+  const when = o.at ? ago(Date.parse(o.at)) : null;
+  return `<p class="gw-gv-outcome ${o.ok ? "is-ok" : "is-failed"}" data-gw-governed-outcome>
+    <span class="gw-gv-mark">${o.ok ? "✓" : "✕"}</span>
+    <span class="gw-gv-text">${esc(o.title)} — ${esc(o.detail)}${when ? ` · ${esc(when)} ago` : ""}${o.approved_by ? ` · approved by ${esc(o.approved_by)}` : ""}</span>
+  </p>`;
+}
+
+export function operatorDecisionRun(lane) {
+  const active = lane?.execution_run || null;
+  if (active?.governed_action?.status === "awaiting_operator") return active;
+  const pending = lane?.governed_action?.status === "awaiting_operator"
+    ? lane.governed_action
+    : (lane?.previous_run?.governed_action?.status === "awaiting_operator"
+      ? lane.previous_run.governed_action
+      : null);
+  if (!pending) return active;
+  return { ...(active || lane?.previous_run || {}), governed_action: pending };
+}
+
+/** Operator-facing result of Authorize / Deny. Never says "census" for a push. */
+export function governedDecisionNotice({
+  approve = true,
+  already = false,
+  error = null,
+  actionKey = null,
+  title = null,
+  approveLabel = null,
+} = {}) {
+  if (error) {
+    if (error === "self_approval_refused") {
+      return { kind: "err", text: "This lane cannot approve its own request." };
+    }
+    if (error === "request_not_found") {
+      return { kind: "err", text: "That approval is no longer available." };
+    }
+    if (error === "unreachable") {
+      return { kind: "err", text: "Could not reach the Gateway. The decision was not sent." };
+    }
+    return { kind: "err", text: `Could not resolve that decision (${error}).` };
+  }
+  if (already) return { kind: "ok", text: "Already resolved." };
+  if (!approve) return { kind: "ok", text: "Denied." };
+  const what = approveLabel
+    ? String(approveLabel).replace(/^Authorize\s+/i, "")
+    : (actionKey === "repository.push" ? "Push"
+      : actionKey === "repository.merge_pull_request" ? "Merge"
+      : actionKey === "promotion.open_pr" ? "Pull request"
+      : actionKey === "database.read_census" ? "Census"
+      : (title || "Action"));
+  return { kind: "ok", text: `${what} authorized. Director is executing.` };
+}
+
+export function renderOperatorDecisionBar(run, extras = {}) {
+  const inner = renderOperatorDecisionActions(run, extras);
   if (!inner) return "";
   const awaiting = run?.governed_action?.status === "awaiting_operator";
   return `<div class="gw-decision-bar" data-gw-decision-bar data-kind="${awaiting ? "approval" : "stale"}">
@@ -2166,12 +2525,33 @@ export function renderBlockingScreen(screen, { pending = null } = {}) {
 }
 
 /** When there is a blocker but nothing selectable, say so honestly. */
-export function renderUnanswerableScreen(screen) {
+/**
+ * Blockers whose cancel key is known to be Escape. Mirrors
+ * DISMISSIBLE_BLOCKER_KINDS in prompt-block-dismiss.mjs; the server re-checks
+ * before sending anything, so this list only decides whether to OFFER the way
+ * out. Deliberately excludes permission/trust/onboarding/login/update: those ask
+ * a real question, and dismissing one is answering it.
+ */
+export const DISMISSIBLE_SCREEN_KINDS = Object.freeze(["selection", "resume_picker", "error_modal"]);
+
+export function renderUnanswerableScreen(screen, { laneId = null, pending = false } = {}) {
   if (!screen || screen.answerable !== false || !screen.needs_terminal) return "";
+  const kind = screen.blocker?.kind || null;
+  // "It has to be answered in the agent's terminal" was the whole problem: Trust
+  // Runtime sat in a Rewind picker and the Director had no way to clear it.
+  const dismissible = DISMISSIBLE_SCREEN_KINDS.includes(kind);
+  const action = dismissible
+    ? `<div class="gw-work-stale-actions">
+        <button type="button" class="btn primary" data-gw-dismiss-block
+          data-lane-id="${esc(laneId || "")}" ${pending ? "disabled" : ""}>
+          ${pending ? "Closing\u2026" : "Close this screen"}</button>
+      </div>
+      <div class="gw-screen-note">Sends Escape and nothing else. It cannot answer a question or pick an entry.</div>`
+    : `<div class="gw-screen-note">This one has no choices to pick, so it has to be answered in the agent's terminal.</div>`;
   return `<aside class="gw-screen is-terminal" data-gw-screen-terminal>
     <div class="gw-screen-h">${esc(screen.blocker?.title || "The agent is waiting")}</div>
     <div class="gw-screen-q">${esc(screen.blocker?.signal || "")}</div>
-    <div class="gw-screen-note">This one has no choices to pick, so it has to be answered in the agent's terminal.</div>
+    ${action}
   </aside>`;
 }
 
@@ -2211,11 +2591,16 @@ export function renderCurrentWork(run, nowMs = Date.now(), { cancelPending = fal
     const startedMs = run.started_at ? Date.parse(run.started_at) : NaN;
     const started = Number.isFinite(startedMs) ? ago(startedMs, nowMs) : null;
     const instruction = run.instruction ? String(run.instruction) : "";
+    const leaked = run.resource_wait?.request_state === "GRANTED" && !run.resource_wait?.resuming;
+    const closeRun = leaked
+      ? { ...run, run_lifecycle: { class: "active", reason: "open_resource" } }
+      : run;
     return `<aside class="gw-work" data-gw-work data-run-state="EXECUTING" data-agent-idle="1">
     <span class="gw-work-h">Current work</span>
     <span class="gw-work-state">At a prompt</span>
     ${instruction ? `<span class="gw-work-text">${esc(instruction)}</span>` : ""}
     <span class="gw-work-meta">The agent finished this turn. The run is still open${started ? ` · started ${esc(started)} ago` : ""}.</span>
+    ${renderOperatorDecisionActions(closeRun, { activity: "ready" })}
     ${renderCancelControl(run, { pending: cancelPending })}
   </aside>`;
   }
@@ -3702,6 +4087,7 @@ export function renderStatus(lane, resources, { open = false, summary, sessionLi
       ${machine ? `<dt>Machine</dt><dd>${esc(machine)}</dd>` : ""}
     </dl>
     ${renderSourceControl(lane)}
+    ${renderCheckpointReadiness(lane.execution_run || lane.previous_run)}
     ${renderAgentTelemetry(telemetry, Date.now(), { lane })}
     ${renderDevelopmentResources(developmentResources, lanes || [lane])}
   </details>`;
@@ -4115,6 +4501,59 @@ export function createErrorText(error) {
   }
 }
 
+/**
+ * Checkpoint readiness, as a report rather than a promise of action.
+ *
+ * The Director needs four facts to act: whether a checkpoint is possible, what
+ * this run actually owns, how much dirt is NOT this run's, and why it is
+ * blocked. The last line states that reporting created no commit — the previous
+ * behaviour silently did, so the absence of a mutation is worth saying out loud.
+ *
+ * Path lists are bounded and the foreign list collapses behind a disclosure: an
+ * incident-shaped worktree has dozens of them and a phone must stay usable.
+ */
+export function renderCheckpointReadiness(run) {
+  const r = run?.checkpoint_readiness;
+  if (!r) return "";
+  const ready = r.checkpoint_ready === true;
+  const why = {
+    foreign_dirty_files: "Files are dirty that this run did not create.",
+    no_run_baseline: "This run has no recorded starting state, so nothing can be attributed to it.",
+    baseline_truncated: "The recorded starting state was too large to record in full, so attribution is not exact.",
+    head_moved_since_baseline: "The branch moved since this run started.",
+    worktree_conflict: "The worktree has a merge conflict.",
+    nothing_to_checkpoint: "This run has not changed any files.",
+    git_unreadable: "Git could not be read.",
+    ready: "This run's files can be checkpointed.",
+  }[r.reason] || "Checkpoint is not available.";
+
+  const list = (label, group, cls) => {
+    if (!group?.count) return "";
+    const shown = (group.paths || []).slice(0, 12).map((p) => `<li>${esc(p)}</li>`).join("");
+    const more = group.count > 12 ? `<li class="gw-ck-more">… ${group.count - 12} more</li>` : "";
+    return `<details class="gw-ck-group ${cls}"${cls === "is-owned" ? " open" : ""}>
+      <summary>${esc(label)} · ${group.count}</summary>
+      <ul class="gw-ck-paths">${shown}${more}</ul>
+    </details>`;
+  };
+
+  return `<div class="gw-status-block gw-ck" data-gw-checkpoint-readiness>
+    <div class="gw-status-h">Checkpoint</div>
+    <p class="gw-ck-verdict ${ready ? "is-ready" : "is-blocked"}">
+      ${ready ? "Ready" : "Not ready"} — ${esc(why)}
+    </p>
+    <dl class="gw-kv">
+      <dt>HEAD</dt><dd class="gw-ck-sha">${esc((r.head || "—").slice(0, 12))}</dd>
+      <dt>Changed by this run</dt><dd>${r.owned?.count ?? 0}</dd>
+      <dt>Already dirty</dt><dd>${r.foreign?.count ?? 0}</dd>
+      <dt>Staged / unstaged / untracked</dt><dd>${r.staged_count ?? 0} / ${r.unstaged_count ?? 0} / ${r.untracked_count ?? 0}</dd>
+    </dl>
+    ${list("Candidate paths for a checkpoint", r.owned, "is-owned")}
+    ${list("Not from this run — will not be committed", r.foreign, "is-foreign")}
+    <p class="gw-ck-note">Status was recorded. No commit was created, nothing was staged, and the working tree was not touched.</p>
+  </div>`;
+}
+
 export function renderSourceControl(lane) {
   const scm = lane?.source_control;
   if (!scm && !lane?.git?.branch) return "";
@@ -4233,6 +4672,14 @@ export function renderGatewayShell({
   latestResponse = null,
   newUpdate = false,
   asideOpen = false,
+  // INERT IS NOT THE SAME AS CLOSED. On desktop the details pane is a permanent
+  // grid column — no rule hides it, and the fold preference changes nothing you
+  // can see. Marking it inert whenever it was "closed" therefore left a pane
+  // that was fully visible and completely dead: Chromium does not hit-test an
+  // inert subtree, so the wheel fell through to an ancestor with overflow:hidden
+  // and nothing scrolled, while every control inside it silently ignored clicks.
+  // Only the mobile drawer is ever genuinely hidden, so only it may be inert.
+  asideInert = !asideOpen,
   userMessageExpanded = false,
   folders = [],
   collapsedFolders,
@@ -4365,7 +4812,7 @@ export function renderGatewayShell({
   // used to be split between an inline <details> under the thread and a second
   // "Lane details" fold in the aside, so the same lane facts appeared twice and
   // neither place was complete.
-  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideOpen ? "" : ' aria-hidden="true" inert'}>
+  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideInert ? ' aria-hidden="true" inert' : ""}>
         <div class="gw-aside-head">
           <div class="gw-aside-title">Details</div>
           <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
@@ -4379,15 +4826,30 @@ export function renderGatewayShell({
             ${renderLaneRepository(lane, repositories)}
           </div>
           ${renderNotificationControls(notify || {})}
+          ${renderBrowserAuthRecovery(lane)}
+          ${/*
+            ONE runtime section, directly below the conversation. These were three
+            separate cards stacked in sequence, which read as three unrelated
+            things; they are one subject — whether this lane can keep working.
+          */ ""}
+          ${(() => {
+            const parts = [
+              renderLaneSessionCallout(lane, { executionCapacity }),
+              renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity }),
+              renderContextRefreshButton(lane),
+            ].filter((html) => String(html || "").trim());
+            if (!parts.length) return "";
+            return `<section class="gw-runtime-section" data-gw-runtime-section>
+              <h2 class="gw-runtime-section-h">Runtime</h2>
+              ${parts.join("\n")}
+            </section>`;
+          })()}
           ${renderLaneLocalhost(lane)}
           ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending, activity: lane?.provider_activity?.activity })}${renderPreviousWork(lane?.previous_run)}
-          ${renderContextRefreshButton(lane)}
           ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
           ${renderClaudeRunStatus(lane, telemetry)}
           ${renderProviderHealth(output?.provider_health)}
           ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
-          ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
-          ${renderLaneSessionCallout(lane, { executionCapacity })}
           ${renderRecentSystemActivity(lane?.recent_system_activity)}
           ${renderTerminalDiagnostics(bodyText, { pending, output })}
           ${statusHtml}
@@ -4425,9 +4887,20 @@ export function renderGatewayShell({
           </article>
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
-        ${renderOperatorDecisionBar(lane?.execution_run)}
+        ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
+        ${/*
+          ACTIONS BELONG WHERE THE CONVERSATION IS.
+          These three were in the details rail: the session callout that says
+          Claude's session failed, the runtime controls that keep or release the
+          lane, and the context refresh. Each one gates progress, and the rail is
+          the wrong home for anything that does — it is a reference column the
+          Director may have collapsed, it is the first thing to run out of room,
+          and while it was inert it could not be scrolled or clicked at all. An
+          action the operator cannot reach is the same as no action.
+        */ ""}
+        ${renderGovernedOutcome(lane)}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
-        ${renderUnanswerableScreen(blockingScreen)}
+        ${renderUnanswerableScreen(blockingScreen, { laneId: lane?.lane_id || selectedId })}
         ${renderComposer({
           ...(composer || {}),
           idleStart: cap.state === "IDLE",

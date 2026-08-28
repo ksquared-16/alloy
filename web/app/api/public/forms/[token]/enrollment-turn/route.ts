@@ -27,6 +27,7 @@ import {
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { applyParticipantTurnResponse } from "@/lib/enrollment/participantRuntime/applyParticipantTurnResponse";
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
+import type { StructuredCandidate } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
 import { participantProviderReasoningPermitted } from "@/lib/enrollment/participantRuntime/participantProviderAuthorization";
 import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
@@ -96,13 +97,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const text = typeof body.text === "string" ? body.text : null;
 
+    /*
+     * "LEAVE IT BLANK" IS AN ACTION, NOT A VALUE.
+     *
+     * The browser sends the intent — a flag, never words — and the server decides whether this turn
+     * may be declined at all. Nothing about the shortcut's label crosses the wire as an answer,
+     * which is the whole point: its text belongs on the button, not in a middle-name box.
+     */
+    const declined = (body as { decline?: unknown }).decline === true;
+
     // Deterministic FIRST. A value typed into the control, or an unambiguous "yes", needs no model
     // and must never wait on one.
-    let candidate = interpretParticipantResponseDeterministically({
-        turn: current.value.next_turn,
-        text,
-        directValue: body.value,
-    });
+    let candidate: StructuredCandidate = declined
+        ? { kind: "declined" }
+        : interpretParticipantResponseDeterministically({
+              turn: current.value.next_turn,
+              text,
+              directValue: body.value,
+          });
 
     // Governed assistance is ADDITIVE, and only where the deterministic path could not read the
     // answer. Every gate — affirmative permission, D-101 turn eligibility, the Information Package,

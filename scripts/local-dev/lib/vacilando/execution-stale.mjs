@@ -253,6 +253,19 @@ function pastSettle(run, facts) {
 /**
  * @returns {{ class: "active"|"stale"|"ambiguous", reason: string, evidence: object, summary?: string }}
  */
+/**
+ * Has the settle window passed since this run was recovered?
+ *
+ * A recovery that has produced nothing for a full settle window is not in
+ * flight. With no timestamp to judge by, it is treated as still settling —
+ * unknown timing must not become a licence to collect.
+ */
+function recoverySettled(run, nowMs) {
+  const recoveredAt = parseMs(run?.recovery_state?.recovered_at) ?? parseMs(run?.updated_at);
+  if (recoveredAt == null) return false;
+  return (nowMs - recoveredAt) >= STALE_SETTLE_MS;
+}
+
 export function classifyExecutionRunStale(run, facts = {}) {
   const nowMs = facts.now_ms || Date.now();
   const merged = { ...facts, now_ms: nowMs };
@@ -279,7 +292,22 @@ export function classifyExecutionRunStale(run, facts = {}) {
     return { class: "active", reason: "terminal", evidence };
   }
   if (PROTECTIVE_STATES.has(run.state)) {
-    return { class: "active", reason: `protective_state_${run.state.toLowerCase()}`, evidence };
+    // RECOVERING is protective only while a recovery could still be IN FLIGHT.
+    //
+    // It was protective unconditionally, and a recovered run that never reports
+    // again therefore sat in RECOVERING forever: the governor would not collect
+    // it and the lane card read "Recovering" permanently. Communications sat
+    // there for nearly two hours with an idle pane, past settle, no progress and
+    // no agent report — nothing about that is a recovery in flight.
+    //
+    // The other protective states keep their unconditional protection: they wait
+    // on a person or on a governed decision, and time alone does not resolve
+    // either.
+    if (run.state === "RECOVERING" && recoverySettled(run, nowMs)) {
+      // fall through to the ordinary evaluation below
+    } else {
+      return { class: "active", reason: `protective_state_${run.state.toLowerCase()}`, evidence };
+    }
   }
   const governedPending = run.state === "WAITING_RESOURCE" && (
     run.resource_wait?.resource_key === "director_governed_action"
@@ -298,10 +326,14 @@ export function classifyExecutionRunStale(run, facts = {}) {
       return { class: "active", reason: "governed_action_resumed", evidence };
     }
   }
-  if (run.state !== "EXECUTING") {
+  if (run.state !== "EXECUTING" && run.state !== "RECOVERING") {
     return { class: "active", reason: "not_executing", evidence };
   }
-  if (run.recovery_state) {
+  // `recovery_state` is the RECORD of a past recovery, not a live flag. Read as
+  // "a recovery is happening" it never cleared, so any run that had ever been
+  // recovered became permanently uncollectable. It protects the settle window
+  // after the recovery, and no longer.
+  if (run.recovery_state && !recoverySettled(run, nowMs)) {
     return { class: "active", reason: "recovery_in_flight", evidence };
   }
   if (evidence.open_resource) {
@@ -480,6 +512,10 @@ export async function maybeCompleteIdleTurnFromLastOutput(lane, {
   if (lane?.provider_activity?.live_progress?.idle_result !== true) {
     return { ok: true, completed: false, skipped: "turn_not_finished" };
   }
+  const ga = lane?.governed_action || run?.governed_action;
+  if (ga && ["requested", "awaiting_director", "awaiting_control_plane_refresh", "awaiting_operator", "executing"].includes(ga.status)) {
+    return { ok: true, completed: false, skipped: "governed_action_pending" };
+  }
   const started = parseMs(run.started_at);
   if (started != null && (nowMs - started) < IDLE_TURN_COMPLETE_GRACE_MS) {
     return { ok: true, completed: false, skipped: "grace" };
@@ -565,7 +601,12 @@ export async function applyIdleTurnCompletions(lanes, { root, nowMs = Date.now()
  */
 export function canOperatorSupersedeRun(run, facts = {}) {
   if (!run) return false;
-  if (facts.open_resource || facts.in_flight_continuation) return false;
+  // An in-flight continuation is a resume being pasted into the pane.
+  // A GRANTED exclusive lock with no continuation is not: Vacilando sat
+  // EXECUTING with gateway_host_mutation granted, the pane idle at a prompt,
+  // and Send / Close / stale-governor all refused. Completing the turn
+  // releases the grant (cleanupRunResources). Operator Send is the way out.
+  if (facts.in_flight_continuation) return false;
   if (SESSION_BUSY.has(facts.session_state)) return false;
   const nowMs = facts.now_ms || Date.now();
   if (run.state === "NEEDS_INPUT") {
@@ -575,7 +616,20 @@ export function canOperatorSupersedeRun(run, facts = {}) {
     if (report?.type === "needs_input" && report.blocking !== false) return false;
     return true;
   }
-  if (run.state !== "EXECUTING") return false;
+  // RECOVERING is superseded on the same terms as EXECUTING.
+  //
+  // A recovered run waits for the agent to report again. When the agent already
+  // answered BEFORE the recovery — or its reply was consumed as a delivery echo
+  // — nothing further is coming, and the run parks in RECOVERING forever. The
+  // stale governor calls that class "active", so it never collects it either.
+  // The lane is then unreachable: Send is refused, nothing closes the run, and
+  // the operator has no way back in. Communications sat exactly there for 46
+  // minutes with an idle pane.
+  //
+  // The guards above still hold — an open resource, an in-flight continuation
+  // or a busy session all still refuse — so this widens the state, never the
+  // conditions.
+  if (run.state !== "EXECUTING" && run.state !== "RECOVERING") return false;
   const delivered = facts.delivered_ms;
   if (delivered != null && (nowMs - delivered) < OPERATOR_SUPERSEDE_GRACE_MS) return false;
   return true;
@@ -732,7 +786,29 @@ export function closeStaleExecutionRun(runId, {
   const facts = collectStaleRunFacts(run, { root, nowMs });
   const cls = classifyExecutionRunStale(run, facts);
   if (cls.class === "active") {
-    return { ok: false, error: "run_still_active", reason: cls.reason, run: publicExecutionRun(run) };
+    // Governor must not auto-collect a grant holder (exclusive install can
+    // look idle). The operator still has to be able to close it: a leaked
+    // GRANTED lock with no in-flight continuation is how Vacilando became
+    // unreachable — Close returned run_still_active, Send returned
+    // current_run_active, and the decision bar never appeared.
+    const operatorCloseLeakedGrant = origin === "operator"
+      && cls.reason === "open_resource"
+      && !facts.in_flight_continuation;
+    if (!operatorCloseLeakedGrant) {
+      return { ok: false, error: "run_still_active", reason: cls.reason, run: publicExecutionRun(run) };
+    }
+    const out = closeClassifiedRun(run, {
+      class: "stale",
+      reason: "operator_closed_leaked_grant",
+      evidence: cls.evidence,
+      summary: "Abandoned: the run was holding a shared lock after the agent had already finished.",
+    }, {
+      root,
+      nowMs,
+      origin: "operator",
+    });
+    if (!out.ok) return out;
+    return { ok: true, run: publicExecutionRun(out.run, { includeInstruction: true, includeTransitions: true }) };
   }
   const out = closeClassifiedRun(run, cls, {
     root,

@@ -11,6 +11,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { OPERATIONAL_AGREEMENT_STATUSES } from "@/lib/childcareOperational/enrollmentAgreementService";
 import {
     getOperationalAgreementForMemberSite,
     getAgreementById,
@@ -563,141 +564,45 @@ export type LoadSchedulingProjectionParams = {
 };
 
 /** Thin I/O: load canonical rows for one child + delegate to the pure stitch. */
+/**
+ * Single-child API — DELEGATES to the plural owner with a one-item set.
+ *
+ * There is one scheduling implementation, not two. This exists because callers that genuinely have
+ * one child should not have to build a set, and because every existing caller keeps working; it adds
+ * no behaviour of its own.
+ *
+ * A child with no schedulable truth yields a projection with no children, which is what this path
+ * has always returned for that case.
+ */
 export async function loadSchedulingProjectionForChild(
     supabase: SupabaseClient,
     orgId: string,
     params: LoadSchedulingProjectionParams
 ): Promise<SchedulingProjection> {
-    const { customerMemberId, siteLocationId, todayYmd, computedAt } = params;
-
-    let agreement: ChildEnrollmentAgreementRow | null =
-        await getOperationalAgreementForMemberSite(
-            supabase,
-            orgId,
-            customerMemberId,
-            siteLocationId
-        );
-
-    const siteName =
-        params.siteName !== undefined ? params.siteName : await resolveLocationLabel(supabase, orgId, siteLocationId);
-
-    // Simple label resolvers (cached) shared by the committed + proposed paths.
-    const roomLabelCache = new Map<string, string | null>();
-    const programLabelCache = new Map<string, string | null>();
-    async function roomLabel(id: string | null): Promise<string | null> {
-        if (!id) return null;
-        if (!roomLabelCache.has(id)) roomLabelCache.set(id, await resolveLocationLabel(supabase, orgId, id));
-        return roomLabelCache.get(id) ?? null;
-    }
-    async function programLabel(id: string | null): Promise<string | null> {
-        if (!id) return null;
-        if (!programLabelCache.has(id)) programLabelCache.set(id, await resolveProgramLabel(supabase, orgId, id));
-        return programLabelCache.get(id) ?? null;
-    }
-
-    // Always load by customer_member_id so proposed (no agreement) and committed rows
-    // compose into one projection. Agreement remains the committed authority when present.
-    const [assignmentRows, placements] = await Promise.all([
-        listScheduleAssignments(supabase, orgId, { customerMemberId }),
-        agreement
-            ? listChildPlacements(supabase, orgId, { enrollmentAgreementId: agreement.id })
-            : Promise.resolve([] as ChildPlacementRow[]),
-    ]);
-
-    // No ledger rows yet → fall back to participation-metadata draft (compat).
-    if (!agreement && assignmentRows.length === 0) {
-        const proposed = await loadProposedDraftForChild(
-            supabase,
-            orgId,
-            customerMemberId,
-            siteLocationId,
-            roomLabel,
-            programLabel
-        );
-        const subject: ChildSchedulingSubject = {
-            id: customerMemberId,
-            name: params.subjectName,
-            program: proposed?.assignments[0]?.room.program ?? null,
-            ageGroup: params.ageGroup ?? null,
-            siteId: siteLocationId,
-            siteName,
-        };
-        const child = buildChildScheduling({
-            subject,
-            agreementStatus: null,
-            enrollmentAgreementId: null,
-            assignments: [],
-            asOf: todayYmd,
-            proposed,
-        });
-        return buildSchedulingProjectionForChild(child, todayYmd, computedAt);
-    }
-
-    const patterns = await loadPatterns(
-        supabase,
-        orgId,
-        assignmentRows.map((a) => a.schedule_pattern_id)
-    );
-    const assignmentTypes = await loadAssignmentTypes(
-        supabase,
-        orgId,
-        assignmentRows
-            .map((a) => a.operational_assignment_type_id)
-            .filter((id): id is string => Boolean(id))
-    );
-
-    const assignments: AssignmentInput[] = [];
-    for (const row of assignmentRows) {
-        const pattern = patterns.get(row.schedule_pattern_id) ?? null;
-        const hours = readPatternDefaultHours(
-            (pattern?.metadata ?? null) as Record<string, unknown> | null
-        );
-        const placement = placementForAssignment(placements, row);
-        // Prefer assignment-owned room; fall back to covering placement (compat).
-        const roomId = row.room_location_id ?? placement?.room_location_id ?? null;
-        const programId = row.program_category_id ?? placement?.program_category_id ?? null;
-        const room: AssignmentRoom = {
-            id: roomId,
-            name: await roomLabel(roomId),
-            program: await programLabel(programId),
-        };
-        const type =
-            (row.operational_assignment_type_id
-                ? assignmentTypes.get(row.operational_assignment_type_id)
-                : null) ?? EMPTY_TYPE;
-        assignments.push({
-            row,
-            weekdays: pattern?.weekdays ?? [],
-            patternResolved: pattern != null,
-            patternLabel: pattern?.label?.trim() || null,
-            arriveTime: hours?.arrive ?? null,
-            departTime: hours?.depart ?? null,
-            room,
-            assignmentType: type,
-        });
-    }
-
-    // Subject program comes from the operational placement (current room).
-    const operationalPlacement =
-        placements.find((p) => !p.end_date) ?? placements[0] ?? null;
-    const subject: ChildSchedulingSubject = {
-        id: customerMemberId,
-        name: params.subjectName,
-        program: await programLabel(operationalPlacement?.program_category_id ?? null),
-        ageGroup: params.ageGroup ?? null,
-        siteId: siteLocationId,
-        siteName,
-    };
-
-    const child = buildChildScheduling({
-        subject,
-        agreementStatus: agreement?.status ?? null,
-        enrollmentAgreementId: agreement?.id ?? null,
-        assignments,
-        asOf: todayYmd,
+    const byMember = await loadSchedulingProjectionsForChildren(supabase, orgId, {
+        children: [
+            {
+                customerMemberId: params.customerMemberId,
+                subjectName: params.subjectName,
+                ageGroup: params.ageGroup ?? null,
+            },
+        ],
+        siteLocationId: params.siteLocationId,
+        todayYmd: params.todayYmd,
+        computedAt: params.computedAt,
+        siteName: params.siteName,
     });
-
-    return buildSchedulingProjectionForChild(child, todayYmd, computedAt);
+    const projection = byMember.get(params.customerMemberId.trim());
+    if (!projection) {
+        // Unreachable for any non-empty member id: the plural owner sets an entry for every child it
+        // was asked about. Kept as an explicit failure rather than a fabricated empty projection,
+        // because an invented one would report "nothing scheduled" for a child nobody looked at.
+        throw new OperationalEnrollmentServiceError(
+            "db_error",
+            "scheduling projection missing for the requested child"
+        );
+    }
+    return projection;
 }
 
 export type LoadStaffSchedulingProjectionParams = {
@@ -765,18 +670,17 @@ export async function loadSchedulingProjectionForStaff(
         subjectType: "staff",
     });
 
-    const patterns = await loadPatterns(
-        supabase,
-        orgId,
-        assignmentRows.map((a) => a.schedule_pattern_id)
-    );
-    const assignmentTypes = await loadAssignmentTypes(
-        supabase,
-        orgId,
-        assignmentRows
-            .map((a) => a.operational_assignment_type_id)
-            .filter((id): id is string => Boolean(id))
-    );
+    // Same independence as the child loader above: both id sets come from `assignmentRows`. Not on
+    // the drawer-VM critical path, so unmeasured here — corrected together because leaving one half
+    // of an identical shape sequential is how the next reader learns the wrong lesson.
+    const [patterns, assignmentTypes] = await Promise.all([
+        loadPatterns(supabase, orgId, assignmentRows.map((a) => a.schedule_pattern_id)),
+        loadAssignmentTypes(
+            supabase,
+            orgId,
+            assignmentRows.map((a) => a.operational_assignment_type_id).filter((id): id is string => Boolean(id)),
+        ),
+    ]);
 
     const assignments: AssignmentInput[] = [];
     for (const row of assignmentRows) {
@@ -845,4 +749,451 @@ export async function agreementStatusById(
 ): Promise<string | null> {
     const agreement = await getAgreementById(supabase, orgId, agreementId);
     return agreement?.status ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// CANONICAL BULK SCHEDULING PROJECTION
+//
+// The drawer VM projects EVERY inquiry child on the case. Doing that one child at a time meant one
+// three-hop chain each — agreement, then assignments and placements, then patterns and types — plus
+// a proposed-draft branch with two more hops and its own label lookups. Per-child timing on the
+// certification tenant: 17 children, a 239–316 ms leg, and 3,116–3,903 ms of CUMULATIVE database
+// work. Concurrency hid the fan-out; it did not pay for it.
+//
+// Two memoization shapes were built and rejected on measurement first — a resolved-value cache
+// recovered nothing (all seventeen children miss at the same instant) and an in-flight promise cache
+// regressed the leg fourfold by making every child wait on whichever one claimed the shared ids.
+// That is the evidence that this is not a caching problem: it is a fan-out problem, and the only
+// thing that removes a fan-out is asking once for the whole set.
+//
+// THE QUERY COUNT IS NOW INDEPENDENT OF CHILD COUNT — eight bounded reads whether the case has one
+// child or seventeen, plus explicitly declared chunking above MAX_IDS_PER_QUERY.
+//
+// Truth is preserved by construction rather than by re-derivation: the bulk owner changes only where
+// rows come from, and every child is then stitched by the SAME pure function the single-child path
+// has always used. `loadSchedulingProjectionForChild` now delegates here with a one-item set, so
+// there is one implementation, not two.
+// ---------------------------------------------------------------------------
+
+/**
+ * Chunk bound for `IN (...)` predicates. PostgREST puts the list in the URL, so an unbounded set
+ * becomes a request that is silently truncated or rejected at the gateway rather than a slow query.
+ * Chunks are merged in request order, so the merge is deterministic regardless of completion order.
+ */
+export const MAX_IDS_PER_QUERY = 100;
+
+function chunkIds(ids: readonly string[]): string[][] {
+    const distinct = [...new Set(ids.filter((id): id is string => Boolean(id && id.trim())))];
+    if (distinct.length === 0) return [];
+    const out: string[][] = [];
+    for (let i = 0; i < distinct.length; i += MAX_IDS_PER_QUERY) out.push(distinct.slice(i, i + MAX_IDS_PER_QUERY));
+    return out;
+}
+
+/** Run one bounded read per chunk and concatenate IN CHUNK ORDER — never in completion order. */
+async function readChunked<T>(ids: readonly string[], read: (chunk: string[]) => Promise<T[]>): Promise<T[]> {
+    const chunks = chunkIds(ids);
+    if (chunks.length === 0) return [];
+    const results = await Promise.all(chunks.map((chunk) => read(chunk)));
+    return results.flat();
+}
+
+export type ChildSchedulingRequest = {
+    customerMemberId: string;
+    subjectName: string;
+    ageGroup?: string | null;
+};
+
+export type LoadSchedulingProjectionsForChildrenParams = {
+    children: readonly ChildSchedulingRequest[];
+    siteLocationId: string;
+    todayYmd: string;
+    computedAt: string;
+    /** Pre-resolved site label — the site is case-level, so it is resolved once for the whole set. */
+    siteName?: string | null;
+};
+
+/**
+ * THE canonical scheduling projection owner. Returns a Map keyed by `customerMemberId`.
+ *
+ * A requested child with no schedulable truth is ABSENT from the map — the same thing the
+ * single-child path expressed by returning a projection with no children. Callers that need a
+ * placeholder decide that themselves rather than having one invented here.
+ *
+ * Duplicate requested ids collapse to one entry; the map cannot represent a duplicate, and the
+ * projection for a given child does not depend on how many times it was asked for.
+ */
+export async function loadSchedulingProjectionsForChildren(
+    supabase: SupabaseClient,
+    orgId: string,
+    params: LoadSchedulingProjectionsForChildrenParams
+): Promise<Map<string, SchedulingProjection>> {
+    const out = new Map<string, SchedulingProjection>();
+    const siteLocationId = params.siteLocationId?.trim() ?? "";
+    const requested = params.children.filter((c) => Boolean(c.customerMemberId?.trim()));
+    if (requested.length === 0) return out;
+
+    // The REQUESTED set is the access boundary. Every row below is matched back to a member id in
+    // this set, so a shared agreement, pattern or assignment-type id cannot carry another child's
+    // row into a requested child's projection.
+    const byMemberId = new Map<string, ChildSchedulingRequest>();
+    for (const c of requested) if (!byMemberId.has(c.customerMemberId.trim())) byMemberId.set(c.customerMemberId.trim(), c);
+    const memberIds = [...byMemberId.keys()];
+
+    // ── Hop 1: agreements and assignments. Independent — neither informs the other.
+    const [agreementRows, assignmentRowsAll] = await Promise.all([
+        readChunked(memberIds, async (chunk) => {
+            const { data, error } = await supabase
+                .from("child_enrollment_agreements")
+                .select("*")
+                .eq("org_id", orgId)
+                .eq("site_location_id", siteLocationId)
+                .in("customer_member_id", chunk)
+                .in("status", OPERATIONAL_AGREEMENT_STATUSES);
+            if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+            return (data ?? []) as ChildEnrollmentAgreementRow[];
+        }),
+        readChunked(memberIds, async (chunk) => {
+            const { data, error } = await supabase
+                .from("schedule_assignments")
+                .select("*")
+                .eq("org_id", orgId)
+                .in("customer_member_id", chunk)
+                .order("start_date", { ascending: false });
+            if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+            return (data ?? []) as ScheduleAssignmentRow[];
+        }),
+    ]);
+
+    const agreementByMember = new Map<string, ChildEnrollmentAgreementRow>();
+    for (const row of agreementRows) {
+        const member = String(row.customer_member_id ?? "").trim();
+        if (!byMemberId.has(member)) continue; // not requested — cannot enter a result
+        if (agreementByMember.has(member)) {
+            // `getOperationalAgreementForMemberSite` used `.maybeSingle()`, which ERRORS on a second
+            // row. Silently picking one here would make the bulk owner disagree with the single-child
+            // owner on exactly the case an operator would need told about.
+            throw new OperationalEnrollmentServiceError(
+                "db_error",
+                "multiple active enrollment agreements for one member at one site"
+            );
+        }
+        agreementByMember.set(member, row);
+    }
+
+    const assignmentsByMember = new Map<string, ScheduleAssignmentRow[]>();
+    for (const row of assignmentRowsAll) {
+        const member = String(row.customer_member_id ?? "").trim();
+        if (!byMemberId.has(member)) continue;
+        (assignmentsByMember.get(member) ?? assignmentsByMember.set(member, []).get(member)!).push(row);
+    }
+
+    // ── Hop 2: everything the first hop's rows name. All independent of one another.
+    const agreementIds = [...agreementByMember.values()].map((a) => a.id);
+    const proposedMembers = memberIds.filter(
+        (id) => !agreementByMember.has(id) && (assignmentsByMember.get(id)?.length ?? 0) === 0
+    );
+    const [placementRows, patternRows, typeRows, processRows] = await Promise.all([
+        readChunked(agreementIds, async (chunk) => {
+            const { data, error } = await supabase
+                .from("child_placements")
+                .select("*")
+                .eq("org_id", orgId)
+                .in("enrollment_agreement_id", chunk)
+                .order("start_date", { ascending: false });
+            if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+            return (data ?? []) as ChildPlacementRow[];
+        }),
+        readChunked(assignmentRowsAll.map((a) => a.schedule_pattern_id), async (chunk) => {
+            const { data, error } = await supabase
+                .from("schedule_patterns").select("*").eq("org_id", orgId).in("id", chunk);
+            if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+            return (data ?? []) as SchedulePatternRow[];
+        }),
+        readChunked(
+            assignmentRowsAll.map((a) => a.operational_assignment_type_id).filter((id): id is string => Boolean(id)),
+            async (chunk) => {
+                const { data, error } = await supabase
+                    .from("operational_assignment_types")
+                    .select("id, key, label, icon_key, visual_tone, billing_participation, attendance_participation, staffing_participation")
+                    .eq("org_id", orgId).in("id", chunk);
+                if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+                return (data ?? []) as AssignmentTypeRow[];
+            }
+        ),
+        readChunked(proposedMembers, async (chunk) => {
+            const { data, error } = await supabase
+                .from("process_instances")
+                .select("subject_id, metadata, created_at")
+                .eq("org_id", orgId)
+                .eq("process_key", "enrollment")
+                .in("subject_id", chunk)
+                .order("created_at", { ascending: false });
+            if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+            return (data ?? []) as Array<{ subject_id: string; metadata: unknown; created_at: string }>;
+        }),
+    ]);
+
+    const placementsByAgreement = new Map<string, ChildPlacementRow[]>();
+    for (const row of placementRows) {
+        const key = String(row.enrollment_agreement_id ?? "").trim();
+        (placementsByAgreement.get(key) ?? placementsByAgreement.set(key, []).get(key)!).push(row);
+    }
+    const patternsById = new Map<string, SchedulePatternRow>();
+    for (const row of patternRows) patternsById.set(row.id, row);
+    const typesById = new Map<string, AssignmentTypePresentation>();
+    for (const raw of typeRows) {
+        typesById.set(raw.id, {
+            id: raw.id, key: raw.key, label: raw.label, iconKey: raw.icon_key, visualTone: raw.visual_tone,
+            billingParticipation: raw.billing_participation,
+            attendanceParticipation: raw.attendance_participation,
+            staffingParticipation: raw.staffing_participation,
+        });
+    }
+    // The single-child read was `.order(created_at desc).limit(1)`: the LATEST instance per subject.
+    // Rows arrive already ordered, so the first one seen for a subject is that latest instance.
+    const processMetaByMember = new Map<string, ProposedDraftMeta>();
+    for (const row of processRows) {
+        const member = String(row.subject_id ?? "").trim();
+        if (!byMemberId.has(member) || processMetaByMember.has(member)) continue;
+        processMetaByMember.set(member, ((row.metadata ?? {}) as ProposedDraftMeta));
+    }
+
+    // ── Hop 3: the labels and proposed patterns those rows name. Still bounded, still one read each.
+    const proposedTypes = [...processMetaByMember.values()]
+        .map((m) => m.schedule_type?.trim() || "")
+        .filter(Boolean);
+    const roomIds: string[] = [];
+    const programIds: string[] = [];
+    for (const row of assignmentRowsAll) {
+        if (row.room_location_id) roomIds.push(row.room_location_id);
+        if (row.program_category_id) programIds.push(row.program_category_id);
+    }
+    for (const row of placementRows) {
+        if (row.room_location_id) roomIds.push(row.room_location_id);
+        if (row.program_category_id) programIds.push(row.program_category_id);
+    }
+    for (const meta of processMetaByMember.values()) {
+        if (meta.program_room_cohort_key?.trim()) roomIds.push(meta.program_room_cohort_key.trim());
+        if (meta.program_category_id) programIds.push(String(meta.program_category_id));
+    }
+    const [roomLabelRows, programLabelRows, proposedPatternRows] = await Promise.all([
+        readChunked(roomIds, async (chunk) => {
+            const { data } = await supabase.from("locations").select("id, label").eq("org_id", orgId).in("id", chunk);
+            return (data ?? []) as Array<{ id: string; label: string | null }>;
+        }),
+        readChunked(programIds, async (chunk) => {
+            const { data } = await supabase
+                .from("location_program_categories").select("id, label, key").eq("org_id", orgId).in("id", chunk);
+            return (data ?? []) as Array<{ id: string; label: string | null; key: string | null }>;
+        }),
+        proposedTypes.length === 0 ? Promise.resolve([] as SchedulePatternRow[]) :
+            readChunked(proposedTypes, async (chunk) => {
+                const { data } = await supabase
+                    .from("schedule_patterns")
+                    .select("weekdays, label, schedule_type_key, sort_order")
+                    .eq("org_id", orgId).eq("site_location_id", siteLocationId)
+                    .in("schedule_type_key", chunk).eq("is_active", true)
+                    .order("sort_order");
+                return (data ?? []) as SchedulePatternRow[];
+            }),
+    ]);
+    const roomLabels = new Map<string, string | null>();
+    for (const r of roomLabelRows) roomLabels.set(r.id, r.label != null ? String(r.label).trim() || null : null);
+    const programLabels = new Map<string, string | null>();
+    for (const r of programLabelRows) programLabels.set(r.id, r.label?.trim() || r.key?.trim() || null);
+    // `.order(sort_order).limit(1)` per type — first seen wins, matching the single-child read.
+    const proposedPatternByType = new Map<string, SchedulePatternRow>();
+    for (const row of proposedPatternRows) {
+        const key = String((row as { schedule_type_key?: string }).schedule_type_key ?? "").trim();
+        if (!key || proposedPatternByType.has(key)) continue;
+        proposedPatternByType.set(key, row);
+    }
+
+    const siteName =
+        params.siteName !== undefined ? params.siteName : (roomLabels.get(siteLocationId) ?? null);
+
+    // ── Stitch. No I/O below this line: every child is built from the rows above by the same pure
+    //    path the single-child owner has always used.
+    for (const memberId of memberIds) {
+        const request = byMemberId.get(memberId)!;
+        const agreement = agreementByMember.get(memberId) ?? null;
+        const assignmentRows = assignmentsByMember.get(memberId) ?? [];
+        const placements = agreement ? (placementsByAgreement.get(agreement.id) ?? []) : [];
+        const projection = stitchChildSchedulingProjection({
+            request,
+            siteLocationId,
+            siteName,
+            todayYmd: params.todayYmd,
+            computedAt: params.computedAt,
+            agreement,
+            assignmentRows,
+            placements,
+            patternsById,
+            typesById,
+            roomLabels,
+            programLabels,
+            proposedMeta: processMetaByMember.get(memberId) ?? null,
+            proposedPatternByType,
+        });
+        out.set(memberId, projection);
+    }
+    // EVERY requested child has an entry. A child with no agreement, no assignment and no draft is
+    // still a child with a projection that says so — the single-child path always produced one, and
+    // omitting it here would turn "nothing scheduled" into "we did not look".
+    return out;
+}
+
+/**
+ * The PURE stitch — no I/O. Both the bulk owner and (through it) the single-child API build every
+ * child with exactly this code, so the two cannot drift apart by construction. It is the original
+ * single-child body with each `await` replaced by a lookup into rows already fetched.
+ */
+type StitchChildSchedulingParams = {
+    request: ChildSchedulingRequest;
+    siteLocationId: string;
+    siteName: string | null;
+    todayYmd: string;
+    computedAt: string;
+    agreement: ChildEnrollmentAgreementRow | null;
+    assignmentRows: ScheduleAssignmentRow[];
+    placements: ChildPlacementRow[];
+    patternsById: Map<string, SchedulePatternRow>;
+    typesById: Map<string, AssignmentTypePresentation>;
+    roomLabels: Map<string, string | null>;
+    programLabels: Map<string, string | null>;
+    proposedMeta: ProposedDraftMeta | null;
+    proposedPatternByType: Map<string, SchedulePatternRow>;
+};
+
+function stitchChildSchedulingProjection(p: StitchChildSchedulingParams): SchedulingProjection {
+    const customerMemberId = p.request.customerMemberId.trim();
+    const roomLabel = (id: string | null): string | null => (id ? (p.roomLabels.get(id) ?? null) : null);
+    const programLabel = (id: string | null): string | null => (id ? (p.programLabels.get(id) ?? null) : null);
+
+    // No ledger rows yet → the participation-metadata draft, exactly as before.
+    if (!p.agreement && p.assignmentRows.length === 0) {
+        const proposed = stitchProposedDraft(p, customerMemberId, roomLabel, programLabel);
+        const subject: ChildSchedulingSubject = {
+            id: customerMemberId,
+            name: p.request.subjectName,
+            program: proposed?.assignments[0]?.room.program ?? null,
+            ageGroup: p.request.ageGroup ?? null,
+            siteId: p.siteLocationId,
+            siteName: p.siteName,
+        };
+        const child = buildChildScheduling({
+            subject,
+            agreementStatus: null,
+            enrollmentAgreementId: null,
+            assignments: [],
+            asOf: p.todayYmd,
+            proposed,
+        });
+        return buildSchedulingProjectionForChild(child, p.todayYmd, p.computedAt);
+    }
+
+    const assignments: AssignmentInput[] = [];
+    for (const row of p.assignmentRows) {
+        const pattern = p.patternsById.get(row.schedule_pattern_id) ?? null;
+        const hours = readPatternDefaultHours((pattern?.metadata ?? null) as Record<string, unknown> | null);
+        const placement = placementForAssignment(p.placements, row);
+        const roomId = row.room_location_id ?? placement?.room_location_id ?? null;
+        const programId = row.program_category_id ?? placement?.program_category_id ?? null;
+        const room: AssignmentRoom = { id: roomId, name: roomLabel(roomId), program: programLabel(programId) };
+        const type = (row.operational_assignment_type_id ? p.typesById.get(row.operational_assignment_type_id) : null) ?? EMPTY_TYPE;
+        assignments.push({
+            row,
+            weekdays: pattern?.weekdays ?? [],
+            patternResolved: pattern != null,
+            patternLabel: pattern?.label?.trim() || null,
+            arriveTime: hours?.arrive ?? null,
+            departTime: hours?.depart ?? null,
+            room,
+            assignmentType: type,
+        });
+    }
+
+    const operationalPlacement = p.placements.find((x) => !x.end_date) ?? p.placements[0] ?? null;
+    const subject: ChildSchedulingSubject = {
+        id: customerMemberId,
+        name: p.request.subjectName,
+        program: programLabel(operationalPlacement?.program_category_id ?? null),
+        ageGroup: p.request.ageGroup ?? null,
+        siteId: p.siteLocationId,
+        siteName: p.siteName,
+    };
+    const child = buildChildScheduling({
+        subject,
+        agreementStatus: p.agreement?.status ?? null,
+        enrollmentAgreementId: p.agreement?.id ?? null,
+        assignments,
+        asOf: p.todayYmd,
+    });
+    return buildSchedulingProjectionForChild(child, p.todayYmd, p.computedAt);
+}
+
+/** The proposed-draft branch, stitched from the pre-read process-instance metadata. */
+function stitchProposedDraft(
+    p: StitchChildSchedulingParams,
+    customerMemberId: string,
+    roomLabel: (id: string | null) => string | null,
+    programLabel: (id: string | null) => string | null
+): ScheduleView | null {
+    const meta = p.proposedMeta ?? ({} as ProposedDraftMeta);
+    const scheduleType = meta.schedule_type?.trim() || null;
+    const roomId = meta.program_room_cohort_key?.trim() || null;
+    const startDate = meta.start_date?.trim() || null;
+    if (!scheduleType && !roomId && !startDate) return null;
+
+    let weekdays: number[] = Array.isArray(meta.weekdays) ? meta.weekdays : [];
+    let scheduleTypeLabel: string | null = null;
+    if (scheduleType) {
+        const row = p.proposedPatternByType.get(scheduleType) ?? null;
+        // The operator's saved weekdays win; the pattern is only the fallback template.
+        if (weekdays.length === 0) weekdays = (row?.weekdays as number[] | undefined) ?? [];
+        scheduleTypeLabel = row?.label?.trim() || null;
+    }
+
+    const arrive = meta.scheduleTimes?.default?.arrive ?? null;
+    const depart = meta.scheduleTimes?.default?.depart ?? null;
+    const effectiveFrom = startDate ?? "";
+    const assignment: Assignment = {
+        id: `${PROPOSED_DRAFT_ASSIGNMENT_ID_PREFIX}${customerMemberId}`,
+        subjectId: customerMemberId,
+        subjectType: "child",
+        childId: customerMemberId,
+        room: { id: roomId, name: roomLabel(roomId), program: programLabel(meta.program_category_id ?? null) },
+        weekdays,
+        arriveTime: arrive,
+        departTime: depart,
+        effectiveFrom,
+        effectiveTo: meta.end_date?.trim() || null,
+        openEnded: !meta.end_date,
+        kind: "base",
+        status: "proposed",
+        isPrimary: true,
+        commitmentKind: "proposed",
+        assignmentType: { ...EMPTY_TYPE, key: scheduleType, label: scheduleTypeLabel },
+        patternId: null,
+        patternLabel: scheduleTypeLabel,
+        billing: billingFromType({
+            ...EMPTY_TYPE,
+            key: scheduleType,
+            label: scheduleTypeLabel,
+            billingParticipation: "eligible",
+        }),
+    };
+    return {
+        bucket: "current",
+        effectiveFrom,
+        effectiveTo: assignment.effectiveTo,
+        openEnded: assignment.openEnded,
+        temporary: false,
+        assignments: [assignment],
+        scheduleType,
+        scheduleTypeLabel,
+        rate: "pending",
+        projectedTuition: null,
+    };
 }

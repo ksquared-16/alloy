@@ -8,6 +8,7 @@ import {
   approveMissionExecution,
   getKickoffState,
 } from "./mission-kickoff.mjs";
+import { hostname as osHostname } from "node:os";
 import { getBrief, getBriefVersion, listBriefVersions, proposeBriefRevision, createBrief } from "./mission-brief.mjs";
 import { readTimelineSummary, summarizeFromTimeline, readTimeline } from "./timeline.mjs";
 import {
@@ -150,6 +151,32 @@ function authGate(path, method, headers) {
   return { ok: true, actor: auth.actor };
 }
 
+/** Slot from a worktree path, for a lane whose binding has not recorded one. */
+function laneSlotFromPath(lane) {
+  const m = String(lane?.binding?.worktree_path || "").match(/\/wt(\d)-/);
+  return m ? Number(m[1]) : null;
+}
+
+function gatewayHostLabel() {
+  try { return osHostname(); } catch { return "the Gateway host"; }
+}
+
+/**
+ * Whether the Director is reading this UI ON the Gateway host.
+ *
+ * Judged from the Host header, because that is what separates a loopback visit
+ * from a tailnet one: the Gateway answers at both 127.0.0.1:3020 and
+ * <machine>.<tailnet>.ts.net:3020, and only the first can see a window that
+ * opens on this machine's screen. Returns null when it cannot tell, so the copy
+ * stays honest instead of asserting the wrong one.
+ */
+function requestIsFromGatewayHost(headers = {}) {
+  const host = String(headers.host || headers.Host || "").trim().toLowerCase();
+  if (!host) return null;
+  const name = host.replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+  return name === "127.0.0.1" || name === "localhost" || name === "::1";
+}
+
 export async function handleV2Post(path, body, { headers = {} } = {}) {
   const v = body || {};
   const gate = authGate(path, "POST", headers);
@@ -157,6 +184,105 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
   const actorDefault = gate.actor || v.actor || "operator";
   const idempotencyKey = v.idempotency_key || v.idempotencyKey || headers["x-idempotency-key"] || headers["X-Idempotency-Key"] || null;
 
+  // Clear a RECOGNISED modal the agent must never type into.
+  //
+  // Trust Runtime sat in Claude's Rewind picker while the lane reported
+  // "Working": the picker's row cursor is the same glyph as the input prompt, so
+  // the pane read READY. The only way out was a person at a terminal, which is
+  // exactly what the Director should never need. This does not let the agent
+  // answer modals — it can send Escape and nothing else, only for blocker kinds
+  // whose cancel key is known, and only when an operator asks.
+  if (path === "/api/v2/lanes/prompt-block/dismiss") {
+    const { dismissPromptBlock } = await import("./prompt-block-dismiss.mjs");
+    const laneId = v.lane_id || v.laneId;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const out = await dismissPromptBlock(laneId);
+    return {
+      status: out.ok ? 200 : (out.error === "lane_not_found" ? 404 : 409),
+      body: out,
+    };
+  }
+  // Browser-session recovery. THE AGENT MAY START A SIGN-IN AND MAY ABANDON ONE;
+  // IT MAY NEVER COMPLETE ONE. A person types the password into a browser this
+  // opens on the slot's own loopback base. Nothing typed reaches the agent, the
+  // request, the response or any durable record — the only thing that crosses
+  // this boundary is a state name.
+  if (path === "/api/v2/browser-auth/status"
+    || path === "/api/v2/browser-auth/sign-in"
+    || path === "/api/v2/browser-auth/verify") {
+    const {
+      validateBrowserAuthRequest, readSlotAuthStatus, verifyBrowserAuth,
+      beginBrowserAuthCapture, recordSlotVerification, publicAuthOutcome,
+      qaIdentityForSlot, BROWSER_AUTH_STATES,
+    } = await import("./browser-auth.mjs");
+    const { getDurableLane } = await import("./development-lane.mjs");
+    const laneId = v.lane_id || v.laneId;
+    const lane = laneId ? getDurableLane(laneId) : null;
+    if (!lane) return { status: 404, body: { ok: false, error: "lane_not_registered" } };
+    const slot = v.slot ?? lane.binding?.slot ?? null;
+    const validated = validateBrowserAuthRequest({
+      lane,
+      slot,
+      expectedIdentity: qaIdentityForSlot(slot ?? laneSlotFromPath(lane)),
+    });
+    if (!validated.ok) return { status: 409, body: validated };
+
+    const status = readSlotAuthStatus(validated.slot);
+    if (path === "/api/v2/browser-auth/status") {
+      return { status: 200, body: publicAuthOutcome({ validated, state: status.state, status, detail: status.detail }) };
+    }
+    if (path === "/api/v2/browser-auth/verify") {
+      const verdict = await verifyBrowserAuth(validated);
+      recordSlotVerification(validated.slot, {
+        state: verdict.state, expectedIdentity: validated.expected_identity,
+        actualIdentity: verdict.actual_identity, detail: verdict.detail,
+      });
+      return {
+        status: verdict.ok ? 200 : 409,
+        body: publicAuthOutcome({ validated, state: verdict.state, status, detail: verdict.detail }),
+      };
+    }
+    // sign-in: START the capture and answer immediately.
+    //
+    // WHY THIS DOES NOT WAIT. The capture is only finished when a person has
+    // typed a password, which can be minutes away. Awaiting it held the HTTP
+    // response open for the whole capture window, so the button sat on
+    // "Waiting for you to sign in…" with no other signal and looked broken —
+    // and any proxy between the operator and the Gateway would time the request
+    // out before the person ever finished.
+    //
+    // WHERE THE BROWSER APPEARS. On the Gateway HOST, because that is where the
+    // Playwright profile and the loopback base live. A Director reading this UI
+    // from a phone or another machine over the tailnet will see nothing happen,
+    // which is exactly what "the sign in link did not navigate anywhere" was.
+    // The response now says whose screen to look at, and whether this request
+    // came from that machine.
+    const capture = beginBrowserAuthCapture(validated, {
+      timeoutMs: Number.isFinite(Number(v.timeout_ms)) ? Number(v.timeout_ms) : undefined,
+    });
+    // Never let an abandoned capture surface as an unhandled rejection.
+    capture.catch(() => {});
+    const outcome = publicAuthOutcome({
+      validated,
+      state: BROWSER_AUTH_STATES.AWAITING_OPERATOR,
+      status,
+    });
+    const local = requestIsFromGatewayHost(headers);
+    return {
+      status: 202,
+      body: {
+        ...outcome,
+        capture_started: true,
+        browser_opens_on: gatewayHostLabel(),
+        viewer_is_on_host: local,
+        next_step: local === true
+          ? "A browser window is opening on this machine. Sign in there, then press Re-check."
+          : local === false
+            ? `The browser opens on ${gatewayHostLabel()}, not on this device. Sign in at that machine's screen, then press Re-check here.`
+            : `The browser opens on ${gatewayHostLabel()}. Sign in at that machine's screen, then press Re-check here.`,
+      },
+    };
+  }
   if (path === "/api/v2/lanes/create" || path === "/api/v2/lane/create") {
     const { createNewLaneRequest } = await import("./lane-identity-api.mjs");
     return createNewLaneRequest(v, { actor: actorDefault });
@@ -341,11 +467,22 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     return { status, body: out };
   }
   if (path === "/api/v2/governed-actions/approve") {
-    const { approveGovernedAction, pendingGovernedActionForMission } = await import("./governed-action-request.mjs");
+    const { approveGovernedAction, pendingGovernedActionForMission, pendingGovernedActionForLane } = await import("./governed-action-request.mjs");
     const id = v.request_id || v.requestId;
-    const pending = id ? null : pendingGovernedActionForMission(v.mission_id || v.missionId);
+    // A repository-authorized request has no mission, so the mission lookup
+    // cannot find it. The lane always can.
+    const pending = id
+      ? null
+      : (pendingGovernedActionForMission(v.mission_id || v.missionId)
+        || pendingGovernedActionForLane(v.lane_id || v.laneId));
     try {
-      const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, { actor: actorDefault }));
+      // The card hands back the identity it was rendered for. A request id
+      // alone would let a tap approve content that moved after the operator
+      // read it.
+      const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, {
+        actor: actorDefault,
+        expectedFingerprint: v.content_fingerprint || v.contentFingerprint || null,
+      }));
       return { status: out.ok ? 200 : 409, body: out };
     } catch (e) {
       return {
@@ -355,13 +492,17 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     }
   }
   if (path === "/api/v2/governed-actions/deny") {
-    const { denyGovernedAction, pendingGovernedActionForMission } = await import("./governed-action-request.mjs");
+    const { denyGovernedAction, pendingGovernedActionForMission, pendingGovernedActionForLane } = await import("./governed-action-request.mjs");
     const id = v.request_id || v.requestId;
-    const pending = id ? null : pendingGovernedActionForMission(v.mission_id || v.missionId);
+    const pending = id
+      ? null
+      : (pendingGovernedActionForMission(v.mission_id || v.missionId)
+        || pendingGovernedActionForLane(v.lane_id || v.laneId));
     const out = denyGovernedAction(id || pending?.request_id, {
       actor: actorDefault,
       reason: v.reason || "approval_denied",
       code: v.code || "approval_denied",
+      expectedFingerprint: v.content_fingerprint || v.contentFingerprint || null,
     });
     return { status: out.ok ? 200 : 409, body: out };
   }
@@ -1093,6 +1234,16 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     const { trustedHostDiagnostics } = await import("./trusted-host-actions.mjs");
     return { status: 200, body: { ok: true, diagnostics: trustedHostDiagnostics() } };
   }
+  // EVERY pending approval, without needing to know a lane.
+  //
+  // The only approval surface used to live inside a lane the operator already
+  // had to be looking at, so a pending decision was unreachable unless you
+  // already knew where it came from.
+  if (path === "/api/v2/governed-actions/pending" || path === "/api/v2/approvals") {
+    const { pendingApprovals } = await import("./governed-action-request.mjs");
+    const approvals = pendingApprovals();
+    return { status: 200, body: { ok: true, count: approvals.length, approvals } };
+  }
   if (path === "/api/v2/governed-actions") {
     const { listGovernedActions, pendingGovernedActionForMission, pendingGovernedActionForLane } = await import("./governed-action-request.mjs");
     const mid = q("mission_id") || q("id");
@@ -1472,7 +1623,15 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
       await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" });
     } catch { /* */ }
     const out = await listDevelopmentLanes();
-    const lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))));
+    let lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))));
+    // A lane whose browser session is dead cannot execute, and until this was
+    // attached the Director had no way to see that or fix it. The recovery card
+    // is already rendered by the view; without this the data never arrives, so
+    // the card never appears and the flow looks undeployed.
+    try {
+      const { attachLaneBrowserAuth, qaIdentityForSlot } = await import("./browser-auth.mjs");
+      lanes = attachLaneBrowserAuth(lanes, { qaIdentityFor: qaIdentityForSlot });
+    } catch { /* auth recovery is additive; lane discovery must still answer */ }
     let folders = [];
     try {
       const { listLaneFolders } = await import("./lane-folders.mjs");

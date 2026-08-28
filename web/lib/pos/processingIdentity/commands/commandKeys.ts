@@ -22,6 +22,7 @@ export const IDENTITY_COMMAND_KEYS = {
     attachDocument: "attach_document",
     updateCommunicationPreferences: "update_communication_preferences",
     proposeMerge: "propose_merge",
+    proposeSafeguardingRestriction: "propose_safeguarding_restriction",
 } as const;
 
 export type IdentityCommandKey =

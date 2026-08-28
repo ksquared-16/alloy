@@ -167,7 +167,7 @@ export function SignatureCaptureDialog({
                         type="button"
                         onClick={done}
                         disabled={!ready}
-                        className="rounded-xl bg-alloy-midnight px-5 py-2.5 text-[15px] font-medium text-white disabled:opacity-40"
+                        className="rounded-xl bg-alloy-bend-pine px-5 py-2.5 text-[15px] font-medium text-white disabled:opacity-40"
                         data-signature-done="true"
                     >
                         Done
