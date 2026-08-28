@@ -229,7 +229,10 @@ export const BYPASS_KINDS = Object.freeze([
   "external",         // heavy work with no managed owner — observed, never governed
 ]);
 
-export function bypassRecord({ kind, command = null, decision = null, detail = null, pid = null, lane_id = null, now = Date.now() }) {
+export function bypassRecord({
+  kind, command = null, decision = null, detail = null, pid = null, lane_id = null,
+  pgid = null, run_id = null, now = Date.now(),
+}) {
   return {
     schema_version: VALIDATION_ROUTING_SCHEMA,
     kind,
@@ -237,9 +240,30 @@ export function bypassRecord({ kind, command = null, decision = null, detail = n
     decision,
     detail,
     pid: pid ?? null,
+    /*
+     * OWNERSHIP TRAVELS WITH THE BYPASS.
+     *
+     * 198 commands were recorded here as heavy-but-ungovernable and allowed
+     * through, carrying a pid and a lane. A pid names one process; what
+     * outlives a run is a process GROUP, and without the group nothing could
+     * find `bash run-durability.sh | tail -6` after its run ended. A `tail`
+     * sat blocked on the pipe holding the group open and a test span at 95%
+     * CPU for four hours, invisible to every query Vacilando had.
+     *
+     * Deciding we will not GOVERN a command is not deciding we will not OWN
+     * it. Routing and ownership are separate questions and only the first one
+     * is allowed to answer "I cannot tell".
+     */
+    pgid: pgid ?? null,
+    run_id: run_id ?? null,
     lane_id: lane_id ?? null,
     at: new Date(now).toISOString(),
   };
+}
+
+/** True when a bypass record carries enough to reconcile it later. */
+export function bypassIsOwnable(record) {
+  return Boolean(record && record.pgid != null && record.command);
 }
 
 /**
