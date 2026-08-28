@@ -299,3 +299,35 @@ await test("NC14 — a throwing executor does not abort the cycle", () => {
   assert.ok(out.problems.some((p) => p.stage === "execute"), "the execute failure is recorded per-resource");
   assert.equal(out.refused.length, 1);
 });
+
+await test("NC15 — a reconciled registration is CLOSED with its final disposition", () => {
+  // Found by the live cadence certification: the process was terminated and the
+  // cycle audit was complete, but the registry record still read disposition
+  // null, because the mini-plan carried the id through `evidence` where it does
+  // not exist. A dead group is filtered out anyway, so nothing misbehaved — the
+  // audit was simply incomplete, and §16 requires a final disposition.
+  const r = root();
+  withRun(r, "erun_dead", "FAILED");
+  const reg = REG.registerHeavyCommand({
+    root: r, runId: "erun_dead", pid: 1, pgid: 777777, command: "node --test x", nowMs: NOW,
+  });
+  let calls = 0;
+  const out = RUN.runStewardCycle({
+    root: r, nowMs: NOW + 60 * MIN, exec: stubExec,
+    // Alive while observed, gone once terminated.
+    groupAlive: () => { calls += 1; return calls === 1; },
+  });
+  assert.equal(out.executed.length, 1, JSON.stringify(out.refused));
+  const rec = REG.listHeavyCommands({ root: r }).find((c) => c.id === reg.id);
+  assert.equal(rec.disposition, "reconciled", "the registration must record how it ended");
+  assert.ok(rec.disposition_at);
+});
+
+await test("NC16 — the plan entry carries the resource id, not just a composite key", () => {
+  const res = [{
+    id: "hcmd_id_check", resourceClass: "test_process", alloyOwned: true, pid: 1, pgid: 2, command: "node --test x",
+    owningRuns: [{ run_id: "e", state: "FAILED", updated_at: new Date(NOW - 60 * MIN).toISOString() }], activeLeases: [],
+  }];
+  const plan = C.buildCyclePlan({ cycleId: "c1", resources: res, nowMs: NOW });
+  assert.equal(plan.proposed[0].resource_id, "hcmd_id_check");
+});

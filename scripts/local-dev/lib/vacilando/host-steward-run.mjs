@@ -127,7 +127,7 @@ export function runStewardCycle({
         const stewardPlan = {
           fingerprint: plan.plan_fingerprint,
           autonomous: [{
-            id: entry.evidence?.id ?? null,
+            id: entry.resource_id ?? null,
             action: entry.action,
             ownership: entry.ownership,
             resource_class: entry.resource_class,
