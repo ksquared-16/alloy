@@ -332,6 +332,7 @@ export function listMigrationsAtSha({ root, sha, git = defaultGit, gitCwd = null
 }
 
 export function readMigrationContent({
+  environment = "staging",
   root,
   sha,
   relative,
@@ -361,13 +362,27 @@ export function readMigrationContent({
   if (currentStagingSha && !shaEquals(currentStagingSha, sha)) {
     const live = git(["show", `${currentStagingSha}:${inside.relative}`], { cwd: store.cwd });
     if (!gitOk(live) || live.stdout == null) {
-      return {
-        ok: false,
-        code: "migration_changed_since_approval",
-        detail: `Migration ${inside.relative} is missing on current staging ${currentStagingSha}`,
-      };
-    }
-    if (sha256(String(live.stdout)) !== sha256(text)) {
+      /*
+       * ABSENT ON STAGING IS NOT DRIFT — IN CERTIFICATION.
+       *
+       * This guard asks "is the migration I approved still the migration that
+       * will run?". Comparing against staging answers that for a staging
+       * apply. For a certification apply of unmerged work the file is absent
+       * from staging BY DEFINITION — that is what is being certified — so the
+       * guard failed on a condition certification can never satisfy, the same
+       * shape as the staging-ancestry check one layer up.
+       *
+       * A NEW migration is not a CHANGED one. What must still fail everywhere
+       * is the case below: present on staging and different.
+       */
+      if (!CERTIFICATION_ENVIRONMENTS.includes(envName(environment))) {
+        return {
+          ok: false,
+          code: "migration_changed_since_approval",
+          detail: `Migration ${inside.relative} is missing on current staging ${currentStagingSha}`,
+        };
+      }
+    } else if (sha256(String(live.stdout)) !== sha256(text)) {
       return {
         ok: false,
         code: "migration_changed_since_approval",
@@ -391,6 +406,7 @@ function locatePrefix(root, prefix, sha, { git, gitCwd } = {}) {
 }
 
 export function resolveMigrationEntry(item = {}, {
+  environment = "staging",
   root,
   expectedSha,
   git = defaultGit,
@@ -427,6 +443,7 @@ export function resolveMigrationEntry(item = {}, {
     };
   }
   const content = readMigrationContent({
+    environment,
     root,
     sha: expectedSha,
     relative: inside.relative,
@@ -553,6 +570,7 @@ export function validateMigrationInputs(inputs = {}, {
   });
   if (!reach.ok) return reach;
   const migrations = normalizeMigrationList(inputs, {
+    environment,
     root,
     expectedSha,
     git,
@@ -593,6 +611,10 @@ export function applyMigrationBatch(normalized, {
   const results = [];
   for (const entry of normalized.migrations) {
     const latest = readContent({
+      // The runtime re-read applies the SAME environment rule as validation.
+      // Reading it here under staging semantics would re-introduce the failure
+      // at execution time, after the request had already been approved.
+      environment: normalized.environment,
       root: normalized.worktreePath,
       sha: normalized.expectedSha,
       relative: entry.path,

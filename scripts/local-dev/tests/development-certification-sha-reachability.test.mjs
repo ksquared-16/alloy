@@ -17,7 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -255,4 +255,105 @@ await test("NC12 — the sanctioned globs do not leak outside their prefixes", (
     );
   }
   assert.ok(!listed.some((r) => r.includes("feature/not-sanctioned")));
+});
+
+/* ── Drift guard: absent is not changed ───────────────────────────────────────
+ *
+ * One layer below reachability sits the same shape of defect. The guard asks
+ * "is the migration I approved still the migration that will run?" and answers
+ * it by comparing against staging. For a certification apply of unmerged work
+ * the file is absent from staging BY DEFINITION, so the guard failed on a
+ * condition certification can never satisfy. A NEW migration is not a CHANGED
+ * one — but a migration PRESENT on staging and different is still drift, in
+ * every environment including certification.
+ */
+
+/** A repo where a migration exists on an agent branch and NOT on staging. */
+function migrationWorld({ alsoOnStaging = null } = {}) {
+  const base = mkdtempSync(join(tmpdir(), "certmig-"));
+  const origin = join(base, "origin.git");
+  const repo = join(base, "repo");
+  mkdirSync(repo);
+  g(["init", "-q", "--bare", origin], base);
+  g(["init", "-q", "-b", "staging"], repo);
+  g(["config", "user.email", "t@example.com"], repo);
+  g(["config", "user.name", "t"], repo);
+  mkdirSync(join(repo, "supabase", "migrations"), { recursive: true });
+  const rel = "supabase/migrations/20260827180000_thing.sql";
+  writeFileSync(join(repo, "README.md"), "root");
+  g(["add", "."], repo); g(["commit", "-qm", "root"], repo);
+  if (alsoOnStaging !== null) {
+    writeFileSync(join(repo, rel), alsoOnStaging);
+    g(["add", "."], repo); g(["commit", "-qm", "migration on staging"], repo);
+  }
+  g(["remote", "add", "origin", origin], repo);
+  g(["push", "-q", "origin", "staging"], repo);
+  const stagingSha = g(["rev-parse", "HEAD"], repo);
+
+  g(["checkout", "-q", "-b", "agent/claude/9-mig"], repo);
+  writeFileSync(join(repo, rel), "-- the approved migration\n");
+  // A marker so the branch commit is never empty — when staging already holds
+  // identical migration content, `git commit` would otherwise refuse and the
+  // fixture would fail in a way that looks like a code failure.
+  writeFileSync(join(repo, "branch-marker.txt"), "agent");
+  g(["add", "."], repo); g(["commit", "-qm", "migration"], repo);
+  const migSha = g(["rev-parse", "HEAD"], repo);
+  g(["push", "-q", "origin", "agent/claude/9-mig"], repo);
+  g(["fetch", "-q", "--prune", "origin"], repo);
+  return { repo, rel, stagingSha, migSha };
+}
+
+const readAt = (w, environment) => M.readMigrationContent({
+  environment, root: w.repo, sha: w.migSha, relative: w.rel,
+  gitCwd: w.repo, currentStagingSha: w.stagingSha, fetchIfMissing: false,
+});
+
+await test("certification: a migration absent from staging is NEW, not changed", () => {
+  const w = migrationWorld();
+  const r = readAt(w, "certification");
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.match(r.text, /the approved migration/);
+});
+
+await test("NC13 — staging still REFUSES a migration absent from staging", () => {
+  const w = migrationWorld();
+  const r = readAt(w, "staging");
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "migration_changed_since_approval");
+});
+
+await test("NC14 — real drift still fails in CERTIFICATION: present on staging and different", () => {
+  // This is the case the guard exists for, and widening must not touch it.
+  const w = migrationWorld({ alsoOnStaging: "-- a DIFFERENT migration\n" });
+  const r = readAt(w, "certification");
+  assert.equal(r.ok, false, "content that differs on staging is drift in every environment");
+  assert.equal(r.code, "migration_changed_since_approval");
+  assert.match(r.detail, /changed on staging after approval/);
+});
+
+await test("NC15 — identical content on staging passes everywhere", () => {
+  const w = migrationWorld({ alsoOnStaging: "-- the approved migration\n" });
+  assert.equal(readAt(w, "certification").ok, true);
+  assert.equal(readAt(w, "staging").ok, true);
+});
+
+await test("NC16 — a migration absent at its OWN sha fails in every environment", () => {
+  const w = migrationWorld();
+  const r = M.readMigrationContent({
+    environment: "certification", root: w.repo, sha: w.stagingSha,
+    relative: w.rel, gitCwd: w.repo, currentStagingSha: w.stagingSha, fetchIfMissing: false,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "migration_missing_at_sha");
+});
+
+await test("NC17 — the runtime re-read applies the same environment rule as validation", () => {
+  // Reading under staging semantics at execution time would re-introduce the
+  // failure AFTER the request had already been approved.
+  const src = readFileSync(new URL("../lib/vacilando/trusted-host-migrate.mjs", import.meta.url), "utf8");
+  const i = src.indexOf("const latest = readContent({");
+  assert.ok(i > -1, "the runtime re-read must exist");
+  const block = src.slice(i, i + 400);
+  assert.ok(/environment:\s*normalized\.environment/.test(block),
+    "the runtime re-read must pass the normalized environment");
 });
