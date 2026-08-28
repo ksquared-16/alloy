@@ -394,3 +394,89 @@ test("a healthy resolved bridge reports nothing", () => {
   });
   assert.equal(h.consistent, true);
 });
+
+// ── Negative controls the bridge must hold on its own ────────────────────────
+
+test("a continuation is refused for a different session or run", () => {
+  const b = { prompt_fingerprint: "fp", session_id: "sess_1", run_id: "run_1" };
+  assert.equal(B.assertBridgeSession({ bridge: b, observed: { session_id: "sess_1", run_id: "run_1" } }).ok, true);
+  assert.equal(B.assertBridgeSession({ bridge: b, observed: { session_id: "sess_2", run_id: "run_1" } }).refusal, "session_mismatch");
+  assert.equal(B.assertBridgeSession({ bridge: b, observed: { session_id: "sess_1", run_id: "run_9" } }).refusal, "run_mismatch");
+});
+
+test("a stale prompt cannot receive a decision minted for the old one", () => {
+  const b = { prompt_fingerprint: "fp-old", session_id: "s", run_id: "r" };
+  const r = B.assertBridgeSession({ bridge: b, observed: { session_id: "s", run_id: "r", prompt_fingerprint: "fp-new" } });
+  assert.equal(r.ok, false);
+  assert.equal(r.refusal, "prompt_fingerprint_mismatch");
+});
+
+test("the provider's command cannot widen the governed request", () => {
+  const op = B.extractAttemptedOperation({ command: MIGRATION_CMD });
+  const id = B.canonicalIdentityFor(op, { repoRoot: REPO });
+  // A command flag that is not a registered input must not survive into inputs.
+  id.inputs.databaseUrl = "postgres://smuggled";
+  id.inputs.sql = "drop table children";
+  const g = B.governedInputsFor({ identity: id });
+  assert.equal(g.ok, true);
+  assert.deepEqual(Object.keys(g.inputs).sort(), ["environment", "expectedSha", "migrations"]);
+  assert.ok(g.dropped.includes("databaseUrl"));
+  assert.ok(g.dropped.includes("sql"));
+});
+
+test("inputs for an unregistered action cannot be built at all", () => {
+  const g = B.governedInputsFor({ identity: { inputs: { anything: 1 } }, actionKey: "database.arbitrary_sql" });
+  assert.equal(g.ok, false);
+  assert.equal(g.error, "unregistered_action_key");
+});
+
+test("a worker cannot choose the executor — only the action key is an input", () => {
+  // selectExecutor takes a KEY. There is no parameter through which a caller
+  // could nominate itself, and the answer comes from the registry either way.
+  assert.equal(B.selectExecutor.length, 1);
+  const e = B.selectExecutor("database.apply_migration");
+  assert.equal(e.executor, "trusted_host");
+});
+
+test("the narrow-affirmative rule is preserved: no broad standing permission is ever selectable", () => {
+  // The real modal offers a project-wide grant as option 2. V1's chooser takes
+  // the narrowest yes; the bridge never introduces a second answering path.
+  const pane = `
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again for this project
+   3. No
+`;
+  const opt = A.affirmativeOption(pane);
+  assert.equal(opt.option, 1);
+  assert.equal(opt.widens_permissions, false);
+});
+
+test("the routine read-only path is untouched by the bridge", () => {
+  // V1's certified case. The bridge must decline to act on it at all — a second
+  // stage that reclassifies routine work would re-open a settled decision.
+  const r = B.resolveProviderCapability({
+    classification: "routine_tool_permission",
+    command: "ls /Users/Kelly/.local/share/alloy/toolkit/3c07d1074460/",
+  });
+  assert.equal(r.resolution, "still_unknown");
+  assert.match(r.reason, /does not apply/);
+});
+
+test("the registry is the only capability catalog", () => {
+  // Every action key the resolver can produce must be a registered one.
+  const commands = [
+    MIGRATION_CMD,
+    "git push origin HEAD",
+    "gh pr merge 591 --squash",
+    "gh pr close 591",
+    "gh pr create --base staging",
+    "git push origin --delete agent/claude/6-x",
+  ];
+  const registered = new Set(B.registeredActionKeys());
+  for (const c of commands) {
+    const r = B.resolveProviderCapability({ classification: "unsafe_or_unknown_provider_prompt", command: c });
+    if (r.resolution !== "registered_governed_capability") continue;
+    assert.ok(registered.has(r.action_key), `${c} → ${r.action_key}`);
+  }
+});

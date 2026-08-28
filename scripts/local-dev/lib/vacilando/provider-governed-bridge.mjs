@@ -652,6 +652,57 @@ export function planProviderContinuation({ bridge = null, governedAction = null,
   };
 }
 
+/**
+ * A continuation is only ever delivered to the session and run it was minted for.
+ *
+ * The bridge outlives the provider process it was opened for: a seat can be
+ * reclaimed, a session replaced, a run superseded, all while a governed action
+ * is still executing elsewhere. Delivering an old outcome into a new session
+ * would tell a provider that work it never attempted has completed — so identity
+ * is re-asserted at delivery time, not assumed from the fact that a bridge
+ * exists.
+ */
+export function assertBridgeSession({ bridge = null, observed = null } = {}) {
+  if (!bridge) return { ok: false, refusal: "missing_bridge" };
+  if (!observed) return { ok: false, refusal: "no_observed_session" };
+  if (bridge.session_id && observed.session_id !== bridge.session_id) {
+    return { ok: false, refusal: "session_mismatch", expected: bridge.session_id, observed: observed.session_id };
+  }
+  if (bridge.run_id && observed.run_id !== bridge.run_id) {
+    return { ok: false, refusal: "run_mismatch", expected: bridge.run_id, observed: observed.run_id };
+  }
+  if (observed.prompt_fingerprint && observed.prompt_fingerprint !== bridge.prompt_fingerprint) {
+    return { ok: false, refusal: "prompt_fingerprint_mismatch", expected: bridge.prompt_fingerprint, observed: observed.prompt_fingerprint };
+  }
+  return { ok: true };
+}
+
+/**
+ * The governed request's inputs, built ONLY from canonical evidence.
+ *
+ * The provider's command is what told us an action was attempted; it is not a
+ * source of parameters. Anything the command carried that the registered action
+ * did not ask for is dropped here, so a prompt cannot widen a request into
+ * something the operator did not read on the card.
+ */
+export function governedInputsFor({ identity = null, actionKey = null } = {}) {
+  const key = actionKey || identity?.action_key || null;
+  const definition = key ? getActionDefinition(key) : null;
+  if (!definition) return { ok: false, error: "unregistered_action_key", action_key: key };
+  const required = definition.inputSchema?.required || [];
+  const source = identity?.inputs || {};
+  const inputs = {};
+  const dropped = [];
+  for (const field of required) {
+    if (source[field] === undefined) return { ok: false, error: "missing_canonical_input", field };
+    inputs[field] = source[field];
+  }
+  for (const field of Object.keys(source)) {
+    if (!required.includes(field)) dropped.push(field);
+  }
+  return { ok: true, action_key: key, inputs, dropped, content_fingerprint: identity?.content_fingerprint || null };
+}
+
 // ── Operator surface ─────────────────────────────────────────────────────────
 
 /**
