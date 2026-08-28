@@ -98,22 +98,27 @@ async function test(name, fn) {
 
 // ------------------------------------------------ law 1: not NEEDS_INPUT ----
 
-await test("a permission dialog FAILS the undelivered run — it is never NEEDS_INPUT", async () => {
+await test("a permission dialog QUEUES the undelivered run — the adapter owns it, not the terminal", async () => {
+  /*
+   * CONTRACT CHANGED, DELIBERATELY. A permission prompt used to FAIL the run and
+   * tell the operator to answer it in tmux. It is an execution-adapter concern:
+   * provider-prompt-authority classifies it against Vacilando's own authority,
+   * answers what is already authorized, and converts the rest into a governed
+   * decision. So the run stays retryable rather than dying.
+   *
+   * The property the original test existed to protect is unchanged and asserted
+   * below: a permission dialog must never park the run as sticky NEEDS_INPUT.
+   */
   const out = await deliverManagedLaneInstruction(LANE, "do the work", sendOpts(refusingSend(PERMISSION_PANE)));
   assert.equal(out.ok, false);
   assert.equal(out.error, PROMPT_NOT_READY_ERROR);
-  assert.equal(out.status, "failed");
-  assert.equal(out.needs_terminal_operator, true);
+  assert.equal(out.status, "queued");
+  assert.notEqual(out.needs_terminal_operator, true, "a permission prompt is never the operator's terminal problem");
 
   const run = listExecutionRunsForLane(LANE, ROOT)[0];
-  assert.equal(run.state, "FAILED", "a dialog the operator cannot answer here is not needs-input");
-  assert.equal(run.state_reason, UNDELIVERED_PROMPT_BLOCK);
+  assert.notEqual(run.state, "NEEDS_INPUT", "still never sticky needs-input");
   assert.equal(run.delivery.acknowledged, false);
-  assert.equal(run.started_at, null);
   assert.match(run.instruction, /do the work/, "the instruction is preserved");
-  // FAILED is terminal, so the lane is free — nothing is protecting a run that
-  // never reached anyone.
-  assert.equal(activeRunForLane(LANE, ROOT), null);
 });
 
 await test("every operator-terminal blocker kind fails; transient states do not", () => {
@@ -142,7 +147,10 @@ await test("a mid-turn agent keeps the run QUEUED for a later retry", async () =
 
 await test("Send supersedes an undelivered blocked run instead of pasting into it", async () => {
   const first = await deliverManagedLaneInstruction(LANE, "first instruction", sendOpts(refusingSend(PERMISSION_PANE)));
-  assert.equal(first.status, "failed");
+  // Queued, not failed: a permission prompt is adapter business now. What this
+  // test actually protects — a later Send is a NEW turn and never re-pastes the
+  // blocked instruction — is unchanged.
+  assert.equal(first.status, "queued");
   const blocked = listExecutionRunsForLane(LANE, ROOT)[0];
 
   // The pane is clear now. The next Send is a NEW turn.
@@ -208,6 +216,9 @@ await test("the notice says the prompt must be answered in the terminal", () => 
   });
   assert.equal(blocked.kind, "err");
   assert.match(blocked.text, /was not sent/i);
+  // The phrase survives ONLY for blockers Vacilando genuinely cannot answer —
+  // onboarding, login, trust. It must never appear for a permission prompt,
+  // which is what this whole slice removes from the operator's path.
   assert.match(blocked.text, /answered in the agent's terminal/i);
   assert.match(blocked.text, /cannot answer it for you/i);
   assert.equal(blocked.text.includes("provider_prompt_not_ready"), false);

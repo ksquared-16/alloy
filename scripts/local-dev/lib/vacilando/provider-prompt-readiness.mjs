@@ -490,9 +490,38 @@ export function promptReadinessSummary(assessment) {
  * dialog, not answer it. A send blocked by one of these is not "needs input";
  * it is undelivered.
  */
+/*
+ * NOTE THE ABSENCE OF "permission".
+ *
+ * A provider's native permission prompt is an EXECUTION ADAPTER concern, not a
+ * human authority boundary. Listing it here made Vacilando fail a run and tell
+ * the operator to answer in tmux — for `ls ~/.local/share/alloy/toolkit/<sha>/`,
+ * a read-only listing of the very path the run instruction hands the agent.
+ * That let a provider's own classifier act as a second governance system, and
+ * where the two disagreed the provider won by default, because it holds the
+ * keyboard.
+ *
+ * Permission prompts now route through provider-prompt-authority: Vacilando
+ * answers what it has already authorized, converts what it has not into a
+ * governed decision, and surfaces what it cannot classify — all inside
+ * Vacilando. The kinds below are different: onboarding, login, trust and the
+ * rest are genuine provider-account state that Vacilando has no authority over
+ * and cannot answer on anyone's behalf.
+ */
 export const OPERATOR_TERMINAL_BLOCKERS = Object.freeze([
-  "permission", "onboarding", "setup", "trust", "update", "login", "resume_picker", "selection", "error_modal",
+  "onboarding", "setup", "trust", "update", "login", "resume_picker", "selection", "error_modal",
 ]);
+
+/** Blocker kinds the prompt adapter owns instead of the operator's terminal. */
+export const ADAPTER_OWNED_BLOCKERS = Object.freeze(["permission"]);
+
+/** True when this block is the adapter's to resolve rather than a person's. */
+export function promptBlockIsAdapterOwned(assessment) {
+  if (!assessment) return false;
+  if (assessment.state !== "blocked") return false;
+  const kind = assessment.blocker?.kind || assessment.blocker_kind || null;
+  return ADAPTER_OWNED_BLOCKERS.includes(kind);
+}
 
 /**
  * Is this refusal a standing dialog, or a passing condition?

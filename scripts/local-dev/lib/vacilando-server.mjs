@@ -137,6 +137,10 @@ import {
   tokensEqual,
 } from "./vacilando/vacilando-api-auth.mjs";
 import { attachTailscaleListener } from "./vacilando/vacilando-tailscale-bind.mjs";
+import { homedir } from "node:os";
+const STEWARD_CADENCE_MS = 5 * 60 * 1000;
+const RUNTIME_ROOT_FOR_STEWARD = () => process.env.ALLOY_RUNTIME_ROOT?.trim()
+  || join(homedir(), ".local", "state", "alloy-dev", "gateway");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.env.HOME || "", ".local", "state", "alloy-dev");
@@ -2532,6 +2536,40 @@ export function createVacilandoServer() {
   const condTimer = setInterval(runConductor, 30000);
   condTimer.unref?.();
   setTimeout(runConductor, 60_000).unref?.();
+
+  /*
+   * HOST STEWARD CADENCE.
+   *
+   * Deliberately wired into the timers this server already owns rather than a
+   * second scheduler: the steward coordinates existing subsystems and should
+   * not become one more thing that needs supervising.
+   *
+   * The cycle serialises itself in its own state file, so overlapping timers
+   * across a restart cannot produce two mutating cycles. `stewardInFlight` is
+   * only the cheap in-process guard.
+   *
+   * Cadence measured, not guessed: a full cycle costs ~2.3s of mostly-idle wall
+   * time, so five minutes is well under 1% duty. Thirty seconds would not be.
+   */
+  let stewardInFlight = false;
+  const runSteward = async () => {
+    if (stewardInFlight) return;
+    stewardInFlight = true;
+    try {
+      const { runStewardCycle } = await import("./vacilando/host-steward-run.mjs");
+      const out = runStewardCycle({ root: RUNTIME_ROOT_FOR_STEWARD() });
+      // An action means look again soon rather than waiting a whole sweep.
+      if (out?.executed?.length) {
+        const { RECHECK_MS } = await import("./vacilando/host-steward-cycle.mjs");
+        setTimeout(() => { runSteward().catch(() => {}); }, RECHECK_MS).unref?.();
+      }
+    } catch { /* the steward must never take the server down */ }
+    stewardInFlight = false;
+  };
+  const stewardTimer = setInterval(() => { runSteward().catch(() => {}); }, STEWARD_CADENCE_MS);
+  stewardTimer.unref?.();
+  // First sweep after two minutes: cold open stays responsive.
+  setTimeout(() => { runSteward().catch(() => {}); }, 2 * 60_000).unref?.();
 
   /**
    * Background warm AFTER listen. Previously recover + diskSignal (sync GC dry-run
