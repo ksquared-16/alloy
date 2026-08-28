@@ -1771,7 +1771,13 @@
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 50%, #64748b);
 }
 
-/* Two peer commands, sized to their labels, directly above the ledger they act on. */
+/*
+ * Two peer commands, sized to their labels, directly above the ledger they act on.
+ *
+ * `flex: 0 0 auto` matters: the platform's action button is `width: 100%` by default (it is built
+ * for a full-width row), so without it `Add charge` stretched across the card while `Payment` sat
+ * compact beside it — two peers that did not look like peers.
+ */
 .alloy-os-fdetail__actions {
   display: flex;
   flex-wrap: wrap;
@@ -1779,7 +1785,9 @@
   margin: 8px 0 2px;
 }
 .alloy-os-fdetail__actions > button {
-  min-width: 148px;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 168px;
 }
 
 /* The utility link closes the card, bottom-right, out of the ledger's way. */
