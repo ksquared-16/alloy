@@ -179,8 +179,18 @@ export default function ProcessCard({
                     </div>
                     <div className="alloy-os-process__work-actions">
                         <ActionRow>
+                            {/* CONFIGURATION DECIDES THE SET AND THE ORDER; the platform decides
+                                whether each one can run. The card renders both verdicts and owns
+                                neither — there is no filtering, no re-ordering and no emphasis
+                                rule here. */}
                             {evidence.actions.map((a) => (
-                                <Action key={a.label} primary={a.primary}>
+                                <Action
+                                    key={a.key ?? a.label}
+                                    primary={a.primary}
+                                    disabled={a.disabled}
+                                    title={a.disabledReason ?? undefined}
+                                    onClick={a.onInvoke}
+                                >
                                     {a.label}
                                 </Action>
                             ))}
