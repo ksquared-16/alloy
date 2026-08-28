@@ -75,6 +75,10 @@ case "${1:-}" in
     shift
     exec node "$SCRIPT_DIR/vac-worktree-retire.mjs" "$@"
     ;;
+  host-steward)
+    shift
+    exec node "$SCRIPT_DIR/vac-host-steward.mjs" "$@"
+    ;;
   browser-auth)
     shift
     exec node "$SCRIPT_DIR/vac-browser-auth.mjs" "$@"
