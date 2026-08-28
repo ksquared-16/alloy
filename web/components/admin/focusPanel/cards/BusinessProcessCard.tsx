@@ -22,11 +22,13 @@ import {
 } from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
+import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import { currentWorkActivityRowKey } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActivityRowKey";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 
 type Props = {
@@ -34,6 +36,7 @@ type Props = {
     context: OperationalContext;
     receded?: boolean;
     coordination?: FocusPanelCoordination;
+    mutation?: FocusPanelMutation;
 };
 
 /** Two identities per stage, then a count. A busy family must not destroy the rail. */
@@ -60,7 +63,45 @@ const MAX_MARKERS_PER_STAGE = 2;
  * The evidence places participants by `stageKey`. A participant it could not place is not dropped —
  * it is reported, so a missing marker looks like the gap it is instead of a smaller family.
  */
-export default function BusinessProcessCard({ model, context, receded = false, coordination }: Props) {
+export default function BusinessProcessCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    mutation,
+}: Props) {
+    /*
+     * THE SHARED COMMAND WORKSPACE, HOSTED WHERE THE CARD NOW LIVES.
+     *
+     * A configured command that opens a capability asks the platform for its command workspace.
+     * That workspace is a presentation of the Current Work card — and this card SUPERSEDES it, so
+     * a published layout composes no `current_work` cell and the request had nowhere to land:
+     * "Reschedule Tour" opened nothing at all. Rendering the shared component here is what makes
+     * the existing chrome reachable again. It is emphatically not a Process-specific panel — it is
+     * the same component, with the same capability hosts and the same dismiss behaviour.
+     */
+    if (coordination?.currentWorkWorkspace?.open) {
+        return (
+            <CurrentWorkCard
+                model={model}
+                context={context}
+                coordination={coordination}
+                mutation={mutation}
+                presentation="workspace"
+            />
+        );
+    }
+    return (
+        <BusinessProcessSummary
+            model={model}
+            context={context}
+            receded={receded}
+            coordination={coordination}
+        />
+    );
+}
+
+function BusinessProcessSummary({ model, context, receded = false, coordination }: Props) {
     const evidence = useMemo(
         () =>
             buildBusinessProcessCardEvidence(context, {
