@@ -168,6 +168,9 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         mode: "preview",
                         payload: {
                             customer_member_id: chargeTarget,
+                            // The household, so a pre-enrolment family has a billable subject when
+                            // no child agreement exists. The resolver still prefers an agreement.
+                            customer_id: customerId,
                             template_id: templateId,
                             child_label: vm?.subjects.find((s) => s.customerMemberId === chargeTarget)
                                 ?.displayName,
@@ -231,6 +234,9 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                      */
                     payload: {
                         customer_member_id: chargeTarget,
+                        // Same subject inputs the preview was given — preview and commit run the
+                        // same resolver, so they must be asked the same question.
+                        customer_id: customerId,
                         template_id: pending.templateId,
                         ...(chargeEventDate ? { event_date: chargeEventDate } : {}),
                         ...(chargeNote ? { note: chargeNote } : {}),

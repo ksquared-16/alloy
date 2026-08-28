@@ -64,32 +64,90 @@ function todayYmd(): string {
  * ids out of the operator surface entirely — and a child with no agreement fails closed rather than
  * having a charge attached to whatever agreement happens to exist.
  */
+/**
+ * WHAT THIS CHARGE IS WRITTEN AGAINST — an agreement when one exists, the household otherwise.
+ *
+ * ── THE PRODUCT RULE ──
+ *
+ * A family can be billed before enrollment. A waitlist fee, a registration or application fee and a
+ * deposit are all incurred before anyone is enrolled, so requiring an enrollment agreement made
+ * Financials enrollment-gated and answered "there is nothing to charge against" to a family that
+ * plainly owed money.
+ *
+ * ── WHAT IS PRESERVED ──
+ *
+ * AGREEMENT-BACKED CHILD ATTRIBUTION. When the named child HAS an agreement, that agreement is
+ * still the source, so an enrolled child's charges keep landing on their own ledger exactly as
+ * before. The household source is the fallback, never the preference.
+ *
+ * HOUSEHOLD CHARGES STAY HOUSEHOLD TRUTH. A charge resolved to the customer is attributed to the
+ * customer — it is never pinned onto whichever child happens to be first, which would put a family
+ * expense on one sibling's ledger and is the failure this resolver exists to prevent.
+ *
+ * TEMPLATE AUTHORITY. Whether a PARTICULAR charge needs a child or an agreement is decided by its
+ * template and by `resolveChargeFromTemplate` — a rate-derived tuition charge that cannot price
+ * itself without an agreement still refuses, and nothing here weakens that.
+ */
+type ChargeSubject =
+    | { ok: true; kind: "enrollment_agreement"; agreementId: string; customerMemberId: string }
+    | { ok: true; kind: "customer"; customerId: string }
+    | { ok: false; code: string; message: string };
+
 async function resolveChargeSubject(
     supabase: SupabaseClient,
     orgId: string,
     customerMemberId: string,
-): Promise<{ ok: true; agreementId: string } | { ok: false; code: string; message: string }> {
-    if (!customerMemberId) {
-        return { ok: false, code: "missing_child", message: "A child is required." };
+    /** The household, when the caller knows it. Required to fall back to a customer source. */
+    customerId?: string | null,
+): Promise<ChargeSubject> {
+    const household = t(customerId) || null;
+
+    if (customerMemberId) {
+        const { data, error } = await supabase
+            .from("child_enrollment_agreements")
+            .select("id, status, created_at")
+            .eq("org_id", orgId)
+            .eq("customer_member_id", customerMemberId)
+            .order("created_at", { ascending: false });
+        if (error) return { ok: false, code: "db_error", message: error.message };
+        const rows = (data ?? []) as Array<{ id: string; status: string }>;
+        if (rows.length > 0) {
+            // An active agreement is the billable source; otherwise the most recent one still owns
+            // history. Unchanged — an enrolled child's attribution does not move.
+            const active = rows.find((r) => t(r.status) === "active");
+            return {
+                ok: true,
+                kind: "enrollment_agreement",
+                agreementId: (active ?? rows[0]!).id,
+                customerMemberId,
+            };
+        }
+        // No agreement for this child. Fall through to the household rather than refusing —
+        // a pre-enrolment child's fee is the FAMILY's, and that is a real, chargeable subject.
     }
-    const { data, error } = await supabase
-        .from("child_enrollment_agreements")
-        .select("id, status, created_at")
-        .eq("org_id", orgId)
-        .eq("customer_member_id", customerMemberId)
-        .order("created_at", { ascending: false });
-    if (error) return { ok: false, code: "db_error", message: error.message };
-    const rows = (data ?? []) as Array<{ id: string; status: string }>;
-    if (rows.length === 0) {
+
+    if (!household) {
         return {
             ok: false,
-            code: "no_enrollment_agreement",
-            message: "This child has no enrollment agreement, so there is nothing to charge against.",
+            code: "missing_billable_subject",
+            message:
+                "There is no enrollment agreement and no household in scope, so there is nothing to "
+                + "charge against.",
         };
     }
-    // An active agreement is the billable source; otherwise the most recent one still owns history.
-    const active = rows.find((r) => t(r.status) === "active");
-    return { ok: true, agreementId: (active ?? rows[0]!).id };
+    return { ok: true, kind: "customer", customerId: household };
+}
+
+/** The billable source pair for a resolved subject — one place, so callers cannot disagree. */
+function billableSourceForSubject(
+    subject: Extract<ChargeSubject, { ok: true }>,
+): { agreementId: string | null; billableSource: { type: "enrollment_agreement" | "customer"; id: string } } {
+    return subject.kind === "enrollment_agreement"
+        ? {
+              agreementId: subject.agreementId,
+              billableSource: { type: "enrollment_agreement", id: subject.agreementId },
+          }
+        : { agreementId: null, billableSource: { type: "customer", id: subject.customerId } };
 }
 
 function mapError(err: unknown, correlationId: string): ActionResult {
@@ -138,6 +196,7 @@ const addCharge: RegisteredAction = {
             supabase as SupabaseClient,
             ctx.orgId,
             childIdFrom(payload, invocation?.entityId),
+            t(payload?.customer_id) || null,
         );
         return {
             eligible: subject.ok,
@@ -160,12 +219,13 @@ const addCharge: RegisteredAction = {
             supabase as SupabaseClient,
             ctx.orgId,
             childIdFrom(payload, invocation?.entityId),
+            t(payload?.customer_id) || null,
         );
         if (!subject.ok) return { summary: subject.message, changes: [] };
         try {
             const { intent } = await previewTemplateCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload?.template_id),
-                agreementId: subject.agreementId,
+                ...billableSourceForSubject(subject),
                 eventDate: t(payload?.event_date) || null,
                 servicePeriodStart: t(payload?.service_period_start) || null,
                 unitAmountCents:
@@ -201,13 +261,18 @@ const addCharge: RegisteredAction = {
         const correlationId = randomUUID();
         try {
             const childId = childIdFrom(payload, invocation.entityId);
-            const subject = await resolveChargeSubject(supabase as SupabaseClient, ctx.orgId, childId);
+            const subject = await resolveChargeSubject(
+                supabase as SupabaseClient,
+                ctx.orgId,
+                childId,
+                t(payload?.customer_id) || null,
+            );
             if (!subject.ok) {
                 return { ok: false, correlationId, status: 409, error: subject.message };
             }
             const written = await writeTemplateDraftCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload.template_id),
-                agreementId: subject.agreementId,
+                ...billableSourceForSubject(subject),
                 eventDate: t(payload.event_date) || null,
                 servicePeriodStart: t(payload.service_period_start) || null,
                 unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
