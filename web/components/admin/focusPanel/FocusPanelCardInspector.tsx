@@ -66,6 +66,10 @@ import {
     buildConceptPath,
     parseConceptPath,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCatalog";
+import {
+    currentPlacementVariant,
+    placementVariantsFor,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import type { FocusPanelCardDensity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
@@ -158,6 +162,13 @@ type Props = {
     history: HistoryInfo;
     /** Drill-in mode: hide presentation/evidence field authoring — those live inline on the runtime. */
     metadataOnly?: boolean;
+    /**
+     * Switch a card between the presentations it actually implements. Present only
+     * for a card that declares more than one; the host applies both halves of the
+     * choice — the appearance density and the placement span — because a Compact
+     * choice rendered at Summary width is not a choice.
+     */
+    onPresentationChange?: (card: FocusPanelCardKey, variantLabel: string) => void;
 };
 
 const FIELD = "config-runtime-input";
@@ -174,6 +185,7 @@ export default function FocusPanelCardInspector({
     onRemove,
     history,
     metadataOnly = false,
+    onPresentationChange,
 }: Props) {
     const visibleTabs = useMemo(
         () =>
@@ -192,6 +204,8 @@ export default function FocusPanelCardInspector({
 
     const appearance = config.appearance ?? {};
     const effectiveTitle = appearance.titleOverride?.trim() || baseModel.title;
+    const placementVariants = useMemo(() => placementVariantsFor(baseModel.key), [baseModel.key]);
+    const currentVariant = currentPlacementVariant(baseModel.key, appearance.density ?? baseModel.density);
 
     // Edit against a config that always carries explicit evidence groups: when a card
     // has no fields yet, seed a default "Details" group from the reference so authoring
@@ -483,21 +497,50 @@ export default function FocusPanelCardInspector({
                     </div>
                 ) : tab === "presentation" ? (
                     <div className="space-y-3">
-                        <Labeled label="Size">
-                            <select
-                                data-testid="inspector-density"
-                                className={FIELD}
-                                value={appearance.density ?? baseModel.density}
-                                onChange={(e) => patchAppearance({ density: e.target.value as FocusPanelCardDensity })}
-                            >
-                                {DENSITIES.map((d) => (
-                                    <option key={d} value={d}>
-                                        {d[0]!.toUpperCase() + d.slice(1)}
-                                    </option>
-                                ))}
-                            </select>
-                        </Labeled>
-                        <p className="config-typo-meta">Size applies live to the published workspace — the runtime computes exact spacing.</p>
+                        {/*
+                          * A CARD WITH REAL PRESENTATIONS IS CHOSEN BY NAME, NOT BY SIZE.
+                          *
+                          * Financials is one identity and one read model with two implemented
+                          * presentations. Offering that as "Compact / Standard" made the operator
+                          * pick a density and hope; offering it as Summary / Compact names the two
+                          * cards they can actually see. The span travels with the choice — it is
+                          * how the platform places the card, not what is being chosen.
+                          */}
+                        {placementVariants.length > 1 ?
+                            <Labeled label="Presentation">
+                                <select
+                                    data-testid="inspector-presentation"
+                                    className={FIELD}
+                                    value={currentVariant ?? placementVariants[0]!.variantLabel}
+                                    onChange={(e) => onPresentationChange?.(baseModel.key, e.target.value)}
+                                >
+                                    {placementVariants.map((v) => (
+                                        <option key={v.variantLabel} value={v.variantLabel}>
+                                            {v.variantLabel}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Labeled>
+                        :   <Labeled label="Size">
+                                <select
+                                    data-testid="inspector-density"
+                                    className={FIELD}
+                                    value={appearance.density ?? baseModel.density}
+                                    onChange={(e) => patchAppearance({ density: e.target.value as FocusPanelCardDensity })}
+                                >
+                                    {DENSITIES.map((d) => (
+                                        <option key={d} value={d}>
+                                            {d[0]!.toUpperCase() + d.slice(1)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Labeled>
+                        }
+                        <p className="config-typo-meta">
+                            {placementVariants.length > 1
+                                ? "Both presentations are the same card and the same account — only how much of it this placement shows."
+                                : "Size applies live to the published workspace — the runtime computes exact spacing."}
+                        </p>
                     </div>
                 ) : tab === "behavior" ? (
                     <div className="space-y-3" data-focus-panel-inspector-behavior={effectiveWeight} data-focus-panel-composition-depth={effectiveDepth}>

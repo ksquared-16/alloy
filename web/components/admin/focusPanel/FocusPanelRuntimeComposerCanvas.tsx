@@ -82,6 +82,15 @@ type Props = {
      */
     /** Records a placement variant's density on the card's own config. */
     onCardDensityChange?: (card: FocusPanelCardKey, density: FocusPanelCardDensity) => void;
+    /**
+     * Spans the inspector has asked for, by card.
+     *
+     * A presentation switch is two facts — the density the card reads, and the width
+     * the platform places it at. The density reaches the card through its config;
+     * this is the other half, applied to the grid the canvas owns rather than by
+     * letting a second writer edit that grid behind its back.
+     */
+    desiredSpanByCard?: Partial<Record<FocusPanelCardKey, number>>;
     catalog: {
         key: FocusPanelCardKey;
         label: string;
@@ -116,6 +125,7 @@ export default function FocusPanelRuntimeComposerCanvas({
     initialGrid,
     catalog,
     onCardDensityChange,
+    desiredSpanByCard,
     order,
     cards,
     vm,
@@ -173,6 +183,29 @@ export default function FocusPanelRuntimeComposerCanvas({
             return next;
         });
     }, [order]);
+
+    /*
+     * Apply a requested presentation span to the grid the canvas owns.
+     *
+     * Only when it actually differs, so this cannot fight the operator's own
+     * resize: a drag to a new width leaves `desiredSpanByCard` untouched, and this
+     * effect has nothing to say about it.
+     */
+    useEffect(() => {
+        if (!desiredSpanByCard) return;
+        setGrid((prev) => {
+            let next = prev;
+            for (const [card, span] of Object.entries(desiredSpanByCard)) {
+                if (typeof span !== "number") continue;
+                const area = next.areas.find((a) => a.card === card);
+                if (!area || area.colSpan === span) continue;
+                next = resizeArea(next, card as FocusPanelCardKey, span, area.rowSpan);
+            }
+            if (next === prev) return prev;
+            onLayoutChangeRef.current?.(buildPublishedLayoutFromGrid(next));
+            return next;
+        });
+    }, [desiredSpanByCard]);
 
     const publishedLayout = useMemo(() => buildPublishedLayoutFromGrid(grid), [grid]);
 

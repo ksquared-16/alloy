@@ -89,6 +89,36 @@ const WITHHELD_FROM_AUTHORING: Partial<Record<FocusPanelCardKey, string>> = {
 
 /** One authorable choice in the builder — a card identity plus the shape it is placed in. */
 /**
+ * The presentations a card genuinely implements, named as the operator reads them.
+ *
+ * A card with more than one entry is one canonical identity with one read model
+ * and more than one PRESENTATION — Financials answers the same question at
+ * Summary and at Compact. The list is the authoring vocabulary: "Summary" and
+ * "Compact", never "standard", "8/12" or "span 8", which are how the platform
+ * places it and not what the operator is choosing.
+ */
+export function placementVariantsFor(
+    key: FocusPanelCardKey,
+): ReadonlyArray<{ variantLabel: string; density: FocusPanelCardDensity; columns: number }> {
+    return (PLACEMENT_VARIANTS[key] ?? []).map((v) => ({
+        variantLabel: v.variantLabel ?? "",
+        density: v.density,
+        columns: v.columns,
+    }));
+}
+
+/** The variant a placed card is currently in, matched on its authored density. */
+export function currentPlacementVariant(
+    key: FocusPanelCardKey,
+    density: FocusPanelCardDensity | null | undefined,
+): string | null {
+    const variants = placementVariantsFor(key);
+    if (!variants.length) return null;
+    const hit = variants.find((v) => v.density === density);
+    return (hit ?? variants[0]!).variantLabel;
+}
+
+/**
  * A placeable model for an authorable card the PREVIEW SUBJECT does not produce.
  *
  * The composer's card map comes from a demo opportunity, so it contains models for
