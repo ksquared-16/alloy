@@ -1948,3 +1948,27 @@
   flex: 0 0 auto;
   align-self: flex-start;
 }
+
+/* ── Surface Builder: Add card chips ───────────────────────────────────────────
+ *
+ * The chip carries the CONSEQUENCE of the choice, not just the name: "Financials · Summary · 8/12"
+ * against "Financials · Compact · 4/12". Two placements of one canonical card are only a real
+ * choice if an operator can see how they differ before dropping one in.
+ */
+.alloy-os-fp-composer__chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.alloy-os-fp-composer__chip-label {
+  font-weight: 600;
+}
+
+.alloy-os-fp-composer__chip-shape {
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}

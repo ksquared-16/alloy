@@ -124,15 +124,36 @@ const PLACEMENT_VARIANTS: Partial<Record<FocusPanelCardKey, readonly Omit<Author
         ],
     };
 
-/** The standard placement for a card with no declared variants. */
+/**
+ * The standard placement for a card with no declared variants.
+ *
+ * Every authorable card states a width, because the fallback is what produced the packing bug: an
+ * unlisted card fell back to six columns, so Readiness dropped beside an 8/12 Financials could not
+ * fit (8 + 6 > 12) and took its own row — which reads as the builder refusing to pack when the real
+ * cause was a width nobody had declared.
+ *
+ * These are the widths the runtime compositions actually use, so a card authored at its default
+ * lands where the shipped panels put it.
+ */
 const DEFAULT_COLUMNS: Partial<Record<FocusPanelCardKey, number>> = {
     business_process: 12,
     attendance: 8,
     children: 6,
+    staff: 6,
     scheduling: 4,
     household: 4,
     health_safety: 4,
-    staff: 6,
+    readiness_kpi: 4,
+    tour_summary: 4,
+    documents: 4,
+    attention: 4,
+    required_information: 4,
+    notes: 4,
+    communications: 6,
+    current_mission: 6,
+    timeline: 6,
+    milestones: 4,
+    employment: 6,
 };
 
 /**
