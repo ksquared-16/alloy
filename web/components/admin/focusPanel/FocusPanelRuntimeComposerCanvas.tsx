@@ -473,25 +473,32 @@ export default function FocusPanelRuntimeComposerCanvas({
          * follow the add, and scrolling to it makes the placement legible — the packer
          * already chose a real position, this only takes the operator there.
          */
-        onSelectCard?.(card);
         setJustAdded(card);
     };
 
     /*
-     * Scroll to the newly placed card AFTER the grid has laid it out. Resolving its
-     * position in the same tick would read the geometry the card had before it
-     * existed, which is the same class of staleness the drag path had to fix.
+     * Select and reveal the new card ON THE NEXT RENDER, not in the click handler.
+     *
+     * Selecting inline did nothing: the host resolves a card key against `order`,
+     * and `order` only gains the card when the layout change this same handler
+     * emitted is reconciled. Both updates batch, so the lookup ran against the
+     * order from BEFORE the add and found nothing — the card appeared, unselected,
+     * and the inspector kept pointing at whatever was selected before.
+     *
+     * Waiting a frame also fixes the reveal for the same underlying reason: the
+     * cell's geometry does not exist until the grid has laid it out.
      */
     const [justAdded, setJustAdded] = useState<FocusPanelCardKey | null>(null);
     useEffect(() => {
         if (!justAdded) return;
         const frame = requestAnimationFrame(() => {
+            onSelectCard?.(justAdded);
             const cell = gridContainerRef.current?.querySelector(`[data-fp-composer-cell="${justAdded}"]`);
             cell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
             setJustAdded(null);
         });
         return () => cancelAnimationFrame(frame);
-    }, [justAdded]);
+    }, [justAdded, onSelectCard]);
 
     const renderComposerCell = useCallback(
         (cellKey: string) => {
