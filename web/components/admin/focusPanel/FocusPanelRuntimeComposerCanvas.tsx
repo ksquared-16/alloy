@@ -26,9 +26,12 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
-    composerCellFromOffset,
-    composerGhostBounds,
+    COMPOSER_GRID_GAP_PX,
     composerGridMetrics,
+    parseTrackSizes,
+    spanBounds,
+    trackEdges,
+    trackFromOffset,
     defaultRowSpanForCard,
     gridFromPublishedLayout,
     moveArea,
@@ -303,44 +306,68 @@ export default function FocusPanelRuntimeComposerCanvas({
         [vm.entity.id, record],
     );
 
-    /*
-     * Pointer → cell, measured against the grid's OWN box and converted by the one
-     * geometry owner. Reading the rect on every call rather than caching it is
-     * deliberate: the canvas scrolls and reflows while a drag is in flight, and a
-     * cached rect is exactly the stale geometry that made a drop land somewhere the
-     * ghost never showed.
+    /**
+     * The canvas's REAL geometry, read fresh from the browser.
+     *
+     * Rows are content-sized, so there is no constant pitch to compute from — and
+     * even the columns are better read than derived, because the browser has
+     * already resolved them. Re-reading on every call rather than caching is
+     * deliberate: rows resize as cards move during a drag, and a cached edge list
+     * is exactly the stale geometry that made a drop land where the ghost never
+     * showed.
      */
+    const measureCanvas = useCallback(() => {
+        const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
+        const el = (canvas ?? gridContainerRef.current) as HTMLElement | null;
+        if (!el) return null;
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        const colSizes = parseTrackSizes(style.gridTemplateColumns);
+        const rowSizes = parseTrackSizes(style.gridTemplateRows);
+        const fallback = composerGridMetrics(rect.width, cols);
+        return {
+            rect,
+            colEdges: colSizes.length ? trackEdges(colSizes, COMPOSER_GRID_GAP_PX) : trackEdges(
+                Array.from({ length: cols }, () => fallback.trackWidth), COMPOSER_GRID_GAP_PX,
+            ),
+            rowEdges: rowSizes.length ? trackEdges(rowSizes, COMPOSER_GRID_GAP_PX) : [0],
+            colPitch: fallback.columnPitch,
+            rowPitch: fallback.rowPitch,
+        };
+    }, [cols]);
+
     const cellFromPointer = useCallback(
         (clientX: number, clientY: number) => {
-            const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
-            const el = canvas ?? gridContainerRef.current;
-            if (!el) return { col: 1, row: 1 };
-            const r = el.getBoundingClientRect();
-            return composerCellFromOffset({
-                offsetX: clientX - r.left,
-                offsetY: clientY - r.top,
-                surfaceWidthPx: r.width,
-                columns: cols,
-            });
+            const m = measureCanvas();
+            if (!m) return { col: 1, row: 1 };
+            const col = trackFromOffset(clientX - m.rect.left, m.colEdges, m.colPitch);
+            const row = trackFromOffset(clientY - m.rect.top, m.rowEdges, m.rowPitch);
+            return { col: Math.min(cols, Math.max(1, col)), row: Math.max(1, row) };
         },
-        [cols],
+        [cols, measureCanvas],
     );
 
+    /*
+     * The ghost is drawn from the SAME measured tracks the drop resolves against, so
+     * the preview and the landing place cannot disagree. They used to be computed
+     * independently, which is how the ghost came to show a position the card did not
+     * take.
+     */
     const ghostBounds = useMemo(() => {
         if (!ghost || !gridContainerRef.current) return null;
         const container = gridContainerRef.current;
-        const canvas = container.querySelector(".alloy-os-fp-canvas--grid");
-        if (!canvas) return null;
+        const m = measureCanvas();
+        if (!m) return null;
         const cRect = container.getBoundingClientRect();
-        const gRect = canvas.getBoundingClientRect();
-        return composerGhostBounds({
-            ...ghost,
-            columns: cols,
-            surfaceWidthPx: gRect.width,
-            paddingX: gRect.left - cRect.left,
-            paddingY: gRect.top - cRect.top,
-        });
-    }, [ghost, cols, grid]);
+        const x = spanBounds(ghost.colStart, ghost.colSpan, m.colEdges, COMPOSER_GRID_GAP_PX, m.colPitch);
+        const y = spanBounds(ghost.rowStart, ghost.rowSpan, m.rowEdges, COMPOSER_GRID_GAP_PX, m.rowPitch);
+        return {
+            left: m.rect.left - cRect.left + x.offset,
+            top: m.rect.top - cRect.top + y.offset,
+            width: x.size,
+            height: y.size,
+        };
+    }, [ghost, measureCanvas, grid]);
 
     const applySnappedMove = useCallback(
         (area: FocusPanelGridArea, col: number, row: number) => {
@@ -412,23 +439,17 @@ export default function FocusPanelRuntimeComposerCanvas({
         const measureEl = canvas ?? gridContainerRef.current;
         const move = (ev: globalThis.PointerEvent) => {
             if (!measureEl) return;
-            const r = measureEl.getBoundingClientRect();
-            const m = composerGridMetrics(r.width, cols);
-            const colSpan =
-                axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / m.columnPitch) - area.colStart + 1);
-            const rowSpan =
-                axis === "w" ? area.rowSpan : Math.max(1, Math.round((ev.clientY - r.top) / m.rowPitch) - area.rowStart + 1);
+            const cell = cellFromPointer(ev.clientX, ev.clientY);
+            const colSpan = axis === "h" ? area.colSpan : Math.max(1, cell.col - area.colStart + 1);
+            const rowSpan = axis === "w" ? area.rowSpan : Math.max(1, cell.row - area.rowStart + 1);
             const next = clampArea(grid, { ...area, colSpan, rowSpan });
             setGhost({ colStart: next.colStart, colSpan: next.colSpan, rowStart: next.rowStart, rowSpan: next.rowSpan });
         };
         const up = (ev: globalThis.PointerEvent) => {
             if (measureEl) {
-                const r = measureEl.getBoundingClientRect();
-                const m = composerGridMetrics(r.width, cols);
-                const colSpan =
-                    axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / m.columnPitch) - area.colStart + 1);
-                const rowSpan =
-                    axis === "w" ? area.rowSpan : Math.max(1, Math.round((ev.clientY - r.top) / m.rowPitch) - area.rowStart + 1);
+                const cell = cellFromPointer(ev.clientX, ev.clientY);
+                const colSpan = axis === "h" ? area.colSpan : Math.max(1, cell.col - area.colStart + 1);
+                const rowSpan = axis === "w" ? area.rowSpan : Math.max(1, cell.row - area.rowStart + 1);
                 applyGrid(resizeArea(grid, area.card, colSpan, rowSpan));
             }
             setGhost(null);
