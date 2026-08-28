@@ -36,6 +36,7 @@ import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedu
 import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
 import type { SearchDestination } from "@/lib/search/searchContracts";
 import DurableRecordContextualCard from "@/components/presentation/durableRecord/DurableRecordContextualCard";
+import FocusPanelSubjectIdentityBlock from "@/components/admin/focusPanel/FocusPanelSubjectIdentityBlock";
 import {
     resolveInitialContextOption,
     type DurableRecordContextOption,
@@ -373,6 +374,25 @@ export default function DurableRecordSurface({
             data-durable-record-subject-id={state.model.subject.id}
             data-durable-record-context-count={state.contexts.length}
         >
+            {/*
+              * THE PERSON IS GENUINELY THE SUBJECT HERE, so the shell says who this record is:
+              * canonical image when there is one, initials otherwise — the same `CardAvatar` the
+              * cards use, reached through the shell's own subject-identity block rather than a
+              * second presentation. A CASE panel keeps household identity; a scoped participant
+              * stays inside the Process card. This is the caller that block was built for, and
+              * until now it had none.
+              */}
+            {state.personSubject ? (
+                <div className="px-1 pb-2" data-durable-record-identity="person">
+                    <FocusPanelSubjectIdentityBlock
+                        subjectTitle={state.personSubject.label}
+                        contextChips={[]}
+                        personSubjectName={state.personSubject.label}
+                        personSubjectImageUrl={state.personSubject.imageUrl}
+                        personSubjectRecordId={state.personSubject.personId}
+                    />
+                </div>
+            ) : null}
             {presentation === "full" ? (
                 <DurableRecordContextStrip
                     options={state.contexts}

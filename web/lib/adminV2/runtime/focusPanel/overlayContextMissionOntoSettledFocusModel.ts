@@ -76,6 +76,13 @@ export function overlayContextMissionOntoSettledFocusModel(
                 key: situation?.stageKey ?? settled.context.businessProcess.key,
                 label: situation?.stageLabel ?? settled.context.businessProcess.label,
                 stageKey: situation?.stageKey ?? settled.context.businessProcess.stageKey,
+                /*
+                 * PRESERVED, NOT REBUILT. This overlay changes the MISSION — which stage the
+                 * operator is being pointed at — and nothing about which stages the process has.
+                 * Rebuilding the struct field by field silently drops anything it does not name,
+                 * which is exactly how the configured rail vanished the first time.
+                 */
+                stages: settled.context.businessProcess.stages,
             },
             stageWorkRuntime: stageWorkRuntime ?? settled.context.stageWorkRuntime,
             publishedStageInputs: publishedStageInputs ?? settled.context.publishedStageInputs,

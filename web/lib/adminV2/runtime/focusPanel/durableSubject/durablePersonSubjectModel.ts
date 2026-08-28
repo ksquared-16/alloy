@@ -19,6 +19,12 @@ export type DurablePersonSubject = {
     /** The person's composed record — the panel's `context.truth`. */
     truth: Record<string, unknown>;
     /**
+     * Canonical profile photo, resolved by `resolveIdentityPhotoUrlFromRaw` — the one owner of
+     * that question, which distinguishes an actor-authorized URL from one merely found in storage.
+     * Null is an ANSWER: the shell renders initials, it does not wait for an image.
+     */
+    imageUrl: string | null;
+    /**
      * Employment as the Focus Panel's signal shape, projected from the person-owned composition.
      * Null when the person has never held employment here — an ANSWER, distinct from "not composed".
      */

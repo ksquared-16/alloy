@@ -37,6 +37,8 @@ export type InquiryChildHydrateRow = {
     schedule_type: string | null;
     desired_schedule_label: string | null;
     outcome_status_key: string | null;
+    /** The child's own canonical process stage key, when the participation row carries one. */
+    stage_key?: string | null;
     outcome_status_label: string | null;
     fit_status: string | null;
     notes: string | null;
@@ -273,6 +275,7 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
                 scheduleType
             ),
             outcome_status_key: null,
+            stage_key: null,
             outcome_status_label: null,
             fit_status: null,
             notes: null,

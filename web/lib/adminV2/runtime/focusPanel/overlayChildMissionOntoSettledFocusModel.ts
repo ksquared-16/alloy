@@ -183,10 +183,59 @@ export function overlayChildMissionOntoSettledFocusModel(
                 id: commitCritical.subjectId,
                 label: subjectLabel,
             },
+            /*
+             * THE FOCUSED CHILD IS THE SCOPED PARTICIPANT.
+             *
+             * The settled context resolves `participantScope` by matching a selection against the
+             * FAMILY's children — the right rule for a case panel, and no rule at all here: this
+             * overlay already knows which child it is about, because that is what it exists to say.
+             * Leaving the settled answer in place meant a child-grain panel carried NO scope, and
+             * the Attendance card asked the operator to "select a child" on that child's own record.
+             *
+             * `childMemberId` comes from `subjectIdentityTruth`, the same binding this overlay uses
+             * for the identity card, so the participant and the subject can never disagree. Stated
+             * rather than resolved: there is nothing ambiguous about the record of attention.
+             */
+            participantScope: childMemberId
+                ? {
+                      participationId: commitCritical.subjectId,
+                      customerMemberId: childMemberId,
+                      personId: null,
+                      displayName: subjectLabel,
+                      /*
+                       * THE RESOLVED PHOTO FIRST — the signed, actor-scoped URL that actually
+                       * renders. `photo_url` is the stored document reference and is null on every
+                       * child, so reading it alone made this overlay overwrite a correctly resolved
+                       * scope with an empty image and drop the header back to initials for a child
+                       * whose photo the queue row beside it was already showing.
+                       */
+                      imageUrl:
+                          trimOrNull(commitCritical.subjectIdentityTruth?.["child.resolved_photo_url"])
+                          ?? trimOrNull(childRow?.resolved_photo_url)
+                          ?? trimOrNull(childRow?.photo_url)
+                          ?? settled.context.participantScope?.imageUrl
+                          ?? null,
+                      stageKey: situation?.stageKey ?? null,
+                      stageLabel: situation?.stageLabel ?? null,
+                  }
+                : settled.context.participantScope,
+            /*
+             * PRESERVED, NOT REBUILT. This overlay changes the MISSION — which stage the operator is
+             * being pointed at — and nothing else about the process.
+             *
+             * It used to rebuild the struct field by field, naming `stages` explicitly so the
+             * configured rail would survive. That was the right instinct applied the wrong way: the
+             * explicit line was the only UNGUARDED access, so a context without a business process
+             * crashed the overlay outright — six guard tests failed on
+             * "Cannot read properties of undefined (reading 'stages')" while the two lines above it,
+             * which happened to be `??`-guarded, passed. Spreading preserves EVERY field including
+             * ones added later, and is safe when there is nothing to spread.
+             */
             businessProcess: {
-                key: situation?.stageKey ?? settled.context.businessProcess.key,
-                label: situation?.stageLabel ?? settled.context.businessProcess.label,
-                stageKey: situation?.stageKey ?? settled.context.businessProcess.stageKey,
+                ...settled.context.businessProcess,
+                key: situation?.stageKey ?? settled.context.businessProcess?.key,
+                label: situation?.stageLabel ?? settled.context.businessProcess?.label,
+                stageKey: situation?.stageKey ?? settled.context.businessProcess?.stageKey,
             },
             stageWorkRuntime,
             publishedStageInputs,

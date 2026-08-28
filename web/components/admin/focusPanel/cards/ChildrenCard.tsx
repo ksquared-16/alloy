@@ -1173,6 +1173,7 @@ export default function ChildrenCard({
                 archetype="collection"
                 statusChip={statusChip}
                 statusTone={statusTone}
+                modalClass="record"
                 density={density}
                 gridSpan={model.span}
                 data-universal-card-key={model.key}

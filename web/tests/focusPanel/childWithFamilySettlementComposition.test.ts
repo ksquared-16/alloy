@@ -97,8 +97,16 @@ describe("a child with family settlement keeps the enrollment context", () => {
             "current_work",
             "household",
             "children",
+            // The child's operating day and the family account, both added as production verticals
+            // closed. The guard's point is that `child_identity` is ABSENT — the focused child is
+            // represented through Children — not that this list never grows.
+            "attendance",
             "scheduling",
+            "financials",
             "billing_preview",
+            // Health & Safety, placed at child grain because this is where the record of attention
+            // IS a child. At case grain the card refuses rather than choosing a subject.
+            "health_safety",
         ]);
     });
 

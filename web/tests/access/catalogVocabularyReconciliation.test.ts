@@ -51,6 +51,18 @@ type Artifact = {
 const artifact: Artifact = JSON.parse(fs.readFileSync(ARTIFACT_PATH, "utf8"));
 const artifactEnforced = artifact.enforced.map((e) => e.key);
 
+/**
+ * Keys added by an APPROVED decision after the W-11 artifact was recorded.
+ *
+ * The lock's purpose is that nothing widens the catalog SILENTLY, not that the catalog can never
+ * widen. Each entry names the decision that authorized it, so an unapproved addition still fails —
+ * it simply will not be in this list.
+ */
+const APPROVED_ADDITIONS: Record<string, string> = {
+    "health.view": "D-H6 — structured health visibility boundary",
+    "health.manage": "D-H6 — structured health mutation boundary",
+};
+
 describe("W-11 — the catalog is discovered completely", () => {
     const catalog = discoverCatalog();
 
@@ -58,8 +70,22 @@ describe("W-11 — the catalog is discovered completely", () => {
         // 57 is not a number chosen here. The Phase 0 migration measured the shared database on
         // 2026-07-29 and recorded it in its own comment before writing the literal that reproduces it;
         // this derivation from the migration tree arrives at the same width independently.
-        expect(catalog.size).toBe(artifact.catalog_width);
-        expect(catalog.size).toBe(57);
+        const added = Object.keys(APPROVED_ADDITIONS).filter((k) => catalog.has(k));
+        expect(catalog.size).toBe(artifact.catalog_width + added.length);
+        expect(catalog.size).toBe(57 + added.length);
+    });
+
+    it("every key beyond the W-11 artifact is one an approved decision added", () => {
+        // The discovery lock still bites: a key seeded without a recorded decision fails here.
+        const artifactKeys = new Set([
+            ...artifactEnforced,
+            ...artifact.deletion_candidates,
+            ...artifact.addition_candidates.map((a) => a.key),
+        ]);
+        const unexplained = [...catalog.keys()].filter(
+            (k) => !artifactKeys.has(k) && !(k in APPROVED_ADDITIONS),
+        );
+        expect(unexplained).toEqual([]);
     });
 
     it("reaches every seeding syntax in the tree, including the two the pinned parser could not", () => {
@@ -75,7 +101,9 @@ describe("W-11 — the catalog is discovered completely", () => {
         expect(catalog.get("settings.users_roles")?.seededBy).toContain(
             "20260505120100_settings_users_roles_permission.sql",
         );
-        expect([...catalog.keys()].sort()).toEqual(
+        // Approved post-artifact additions are excluded on the DISCOVERED side, so the artifact
+        // comparison still detects anything else that appeared.
+        expect([...catalog.keys()].filter((k) => !(k in APPROVED_ADDITIONS)).sort()).toEqual(
             [...artifactEnforced, ...artifact.deletion_candidates].sort(),
         );
     });
@@ -104,11 +132,19 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         expect(scan.sitesByKey.size).toBeGreaterThan(10);
     });
 
-    it("the enforced set is exactly the artifact's", () => {
+    it("the enforced set is exactly the artifact's, plus the approved additions", () => {
         const enforced = [...catalog.keys()].filter((k) => (scan.sitesByKey.get(k) ?? []).length > 0);
-        expect(enforced.sort()).toEqual([...artifactEnforced].sort());
+        const added = Object.keys(APPROVED_ADDITIONS).filter((k) => enforced.includes(k));
+        expect(enforced.filter((k) => !(k in APPROVED_ADDITIONS)).sort()).toEqual(
+            [...artifactEnforced].sort(),
+        );
         // 21 until W-13/AD-22 gave `settings.users_roles.read` an enforcement site.
-        expect(enforced.length).toBe(22);
+        expect(enforced.length).toBe(22 + added.length);
+        /*
+         * A health key that is SEEDED but not ENFORCED would be the D-H6 failure mode: the catalogue
+         * would advertise a boundary the product does not apply. Both keys must have call sites.
+         */
+        expect(added.sort()).toEqual(Object.keys(APPROVED_ADDITIONS).sort());
     });
 
     it("the deletion list is exactly the catalog keys no product source names", () => {
