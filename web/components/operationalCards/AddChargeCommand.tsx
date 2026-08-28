@@ -95,6 +95,7 @@ export default function AddChargeCommand({
                  * elevated cell, which put it in the Financials column position and made a focused
                  * command read as another panel in the workspace.
                  */
+                modalClass="command"
                 density="expanded"
                 gridSpan="row"
                 data-universal-card-key="add_charge"

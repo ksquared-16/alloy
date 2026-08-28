@@ -1499,15 +1499,19 @@
 
 /* ══ ADD CHARGE — the approved command card ═══════════════════════════════════ */
 
+/*
+ * NO CARD INSIDE THE CARD.
+ *
+ * This carried its own border, radius, white background and 480px cap from when it was a lab
+ * specimen standing on a page. Inside the elevated host that produced a bordered card floating in a
+ * bordered card, which is the one thing every other centered surface does not do — the content sits
+ * directly on the Focus Card and only the outer border and scrim frame it.
+ */
 .alloy-os-addcharge {
-  border: 1px solid var(--alloy-os-fp-card-border, #a6b2bd);
-  border-radius: 14px;
-  background: #fff;
-  padding: 14px 16px 15px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 480px;
+  min-width: 0;
 }
 .alloy-os-addcharge__title {
   margin: 0 0 3px;
@@ -1586,9 +1590,13 @@
   font-size: 8.5px;
   color: #b45309;
 }
+/*
+ * A VALUE IS NOT A HEADING. At 600 the Service Date and every stated value competed with the
+ * section heads above them, so the form read as a stack of titles. Normal control weight.
+ */
 .alloy-os-addcharge__field-value {
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--alloy-os-midnight, #273f52);
 }
 .alloy-os-addcharge__field-value[data-locked="true"] {
@@ -1614,12 +1622,13 @@
 .alloy-os-addcharge__input {
   width: 100%;
   min-width: 0;
-  padding: 2px 6px;
+  padding: 3px 7px;
   border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 16%, transparent);
   border-radius: 6px;
   background: transparent;
   font: inherit;
-  font-weight: 700;
+  /* Same weight as a stated value beside it — an input that shouts reads as the only thing to do. */
+  font-weight: 500;
   color: inherit;
 }
 
@@ -1760,4 +1769,24 @@
   margin-top: 2px;
   font-size: 0.72rem;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 50%, #64748b);
+}
+
+/* Two peer commands, sized to their labels, directly above the ledger they act on. */
+.alloy-os-fdetail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 2px;
+}
+.alloy-os-fdetail__actions > button {
+  min-width: 148px;
+}
+
+/* The utility link closes the card, bottom-right, out of the ledger's way. */
+.alloy-os-fdetail__utility {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
 }

@@ -111,6 +111,7 @@ export default function HealthFactCommand({
                 iconName="HeartPulse"
                 tier="work"
                 archetype="status"
+                modalClass="command"
                 density="expanded"
                 gridSpan="row"
                 data-universal-card-key="health_fact_command"

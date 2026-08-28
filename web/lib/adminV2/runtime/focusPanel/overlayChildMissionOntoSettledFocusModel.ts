@@ -202,7 +202,19 @@ export function overlayChildMissionOntoSettledFocusModel(
                       customerMemberId: childMemberId,
                       personId: null,
                       displayName: subjectLabel,
-                      imageUrl: trimOrNull(childRow?.photo_url) ?? null,
+                      /*
+                       * THE RESOLVED PHOTO FIRST — the signed, actor-scoped URL that actually
+                       * renders. `photo_url` is the stored document reference and is null on every
+                       * child, so reading it alone made this overlay overwrite a correctly resolved
+                       * scope with an empty image and drop the header back to initials for a child
+                       * whose photo the queue row beside it was already showing.
+                       */
+                      imageUrl:
+                          trimOrNull(commitCritical.subjectIdentityTruth?.["child.resolved_photo_url"])
+                          ?? trimOrNull(childRow?.resolved_photo_url)
+                          ?? trimOrNull(childRow?.photo_url)
+                          ?? settled.context.participantScope?.imageUrl
+                          ?? null,
                       stageKey: situation?.stageKey ?? null,
                       stageLabel: situation?.stageLabel ?? null,
                   }

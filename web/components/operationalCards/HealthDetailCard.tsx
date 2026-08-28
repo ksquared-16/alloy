@@ -64,6 +64,7 @@ export default function HealthDetailCard({
                 iconName="HeartPulse"
                 tier="context"
                 archetype="profile"
+                modalClass="workstation"
                 density="expanded"
                 gridSpan="row"
                 data-universal-card-key="health_detail"

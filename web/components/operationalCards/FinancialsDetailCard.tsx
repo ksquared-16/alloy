@@ -32,6 +32,9 @@ export default function FinancialsDetailCard({
     activeFilter = "all",
     activePayer = "All payers",
     activeSubject = "All",
+    onPayment,
+    onAddCharge,
+    onManagePayment,
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
@@ -45,6 +48,14 @@ export default function FinancialsDetailCard({
      */
     activePayer?: string;
     activeSubject?: string;
+    /**
+     * The detail's commands, when a host supplies them. `Payment` is one entry into the settle-what-
+     * is-owed operation rather than a permanent row of competing payment buttons; `Add charge`
+     * changes what is owed and stays its peer. Absent in the lab, where the controls are inert.
+     */
+    onPayment?: () => void;
+    onAddCharge?: () => void;
+    onManagePayment?: () => void;
 }) {
     const payerFilters = ["All payers", ...evidence.payers.map((p) => (p.funding ? "Funding" : p.name.split(" ")[0]!))];
     const { period, pastDue } = evidence;
@@ -60,6 +71,7 @@ export default function FinancialsDetailCard({
                 archetype="status"
                 statusChip={pastDue ? `${pastDue.amount} past due` : undefined}
                 statusTone="due"
+                modalClass="workstation"
                 density="expanded"
                 gridSpan="row"
                 data-universal-card-key="financials_detail"
@@ -74,27 +86,36 @@ export default function FinancialsDetailCard({
                     <Stat label="Next" value={evidence.payment.nextChargeLabel ?? "—"} />
                 </div>
 
-                <div className="alloy-os-fdetail__payers">
-                    {evidence.payers.map((p) => (
-                        <span key={p.name} className="alloy-os-fdetail__payer" data-funding={p.funding ? "true" : undefined}>
-                            <span className="alloy-os-billing__payer-name">{p.name}</span>
-                            <span className="alloy-os-billing__payer-share">{p.share}</span>
-                            <span className="alloy-os-billing__payer-method">{p.method}</span>
-                            {p.methodIssue ? (
-                                <span className="alloy-os-billing__method-issue">· {p.methodIssue}</span>
-                            ) : null}
-                        </span>
-                    ))}
-                    <FooterAction>Manage payment →</FooterAction>
-                </div>
+                {evidence.payers.length ? (
+                    <div className="alloy-os-fdetail__payers">
+                        {evidence.payers.map((p) => (
+                            <span key={p.name} className="alloy-os-fdetail__payer" data-funding={p.funding ? "true" : undefined}>
+                                <span className="alloy-os-billing__payer-name">{p.name}</span>
+                                <span className="alloy-os-billing__payer-share">{p.share}</span>
+                                <span className="alloy-os-billing__payer-method">{p.method}</span>
+                                {p.methodIssue ? (
+                                    <span className="alloy-os-billing__method-issue">· {p.methodIssue}</span>
+                                ) : null}
+                            </span>
+                        ))}
+                    </div>
+                ) : null}
 
-                {/* Mutations sit together; Manage payment is management/navigation and lives with
-                    the payer facts above, not as a peer command. */}
-                <ActionRow>
-                    <Action primary>Pay now</Action>
-                    <Action>Add charge</Action>
-                    <Action>Record payment</Action>
-                </ActionRow>
+                {/*
+                    TWO PEER ACTIONS, NOT THREE COMPETING BUTTONS.
+                    Pay now and Record payment are both ways INTO the same operation — settling what
+                    is owed — and giving each permanent equal real estate above the ledger spent a
+                    third of the header on a choice the operator has not made yet. `Payment` enters
+                    that operation and offers whichever variants are actually supported.
+                    `Add charge` stays a peer because it changes what is OWED rather than settling
+                    it, which is a different verb with a different consequence.
+                */}
+                <div className="alloy-os-fdetail__actions">
+                    <Action primary onClick={onPayment}>
+                        Payment
+                    </Action>
+                    <Action onClick={onAddCharge}>Add charge</Action>
+                </div>
 
                 {/* The ledger owns the detail. */}
                 <div className="alloy-os-billingdetail__ledgerband">
@@ -213,7 +234,14 @@ export default function FinancialsDetailCard({
                         ))}
                     </div>
                 </div>
-            </UniversalCard>
+                {/* A quiet utility link at the foot of the card — management, not a peer command,
+                    and deliberately the last thing on the surface rather than a button above the
+                    ledger competing with the work. */}
+                <div className="alloy-os-fdetail__utility">
+                    <FooterAction onClick={onManagePayment}>Manage payment →</FooterAction>
+                </div>
+
+                            </UniversalCard>
         </div>
     );
 }

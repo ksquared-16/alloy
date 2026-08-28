@@ -448,6 +448,10 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         openPeriodKey: vm.period.key,
                     })}
                     activeSubject={subjectFilter === "all" ? "All" : subjectFilter}
+                    /* `Payment` enters the settle operation; the platform exposes no payment
+                       command from this lane yet, so it is passed undefined and the control is
+                       inert rather than lying about what it will do. */
+                    onAddCharge={() => setOverlay("add_charge")}
                 />
             </div>
         );

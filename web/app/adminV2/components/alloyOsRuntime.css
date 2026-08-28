@@ -3409,46 +3409,83 @@ html[data-alloy-os-runtime-split="true"]
 }
 
 /*
- * WORKSTATION DETAIL — an elevated card at EXPANDED density gets real room.
+ * ══ THE THREE ELEVATED MODAL CLASSES ══════════════════════════════════════════
  *
- * The default elevated card is 720px, which is right for a focused single-answer card
- * (Assignments, Household). It is not right for a detail card that carries a filtered ledger with
- * eight columns, or a health record in three columns: at 720px the Financials ledger rendered its
- * DESCRIPTION header on top of its own values, and the summary strip had nowhere to lay out.
+ * The default elevated card is 720px, which is right for a focused single-answer card that
+ * declares no class. Cards that DO declare one get a deliberate size, and the hierarchy is the
+ * point: an operator should be able to tell what kind of thing opened from its size alone.
  *
- * This is the existing DENSITY system doing the work — `data-universal-card-density="expanded"` is
- * what the detail cards already declare — not a Financials-only fixed-position modal. Every detail
- * card gets the same host, so there is one answer to "how big is an expanded card".
+ *   command      560px   a focused mutation. Small on purpose — a short form in a workstation
+ *                        reads as a document, not as a command.
+ *   record       880px   an entity's detail. Enough for structured two-column content.
+ *   workstation 1180px   a working surface. A filtered ledger with eight columns, or a health
+ *                        record in three columns, IS the work.
  *
- * Roughly 2x the usable area: 1180px wide against 720px, and 88vh of height against 75vh. Still
- * centered, still scrimmed, still capped against the viewport so it cannot overflow, and still
- * `min(..., calc(100% - 32px))` so a narrow canvas simply gets a narrower card.
+ * All three stay centered, scrimmed, capped against the viewport, and `min(..., 100% - 32px)` so a
+ * narrow canvas simply yields a narrower card. This is the shared host: no card sets its own
+ * geometry, and there is no Financials-specific or Health-specific modal anywhere.
  */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-  .alloy-os-ucard[data-universal-card-density="expanded"] {
+  .alloy-os-ucard[data-universal-card-modal="command"] {
+  width: min(var(--alloy-os-focus-panel-command-max-width, 560px), calc(100% - 32px));
+  max-height: min(76vh, calc(100dvh - 64px));
+  top: 22px;
+}
+
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard[data-universal-card-modal="record"] {
+  width: min(var(--alloy-os-focus-panel-record-max-width, 880px), calc(100% - 32px));
+  max-height: min(84vh, calc(100dvh - 56px));
+  top: 20px;
+}
+
+/*
+ * The workstation reaches close to the usable bottom of the panel while keeping a real margin.
+ * 96vh against the 88vh it carried before — the ledger was the thing being squeezed, and height is
+ * the axis that gives it rows rather than columns.
+ */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard[data-universal-card-modal="workstation"] {
   width: min(var(--alloy-os-focus-panel-detail-max-width, 1180px), calc(100% - 32px));
-  max-height: min(88vh, calc(100dvh - 48px));
-  top: 16px;
+  max-height: min(96vh, calc(100dvh - 28px));
+  top: 12px;
 }
 
 /*
  * And the BODY has to be allowed to use that room.
  *
  * `.alloy-os-ucard--expanded .alloy-os-ucard__body` caps at min(360px, 45vh) — right for an
- * expanded card sitting in the grid, and the reason the taller host changed nothing at first: the
- * card grew and the body stayed 360px, so the ledger was still clipped one row in, with Upcoming
- * below the fold.
+ * expanded card sitting in the grid, and the reason a taller host changed nothing at first: the
+ * card grew and the body stayed 360px, so the ledger was clipped one row in.
  *
- * Inside the elevated host the card's own max-height is the cap, so the body takes what is left
+ * Inside the elevated host the card's own max-height is the cap and the body takes what is left
  * after the header. It still scrolls — internal scrolling where genuinely necessary — but only
- * once the content exceeds a nearly full-height workstation card rather than a 360px box.
+ * once content exceeds a nearly full-height card rather than a 360px box.
  */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
-  .alloy-os-ucard[data-universal-card-density="expanded"]
+  .alloy-os-ucard[data-universal-card-modal="workstation"]
   .alloy-os-ucard__body {
-  max-height: calc(min(88vh, 100dvh - 48px) - 108px);
+  max-height: calc(min(96vh, 100dvh - 28px) - 104px);
+  overflow-y: auto;
+}
+
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard[data-universal-card-modal="record"]
+  .alloy-os-ucard__body {
+  max-height: calc(min(84vh, 100dvh - 56px) - 104px);
+  overflow-y: auto;
+}
+
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard[data-universal-card-modal="command"]
+  .alloy-os-ucard__body {
+  max-height: calc(min(76vh, 100dvh - 64px) - 104px);
   overflow-y: auto;
 }
 
