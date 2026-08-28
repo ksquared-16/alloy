@@ -26,9 +26,9 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
-    COMPOSER_GRID_GAP_PX,
-    COMPOSER_GRID_ROW_UNIT_PX,
+    composerCellFromOffset,
     composerGhostBounds,
+    composerGridMetrics,
     defaultRowSpanForCard,
     gridFromPublishedLayout,
     moveArea,
@@ -303,17 +303,25 @@ export default function FocusPanelRuntimeComposerCanvas({
         [vm.entity.id, record],
     );
 
+    /*
+     * Pointer → cell, measured against the grid's OWN box and converted by the one
+     * geometry owner. Reading the rect on every call rather than caching it is
+     * deliberate: the canvas scrolls and reflows while a drag is in flight, and a
+     * cached rect is exactly the stale geometry that made a drop land somewhere the
+     * ghost never showed.
+     */
     const cellFromPointer = useCallback(
         (clientX: number, clientY: number) => {
             const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
             const el = canvas ?? gridContainerRef.current;
             if (!el) return { col: 1, row: 1 };
             const r = el.getBoundingClientRect();
-            const colW = r.width / cols;
-            const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
-            const col = Math.min(cols, Math.max(1, Math.floor((clientX - r.left) / colW) + 1));
-            const row = Math.max(1, Math.floor((clientY - r.top) / rowUnit) + 1);
-            return { col, row };
+            return composerCellFromOffset({
+                offsetX: clientX - r.left,
+                offsetY: clientY - r.top,
+                surfaceWidthPx: r.width,
+                columns: cols,
+            });
         },
         [cols],
     );
@@ -405,24 +413,22 @@ export default function FocusPanelRuntimeComposerCanvas({
         const move = (ev: globalThis.PointerEvent) => {
             if (!measureEl) return;
             const r = measureEl.getBoundingClientRect();
-            const colW = r.width / cols;
-            const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
+            const m = composerGridMetrics(r.width, cols);
             const colSpan =
-                axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / colW) - area.colStart + 1);
+                axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / m.columnPitch) - area.colStart + 1);
             const rowSpan =
-                axis === "w" ? area.rowSpan : Math.max(1, Math.round((ev.clientY - r.top) / rowUnit) - area.rowStart + 1);
+                axis === "w" ? area.rowSpan : Math.max(1, Math.round((ev.clientY - r.top) / m.rowPitch) - area.rowStart + 1);
             const next = clampArea(grid, { ...area, colSpan, rowSpan });
             setGhost({ colStart: next.colStart, colSpan: next.colSpan, rowStart: next.rowStart, rowSpan: next.rowSpan });
         };
         const up = (ev: globalThis.PointerEvent) => {
             if (measureEl) {
                 const r = measureEl.getBoundingClientRect();
-                const colW = r.width / cols;
-                const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
+                const m = composerGridMetrics(r.width, cols);
                 const colSpan =
-                    axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / colW) - area.colStart + 1);
+                    axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / m.columnPitch) - area.colStart + 1);
                 const rowSpan =
-                    axis === "w" ? area.rowSpan : Math.max(1, Math.round((ev.clientY - r.top) / rowUnit) - area.rowStart + 1);
+                    axis === "w" ? area.rowSpan : Math.max(1, Math.round((ev.clientY - r.top) / m.rowPitch) - area.rowStart + 1);
                 applyGrid(resizeArea(grid, area.card, colSpan, rowSpan));
             }
             setGhost(null);
@@ -458,7 +464,34 @@ export default function FocusPanelRuntimeComposerCanvas({
         // The density is part of the placement, so it is recorded with it rather than left to the
         // card's default — a Compact choice that renders as Summary is not a choice.
         if (placement?.density) onCardDensityChange?.(card, placement.density);
+        /*
+         * ADDING MUST BE VISIBLY CAUSAL.
+         *
+         * The grid gained a card and nothing else happened: on a long Surface the new
+         * card landed below the fold, so "I clicked Financials" produced no observable
+         * effect and the operator clicked again. Selecting it makes the inspector
+         * follow the add, and scrolling to it makes the placement legible — the packer
+         * already chose a real position, this only takes the operator there.
+         */
+        onSelectCard?.(card);
+        setJustAdded(card);
     };
+
+    /*
+     * Scroll to the newly placed card AFTER the grid has laid it out. Resolving its
+     * position in the same tick would read the geometry the card had before it
+     * existed, which is the same class of staleness the drag path had to fix.
+     */
+    const [justAdded, setJustAdded] = useState<FocusPanelCardKey | null>(null);
+    useEffect(() => {
+        if (!justAdded) return;
+        const frame = requestAnimationFrame(() => {
+            const cell = gridContainerRef.current?.querySelector(`[data-fp-composer-cell="${justAdded}"]`);
+            cell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            setJustAdded(null);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [justAdded]);
 
     const renderComposerCell = useCallback(
         (cellKey: string) => {
@@ -498,6 +531,9 @@ export default function FocusPanelRuntimeComposerCanvas({
                             : undefined
                     }
                 >
+                    {/* The AUTHORED placement travels into the preview, so a card whose
+                        presentation changes with its size — Financials Compact vs Summary —
+                        previews the presentation actually being placed. */}
                     <FocusPanelCardRenderer
                         model={model}
                         context={previewContext}
@@ -505,6 +541,12 @@ export default function FocusPanelRuntimeComposerCanvas({
                         coordination={coordination}
                         mutation={mutation}
                         compat={{ onSelectTab: () => {} }}
+                        authoringPreview={{
+                            columns: area?.colSpan ?? null,
+                            // `composeEffectiveCardModel` has already folded the authored
+                            // appearance density onto the model, so this IS the effective one.
+                            density: model.density ?? null,
+                        }}
                     />
                 </ComposerCellShell>
             );
@@ -539,6 +581,42 @@ export default function FocusPanelRuntimeComposerCanvas({
             data-fp-composer-edit-mode={composer?.drillIn ? "true" : undefined}
             data-fp-composer-depth-active={activeDepth ? "true" : undefined}
         >
+            {/* ADD CARD LEADS THE FLOW: add → place → configure → publish.
+                It used to sit under the canvas, so adding a second card to a long
+                Surface meant scrolling past everything already authored to reach the
+                control that adds more. */}
+            {tray.length > 0 ?
+                <div className="alloy-os-fp-composer__tray" data-fp-composer-tray="true" data-fp-composer-tray-position="top">
+                    <Plus className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />
+                    <span className="alloy-os-fp-composer__tray-label">Add card</span>
+                    {tray.map((c) => (
+                        <button
+                            // A variant is keyed by identity AND shape: Financials appears twice in
+                            // the tray, once per placement, and both are the same `cardKey`.
+                            key={`${c.key}:${c.variantLabel ?? "default"}`}
+                            type="button"
+                            className="alloy-os-fp-composer__chip"
+                            data-fp-composer-add-card={c.key}
+                            data-fp-composer-variant={c.variantLabel ?? undefined}
+                            data-fp-composer-columns={c.columns ?? undefined}
+                            title={trayName(c)}
+                            onClick={() => onAddCard(c.key, { colSpan: c.columns, density: c.density })}
+                        >
+                            {/*
+                              * THE PRODUCT NAME, AND NOTHING ELSE.
+                              *
+                              * The chip used to carry "6/12" beside every label. An operator
+                              * choosing a card is choosing a card, not a track count — and the
+                              * number was the internal grid primitive leaking into the product.
+                              * Where a card genuinely has two presentations, the DIFFERENCE is
+                              * named in operator language ("Financials — Compact"); the columns
+                              * still travel with the choice, silently, as its default placement.
+                              */}
+                            <span className="alloy-os-fp-composer__chip-label">{trayName(c)}</span>
+                        </button>
+                    ))}
+                </div>
+            :   null}
             <section
                 className="alloy-os-fp-composer__panel flex min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-sm"
                 aria-label="Focus Panel composer preview"
@@ -608,40 +686,23 @@ export default function FocusPanelRuntimeComposerCanvas({
                 </div>
             </section>
 
-            {tray.length > 0 ?
-                <div className="alloy-os-fp-composer__tray" data-fp-composer-tray="true">
-                    <Plus className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />
-                    <span className="alloy-os-fp-composer__tray-label">Add card</span>
-                    {tray.map((c) => (
-                        <button
-                            // A variant is keyed by identity AND shape: Financials appears twice in
-                            // the tray, once per placement, and both are the same `cardKey`.
-                            key={`${c.key}:${c.variantLabel ?? "default"}`}
-                            type="button"
-                            className="alloy-os-fp-composer__chip"
-                            data-fp-composer-add-card={c.key}
-                            data-fp-composer-variant={c.variantLabel ?? undefined}
-                            data-fp-composer-columns={c.columns ?? undefined}
-                            title={
-                                c.variantLabel ?
-                                    `${c.label} — ${c.variantLabel}, ${c.columns ?? 6} of 12 columns`
-                                :   `${c.label} — ${c.columns ?? 6} of 12 columns`
-                            }
-                            onClick={() => onAddCard(c.key, { colSpan: c.columns, density: c.density })}
-                        >
-                            <span className="alloy-os-fp-composer__chip-label">{c.label}</span>
-                            {/* The consequence of the choice, on the chip: an operator picking
-                                between two Financials placements can see which is which. */}
-                            <span className="alloy-os-fp-composer__chip-shape">
-                                {c.variantLabel ? `${c.variantLabel} · ` : ""}
-                                {c.columns ?? 6}/12
-                            </span>
-                        </button>
-                    ))}
-                </div>
-            :   null}
         </div>
     );
+}
+
+/**
+ * The operator-facing name of a tray entry.
+ *
+ * A variant is a different PRESENTATION of the same card, so it reads as one:
+ * "Financials" and "Financials — Compact". Never "Financials 4/12" — the span is
+ * how the platform places it, not what the operator is choosing.
+ */
+function trayName(entry: { label: string; variantLabel?: string }): string {
+    const variant = entry.variantLabel?.trim();
+    if (!variant) return entry.label;
+    // A variant that merely restates the card's default placement adds nothing.
+    if (variant.toLowerCase() === "summary") return entry.label;
+    return `${entry.label} — ${variant}`;
 }
 
 function findAreaForCard(grid: FocusPanelGridLayout, card: FocusPanelCardKey): FocusPanelGridArea | undefined {

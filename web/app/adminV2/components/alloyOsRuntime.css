@@ -5713,9 +5713,17 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-fp-composer-cell__drag-bar {
   position: absolute;
   top: 0;
-  left: 34px;
-  /* Leave clear space for the top-right Configure toolbar so drag doesn't steal hits. */
-  right: 156px;
+  /*
+   * THE HANDLE MUST SURVIVE A NARROW CARD.
+   *
+   * Fixed insets of 34px and 156px consumed 190px of the cell. A 4/12 card kept a
+   * usable bar; a 2/12 card had none at all — the handle's computed width went to
+   * zero and the card simply could not be picked up. The gutters are proportional
+   * now, so every card keeps a real grab target, and the Configure toolbar keeps
+   * clear space on the cards wide enough to have one.
+   */
+  left: min(34px, 10%);
+  right: clamp(44px, 34%, 156px);
   height: 34px;
   z-index: 6;
   cursor: grab;
