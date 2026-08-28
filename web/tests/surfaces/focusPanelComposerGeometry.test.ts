@@ -16,6 +16,10 @@ import {
     composerCellFromOffset,
     composerGhostBounds,
     composerGridMetrics,
+    parseTrackSizes,
+    spanBounds,
+    trackEdges,
+    trackFromOffset,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 
 const W = 1200;
@@ -106,5 +110,91 @@ describe("composer grid metrics", () => {
         expect(Number.isFinite(cell.col)).toBe(true);
         expect(cell.col).toBeGreaterThanOrEqual(1);
         expect(cell.col).toBeLessThanOrEqual(COLS);
+    });
+});
+
+
+/**
+ * MEASURED TRACKS — the geometry that survives content-sized rows.
+ *
+ * These sizes are the real ones read off the live canvas: a fixed 76px row could
+ * not grow, so Financials overflowed its 162px area by 309px and painted over
+ * Health & Safety. With content-sized rows there is no constant pitch left to
+ * assume, so every conversion has to come from the browser's own resolved tracks.
+ */
+describe("measured track geometry", () => {
+    const GAP = COMPOSER_GRID_GAP_PX;
+    // Mixed heights, exactly the case a constant pitch cannot describe.
+    const ROWS = [76, 239, 76, 471, 350, 76];
+
+    it("parses a computed track list and ignores anything that is not a length", () => {
+        expect(parseTrackSizes("76px 239px 76px")).toEqual([76, 239, 76]);
+        expect(parseTrackSizes("")).toEqual([]);
+        expect(parseTrackSizes(null)).toEqual([]);
+        expect(parseTrackSizes("auto min-content")).toEqual([]);
+    });
+
+    it("edges accumulate each track plus the gap that follows it", () => {
+        const edges = trackEdges(ROWS, GAP);
+        expect(edges[0]).toBe(0);
+        expect(edges[1]).toBe(76 + GAP);
+        expect(edges[2]).toBe(76 + GAP + 239 + GAP);
+        expect(edges).toHaveLength(ROWS.length + 1);
+    });
+
+    it("an offset resolves to the track that actually contains it, at every height", () => {
+        const edges = trackEdges(ROWS, GAP);
+        for (let i = 0; i < ROWS.length; i += 1) {
+            const start = edges[i]!;
+            expect(trackFromOffset(start + 1, edges, 86)).toBe(i + 1);
+            expect(trackFromOffset(start + ROWS[i]! - 1, edges, 86)).toBe(i + 1);
+        }
+    });
+
+    it("a constant pitch would get the tall rows wrong — which is the defect", () => {
+        const edges = trackEdges(ROWS, GAP);
+        // The 5th row starts at 76+239+76+471 + 4 gaps = 902.
+        const fifthStart = edges[4]!;
+        expect(trackFromOffset(fifthStart + 5, edges, 86)).toBe(5);
+        // The old constant-pitch model would have called that row 11.
+        expect(Math.floor((fifthStart + 5) / 86) + 1).not.toBe(5);
+    });
+
+    it("below the last track the index continues, so a card can always be dropped at the end", () => {
+        const edges = trackEdges(ROWS, GAP);
+        const past = edges[edges.length - 1]! + 200;
+        expect(trackFromOffset(past, edges, 86)).toBeGreaterThan(ROWS.length);
+    });
+
+    it("a negative or pre-layout offset resolves to the first track, never NaN", () => {
+        expect(trackFromOffset(-50, trackEdges(ROWS, GAP), 86)).toBe(1);
+        expect(trackFromOffset(10, [0], 86)).toBe(1);
+        expect(Number.isFinite(trackFromOffset(10, [], 86))).toBe(true);
+    });
+
+    it("a span covers its tracks and the gaps between them, and stops before the next", () => {
+        const edges = trackEdges(ROWS, GAP);
+        const two = spanBounds(2, 2, edges, GAP, 86);
+        expect(two.offset).toBe(edges[1]);
+        expect(two.size).toBe(239 + GAP + 76);
+        const one = spanBounds(4, 1, edges, GAP, 86);
+        expect(one.size).toBe(471);
+    });
+
+    it("a span past the measured tracks extrapolates rather than collapsing to zero", () => {
+        const edges = trackEdges(ROWS, GAP);
+        const beyond = spanBounds(ROWS.length + 3, 2, edges, GAP, 86);
+        expect(beyond.size).toBeGreaterThan(0);
+        expect(beyond.offset).toBeGreaterThan(edges[edges.length - 1]!);
+    });
+
+    it("the ghost and the drop resolve to the same band, at every row", () => {
+        // The property that matters: what the operator is shown is where the card lands.
+        const edges = trackEdges(ROWS, GAP);
+        for (let row = 1; row <= ROWS.length; row += 1) {
+            const bounds = spanBounds(row, 1, edges, GAP, 86);
+            expect(trackFromOffset(bounds.offset + 1, edges, 86)).toBe(row);
+            expect(trackFromOffset(bounds.offset + bounds.size - 1, edges, 86)).toBe(row);
+        }
     });
 });

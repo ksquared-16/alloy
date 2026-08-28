@@ -315,6 +315,86 @@ export function snapMoveTarget(
 }
 
 /**
+ * MEASURED TRACK GEOMETRY — the composer's real coordinate system.
+ *
+ * ── WHY MEASURED, AND NOT COMPUTED ──
+ *
+ * The composer used to pin its rows to a fixed 76px so pointer maths could assume
+ * a constant pitch. That assumption bought arithmetic and paid for it in truth: a
+ * card whose content is taller than `rowSpan × 76` cannot make a fixed row grow,
+ * so it OVERFLOWED its grid area and painted over whatever was declared beneath
+ * it. Measured on the live canvas, Financials overflowed its 162px area by 309px
+ * and covered Health & Safety by 298px; Attendance covered Financials by 221px.
+ * The declared areas never overlapped — the rendered cards did, which is what an
+ * operator sees and what QA kept reporting.
+ *
+ * It also broke dragging in exactly the reported way. The grab offset is
+ * `pointerRow − area.rowStart`; over a card that visually spans six rows while
+ * declaring two, that offset is large and wrong, so the drop landed far below
+ * ("snaps back toward the bottom") and upward moves clamped at row 1 and were
+ * then pushed back down by collision snapping ("some cards refuse to move up").
+ *
+ * The rows are content-sized now, like the runtime's. That removes the overflow —
+ * and it also removes the constant pitch, so geometry can no longer be computed
+ * from a constant at all. It is read from the browser's own resolved track sizes
+ * (`getComputedStyle().gridTemplateRows` returns used px, implicit rows included),
+ * which is the only description of the canvas that is true by construction.
+ */
+export function trackEdges(sizes: readonly number[], gapPx: number): number[] {
+    const edges: number[] = [0];
+    for (let i = 0; i < sizes.length; i += 1) {
+        edges.push(edges[i]! + (sizes[i] ?? 0) + gapPx);
+    }
+    return edges;
+}
+
+/** Parse a computed track list ("76px 120px …") into numbers. PURE. */
+export function parseTrackSizes(computed: string | null | undefined): number[] {
+    return String(computed ?? "")
+        .split(/\s+/)
+        .map((t) => Number.parseFloat(t))
+        .filter((n) => Number.isFinite(n) && n >= 0);
+}
+
+/**
+ * Offset → 1-based track index, against MEASURED edges.
+ *
+ * Past the last measured track the index continues on the last track's pitch:
+ * dropping below every existing row is a legitimate move (append to the end), and
+ * refusing it would be the "cannot move to the bottom" defect in the other
+ * direction.
+ */
+export function trackFromOffset(offset: number, edges: readonly number[], fallbackPitch: number): number {
+    if (offset < 0 || edges.length < 2) return 1;
+    for (let i = 0; i < edges.length - 1; i += 1) {
+        if (offset < edges[i + 1]!) return i + 1;
+    }
+    const last = edges[edges.length - 1]!;
+    const pitch = fallbackPitch > 0 ? fallbackPitch : COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
+    return edges.length - 1 + Math.max(0, Math.floor((offset - last) / pitch)) + 1;
+}
+
+/** Pixel span of `[start, start+span)` over measured edges. PURE. */
+export function spanBounds(
+    start: number,
+    span: number,
+    edges: readonly number[],
+    gapPx: number,
+    fallbackPitch: number,
+): { offset: number; size: number } {
+    const at = (index: number) => {
+        if (index < edges.length) return edges[index]!;
+        const last = edges[edges.length - 1] ?? 0;
+        const pitch = fallbackPitch > 0 ? fallbackPitch : COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
+        return last + (index - (edges.length - 1)) * pitch;
+    };
+    const offset = at(Math.max(0, start - 1));
+    const end = at(Math.max(0, start - 1 + Math.max(1, span)));
+    // The trailing gap belongs to the next track, not to this span.
+    return { offset, size: Math.max(0, end - offset - gapPx) };
+}
+
+/**
  * THE ONE OWNER OF COMPOSER GRID GEOMETRY.
  *
  * ── THE DEFECT THIS REPLACES ──
