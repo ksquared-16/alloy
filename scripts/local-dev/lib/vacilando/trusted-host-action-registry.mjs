@@ -334,6 +334,10 @@ function defineRetireWorktree() {
           worktreeParent: inputs.worktreeParent || null,
           canonicalRoot: inputs.canonicalRoot || null,
           requestingWorktree: inputs.requestingWorktree || null,
+          // Normalisation DROPS anything it does not name. Omitting this sent
+          // the executor to its runtimeRoot() fallback, which is where the
+          // undefined helper above was hiding.
+          runtimeRoot: inputs.runtimeRoot || null,
         },
       };
     },

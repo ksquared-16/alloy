@@ -75,8 +75,19 @@ const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
  * variable and its writes land in its own directory, and can never contaminate the production store.
  */
 function storeDir() {
-  const root = process.env.ALLOY_RUNTIME_ROOT?.trim() || RUNTIME_ROOT;
-  return join(root, "vacilando", "trusted-host-actions");
+  return join(runtimeRoot(), "vacilando", "trusted-host-actions");
+}
+/**
+ * The runtime state root.
+ *
+ * Two executors already called runtimeRoot() as a fallback and NOTHING DEFINED
+ * IT. The reconciliation path never noticed because its CLI always sends
+ * inputs.runtimeRoot, so `inputs.runtimeRoot || runtimeRoot()` short-circuited
+ * and the right-hand side was never evaluated. A latent ReferenceError sitting
+ * behind an `||`, waiting for the first caller whose inputs omitted the key.
+ */
+function runtimeRoot() {
+  return process.env.ALLOY_RUNTIME_ROOT?.trim() || RUNTIME_ROOT;
 }
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUN_SQL_SH = join(HERE, "trusted-host-run-sql.sh");

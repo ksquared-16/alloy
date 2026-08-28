@@ -624,3 +624,29 @@ await test("NC38 — the requester identity comes from the record, in every cons
     "defaultExecute must take the requester from the record",
   );
 });
+
+await test("NC39 — every executor fallback identifier actually resolves", () => {
+  // The live defect: `action.inputs?.runtimeRoot || runtimeRoot()` appeared in
+  // two executors and runtimeRoot was never defined in that module. The
+  // reconciliation CLI always sends inputs.runtimeRoot, so the `||`
+  // short-circuited and the ReferenceError stayed latent until the first caller
+  // whose normalised inputs omitted the key — which was retirement, because
+  // validateInputs drops whatever it does not name.
+  const src = readFileSync(new URL("../lib/vacilando/trusted-host-actions.mjs", import.meta.url), "utf8");
+  const used = [...src.matchAll(/\|\|\s*([a-zA-Z_$][\w$]*)\(\)/g)].map((m) => m[1]);
+  for (const fn of new Set(used)) {
+    const defined = new RegExp(`(function\\s+${fn}\\s*\\(|const\\s+${fn}\\s*=|\\b${fn}\\b[^\\n]*from\\s+")`).test(src);
+    assert.ok(defined, `${fn}() is used as a fallback but is not defined or imported in trusted-host-actions.mjs`);
+  }
+});
+
+await test("NC40 — normalised retirement inputs keep the runtime root", () => {
+  const def = REG.getActionDefinition("vacilando.retire_worktree");
+  const out = def.validateInputs({
+    repository: "repo_alloy", worktree: "wt-old", branch: "b",
+    headSha: "a".repeat(40), safetyFingerprint: "b".repeat(32), s7State: "retirable",
+    runtimeRoot: "/some/root",
+  });
+  assert.equal(out.ok, true);
+  assert.equal(out.normalized.runtimeRoot, "/some/root");
+});
