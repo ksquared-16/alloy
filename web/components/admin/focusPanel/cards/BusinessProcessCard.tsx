@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -12,6 +12,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buildBusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
 import { adaptBusinessProcessEvidenceToProcessCard } from "@/lib/adminV2/runtime/focusPanel/businessProcess/adaptBusinessProcessEvidenceToProcessCard";
+import {
+    projectProcessCardCommands,
+    type ProcessCardCommand,
+} from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
+import { logProcessCardCommandDrift } from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
+import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
 import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import { currentWorkActivityRowKey } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActivityRowKey";
@@ -76,30 +82,89 @@ export default function BusinessProcessCard({ model, context, receded = false, c
     );
 
     /*
-     * CANONICAL ACTIONS, RESOLVED BY THE PROVIDER.
+     * THE COMMANDS THE PUBLISHED PROCESS CONFIGURED — and emphatically not the record-header list.
      *
-     * Business Process replaced Journey + What's Next precisely so progression and the work's
-     * commands live together, and the card was rendering no actions at all. These are the registry's
-     * own resolved actions for this record — primary first, then secondary — never a hardcoded
-     * Waitlist button. The registry decides emphasis; the card only renders it.
+     * This card read `context.recordHeaderActions`: the registry's generic record-header slots,
+     * resolved from what is executable for the record. Nothing in that list is aware of the
+     * published Business Process, so the card offered commands the configuration never selected,
+     * in the registry's order, with emphasis this file invented (`i === 0`). The two
+     * responsibilities were reversed — the platform was choosing the set, and the configuration was
+     * not consulted at all.
+     *
+     * `projectProcessCardCommands` restores the boundary: the published revision decides WHICH
+     * commands and in WHAT ORDER, and the action/capability platform decides whether each one can
+     * run right now. Both verdicts arrive decided; this file adds neither.
      */
-    const actions = useMemo(() => {
-        const slots = context.recordHeaderActions ?? null;
-        if (!slots) return [];
-        return [
-            /*
-             * EXACTLY ONE FILLED ACTION.
-             *
-             * The registry's `primary` slot can hold several, and marking all of them primary put
-             * two filled green buttons side by side — the approved specimen fills one and outlines
-             * the rest. Emphasis is a ranking, not a category: if everything is primary, nothing is.
-             * The registry still decides the ORDER and which action leads; this only decides how
-             * many earn the fill.
-             */
-            ...(slots.primary ?? []).map((a, i) => ({ key: a.key, label: a.label, primary: i === 0 })),
-            ...(slots.secondary ?? []).map((a) => ({ key: a.key, label: a.label, primary: false })),
-        ];
-    }, [context.recordHeaderActions]);
+    const projection = useMemo(() => projectProcessCardCommands(context), [context]);
+
+    /*
+     * EXECUTION IS THE SHARED HOST'S. The card plans through the platform's own planner and hands
+     * the result to the existing chrome — the Current Work command workspace for capability
+     * surfaces, the record command host for registry-resolved actions. There is no Process-specific
+     * command panel, and no key-switching here: `planCurrentWorkActionExecution` owns that.
+     */
+    const invoke = useCallback(
+        (command: ProcessCardCommand) => {
+            const plan = planCurrentWorkActionExecution(command.action);
+            switch (plan.kind) {
+                case "blocked":
+                case "unsupported":
+                    // Already rendered as unavailable with this reason. Never substitute another command.
+                    return;
+                case "record_outcome":
+                    coordination?.openCurrentWorkWorkspace?.({ kind: "record_outcome" });
+                    return;
+                case "communications_composer": {
+                    const composer = coordination?.resolveCommunicationsComposerAction?.() ?? null;
+                    if (composer) coordination?.invokeHeaderAction?.(composer);
+                    return;
+                }
+                case "header_delegate": {
+                    const resolved = plan.action.resolved;
+                    if (resolved) {
+                        coordination?.invokeHeaderAction?.(resolved);
+                        return;
+                    }
+                    coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
+                    return;
+                }
+                default:
+                    // The shared command workspace resolves the SAME configured command by identity.
+                    coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
+            }
+        },
+        [coordination],
+    );
+
+    const actions = useMemo(
+        () =>
+            projection.commands.map((command) => ({
+                key: command.key,
+                label: command.label,
+                primary: command.prominence === "primary",
+                disabled: command.status !== "executable",
+                disabledReason: command.unavailableReason,
+                onInvoke: () => invoke(command),
+            })),
+        [projection.commands, invoke],
+    );
+
+    /*
+     * DRIFT IS REPORTED, NEVER RENDERED. A configured command whose action is no longer registered
+     * would otherwise vanish silently and read as "the process configures nothing" — a different
+     * and false statement. It stays off the card face (an operator must never read a platform
+     * limitation as a command) and becomes an observable configuration fault instead.
+     */
+    useEffect(() => {
+        if (!projection.drift.length) return;
+        for (const row of projection.drift) {
+            logProcessCardCommandDrift({
+                processKey: context.businessProcess.key ?? null,
+                stageKey: context.businessProcess.stageKey ?? null,
+                ...row,
+            });
+        }
+    }, [projection.drift, context.businessProcess.key, context.businessProcess.stageKey]);
 
     const processEvidence = useMemo(
         () =>
