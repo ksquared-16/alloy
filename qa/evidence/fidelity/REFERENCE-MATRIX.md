@@ -292,3 +292,63 @@ Until that migration is applied, `resolveChargeSubject` and `childcareChargeServ
 be changed to accept a customer source: a charge carrying
 `billable_source_type = 'customer'` fails at insert against the current CHECK, so the code
 would be unrunnable and uncertifiable. Not written, and not faked.
+
+---
+
+# Surface Builder closure
+
+Brokered typecheck rc=0. Certified at 1920×1200 on `/organization/surfaces?section=focus-panels`.
+
+## Canonical authorable card list (derived, 20 options / 19 identities)
+
+Business Process 12/12 · Household 4/12 · Children 6/12 · Employment 6/12 · Staff 6/12 ·
+Attendance 8/12 · **Financials — Summary 8/12** · **Financials — Compact 4/12** ·
+Health & Safety 4/12 · Milestones 4/12 · Readiness 4/12 · Tour 4/12 · Communications 6/12 ·
+Documents 4/12 · Why Now 4/12 · Required Information 4/12 · Current Mission 6/12 ·
+Timeline 6/12 · Notes 4/12 · Assignments 4/12
+
+## Predecessor / non-operational cards hidden from new authoring
+
+| Key | Reason (derived or declared) |
+|---|---|
+| `current_work` | Superseded by Business Process — read from `successorForDeclaration`, not a list |
+| `billing_preview` | Configuration question, not an operational peer of Financials. **Still renders on existing layouts** |
+| `child_identity` | The durable child composes as the one member of its own Children collection |
+| `health` | Enrollment Health is a pipeline metric, not the child's health record |
+
+## Density variants
+
+Financials only — the one card with two implemented presentations. Both store the same
+canonical `cardKey`; the density persists through `appearance.density`, the same per-card
+config path the inspector writes. No `financials_compact` identity was invented.
+
+## Preview source
+
+The production components. Every composer cell renders a real card
+(`data-universal-card="true"` with its own key and density) — certified for all 7 placed
+cards. Not a thumbnail, not a second mock.
+
+## Drag / snap certification
+
+`tests/surfaces/focusPanelGridPacking.test.ts` — 7 cases on the pure ops:
+8/12+4/12 no gap · two 6/12 · three 4/12 · new row only when nothing fits · full-row card
+alone · no overlap when a taller card meets a one-row gap · remove-and-repack.
+
+## Published layout revision tested
+
+**v134 → v135.** Added Readiness in the builder, published, reloaded: card set preserved
+exactly (`PRESERVED EXACTLY: true`). The published layout served at
+`/api/admin/entity-layouts/focus-panel-summary` carries `readiness_kpi`.
+
+## Financials Details final action geometry
+
+Card 1180×597. Facts and actions on the SAME row of one rollup — facts x=616 y=384,
+actions x=1402 **y=384** (top-right). Ledger 158px from the card top. `Manage payment →` at
+the foot. Exactly two action labels: `Payment`, `Add charge`.
+
+## Not certifiable here, and why
+
+**Authored → runtime match (§7.8).** The published layout is correct and is fetched, but
+every queue lens in this tenant resolves CHILD grain, where the code composition governs by
+design — the runtime rendered `scheduling` (code) and not `readiness_kpi` (published). This
+needs a genuine case-grain lens to certify and is not a defect in anything changed here.

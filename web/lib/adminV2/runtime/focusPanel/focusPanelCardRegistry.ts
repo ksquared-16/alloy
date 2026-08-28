@@ -247,7 +247,15 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * The grain concern remains the gate. A card reaches the person grain because it is declared
      * here — never because a component decided it could.
      */
-    { key: "scheduling", ownsOperationalTruth: true, grains: ["opportunity", "child", "person"] },
+    /*
+     * "Assignments" — the name the card renders and the name an operator picks it by.
+     *
+     * With no title the registry fell back to humanising the KEY, so the Surface Builder offered
+     * this card as "scheduling" while the runtime card headed itself ASSIGNMENTS. A card an
+     * operator cannot recognise between the library and the panel is the same drift as offering it
+     * under a predecessor's name.
+     */
+    { key: "scheduling", title: "Assignments", ownsOperationalTruth: true, grains: ["opportunity", "child", "person"] },
 ];
 
 const CARD_BY_KEY: ReadonlyMap<FocusPanelCardKey, CardDefinition> = new Map(
