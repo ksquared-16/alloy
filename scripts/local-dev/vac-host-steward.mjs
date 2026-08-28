@@ -22,15 +22,54 @@ import { executionRunStorePath } from "./lib/vacilando/execution-run.mjs";
 
 const argv = process.argv.slice(2);
 const apply = argv.includes("--apply");
+const cycle = argv.includes("--cycle");
+const status = argv.includes("--status");
 const json = argv.includes("--json");
-const unknown = argv.filter((a) => a.startsWith("--") && !["--apply", "--json"].includes(a));
+const unknown = argv.filter((a) => a.startsWith("--") && !["--apply", "--json", "--cycle", "--status"].includes(a));
 if (unknown.length) {
-  process.stderr.write(`vac host-steward: unknown option ${unknown[0]}\nUsage: vac host-steward [--apply] [--json]\n`);
+  process.stderr.write(`vac host-steward: unknown option ${unknown[0]}\nUsage: vac host-steward [--cycle] [--status] [--apply] [--json]\n`);
   process.exit(2);
 }
 
 const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
 const nowMs = Date.now();
+
+if (status) {
+  const { stewardStatus } = await import("./lib/vacilando/host-steward-cycle.mjs");
+  const st = stewardStatus({ root, nowMs });
+  if (json) { process.stdout.write(`${JSON.stringify(st, null, 2)}\n`); process.exit(0); }
+  process.stdout.write(`Host Steward\n`);
+  process.stdout.write(`  ${st.stale ? "STALE — no cycle within cadence" : "healthy"} · last cycle ${st.last_cycle_at || "never"}${st.last_cycle_ms != null ? ` (${st.last_cycle_ms}ms)` : ""}\n`);
+  process.stdout.write(`  cycles ${st.cycles_recorded} · executed ${st.actions_executed} · refused ${st.actions_refused}\n`);
+  if (st.history.length) {
+    process.stdout.write(`\nRecent:\n`);
+    for (const h of st.history.slice(-8)) process.stdout.write(`  · ${h.action} ${h.resource} (${h.owner})${h.ok ? "" : " — FAILED"}\n`);
+  }
+  if (st.escalations.length) {
+    process.stdout.write(`\nEscalations:\n`);
+    for (const e of st.escalations) process.stdout.write(`  · ${e.resource || e.action}: ${e.why}\n`);
+  }
+  process.exit(0);
+}
+
+if (cycle) {
+  const { runStewardCycle } = await import("./lib/vacilando/host-steward-run.mjs");
+  const out = runStewardCycle({ root, nowMs, dryRun: !apply });
+  if (json) { process.stdout.write(`${JSON.stringify(out, null, 2)}\n`); process.exit(0); }
+  if (!out.ok) { process.stdout.write(`cycle refused: ${out.error}\n`); process.exit(1); }
+  process.stdout.write(`cycle       ${out.cycle_id}${out.dry_run ? " (dry run)" : ""}\n`);
+  process.stdout.write(`admission   ${out.admission_before?.state ?? "unknown"}${out.admission_after ? ` -> ${out.admission_after.state}` : ""}\n`);
+  process.stdout.write(`observed    ${JSON.stringify(out.plan.classifications)}\n`);
+  process.stdout.write(`proposed    ${out.plan.proposed.length}\n`);
+  for (const p of out.plan.proposed) process.stdout.write(`   · [${p.priority}] ${p.action} ${p.resource_key} -> ${p.owner}\n`);
+  process.stdout.write(`suppressed  ${out.plan.suppressed.length}\n`);
+  for (const p of out.plan.suppressed) process.stdout.write(`   · ${p.action} ${p.resource_key}: ${p.suppressed_because}\n`);
+  if (!out.dry_run) {
+    process.stdout.write(`executed    ${out.executed.length} · refused ${out.refused.length} · problems ${out.problems.length}\n`);
+    for (const e of out.executed) process.stdout.write(`   · ${e.action} ${e.resource_key} verified=${e.postcondition_verified}\n`);
+  }
+  process.exit(0);
+}
 
 function runStates() {
   const byId = new Map();

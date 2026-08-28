@@ -30,6 +30,7 @@ import { attributionReport, parseProcessTable } from "./lib/vacilando/process-at
 import { classifyWorkload } from "./lib/vacilando/workload-classification.mjs";
 import { concurrentWeightedCost } from "./lib/vacilando/workload-observation.mjs";
 import { hostCapability, computeCapacityPolicy } from "./lib/vacilando/capacity-policy.mjs";
+import { stewardStatus } from "./lib/vacilando/host-steward-cycle.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac health [--json] [--check <name>] [--quiet]
@@ -352,6 +353,14 @@ const report = composeReport({
     ports, worktrees, configured_max: configuredMax,
     validation_routing: validationRouting, validation_bypasses: validationBypasses,
     toolkit_plan: toolkitState, toolkit_severity: toolkitSeverity,
+    // Read from the steward's own status; health never infers whether it ran.
+    steward_status: (() => {
+      try {
+        return stewardStatus({
+          root: process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway"),
+        });
+      } catch { return null; }
+    })(),
     disk_pressure: Boolean(disk && disk.free_pct != null && disk.free_pct < 10),
     seat_states: seatStates, seat_summary: seatSummary, idle_grace_policy: idleGracePolicy,
     provider_capacity_waits: providerCapacityWaits, reclaims_in_flight: reclaimsInFlight,
