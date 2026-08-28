@@ -16,7 +16,7 @@
  */
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import { cardDefinition } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import { cardDefinition, cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
@@ -203,6 +203,14 @@ export function isFocusRequestFor(
 /**
  * Map an active card TYPE to the grid cell key that hosts it. `activeDepth` reports
  * card types; grid cells use `instanceKey` when the layout doc assigns one.
+ *
+ * ── A SUPERSEDED CARD ELEVATES ON ITS SUCCESSOR'S CELL ──
+ *
+ * A published layout composes the successor, so the predecessor's key matches no cell and the
+ * lookup fell through to the key itself — which no cell answers to, so nothing was raised. The
+ * request is still legitimate: the successor is where that card's depth now lives, which is exactly
+ * what supersession means. Consulting the registry here keeps that in one place rather than making
+ * every caller translate keys before asking.
  */
 export function resolveElevatedCellKey(
     activeCard: FocusPanelCardKey | null | undefined,
@@ -211,6 +219,12 @@ export function resolveElevatedCellKey(
     if (!activeCard) return null;
     for (const [cellKey, { typeKey }] of cellResolution) {
         if (typeKey === activeCard) return cellKey;
+    }
+    const successor = cardSuccessor(activeCard);
+    if (successor) {
+        for (const [cellKey, { typeKey }] of cellResolution) {
+            if (typeKey === successor) return cellKey;
+        }
     }
     return activeCard;
 }

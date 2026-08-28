@@ -183,6 +183,7 @@ export default function FocusPanelCardRenderer({
                 context={context}
                 receded={receded}
                 coordination={coordination}
+                mutation={mutation}
             />
         );
     }
