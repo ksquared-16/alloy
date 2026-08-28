@@ -572,3 +572,37 @@ await test("NC34 — retirement never assigns a slot, port or agent", async () =
   const row = REGI.listRegisteredWorktrees({ root: env.root }).find((r) => r.name === env.name);
   for (const f of ["slot", "port", "agent"]) assert.equal(row[f] ?? null, null, `retirement must not assign ${f}`);
 });
+
+await test("NC36 — naming a worktree on the command line does not make it look occupied", () => {
+  // The live defect: `vac worktree-retire <name> --apply` counted its own argv
+  // as two live providers, so the command blocked the very worktree it named.
+  // Occupancy is a path, not a word.
+  const env = repoWithWorktree();
+  const measured = OBS.observeRetirementCandidates({
+    root: env.root,
+    s7Worktrees: [{ path: env.name, state: "retirable", in_git_worktree_list: true, reasons: [] }],
+    processes: [
+      { pid: 999001, command: `node /usr/local/bin/vac worktree-retire ${env.name} --apply` },
+      { pid: 999002, command: `grep ${env.name} /var/log/x` },
+    ],
+    worktreeParent: env.parent,
+    requestingWorktree: "wt-somewhere-else",
+    repository: "repo_test",
+  })[0];
+  assert.equal(measured.state, "candidate", `mere mention must not occupy: ${measured.reason}`);
+});
+
+await test("NC37 — a process running INSIDE the worktree path does occupy it", () => {
+  const env = repoWithWorktree();
+  const measured = OBS.observeRetirementCandidates({
+    root: env.root,
+    s7Worktrees: [{ path: env.name, state: "retirable", in_git_worktree_list: true, reasons: [] }],
+    processes: [{ pid: 999003, command: `node ${env.path}/web/node_modules/.bin/next dev -p 3011` }],
+    worktreeParent: env.parent,
+    requestingWorktree: "wt-somewhere-else",
+    repository: "repo_test",
+  })[0];
+  assert.equal(measured.state, "blocked");
+  assert.ok(measured.blocked_by.includes("no_live_provider"));
+  assert.ok(measured.blocked_by.includes("no_live_dev_server"), "a next dev in the path is a dev server");
+});

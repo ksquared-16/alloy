@@ -173,7 +173,27 @@ export function observeRetirementCandidates({
     const name = w.path;
     const full = join(parent, name);
     const g = measureWorktreeGit(full, { canonicalBase });
-    const providers = processes.filter((p) => String(p.command || "").includes(name)).map((p) => ({ pid: p.pid }));
+    // OCCUPANCY IS A PATH, NOT A WORD.
+    //
+    // This matched any command whose text merely CONTAINED the worktree name,
+    // so `vac worktree-retire wt1-drawer-product-eradication --apply` counted
+    // its own argv as two live providers and the worktree blocked itself. The
+    // same shape as a governed request that reads its own branch name out of a
+    // run instruction and calls it a reference. Naming a thing is not using it.
+    //
+    // A process occupies a worktree when it references the worktree's PATH, and
+    // never when it is this process or the shell that spawned it.
+    const selfPids = new Set([process.pid, process.ppid].filter(Boolean));
+    const refs = processes.filter((p) => {
+      if (selfPids.has(p.pid)) return false;
+      const c = String(p.command || "");
+      return c.includes(full) || c.includes(`alloy-worktrees/${name}`);
+    });
+    const providers = refs.map((p) => ({ pid: p.pid }));
+    // A dev server is a process actually serving from that path — measured here
+    // rather than inferred from S7's lifecycle state, which calls a worktree
+    // "active" for any live reference at all.
+    const devServer = refs.some((p) => /next[- ](dev|start|server)/.test(String(p.command || "")));
     const registration = resolveWorktreeRegistration({ root, name, repositoryId: repository });
 
     const safety = evaluateRetirementSafety({
@@ -182,7 +202,7 @@ export function observeRetirementCandidates({
       headSha: g.head_sha,
       existsInGit: w.in_git_worktree_list,
       liveProviders: providers,
-      liveDevServer: w.state === "active" ? true : (w.reasons || []).some((r) => String(r).includes("dev server")),
+      liveDevServer: devServer,
       activeRuns: runs ? (runs[name] || []) : null,
       activeGovernedActions: actions ? (actions[name] || []) : null,
       activeLanes: lanes ? (lanes[name] || []) : null,
