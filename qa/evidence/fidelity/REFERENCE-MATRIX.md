@@ -218,3 +218,77 @@ trigger, compact aligned participants (markers certified separately under diverg
 Financials 679 8/12 summary with RESPONSIBILITY; compact at case grain.
 Health & Safety 334 4/12 — HEALTH / REQUIRED INFORMATION, no pill cloud.
 Attendance 679 8/12 timeline with Assignment 334 4/12 beside it, expected-then-actual.
+
+---
+
+# Product-finish pass — final evidence
+
+Brokered typecheck rc=0. Suites 262/262. Certified at 1920×1200.
+
+## §1 Modal size hierarchy (shared host, `data-universal-card-modal`)
+
+| Class | Card | Measured |
+|---|---|---|
+| command | Add charge | **560 × 599** |
+| record | Children · Household · Assignment | **880 × 545** |
+| workstation | Financials detail | **1180 × 626** |
+| workstation | Health detail | **1180 × 511** |
+| workstation | Attendance detail | **1180 × 297** |
+
+No card sets its own geometry; no Financials- or Health-specific modal exists.
+
+## §2 Add Charge
+
+Centered command card, no nested border (the inner card's border/radius/background/480px
+cap are gone — content sits on the Focus Card surface). Values and inputs at 500 weight, so
+the Service Date no longer competes with section heads. Dropdown reshapes the form from
+`financial_charge_templates` across all four configured templates. Draft semantics
+preserved: "Creates a draft — not yet owed", balance stated unchanged.
+
+## §3 Financials Details
+
+Shallow summary (Balance / Past due / Responsibility / Paid / Autopay / Next), then
+`Payment | Add charge` as two equal peers, then LEDGER with filters high, period grouping,
+all eight canonical columns, Upcoming, and `Manage payment →` bottom-right. No running
+balance. Height 88vh → 96vh.
+
+## §5 Focus Panel header avatar — GATE CLOSED
+
+Real image for Wrigley and Lennon Kurzman (the two children carrying
+`resolved_photo_url`); normal initials fallback for everyone else; 17 distinct subjects
+across 17 switches with no stale photo. Three chained defects fixed: the composer emitted
+no photo, it read a stale row, and the child-mission overlay then overwrote the resolved
+scope with the null stored field.
+
+## §6 Attendance Details
+
+New workstation detail from the EXISTING fold — no new ledger. Timeframe (Week / Month /
+All), room filter built from rooms the record touched, event filter (All / Present /
+Absent / Movement / Corrections), table (Date / Expected / In / Out / Attended / Rooms /
+State), day expands to its event sequence. Corrections shown, never applied. Open days
+report `null` duration, not 0.
+
+Two blockers fixed to get there: the `timeline` archetype hides its footer
+(`display: none`), so Details lives in the body; and `attendance` did not declare
+`ownsOperationalTruth`, so `clampPerspectiveForCard` refused to elevate it at all.
+
+## §5 regression — accepted cards
+
+Business Process 1343 full row, ENROLLMENT, 3 configured annotations · Financials 892 8/12
+summary · Health & Safety 441 4/12 · Attendance 892 8/12 + Assignment 441 4/12 ·
+Children 667 6/12.
+
+## §8 Pre-enrollment Financials — promotion requested, NOT closed
+
+Governed push requested: **`gar_026172ce79b88e`**.
+
+Branch `promote/household-billable-source`, commit `b53cc32b4b59b41f695e13de81c533f18273acfa`,
+cut fresh from `origin/staging` and containing **exactly one file**:
+`supabase/migrations/20260827120000_household_billable_source.sql`, sha256
+`c798135c7b8a6381548af143992412f1531b770cf577c64be90101b6028b44c2` (verified against the
+carried-forward value). Nothing from wt6 (126 ahead / 327 behind) travels with it.
+
+Until that migration is applied, `resolveChargeSubject` and `childcareChargeService` cannot
+be changed to accept a customer source: a charge carrying
+`billable_source_type = 'customer'` fails at insert against the current CHECK, so the code
+would be unrunnable and uncertifiable. Not written, and not faked.
