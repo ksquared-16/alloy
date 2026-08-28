@@ -27,6 +27,9 @@ const {
   assessPanePromptReadiness,
   detectPromptBlocker,
   detectProviderBusy,
+  detectPromptAffordance,
+  liveNarrationIsCurrentTurn,
+  turnFinishedByAffordance,
   promptReadinessAllowsSend,
 } = await import("../lib/vacilando/provider-prompt-readiness.mjs");
 const viewModule = await import("../apps/vacilando/public/gateway-view.mjs");
@@ -621,6 +624,85 @@ await test("dismiss sends Escape only, and refuses a pane it did not recognise",
   const argv = D.dismissKeysArgv("%9");
   assert.equal(argv.includes("Enter"), false);
   assert.equal(argv.some((k) => /^\d+$/.test(String(k))), false);
+});
+
+/* ── The idle composer Vacilando could not see ────────────────────────────── */
+
+const NBSP = " ";
+const NBSP_IDLE_PANE = [
+  "⏺ Lane is 24 ahead / 147 behind staging. Reconciling by merging staging in (the",
+  "  established lane process here).",
+  "",
+  "  Listed 3 directories, ran 16 shell commands",
+  "────────────────────────────────────────────────────────────────",
+  `❯${NBSP}`,
+  "────────────────────────────────────────────────────────────────",
+  "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+].join("\n");
+
+const NBSP_BUSY_PANE = [
+  "⏺ Now the browser interaction certification.",
+  "",
+  "✢ Wibbling… (50m 3s · ↓ 52.2k tokens)",
+  "────────────────────────────────────────────────────────────────",
+  `❯${NBSP}`,
+  "────────────────────────────────────────────────────────────────",
+  "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← for agents",
+].join("\n");
+
+await test("NBSP — an empty Claude composer is caret + U+00A0, and must be seen", () => {
+  // Claude Code pads the empty composer with a non-breaking space. `[ \t]` does
+  // not match it, so the caret patterns never once matched an idle composer and
+  // affordance detection was carried entirely by footer hints. Found by dumping
+  // codepoints from a live pane that insisted a visible ❯ was absent.
+  assert.ok(detectPromptAffordance(`────\n❯${NBSP}\n────`), "caret + NBSP is a composer");
+  assert.ok(detectPromptAffordance("────\n❯ \n────"), "caret + ordinary space still is too");
+});
+
+await test("a finished turn with no terminator marker reads READY, not busy", () => {
+  // The live incident: Trust Runtime sat QUEUED 82 minutes on
+  // waiting_for_ready_prompt while idle at 0.39s of CPU per minute. Its last
+  // turn ended on "Listed 3 directories…" and never printed a terminator, so the
+  // ⏺ narration above stayed "current" forever.
+  assert.equal(liveNarrationIsCurrentTurn(NBSP_IDLE_PANE), false);
+  assert.equal(turnFinishedByAffordance(NBSP_IDLE_PANE), true);
+  const a = assessPanePromptReadiness(NBSP_IDLE_PANE, { provider: "claude", captured: true });
+  assert.equal(a.state, "ready");
+  assert.equal(promptReadinessAllowsSend(a).allow, true);
+});
+
+await test("a genuinely mid-turn pane is still BUSY — the narration fallback survives", () => {
+  // The fallback exists to catch an agent whose spinner scrolled out of the
+  // capture. Widening readiness must not cost that.
+  assert.equal(turnFinishedByAffordance(NBSP_BUSY_PANE), false);
+  const a = assessPanePromptReadiness(NBSP_BUSY_PANE, { provider: "claude", captured: true });
+  assert.equal(a.state, "busy");
+  assert.equal(promptReadinessAllowsSend(a).allow, false);
+});
+
+await test("the interrupt affordance is used in ONE direction only", () => {
+  // Its PRESENCE proves nothing: the footer carries "esc to interrupt" whenever a
+  // background shell runs, which is the false-busy this file already fixed once.
+  // Its ABSENCE means no turn is running, which is the direction relied on here.
+  const spinnerNoEsc = NBSP_IDLE_PANE.replace("Listed 3 directories, ran 16 shell commands", "✢ Wibbling… (3s · ↓ 1k tokens)");
+  assert.equal(turnFinishedByAffordance(spinnerNoEsc), false, "a spinner alone still means busy");
+  const escNoSpinner = NBSP_IDLE_PANE.replace("· ← for agents", "· esc to interrupt · ← for agents");
+  assert.equal(turnFinishedByAffordance(escNoSpinner), false, "an interrupt offer alone still means busy");
+});
+
+await test("no composer means no finished-turn claim", () => {
+  const noComposer = NBSP_IDLE_PANE.split("\n").filter((l) => !l.includes("❯")).join("\n");
+  assert.equal(turnFinishedByAffordance(noComposer), false, "without a settled composer we claim nothing");
+
+  // A pane with NEITHER a composer NOR narration. The settled-tail check cannot
+  // reject this one, so only the composer requirement can — without it a
+  // half-drawn or scrolled pane would be read as a finished turn. A mutation
+  // deleting that guard survived until this case existed.
+  const bare = [
+    "────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+  ].join("\n");
+  assert.equal(turnFinishedByAffordance(bare), false, "a footer alone is not a settled composer");
 });
 
 process.stdout.write(`\n1..${pass + fail}\npass ${pass}\nfail ${fail}\n`);
