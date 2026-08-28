@@ -169,6 +169,10 @@ export function buildCyclePlan({
     const key = resourceKey(d);
     const entry = {
       resource_key: key,
+      // The resource's own id, carried explicitly. Reaching for it through
+      // `evidence` returned undefined, so the registry record was never closed
+      // and its final disposition stayed null even on a successful reconcile.
+      resource_id: d.id ?? null,
       resource_class: d.resource_class,
       ownership: d.ownership,
       action: d.action,
