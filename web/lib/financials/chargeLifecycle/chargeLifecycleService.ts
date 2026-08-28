@@ -47,6 +47,18 @@ type ChargeLifecycleRow = {
 export type SimulateArgs = {
     templateId: string;
     agreementId?: string | null;
+    /**
+     * THE BILLABLE SOURCE, when it is not an enrollment agreement.
+     *
+     * A family incurs charges before anyone is enrolled — a waitlist fee, a registration fee, a
+     * deposit — and those have no agreement to hang off. `customer` is an existing canonical
+     * durable subject, so this carries the pair the charge is actually written against rather than
+     * forcing every charge through an agreement that may not exist.
+     *
+     * Absent means "agreement", which keeps every existing caller and every enrolled-child charge
+     * behaving exactly as before.
+     */
+    billableSource?: { type: "enrollment_agreement" | "customer"; id: string } | null;
     occursDate?: string | null;
     eventDate?: string | null;
     servicePeriodStart?: string | null;
@@ -136,7 +148,7 @@ export async function previewTemplateCharge(
     }
 
     let wouldWrite: DraftWriteIntent;
-    if (!isWritable(intent) || !args.agreementId) {
+    if (!isWritable(intent) || !billableSourceFor(args)) {
         wouldWrite = "not_writable";
     } else if (!existing) {
         wouldWrite = "create";
@@ -160,12 +172,37 @@ export type DraftWriteResult =
  * billable source). Never posts; never mutates a posted charge. Re-running with
  * the same template/context recalculates the draft (no duplicates).
  */
+/**
+ * The pair a charge is written against — resolved ONCE so the guard, the dedupe scope and the
+ * insert cannot disagree about what this charge belongs to.
+ *
+ * `agreementId` still wins when present, which is what preserves child attribution for an enrolled
+ * child. Only when there is no agreement does a customer source apply, and it must be stated
+ * explicitly by the caller — this never invents one.
+ */
+function billableSourceFor(
+    args: SimulateArgs,
+): { type: "enrollment_agreement" | "customer"; id: string } | null {
+    if (args.agreementId) return { type: ENROLLMENT, id: args.agreementId };
+    if (args.billableSource?.id) return { type: args.billableSource.type, id: args.billableSource.id };
+    return null;
+}
+
 export async function writeTemplateDraftCharge(
     supabase: SupabaseClient,
     orgId: string,
     args: SimulateArgs & { actorUserId?: string | null },
 ): Promise<DraftWriteResult> {
-    if (!args.agreementId) fail("invalid_input", "an enrollment agreement is required to write a draft charge");
+    /*
+     * A BILLABLE SOURCE is required; an ENROLLMENT AGREEMENT is not.
+     *
+     * This used to demand an agreement, which is what made Financials enrollment-gated: a family
+     * with a registration fee and no enrolment had nothing to charge against. The requirement is a
+     * source — and `customer` is one. Whether a PARTICULAR charge needs an agreement stays with its
+     * template and the resolver, which is where that rule belongs.
+     */
+    const source = billableSourceFor(args);
+    if (!source) fail("invalid_input", "a billable source is required to write a draft charge");
     const { intent, existing, wouldWrite } = await previewTemplateCharge(supabase, orgId, args);
     if (wouldWrite === "not_writable") {
         return { status: "not_writable", reason: intent.eligible ? "amount_not_resolvable" : intent.reason ?? "ineligible" };
@@ -213,8 +250,10 @@ export async function writeTemplateDraftCharge(
         .insert({
             org_id: orgId,
             job_id: null,
-            billable_source_type: ENROLLMENT,
-            billable_source_id: args.agreementId,
+            // The resolved source, not a hardcoded one. An enrolled child still writes against its
+            // agreement; a pre-enrolment family writes against the household.
+            billable_source_type: source.type,
+            billable_source_id: source.id,
             charge_type: "fee",
             charge_category: intent.chargeCategory,
             status: "draft",
