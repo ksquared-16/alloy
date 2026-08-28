@@ -234,6 +234,36 @@ describe("Process card command fidelity", () => {
         expect(keys).not.toContain("add_child");
     });
 
+    it("withholds a runtime companion the configuration never selected, and keeps the configured one", () => {
+        /*
+         * The production case this guard was written from: on a booked tour the platform rewrites
+         * the configured `schedule_tour` into "Reschedule Tour" — which still traces to the
+         * configured ref and belongs — and ADDS a "Cancel Tour" companion keyed on the booking,
+         * which traces to no configured ref and does not.
+         */
+        const context = contextFor({ helpful: ["schedule_tour"] });
+        const tourContext: OperationalContext = {
+            ...context,
+            signals: {
+                ...context.signals,
+                tour: {
+                    scheduled: true,
+                    startAt: "2026-09-01T17:00:00Z",
+                    statusLabel: "Scheduled",
+                    bookingId: "booking-1",
+                },
+            },
+        };
+        const projection = projectProcessCardCommands(tourContext);
+        const labels = projection.commands.map((c) => c.label);
+        expect(labels).toContain("Reschedule Tour");
+        expect(labels).not.toContain("Cancel Tour");
+        // Withheld, not silently vanished: an unselected companion is observable.
+        expect(projection.withheld.map((w) => w.key)).toContain("cancel_tour");
+        // …and the configured ref is NOT reported as drift, because it did render.
+        expect(projection.drift.map((d) => d.actionRef)).not.toContain("schedule_tour");
+    });
+
     it("carries no commands at all when no published revision governs the subject", () => {
         // Fail closed. A record-header list is not a substitute for configuration, and an empty
         // command row is the honest answer to "what has this process configured here?".
