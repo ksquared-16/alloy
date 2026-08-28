@@ -74,6 +74,7 @@ SUITES=(
   "development-host-steward.test.mjs"
   "development-host-steward-automation.test.mjs"
   "development-decision-delivery.test.mjs"
+  "development-provider-governed-bridge.test.mjs"
 )
 
 PASS=0
