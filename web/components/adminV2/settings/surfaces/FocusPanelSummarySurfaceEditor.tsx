@@ -33,7 +33,10 @@ import {
     type SummaryCardOrderEntry,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryDocOps";
 import type { FocusPanelCardConfig } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
-import { authorableFocusPanelCards } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
+import {
+    authorableFocusPanelCards,
+    authoringPlacementModelFor,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import {
     loadFocusPanelSummaryLayout,
     publishFocusPanelSummary,
@@ -179,18 +182,45 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
     void onOpenNestedSurface;
     const { vm, record } = useMemo(() => buildDemoFocusPanelSummaryViewModel(), []);
 
-    const cards = useMemo(
-        () =>
-            deriveOpportunityFocusPanelPresentation({
-                mode: "summary",
-                displayVm: vm,
-                record,
-                title: vm.header.title,
-                perspective: null,
-                statusLabel: "Tour scheduled",
-            }).cards,
-        [vm, record],
-    );
+    const cards = useMemo(() => {
+        const derived = deriveOpportunityFocusPanelPresentation({
+            mode: "summary",
+            displayVm: vm,
+            record,
+            title: vm.header.title,
+            perspective: null,
+            statusLabel: "Tour scheduled",
+        }).cards;
+        /*
+         * THE TRAY MUST BE ABLE TO PLACE EVERYTHING IT OFFERS.
+         *
+         * The demo subject is a family opportunity, so it produces no Staff model —
+         * and the consequence was silent: clicking Staff added it to the grid, the
+         * order reconciliation found no model and dropped the entry, and the sync
+         * effect then removed the card. A chip that does nothing.
+         *
+         * The registry decides what is authorable, so it also supplies the minimum a
+         * placement needs for the cards this subject cannot model. Real models always
+         * win; this only fills genuine gaps.
+         */
+        const merged = new Map(derived);
+        for (const option of authorableFocusPanelCards()) {
+            if (merged.has(option.cardKey)) continue;
+            const placement = authoringPlacementModelFor(option.cardKey);
+            if (!placement) continue;
+            merged.set(option.cardKey, {
+                key: placement.key,
+                archetype: "reference",
+                title: placement.title,
+                insight: "",
+                tier: "reference",
+                span: placement.span,
+                density: placement.density,
+                visible: true,
+            });
+        }
+        return merged;
+    }, [vm, record]);
 
     // Preview canvas observes the same Operational Context boundary the runtime uses.
     const previewContext = useMemo(

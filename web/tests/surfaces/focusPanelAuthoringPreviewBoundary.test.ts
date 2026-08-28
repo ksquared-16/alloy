@@ -79,3 +79,46 @@ describe("authoring preview boundary", () => {
         }
     });
 });
+
+describe("the authorable library", () => {
+    it("still excludes every superseded predecessor", async () => {
+        const { authorableFocusPanelCards } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring"
+        );
+        const keys = new Set(authorableFocusPanelCards().map((o) => o.cardKey));
+        for (const retired of ["current_work", "billing_preview", "child_identity", "health"]) {
+            expect(keys.has(retired as never), `${retired} is offered in Add card`).toBe(false);
+        }
+        // …and the successors it derives are still there.
+        for (const live of ["business_process", "financials", "attendance", "health_safety", "staff"]) {
+            expect(keys.has(live as never), `${live} is missing from Add card`).toBe(true);
+        }
+    });
+
+    it("every offered card can be placed — a chip that cannot place is a chip that does nothing", async () => {
+        const { authorableFocusPanelCards, authoringPlacementModelFor } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring"
+        );
+        for (const option of authorableFocusPanelCards()) {
+            const placement = authoringPlacementModelFor(option.cardKey);
+            expect(placement, `${option.cardKey} has no placement model`).not.toBeNull();
+            expect(placement!.title.length).toBeGreaterThan(0);
+        }
+    });
+
+    it("Financials offers two named presentations, and neither name is a span", async () => {
+        const { authorableFocusPanelCards } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring"
+        );
+        const financials = authorableFocusPanelCards().filter((o) => o.cardKey === "financials");
+        expect(financials).toHaveLength(2);
+        expect(financials.map((o) => o.variantLabel).sort()).toEqual(["Compact", "Summary"]);
+        for (const option of financials) {
+            expect(option.label).toBe("Financials");
+            expect(option.variantLabel).not.toMatch(/\d+\s*\/\s*12|span/i);
+        }
+        // The columns still travel with the choice — silently, as the default placement.
+        expect(financials.find((o) => o.variantLabel === "Summary")!.columns).toBe(8);
+        expect(financials.find((o) => o.variantLabel === "Compact")!.columns).toBe(4);
+    });
+});
