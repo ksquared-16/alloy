@@ -210,7 +210,10 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
             if (!placement) continue;
             merged.set(option.cardKey, {
                 key: placement.key,
-                archetype: "reference",
+                // A neutral archetype: this model exists to make the card PLACEABLE, and the
+                // authoring preview supplies the presentation. Claiming a richer archetype
+                // would promise a body shape nothing here fills.
+                archetype: "summary",
                 title: placement.title,
                 insight: "",
                 tier: "reference",
