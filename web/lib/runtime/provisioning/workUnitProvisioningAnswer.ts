@@ -1728,7 +1728,26 @@ export async function composeWorkUnitProvisioningAnswer(
     // Child surface: Attention bindings (child.*) + family Truth bindings (person.* / children).
     // Family bindings are Settlement context for the Focus Panel — not a substitution of subject.
     const childBindings = childComposition
-        ? childSubjectIdentityTruthBindings(childComposition, childSubjectRow?.title ?? null)
+        ? childSubjectIdentityTruthBindings(
+              childComposition,
+              childSubjectRow?.title ?? null,
+              /*
+               * The photo `attachChildGrainAvatar` already resolved, read from the LIVE row set.
+               *
+               * `childSubjectRow` was captured before the avatar branch merged its results, and the
+               * placement/inquiry attaches in between may hand back new row objects — so the
+               * captured reference can be a stale copy with no avatar on it. Looking the child up
+               * again by its participation id reads whatever the pipeline actually produced,
+               * without resolving the photo a second time.
+               */
+              (() => {
+                  const live = (childRows as Array<Record<string, unknown>> | null)?.find(
+                      (r) => String(r.participationId ?? "") === String(childComposition.identity.participationId ?? ""),
+                  );
+                  const url = live?.avatarImageUrl ?? (childSubjectRow as { avatarImageUrl?: unknown } | null)?.avatarImageUrl;
+                  return typeof url === "string" && url.trim() ? url : null;
+              })(),
+          )
         : null;
     // Child surface: Attention bindings (child.*) + family Truth bindings (person.* / children).
     // Family bindings are Settlement context for the Focus Panel — not a substitution of subject.

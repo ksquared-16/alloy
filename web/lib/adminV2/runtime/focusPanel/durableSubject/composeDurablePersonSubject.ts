@@ -38,6 +38,8 @@ export type ComposeDurablePersonSubjectResult =
     | { ok: true; subject: DurablePersonSubject }
     | { ok: false; reason: "not_found" };
 
+import { resolveIdentityPhotoUrlFromRaw } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
+
 function trimOrNull(v: unknown): string | null {
     const s = v != null ? String(v).trim() : "";
     return s || null;
@@ -72,6 +74,9 @@ export async function composeDurablePersonSubject(
             personId: id,
             label,
             truth,
+            // Provenance matters: the resolver distinguishes an actor-authorized URL from one found
+            // in storage, so the shell never renders a credential it was not granted.
+            imageUrl: resolveIdentityPhotoUrlFromRaw(truth),
             employment: personEmploymentSignal(id, label, composition),
         },
     };

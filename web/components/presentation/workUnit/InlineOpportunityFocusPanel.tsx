@@ -41,7 +41,7 @@
  * @see docs/platform/experience/presentation-runtime-v2.md
  */
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     logCurrentWorkInit,
     nextCurrentWorkInstanceId,
@@ -53,6 +53,7 @@ import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/Alloy
 import { AlloyThinkingLabel } from "@/components/admin/workspace/AlloyThinkingLabel";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
 import OpportunityFocusPanelBody from "@/components/admin/focusPanel/OpportunityFocusPanelBody";
+import type { OperationalParticipantScope } from "@/lib/adminV2/runtime/operationalContext/types";
 import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/OpportunityDrawerBodySaveBar";
 import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActionModalsPortal";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -90,6 +91,14 @@ import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/dra
 import { useOpportunityDrawerVmRegistryModals } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals";
 
 export function InlineOpportunityFocusPanel() {
+    /*
+     * The settled participant scope, reported up by the body.
+     *
+     * Held here because the header and the body are siblings and only the body composes the
+     * operational context. The header RENDERS identity; it never resolves it — deriving child
+     * identity a second time is exactly how a stale avatar leaks into the next case.
+     */
+    const [subjectScope, setSubjectScope] = useState<OperationalParticipantScope | null>(null);
     const { canMutate: authCanMutate, role, roleKeys } = useAdminAuth();
     const { labels } = useEntityLabels();
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
@@ -583,6 +592,7 @@ export function InlineOpportunityFocusPanel() {
                 >
                     {visible ?
                         <OpportunityFocusPanelHeader
+                            subjectScope={subjectScope}
                             title={headerTitle || drawerTitle}
                             opportunityId={visible.displayVm.entity.id}
                             record={visible.record}
@@ -623,7 +633,10 @@ export function InlineOpportunityFocusPanel() {
                     className={
                         isActivityMode
                             ? `${activityBodyFillClass} bg-white px-2 py-2 [scrollbar-gutter:stable]`
-                            : "min-h-0 flex-1 overflow-y-auto bg-white px-4 py-3 [scrollbar-gutter:stable]"
+                            : // Work mode: the cards should begin close to the Work / Activity
+                              // control. Top padding is trimmed; the bottom keeps its breathing
+                              // room so the last card never touches the panel edge.
+                              "min-h-0 flex-1 overflow-y-auto bg-white px-4 pt-1 pb-3 [scrollbar-gutter:stable]"
                     }
                 >
                     {/* Keyed `swap` wrapper — remounts + settles the body on a record switch. */}
@@ -660,6 +673,7 @@ export function InlineOpportunityFocusPanel() {
                         // one readiness boundary, zero resize, zero card-by-card assembly. Settlement only
                         // fills reserved cells in place.
                         <OpportunityFocusPanelBody
+                            onSubjectScope={setSubjectScope}
                             mode={focusPanelMode}
                             title={headerTitle || (visible ? drawerTitle : seedTitle)}
                             statusLabel={statusLabel}

@@ -125,20 +125,76 @@ export function placeArea(grid: FocusPanelGridLayout, area: FocusPanelGridArea):
     return normalizeGridColumnStacking({ ...grid, areas });
 }
 
-/** Add a card as a full-width region on the next free row (default span). PURE. */
+/**
+ * FIRST FIT — the leftmost free slot on the earliest row that can hold this width.
+ *
+ * A new card used to be dropped full-width on a brand-new row, which is why authoring an 8/12 and
+ * then a 4/12 produced two rows with a four-column hole beside the first: the packing an operator
+ * obviously meant (8 + 4) was available and never taken.
+ *
+ * This scans existing rows for a gap wide enough and returns it, falling back to a fresh row when
+ * nothing fits. It only ever places into genuinely EMPTY columns, so it cannot overlap; and it
+ * prefers the earliest row, so cards pack upward instead of drifting down the canvas.
+ */
+function firstFit(
+    grid: FocusPanelGridLayout,
+    colSpan: number,
+    rowSpan: number,
+): { colStart: number; rowStart: number } {
+    const lastRow = grid.areas.length
+        ? Math.max(...grid.areas.map((a) => a.rowStart + a.rowSpan - 1))
+        : 0;
+    for (let row = 1; row <= lastRow; row += 1) {
+        // Columns occupied by anything whose vertical extent covers this row.
+        const taken = new Set<number>();
+        for (const a of grid.areas) {
+            const covers = a.rowStart <= row && row < a.rowStart + a.rowSpan;
+            if (!covers) continue;
+            for (let c = a.colStart; c < a.colStart + a.colSpan; c += 1) taken.add(c);
+        }
+        for (let start = 1; start + colSpan - 1 <= grid.columns; start += 1) {
+            let fits = true;
+            for (let c = start; c < start + colSpan; c += 1) {
+                if (taken.has(c)) { fits = false; break; }
+            }
+            // The whole vertical extent must be free, not merely this row — a taller card
+            // dropped into a one-row gap would collide with whatever sits below it.
+            if (fits && rowSpan > 1) {
+                for (const a of grid.areas) {
+                    const vOverlap = a.rowStart < row + rowSpan && row < a.rowStart + a.rowSpan;
+                    if (!vOverlap) continue;
+                    const hOverlap = a.colStart < start + colSpan && start < a.colStart + a.colSpan;
+                    if (hOverlap) { fits = false; break; }
+                }
+            }
+            if (fits) return { colStart: start, rowStart: row };
+        }
+    }
+    return { colStart: 1, rowStart: nextFreeRow(grid) };
+}
+
+/**
+ * Add a card, packed into the first slot that fits its declared width. PURE.
+ *
+ * `colSpan` defaults to the full row only when the caller states no width — an authored placement
+ * always states one, so the default is the honest answer for "I don't know how wide this is"
+ * rather than the shape every new card takes.
+ */
 export function addCardToGrid(
     grid: FocusPanelGridLayout,
     card: FocusPanelCardKey,
     opts?: { colSpan?: number; rowSpan?: number },
 ): FocusPanelGridLayout {
     if (findArea(grid, card)) return grid;
+    const colSpan = Math.max(1, Math.min(opts?.colSpan ?? grid.columns, grid.columns));
+    const rowSpan = opts?.rowSpan ?? defaultRowSpanForCard(card);
+    const slot = firstFit(grid, colSpan, rowSpan);
     return placeArea(grid, {
         card,
-        colStart: 1,
-        colSpan: opts?.colSpan ?? grid.columns,
-        rowStart: nextFreeRow(grid),
-        // Default to the card's natural summary height (full card), not a min-height row.
-        rowSpan: opts?.rowSpan ?? defaultRowSpanForCard(card),
+        colStart: slot.colStart,
+        colSpan,
+        rowStart: slot.rowStart,
+        rowSpan,
     });
 }
 

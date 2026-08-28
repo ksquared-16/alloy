@@ -189,7 +189,16 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
         it("agrees with the catalog W-11 discovers from the whole tree", () => {
             // Cross-instrument: the enumeration is pinned to a width a second, independent method
             // produced. W-11's non-vacuity guard could not tell 35 keys from 57; this can.
-            const discovered = [...discoverCatalog().keys()].sort();
+            /*
+             * The seed function reproduces the catalog AS OF ITS OWN MIGRATION. Keys seeded later by
+             * an approved decision (D-H6's health.view / health.manage, granted to admin in their
+             * own migration) are legitimately absent from this literal — back-editing them into a
+             * historical migration would rewrite what that migration did.
+             */
+            const POST_SEED_ADDITIONS = new Set(["health.view", "health.manage"]);
+            const discovered = [...discoverCatalog().keys()]
+                .filter((k) => !POST_SEED_ADDITIONS.has(k))
+                .sort();
             expect(keyLiterals(adminRegion!).sort()).toEqual(discovered);
         });
     });

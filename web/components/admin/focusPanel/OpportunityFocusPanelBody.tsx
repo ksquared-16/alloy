@@ -9,6 +9,7 @@ import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/fo
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import { useAttentionCardFocus } from "@/lib/runtime/kernel/useAttentionCardFocus";
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
+import type { OperationalParticipantScope } from "@/lib/adminV2/runtime/operationalContext/types";
 import { focusPanelWorkModeModelFromProvisioningAnswer } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 import { overlayChildMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayChildMissionOntoSettledFocusModel";
 import { overlayContextMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayContextMissionOntoSettledFocusModel";
@@ -42,6 +43,15 @@ type Props = {
     commitCritical: FocusPanelCommitCriticalInput | null;
     onSelectTab: (tab: DrawerTabKey) => void;
     onHeaderAction?: (action: ResolvedActionForClient) => void;
+    /**
+     * The SETTLED participant scope, reported up so the header can show that child's identity.
+     *
+     * Reported rather than re-derived. `resolveParticipantScope` has already decided whether the
+     * carried participation id names somebody on THIS case, and it refuses to guess — so an id left
+     * over from the previous row resolves to nobody. Deriving child identity a second time in the
+     * header is exactly how a stale avatar leaks into the next case.
+     */
+    onSubjectScope?: (scope: OperationalParticipantScope | null) => void;
     onModeChange?: (mode: FocusPanelMode) => void;
 };
 
@@ -62,6 +72,7 @@ export default function OpportunityFocusPanelBody({
     commitCritical,
     onSelectTab,
     onHeaderAction,
+    onSubjectScope,
     onModeChange,
 }: Props) {
     const perspective = useActiveRuntimePerspective();
@@ -100,6 +111,14 @@ export default function OpportunityFocusPanelBody({
     const model = useMemo(() => {
         if (enriched) {
             const settled = focusPanelWorkModeModelFromDrawerVm({
+                /*
+                 * ATTENTION'S CURRENT SUBJECT IS THE CARRIER. For a child-grain lens the Work View
+                 * selects a participation, and that id rides here beside the case the panel still
+                 * composes against. The resolver decides whether it names somebody on THIS case, so
+                 * an id left over from the previous row resolves to nobody rather than to whoever
+                 * happens to be first.
+                 */
+                selectedParticipationId: attentionSubjectId ?? null,
                 mode,
                 displayVm: enriched.displayVm,
                 record: enriched.record,
@@ -212,6 +231,17 @@ export default function OpportunityFocusPanelBody({
         }
         return null;
     }, [mode, title, statusLabel, canMutate, enriched, commitCritical, perspective]);
+    /*
+     * One report per settled model, including the report that CLEARS it.
+     *
+     * Passing the scope up only when one exists would leave the previous child's avatar in the
+     * header after switching to a case with no scoped child — the stale-scope leak this whole
+     * carrier exists to prevent. `null` is a value here, not an omission.
+     */
+    useEffect(() => {
+        onSubjectScope?.(model?.context?.participantScope ?? null);
+    }, [model, onSubjectScope]);
+
 
     // Timing boundary — fires only when the model identity changes (commit-critical arrival,
     // per-card ready set, settlement), never per render frame. Dev/staging gated inside.

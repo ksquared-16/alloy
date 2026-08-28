@@ -1,0 +1,1359 @@
+@import "../../adminV2/components/operationalCardsShared.css";
+
+/*
+ * Candidate-card geometry for the Local Design Lab.
+ *
+ * Lab-scoped on purpose: `alloyOsRuntime.css` is production, and nothing in this pass may reach a
+ * Surface. Class names are written as they would be named in production, so promotion is a file
+ * move rather than a rewrite.
+ *
+ * Every value here is derived from the measured family (see
+ * docs/platform/operator/operational-card-visual-audit.md), not invented:
+ *   - card ink       var(--alloy-os-midnight, #273f52)
+ *   - quiet ink      var(--alloy-os-text-secondary, #4b5563)
+ *   - faint ink      var(--alloy-os-text-tertiary, #9ca3af)
+ *   - hairline       color-mix(... midnight 9%) — the rule What's Next already uses
+ *   - state green    var(--alloy-os-bend-pine, #00a283)
+ *   - attention      #b45309   risk #dc2626
+ */
+
+/* ── shared body idioms ─────────────────────────────────────────────────── */
+
+/* In-body section head. Matches What's Next's RECENT ACTIVITY label, and carries the family's
+   single hairline when it follows other content. */
+.alloy-os-cardlab__section-head {
+  margin: 5px 0 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+/* The family has exactly ONE hairline — What's Next, before RECENT ACTIVITY, where a different
+ * KIND of content follows the action row. Sections of like content separate with whitespace. */
+.alloy-os-cardlab__section-head--ruled {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-cardlab__section-head:first-child {
+  margin-top: 0;
+}
+
+.alloy-os-cardlab__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.alloy-os-cardlab__fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px 12px;
+  margin-top: 3px;
+  min-width: 0;
+}
+.alloy-os-cardlab__value--missing {
+  color: #b45309;
+}
+.alloy-os-cardlab__value--positive {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* A fact that is not a person: name over detail, optional right-aligned value. */
+.alloy-os-cardlab__fact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-cardlab__fact-row-value {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-cardlab__fact-row-value.alloy-os-household__row-detail--missing {
+  color: #b45309;
+  font-weight: 600;
+}
+.alloy-os-cardlab__row-main--inline {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.alloy-os-cardlab__name--severe {
+  color: #b91c1c;
+}
+
+/* The critical safety fact leads the card as the insight, so THAT is what carries the emphasis —
+ * no banner, no count, no separate section. */
+/* ── health & safety ────────────────────────────────────────────────────── */
+
+/* Restrained risk treatment. This card carries DURABLE safety information, not an active
+ * incident, so it stays a normal card surface with a narrow risk rail. Red is spent only on the
+ * two things that must be recognised: the severity, and what staff actually do. */
+.alloy-os-health__critical {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 0 3px 10px;
+  border-left: 2px solid #c2410c;
+}
+.alloy-os-health__critical-label {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+.alloy-os-health__critical-icon {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+}
+.alloy-os-health__critical-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.alloy-os-health__critical-name {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-health__severity {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #c2410c 10%, #fff);
+  color: #c2410c;
+}
+.alloy-os-health__critical-line {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* What staff DO is the one line that has to survive a glance. */
+.alloy-os-health__critical-line--do {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #c2410c;
+}
+
+.alloy-os-health__need-inline {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.alloy-os-health__need-name {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-health__need-detail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* A medication sits UNDER the need it supports, indented against a quiet rail. */
+.alloy-os-health__med {
+  margin: 1px 0 0;
+  padding-left: 8px;
+  border-left: 1.5px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 30%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-health__med-name {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* Supporting operational context — two columns so it never dominates the care information. */
+.alloy-os-health__reqs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px 16px;
+}
+.alloy-os-health__req {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-health__req-name {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-health__req-value {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-health__req-value--missing {
+  color: #b45309;
+}
+
+/* Emergency contacts are relationship context, so they share the footer with the detail link
+ * rather than competing with medical information in the body. */
+.alloy-os-health__footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.alloy-os-health__emergency {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-health__emergency strong {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-staff__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-staff__presence {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-staff__presence--off {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+.alloy-os-cardlab__person {
+  align-items: flex-start;
+}
+.alloy-os-cardlab__person .alloy-os-card-avatar {
+  margin-top: 1px;
+}
+
+/* The primary action inside a helpful-row is the runtime's filled `primary-action`; it only needs
+ * the row's sizing applied to it here. */
+.alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ── attendance day track ───────────────────────────────────────────────── */
+
+.alloy-os-attendance__body {
+  gap: 6px;
+}
+.alloy-os-attendance__track {
+  position: relative;
+  height: 10px;
+  margin: 6px 8px 0;
+}
+.alloy-os-attendance__expected {
+  position: absolute;
+  inset: 4px 0 auto 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--alloy-os-border, #e5e9ef);
+}
+.alloy-os-attendance__actual {
+  position: absolute;
+  top: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__tick {
+  position: absolute;
+  top: 1px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 999px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.alloy-os-attendance__tick[data-tick="past"] {
+  border: 2.5px solid var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__tick[data-tick="now"] {
+  border: 2.5px solid var(--alloy-os-bend-pine, #00a283);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, transparent);
+}
+.alloy-os-attendance__scale {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 8px;
+  font-size: 0.66rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-attendance__recent {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 2px;
+}
+.alloy-os-attendance__day {
+  display: grid;
+  grid-template-columns: 8px minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-attendance__day-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  align-self: center;
+}
+.alloy-os-attendance__day[data-day-state="present"] .alloy-os-attendance__day-mark {
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__day[data-day-state="partial"] .alloy-os-attendance__day-mark {
+  background: #b45309;
+}
+.alloy-os-attendance__day[data-day-state="absent"] .alloy-os-attendance__day-mark {
+  background: var(--alloy-os-border, #e5e9ef);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, transparent);
+}
+.alloy-os-attendance__day-label {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-attendance__day-hours {
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── billing ────────────────────────────────────────────────────────────── */
+
+.alloy-os-billing__zones {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.72fr) minmax(0, 1.23fr);
+  gap: 10px 34px;
+  min-width: 0;
+  margin-top: 2px;
+}
+/* Current Period is the primary financial explanation and needs width for the arithmetic.
+ * Past Due and Payment answer one related question — what needs collecting, and how — so they
+ * stack in a narrower right column instead of holding equal authority. */
+.alloy-os-billing__zones--two {
+  grid-template-columns: minmax(0, 60fr) minmax(0, 40fr);
+  gap: 10px 36px;
+}
+.alloy-os-billing__collect {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-billing__zone--payment {
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-billing__zone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-billing__zone {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+/* Each zone announces itself in the family's in-body section-head grammar; the boundary is the
+ * 34px gap and the alignment, not a rule. */
+.alloy-os-billing__zone-head {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-billing__period {
+  margin: -2px 0 2px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* zone 1 — the arithmetic */
+.alloy-os-billing__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Cap the arithmetic's measure. At full column width the label and its amount drift apart and
+   * the stack stops reading as a sum. */
+  max-width: 380px;
+}
+.alloy-os-billing__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.alloy-os-billing__line-label {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* Only meaningful totals carry weight; individual rows stay regular and tabular. */
+.alloy-os-billing__line-value {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  min-width: 76px;
+  text-align: right;
+}
+/* The one rule the card carries — a financial subtotal, not a section divider. */
+.alloy-os-billing__line--emphasis {
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 20%, transparent);
+}
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billing__due {
+  margin: 3px 0 0;
+  max-width: 380px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__due strong {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* zone 2 — past due. The amount is the one number readable from across the room. */
+.alloy-os-billing__lines--compact {
+  max-width: none;
+  margin-top: 2px;
+}
+.alloy-os-billing__autopay--compact {
+  font-size: 0.76rem;
+  font-weight: 600;
+  margin-top: 5px;
+}
+
+.alloy-os-billing__amount {
+  margin: 2px 0 0;
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__age {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #b45309;
+}
+.alloy-os-billing__decline {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__clear {
+  margin: 4px 0 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billing__clear-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* zone 3 — a ledger, not an activity feed: fixed columns, tabular figures, uniform row height. */
+.alloy-os-billing__ledger {
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-billing__entry {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 82px;
+  gap: 12px;
+  align-items: baseline;
+  min-width: 0;
+  height: 20px;
+}
+.alloy-os-billing__entry > :last-child {
+  text-align: right;
+}
+.alloy-os-billing__entry--head {
+  height: 16px;
+}
+.alloy-os-billing__entry--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billing__entry-when {
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-label {
+  font-size: 0.74rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-amount {
+  font-size: 0.74rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-amount--credit {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* zone 3, composition B — how the bill is expected to be paid */
+.alloy-os-billing__autopay {
+  margin: 2px 0 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__autopay[data-autopay-ok="true"] {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billing__next {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__payer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 5px;
+}
+.alloy-os-billing__payer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+/* A funding source is not an ordinary parent payer, so it is not drawn as one. */
+.alloy-os-billing__payer-row[data-funding="true"] .alloy-os-billing__payer-name,
+.alloy-os-billing__payer[data-funding="true"] .alloy-os-billing__payer-name {
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__method-issue {
+  color: #b45309;
+  font-weight: 600;
+}
+/* When the ledger steps out of a primary zone it becomes one supporting line. */
+.alloy-os-billing__history {
+  margin: 9px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* payer strip — full width, below the zones, deliberately placed rather than left over. */
+.alloy-os-billing__payers {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alloy-os-billing__payer-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 3px 34px;
+}
+.alloy-os-billing__payer {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+.alloy-os-billing__payer-name {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  white-space: nowrap;
+}
+.alloy-os-billing__payer-share {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__payer-method {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One place for the financial management actions, so they stop scattering across the zones. */
+.alloy-os-billing__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+}
+
+/* ── narrow columns ─────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .alloy-os-billing__zones {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── detail experiences (expanded density, centered Focus Card) ───────────── */
+
+.alloy-os-billingdetail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 30px;
+  min-width: 0;
+  margin-top: 2px;
+}
+.alloy-os-billingdetail__col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.alloy-os-billingdetail__group {
+  margin: 6px 0 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 2px 0 4px;
+}
+.alloy-os-billingdetail__filter {
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  background: #fff;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.alloy-os-billingdetail__filter--on {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billingdetail__ledger {
+  display: flex;
+  flex-direction: column;
+}
+/* The ledger takes the full card width beneath the three columns — a real table needs room. */
+.alloy-os-billingdetail__ledgerband {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.alloy-os-billingdetail__row {
+  display: grid;
+  grid-template-columns: 56px 92px 82px minmax(0, 1fr) 124px 88px 96px 150px;
+  gap: 10px;
+  align-items: baseline;
+  min-height: 21px;
+  padding: 1px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+}
+.alloy-os-billingdetail__row > :nth-child(6) {
+  text-align: right;
+}
+.alloy-os-billingdetail__subject {
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__gl {
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__row--head {
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
+}
+.alloy-os-billingdetail__row--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__when,
+.alloy-os-billingdetail__amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__amount {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billingdetail__type,
+.alloy-os-billingdetail__status,
+.alloy-os-billingdetail__source {
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__note {
+  margin: 5px 0 0;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__unowned {
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #b45309 10%, #fff);
+  color: #b45309;
+}
+.alloy-os-billing__funding-tag {
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-healthdetail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 30px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__record {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 0 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+  min-width: 0;
+}
+.alloy-os-healthdetail__record-name {
+  margin: 0 0 2px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-healthdetail__link {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__fact {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.alloy-os-healthdetail__fact-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__fact-value {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__prov {
+  margin: 3px 0 0;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__prov--confirmed {
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 650;
+}
+.alloy-os-healthdetail__auth {
+  margin: 3px 0 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__auth--missing {
+  color: #b45309;
+}
+.alloy-os-healthdetail__auth-note {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__state {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.alloy-os-healthdetail__state--satisfied {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-healthdetail__state--missing {
+  background: color-mix(in srgb, #b45309 10%, #fff);
+  color: #b45309;
+}
+.alloy-os-healthdetail__state--expiring {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__why {
+  margin: 3px 0 0;
+  font-size: 0.66rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__table {
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-healthdetail__docrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) 74px 74px 78px;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 21px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+  font-size: 0.7rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__docrow--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__docname {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-healthdetail__ver {
+  margin-left: 5px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+@media (max-width: 1000px) {
+  .alloy-os-billingdetail,
+  .alloy-os-healthdetail__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The platform caps an expanded card body at min(360px, 45vh) and scrolls it. That is the real
+ * runtime behaviour and the lab keeps it by default. This class lifts the cap for REVIEW only, so
+ * a whole detail design can be read on one page — it is a lab affordance, not a proposed change. */
+.lab-detail-unclipped .alloy-os-ucard--expanded .alloy-os-ucard__body {
+  max-height: none;
+  overflow-y: visible;
+}
+
+/* ── safety signals: configured projections, minimum useful fact ───────────── */
+.alloy-os-signals {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.alloy-os-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.alloy-os-signal[data-signal-tone="critical"] {
+  background: color-mix(in srgb, #c2410c 10%, #fff);
+  color: #c2410c;
+}
+.alloy-os-signal[data-signal-tone="medication"] {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-signal[data-signal-tone="dietary"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
+  color: var(--alloy-os-accent-ink, #00806a);
+}
+.alloy-os-signals--dense .alloy-os-signal {
+  font-size: 9px;
+  padding: 0 6px;
+}
+
+/* ── financials detail: condensed strip + period-grouped ledger ────────────── */
+.alloy-os-fdetail__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 26px;
+  margin-top: 2px;
+}
+.alloy-os-fdetail__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.alloy-os-fdetail__statlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__statvalue {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__statvalue--strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.alloy-os-fdetail__stat[data-tone="due"] .alloy-os-fdetail__statvalue { color: #b45309; }
+.alloy-os-fdetail__stat[data-tone="ok"] .alloy-os-fdetail__statvalue { color: var(--alloy-os-bend-pine, #00a283); }
+.alloy-os-fdetail__payers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-fdetail__payer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-fdetail__filterrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+  align-items: center;
+}
+.alloy-os-fdetail__filterlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  margin-right: 2px;
+}
+.alloy-os-fdetail__period { margin-top: 8px; }
+.alloy-os-fdetail__periodhead {
+  margin: 0 0 2px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+.alloy-os-fdetail__periodname {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-fdetail__periodsum {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__collapsed {
+  margin: 3px 0 0;
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__upcoming { margin-top: 8px; }
+.alloy-os-fdetail__upcominglist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+}
+.alloy-os-fdetail__up {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+/* ── add charge command ───────────────────────────────────────────────────── */
+.alloy-os-addcharge {
+  border: 1px solid var(--alloy-os-fp-card-border, #a6b2bd);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px 16px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 480px;
+}
+.alloy-os-addcharge__title {
+  margin: 0 0 3px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 190px;
+  padding: 3px 9px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__optioncount {
+  margin-left: 8px;
+  font-size: 0.64rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__share {
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__field-value [data-locked="true"] {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.alloy-os-addcharge__type {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__type[data-on="true"] {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-addcharge__config {
+  margin: 1px 0 0;
+  font-size: 0.66rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__field {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+}
+.alloy-os-addcharge__field-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__req {
+  margin-left: 5px;
+  font-size: 8.5px;
+  color: #b45309;
+}
+.alloy-os-addcharge__field-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__field-value[data-locked="true"] {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__hint {
+  margin-left: 7px;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── lab-only surface mocks for Safety Signal projection ──────────────────── */
+.lab-surface {
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lab-surface__label {
+  margin: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.lab-surface__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lab-surface__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.lab-surface__meta {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* ── expanded process detail ───────────────────────────────────────────────── */
+.alloy-os-processdetail__history {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.alloy-os-processdetail__stage {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 0 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+}
+.alloy-os-processdetail__stage-name {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-processdetail__stage-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 18px;
+}
+.alloy-os-processdetail__fact,
+.alloy-os-processdetail__line {
+  margin: 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.alloy-os-processdetail__lbl {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-processdetail__req {
+  font-size: 10px;
+  font-weight: 650;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-processdetail__req--missing {
+  background: color-mix(in srgb, #b45309 10%, #fff);
+  color: #b45309;
+}
+.alloy-os-processdetail__pp {
+  font-size: 11px;
+}
+/* An honest absence, not an empty timeline that reads like "nothing happened". */
+.alloy-os-processdetail__nohistory {
+  margin: 3px 0 0;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  max-width: 74ch;
+}
+.alloy-os-processdetail__participants {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.alloy-os-processdetail__participant {
+  display: grid;
+  grid-template-columns: 24px minmax(140px, 220px) 108px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 8px;
+}
+.alloy-os-processdetail__participant[data-scoped="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+.alloy-os-processdetail__pname {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}

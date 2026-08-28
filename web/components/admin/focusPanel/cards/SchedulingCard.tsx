@@ -594,6 +594,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             archetype={model.archetype}
             statusChip={activeChild ? null : model.statusChip}
             statusTone={model.statusTone}
+            modalClass="record"
             density={activeChild ? "expanded" : model.density ?? "compact"}
             gridSpan={model.span}
             data-universal-card-key={model.key}

@@ -15,6 +15,10 @@ import CommunicationsCard from "@/components/admin/focusPanel/cards/Communicatio
 import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPreviewCard";
 import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import MilestonesCard from "@/components/admin/focusPanel/cards/MilestonesCard";
+import AttendanceCard from "@/components/admin/focusPanel/cards/AttendanceCard";
+import FinancialsCard from "@/components/admin/focusPanel/cards/FinancialsCard";
+import HealthSafetyCard from "@/components/admin/focusPanel/cards/HealthSafetyCard";
+import BusinessProcessCard from "@/components/admin/focusPanel/cards/BusinessProcessCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 // Drill-only content: renders ONLY inside the `documents` / `notes` cards on drill-down (an operator
@@ -138,14 +142,48 @@ export default function FocusPanelCardRenderer({
     // Employment reads the person-owned composition projected onto the context. Pure card: it
     // observes `model` + `context` only, and never mutates — Add/Edit/End live at
     // /organization/staff, so this surface has exactly one execution path for the capability.
-    if (model.key === "employment") {
+    // `staff` is the person-grain successor to this presentation. One component, because the two
+    // keys name one owner's truth at two grains — a second component would be a second presentation.
+    if (model.key === "employment" || model.key === "staff") {
         return (
             <EmploymentCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Health & Safety reads ONE child's composed health record, permission-gated server-side.
+    if (model.key === "health_safety") {
+        return (
+            <HealthSafetyCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Financials reads the household's composed account; a scoped child preselects the subject
+    // filter rather than narrowing the account, because the account is genuinely the family's.
+    if (model.key === "financials") {
+        return (
+            <FinancialsCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Attendance reads its own composed VM for the SCOPED participant; the panel stays case-grain.
+    if (model.key === "attendance") {
+        return (
+            <AttendanceCard model={model} context={context} receded={receded} coordination={coordination} />
         );
     }
     if (model.key === "scheduling") {
         return (
             <SchedulingCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // The production Business Process card — the canonical successor's own presentation. Current
+    // Work remains a consumed data owner (the evidence builder reads it); what changed is which
+    // card renders, not who owns the truth.
+    if (model.key === "business_process") {
+        return (
+            <BusinessProcessCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+            />
         );
     }
     if (model.key === "current_work") {

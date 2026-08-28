@@ -106,6 +106,7 @@ function staffSubject(
         personId: PERSON_ID,
         label: "Dana Okafor",
         truth,
+        imageUrl: null,
         employment: personEmploymentSignal(PERSON_ID, "Dana Okafor", composition),
     };
 }
@@ -129,8 +130,8 @@ describe("a staff Person with no case composes a Focus Panel model", () => {
     });
 
     it("includes the Employment card, ready, with the person's own answer", () => {
-        expect(model.cardReadiness.get("employment")).toBe("ready");
-        const card = model.cardModels.get("employment");
+        expect(model.cardReadiness.get("staff")).toBe("ready");
+        const card = model.cardModels.get("staff");
         expect(card?.visible).toBe(true);
         // "who, in what capacity, where" — minus the name, which is the surface's own subject.
         expect(card?.insight).toBe("Lead Teacher at Riverside");
@@ -153,7 +154,7 @@ describe("a staff Person with no case composes a Focus Panel model", () => {
 
     it("offers no commands — employment is authored elsewhere", () => {
         expect(model.commands).toEqual([]);
-        expect(model.cardModels.get("employment")?.primaryAction).toBeNull();
+        expect(model.cardModels.get("staff")?.primaryAction).toBeNull();
     });
 
     it("never-employed resolves to not_applicable, keeping the cell without claiming employment", () => {
@@ -162,8 +163,8 @@ describe("a staff Person with no case composes a Focus Panel model", () => {
             subject: staffSubject(neverEmployedComposition()),
             canMutate: true,
         });
-        expect(m.cardReadiness.get("employment")).toBe("not_applicable");
-        expect(m.cardModels.get("employment")?.visible).toBe(false);
+        expect(m.cardReadiness.get("staff")).toBe("not_applicable");
+        expect(m.cardModels.get("staff")?.visible).toBe(false);
         // Null signal, not an empty one: "never employed" is an answer the card must not dress up.
         expect(m.context.employment).toBeNull();
     });
@@ -201,9 +202,15 @@ describe("the case-shaped signals are not read on a person panel", () => {
 
 describe("card applicability is declared per card, not switched centrally", () => {
     it("Employment is the one card declared for both case and person", () => {
-        expect(cardGrains("employment")).toEqual(["opportunity", "person"]);
-        expect(cardAppliesToGrain("employment", "person")).toBe(true);
+        // Employment is CASE-ONLY now: on a durable person the presentation is superseded by
+        // `staff` (registry SUPERSESSION concern, person grain only). The case chip answers a
+        // different question — "does anyone on this household work here?" — and is untouched.
+        expect(cardGrains("employment")).toEqual(["opportunity"]);
+        expect(cardAppliesToGrain("employment", "person")).toBe(false);
         expect(cardAppliesToGrain("employment", "opportunity")).toBe(true);
+        expect(cardGrains("staff")).toEqual(["person"]);
+        expect(cardAppliesToGrain("staff", "person")).toBe(true);
+        expect(cardAppliesToGrain("staff", "opportunity")).toBe(false);
     });
 
     it("an undeclared card is case-only — silence never widens applicability", () => {
@@ -249,7 +256,7 @@ describe("card applicability is declared per card, not switched centrally", () =
      * widening visible, and this test earned its keep by failing the moment the grain changed.
      */
     it("the person grain selects Employment and Assignments out of the whole catalog", () => {
-        expect(cardKeysForGrain("person")).toEqual(["employment", "scheduling"]);
+        expect(cardKeysForGrain("person")).toEqual(["staff", "scheduling"]);
         // The catalog is one vocabulary; selection is what varies.
         expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
         // Widening named `person` and NOTHING else: a staff member's commitment is a person fact,
@@ -262,7 +269,9 @@ describe("card applicability is declared per card, not switched centrally", () =
         // is the point: the ONLY cards outside the case grain are ones explicitly declared elsewhere.
         const caseKeys = cardKeysForGrain("opportunity");
         const excluded = FOCUS_PANEL_CARDS.map((c) => c.key).filter((k) => !caseKeys.includes(k));
-        expect(excluded).toEqual(["child_identity"]);
+        // `staff` joins it: a person-grain card is legitimately not case-grain. The invariant the
+        // test guards is unchanged — no card that WAS case-grain silently stopped being one.
+        expect(excluded).toEqual(["staff", "child_identity"]);
     });
 
     it("an unsupported grain/card pair is refused deterministically, never thrown", () => {
@@ -280,7 +289,7 @@ describe("card applicability is declared per card, not switched centrally", () =
             subject: staffSubject(),
             canMutate: true,
         });
-        expect([...model.cardModels.keys()]).toEqual(["employment"]);
+        expect([...model.cardModels.keys()]).toEqual(["staff"]);
         // No empty shell pretending applicability.
         expect(model.cardReadiness.has("current_work")).toBe(false);
         expect(model.cardReadiness.has("household")).toBe(false);
@@ -288,9 +297,9 @@ describe("card applicability is declared per card, not switched centrally", () =
 });
 
 describe("default composition varies by grain", () => {
-    it("person composes exactly one card, and it is Employment", () => {
+    it("person composes exactly one card, and it is Staff", () => {
         const composition = focusPanelDefaultCompositionForGrain("person");
-        expect(composition.map((e) => e.key)).toEqual(["employment"]);
+        expect(composition.map((e) => e.key)).toEqual(["staff"]);
         expect(composition[0]!.visibility).toBe("visible");
     });
 
@@ -384,7 +393,7 @@ describe("a person's operational host is enrichment only", () => {
         const without = personModel(null);
         expect(withHost.subject).toEqual(without.subject);
         expect([...withHost.cardModels.keys()]).toEqual([...without.cardModels.keys()]);
-        expect(withHost.cardModels.get("employment")).toEqual(without.cardModels.get("employment"));
+        expect(withHost.cardModels.get("staff")).toEqual(without.cardModels.get("staff"));
         expect(withHost.context.businessProcess).toEqual({ key: null, label: null, stageKey: null });
     });
 });

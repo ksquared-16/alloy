@@ -55,6 +55,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCardDensity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
@@ -70,7 +71,21 @@ type NestedSurfaceTarget = {
 type Props = {
     /** Seed grid from loaded published layout (converted once on mount). */
     initialGrid: FocusPanelGridLayout;
-    catalog: { key: FocusPanelCardKey; label: string }[];
+    /**
+     * The authorable library, with each entry's PLACEMENT.
+     *
+     * `variantLabel` + `columns` are what let one canonical identity be offered in more than one
+     * shape — Financials Summary (8/12) and Financials Compact (4/12) — without a second card key.
+     */
+    /** Records a placement variant's density on the card's own config. */
+    onCardDensityChange?: (card: FocusPanelCardKey, density: FocusPanelCardDensity) => void;
+    catalog: {
+        key: FocusPanelCardKey;
+        label: string;
+        variantLabel?: string;
+        density?: FocusPanelCardDensity;
+        columns?: number;
+    }[];
     order: SummaryCardOrderEntry[];
     cards: Map<FocusPanelCardKey, FocusPanelCardModel>;
     vm: OpportunityDrawerViewModel;
@@ -97,6 +112,7 @@ type Ghost = { colStart: number; colSpan: number; rowStart: number; rowSpan: num
 export default function FocusPanelRuntimeComposerCanvas({
     initialGrid,
     catalog,
+    onCardDensityChange,
     order,
     cards,
     vm,
@@ -426,10 +442,22 @@ export default function FocusPanelRuntimeComposerCanvas({
         window.addEventListener("pointercancel", up);
     };
 
-    const onAddCard = (card: FocusPanelCardKey) => {
-        const span = Math.min(6, cols);
+    /*
+     * Add at the placement the LIBRARY declared, not at a fixed six columns.
+     *
+     * Every card arrived 6/12 regardless of what it is, so an authored panel started life wrong and
+     * the operator resized card by card: Business Process is a full row, Financials Summary is 8,
+     * its Compact variant is 4. The width travels with the choice, and `addCardToGrid` packs it into
+     * the first row that can hold it — which is what makes 8 + 4 land beside each other instead of
+     * on two rows with a hole.
+     */
+    const onAddCard = (card: FocusPanelCardKey, placement?: { colSpan?: number; density?: FocusPanelCardDensity }) => {
+        const span = Math.max(1, Math.min(placement?.colSpan ?? Math.min(6, cols), cols));
         const withCard = addCardToGrid(grid, card, { colSpan: span, rowSpan: defaultRowSpanForCard(card) });
         applyGrid(withCard);
+        // The density is part of the placement, so it is recorded with it rather than left to the
+        // card's default — a Compact choice that renders as Summary is not a choice.
+        if (placement?.density) onCardDensityChange?.(card, placement.density);
     };
 
     const renderComposerCell = useCallback(
@@ -586,13 +614,28 @@ export default function FocusPanelRuntimeComposerCanvas({
                     <span className="alloy-os-fp-composer__tray-label">Add card</span>
                     {tray.map((c) => (
                         <button
-                            key={c.key}
+                            // A variant is keyed by identity AND shape: Financials appears twice in
+                            // the tray, once per placement, and both are the same `cardKey`.
+                            key={`${c.key}:${c.variantLabel ?? "default"}`}
                             type="button"
                             className="alloy-os-fp-composer__chip"
                             data-fp-composer-add-card={c.key}
-                            onClick={() => onAddCard(c.key)}
+                            data-fp-composer-variant={c.variantLabel ?? undefined}
+                            data-fp-composer-columns={c.columns ?? undefined}
+                            title={
+                                c.variantLabel ?
+                                    `${c.label} — ${c.variantLabel}, ${c.columns ?? 6} of 12 columns`
+                                :   `${c.label} — ${c.columns ?? 6} of 12 columns`
+                            }
+                            onClick={() => onAddCard(c.key, { colSpan: c.columns, density: c.density })}
                         >
-                            {c.label}
+                            <span className="alloy-os-fp-composer__chip-label">{c.label}</span>
+                            {/* The consequence of the choice, on the chip: an operator picking
+                                between two Financials placements can see which is which. */}
+                            <span className="alloy-os-fp-composer__chip-shape">
+                                {c.variantLabel ? `${c.variantLabel} · ` : ""}
+                                {c.columns ?? 6}/12
+                            </span>
                         </button>
                     ))}
                 </div>
