@@ -31,6 +31,7 @@ export const ACTION_TYPES = Object.freeze({
   REPOSITORY_CLOSE_PULL_REQUEST: "repository.close_pull_request",
   REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
   VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
+  VACILANDO_RETIRE_WORKTREE: "vacilando.retire_worktree",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -290,6 +291,55 @@ function definePromotionOpenPr() {
 }
 
 
+function defineRetireWorktree() {
+  return {
+    actionType: ACTION_TYPES.VACILANDO_RETIRE_WORKTREE,
+    version: 1,
+    title: "Retire a Vacilando worktree through Git",
+    requiredCapability: "trusted_host.vacilando.retire_worktree",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "worktree", "branch", "headSha", "safetyFingerprint", "s7State"],
+    },
+    outputSchema: { applied: "array", postconditions: "object" },
+    evidenceSchema: ["worktree", "branch", "head_sha", "safety_fingerprint", "gates", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const worktree = String(inputs.worktree || "").trim();
+      const branch = String(inputs.branch || "").trim();
+      const headSha = String(inputs.headSha || "").trim();
+      const fingerprint = String(inputs.safetyFingerprint || "").trim();
+      if (!String(inputs.repository || "").trim()) return { ok: false, code: "missing_repository" };
+      if (!worktree) return { ok: false, code: "missing_worktree" };
+      if (worktree.includes("/") || worktree.includes("..")) return { ok: false, code: "invalid_worktree_identity" };
+      if (!branch) return { ok: false, code: "missing_branch" };
+      // An abbreviated SHA once passed every local check and died inside the
+      // provider. Bind on the full object name or not at all.
+      if (!/^[0-9a-f]{40}$/.test(headSha)) return { ok: false, code: "invalid_head_sha" };
+      if (!/^[0-9a-f]{32}$/.test(fingerprint)) return { ok: false, code: "invalid_safety_fingerprint" };
+      if (!String(inputs.s7State || "").trim()) return { ok: false, code: "missing_s7_state" };
+      // Branch deletion is a different action with a different blast radius. A
+      // retirement request that also asks to delete a branch is malformed, not
+      // convenient.
+      if (inputs.deleteBranch != null || inputs.deleteRemoteBranch != null) {
+        return { ok: false, code: "branch_deletion_is_a_separate_action" };
+      }
+      return {
+        ok: true,
+        normalized: {
+          repository: String(inputs.repository).trim(),
+          worktree, branch, headSha, safetyFingerprint: fingerprint,
+          s7State: String(inputs.s7State).trim(),
+          worktreeParent: inputs.worktreeParent || null,
+          canonicalRoot: inputs.canonicalRoot || null,
+          requestingWorktree: inputs.requestingWorktree || null,
+        },
+      };
+    },
+  };
+}
+
 function defineApplyReconciliationPlan() {
   return {
     actionType: ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN,
@@ -487,6 +537,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, defineRepositoryClosePullRequest()],
   [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, defineRepositoryDeleteRemoteBranch()],
   [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
+  [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
 ]);
 

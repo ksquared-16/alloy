@@ -51,6 +51,7 @@ import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
 import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
+import { executeWorktreeRetirement } from "./trusted-host-worktree-retirement.mjs";
 import { gatherObservation } from "./reconciliation-observe.mjs";
 import {
   applyMigrationBatch,
@@ -522,6 +523,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
     return executeDeleteRemoteBranchTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) {
+    return executeRetireWorktreeTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -1372,6 +1376,64 @@ export function executeApplyReconciliationPlanTrustedHostAction(action, { actor 
     requested: out.requested, applied: out.applied, skipped: out.skipped,
     withheld: out.withheld, unsupported: out.unsupported, credentialsExposed: false,
   }, { nowMs });
+}
+
+export function executeRetireWorktreeTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  // The executor re-measures every safety gate itself. What the request carries
+  // is a claim about a moment that has already passed.
+  const root = action.inputs?.runtimeRoot || runtimeRoot();
+  let out;
+  try {
+    out = executeWorktreeRetirement({
+      root,
+      worktree: action.inputs?.worktree,
+      repository: action.inputs?.repository,
+      expectedFingerprint: action.inputs?.safetyFingerprint,
+      expectedHeadSha: action.inputs?.headSha,
+      expectedBranch: action.inputs?.branch,
+      worktreeParent: action.inputs?.worktreeParent || null,
+      canonicalRoot: action.inputs?.canonicalRoot || null,
+      requestingWorktree: action.inputs?.requestingWorktree || null,
+      s7State: action.inputs?.s7State || null,
+      nowMs,
+    });
+  } catch (e) {
+    return failTrustedAction(action, "retirement_failed", String(e?.message || e), { nowMs });
+  }
+  if (!out.ok) {
+    return failTrustedAction(action, out.error || "retirement_refused",
+      out.reason || out.detail || `retirement refused: ${out.error}`, { nowMs });
+  }
+  return completeTrustedAction(action, {
+    worktree: out.worktree, path: out.path, branch: out.branch, head_sha: out.head_sha,
+    safety_fingerprint: out.fingerprint, applied: out.applied,
+    postconditions: out.postconditions, removal_method: out.removal_method,
+    branch_deleted: out.branch_deleted, credentialsExposed: false,
+  }, { nowMs });
+}
+
+export function fulfillRetireWorktreeForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillApplyReconciliationPlanForMission(missionId, {

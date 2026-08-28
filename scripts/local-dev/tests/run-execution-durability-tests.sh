@@ -69,6 +69,7 @@ SUITES=(
   "development-director-execution-bridge.test.mjs"
   "development-governed-run-wait.test.mjs"
   "development-repository-housekeeping.test.mjs"
+  "development-worktree-retirement.test.mjs"
 )
 
 PASS=0
