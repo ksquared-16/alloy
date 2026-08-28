@@ -352,3 +352,63 @@ the foot. Exactly two action labels: `Payment`, `Add charge`.
 every queue lens in this tenant resolves CHILD grain, where the code composition governs by
 design — the runtime rendered `scheduling` (code) and not `readiness_kpi` (published). This
 needs a genuine case-grain lens to certify and is not a defect in anything changed here.
+
+---
+
+# PROMOTED TO STAGING
+
+**Final staging SHA: `75cedc8f93770c3d226571a32886d299f9432031`**
+
+| Step | Evidence |
+|---|---|
+| Cards program merged | PR **#587** → merge `29fa895a190462297eba6cdd4c66a79c19925f07` |
+| Pre-enrollment Financials merged | PR **#589** → merge `75cedc8f93770c3d226571a32886d299f9432031` |
+| Migration on staging | `20260827120000_household_billable_source.sql`, sha256 `c798135c…b44c2` (exact match) |
+| Migration applied | `gar_35fd9289026517` — `ok: true`, `ledger: "applied"`, `artifact_source: git_object`, 2026-08-28T03:27:06Z |
+
+## Migration proof — by real database read
+
+Census `gar_0266a335d01adf` BEFORE the apply, against `alloy_deployed_primary`:
+
+```
+charges              CHECK (billable_source_type IS NULL OR = ANY (ARRAY['job','enrollment_agreement']))
+ledger_transactions  CHECK (billable_source_type IS NULL OR = ANY (ARRAY['job','enrollment_agreement']))
+```
+
+`customer` absent from both — the migration was genuinely required, not assumed.
+
+AFTER the apply, the proof is a real write: a charge carrying `billable_source_type = 'customer'`
+was inserted successfully. That insert is impossible against the CHECK above, so the write
+itself proves the constraint changed. (A confirming re-census, `gar_ae21d81a40e2a5`, is queued
+awaiting operator approval; it is corroboration, not the proof.)
+
+## Pre-enrollment billing proof
+
+A waitlist household with **zero** enrollment agreements:
+
+| Check | Result |
+|---|---|
+| Financials rendered | ✅ |
+| Add charge available | ✅ |
+| Preview | `registration_fee $75.00`, occurs + billable 2026-08-28 |
+| Commit | ✅ no refusal |
+| Read model refresh | rows 0 → 1 |
+| No agreement fabricated | `subjects: 0` after |
+| No arbitrary child chosen | `subjectMemberId: null` |
+| Draft ≠ owed | `status: draft`, balance stays $0 |
+| Enrolled-child charges | re-certified unchanged |
+
+## Regression, on staging-identical code
+
+Business Process 1343 full row (ENROLLMENT, 3 annotations) · Financials 892 8/12 summary ·
+Health & Safety 441 4/12 · Attendance 892 8/12 + Assignments 441 4/12 · Children 667 6/12.
+Modal classes: command 560 · record 880 · workstation 1180 (Financials / Health / Attendance).
+Surface Builder tray carries no predecessor identity. Suites 279/279; typecheck rc=0.
+
+## Deferred, deliberately
+
+The M1/D-H1 health FIELD-REGISTRY rebinding did not promote. Staging has evolved that registry
+independently, and taking my side would have reverted another lane's work to ship a program
+that is explicitly deferred. `tests/health/healthGrainM1.test.ts` was removed from the
+promotion rather than shipped red. The H1 health-fact substrate the Health & Safety card
+depends on is unaffected.
