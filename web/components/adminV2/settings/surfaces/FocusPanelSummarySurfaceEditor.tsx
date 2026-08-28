@@ -36,6 +36,7 @@ import type { FocusPanelCardConfig } from "@/lib/adminV2/runtime/focusPanel/focu
 import {
     authorableFocusPanelCards,
     authoringPlacementModelFor,
+    placementVariantsFor,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import {
     loadFocusPanelSummaryLayout,
@@ -105,6 +106,7 @@ function FocusPanelComposerInspectorSlot({
     history,
     order,
     cards,
+    onPresentationChange,
 }: {
     selectedEntry: SummaryCardOrderEntry | null;
     selectedBaseModel: FocusPanelCardModel | null;
@@ -114,6 +116,7 @@ function FocusPanelComposerInspectorSlot({
     history: { publishedVersion: number | null; hasDraft: boolean; dirty: boolean };
     order: SummaryCardOrderEntry[];
     cards: Map<FocusPanelCardKey, FocusPanelCardModel>;
+    onPresentationChange?: (card: FocusPanelCardKey, variantLabel: string) => void;
 }) {
     const composer = useFocusPanelComposer();
     if (composer?.drillIn) {
@@ -134,6 +137,7 @@ function FocusPanelComposerInspectorSlot({
     if (selectedEntry && selectedBaseModel) {
         return (
             <FocusPanelCardInspector
+                onPresentationChange={onPresentationChange}
                 baseModel={selectedBaseModel}
                 instanceId={selectedInstanceId!}
                 config={selectedEntry.config ?? {}}
@@ -480,6 +484,26 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
         [],
     );
 
+    /**
+     * Switch a card's PRESENTATION.
+     *
+     * Both halves travel together. The density is what the card reads to decide
+     * which composition it renders; the span is where the platform puts it. A
+     * Compact choice left at Summary width would render the compact card in an
+     * eight-column hole, which is not the choice the operator made.
+     */
+    const [desiredSpanByCard, setDesiredSpanByCard] = useState<Partial<Record<FocusPanelCardKey, number>>>({});
+    const handlePresentationChange = useCallback(
+        (cardKey: FocusPanelCardKey, variantLabel: string) => {
+            const variant = placementVariantsFor(cardKey).find((v) => v.variantLabel === variantLabel);
+            if (!variant) return;
+            handleVariantDensity(cardKey, variant.density);
+            setDesiredSpanByCard((prev) => ({ ...prev, [cardKey]: variant.columns }));
+            setDirty(true);
+        },
+        [handleVariantDensity],
+    );
+
     const selectedEntry = selectedInstanceId ? byInstance.get(selectedInstanceId) ?? null : null;
     const selectedBaseModel = selectedEntry ? cards.get(selectedEntry.key) ?? null : null;
 
@@ -588,6 +612,7 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
                             initialGrid={builderInitialGrid}
                             catalog={builderCatalog}
                             onCardDensityChange={handleVariantDensity}
+                            desiredSpanByCard={desiredSpanByCard}
                             order={order}
                             cards={cards}
                             vm={vm}
@@ -622,6 +647,7 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
                         }}
                         order={order}
                         cards={cards}
+                        onPresentationChange={handlePresentationChange}
                     />
                 </div>
             ) : null}

@@ -122,3 +122,38 @@ describe("the authorable library", () => {
         expect(financials.find((o) => o.variantLabel === "Compact")!.columns).toBe(4);
     });
 });
+
+describe("Financials presentations", () => {
+    it("are one canonical identity with two named presentations, and no third", async () => {
+        const { placementVariantsFor, currentPlacementVariant } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring"
+        );
+        const variants = placementVariantsFor("financials");
+        expect(variants.map((v) => v.variantLabel)).toEqual(["Summary", "Compact"]);
+        /*
+         * Operator language only. "Compact" is the operator's word and stays — it
+         * happens to spell the same as an internal density, which is a coincidence
+         * of vocabulary, not a leak. What must never appear is the grid arithmetic
+         * or the densities an operator has no name for.
+         */
+        for (const v of variants) {
+            expect(v.variantLabel).not.toMatch(/\d+\s*\/\s*12|\bspan\b|\bstandard\b|\bmicro\b|\bexpanded\b/i);
+        }
+        // The placement travels with the choice, silently.
+        expect(variants.find((v) => v.variantLabel === "Summary")!.columns).toBe(8);
+        expect(variants.find((v) => v.variantLabel === "Compact")!.columns).toBe(4);
+        // A placed card reports which presentation it is in, from its authored density.
+        expect(currentPlacementVariant("financials", "compact")).toBe("Compact");
+        expect(currentPlacementVariant("financials", "standard")).toBe("Summary");
+    });
+
+    it("a card with a single presentation offers none — the control is not invented", async () => {
+        const { placementVariantsFor, currentPlacementVariant } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring"
+        );
+        for (const key of ["business_process", "attendance", "health_safety", "household", "children"]) {
+            expect(placementVariantsFor(key as never)).toEqual([]);
+            expect(currentPlacementVariant(key as never, "standard")).toBeNull();
+        }
+    });
+});
