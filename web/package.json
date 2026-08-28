@@ -34,6 +34,8 @@
         "screenshots:bos-operational-intake-shell-lock": "playwright test playwright/tests/bos-operational-intake-shell-lock.spec.ts",
         "screenshots:action-workspace-bos-cloud": "playwright test playwright/tests/action-workspace-bos-cloud.spec.ts",
         "dev:tenant:childcare": "tsx --tsconfig tsconfig.json scripts/spinupChildcareTenant.ts",
+        "dev:seed:operational-cards-certification": "tsx --tsconfig tsconfig.json scripts/seedOperationalCardsCertification.ts",
+        "dev:seed:staff-certification": "tsx --tsconfig tsconfig.json scripts/seedStaffCertificationFixture.ts",
         "dev:seed:work-unit-job-queues": "tsx --tsconfig tsconfig.json scripts/seedWorkUnitJobQueueDefinitionV1.ts",
         "dev:seed:enrollment-opportunity-queues": "tsx --tsconfig tsconfig.json scripts/seedEnrollmentOpportunityQueuesV1.ts",
         "dev:seed:ensure-application-in-progress-status": "tsx --tsconfig tsconfig.json scripts/ensureOpportunityStatusApplicationInProgress.ts",

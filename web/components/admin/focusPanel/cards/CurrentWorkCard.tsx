@@ -553,6 +553,7 @@ export default function CurrentWorkCard({
             // every visible exit was bound to `closeWorkspace`, so leaving a command destination
             // always cost the operator the whole Focus Panel context.
             onDismissPanel={closeActionPanel}
+            panelTitle={activePanelAction?.label ?? null}
             actionPanel={
                 activePanelAction ?
                     <CurrentWorkActionPanel
@@ -641,13 +642,20 @@ export default function CurrentWorkCard({
             data-focused-work-id={focusedWorkItemId ?? undefined}
         >
             <UniversalCard
-                title={vm.microLabel}
-                insight={cardInsight}
+                /*
+                 * IN COMMAND MODE THE CARD STOPS INTRODUCING ITSELF. "What's Next" and the stage sat
+                 * above every command workspace, restating what is still visible behind the scrim
+                 * and pushing the first editable control down by two lines plus a chip. The command
+                 * names itself in its own topbar, so this identity is redundant exactly while a
+                 * capability owns the surface — and returns the moment it closes.
+                 */
+                title={capabilityActive ? "" : vm.microLabel}
+                insight={capabilityActive ? "" : cardInsight}
                 supportingInsight={null}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="status"
-                statusChip={statusChip}
+                statusChip={capabilityActive ? null : statusChip}
                 statusTone={statusTone}
                 density="compact"
                 gridSpan={model.span}

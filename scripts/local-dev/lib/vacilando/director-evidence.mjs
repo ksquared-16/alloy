@@ -19,6 +19,8 @@ import { executionRunStorePath } from "./execution-run.mjs";
 import { developmentLaneStorePath } from "./development-lane.mjs";
 import { branchIsReferenced } from "./branch-reference.mjs";
 import { isSafeCorrection, WITHHELD_CORRECTION_KINDS } from "./reconciliation-apply.mjs";
+import { observeRetirementCandidates } from "./worktree-retirement-observe.mjs";
+import { homedir } from "node:os";
 import {
   measureClosePullRequestGates,
   measureDeleteRemoteBranchGates,
@@ -100,6 +102,12 @@ export function changedFiles(worktree, baseRef, headSha) {
  * rather than an assumption. Until those are wired, push and open-PR escalate
  * exactly as they do today.
  */
+function gateEvidence(measured, gateName, field) {
+  const g = (measured?.gates || []).find((x) => x.gate === gateName);
+  if (!g || !g.measured) return null;
+  return g.evidence ? g.evidence[field] ?? null : null;
+}
+
 export function collectDirectorEvidence(rec, {
   stateRoot,
   worktree = null,
@@ -157,6 +165,76 @@ export function collectDirectorEvidence(rec, {
     evidence.ambiguous_owner_mutations = corrections ? corrections.filter((c) => c?.kind === "any_correction").length : null;
     evidence.withheld_count = withheld.length;
     evidence.metadata_store_known = Boolean(stateRoot);
+  }
+  // Worktree retirement. Every value here is a MEASUREMENT of the worktree the
+  // request names, taken now — not a restatement of what the requester claimed.
+  // The safety snapshot travels with the request so a decision can be audited,
+  // but the gates below read the freshly measured half.
+  if (rec?.action_key === "vacilando.retire_worktree") {
+    const wt = inputs.worktree || null;
+    evidence.branch = inputs.branch || null;
+    evidence.retirement_fingerprint = inputs.safetyFingerprint || null;
+    // Asking to delete a branch as part of retiring a worktree is malformed,
+    // and stays visible as a gate rather than being silently dropped.
+    evidence.requests_branch_deletion = Boolean(inputs.deleteBranch || inputs.deleteRemoteBranch);
+    try {
+      const parent = inputs.worktreeParent || join(homedir(), "Code", "alloy-worktrees");
+      const gitList = (() => {
+        try {
+          return execFileSync("git", ["worktree", "list", "--porcelain"], {
+            cwd: inputs.canonicalRoot || join(homedir(), "Alloy"), encoding: "utf8",
+            timeout: 20000, stdio: ["ignore", "pipe", "ignore"],
+          }).split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.replace("worktree ", ""));
+        } catch { return null; }
+      })();
+      const inGit = gitList == null ? null : gitList.some((x) => x.replace(/\/+$/, "").split("/").pop() === wt);
+      let processes = [];
+      try {
+        processes = execFileSync("ps", ["-Ao", "pid=,args="], { encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 15000 })
+          .split("\n").map((l) => { const m = l.trim().match(/^(\d+)\s+(.*)$/); return m ? { pid: Number(m[1]), command: m[2] } : null; })
+          .filter(Boolean);
+      } catch { processes = []; }
+      const measured = observeRetirementCandidates({
+        root: stateRoot,
+        s7Worktrees: [{ path: wt, state: inputs.s7State || "retirable", in_git_worktree_list: inGit, reasons: [] }],
+        processes,
+        worktreeParent: parent,
+        // THE REQUESTER COMES FROM THE RECORD, never from inputs. A worker
+        // that could name its own requester could name someone else's and
+        // retire the tree it is running in. This is the same rule defaultExecute
+        // applies; wiring it in two of the three places left not_self_retirement
+        // unmeasured here, which changed the gate set and therefore the
+        // fingerprint, and a correct request was refused as stale.
+        requestingWorktree: rec?.worktree_path || inputs.requestingWorktree || null,
+        repository: inputs.repository || "repo_alloy",
+      })[0];
+      if (measured) {
+        evidence.retirement_safety_measured = measured.unmeasured.length === 0;
+        evidence.retirement_state = measured.state;
+        evidence.worktree_dirty_paths = gateEvidence(measured, "tree_clean_or_handled", "dirty_paths")?.length ?? null;
+        const liveRefs = ["no_live_provider", "no_live_dev_server", "no_active_execution_run",
+          "no_active_governed_action", "no_active_lane"]
+          .map((g) => measured.gates.find((x) => x.gate === g))
+          .filter((g) => g && g.measured);
+        evidence.live_worktree_references = liveRefs.length === 5
+          ? liveRefs.filter((g) => !g.passed).length
+          : null;
+        evidence.branch_durability = measured.durability;
+        evidence.unique_work_at_risk = measured.durability === "unknown"
+          ? null
+          : measured.durability === "unique_local_commits";
+        const untracked = gateEvidence(measured, "no_untracked_unreproducible", "untracked");
+        const reproducible = gateEvidence(measured, "no_untracked_unreproducible", "reproducible");
+        evidence.untracked_unreproducible = untracked == null ? null : (reproducible === true ? 0 : untracked.length);
+        const selfGate = measured.gates.find((g) => g.gate === "not_self_retirement");
+        evidence.self_retirement = selfGate && selfGate.measured ? !selfGate.passed : null;
+        // The fingerprint must still describe what was just measured.
+        if (evidence.retirement_fingerprint && measured.fingerprint !== evidence.retirement_fingerprint) {
+          evidence.retirement_safety_measured = false;
+          evidence.retirement_state = "stale";
+        }
+      }
+    } catch { /* unmeasured -> escalates */ }
   }
   if (rec?.action_key === "repository.close_pull_request") {
     try {

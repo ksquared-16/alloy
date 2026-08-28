@@ -382,9 +382,24 @@ export function childQueueRowContext(params: {
 export function childSubjectIdentityTruthBindings(
     composition: ChildSurfaceComposition,
     childDisplayName: string | null,
+    /**
+     * The child's canonical resolved photo, already minted for this actor by
+     * `attachChildGrainAvatar` over the whole row set.
+     *
+     * Carried here so the Focus Panel header can show the child's ACTUAL image, the same one the
+     * queue rows and the Children card show. Without it the header had no photo to render under any
+     * `child.*` key and fell back to initials for every child — which states "no photo exists" when
+     * the truth is "this surface never asked for it".
+     *
+     * Absent stays absent. The fallback presentation is the normal one, not a new treatment.
+     */
+    childAvatarImageUrl?: string | null,
 ): Record<string, unknown> | null {
     const bindings: Record<string, unknown> = {};
     if (childDisplayName) bindings["child.display_name"] = childDisplayName;
+    if (childAvatarImageUrl?.trim()) {
+        bindings["child.resolved_photo_url"] = childAvatarImageUrl.trim();
+    }
     if (composition.family?.name) bindings["child.family_name"] = composition.family.name;
     // Prefer family context; fall back to participation identity.contextId so Settlement
     // can always key the opportunity VM when Attention is the child.

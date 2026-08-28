@@ -16,6 +16,7 @@
  * @see docs/platform/operator/card-composition-system.md (default = recommendation, published = source of truth)
  */
 
+import { normalizeFocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 /**
@@ -280,11 +281,41 @@ export function isFocusPanelPublishedLayout(value: unknown): value is FocusPanel
 export const FOCUS_PANEL_PUBLISHED_LAYOUT_META_KEY = "focusPanelLayout" as const;
 
 /** Read + validate the published layout from a Summary LayoutDoc's metadata, or null. */
+/**
+ * Normalize every card key inside a stored published layout.
+ *
+ * THE STORED BLOB IS CONFIGURATION, AND CONFIGURATION NORMALIZES. `readFocusPanelCardSectionMeta`
+ * already normalizes the section path, but the published layout is a SECOND record of the same
+ * composition held in doc metadata, and it was returned verbatim. A tenant whose layout was
+ * published naming a superseded key therefore resolved that key on one path and not the other —
+ * two readers of one document disagreeing about which card is placed, which is how a card ends up
+ * both present and absent in the same render.
+ */
+function normalizePublishedLayoutCardKeys(layout: FocusPanelPublishedLayout): FocusPanelPublishedLayout {
+    const normalizeKey = (card: FocusPanelCardKey): FocusPanelCardKey =>
+        normalizeFocusPanelCardKey(card) ?? card;
+    return {
+        ...layout,
+        ...(layout.grid
+            ? {
+                  grid: {
+                      ...layout.grid,
+                      areas: layout.grid.areas.map((a) => ({ ...a, card: normalizeKey(a.card) })),
+                  },
+              }
+            : {}),
+        rows: layout.rows.map((row) => ({
+            ...row,
+            cells: row.cells.map((cell) => ({ ...cell, cards: cell.cards.map(normalizeKey) })),
+        })),
+    };
+}
+
 export function readFocusPanelPublishedLayout(
     doc: { metadata?: Record<string, unknown> | null } | null | undefined,
 ): FocusPanelPublishedLayout | null {
     const raw = doc?.metadata?.[FOCUS_PANEL_PUBLISHED_LAYOUT_META_KEY];
-    return isFocusPanelPublishedLayout(raw) ? raw : null;
+    return isFocusPanelPublishedLayout(raw) ? normalizePublishedLayoutCardKeys(raw) : null;
 }
 
 /** Areas top→bottom, then left→right — the grid's natural reading order. */

@@ -100,6 +100,17 @@ export type FocusPanelCardPayload = {
 export const FOCUS_PANEL_CARD_KEYS = [
     /** @grain case — family attention flags */
     "attention",
+    /**
+     * @grain case — the combined Business Process card: configured stage rail + participant
+     * projection + Current Work + case actions + bounded Activity.
+     *
+     * THE CANONICAL SUCCESSOR TO `current_work` AS A CARD PRESENTATION. `current_work` remains a
+     * canonical DATA owner that this card consumes — the supersession is of card identity and
+     * composition, never of the Current Work platform concept. Stored tenant configuration naming
+     * `current_work` normalizes here (the SUPERSESSION concern on the registry), and the two must
+     * never render together.
+     */
+    "business_process",
     /** @grain case — current lifecycle mission label */
     "current_mission",
     /** @grain case — open work items for this family */
@@ -123,6 +134,25 @@ export const FOCUS_PANEL_CARD_KEYS = [
      * has no host Work Unit of its own, so the case panel is the only surface that composes
      * for them. Employment facts are never authored here.
      */
+    /**
+     * @grain case — the child's operating day: expected window, arrival, room movements, current
+     * location, departure, and the commands that change them.
+     *
+     * Case grain with a PARTICIPANT SCOPE: the panel subject stays the family, and the card answers
+     * about the scoped child. With several children and none scoped it renders no controls rather
+     * than picking one.
+     */
+    "attendance",
+    "financials",
+    "health_safety",
+    /**
+     * @grain person — the employee-centric Staff card.
+     *
+     * Successor to the person-grain `employment` presentation, reading the SAME
+     * `PersonEmploymentComposition`. Not a second owner of employment truth — a fuller presentation
+     * of the one owner. `scheduling` stays a separate card answering a separate question.
+     */
+    "staff",
     "employment",
     /** @grain case — meaningful completed/committed outcomes (not Activity history) */
     "milestones",

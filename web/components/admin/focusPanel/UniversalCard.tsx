@@ -28,6 +28,23 @@ export type UniversalCardProps = {
     className?: string;
     "data-universal-card-key"?: string;
     receded?: boolean;
+    /**
+     * WHICH OF THE THREE ELEVATED SIZES this card takes when it is raised into the depth layer.
+     *
+     * The Focus Panel has exactly three intentional modal classes, and they are a property of what
+     * the card IS, not of who opened it:
+     *
+     *   command      a focused mutation — Add charge, Add allergy. Smallest: a short form does not
+     *                need a workstation, and a small card is what makes it read as a command.
+     *   record       an entity's detail — Children, Household, Assignment. Medium.
+     *   workstation  a working surface — Financials, Health, Attendance details. Largest, because a
+     *                filtered ledger or a three-column record is the work, not a summary of it.
+     *
+     * Declared here rather than inferred from density so a card cannot end up in the wrong size by
+     * accident: Add charge was reading as a workstation purely because `expanded` was the only way
+     * into the elevated host.
+     */
+    modalClass?: "command" | "record" | "workstation";
 };
 
 const DENSITY_CLASS: Record<FocusPanelCardDensity, string> = {
@@ -69,6 +86,7 @@ export default function UniversalCard({
     statusTone = "neutral",
     footerAction,
     density = "compact",
+    modalClass,
     gridSpan,
     children,
     className,
@@ -95,6 +113,7 @@ export default function UniversalCard({
             )}
             data-universal-card="true"
             data-universal-card-density={density}
+            data-universal-card-modal={modalClass ?? undefined}
             data-universal-card-tier={tier}
             data-card-role={cardRole}
             data-card-archetype={archetype ?? undefined}

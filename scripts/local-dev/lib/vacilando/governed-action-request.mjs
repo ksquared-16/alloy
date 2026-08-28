@@ -46,6 +46,7 @@ import {
   fulfillRepositoryPushForMission,
   fulfillClosePullRequestForMission,
   fulfillApplyReconciliationPlanForMission,
+  fulfillRetireWorktreeForMission,
   fulfillDeleteRemoteBranchForMission,
   fulfillRestoreQaSessionForMission,
   fulfillProvisionQaIdentityForMission,
@@ -1248,6 +1249,7 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
+  if (actionKey === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) return "other";
   return "read_only";
 }
 
@@ -2058,6 +2060,21 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) {
+    return fulfillRetireWorktreeForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      // The REQUESTING worktree comes from the record, never from inputs — a
+      // worker that could name its own requester could name someone else's and
+      // retire the tree it is running in.
+      inputs: { ...(rec.inputs || {}), requestingWorktree: rec.worktree_path || null },
       actor,
       nowMs,
       grant,

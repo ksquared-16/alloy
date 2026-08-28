@@ -13,6 +13,38 @@ import { fileURLToPath } from "node:url";
 
 export const CANONICAL_MIGRATION_DIR = "supabase/migrations";
 export const ALLOWED_ENVIRONMENTS = Object.freeze(["staging", "certification", "cert"]);
+/**
+ * Environments where a migration SHA may be proven against a sanctioned
+ * remote-tracking ref other than origin/staging.
+ *
+ * Certification runs migrations for work that has NOT landed on staging yet —
+ * that is the point of certifying it. Requiring staging-ancestry there makes
+ * the gate unsatisfiable for exactly the commits certification exists to test,
+ * so the check was passing by never being reachable rather than by being safe.
+ */
+export const CERTIFICATION_ENVIRONMENTS = Object.freeze(["certification", "cert"]);
+/**
+ * The ONLY refs a certification SHA may be proven against. Remote-tracking
+ * only: a ref that exists solely in this checkout proves nothing about what
+ * anyone else can see, and "the working copy has this commit" is the assertion
+ * this gate exists to refuse.
+ */
+/*
+ * `**`, NOT `*`. git for-each-ref matches patterns with wildmatch in PATHNAME
+ * mode, so a single star does not cross a slash. Agent branches are two levels
+ * deep (agent/claude/4-thing), so `refs/remotes/origin/agent/*` matches exactly
+ * ZERO of the 169 agent refs in this repository, while
+ * `refs/remotes/origin/promotion/*` matches its one-level refs and looks like
+ * proof the pattern works. Written with a single star this gate stays as
+ * unsatisfiable as the staging-only check it replaces, and silently so —
+ * for-each-ref returns success with no rows, which reads as "no sanctioned ref
+ * matched" rather than "the pattern was wrong".
+ */
+export const CERTIFICATION_SANCTIONED_REF_GLOBS = Object.freeze([
+  "refs/remotes/origin/staging",
+  "refs/remotes/origin/agent/**",
+  "refs/remotes/origin/promotion/**",
+]);
 export const BLOCKED_ENVIRONMENTS = Object.freeze([
   "production", "prod", "alloy_production", "alloy_deployed_primary",
 ]);
@@ -193,6 +225,74 @@ export function assertShaReachableFromStaging(sha, {
   };
 }
 
+/**
+ * Reachability, environment-aware.
+ *
+ * STAGING AND PRODUCTION SEMANTICS DO NOT MOVE. The staging test runs FIRST and
+ * unconditionally, and its result is returned verbatim on success. On failure,
+ * anything that is not certification gets the original failure object back
+ * unchanged — same code, same detail — so nothing downstream can tell this
+ * function was introduced.
+ *
+ * Only for certification/cert does a second chance exist, and only against the
+ * sanctioned remote-tracking globs. Never local refs, never tags, never a
+ * symbolic HEAD, never arbitrary origin/*, and never the working copy's own
+ * HEAD merely because the object is present.
+ */
+export function assertShaReachableForEnvironment(sha, {
+  environment = "staging",
+  git = defaultGit,
+  cwd,
+  stagingRef = "origin/staging",
+  fetchIfMissing = true,
+} = {}) {
+  const primary = assertShaReachableFromStaging(sha, { git, cwd, stagingRef, fetchIfMissing });
+  if (primary.ok) return primary;
+
+  const env = String(environment || "").trim().toLowerCase();
+  if (!CERTIFICATION_ENVIRONMENTS.includes(env)) return primary;
+  // A SHA that is not a commit at all is not made into one by the environment.
+  if (primary.code === "source_sha_unavailable") return primary;
+
+  if (fetchIfMissing) {
+    git(["fetch", "--no-tags", "--prune", "origin"], { cwd, timeout: 60_000 });
+  }
+  const rev = git(["rev-parse", sha], { cwd });
+  if (!gitOk(rev)) return primary;
+  const fullSha = String(rev.stdout || "").trim();
+
+  const listed = git(
+    ["for-each-ref", "--format=%(refname) %(objectname)", ...CERTIFICATION_SANCTIONED_REF_GLOBS],
+    { cwd },
+  );
+  if (!gitOk(listed)) return primary;
+
+  for (const line of String(listed.stdout || "").split("\n")) {
+    const [refname, tip] = line.trim().split(/\s+/);
+    if (!refname || !tip) continue;
+    // Belt and braces: the globs already scope to remote-tracking refs, but a
+    // pattern is a filter and this is an assertion.
+    if (!refname.startsWith("refs/remotes/")) continue;
+    if (refname.endsWith("/HEAD")) continue;
+    if (shaEquals(fullSha, tip)) {
+      return {
+        ok: true, fullSha, stagingSha: primary.stagingSha ?? null,
+        relation: "equals_sanctioned_certification_ref", sanctionedRef: refname, environment: env,
+      };
+    }
+    if (gitOk(git(["merge-base", "--is-ancestor", fullSha, tip], { cwd }))) {
+      return {
+        ok: true, fullSha, stagingSha: primary.stagingSha ?? null,
+        relation: "ancestor_of_sanctioned_certification_ref", sanctionedRef: refname, environment: env,
+      };
+    }
+  }
+  return {
+    ...primary,
+    detail: `${primary.detail}; and it is not reachable from any sanctioned certification ref (${CERTIFICATION_SANCTIONED_REF_GLOBS.join(", ")})`,
+  };
+}
+
 export function parseMigrationFilename(pathRel) {
   const filename = basename(String(pathRel || ""));
   const m = VERSION_RE.exec(filename);
@@ -232,6 +332,7 @@ export function listMigrationsAtSha({ root, sha, git = defaultGit, gitCwd = null
 }
 
 export function readMigrationContent({
+  environment = "staging",
   root,
   sha,
   relative,
@@ -261,13 +362,27 @@ export function readMigrationContent({
   if (currentStagingSha && !shaEquals(currentStagingSha, sha)) {
     const live = git(["show", `${currentStagingSha}:${inside.relative}`], { cwd: store.cwd });
     if (!gitOk(live) || live.stdout == null) {
-      return {
-        ok: false,
-        code: "migration_changed_since_approval",
-        detail: `Migration ${inside.relative} is missing on current staging ${currentStagingSha}`,
-      };
-    }
-    if (sha256(String(live.stdout)) !== sha256(text)) {
+      /*
+       * ABSENT ON STAGING IS NOT DRIFT — IN CERTIFICATION.
+       *
+       * This guard asks "is the migration I approved still the migration that
+       * will run?". Comparing against staging answers that for a staging
+       * apply. For a certification apply of unmerged work the file is absent
+       * from staging BY DEFINITION — that is what is being certified — so the
+       * guard failed on a condition certification can never satisfy, the same
+       * shape as the staging-ancestry check one layer up.
+       *
+       * A NEW migration is not a CHANGED one. What must still fail everywhere
+       * is the case below: present on staging and different.
+       */
+      if (!CERTIFICATION_ENVIRONMENTS.includes(envName(environment))) {
+        return {
+          ok: false,
+          code: "migration_changed_since_approval",
+          detail: `Migration ${inside.relative} is missing on current staging ${currentStagingSha}`,
+        };
+      }
+    } else if (sha256(String(live.stdout)) !== sha256(text)) {
       return {
         ok: false,
         code: "migration_changed_since_approval",
@@ -291,6 +406,7 @@ function locatePrefix(root, prefix, sha, { git, gitCwd } = {}) {
 }
 
 export function resolveMigrationEntry(item = {}, {
+  environment = "staging",
   root,
   expectedSha,
   git = defaultGit,
@@ -327,6 +443,7 @@ export function resolveMigrationEntry(item = {}, {
     };
   }
   const content = readMigrationContent({
+    environment,
     root,
     sha: expectedSha,
     relative: inside.relative,
@@ -444,7 +561,8 @@ export function validateMigrationInputs(inputs = {}, {
     || process.cwd();
   const store = ensureCommitAvailable(expectedSha, { git, root, fetchIfMissing });
   if (!store.ok) return store;
-  const reach = assertShaReachableFromStaging(expectedSha, {
+  const reach = assertShaReachableForEnvironment(expectedSha, {
+    environment,
     git,
     cwd: store.cwd,
     stagingRef,
@@ -452,6 +570,7 @@ export function validateMigrationInputs(inputs = {}, {
   });
   if (!reach.ok) return reach;
   const migrations = normalizeMigrationList(inputs, {
+    environment,
     root,
     expectedSha,
     git,
@@ -492,6 +611,10 @@ export function applyMigrationBatch(normalized, {
   const results = [];
   for (const entry of normalized.migrations) {
     const latest = readContent({
+      // The runtime re-read applies the SAME environment rule as validation.
+      // Reading it here under staging semantics would re-introduce the failure
+      // at execution time, after the request had already been approved.
+      environment: normalized.environment,
       root: normalized.worktreePath,
       sha: normalized.expectedSha,
       relative: entry.path,

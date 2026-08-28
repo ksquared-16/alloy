@@ -2,6 +2,7 @@
  * Derive Focus Panel Universal Card models from opportunity VM — not from layout sections.
  */
 
+import { FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveLeadDrawerCommandHeaderMeta } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
@@ -673,11 +674,36 @@ function buildCardModels(input: {
         }),
     );
 
+    const currentWorkModel = buildCurrentWorkCardModel({
+        stageWorkRuntime: stageRuntime,
+        nextActionLabel: headerPrimaryAction?.label ?? null,
+    });
+    map.set("current_work", currentWorkModel);
+    /*
+     * THE SUCCESSOR HAS ITS OWN MODEL. It used to be `{ ...currentWorkModel }`.
+     *
+     * That shim was written as a temporary measure — "until Slice 2 deepens the presentation" — and
+     * was never replaced, so the canonical Business Process card inherited the PREDECESSOR's
+     * presentation wholesale: the title "What's Next", Current Work's insight, its secondary line
+     * and its due chip. QA saw the locked composition rendering under the old visual grammar and
+     * correctly failed it. The anatomy was right all along; the identity was borrowed.
+     *
+     * What the card needs from the MODEL is only its frame. Everything else — the stage rail, the
+     * participant markers, the annotations, the current work line and the actions — is composed by
+     * `buildBusinessProcessCardEvidence` from canonical truth, which is why the insight is empty
+     * here rather than duplicated: two sources for one line is how they drift.
+     */
     map.set(
-        "current_work",
-        buildCurrentWorkCardModel({
-            stageWorkRuntime: stageRuntime,
-            nextActionLabel: headerPrimaryAction?.label ?? null,
+        FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+        card({
+            key: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+            // The process's own identity. The card overrides this with the tenant's configured
+            // process label when the runtime carries one; see the note in BusinessProcessCard.
+            title: "Business Process",
+            insight: "",
+            tier: "work",
+            span: 1,
+            density: "compact",
         }),
     );
 
@@ -902,6 +928,50 @@ function buildCardModels(input: {
             tier: "historical",
             span: 2,
             density: "compact",
+        }),
+    );
+
+    map.set(
+        "attendance",
+        card({
+            key: "attendance",
+            title: "Attendance",
+            // The day itself is the insight, and only the scoped child has one — the card fills this
+            // in from its own VM rather than the case record, which knows nothing about who is scoped.
+            insight: "",
+            tier: "work",
+            span: 2,
+            density: "compact",
+        }),
+    );
+
+    map.set(
+        "health_safety",
+        card({
+            key: "health_safety",
+            title: "Health & Safety",
+            // The critical fact IS the insight, and only the composed read model knows it. The case
+            // record knows nothing about allergies, so the card fills this in from its own VM.
+            insight: "",
+            tier: "work",
+            span: 2,
+            density: "compact",
+        }),
+    );
+
+    map.set(
+        "financials",
+        card({
+            key: "financials",
+            title: "Financials",
+            // The balance is the insight, and only the composed read model knows it — the card fills
+            // this in from its own VM rather than from the case record, which knows no charges.
+            insight: "",
+            tier: "work",
+            span: 2,
+            // The V5 summary is this card's canonical presentation. A placement that wants supporting
+            // context declares `compact` and the card states the balance without the breakdown.
+            density: "standard",
         }),
     );
 

@@ -17,7 +17,7 @@ import {
     type RelationshipDefinition,
 } from "@/lib/fields/relationship/relationshipDefinitions";
 
-export type CanonicalCollectionProviderKind = "household_membership" | "relationship_role" | "document" | "communication" | "work";
+export type CanonicalCollectionProviderKind = "household_membership" | "relationship_role" | "document" | "communication" | "work" | "health_fact";
 
 export type CanonicalCollectionProviderDefinition = {
     /** Canonical provider refKey — stable platform identity. */
@@ -42,6 +42,61 @@ export type CanonicalCollectionProviderDefinition = {
     /** Relationship role key when providerKind is relationship_role. */
     relationshipRoleKey?: string;
 };
+
+
+/**
+ * H2 — the four Health fact provider refs.
+ *
+ * FOUR REFS, NOT ONE, and that is the whole design. A Forms group binds to exactly ONE collection,
+ * so an operator authoring an allergy section must not receive medications. All four resolve through
+ * the same entity and the same resolver; the ref carries the `fact_kind` filter.
+ *
+ * Registered only now that M1 has landed. Registering while `allergy_notes` still wrote at
+ * enrollment grain would have created the day-one disagreement M1 exists to prevent: a provider
+ * whose `sourceEntityType` is `customer_member` beside a system field writing to the episode.
+ *
+ * H2's guarantees, which Enrollment plans against: these ref values are stable and will not be
+ * renamed; `iteration_entity_type` is `person_health_fact` for all four; the subject context key is
+ * `customer_member_id` (child grain, per D-H1); and a binding authored before any health data exists
+ * resolves to an EMPTY collection rather than an error.
+ */
+function healthFactProvider(
+    refKey: string,
+    collectionRef: string,
+    label: string,
+): CanonicalCollectionProviderDefinition {
+    return {
+        refKey,
+        collectionRef,
+        label,
+        itemEntityType: "person_health_fact",
+        providerKind: "health_fact",
+        sourceEntityType: "customer_member",
+        requiredContextKeys: ["customer_member_id"],
+        resolverOwner: "web/lib/health/healthFactCollectionResolver.ts",
+        // status = active only. A superseded fact is history, not a current answer.
+        activeOnly: true,
+        itemIdentityField: "id",
+        orderingPolicy: "created_at",
+    };
+}
+
+const HEALTH_ALLERGIES = healthFactProvider("health.allergies", "health_allergies", "Allergies");
+const HEALTH_CONDITIONS = healthFactProvider("health.conditions", "health_conditions", "Conditions");
+const HEALTH_MEDICATIONS = healthFactProvider("health.medications", "health_medications", "Medications");
+const HEALTH_IMMUNIZATIONS = healthFactProvider(
+    "health.immunizations",
+    "health_immunizations",
+    "Immunizations",
+);
+
+/** The `fact_kind` each ref filters on — the resolver's only per-ref difference. */
+export const HEALTH_FACT_KIND_BY_PROVIDER_REF: Readonly<Record<string, string>> = Object.freeze({
+    "health.allergies": "allergy",
+    "health.conditions": "condition",
+    "health.medications": "medication",
+    "health.immunizations": "immunization",
+});
 
 const CHILDREN: CanonicalCollectionProviderDefinition = {
     refKey: "children",
@@ -92,7 +147,14 @@ const RESOLVER_OWNER = "web/lib/fields/relationship/canonicalCollectionResolver.
  * `RELATIONSHIP_DEFINITIONS`, never a hand-authored provider here. This list is closed by design;
  * adding to it requires the same justification above.
  */
-const NATIVE_PROVIDERS: readonly CanonicalCollectionProviderDefinition[] = [CHILDREN, HOUSEHOLD_MEMBERS];
+const NATIVE_PROVIDERS: readonly CanonicalCollectionProviderDefinition[] = [
+    CHILDREN,
+    HOUSEHOLD_MEMBERS,
+    HEALTH_ALLERGIES,
+    HEALTH_CONDITIONS,
+    HEALTH_MEDICATIONS,
+    HEALTH_IMMUNIZATIONS,
+];
 
 /**
  * Project ONE relationship definition into its collection provider — generic, no per-role code.

@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
     BILLABLE_SOURCE_TYPES,
@@ -10,6 +10,9 @@ const migrationPath = resolve(
     __dirname,
     "../../../supabase/migrations/20260630120000_financial_substrate_generalization_p3_1.sql"
 );
+
+/** The whole tree, so a vocabulary lock can DISCOVER rather than enumerate. */
+const migrationsDir = dirname(migrationPath);
 
 describe("P3.1 financial substrate generalization migration", () => {
     const sql = readFileSync(migrationPath, "utf8");
@@ -34,9 +37,28 @@ describe("P3.1 financial substrate generalization migration", () => {
         expect(cols.length).toBe(3);
         const idCols = sql.match(/ADD COLUMN IF NOT EXISTS billable_source_id uuid/g) ?? [];
         expect(idCols.length).toBe(3);
-        // vocabulary
+        /*
+         * VOCABULARY IS DISCOVERED ACROSS THE TREE, not pinned to this one file.
+         *
+         * This asserted that P3.1 itself contained every value in `BILLABLE_SOURCE_TYPES`. That was
+         * true only while the vocabulary never grew — and the moment `customer` was added to close
+         * HOUSEHOLD_BILLABLE_SOURCE, the lock demanded a HISTORICAL migration be edited to contain a
+         * value it never wrote. Rewriting a shipped migration to satisfy a test is the one thing a
+         * migration lock must never encourage.
+         *
+         * So: P3.1 owns the two kinds it introduced, and the code vocabulary must be satisfied by the
+         * migration tree as a whole. An unbacked value still fails — it simply is not required to be
+         * in this file.
+         */
+        for (const t of ["job", "enrollment_agreement"]) {
+            expect(sql, `P3.1 must still declare '${t}'`).toContain(`'${t}'::text`);
+        }
+        const tree = readdirSync(migrationsDir)
+            .filter((f) => f.endsWith(".sql"))
+            .map((f) => readFileSync(join(migrationsDir, f), "utf8"))
+            .join("\n");
         for (const t of BILLABLE_SOURCE_TYPES) {
-            expect(sql).toContain(`'${t}'::text`);
+            expect(tree, `no migration declares billable source '${t}'`).toContain(`'${t}'::text`);
         }
     });
 

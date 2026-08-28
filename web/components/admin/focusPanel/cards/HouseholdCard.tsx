@@ -861,6 +861,7 @@ export default function HouseholdCard({
                 archetype="profile"
                 statusChip={statusChip}
                 statusTone={statusTone}
+                modalClass="record"
                 density={density}
                 gridSpan={model.span}
                 data-universal-card-key={model.key}

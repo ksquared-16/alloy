@@ -33,7 +33,7 @@ import {
     type SummaryCardOrderEntry,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryDocOps";
 import type { FocusPanelCardConfig } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
-import { FOCUS_PANEL_CARD_CATALOG } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
+import { authorableFocusPanelCards } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import {
     loadFocusPanelSummaryLayout,
     publishFocusPanelSummary,
@@ -43,6 +43,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryLayoutService";
 import { validateNestedSurfacesForPublish } from "@/lib/adminV2/settings/surfaces/nestedSurfaceConfigService";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCardDensity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import FocusPanelDrillInInspector from "@/components/admin/focusPanel/drillIn/FocusPanelDrillInInspector";
 import { FocusPanelComposerProvider, useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { focusPanelNestedSurfaceByCardKey } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
@@ -424,17 +425,54 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
         [commit, order],
     );
 
+    /*
+     * A PLACEMENT VARIANT IS A DENSITY, and it has to persist.
+     *
+     * Choosing "Financials — Compact" that then published as the Summary presentation would make
+     * the variant decorative. The density travels through the SAME per-card config path the
+     * inspector writes (`appearance.density`, applied by `composeEffectiveCardModel`), so the
+     * builder is not inventing a second place to store it.
+     */
+    const handleVariantDensity = useCallback(
+        (cardKey: FocusPanelCardKey, density: FocusPanelCardDensity) => {
+            setOrder((prev) => {
+                const entry = prev.find((e) => e.key === cardKey);
+                if (!entry) return prev;
+                return updateSummaryCardConfig(prev, entry.instanceId, {
+                    ...(entry.config ?? {}),
+                    appearance: { ...(entry.config?.appearance ?? {}), density },
+                } as FocusPanelCardConfig);
+            });
+        },
+        [],
+    );
+
     const selectedEntry = selectedInstanceId ? byInstance.get(selectedInstanceId) ?? null : null;
     const selectedBaseModel = selectedEntry ? cards.get(selectedEntry.key) ?? null : null;
 
 
     // Row-based composition builder (Composition V2): catalog from the catalog'd cards,
     // seeded from the loaded layout or a default arrangement of the present cards.
+    /*
+     * THE AUTHORABLE LIBRARY, DERIVED — not a hand-kept list beside the registry.
+     *
+     * `FOCUS_PANEL_CARD_CATALOG` was a parallel array that had drifted in every direction: it
+     * offered `billing_preview` beside Financials as a peer, listed cards under their PREDECESSOR's
+     * name, carried keys with no registered card behind them, and omitted Staff. Deriving from
+     * `authorableFocusPanelCards()` means the builder and the renderer read the same registry and
+     * the same supersession contract, so they cannot disagree about what a card is.
+     *
+     * Entries carry their PLACEMENT too, so Financials offers Summary (8/12) and Compact (4/12) as
+     * two visibly different choices that store one canonical `cardKey`.
+     */
     const builderCatalog = useMemo(
         () =>
-            FOCUS_PANEL_CARD_CATALOG.filter((e) => e.cardKey).map((e) => ({
-                key: e.cardKey as FocusPanelCardKey,
-                label: e.label,
+            authorableFocusPanelCards().map((option) => ({
+                key: option.cardKey,
+                label: option.label,
+                variantLabel: option.variantLabel,
+                density: option.density,
+                columns: option.columns,
             })),
         [],
     );
@@ -516,6 +554,7 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
                         <FocusPanelRuntimeComposerCanvas
                             initialGrid={builderInitialGrid}
                             catalog={builderCatalog}
+                            onCardDensityChange={handleVariantDensity}
                             order={order}
                             cards={cards}
                             vm={vm}

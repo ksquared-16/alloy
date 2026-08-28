@@ -51,7 +51,7 @@ import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/u
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
-import { derivePersonEmploymentCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
+import { derivePersonStaffCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
 import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
 import { buildDurablePersonOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import DurableHouseholdContextCard from "@/components/presentation/durableRecord/DurableHouseholdContextCard";
@@ -371,20 +371,24 @@ export default function DurableRecordContextualCard({
         if (option.kind === "employment" && subject.kind === "staff") {
             /*
              * The EXISTING Employment card, centered — read-only exactly as it is on the native
-             * panel. `derivePersonEmploymentCard` decides nothing about employment: `is_staff`,
+             * panel. `derivePersonStaffCard` decides nothing about employment: `is_staff`,
              * `current` and `state_label` arrive already decided by `lib/employment` and are carried
              * through. Making it editable here would be a second execution path for a capability
              * that lives elsewhere, and this slice is not that slice.
              */
-            if (!cardAppliesToGrain("employment", "person")) return null;
+            // `staff` is the person-grain identity for this presentation (registry SUPERSESSION
+            // concern). Asking about `employment` here would ask about the CASE card, which is a
+            // different question and is declared for a different grain — so the gate would refuse
+            // and this contextual card would silently vanish.
+            if (!cardAppliesToGrain("staff", "person")) return null;
             return (
                 <div
                                         data-contextual-card="record"
                     data-contextual-card-context={option.key}
-                    data-contextual-card-canonical-card="employment"
+                    data-contextual-card-canonical-card="staff"
                 >
                     <FocusPanelCardRenderer
-                        model={derivePersonEmploymentCard(subject.person.employment)}
+                        model={derivePersonStaffCard(subject.person.employment)}
                         context={buildDurablePersonOperationalContext(subject.person, false, null)}
                         focusPanelMode="summary"
                     // Tab-pane drill navigation, which a contextual card has no tabs for. The

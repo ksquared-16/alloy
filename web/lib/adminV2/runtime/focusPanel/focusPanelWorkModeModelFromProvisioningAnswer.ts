@@ -85,6 +85,8 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
             key: input.situation?.stageKey ?? null,
             label: input.situation?.stageLabel ?? input.statusLabel ?? null,
             stageKey: input.situation?.stageKey ?? null,
+            // No configured process rail on this producer — an unstaged context is a real answer.
+            stages: [],
         },
         perspective: input.perspective
             ? { missionLabel: input.perspective.defaultMission ?? input.perspective.label ?? null }

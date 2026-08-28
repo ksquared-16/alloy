@@ -147,6 +147,8 @@ export type OpportunityDrawerViewModel = {
         lifecycle_rail: {
             stages: Array<{ key: string; label: string }>;
             current_stage_key: string | null;
+            /** The configured process's own name — the Business Process card's title. */
+            process_name?: string | null;
         } | null;
         /** Operating plan purpose for the current builder stage — read-only context. */
         stage_context: {

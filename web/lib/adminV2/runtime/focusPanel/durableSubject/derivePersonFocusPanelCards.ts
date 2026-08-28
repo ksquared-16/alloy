@@ -52,8 +52,36 @@ function trimOrNull(v: unknown): string | null {
  * into `not_applicable`, so the configured cell is KEPT and renders its muted treatment rather than
  * disappearing or claiming employment.
  */
+/**
+ * THE PERSON-GRAIN STAFF CARD.
+ *
+ * Same composition, same presentation, canonical identity. `staff` supersedes `employment` on the
+ * person grain (registry SUPERSESSION concern), so this is what a durable Person composes.
+ *
+ * It is deliberately NOT a fuller re-implementation: the Employment presentation already answers
+ * "who is this employee, in what capacity, where, and in what state" in the order an operator reads
+ * it — headline, current period, configured facts, history. Rebuilding those sections under a new
+ * name would have created a second presentation of one owner's truth, which is the thing this
+ * supersession exists to prevent. What changes is identity and placement, not the facts.
+ *
+ * Scheduling stays separate. "When and where are they scheduled" is `scheduling`'s question, and
+ * folding a schedule projection in here would introduce a second scheduling resolver.
+ */
+export function derivePersonStaffCard(
+    signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    return buildPersonEmploymentPresentation(signal, "staff");
+}
+
 export function derivePersonEmploymentCard(
     signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    return buildPersonEmploymentPresentation(signal, "employment");
+}
+
+function buildPersonEmploymentPresentation(
+    signal: OperationalEmploymentSignal | null,
+    key: Extract<FocusPanelCardKey, "employment" | "staff">,
 ): FocusPanelCardModel {
     const lead = signal?.primary ?? signal?.people[0] ?? null;
     const employment = lead?.employment ?? null;
@@ -61,10 +89,10 @@ export function derivePersonEmploymentCard(
 
     if (!employment) {
         return {
-            key: "employment",
-            archetype: system5ArchetypeForCard("employment"),
-            iconName: system5IconForCard("employment"),
-            title: cardTitle("employment") ?? "Employment",
+            key,
+            archetype: system5ArchetypeForCard(key),
+            iconName: system5IconForCard(key),
+            title: cardTitle(key) ?? "Employment",
             insight: "This person has never worked here",
             tier: "reference",
             span: 2,
@@ -85,10 +113,10 @@ export function derivePersonEmploymentCard(
     }
 
     return {
-        key: "employment",
-        archetype: system5ArchetypeForCard("employment"),
-        iconName: system5IconForCard("employment"),
-        title: cardTitle("employment") ?? "Employment",
+        key,
+        archetype: system5ArchetypeForCard(key),
+        iconName: system5IconForCard(key),
+        title: cardTitle(key) ?? "Employment",
         insight,
         secondaryInsight: trimOrNull(current?.employment_type_label),
         tier: "reference",
@@ -115,6 +143,11 @@ export function derivePersonFocusPanelCards(
     input: DerivePersonFocusPanelCardsInput,
 ): Map<FocusPanelCardKey, FocusPanelCardModel> {
     const cards = new Map<FocusPanelCardKey, FocusPanelCardModel>();
+    // `staff` is the person-grain identity; `employment` no longer declares this grain, so the
+    // registry answers "no" for it and exactly one of the two ever composes here.
+    if (cardAppliesToGrain("staff", "person")) {
+        cards.set("staff", derivePersonStaffCard(input.employment));
+    }
     if (cardAppliesToGrain("employment", "person")) {
         cards.set("employment", derivePersonEmploymentCard(input.employment));
     }
