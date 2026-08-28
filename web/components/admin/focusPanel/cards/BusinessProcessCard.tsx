@@ -16,7 +16,10 @@ import {
     projectProcessCardCommands,
     type ProcessCardCommand,
 } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
-import { logProcessCardCommandDrift } from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
+import {
+    logProcessCardCommandDrift,
+    logProcessCardCommandWithheld,
+} from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
 import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
@@ -156,15 +159,17 @@ export default function BusinessProcessCard({ model, context, receded = false, c
      * limitation as a command) and becomes an observable configuration fault instead.
      */
     useEffect(() => {
-        if (!projection.drift.length) return;
+        const processKey = context.businessProcess.key ?? null;
+        const stageKey = context.businessProcess.stageKey ?? null;
         for (const row of projection.drift) {
-            logProcessCardCommandDrift({
-                processKey: context.businessProcess.key ?? null,
-                stageKey: context.businessProcess.stageKey ?? null,
-                ...row,
-            });
+            logProcessCardCommandDrift({ processKey, stageKey, ...row });
         }
-    }, [projection.drift, context.businessProcess.key, context.businessProcess.stageKey]);
+        // Not a fault: an executable command configuration did not select. Recorded so "the row is
+        // exactly what was configured" stays checkable rather than merely asserted.
+        for (const row of projection.withheld) {
+            logProcessCardCommandWithheld({ processKey, stageKey, ...row });
+        }
+    }, [projection.drift, projection.withheld, context.businessProcess.key, context.businessProcess.stageKey]);
 
     const processEvidence = useMemo(
         () =>

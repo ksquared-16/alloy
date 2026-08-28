@@ -91,9 +91,15 @@ export type ProcessCardCommandProjection = {
     configured: boolean;
     commands: ProcessCardCommand[];
     drift: ProcessCardCommandDrift[];
+    /**
+     * Commands the platform offered that trace to no configured ref — runtime companions a state
+     * rule added, not selections the process made. Observable, never rendered. This is the list
+     * that keeps rule 6 honest in production rather than only in fixtures.
+     */
+    withheld: Array<{ key: string; label: string }>;
 };
 
-const EMPTY: ProcessCardCommandProjection = { configured: false, commands: [], drift: [] };
+const EMPTY: ProcessCardCommandProjection = { configured: false, commands: [], drift: [], withheld: [] };
 
 function commandFrom(
     action: CurrentWorkActionVM,
@@ -154,17 +160,59 @@ export function projectProcessCardCommands(context: OperationalContext): Process
     const surface = projectCurrentWork(context).surface;
     const buttons = resolveCurrentWorkActionButtons(surface);
 
+    /*
+     * PROVENANCE, NOT PLAUSIBILITY.
+     *
+     * A command earns the row by descending from a configured ref — never by being executable. The
+     * link survives the platform's own state rules because those rewrite an action's key and label
+     * while carrying its `actionRef`: a booked tour turns the configured `schedule_tour` into
+     * "Reschedule Tour", and it still traces to `schedule_tour`. A companion the same rule ADDS
+     * when a booking exists (Cancel Tour, whose ref is a booking id) traces to nothing, and is
+     * exactly the kind of executable-but-unselected command this card must not show.
+     *
+     * No domain keys are involved: the test is whether configuration named it, not what it is.
+     */
+    const configured = configuredRefs(context);
+    const configuredKeys = new Set<string>();
+    for (const { ref } of configured) {
+        configuredKeys.add(ref);
+        configuredKeys.add(normalizeActionRefToIntentKey(ref));
+    }
+    const tracesToConfiguration = (action: CurrentWorkActionVM): boolean => {
+        for (const candidate of [action.actionRef, action.handlerKey, action.key]) {
+            const value = candidate?.trim();
+            if (!value) continue;
+            if (configuredKeys.has(value) || configuredKeys.has(normalizeActionRefToIntentKey(value))) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     const commands: ProcessCardCommand[] = [];
-    const dominant = buttons.dominant ? commandFrom(buttons.dominant, "primary") : null;
-    if (dominant) commands.push(dominant);
-    for (const helpful of buttons.helpful) {
-        const command = commandFrom(helpful, "secondary");
+    const withheld: ProcessCardCommandProjection["withheld"] = [];
+
+    /*
+     * The record-outcome affordance is admitted on its OWN provenance. It exists only where the
+     * work template configures outcomes, so it is configuration-derived even though it names no
+     * action ref — and dropping it would take the configured way of resolving outcome-led work off
+     * the card.
+     */
+    const outcomeKey = buttons.recordOutcome?.key ?? null;
+
+    const admit = (action: CurrentWorkActionVM | null, prominence: ProcessCardCommand["prominence"]) => {
+        if (!action) return;
+        if (!tracesToConfiguration(action) && action.key !== outcomeKey) {
+            if (action.key?.trim()) withheld.push({ key: action.key.trim(), label: action.label });
+            return;
+        }
+        const command = commandFrom(action, prominence);
         if (command) commands.push(command);
-    }
-    if (buttons.subordinateOutcome) {
-        const command = commandFrom(buttons.subordinateOutcome, "secondary");
-        if (command) commands.push(command);
-    }
+    };
+
+    admit(buttons.dominant, "primary");
+    for (const helpful of buttons.helpful) admit(helpful, "secondary");
+    admit(buttons.subordinateOutcome, "secondary");
 
     // Identity, never label: a configured ref counts as rendered when its intent key is on the row.
     const rendered = new Set<string>();
@@ -178,7 +226,7 @@ export function projectProcessCardCommands(context: OperationalContext): Process
     }
 
     const drift: ProcessCardCommandDrift[] = [];
-    for (const { ref, slot } of configuredRefs(context)) {
+    for (const { ref, slot } of configured) {
         if (rendered.has(ref) || rendered.has(normalizeActionRefToIntentKey(ref))) continue;
         drift.push({
             actionRef: ref,
@@ -190,5 +238,5 @@ export function projectProcessCardCommands(context: OperationalContext): Process
         });
     }
 
-    return { configured: true, commands, drift };
+    return { configured: true, commands, drift, withheld };
 }

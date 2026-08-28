@@ -24,9 +24,18 @@ export type ProcessCardCommandDriftEvent = {
     message: string;
 };
 
+export type ProcessCardCommandWithheldEvent = {
+    processKey: string | null;
+    stageKey: string | null;
+    key: string;
+    label: string;
+};
+
 type DriftWindow = Window & {
     /** Read by browser certification and by the config-validation surface. */
     __ALLOY_PROCESS_COMMAND_DRIFT?: ProcessCardCommandDriftEvent[];
+    /** Executable commands the configuration never selected, so the row does not carry them. */
+    __ALLOY_PROCESS_COMMAND_WITHHELD?: ProcessCardCommandWithheldEvent[];
 };
 
 /** Report one configured command that did not resolve to a registered action. */
@@ -50,8 +59,24 @@ export function logProcessCardCommandDrift(event: ProcessCardCommandDriftEvent):
     );
 }
 
+/**
+ * Report one executable command the configuration did not select.
+ *
+ * Not a fault — a runtime companion (a state rule's addition) is legitimate elsewhere. It is
+ * recorded so "the row is exactly what configuration selected" stays a checkable claim rather than
+ * an assertion, which is what the certification pass reads.
+ */
+export function logProcessCardCommandWithheld(event: ProcessCardCommandWithheldEvent): void {
+    if (typeof window === "undefined") return;
+    const w = window as DriftWindow;
+    const seen = (w.__ALLOY_PROCESS_COMMAND_WITHHELD ??= []);
+    if (seen.some((row) => row.key === event.key && row.stageKey === event.stageKey)) return;
+    seen.push(event);
+}
+
 /** Test seam: drop what has been reported on this page. */
 export function resetProcessCardCommandDrift(): void {
     if (typeof window === "undefined") return;
     (window as DriftWindow).__ALLOY_PROCESS_COMMAND_DRIFT = [];
+    (window as DriftWindow).__ALLOY_PROCESS_COMMAND_WITHHELD = [];
 }
