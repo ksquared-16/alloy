@@ -314,6 +314,56 @@ export function snapMoveTarget(
     return clampArea(grid, next);
 }
 
+/**
+ * THE ONE OWNER OF COMPOSER GRID GEOMETRY.
+ *
+ * ── THE DEFECT THIS REPLACES ──
+ *
+ * Two places converted pixels to cells — the pointer mapping and the ghost — and
+ * both used `surfaceWidth / columns` as the column width. A CSS grid of
+ * `repeat(12, minmax(0, 1fr))` with a 10px `column-gap` does not have 12 equal
+ * columns of `W/12`: it has 12 tracks of `(W - 11·gap)/12`, each followed by a
+ * gap. The two models agree exactly at column 1 and diverge by a further ~9px per
+ * column after that.
+ *
+ * That is why dragging "worked" on the left of the canvas and got progressively
+ * less predictable toward the right: near a boundary the pointer resolved to the
+ * neighbouring column, and the ghost was drawn where the card would NOT land.
+ * The card and the preview of the card disagreed, which reads to an operator as
+ * drag-and-drop being broken rather than as an arithmetic error.
+ *
+ * Both callers now derive from here, so they cannot drift apart again.
+ */
+export function composerGridMetrics(surfaceWidthPx: number, columns: number) {
+    const cols = Math.max(1, columns);
+    // Track width, gaps excluded — the same quantity the browser lays out.
+    const trackWidth = Math.max(0, (surfaceWidthPx - (cols - 1) * COMPOSER_GRID_GAP_PX) / cols);
+    return {
+        columns: cols,
+        trackWidth,
+        /** Distance from one column's start to the next: track + gap. */
+        columnPitch: trackWidth + COMPOSER_GRID_GAP_PX,
+        rowHeight: COMPOSER_GRID_ROW_UNIT_PX,
+        rowPitch: COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX,
+    };
+}
+
+/** Pointer offset (relative to the grid's own box) → 1-based cell. PURE. */
+export function composerCellFromOffset(args: {
+    offsetX: number;
+    offsetY: number;
+    surfaceWidthPx: number;
+    columns: number;
+}): { col: number; row: number } {
+    const m = composerGridMetrics(args.surfaceWidthPx, args.columns);
+    const col = m.columnPitch > 0 ? Math.floor(args.offsetX / m.columnPitch) + 1 : 1;
+    const row = Math.floor(args.offsetY / m.rowPitch) + 1;
+    return {
+        col: Math.min(m.columns, Math.max(1, col)),
+        row: Math.max(1, row),
+    };
+}
+
 /** Pixel bounds for a composer ghost overlay (matches fixed 76px authoring tracks). */
 export function composerGhostBounds(args: {
     colStart: number;
@@ -327,13 +377,13 @@ export function composerGhostBounds(args: {
 }): { left: number; top: number; width: number; height: number } {
     const paddingX = args.paddingX ?? 0;
     const paddingY = args.paddingY ?? 0;
-    const colWidth = args.surfaceWidthPx / args.columns;
-    const track = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
+    const m = composerGridMetrics(args.surfaceWidthPx, args.columns);
     return {
-        left: paddingX + (args.colStart - 1) * colWidth,
-        top: paddingY + (args.rowStart - 1) * track,
-        width: args.colSpan * colWidth - COMPOSER_GRID_GAP_PX,
-        height: args.rowSpan * COMPOSER_GRID_ROW_UNIT_PX + (args.rowSpan - 1) * COMPOSER_GRID_GAP_PX,
+        left: paddingX + (args.colStart - 1) * m.columnPitch,
+        top: paddingY + (args.rowStart - 1) * m.rowPitch,
+        // A span covers its own tracks PLUS the gaps between them — and no trailing gap.
+        width: args.colSpan * m.trackWidth + (args.colSpan - 1) * COMPOSER_GRID_GAP_PX,
+        height: args.rowSpan * m.rowHeight + (args.rowSpan - 1) * COMPOSER_GRID_GAP_PX,
     };
 }
 
