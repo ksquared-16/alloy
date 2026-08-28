@@ -105,6 +105,11 @@ export const GOVERNANCE_POLICY_PATHS = Object.freeze([
 const MANAGED_BRANCH = /^agent\/(claude|cursor)\/\d+-[a-z0-9][a-z0-9-]*$/;
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 
+const DURABLE_BRANCH_STATES = Object.freeze([
+  "reachable_from_canonical_remote", "merged", "pushed_not_merged",
+]);
+const NEVER_RETIRE = Object.freeze(["staging", "main", "master", "production"]);
+
 export const GATES = Object.freeze({
   managed_repository: (ev) => (ev.repository == null ? null : ev.managed_repository === true),
   managed_agent_branch: (ev) => (ev.branch == null ? null : MANAGED_BRANCH.test(String(ev.branch))),
@@ -132,6 +137,24 @@ export const GATES = Object.freeze({
     (ev.pull_request_head_sha == null ? null : String(ev.pull_request_head_sha).toLowerCase() === String(ev.source_sha || "").toLowerCase()),
   no_unresolved_governance_findings: (ev) =>
     (ev.unresolved_governance_findings == null ? null : Number(ev.unresolved_governance_findings) === 0),
+  // ── Worktree retirement ──────────────────────────────────────────────────
+  // Every one of these is a MEASURED property of the worktree at request time,
+  // and every one is measured AGAIN by the executor. A null here escalates, and
+  // the executor refuses independently — the Director's yes is permission to
+  // try, never a finding that it is still safe.
+  retirement_safety_measured: (ev) => (ev.retirement_safety_measured == null ? null : ev.retirement_safety_measured === true),
+  retirement_state_is_candidate: (ev) => (ev.retirement_state == null ? null : ev.retirement_state === "candidate"),
+  worktree_clean: (ev) => (ev.worktree_dirty_paths == null ? null : Number(ev.worktree_dirty_paths) === 0),
+  no_live_worktree_references: (ev) => (ev.live_worktree_references == null ? null : Number(ev.live_worktree_references) === 0),
+  branch_durability_proven: (ev) => (ev.branch_durability == null ? null : DURABLE_BRANCH_STATES.includes(String(ev.branch_durability))),
+  no_unique_work_at_risk: (ev) => (ev.unique_work_at_risk == null ? null : ev.unique_work_at_risk === false),
+  no_untracked_unreproducible: (ev) => (ev.untracked_unreproducible == null ? null : Number(ev.untracked_unreproducible) === 0),
+  not_protected_worktree_branch: (ev) => (ev.branch == null ? null : !NEVER_RETIRE.includes(String(ev.branch).toLowerCase())),
+  // A worker may not declare itself disposable.
+  not_self_retirement: (ev) => (ev.self_retirement == null ? null : ev.self_retirement === false),
+  retirement_fingerprint_bound: (ev) => (ev.retirement_fingerprint == null ? null : /^[0-9a-f]{32}$/.test(String(ev.retirement_fingerprint))),
+  // Branch deletion never rides along with worktree removal.
+  no_implicit_branch_deletion: (ev) => (ev.requests_branch_deletion == null ? null : ev.requests_branch_deletion === false),
   // ── Repository housekeeping ──────────────────────────────────────────────
   pull_request_exists: (ev) => (ev.pull_request_exists == null ? null : ev.pull_request_exists === true),
   pull_request_readable: (ev) => (ev.pull_request_readable == null ? null : ev.pull_request_readable === true),
@@ -262,6 +285,34 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
       "all_corrections_allowlisted", "no_destructive_corrections",
       "no_foreign_owner_mutation", "no_ambiguous_owner_mutation",
       "no_live_process_affected", "metadata_store_known",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
+    policy_id: "routine_worktree_retirement_v1",
+    label: "Routine worktree retirement — disposable worktree, branch retained",
+    action_key: "vacilando.retire_worktree",
+    environments: Object.freeze(["staging", "development_certification"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // WHY A DESTRUCTIVE ACTION IS DELEGATED AT ALL. Removing a worktree whose
+    // every commit is reachable from the canonical remote destroys nothing —
+    // the content survives in Git, and the worktree is a checkout, not the work.
+    // That is the entire basis, and it collapses the moment durability is not
+    // proven, which is why branch_durability_proven and no_unique_work_at_risk
+    // are separate gates: one asks whether the branch is recoverable, the other
+    // whether THIS tree holds commits nothing else has.
+    //
+    // The branch is never deleted here. A worktree can be safely disposable
+    // while its branch is still the only home of unmerged work, so retirement
+    // and deletion are governed apart and no gate below implies the other.
+    gates: Object.freeze([
+      "retirement_safety_measured", "retirement_state_is_candidate",
+      "worktree_clean", "no_live_worktree_references",
+      "branch_durability_proven", "no_unique_work_at_risk",
+      "no_untracked_unreproducible", "not_protected_worktree_branch",
+      "not_self_retirement", "retirement_fingerprint_bound",
+      "no_implicit_branch_deletion",
       "no_governance_exception", "no_operator_hold",
     ]),
   }),

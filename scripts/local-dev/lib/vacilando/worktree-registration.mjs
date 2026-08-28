@@ -166,6 +166,47 @@ export function registerDiscoveredWorktree({
  * A record whose worktree no longer exists in git must NOT create a
  * registration — migration may preserve evidence, never manufacture presence.
  */
+/**
+ * Record that a worktree was retired, truthfully.
+ *
+ * Retirement does not DELETE the registration — a removed worktree that leaves
+ * no trace is indistinguishable from one that never existed, and the evidence
+ * used to justify removing it is exactly what an audit needs afterwards. The
+ * record transitions to `archived` and keeps its discovery history.
+ *
+ * This never touches metadata/*.env. A managed slot is configuration; retiring
+ * the worktree does not surrender the slot.
+ */
+export function archiveRetiredWorktree({
+  root, name, path = null, repositoryId = null, branch = null,
+  evidence = null, nowMs = Date.now(),
+} = {}) {
+  const leaf = String(name || (path ? String(path).split("/").pop() : "")).trim();
+  if (!leaf) return { ok: false, error: "missing_worktree_identity" };
+  if (!root) return { ok: false, error: "missing_runtime_root" };
+  const key = registrationKey({ repositoryId, name: leaf });
+  const store = readStore(root);
+  const existing = store.registrations[key] || null;
+  const record = {
+    schema_version: REGISTRATION_SCHEMA,
+    name: leaf,
+    path: path || existing?.path || null,
+    repository_id: repositoryId || existing?.repository_id || null,
+    branch: branch || existing?.branch || null,
+    provenance: "archived",
+    managed: false,
+    registered_at: existing?.registered_at || new Date(nowMs).toISOString(),
+    last_seen_at: existing?.last_seen_at || null,
+    retired_at: new Date(nowMs).toISOString(),
+    // The gate snapshot that justified removal, kept with the record it justified.
+    retirement_evidence: evidence || null,
+    evidence: existing?.evidence || null,
+  };
+  store.registrations[key] = record;
+  writeStore(root, store);
+  return { ok: true, registration: record };
+}
+
 export function migrateAdoptionRecords({ root, existsInGit = null, nowMs = Date.now() } = {}) {
   const dir = join(root, "reconciliation");
   const migrated = [];
