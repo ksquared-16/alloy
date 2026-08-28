@@ -401,7 +401,26 @@ export type RailParticipant = {
     scoped?: boolean;
 };
 
-export type ProcessAction = { label: string; primary?: boolean };
+/**
+ * A command on the Process card.
+ *
+ * `key` is the registered action's identity and is what execution keys on. The lab's specimens
+ * omit it — they are fixtures, and a fixture has nothing to execute — but every production command
+ * carries one, because a command matched by its LABEL is a command that silently becomes a
+ * different command the moment configuration renames it.
+ */
+export type ProcessAction = {
+    label: string;
+    primary?: boolean;
+    /** Registered action identity. Absent only in design-lab fixtures. */
+    key?: string;
+    /** Configured but not currently executable — the platform's own verdict, never the card's. */
+    disabled?: boolean;
+    /** Why it is unavailable, as the action system stated it. */
+    disabledReason?: string | null;
+    /** Executes through the shared command host. Absent in the lab. */
+    onInvoke?: () => void;
+};
 
 /**
  * A child's own participation. FIRST-CLASS truth at its own grain — not a chip, not decoration.
