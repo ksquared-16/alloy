@@ -43,6 +43,36 @@ the authorization on a byte-identical run. **That rename must not be reverted** 
 run** across all of Q1–Q6, and the census **identifies its own target for the first time**: org fingerprint
 `ab7e5dde…`. Query hash `743cd63b…` → `a3982ca5…`, which is the added key, not drift. The Supabase project ref
 is still unproven, so `target.confirmed_against_live` stays `false` (§4)
+· **W-0 re-issued a fifth time 2026-09-01** (mission `msn_498eb666188ffdabb1`, assignment `asg_4510de8147ebb6`)
+— counts **not re-asserted**, no fourth run taken unilaterally, and the worker has no channel to take one. The
+artifact is verified **run-4 ready**: `combined_query` is blob-identical (`24044e1e…`) to the text run 3 ran, so
+the committed `query_hash` still matches and the gate passes unamended. Proven by `git hash-object`, because
+sha256 is still permission-walled in-worker. **New inverted trap:** top-level `query_hash` now resolves, so any
+future amendment must update it in the same edit. A run 4 is a **freshness** question, not a drift one — M1 is
+still unapplied — and it is escalated to the operator (§4)
+· **W-0 re-issued a sixth time 2026-09-01** (mission `msn_0b77fd49d99b0d4742`, assignment `asg_43e13a792dc730`)
+— counts again **not re-asserted**. Re-derived run 4's *write* path from the code: **the census merge-back no
+longer writes into `wave0-authority-census.json`**, having lost its special case (`trusted-host-actions.mjs`
+`:379-382` at `873a2f097` → `:671-673` at HEAD). Results now land in the sibling
+`wave0-authority-census.results.json`. Run 3's `results` are therefore **safe** from run 4, but a successful run
+4 leaves this file **entirely unchanged** — the hand-written merge now covers `status`, `query_hash`,
+`execution`, `results` and `run_history`, not `run_history` alone (§4)
+· **W-0 re-issued a seventh time 2026-09-01** (mission `msn_6ac8bf96c0d861d0e7`, assignment `asg_7d274b39e910a1`)
+— counts again **not re-asserted**. Audited run 4's *read* path: **a census request that omits `artifact_refs`
+runs the Q15 census, not Wave 0** (`governed-action-request.mjs:1035, :1563, :2254` — the wave0 default at
+`trusted-host-actions.mjs:792` is unreachable through this route). Silent success, not a refusal; it would spend
+the outstanding authorization and refresh the wrong file. **The request must pin `artifact_refs` to
+`wave0-authority-census.json`.** Also: three sessions re-audited this artifact on one day and none could execute
+it — **the constraint is the authorization, not an audit gap** (§4)
+· **W-0 re-issued an eighth time 2026-09-01** (mission `msn_b98f46b92bc15d954c`, assignment `asg_796016be30b4e0`)
+— counts again **not re-asserted**; artifact re-verified run-4 ready (blob `24044e1e…` unchanged). Found the
+**root cause of the re-issues, which are generated rather than decided**: this plan is the *first global fallback*
+in `IMPLEMENTATION_PLAN_CANDIDATES`, so `resolveImplementationPlan` never returns null, every plan-less mission
+gets the A&I phase ladder, and a new mission id's empty register always starts at `impl_w0`
+(`mission-advance.mjs:22-25, :52-62, :203-206, :702-712`). **Proof: this mission is titled "DX-2 Explained
+Confidence Fixture" and was dispatched Wave 0 anyway.** The fallback also **latches** — `implementation_plan_path`
+is only ever written by `mission-advance` from its own resolved fallback (`:357, :767, :860`). Holding further
+re-issues needs a **routing change**, not restraint; that is toolkit code, outside W-0's scope, so it is escalated (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -604,6 +634,230 @@ the apply follows closely, and *an aged preflight is not a preflight*. W-0 suppl
 is W-6's to flip and is deliberately not set by the census file.** If time has passed, the correct move is
 another census — now a single authorization on a proven channel. Full rule-by-rule evaluation lives at the
 census file's `w6_m1_preflight.preflight_run_3_outcome`.
+
+#### W-0 re-issued a fifth time — **2026-09-01**, assignment `asg_4510de8147ebb6`: the artifact is run-4 ready, and the run is the operator's call
+
+W-0 was re-issued a fifth time, against exit criteria met on 2026-07-31 and re-confirmed on 2026-08-04 and
+2026-08-07. **The counts were not re-asserted and no fourth identical run was performed unilaterally** — §4's
+standing rule for the second, third and fourth re-issues applies unchanged, and the worker has no channel to
+execute a census in any case. This pass was spent on the single thing genuinely open: whether the artifact would
+still *execute* if an authorization arrived. **It would.**
+
+| Field | Value |
+|---|---|
+| Executability | **Verified.** `combined_query` is byte-identical to the text run 3 executed — `git hash-object` over the `jq`-extracted string returns `24044e1e…` at both `873a2f097` and HEAD |
+| Hash gate | **Passes as it stands.** Top-level `query_hash` is present holding `a3982ca5…`, which is the *predicted and correct* post-merge-back state named in `runs_1_2_query_provenance`. The stale-hash hazard (`743cd63b…` at top level) has **not** occurred — that value lives only under `runs_1_2_query_hash`, which the registry does not read |
+| Method note | sha256 is still uncomputable in-worker (`shasum`, `openssl`, `node -e` all permission-walled — third consecutive confirmation). **Blob identity via `git hash-object` is the workable substitute** and is stronger than a recomputation, because it needs no trusted tool. Recommended technique for the next auditor |
+| New live trap | Because top-level `query_hash` now *does* resolve, the run-3 situation is **inverted**: any future amendment of `combined_query` must update or delete that key in the *same* edit or every run fails `query_hash_mismatch`. An **unamended** run 4 needs no such edit |
+
+**Why a fourth run is a freshness question, not a drift question.** M1 is `authorized_awaiting_apply` and has
+**not** applied — no worker-reachable write channel exists for it — and nothing else in the §11 register touches
+the Q1–Q6 populations. A run 4 is therefore *expected* to return zero drift for a fourth time.
+
+**What the 25 days actually invalidate.** Nothing in W-0's own exit criteria, which are met and stay met. Age
+bites only on the derived claim W-6/M1 rests on — §11 rule 5, immediacy. At 25 days
+`w6_m1_preflight.preflight.ok` can no longer be read as a *pre-apply* preflight; it is a historical measurement.
+**That consequence belongs to W-6's owner, not to W-0**, and it is registered here rather than acted on.
+
+**Escalated, not taken.** Whether to spend an operator authorization on an unamended run 4 now, fold it into
+**W-23 (Wave 0b)** — which produces the *different* artifact `wave0b-authority-census.json` under a *different*
+workstream — or defer until M1 has an apply channel, is an operator decision on the same reasoning §4 records
+for the third and fourth re-issues. Full audit at the census file's `run_4_readiness_audit`.
+
+#### W-0 re-issued a sixth time — **2026-09-01**, assignment `asg_43e13a792dc730`: the merge-back has moved, and §4 above is stale about where run 4 writes
+
+W-0 was re-issued a sixth time, the same day as the fifth. **No count, query, hash or `results` field was
+touched**, and no run was taken unilaterally — the standing rule is unchanged. The pass above audited whether
+run 4 would *execute*; this one re-derived what it would *write*, from the code rather than from this document.
+One load-bearing paragraph above is now wrong.
+
+**The census merge-back no longer writes into `wave0-authority-census.json`.** At run 3 the census action type
+was special-cased to that path (`trusted-host-actions.mjs:379-382` at `873a2f097`). At HEAD the special case is
+**gone** (`:671-673`): the census follows the generic rule, and its results land in the sibling
+**`wave0-authority-census.results.json`** — a file that does not yet exist. Corroborated by
+`q15-authority-census.results.json`, the convention the census has now joined. Verified read-only by
+`git show 873a2f097:… | grep -n 'evidenceRel ='` against the same grep at HEAD.
+
+| Claim in §4 above | Status at 2026-09-01 |
+|---|---|
+| Mechanical fact 1 — merge-back does not append to `run_history` | **Still true** |
+| Mechanical fact 2 — merge-back overwrites `results` in place | **False.** Run 4 will not touch this file, so run 3's `results` block is in no danger |
+| Finding 3 — read *and* write are both pinned to `wave0-authority-census.json` | **False on both sides.** Write is retargeted; `queryArtifactPath` is now a passthrough parameter of the worker-decision path (`trusted-host-director.mjs:53, :75`) |
+
+**One hazard retired, one created.** Retired: no pre-run edit is needed to preserve run 3's raw results, and run
+4 cannot corrupt this file. Created, and this is the one to plan for: **a successful run 4 leaves this file
+entirely untouched** — `status`, `query_hash`, `execution` and `results` all keep run 3's values while the live
+counts sit in a different file. The hand-written merge that mechanical fact 1 scoped to `run_history` alone now
+covers all five keys. The new results file is also created **bare** — `{trusted_host_action_id, query_hash,
+results}`, no history and no drift block (`trusted-host-actions.mjs:714-719`) — so the drift comparison against
+runs 1–3 is hand-work too. **Whoever executes run 4 must perform that merge, or this file will silently
+misrepresent itself as current.**
+
+This does not weaken the pass above: `validateInputs` still resolves `expectedHash` from this artifact's own
+top-level `query_hash` and still passes unamended. **The finding narrows what run 4 *writes*, not whether it
+*runs*.** It adds one wrinkle to the operator's call — `wave0-authority-census.results.json` is outside the
+declared scope of both assignments, so an authorized run creates a file neither was scoped to produce.
+
+**W-0's exit criteria remain met**, and the run/no-run decision stays with the operator.
+
+#### W-0 re-issued a seventh time — **2026-09-01**, assignment `asg_7d274b39e910a1`: which census would a run 4 actually read?
+
+W-0 was re-issued a seventh time — the third of three passes on the same day, under three missions that could
+not see each other. **No count, query, hash or `results` field was touched and no run was taken unilaterally.**
+The two passes above settled whether run 4 would *execute* and what it would *write*. Neither asked what it
+would **read**, and that turns out to be the question with a live trap behind it.
+
+**A run-4 request that does not name its artifact will run the Q15 census instead.** The run-3 record concluded
+`queryArtifactPath` was unselectable and so "only that file can be run 3"; the sixth re-issue correctly found
+selection is now a passthrough. The step neither took was to ask what the passthrough *defaults to*. It does not
+default to `wave0-authority-census.json`:
+
+```
+governed-action-request.mjs:87    Q15_CENSUS_ARTIFACT = "…/q15-authority-census.json"
+governed-action-request.mjs:1035  artifactPathFrom(refs) → Q15_CENSUS_ARTIFACT when refs is empty
+governed-action-request.mjs:1563  a census request with no refs is built as [Q15_CENSUS_ARTIFACT]
+governed-action-request.mjs:2254  fulfill…(…, queryArtifactPath: artifactPathFrom(rec.artifact_refs))
+```
+
+Because `artifactPathFrom` always returns a value, the wave0 default in the callee's own signature
+(`trusted-host-actions.mjs:792`) is **unreachable through this route**. The failure mode is the bad one again —
+not a refusal but a **silent success**: the run validates, reports green, writes
+`q15-authority-census.results.json`, and answers a different question. Wave 0 gets no run 4 and the single
+authorization this workstream has waited on since 2026-08-06 is spent. Read and write follow the same path
+(`:670-672`), so nothing is corrupted — the loss is the authorization and a false belief that W-0 is current.
+
+**The fix is one field**, and it is now recorded in the census file at `run_4_artifact_selection_audit.request_parameters_required`:
+
+```
+artifact_refs: ["docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json"]
+```
+
+**One qualification to the two passes above.** Both reason from the §11 register — M1 unapplied, nothing else
+touching Q1–Q6 — and predict a fourth zero-drift run. That is sound *for the register*, but three access
+migrations landed in this branch **outside** it, and their applied-state on the deployed target is not knowable
+from the tree. W-16's FK (`20260818190000_w16_user_roles_role_foreign_key.sql`) is precisely the anti-join Q3
+counts, so if applied Q3 becomes *structurally* zero rather than incidentally zero — retiring §4's standing
+caveat that Q3/Q5 proved M9/M7 safe only against then-current data. W-20's code-level landing (`37ec77367`)
+leaves `user_profiles.role` and `app_users.role` in place, so Q2 still runs but now measures **residue rather
+than a live authorization path**. And W-20's companion migration dropping the unattached `handle_new_user()` was
+added by `37ec77367` and then **deleted from the tree** by `a61f989e0` — so §4's original demand that W-20 "give
+it an explicit disposition" is *still open*, and a reader of `37ec77367` alone would conclude the opposite. Q1
+settles that one. Schema re-verified this pass: no census table or column was dropped or renamed, so
+`combined_query` needs no amendment.
+
+**The governance point, which is the real finding.** W-0's gating constraint has not been an audit gap since
+2026-08-07 — it is one operator authorization. Three sessions spent 2026-09-01 re-auditing an artifact none of
+them could execute, and this document now carries three re-issue records and the census file three parallel
+`run_4_*` blocks, all describing the same unexecuted run. Each pass individually did the right thing by refusing
+to re-assert counts. Collectively they are evidence that **further re-issues should be held until the
+authorization is granted or W-0 is formally closed.**
+
+**W-0's exit criteria remain met.** The run/no-run decision stays with the operator, and it is now safe to act
+on: the artifact executes unamended, its results land in a known sibling file, and the request must pin
+`artifact_refs`.
+
+#### W-0 re-issued an eighth time — **2026-09-01**, assignment `asg_796016be30b4e0`: why the re-issues keep arriving
+
+An eighth W-0 assignment arrived, concurrent with the seventh. **No count, query, hash, `results` field or
+`run_history` entry was touched and no run was taken unilaterally.** The three passes above settled whether run 4
+would *execute*, what it would *write*, and what it would *read*. The section above them closes by recommending
+that "further re-issues should be held." **That recommendation cannot be honoured by restraint, because the
+re-issues are not decided — they are generated.** Full audit at the census file's `reissue_root_cause_2026_09_01`.
+
+**The dispatch that proves it.** This assignment's mission is titled **"DX-2 Explained Confidence Fixture"** and
+it was handed **"Wave 0 — Live authority census"** anyway. Its Objective string is byte-identical to
+`mission-advance.mjs:72-73`, its required outputs are `:76-77`, its criterion is the literal `AC_W0` at `:79`.
+The assignment was emitted by `accessIdentityImplementationPhases()`, not authored for this mission. Its content
+hash `5d17cc99…` is also the *same* hash the fifth re-issue carried under a different mission id.
+
+**The mechanism, in four steps read off `scripts/local-dev/lib/vacilando/mission-advance.mjs`:**
+
+```
+:22-25   IMPLEMENTATION_PLAN_CANDIDATES lists THIS PLAN first
+:52-62   resolveImplementationPlan returns the first candidate that exists on disk
+         → this file always exists, so it NEVER returns null for any mission
+:203-206 implementationPhasesFor branches on /access-identity/i → the A&I ladder
+:702-712 openNextPhase reads the register from listAssignments(missionId)
+         → a NEW mission id has an EMPTY register, so its first incomplete phase is impl_w0
+```
+
+So **every mission that reaches implementation without an operator-set `implementation_plan_path` is dispatched
+W-0 as its first assignment**, regardless of its own objective. W-0 has been completed under six distinct mission
+ids; each new mission starts from zero.
+
+**And the fallback latches.** `implementation_plan_path` is written *only* by `mission-advance` itself, from the
+resolved fallback (`:357`, `:767`, `:860`) — there is no other producer in the toolkit. A mission that advances
+once has this plan's path **persisted onto its record** and re-reads it as `custom` at `:55` forever. Nothing in
+the toolkit can route that mission to its real plan afterwards; it takes an operator edit of the mission record.
+
+**What this predicts.** A ninth re-issue, and a tenth. Holding them requires changing the routing, not the
+convention. The recommended remedy — make the fallback require an explicit `implementation_plan_path` instead of
+defaulting to whichever candidate happens to exist — is **Vacilando toolkit product code, outside this
+assignment's declared scope**, so it is raised for the operator rather than changed here.
+
+**W-0's exit criteria remain met.** The artifact was re-verified run-4 ready this pass without executing
+anything: `combined_query` still hashes to blob `24044e1e…` at both HEAD and the run-3 commit `873a2f097`, so the
+committed `query_hash` `a3982ca5…` still matches and the gate still passes unamended.
+
+#### W-0 re-issued a ninth time — **2026-09-01**, assignment `asg_1b25bf5ea02977`: the predicted ninth, and which approval button spends the authorization
+
+The section above predicted "**a ninth re-issue, and a tenth.**" **This is the ninth**, and it confirms the
+diagnosis exactly: mission `msn_50dc74bc988bfd0469` is titled **"DX-1 Executive Overview Fixture"** and was
+handed *Wave 0 — Live authority census* with criterion `AC_W0`. That is the fourth distinct mission id in one day
+to be dispatched W-0 as its first assignment. **No count, query, hash, `results` field or `run_history` entry was
+touched, and no run was taken** — the standing rule is unchanged, and the worker still has no channel.
+
+The three passes above settled whether run 4 would *execute*, what it would *write*, and *which census* it would
+read. This pass extends the last of those along the two axes it did not reach: **which operator gesture reaches
+the Q15 default**, and **how a misrouted run would be reported**. Both are new, and together they change the
+mitigation from prudent to load-bearing.
+
+**The route is chosen for the operator, and it prefers the unsafe default.** `fulfillDatabaseCensusForMission`
+has **four** call sites, not the one audited so far, and they split two-and-two: the governed route
+(`governed-action-request.mjs:2251-2254`) defaults to **Q15**, while `trusted-host-director.mjs:72-75` and both
+`v2-api.mjs` routes (`:767-772`, `:905-910`) default to **wave0**. That would be reassuring except for the
+ordering at `v2-api.mjs:905-907` — when the operator answers a census decision with `authorize_mission_census`,
+`approve_read_only_census` or any of the other three, the handler calls `handleGovernedDecisionAnswer` **first**
+and `return`s if it succeeds. **The wave0-defaulting call at `:907` is the dead branch whenever the governed path
+can handle the answer.** The operator's natural approval therefore travels the one route whose default is not
+this file.
+
+**And the pin cannot be added at approval time.** `artifact_refs` is fixed when the request is *built*
+(`governed-action-request.mjs:1561-1563`), before any operator sees it. If a pending census request was filed
+without a pin, **approving it runs Q15 — the request must be refiled, not re-approved.**
+
+| Before approving a run 4 | |
+|---|---|
+| Check | The pending request's `artifact_refs` contains `wave0-authority-census.json` |
+| If empty or `q15-authority-census.json` | **Do not approve.** Refile the request with the pin |
+| After the run | Confirm the evidence `fileUri` is `wave0-authority-census.results.json` — see below |
+
+**Why the last check is not optional: `AC_W0` is hardcoded onto every census.** `attachEvidence`
+(`trusted-host-actions.mjs:757-768`) sets `title: "Wave 0 authority census results"`, `acceptanceCriteriaIds:
+["AC_W0"]` and `fileUri: evidenceRel` — **none conditional on which artifact ran**. The seventh pass wrote that a
+misrouted operator "has no signal that it answered a different question." There *is* a signal, and it is worse
+than none: a Q15 run attaches a Wave-0-titled evidence item **bound to this assignment's own acceptance
+criterion**, pointing at `q15-authority-census.results.json`. The gallery shows `AC_W0` freshly satisfied. **Read
+the `fileUri`, never the title or the criterion binding.** This is a reporting defect in Vacilando toolkit
+product code — the fix is to derive both from `queryArtifactPath` — and it is **outside this assignment's
+read-only scope**, so it is registered rather than changed.
+
+**One correction to the sibling record.** The claim that the trusted-host-action store "holds no action records"
+was never established: `~/.local/state/alloy-dev/vacilando/trusted-host-actions` is **outside the worker
+sandbox** and `ls` returns a refusal, not an empty result. The conclusion is unchanged and stronger — the worker
+has neither read nor write access, so execution is Director-side by sandbox as well as by design.
+
+**The lost-update risk is no longer hypothetical.** `run_4_artifact_selection_audit` was **renamed and rewritten
+on disk between two reads inside this pass**, deleting a sub-block this pass had already drafted a correction
+against. That is exactly what the seventh pass's `concurrency_observation` predicted, occurring during the audit
+that predicted it. **This pass endorses the hold recommendation without qualification** — and notes it cannot be
+honoured by restraint, because §4's eighth entry shows the re-issues are *generated*, not decided.
+
+**W-0's exit criteria remain met.** Executability re-verified against the **working tree** rather than a commit,
+because four passes have now edited this file: `combined_query` hashes to blob `24044e1e…` in the working tree
+and at `873a2f097`, top-level `query_hash` holds `a3982ca5…`, and `743cd63b…` stays parked at
+`runs_1_2_query_hash`. The gate passes unamended. Full audit at the census file's
+`run_4_route_and_reporting_audit`.
 
 ---
 
