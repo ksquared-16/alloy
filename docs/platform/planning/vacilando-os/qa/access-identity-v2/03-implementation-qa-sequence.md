@@ -73,6 +73,17 @@ gets the A&I phase ladder, and a new mission id's empty register always starts a
 Confidence Fixture" and was dispatched Wave 0 anyway.** The fallback also **latches** — `implementation_plan_path`
 is only ever written by `mission-advance` from its own resolved fallback (`:357, :767, :860`). Holding further
 re-issues needs a **routing change**, not restraint; that is toolkit code, outside W-0's scope, so it is escalated (§4)
+· **W-0 re-issued a ninth time 2026-09-01** (mission `msn_50dc74bc988bfd0469`, assignment `asg_1b25bf5ea02977`)
+— **the ninth the entry above predicted**, and confirming it: mission titled *"DX-1 Executive Overview Fixture"*,
+dispatched Wave 0. Counts again **not re-asserted**; executability re-verified against the **working tree**
+(blob `24044e1e…`). Two new findings on how the pending authorization gets spent. **The operator's approval
+travels the Q15-defaulting route by construction** — `v2-api.mjs:905-907` calls `handleGovernedDecisionAnswer`
+first and returns on success, so the wave0-defaulting call at `:907` is dead whenever governed can answer; and
+`artifact_refs` is fixed at **request-build** time (`governed-action-request.mjs:1561-1563`), so an unpinned
+request must be **refiled, not re-approved**. **`AC_W0` is hardcoded onto every census**
+(`trusted-host-actions.mjs:757-768`): a misrouted run attaches a Wave-0-titled evidence item bound to `AC_W0`
+pointing at the Q15 results — read the `fileUri`, not the title. Both are toolkit reporting/routing defects,
+outside scope, escalated (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
