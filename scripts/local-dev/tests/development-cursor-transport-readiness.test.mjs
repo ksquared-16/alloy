@@ -278,5 +278,27 @@ await test("a Claude modal is NOT dismissed by its own selection caret", async (
   assert.equal(blocker.kind, "onboarding");
 });
 
+await test("one provider is not blocked by the other provider's leftovers", async () => {
+  // A provider switch leaves the outgoing provider's modal in scrollback, and
+  // the Gateway captures more history than the visible screen. Cursor's trust
+  // box kept blocking the lane AFTER it switched to Claude — the send refused
+  // with "Claude is waiting on a folder-trust prompt" while a live Claude
+  // composer sat right there. Observed on lane_73a897409906.
+  const afterSwitch = [
+    CURSOR_TRUST_PANE,
+    "",
+    "▐▛███▛█   Claude Code v2.1.258",
+    "  ~/Code/alloy-worktrees/wt1-work-unit-grade-a",
+    "❯ Try \"write a test\"",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+  ].join("\n");
+  const a = assessPanePromptReadiness(afterSwitch, { provider: "claude" });
+  assert.equal(a.state, "ready", `Claude must not inherit Cursor's modal: ${a.summary}`);
+  // The same text still blocks a CURSOR lane, because there it is Cursor's own
+  // unanswered question with no Cursor composer beneath it.
+  const c = assessPanePromptReadiness(CURSOR_TRUST_PANE, { provider: "cursor" });
+  assert.equal(c.state, "blocked");
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
