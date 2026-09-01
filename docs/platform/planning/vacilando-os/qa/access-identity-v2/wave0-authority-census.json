@@ -1309,5 +1309,53 @@
       "Did not modify the four sibling audit blocks written by the concurrent sessions.",
       "Did not change product code, schema, or UI. The AC_W0 hardcoding at trusted-host-actions.mjs:757-768 is registered as a follow-up, not fixed."
     ]
+  },
+  "run_4_unattended_execution_risk": {
+    "audited_at": "2026-09-01",
+    "audited_by": "claude (Vacilando managed slot 5, worktree wt5-vacilando)",
+    "mission": "msn_60e52c33897bb52c3f",
+    "assignment": "asg_10c569b28e0bde",
+    "content_hash": "4624625b87d59bcce256b0a8746e7b72",
+    "branch": "agent/cursor/5-governed-approval-complete",
+    "mission_title": "DX-5 Evidence Experience — dispatched Wave 0 anyway. The FIFTH distinct mission id in one day to be handed W-0 as its first assignment, and the TENTH re-issue, exactly as reissue_root_cause_2026_09_01 predicted ('a ninth re-issue, and a tenth'). Independent confirmation of that diagnosis; not restated beyond this line.",
+    "why_this_block_exists": "W-0 was re-issued a TENTH time. Four sibling run_4_* audits already cover executability, the write path, artifact selection, the four call routes and evidence reporting, and reissue_root_cause_2026_09_01 covers why the re-issues keep arriving; none is restated here and none was modified. This block records the single thing all of them missed, and it is the one that changes what the operator must do TODAY: every prior pass reasons from the premise that no run 4 can occur until a new operator gesture is made. That premise became false earlier today, at commit 2a8d332a6.",
+    "line_numbers_reverified_at": "HEAD moved during this pass — 2a8d332a6 to 49316559a, via two concurrent sessions committing the eighth and ninth re-issue docs. governed-action-request.mjs was not touched by any of them; every citation below was re-confirmed against the working tree afterwards (ensureRepositoryGrant short-circuit at :2066, tick census clause at :2892).",
+    "counts_untouched": "No Q1-Q6 count, no query text, no hash, no results field, no run_history entry, and no sibling block was modified. Additive only.",
+    "finding_a_stuck_approval_now_executes_unattended": {
+      "severity": "high — it can spend the outstanding authorization with no human in the loop, on the wrong artifact",
+      "new_since_all_sibling_blocks": true,
+      "introduced_by": "commit 2a8d332a6 'fix(vacilando): approval copy per action, and a grant that survives to execution', authored 2026-09-01T12:45:51-0700 — the same day as re-issues five through ten, which is why every sibling audit reasons from the pre-fix world.",
+      "statement": "A census request that was ALREADY APPROVED by the operator and then bounced now resumes and executes automatically on the next Director tick. No second approval, no new request, no operator gesture of any kind. If such a record exists for this workstream, run 4 is no longer pending an authorization — it is pending a tick.",
+      "mechanism": [
+        "The bounce this repairs: approval recorded operator_approval and then executed; execution returned authorization_required without presenting the grant; status stayed awaiting_operator with a decision already made; and the UI hid the button because laneAwaitingOperatorApproval skips any record carrying operator_approval (governed-action-request.mjs:2246-2250, :2264-2270). The code names census as the live instance (:2419-2421).",
+        "governed-action-request.mjs:2887-2893 — tickGovernedActions now selects records with status awaiting_operator AND operator_approval.decision === 'approved' AND action_key === database.read_census. That clause is ADDED by 2a8d332a6; before it, tick ignored awaiting_operator entirely.",
+        "governed-action-request.mjs:2410-2436 — processGovernedAction resumes such a record: it calls ensureRepositoryGrant and then executeGovernedAction directly. The resume is gated to census only; every other already-approved action is deliberately left parked.",
+        "governed-action-request.mjs:2065-2066 — ensureRepositoryGrant short-circuits `if (rec.mission_id) return { ok: true }`. So the resume is NOT confined to the repository-authorized path. A mission-bound W-0 census record resumes too."
+      ],
+      "scope_correction_the_siblings_would_need": "The bounce itself was repository-authorized-only — governed-action-request.mjs:2095-2097 says a mission-bound request 'is authorized exactly as before and never looks at' the grant. The RECOVERY is not so confined, per :2065-2066. So the fix does not establish that W-0's authorization was ever granted and lost; it establishes that the absence of a run can no longer be read as the absence of an authorization, which is the inference re-issues five through nine all rest on.",
+      "why_this_is_worse_than_a_fresh_request": "A resumed record executes on the artifact_refs it was STORED with, and refs are frozen at request-build time (governed-action-request.mjs:1561-1563, :1598, :1613, :1643). A request filed without a pin was stored as [Q15_CENSUS_ARTIFACT] — the default is materialized, so the stored record cannot be distinguished from a deliberate Q15 choice. run_4_route_and_reporting_audit.finding_2 is therefore too narrow in one respect and correct in its conclusion: the pin cannot be retrofitted at approval, and now it cannot be retrofitted at resume either, because there is no operator step left to retrofit it at.",
+      "composed_failure": "Chain the three findings and the worst case is fully unattended: a stuck approved census with unpinned refs resumes on tick, runs the Q15 census, writes q15-authority-census.results.json, and attaches an evidence item titled 'Wave 0 authority census results' bound to acceptance criterion AC_W0 (trusted-host-actions.mjs:757-768, per run_4_route_and_reporting_audit.finding_3). The gallery shows AC_W0 freshly satisfied, the authorization is spent, Wave 0 is not refreshed, and no operator saw a card.",
+      "is_this_a_product_defect": "The recovery itself is a correct fix for a real stuck-card defect and is NOT asserted as a bug. The gap is that it re-executes stored refs that may encode an unintended default. Registered as a follow-up for the governed-action owner alongside the AC_W0 hardcoding; nothing was changed here, this assignment being read-only on product code."
+    },
+    "operator_action_required_before_next_tick": {
+      "check": "In the governed-action store, look for any database.read_census record with status awaiting_operator and operator_approval.decision === 'approved'.",
+      "if_none_exists": "Nothing changes. W-0 remains gated on one authorization exactly as re-issues five through nine describe, and the pinned-refs recipe at run_4_artifact_selection_audit.request_parameters_required stands unamended.",
+      "if_one_exists": "It will execute on the next tick without further approval. Read its artifact_refs BEFORE that happens. If they are absent or name q15-authority-census.json, the record must be cancelled and refiled with the pin — approving, re-approving or waiting cannot correct it.",
+      "worker_could_not_perform_this_check": "The store lives under ~/.local/state/alloy-dev/vacilando, outside the session's permitted working directory. Consistent with run_4_route_and_reporting_audit.worker_execution_channel_correction: a worker gets a sandbox refusal, not an empty result, so absence cannot be inferred from here."
+    },
+    "hold_recommendation_endorsed": {
+      "position": "ENDORSED, and this pass is the tenth data point. Six sessions on 2026-09-01, under six mission ids that could not see each other, have now audited an artifact none of them could execute.",
+      "and_the_hold_still_cannot_be_honoured_by_restraint": "reissue_root_cause_2026_09_01 is confirmed a second time by this dispatch: mission 'DX-5 Evidence Experience' was handed Wave 0 with criterion AC_W0. The remedy is the routing change it names, in mission-advance.mjs — toolkit product code, outside W-0's read-only scope.",
+      "but_one_qualification": "The seventh, eighth and ninth passes concluded the gating constraint is 'one operator authorization' and nothing else. That was true when they wrote it and is no longer strictly true: HEAD added an automatic execution path for an approval that may already have been given. The hold should apply to further AUDIT re-issues; the check above is a Director/operator action, not an audit, and it is time-sensitive against the tick.",
+      "recommended_closure": "Either grant the authorization on a correctly pinned request, or formally close W-0. An eleventh audit pass of this artifact returns less than it costs in merge risk."
+    },
+    "what_this_pass_did_not_do": [
+      "Did not execute the census — no worker-side channel exists, and the governed-action store is outside the sandbox.",
+      "Did not re-assert runs 1-3 counts as current.",
+      "Did not fabricate a results block, a run_history[4] entry, drift data, or a target_identity for an unexecuted run.",
+      "Did not edit combined_query, query_hash, runs_1_2_query_hash, results, or run_history.",
+      "Did not modify or restate the four sibling run_4_* audit blocks or reissue_root_cause_2026_09_01.",
+      "Did not change product code, schema, or UI. The unattended-resume gap and the AC_W0 hardcoding are both registered as follow-ups, not fixed."
+    ]
   }
 }

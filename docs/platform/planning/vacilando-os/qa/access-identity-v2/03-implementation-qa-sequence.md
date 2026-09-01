@@ -84,6 +84,18 @@ request must be **refiled, not re-approved**. **`AC_W0` is hardcoded onto every 
 (`trusted-host-actions.mjs:757-768`): a misrouted run attaches a Wave-0-titled evidence item bound to `AC_W0`
 pointing at the Q15 results — read the `fileUri`, not the title. Both are toolkit reporting/routing defects,
 outside scope, escalated (§4)
+· **W-0 re-issued a tenth time 2026-09-01** (mission `msn_60e52c33897bb52c3f`, assignment `asg_10c569b28e0bde`)
+— **the tenth the same entry predicted**; mission titled *"DX-5 Evidence Experience"*, dispatched Wave 0, fifth
+mission id in one day. Counts again **not re-asserted**. **The premise all five passes above share stopped being
+true the same day**: commit `2a8d332a6` (12:45) added an **unattended** execution path — `tickGovernedActions`
+now picks up an `awaiting_operator` census that is **already approved** and resumes it
+(`governed-action-request.mjs:2887-2893`, `:2410-2436`), and `ensureRepositoryGrant` short-circuits for
+mission-bound records (`:2065-2066`), so W-0's own request qualifies. It repairs a bounce that left an approval
+recorded with **the button hidden** — so "never authorized" and "authorized, then silently bounced" are
+indistinguishable, and **absence of a run no longer proves absence of an authorization**. A resumed record runs
+its **stored** refs, which cannot be pinned after the fact, so with `AC_W0` hardcoded a misrouted run 4 can now
+complete **with no operator in the loop at all**. Check for an approved-but-parked census **before the next
+tick** (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -869,6 +881,70 @@ because four passes have now edited this file: `combined_query` hashes to blob `
 and at `873a2f097`, top-level `query_hash` holds `a3982ca5…`, and `743cd63b…` stays parked at
 `runs_1_2_query_hash`. The gate passes unamended. Full audit at the census file's
 `run_4_route_and_reporting_audit`.
+
+#### W-0 re-issued a tenth time — **2026-09-01**, assignment `asg_10c569b28e0bde`: the run may no longer need an operator at all
+
+**This is the tenth**, and the second half of the prediction two sections above. Mission `msn_60e52c33897bb52c3f`
+is titled **"DX-5 Evidence Experience"** and was handed *Wave 0 — Live authority census* with criterion `AC_W0` —
+the fifth distinct mission id in one day, confirming `reissue_root_cause_2026_09_01` again. **No count, query,
+hash, `results` field or `run_history` entry was touched, and no run was taken.**
+
+The five passes above are unanimous on one premise, and **that premise stopped being true earlier the same day.**
+Each reasons that W-0 is gated on an operator authorization that has not arrived, so nothing can happen until one
+does. Commit **`2a8d332a6`** — *"approval copy per action, and a grant that survives to execution"*, authored
+2026-09-01 at 12:45 — added an **automatic execution path for an approval that may already have been given.**
+
+**The defect it repairs is precisely a lost W-0-shaped approval.** A census request whose approval was recorded
+and whose execution then bounced `authorization_required` was left at `awaiting_operator` **with
+`operator_approval` already set** — and the UI *hid the approve button*, because `laneAwaitingOperatorApproval`
+skips any record carrying one (`governed-action-request.mjs:2246-2250`, `:2264-2270`). The code names census as
+the live instance (`:2419-2421`). From both the worker's side and the operator's side, **"never authorized" and
+"authorized, then silently bounced" look identical.**
+
+**What HEAD now does about it, unattended:**
+
+```
+governed-action-request.mjs:2887-2893  tickGovernedActions now selects awaiting_operator records
+                                       that are approved AND action_key === database.read_census
+                                       — this clause is ADDED by 2a8d332a6
+:2410-2436                             processGovernedAction resumes them: ensureRepositoryGrant,
+                                       then executeGovernedAction directly. Census only; every
+                                       other approved action stays parked
+:2065-2066                             ensureRepositoryGrant returns ok immediately when
+                                       rec.mission_id is set — so a MISSION-BOUND W-0 census
+                                       resumes too, not just the repository-authorized path
+```
+
+**One scope correction the sections above would need.** The bounce itself was repository-authorized-only
+(`:2095-2097`: a mission-bound request "is authorized exactly as before and never looks at" the grant). The
+*recovery* is not so confined. This does **not** prove W-0's authorization was granted and lost — but it does
+mean **the absence of a run can no longer be read as the absence of an authorization**, which is the inference
+every re-issue from the fifth to the ninth rests on.
+
+**Why this makes the pinning finding urgent rather than prudent.** A resumed record executes on the
+`artifact_refs` it was *stored* with, and the default is **materialized into the record at request-build time**
+(`:1561-1563`, `:1598`, `:1613`, `:1643`) — so an unpinned request is stored as `[Q15_CENSUS_ARTIFACT]` and is
+**indistinguishable from a deliberate Q15 choice**. The section above establishes the pin cannot be retrofitted
+at approval; it now cannot be retrofitted at resume either, **because there is no operator step left to retrofit
+it at.** Chain that with the hardcoded `AC_W0` attachment and the worst case is fully unattended: a stuck
+approved census resumes on tick, runs Q15, writes `q15-authority-census.results.json`, and attaches an evidence
+item titled *"Wave 0 authority census results"* bound to `AC_W0`. **The gallery shows `AC_W0` freshly satisfied
+and no operator ever saw a card.**
+
+| Before the next Director tick | |
+|---|---|
+| Check | Any `database.read_census` record at `awaiting_operator` with `operator_approval.decision === "approved"` |
+| If none | Nothing changes; W-0 stays gated exactly as the sections above describe |
+| If one exists | **It executes on the next tick, no approval needed.** Read its `artifact_refs` first — if absent or `q15-authority-census.json`, cancel and refile with the pin. Approving, re-approving or waiting cannot correct it |
+
+The worker could not run this check itself: the store is under `~/.local/state/alloy-dev/vacilando`, outside the
+sandbox, which returns a refusal rather than an empty result. **The resume is a correct fix for a real stuck-card
+defect and is not asserted as a bug**; the gap is that it re-executes stored refs that may encode an unintended
+default. Both that and the `AC_W0` hardcoding are toolkit product code and are **registered, not changed**.
+
+**W-0's exit criteria remain met**, and this pass **endorses the hold** — with the one qualification that the
+check above is a Director/operator action rather than an audit, and it is time-sensitive against the tick. Full
+audit at the census file's `run_4_unattended_execution_risk`.
 
 ---
 
