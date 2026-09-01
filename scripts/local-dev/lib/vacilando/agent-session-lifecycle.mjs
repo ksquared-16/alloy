@@ -1692,6 +1692,27 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
 
   supersedeObservationOnlyCursorSession(found, rec, { nowMs, root });
 
+  // SWITCHING BACK IS ALSO A SWITCH.
+  //
+  // The Cursor path ends a session belonging to the other provider before
+  // creating its own (endActiveSessionForProviderSwitch); the Claude path did
+  // not. Going Cursor → Claude therefore respawned the pane to Claude and THEN
+  // failed with `lane_has_active_session`, because the Cursor session was still
+  // ACTIVE — leaving the lane holding a Claude pane under a Cursor Agent
+  // Session. Observed exactly this on lane_73a897409906 while certifying the
+  // switch back.
+  //
+  // Only a session for a DIFFERENT provider is ended here. A live Claude
+  // session still returns `agent_already_running` below, unchanged.
+  const crossProvider = activeAgentSessionForLane(found.lane_id, root);
+  if (crossProvider && crossProvider.provider && crossProvider.provider !== "claude") {
+    endActiveSessionForProviderSwitch(found.lane_id, {
+      nowMs,
+      root,
+      reason: "provider_switched",
+    });
+  }
+
   if (laneClaudePresent(found)) {
     if (countClaudeOnLane(found) > 1) {
       return { ok: false, error: "duplicate_claude" };
