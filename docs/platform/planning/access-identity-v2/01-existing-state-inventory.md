@@ -1,20 +1,28 @@
 ---
 owner: platform
 status: sprint
-last_reviewed: 2026-08-10
+last_reviewed: 2026-09-01
 supersedes: []
 ---
 
 # 01 — Existing-state inventory
 
-> **This file has four parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
+> **This file has seven parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
 > the **security threat & enforcement matrix** — required output #7. **Part III (§§24–36)** is the
 > **gap analysis** — required output #8. **Part IV (§§37–44)** is the **role-model depth and role-editor
-> surface inventory**, added on operator reopen. Parts II–IV were delivered by later Mission 2 phases and
-> appended here per their assignment scopes; each reuses what precedes it rather than restating it. Read Part I
+> surface inventory**, added on operator reopen. **Part V (§§45–57)** reads that chain as a **threat model**.
+> **Part VI (§§58–71)** is the **gap analysis, reopened**. **Part VII (§§72–85)** is the **Mission 3
+> re-anchor** — the accepted register re-adjudicated against a tree that has since executed most of the plan.
+> Parts II–VII were delivered by later mission phases and appended here per their assignment scopes; each
+> reuses what precedes it rather than restating it. Read Part I
 > first, or jump to [§10](#10-headline--the-unauthenticated-surface-is-the-best-defended-part-of-this-platform),
-> [§24](#24-headline--the-gap-is-no-longer-in-the-product-alone-it-is-between-the-corpus-and-its-plan) or
-> [§37](#37-headline--there-is-no-role-hierarchy-to-flatten).
+> [§24](#24-headline--the-gap-is-no-longer-in-the-product-alone-it-is-between-the-corpus-and-its-plan),
+> [§37](#37-headline--there-is-no-role-hierarchy-to-flatten) or
+> [§72](#72-headline--the-resolvers-findings-are-closed-the-door-is-not).
+>
+> **This header said "four parts" until 2026-09-01**, while carrying six. Parts V and VI were appended
+> without amending it — the same standing follow-up Part VI records as its limit 11 for `README.md`. §85
+> records the correction.
 
 > **Mission 2 refresh.** The accepted corpus is reused as input, not re-derived. This pass re-anchors the
 > inventory to the current worktree and records what has **changed since acceptance** — because remediation
@@ -2662,3 +2670,524 @@ git diff --stat -- docs/platform/planning/vacilando-os/qa/access-identity-v2/05-
   and is superseded by §61. Part III's text is left unedited, per the corpus's convention that a part records
   its state at its date; §61 is the correction of record.
 - **Not re-verified:** all carried findings, all severities, all line numbers cited from earlier parts.
+
+---
+
+# Part VII — Mission 3 re-anchor: the accepted register, re-adjudicated
+
+> **Mission** `msn_65f073b2e01cec4cbc` v1 · phase *Existing-state inventory* · assignment `asg_96b19f5fa19a50`
+> **contentHash** `282eace8ea5a991546ba9e8b1c19fc7e`
+> **Worktree** `wt5-vacilando` @ `2a8d332a6` (branch `agent/cursor/5-governed-approval-complete`,
+> **30 ahead / 1 behind** `origin/staging`)
+> **Date** 2026-09-01
+> **Sources** `web/`, `supabase/migrations/`, `docs/platform/planning/access-identity-v2/`
+> **Method** static and file-grounded, as Parts II–VI. Every current-state claim cites `path:line` and was
+> read in this pass. Claims carried without re-derivation are marked **[carried]**.
+>
+> **Reuse, not re-derivation.** The accepted corpus is this part's input. It does not restate Part I's chain,
+> Part II's threat register, Part III's gap register, Part IV's layer count or Part V's controls. It does one
+> thing those parts cannot do for themselves: **it asks whether they are still true.**
+
+---
+
+## 72. Headline — the resolver's findings are closed; the door is not
+
+Part VI's headline was *"the plan caught up, and was outrun again the same week."* One month later the
+relationship has inverted. **The plan has been executed. This document's own findings about the resolver are,
+with one exception, closed in code** — and what remains open is not a defect the inventory found. It is the
+one thing the inventory never called a defect: **the front door.**
+
+Three facts, each verified in this pass, carry the whole part:
+
+1. **The four-layer model exists as a declared enumeration.** `web/lib/admin/authorityLayers.ts:55` declares
+   `AUTHORITY_LAYERS = ["membership", "role", "capability", "scope"]`, `:83-121` maps every store the resolver
+   reads onto one of them, and `compatibilitySources()` at `:129-131` **returns an empty list** — the legacy
+   fallback that §1 and §2 built their case on is gone from the enumeration because it is gone from the code.
+2. **The legacy fallback, the UUID sort, the read-failure fail-open and the scope bypass are all deleted.**
+   `resolveAdminAccessCore.ts` is now 539 lines of which the majority is the argument for each deletion:
+   `W-20` (`:240-271`), `W-22` (`:178-238`), `W-43` (`:118-161`, `:273-301`), `W-42` (`:20-42`), and `W-8`
+   recorded at `accessScope.ts:46-51` — *"Both are deleted rather than neutered."*
+3. **Admission is still `roleKeys ∋ {admin, ops}`, evaluated against a literal set in application code.**
+   `resolveAdminAccessCore.ts:18` is byte-identical to what §1 recorded on 2026-08-03. **485 of 602 route
+   files** under `web/app/api` name one of the three helpers that turn it into a 403
+   (`getAdminContext.ts:38-39`, `adminRouteGate.ts:45-47`). The capability that `W-13`'s own docstring says
+   replaces it — `portal.access` — **is seeded by no migration and enforced at no site** (§79).
+
+**So the shape of the current state is the inverse of the accepted artifact's.** In July the platform had a
+rich door and no rooms: a strong admission check and a capability vocabulary that decided almost nothing. It
+now has rooms — 59 catalog keys, a declared route-capability table, health as its own grantable area, surface
+declarations joined to the routes behind them — **and the same July door.** Two of the four roles the product
+ships and can assign still cannot open it.
+
+This part mints three new findings, in the `M3-n` space: `M3-1` (§79), `M3-2` (§80), `M3-3` (§81). It closes
+nothing on its own authority and creates no workstream.
+
+---
+
+## 73. Method — what this pass re-derived, and what it did not
+
+**Re-derived from the tree, this pass:** every claim in §§75–81. Each was read at the line cited, at
+`2a8d332a6`, in this worktree.
+
+**Carried without re-derivation:** every severity, every threat ID, every finding whose disposition §75 marks
+**[carried]**, and all of Parts I–VI's line numbers. Where a carried claim's line number has moved, this part
+says so rather than silently re-citing — `resolveAdminAccessCore.ts` grew from ~250 lines to 539, so **every
+line reference into that file from Parts I–VI is stale**, and §84 states the rule for reading them.
+
+**What "closed" means here, and it is deliberately weak.** A finding is marked **closed** when the code
+construct it named is absent from the tree and something in the tree asserts its absence — a test, a foreign
+key, a database constraint. It is **not** a statement that the remediation was correct, that it was applied to
+the shared database, or that a regression lock passes. **This pass executed no test** (§82), so every
+"closed" here is a *static* closure. That is the same standard Parts II–VI used, stated once more because
+this part closes more findings than any before it.
+
+---
+
+## 74. Provenance of the delta — the base moved by 1,622 commits
+
+Part VI verified at `03efba377`. This pass verifies at `2a8d332a6`, and `git rev-list --count 03efba377..HEAD`
+is **1,622**. That is not an access initiative running for a month; it is the whole platform's staging line,
+merged into a worktree whose own branch is about the Vacilando runtime, not about access.
+
+**That is the right base for an existing-state reading, and it is worth saying why.** Every prior part read a
+tree in which the access work was the branch's own work-in-progress. This one reads access surfaces it
+*inherited* — they arrived through `origin/staging` from other programs' merges. What it measures is
+therefore what the platform actually carries, not what one branch was mid-way through proving.
+
+The commits that moved these surfaces, by their own subject lines:
+
+| Commit | What it did |
+|---|---|
+| `1025d65e2` | `docs(access): give the D2/I-10 decision its governed frontmatter` — last commit into this folder |
+| `a61f989e0` | `chore(access): the promotion set is ten required, proven A&I migrations` |
+| `cfa6f6485` | `docs(access): Q15 answered on the deployed tenant — and C1 alone would have been wrong` |
+| `95a76983e` | `feat(health): D-H6 — a health access boundary enforced server-side` |
+| `cfda30e61` / `db95621c6` | `feat(safeguarding): a canonical owner for what is currently forbidden` / `do not widen another program's frozen permission catalog` |
+| `33cae6715` | `fix(identity): person owns a person-backed child's identity, at the shared seam` |
+
+The last of these is the one an inventory must not over-read. **It does not close §1.** No migration adds a
+principal column to `persons` (`rg 'ALTER TABLE .*persons ADD COLUMN.*(user_id|auth)' supabase/migrations` →
+no match), and `web/lib/access/memberIdentityProjection.ts` — the module that projects a *member's* identity —
+names no person. The identity split §1 recorded is **open and structurally unchanged**.
+
+---
+
+## 75. The accepted register, re-adjudicated
+
+Every finding this document has opened, against the tree at `2a8d332a6`. **Disposition is static** (§73).
+
+| Finding | State at §0 (2026-08-03) | **State now** | Evidence |
+|---|---|---|---|
+| **§1** identity split — `persons` carries no principal link | open | **OPEN — unchanged** | §74 |
+| **C1** mentioning `permissionKeys` ≠ enforcing it | open | **NARROWED — materially** | §77 |
+| **C3** triple catalog, dual FKs | closed | **closed, and the views are gone** | `20260818240000_w60_m20_drop_catalog_compatibility_views.sql` |
+| **C5** unsavable Workflows row | closed | closed **[carried]** | §2.3 |
+| **C6** two personas cannot log in | open | **OPEN — verified, and now the load-bearing one** | §79 |
+| **C7** multi-role schema, single-role write path | open | **OPEN at the write path, guarded twice** | §78 |
+| **C8** role widens a scope dimension | open | **CLOSED** — `W-8` | `accessScope.ts:46-51` |
+| **C10** RLS authorizes `owner`/`manager` | open | **SPLIT: application half CLOSED, SQL half OPEN** | §78 |
+| **C11** second resolver diverges | open | **NARROWED, not closed** | §78 |
+| **C12** Phase 0 and Wave 1 closed C5 incompatibly | new | **resolved by measurement** | `catalogVocabularyReconciliation.test.ts:157-167` |
+| **C13** orphaned `ops.workflows.*` capability | new | **RECORDED, not closed** — both keys on the 35-key deletion list; deletion is `OD-3` | `unenforcedPermissionKeys.json` |
+| **G2** routes gating on `access.ok` alone | closed | closed **[carried]** | §3.1 |
+| **G3** self-elevation | partial | **still partial — the ceiling is still absent** | §78 |
+| **G4** new membership gets no access profile | open | **CLOSED at the write path** — `W-5` | `web/app/api/admin/users/route.ts:175-181` |
+| **G6** RLS is not a backstop | open | **OPEN — narrowed by 1.3 points** | §77 |
+| **C2, C4, C9, G1, G5** | carried | **carried, not re-derived** | §7.1 |
+
+**Twelve of the nineteen rows now read closed, carried-closed, or resolved.** That is the single largest
+movement this document has recorded, and it is the reason §72 says the inventory is now mostly historical.
+
+One row deserves emphasis because it is the plan's own hardest case. **G4 is closed by construction, not by
+convention.** `POST /api/admin/users` no longer touches `user_roles`; it calls
+`createMembershipWithAccessProfile` (`route.ts:177`), and the comment above it at `:175-176` states the rule
+the closure rests on — *"membership + access profile are one transaction. Never insert into `user_roles`
+directly here."*
+
+---
+
+## 76. The workstream census — 51 of 62 named, and naming is not shipping
+
+`03…` defines `W-1`…`W-62`. Counting distinct workstream identifiers that appear on any line under `web/` or
+`supabase/migrations/`:
+
+| | Count |
+|---|---:|
+| Plan workstreams `W-1`…`W-62` | 62 |
+| …named somewhere in the tree | **51** |
+| …**not** named anywhere | **11** — `W-19`, `W-21`, `W-23`, `W-24`, `W-25`, `W-27`, `W-29`, `W-34`, `W-37`, `W-48`, `W-53` |
+| `W-0` (the census) | named |
+
+**This is a name search, and §29's limit applies to it verbatim: a workstream can be executed without citing
+its ID, and a workstream can be cited in a docstring without being executed.** It is reported because the
+corpus made its workstream IDs load-bearing — the docstrings in `resolveAdminAccessCore.ts`,
+`authorityLayers.ts`, `canManageUsersAndRoles.ts` and `canReadAnalytics.ts` all open by naming theirs — so
+absence from the tree is meaningful evidence about a program that habitually leaves that trace. **It is not
+proof.**
+
+The absences are also not random. `W-23`, `W-24`, `W-25`, `W-27` and `W-53` are the **lifecycle and audit**
+band — the credential half of revocation, and the authority audit store `03…§27.3` says must not be sized
+before `W-23`'s Q7. `03…§33` already tiers `W-53` as the widest error bar in the plan. **The band the plan
+called its most dangerous is the band with no trace in the tree.**
+
+---
+
+## 77. The census, refreshed
+
+| Measure | Accepted (2026-07-30) | Part I (2026-08-03) | **Now (2026-09-01)** |
+|---|---:|---:|---:|
+| `route.ts` files under `web/app/api` | 539 | 559 | **602** |
+| …holding a service-role client | 517 | 534 | **567** (94.2%) |
+| …resolving `getAdminAccessContext` | 88 | 89 | **103** |
+| …naming an admission helper | — | — | **485** |
+| Files in `web/lib` mentioning `permissionKeys` | 11 | 13 | **21** |
+| Test files under `web/tests/access` | — | — | **49** |
+| Migrations under `supabase/migrations` | — | — | **362** |
+| Catalog permission keys | 57 | 57 | **59** (§81) |
+| Catalog keys with **no** enforcement site | — | — | **35** |
+
+**C1 is materially narrowed, and this is the first pass that can say so with the ratio rather than the
+count.** In August the two new `permissionKeys` files were `canReadAnalytics.ts` and
+`selfAuthorityMutation.ts`, and §4 correctly refused to call that enforcement. The 21 files now include
+`web/lib/health/healthAccess.ts`, `web/lib/communications/communicationPermissions.ts`,
+`web/lib/documents/assertDocumentAccess.ts`, `web/lib/ai/aiEnrichmentPermissions.ts`,
+`web/lib/agent/configLayoutAssist/configurationProposalAccess.ts`,
+`web/lib/operationalExpectations/*/…ServerContext.ts` and `web/lib/access/surfaceCapabilities.ts` — **modules
+whose entire purpose is to decide a capability question**. The over-report ratio §4 put at roughly 30× is no
+longer the right instrument; the honest instrument is §77's last row, and it says **35 of 59 catalog keys
+still decide nothing**.
+
+**G6 is narrowed by 1.3 percentage points and unchanged in kind.** 567 of 602 route files hold a service-role
+client. For that surface, the check inside the handler's own module graph is still the only authority that
+exists.
+
+---
+
+## 78. Enforced vs configured — current
+
+Part I §5's table, re-read line by line. Changed rows in bold.
+
+| Authority concept | Configured | Enforced |
+|---|---|---|
+| Authenticated session | yes | yes |
+| Org membership / tenant isolation | yes | yes |
+| Portal eligibility (`admin`/`ops`) | yes | **yes — still the primary API gate, at 485 route files** |
+| **Ambiguous multi-org membership** | n/a | **refused** — `W-22`, `resolveAdminAccessCore.ts:233` |
+| **Legacy role fallback** (`user_profiles.role`, `app_users.role`) | **deleted** | **n/a** — `W-20`, `:240-271` |
+| **Failed grant read** | n/a | **denies** — `W-43`, `:281-301`, `:344` |
+| **Failed scope-profile read** | n/a | **denies** — `W-43`, `:136-138`, `:358-360` |
+| **Absent scope profile** | representable as `unset` — `W-47` | **`legacy-all` — still fail-open**, `:60` |
+| Analytics read (`reports.read`/`.write`) | yes | **yes, and admission no longer satisfies it** — `W-13`, `canReadAnalytics.ts:45-49` |
+| Users & Roles manage | yes | **yes, capability only** — `W-13`, `canManageUsersAndRoles.ts:35` |
+| Users & Roles catalog read | yes | **yes, on a weaker key** — `settings.users_roles.read`, `:72-79` |
+| **Health view / manage** | **yes — `health.view`, `health.manage`** | **yes** — `healthAccess.ts`, `admin/health/card/route.ts` |
+| Self-authority mutation | n/a | banned unconditionally — `W-2` |
+| Delegation ceiling on other users | **no** | **no — D3 / W-18 still open** (`users/[userId]/role/route.ts:45` validates only that the target role is an active `role_definitions` row) |
+| `ops.workflows.*` | seeded, granted to `admin` | **no** — on the deletion list (C13) |
+| Custom personas (`regional_lead`, `school_director`) | **yes — assignable, FK-constrained, grantable** | **no — cannot pass the admission gate** (C6, §79) |
+| RLS roles `owner` / `manager` | **never seeded, and now structurally unassignable** — `W-16` FK | **application half gone (`W-44`); 30 `CREATE POLICY` statements still name `'owner'` — `AD-4`, open** |
+| Multi-role membership | yes (schema + resolver union) | **read yes; write still replaces** — `W-54` refuses a partial-view replacement, `M2-17` itemizes the loss, `W-17` outstanding |
+| Department scope | yes | **yes — the portal bypass is deleted** (`W-8`) |
+| Site scope | yes | **yes, and now created with the membership** (`W-5`) |
+| Access profile on new membership | intended | **yes — one transaction** (`W-5`, G4 closed) |
+| Operator preview of effective access | yes | **narrowed: same constant, same normal form, same denial** — `:441-445`, `:456-458`, `:467-470`; **still a second implementation** |
+| person → user identity | **no** | n/a — relation does not exist (§74) |
+
+**C11 is the row to read carefully.** `resolveAdminAccessDimensionsForOrgMember` still exists at `:420` and
+still recomputes the whole answer. What changed is that its three divergence *mechanisms* were removed by
+name: it calls the same `normalizeRoleKey`, reads the same `ABSENT_PROFILE_ENFORCEMENT` constant, and denies
+on the same failed grant read, each with a comment saying why a local copy was the defect. **A second
+implementation that has been forced to agree is a smaller finding than a second implementation that
+disagrees. It is not the same finding as closed**, and `IA-R4`'s *"MUST NOT have a second implementation"* is
+unsatisfied.
+
+---
+
+## 79. `M3-1` — the admission door is still a role literal, and it is what keeps C6 open
+
+**Finding.** The platform can now express, grant, scope and enforce a capability. It cannot express
+*admission* as one. Admission is `PORTAL_ROLES = new Set(["admin", "ops"])`
+(`resolveAdminAccessCore.ts:18`), consulted through three helpers that all resolve to the same 403:
+
+```ts
+if (!bundle.portalEligible) return { ok: false, status: 403 };   // getAdminContext.ts:38-39
+if (!bundle.portalEligible) return { ok: false, status: 403 };   // adminRouteGate.ts:45-47
+```
+
+**485 of 602** route files under `web/app/api` name `loadAdminRouteGate`, `requireAdminOrOps` or
+`getAdminContextCached`.
+
+**Why this is a Mission 3 finding and not a restatement of C6.** C6 said *the platform ships two named
+personas it cannot admit to the portal*. That was a supply observation — Phase 0 seeded roles nothing could
+reach. It is now a **demand** observation, because everything downstream of the door was built:
+
+- `regional_lead` and `school_director` are **assignable by construction** —
+  `20260818190000_w16_user_roles_role_foreign_key.sql` foreign-keys `user_roles.role` to `role_definitions`,
+  and `neverSeededRoleVocabulary.test.ts:29` enumerates all four as `ASSIGNABLE`;
+- they can hold capabilities — `role_permission_grants` is keyed by `role_key`, and the role editor writes
+  it (`20260820140000_w58_save_role_definition_and_grants.sql`);
+- the operator can see and compose them — `d2-i10-role-composition-decision.md` (2026-08-21) recommends
+  composable roles *because the platform already implements them*;
+- and every one of those grants is unreachable, because the request 403s at the door.
+
+**The replacement was named and has not shipped.** `W-13`'s migration comment states it in the product's own
+words: *"The `portalEligible` leg is what W-13 replaces with a `portal.access` capability"*
+(`20260819120000_w13_i35b_analytics_read_preservation.sql:14`). `portal.access` appears in the corpus, in
+`README_ADMIN_AUTH.md`, and in one reviewed `reason` string in `routeCapabilities.declared.json:313`. **It is
+inserted into `permission_definitions` by no migration and read by no gate.** `W-13` removed the three sites
+where admission *authorized*; `W-14`/`W-15`, which would make admission itself a capability, are the open half.
+
+**Measured, that half is 91% unstarted.** `web/scripts/routeCapabilities.declared.json` — `W-14`'s
+mechanism, reviewed 2026-08-27 — enumerates every exported handler at method grain:
+
+| Status | Count | Meaning (from the file's own `note`) |
+|---|---:|---|
+| `declared` | **28** | requires a catalog capability key |
+| `none` | **43** | reviewed assertion that the handler legitimately requires none |
+| `pending` | **714** | `W-15`'s burndown backlog |
+| **total** | **785** | |
+
+The ratchet is `max_pending: 693`, and 21 handlers are listed as `inherited` from other programs, so the
+committed assertion `pending − inherited ≤ max_pending` holds exactly at the ceiling. **The mechanism is
+real, tightly locked and honest about its own incompleteness.** `28 / 785 = 3.6%`.
+
+**Severity: this is the highest-value open item in the corpus, and it is not a security defect.** Nothing
+here admits anyone who should be refused — the door is if anything too narrow. It is a **product** finding:
+the access model the operator is now shown, and can now configure in detail, stops at a boundary the operator
+cannot configure at all. `03…§21` owns it as `W-14`/`W-15`; this part adds only the measurement.
+
+---
+
+## 80. `M3-2` — "the one uncatalogued key is still the only one" is a claim about three directories
+
+**Finding — confirmed statically.** `web/tests/access/catalogVocabularyReconciliation.test.ts` states, in its
+module docstring at `:32-35` and again in its test name at `:169`:
+
+> *"The one uncatalogued permission key is still the only one."* … `communications.send.emergency` … *"has no
+> catalog row and nothing binds it to the resolved permission set."*
+
+**That claim is false of the tree.** Two more permission keys are declared in product source and neither has
+a catalog row:
+
+```
+web/lib/safeguarding/safeguardingRestriction.ts:93   view:   "crm.customers.safeguarding.view"
+web/lib/safeguarding/safeguardingRestriction.ts:94   manage: "crm.customers.safeguarding.manage"
+web/lib/pos/processingIdentity/commands/handlers.ts:934   requiredPermission: "crm.customers.safeguarding.manage"
+```
+
+The third is not a declaration. It is the `requiredPermission` on a live command handler — **an enforcement
+site for a key the catalog does not contain**, which is the precise shape the test's own title claims is
+unique to `communications.send.emergency`.
+
+**Why the test nevertheless passes, and why that is the finding.** The assertion filters the scan's own
+results by path before comparing:
+
+```ts
+const declared = [...scan.uncatalogued.entries()]
+    .filter(([, sites]) => sites.some((s) => /communications|admin\/rbac|access/.test(s)))   // :170-171
+    .map(([key]) => key)
+expect(declared).toEqual(["communications.send.emergency"]);                                 // :174
+```
+
+`web/lib/safeguarding/…` and `web/lib/pos/…` match none of `communications`, `admin/rbac`, `access`. The scan
+**does** reach them — `permissionCatalogDiscovery.ts:142` walks `web/app`, `web/lib`, `web/components`,
+`web/scripts` — so the keys are in `scan.uncatalogued` and are filtered out one line before the comparison.
+
+**This is `W-11`'s original defect, recurring one level up.** `W-11` existed because *"a parser pinned to one
+`INSERT` shape saw 35 of 57 keys"* (`:28`). The discovery was fixed; **the assertion built on it was then
+scoped to three directories and stated without scope.** A lock whose name is broader than its predicate does
+not fail when the world changes — it silently narrows to the part of the world it still covers. `T-6`'s class
+(a control that changes nothing) applied to the control that polices `T-6`.
+
+**Disposition.** Corpus-integrity and lock-fidelity, not a product defect: no principal gains anything.
+Nothing here says the safeguarding keys *should* be catalogued — §81 shows that was a considered decision.
+The finding is that **the corpus asserts a uniqueness that has not held since 2026-08-25 and cannot detect
+its own falsification.** Owner: the workstream that owns `RL-35`/`W-50`, since this is the same register.
+
+---
+
+## 81. `M3-3` — the catalog "freeze" is a named-decision gate, and one program read it as a freeze
+
+**Finding.** Two programs met the same catalog lock one day apart and drew opposite conclusions.
+
+**2026-08-25 — safeguarding declined to seed.** `20260825140000_child_safeguarding_restrictions_v1.sql`
+states its reasoning in full:
+
+> *"`crm.customers.safeguarding.view` / `.manage` are the right key names… Seeding them here would widen a
+> catalog that another program has frozen — `w11-catalog-reconciliation.json` pins the width at 57 keys
+> measured against the shared database, and its own tests say a worker may not append to it."*
+
+It therefore shipped its access boundary through RLS policies, a propose-only command type, and a `CHECK`
+constraint — and left the two right-named keys declared in code with nothing behind them, which is `M3-2`'s
+second and third lines.
+
+**2026-08-26 — health appended.** `20260826122000_dh6_health_visibility_permission.sql` inserts
+`health.view` and `health.manage` into `permission_definitions` and grants both to every org's `admin`.
+
+**Both are correct, because the lock is not a freeze.**
+`catalogVocabularyReconciliation.test.ts:53-63` carries an `APPROVED_ADDITIONS` map whose docstring is
+explicit: *"The lock's purpose is that nothing widens the catalog SILENTLY, not that the catalog can never
+widen. Each entry names the decision that authorized it."* Health entered under `D-H6`. The lock then holds
+the widened width by construction — `:74-75` asserts `catalog.size === 57 + added.length` — and `:139-147`
+additionally requires every added key to have an enforcement site, so a seeded-but-inert health key would
+fail.
+
+**The finding is the misreading, and its cost.** Safeguarding was not wrong to be careful; it was wrong about
+what the gate required, and the difference is a Director decision it did not ask for. The consequences are
+concrete and both are live today:
+
+1. **The catalog is 59, and `w11-catalog-reconciliation.json`'s `catalog_width: 57` is now a floor with an
+   allowlist beside it** rather than a measured width. Any reader citing "57 keys" — including the D-H6
+   migration's own comment at `:7` — is citing a number that stopped being the catalog's width the day after
+   it was written.
+2. **A real access boundary is enforced outside the capability vocabulary.** Safeguarding reads are
+   authorized by `has_org_role(org_id, ARRAY['owner','admin','ops'])` and writes by
+   `ARRAY['owner','admin']` (`:123-131`) — **role literals in SQL, including the never-seeded `owner`**. That
+   is `C10`/`AD-4`'s open half acquiring a new instance a month after `W-44` closed the application half. The
+   operator cannot grant safeguarding access to a role, cannot see it in the role editor, and cannot withhold
+   it from `ops` the way `D-H6` withholds health.
+
+**Disposition.** `M3-3` is a governance finding with a product consequence. It is not a request to seed the
+keys — `IA-R6` forbids registering `.view` with no enforcement site, and the safeguarding migration says so
+correctly at its close. It is the observation that **the corpus's catalog gate is legible enough to obey and
+not legible enough to obey correctly**, and that the price was paid in the one domain where the platform
+least wants an ungovernable boundary.
+
+---
+
+## 82. What this pass could not verify
+
+Stated before the limits, because two of these are the reason §73 defines "closed" as weakly as it does.
+
+1. **No test was executed. `npm ci` was attempted and not authorized in this session, and neither
+   `node_modules/` nor `web/node_modules/` exists in this worktree** — `npx vitest run tests/access` fails at
+   `Cannot find module 'vitest/config'`. **All 49 files under `web/tests/access` are unexecuted here.**
+   Everything in §§75–81 is a reading of source, including `M3-2`, which is a claim about what a test's
+   predicate covers and is therefore fully decidable statically — but *"`RL-35` passes"* is not asserted
+   anywhere in this part.
+2. **No database was consulted.** In particular: whether
+   `20260807140000_backfill_membership_access_profiles.sql` has been **applied** on the shared target is
+   unknown to this pass, and that is the precondition `resolveAdminAccessCore.ts:51-54` names for flipping
+   `ABSENT_PROFILE_ENFORCEMENT` to `deny`. **The most consequential remaining switch in the resolver is
+   blocked on a fact this part cannot establish.** `od2-staging-promotion-plan.md` and
+   `q15-census-findings.md` are the artifacts that can; neither was re-run.
+3. **`Q15` and `Q18`'s zeros are carried, not re-measured.** `W-20`'s and `W-22`'s deletions are safe
+   *because* those censuses returned zero on the deployed tenant on 2026-08-19. This pass verified that the
+   deletions happened and that the code records the evidence. It did not re-run the census, and a tenant
+   onboarded since then could change the answer for `W-22` — a principal in two orgs is now **denied**, which
+   is visible and safe, but it is a lockout, and `L1` is the class the plan treats most carefully.
+4. **No claim is made about `origin/staging`.** This worktree is 1 commit behind it. Everything measured is
+   measured at `2a8d332a6`.
+
+---
+
+## 83. Reproduce
+
+```bash
+# §74 — the size of the delta since Part VI's anchor
+git rev-list --count 03efba377..HEAD                                        # 1622
+git rev-parse --short HEAD                                                  # 2a8d332a6
+
+# §72 / §79 — admission is unchanged, and its replacement is nowhere
+sed -n '18p' web/lib/admin/resolveAdminAccessCore.ts                        # PORTAL_ROLES = {admin, ops}
+rg -c "portal\.access" supabase/migrations                                  # no INSERT; comment only
+rg -l "loadAdminRouteGate|requireAdminOrOps|getAdminContextCached" \
+   --glob 'web/app/api/**/route.ts' | wc -l                                 # 485
+
+# §79 — W-14's declaration table
+python3 - <<'PY'
+import json,collections
+d=json.load(open('web/scripts/routeCapabilities.declared.json'))
+print(d['reviewed'], d['ratchet']['max_pending'], len(d['inherited']['handlers']))
+PY
+rg -o '"status": "[a-z-]*"' web/scripts/routeCapabilities.declared.json | sort | uniq -c
+#   28 declared · 43 none · 714 pending   (785 total)
+
+# §75 — the deletions, each at the line that argues for it
+rg -n "W-20|W-22|W-42|W-43" web/lib/admin/resolveAdminAccessCore.ts | head
+rg -n "compatibilitySources" web/lib/admin/authorityLayers.ts               # returns []
+rg -n "createMembershipWithAccessProfile" web/app/api/admin/users/route.ts  # :177  (G4)
+
+# §77 — the census
+rg -l --glob 'web/app/api/**/route.ts' '' | wc -l                           # 602
+rg -l 'supabaseAdmin|createServiceRoleClient|SERVICE_ROLE' \
+   --glob 'web/app/api/**/route.ts' | wc -l                                 # 567
+rg -l 'permissionKeys' web/lib | wc -l                                      # 21
+python3 -c "import json;print(len(json.load(open('web/lib/admin/unenforcedPermissionKeys.json'))['keys']))"   # 35
+
+# §80 M3-2 — the uncatalogued keys the assertion filters out
+rg -n "crm\.customers\.safeguarding" web/lib
+sed -n '169,176p' web/tests/access/catalogVocabularyReconciliation.test.ts  # the path filter
+sed -n '142p'   web/tests/access/permissionCatalogDiscovery.ts              # the scan DOES reach them
+
+# §81 M3-3 — the same gate, read two ways, one day apart
+rg -n "frozen|may not append" supabase/migrations/20260825140000_child_safeguarding_restrictions_v1.sql
+rg -n "INSERT INTO public.permission_definitions" supabase/migrations/20260826122000_dh6_health_visibility_permission.sql
+sed -n '53,63p' web/tests/access/catalogVocabularyReconciliation.test.ts    # APPROVED_ADDITIONS
+
+# §78 — C10's SQL half, still open
+rg -n "CREATE POLICY" supabase/migrations | rg -c "'owner'"                 # 30
+```
+
+---
+
+## 84. Limits — read before citing
+
+1. **Documentary and static.** No request issued, no browser, no database, no test, typecheck or build (§82).
+   Every "closed" in §75 is a static closure and none of them is evidence that a lock passes.
+2. **This part asserts no new *security* defect.** `M3-1` is a product finding, `M3-2` a lock-fidelity
+   finding, `M3-3` a governance finding with a product consequence. No principal gains authority under any of
+   the three. Severities for every carried finding stay with their owners, unchanged.
+3. **Every line number Parts I–VI cite into `resolveAdminAccessCore.ts` is stale.** The file went from ~250
+   lines to 539. `:18` survives by coincidence and was re-verified; `:44`, `:54`, `:62`, `:142`, `:209`,
+   `:233` from §1's table do **not** mean what they meant, and §1's spine table must be read as a claim about
+   *constructs*, not lines. This part re-derived only the constructs it cites.
+4. **§76 is a name search**, with §29's limit in force: naming is not shipping and shipping need not name.
+   The eleven absent IDs are evidence, not proof, and specifically **not** a claim that `W-53` was skipped.
+5. **§79's `485` counts files that NAME an admission helper**, not files proven to gate on it at every
+   exported method. `routeCapabilities.declared.json`'s 785 method-grain rows are the finer instrument, and
+   where the two disagree the JSON is right.
+6. **§77's "59 catalog keys" is derived from the migration tree, not from the shared database.** It is
+   `57 + 2` where 57 is `w11-catalog-reconciliation.json`'s recorded width and 2 is `D-H6`'s approved
+   addition. If a key was seeded outside `INSERT INTO public.permission_definitions`, this pass did not see it.
+7. **`M3-1`…`M3-3` are minted in a new namespace and inherit `X-9`'s numbering risk.** They are deliberately
+   not `C-n`, `G-n` or `GAP-n`: `03…§23` binds those spaces, and minting into a bound register from an
+   unbound phase is what produced `X-9`. If the Director renumbers, they travel with the rest.
+8. **This part mints no decision and creates, renumbers and re-sequences no workstream.** `M3-1` names
+   `W-14`/`W-15` as its owners because the plan already assigns them; that is a report of `03`'s content, not
+   a proposal.
+9. **Scope discipline, with one deliberate exception.** The assignment names one output path and only that
+   file was written — **including** this pass's correction of the file's own "four parts" header, which is
+   inside that path. `README.md` was **not** updated and still omits Parts IV–VII; that is Part VI's standing
+   follow-up, carried forward unresolved for the second time.
+10. **Read-only.** No source, schema, migration, test or UI was modified by this phase.
+
+---
+
+## 85. Provenance — Part VII
+
+- **Verified at `2a8d332a6`** in `wt5-vacilando`, branch `agent/cursor/5-governed-approval-complete`
+  (30 ahead / 1 behind `origin/staging`).
+- **Read in full this pass:** `web/lib/admin/resolveAdminAccessCore.ts` (539 lines),
+  `web/lib/admin/authorityLayers.ts`, `web/lib/admin/canManageUsersAndRoles.ts`,
+  `web/lib/admin/adminRouteGate.ts`, `web/lib/admin/adminPortalRolePick.ts`,
+  `web/lib/admin/canReadAnalytics.ts` §§1–60, `web/lib/admin/unenforcedPermissionKeys.json`,
+  `web/lib/access/capabilityTaxonomy.ts` §§1–90, `web/lib/access/surfaceCapabilities.ts` §§1–60,
+  `web/lib/access/memberRoleAssignment.ts` §§1–45, `web/lib/access/memberIdentityProjection.ts` §§1–30,
+  `web/tests/access/catalogVocabularyReconciliation.test.ts` §§25–185,
+  `web/tests/access/neverSeededRoleVocabulary.test.ts` §§1–70,
+  `20260826122000_dh6_health_visibility_permission.sql`,
+  `20260825140000_child_safeguarding_restrictions_v1.sql` §§100–150,
+  `web/app/api/admin/users/[userId]/role/route.ts` §§1–60,
+  `d2-i10-role-composition-decision.md` §§1–55.
+- **Read by heading:** `01…` §§0–71 (this file, all six prior parts); `03…` §§18–52 by heading, with the
+  wave-13/14 tables read in full.
+- **Mechanical checks:** every command in §83, each run at `2a8d332a6`.
+- **Corrected this pass:** the file's own header block said **"This file has four parts"** while carrying
+  six. Corrected to seven, with the omission recorded in the header itself rather than silently repaired.
+  Parts V and VI's text is left unedited, per the corpus convention that a part records its state at its date.
+- **Superseded by measurement, not by edit:** Part I §4's *"any audit that greps for `permissionKeys`
+  over-reports by roughly 30×"* is no longer the right instrument (§77). Part I §3.5's *"G4 is the
+  highest-value open defect"* is superseded — G4 is closed, and §79 names its successor.
+- **Not re-verified:** all carried findings, all severities, `Q15`/`Q18`'s census zeros, the applied state of
+  every migration, and every line number cited from Parts I–VI.
