@@ -162,6 +162,26 @@ await test("a booted Cursor Agent is recognised by its title, so it is not respa
   assert.equal(out.ok, true, "an already-booted Cursor Agent is immediately ready");
 });
 
+await test("a Cursor whose title drifted to the topic is still recognised as ready", async () => {
+  // OBSERVED LIVE: after one exchange the TUI retitled the pane from
+  // "Cursor Agent" to "Cursor Transport OK" — the conversation topic. A title
+  // test answers what the conversation is about, not what is running, so
+  // readiness must not depend on the title keeping any particular word.
+  const drifted = [{
+    command: "node",
+    title: "Reticulating splines for the operator",
+    screen: "  → Add a follow-up\n",
+  }];
+  const { runTmux } = tmuxStub({ timeline: drifted, stickAt: 0 });
+  setAlloyAdapterImplForTests({ runTmux });
+  const out = await waitForAgentPrompt("alloy-cursor-readiness", {
+    provider: "cursor",
+    timeoutMs: 500,
+    intervalMs: 20,
+  });
+  assert.equal(out.ok, true, "a live Cursor with an unrelated title is ready");
+});
+
 await test("Claude's readiness contract is unchanged", async () => {
   const claudeTimeline = [
     { command: "zsh", title: "", screen: "" },

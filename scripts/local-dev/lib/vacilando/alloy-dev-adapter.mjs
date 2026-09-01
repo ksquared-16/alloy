@@ -466,12 +466,44 @@ export function providerSpawnArgv(provider, providerSessionId = null) {
   return argv;
 }
 
+/**
+ * Is the process holding this pane actually cursor-agent?
+ *
+ * THE TITLE IS NOT A NAME. A fresh Cursor pane is titled "Cursor Agent", but
+ * the TUI rewrites the title to the CONVERSATION TOPIC as soon as there is one
+ * — an observed live pane read "Cursor Transport OK". So a title test answers
+ * "what is this conversation about", not "what is running here", and a running
+ * Cursor whose title had moved on looked like no Cursor at all.
+ *
+ * The pane's argv does not drift: cursor-agent execs node but keeps its own
+ * path in argv[0] (`.../bin/cursor-agent --use-system-ca .../index.js`). One
+ * `ps` on the pane pid settles it. Failure is never fatal — an unreadable
+ * process falls back to the name/title heuristics.
+ */
+function paneProcessIsCursor(pid) {
+  const n = Number(pid);
+  if (!Number.isInteger(n) || n <= 1) return false;
+  try {
+    const out = execFileSync("ps", ["-o", "command=", "-p", String(n)], {
+      encoding: "utf8",
+      timeout: 3000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return /cursor[- ]?agent/i.test(String(out || ""));
+  } catch {
+    return false;
+  }
+}
+
 function paneHasWantedProvider(pane, provider) {
   const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   const cmd = String(pane?.command || "");
   const title = String(pane?.title || "");
   if (wanted === "cursor") {
-    return /cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title);
+    if (/cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title)) return true;
+    // The launcher has exec'd node and the title has moved on to the topic.
+    // Ask the process itself rather than respawn a live conversation.
+    return /^node(\b|$)/i.test(cmd) && paneProcessIsCursor(pane?.pid);
   }
   return inferClaudePresence(pane) === "present";
 }
