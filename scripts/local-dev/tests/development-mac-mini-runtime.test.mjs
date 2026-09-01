@@ -300,6 +300,50 @@ test("a fresh host reconstructs the registry, so a bound worktree is managed", a
   rmSync(fresh, { recursive: true, force: true });
 });
 
+test("capacity is not degraded by the absence of a tmux server", async () => {
+  // THE SECOND HALF OF THE SAME DEFECT. Five call sites read the raw tmux exit
+  // code instead of the discovery boundary, so a fresh host left `panes` null.
+  // assessProviderCapacity correctly reports null as `degraded` — it refuses to
+  // guess — and a degraded verdict refuses the start. The Mac mini therefore
+  // answered `provider_capacity` with active_providers 0 of 3: capacity blocked
+  // a start because nothing at all was running, which is the one case that must
+  // always be allowed.
+  //
+  // TMUX_TMPDIR at an empty directory is the real fresh-host condition: tmux
+  // exits 1 with "error connecting to .../tmux-501/default".
+  const emptyTmux = mkdtempSync(join(tmpdir(), "vac-mini-notmux-"));
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    const A = await import(${JSON.stringify(join(LIB, "alloy-dev-adapter.mjs"))});
+    const cap = await A.assessSessionStartCapacity({});
+    process.stdout.write(JSON.stringify(cap));
+  `], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      TMUX_TMPDIR: emptyTmux,
+      ALLOY_RUNTIME_ROOT: ROOT,
+      ALLOY_CONFIG_FILE: CFG,
+      VACILANDO_DURABLE_LANES: "1",
+    },
+  });
+  assert.equal(r.status, 0, `assessment ran: ${r.stderr}`);
+
+  // Prove the fixture really had no tmux server, or the assertions below are hollow.
+  const probe = spawnSync("tmux", ["list-panes", "-a"], {
+    encoding: "utf8", env: { ...process.env, TMUX_TMPDIR: emptyTmux },
+  });
+  assert.notEqual(probe.status, 0, "fixture has no tmux server");
+
+  const cap = JSON.parse(r.stdout);
+  assert.equal(cap.degraded, false, "zero panes is knowledge, not ignorance");
+  assert.equal(cap.active_providers, 0, "nothing is running");
+  assert.equal(cap.ok, true, "a start is permitted when no provider holds a seat");
+  assert.equal(cap.available, true);
+
+  rmSync(emptyTmux, { recursive: true, force: true });
+});
+
 test("Gateway boot reconstructs the registry from the immutable toolkit", async () => {
   // THE DEFECT ITSELF. migrateLanesToAlloy always worked when called; the bug
   // was that NOTHING in production called it — its only importer was a test.

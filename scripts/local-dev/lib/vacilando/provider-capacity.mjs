@@ -431,8 +431,13 @@ export async function observeLiveSeats({ root = undefined, now = Date.now(), gra
   const sessions = listCurrentAgentSessions(root);
   let panes = null;
   try {
-    const raw = await listTmuxPanesRaw();
-    if (raw?.ok) panes = parseTmuxPaneLines(raw.stdout);
+    const { discoverLivePanes } = await import("./lanes.mjs");
+    // `discoverLivePanes` is the canonical boundary: it distinguishes "no tmux
+    // server" (zero panes — a fact) from "tmux could not answer" (unknown).
+    // Reading the raw exit code here treated a fresh host with no server as
+    // unknown, which degrades capacity to a refusal and blocks every start.
+    const seen = await discoverLivePanes();
+    if (seen.ok) panes = seen.panes;
   } catch { panes = null; }
 
   // S1 is the authority on descendants. No process table means no claim about

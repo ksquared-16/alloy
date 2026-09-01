@@ -647,7 +647,7 @@ export async function assessSessionStartCapacity({ maxProviders = null, root = n
   const { assessProviderCapacity, configuredProviderCeiling } = await import("./provider-capacity.mjs");
   const { suspendedLaneIds } = await import("./provider-suspension.mjs");
   const { listCurrentAgentSessions } = await import("./agent-session.mjs");
-  const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+  const { discoverLivePanes } = await import("./lanes.mjs");
 
   const ceiling = Number(maxProviders ?? configuredProviderCeiling());
   // Honour the adapter's own pane seam first: tests inject panes through it,
@@ -659,8 +659,14 @@ export async function assessSessionStartCapacity({ maxProviders = null, root = n
   } catch { panes = null; }
   if (!panes) {
     try {
-      const raw = await listTmuxPanesRaw();
-      if (raw?.ok) panes = parseTmuxPaneLines(raw.stdout);
+      // Zero panes on a host with no tmux server is a FACT, not an unknown.
+      // Reading the raw exit code here left `panes` null, which
+      // assessProviderCapacity correctly reports as degraded — and a degraded
+      // verdict refuses. On the Mac mini that meant `provider_capacity` with
+      // active_providers 0 of 3: capacity blocked a start because nothing was
+      // running, which is the one case that should always be allowed.
+      const seen = await discoverLivePanes();
+      if (seen.ok) panes = seen.panes;
     } catch { panes = null; }
   }
   const lanes = listDurableLanes(runtime);

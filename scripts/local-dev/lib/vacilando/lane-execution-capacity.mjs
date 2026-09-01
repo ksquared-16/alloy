@@ -408,9 +408,13 @@ export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot
   // is the number that decides whether their lane starts.
   let providerPanes = null;
   try {
-    const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
-    const raw = await listTmuxPanesRaw();
-    if (raw?.ok) providerPanes = parseTmuxPaneLines(raw.stdout);
+    const { discoverLivePanes } = await import("./lanes.mjs");
+    // `discoverLivePanes` is the canonical boundary: it distinguishes "no tmux
+    // server" (zero panes — a fact) from "tmux could not answer" (unknown).
+    // Reading the raw exit code here treated a fresh host with no server as
+    // unknown, which degrades capacity to a refusal and blocks every start.
+    const seen = await discoverLivePanes();
+    if (seen.ok) providerPanes = seen.panes;
   } catch { /* metadata fallback */ }
   const provision = assessProvisionCapacity({ root, ...(providerPanes ? { providerPanes } : {}) });
   const { summarizeExecutionCapacity } = await import("../../apps/vacilando/public/gateway-view.mjs");

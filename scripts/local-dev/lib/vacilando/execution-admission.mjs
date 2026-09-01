@@ -502,10 +502,13 @@ export function resetAdmissionsForTests(root = runtimeRoot()) {
  */
 async function hostProviderPanes() {
   try {
-    const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
-    const raw = await listTmuxPanesRaw();
-    if (!raw?.ok) return null;
-    return parseTmuxPaneLines(raw.stdout);
+    const { discoverLivePanes } = await import("./lanes.mjs");
+    // `discoverLivePanes` is the canonical boundary: it distinguishes "no tmux
+    // server" (zero panes — a fact) from "tmux could not answer" (unknown).
+    // Reading the raw exit code here treated a fresh host with no server as
+    // unknown, which degrades capacity to a refusal and blocks every start.
+    const seen = await discoverLivePanes();
+    return seen.ok ? seen.panes : null;
   } catch {
     return null;
   }
