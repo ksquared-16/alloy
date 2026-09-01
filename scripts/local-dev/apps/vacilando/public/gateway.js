@@ -2461,10 +2461,10 @@ window.VacilandoGateway = {
 window.VacilandoGatewayView = View;
 if (typeof window.__vacilandoStart === "function") window.__vacilandoStart();
 
-fetch("/api/gateway/session", { cache: "no-store", credentials: "same-origin" })
+fetch("/api/gateway/session", { cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(4000) })
   .then((r) => r.json())
   .then((j) => { if (j.authRequired && !j.authenticated) showLogin(); })
-  .catch(() => {});
+  .catch(() => { showLogin(); });
 
 /** Folder failures in operator language, not store error codes. */
 function folderErrorText(error) {

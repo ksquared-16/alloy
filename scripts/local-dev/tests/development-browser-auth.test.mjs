@@ -30,7 +30,7 @@ const {
   blocksExecution, redactAuthText, beginBrowserAuthCapture,
   captureInFlight, resetCapturesForTests, slotAuthStoragePath,
   attachLaneBrowserAuth, recordSlotVerification, readSlotVerification, laneSlot,
-  legacySlotAuthStoragePath,
+  legacySlotAuthStoragePath, qaIdentityForSlot, resetQaIdentityCacheForTests,
 } = await import("../lib/vacilando/browser-auth.mjs");
 
 let pass = 0;
@@ -385,6 +385,22 @@ await test("a session stranded under the base root is missing, and says why", ()
     if (prev === undefined) delete process.env.ALLOY_RUNTIME_ROOT;
     else process.env.ALLOY_RUNTIME_ROOT = prev;
   }
+});
+
+await test("QA identity is read from config files, not by spawning a shell", () => {
+  // THE GATEWAY HANG. qaIdentityForSlot sourced common.sh via spawnSync on every
+  // lane poll. The Gateway cwd is the toolkit snapshot, which is not a git
+  // repo, so each lookup blocked the event loop and printed
+  // `fatal: not a git repository` until HTTP stopped answering.
+  resetQaIdentityCacheForTests();
+  delete process.env.ALLOY_SLOT_5_QA_IDENTITY;
+  const start = Date.now();
+  const id = qaIdentityForSlot(5);
+  assert.equal(id, "qa-slot5-refactor@example.com");
+  assert.ok(Date.now() - start < 250, `identity lookup took ${Date.now() - start}ms`);
+  const cached = Date.now();
+  assert.equal(qaIdentityForSlot(5), id);
+  assert.ok(Date.now() - cached < 20);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

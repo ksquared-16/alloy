@@ -27,7 +27,7 @@
  * metadata — names, counts, expiry timestamps, file mode — which is what a
  * status display actually needs.
  */
-import { execFile, execFileSync, spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -96,28 +96,56 @@ export function legacySlotAuthStoragePath(slot) {
 /**
  * The QA identity a slot signs in as.
  *
- * Asked of the TOOLKIT, which owns it: it resolves operator config and shipped
- * defaults in the right order, and parsing those files here would be a second
- * definition that could disagree with the first. Never invented, and never
- * silently substituted with another account — a null identity is displayed as
- * unknown rather than guessed.
+ * Read from the same files the toolkit sources (`alloy_load_config`): env,
+ * then `~/.config/alloy-dev/config`, then `alloy-config.example`. Never invent
+ * an account, and never spawn a shell on the request path — sourcing
+ * `common.sh` from the Gateway's toolkit cwd is not a git repo, so every
+ * lookup printed `fatal: not a git repository` and `spawnSync`'d the event
+ * loop. Phone and browser polls then queued behind it until nothing answered.
  */
-export function qaIdentityForSlot(slot) {
-  const n = Number(slot);
-  if (!Number.isInteger(n)) return null;
-  const fromEnv = process.env[`ALLOY_SLOT_${n}_QA_IDENTITY`];
-  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+const qaIdentityCache = new Map();
+
+export function resetQaIdentityCacheForTests() {
+  qaIdentityCache.clear();
+}
+
+function parseSlotQaIdentityFromFile(file, slot) {
   try {
-    const toolkit = join(homedir(), ".local", "share", "alloy", "toolkit", "current");
-    const out = execFileSync("bash", ["-lc",
-      `source "${toolkit}/lib/common.sh"; source "${toolkit}/lib/verify.sh"; ` +
-      `alloy_load_config >/dev/null 2>&1; alloy_slot_qa_identity ${n}`,
-    ], { encoding: "utf8", timeout: 15000 });
-    const v = String(out || "").trim();
+    const text = readFileSync(file, "utf8");
+    const re = new RegExp(
+      String.raw`^\s*(?:export\s+)?ALLOY_SLOT_${Number(slot)}_QA_IDENTITY=(["']?)([^"'\n]*)\1\s*$`,
+      "m",
+    );
+    const m = text.match(re);
+    const v = m?.[2]?.trim();
     return v || null;
   } catch {
     return null;
   }
+}
+
+function qaIdentityFromConfigFiles(slot) {
+  const user = process.env.ALLOY_CONFIG_FILE?.trim()
+    || join(homedir(), ".config", "alloy-dev", "config");
+  const toolkit = join(homedir(), ".local", "share", "alloy", "toolkit", "current");
+  const example = join(toolkit, "alloy-config.example");
+  // User config wins, matching alloy_load_config.
+  return parseSlotQaIdentityFromFile(user, slot) || parseSlotQaIdentityFromFile(example, slot);
+}
+
+export function qaIdentityForSlot(slot) {
+  const n = Number(slot);
+  if (!Number.isInteger(n)) return null;
+  if (qaIdentityCache.has(n)) return qaIdentityCache.get(n);
+  const fromEnv = process.env[`ALLOY_SLOT_${n}_QA_IDENTITY`];
+  if (fromEnv && fromEnv.trim()) {
+    const v = fromEnv.trim();
+    qaIdentityCache.set(n, v);
+    return v;
+  }
+  const fromFiles = qaIdentityFromConfigFiles(n);
+  qaIdentityCache.set(n, fromFiles || null);
+  return fromFiles || null;
 }
 
 export function slotAuthStoragePath(slot, { root = stateRoot() } = {}) {

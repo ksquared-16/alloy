@@ -76,6 +76,7 @@ import { laneSlot, qaIdentityForSlot } from "./browser-auth.mjs";
 import {
   consumeGrant,
   getGrant,
+  grantIsValidFor,
   mintGrant,
   resolveGovernedAuthoritySync,
 } from "./governed-repository-authority.mjs";
@@ -359,12 +360,37 @@ export function presentationForGovernedAction(req = {}) {
       detail: `Apply ${n || "ordered"} staging schema migration${n === 1 ? "" : "s"} · stop on first failure`,
     };
   }
+  if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    return {
+      approve_label: "Authorize census",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director",
+      mission_need: "Needs approval — read-only census",
+      detail: `Read-only database census · Target: ${req.target || DEFAULT_TARGET} · Data mode: Read-only`,
+    };
+  }
+  if (key === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) {
+    const wt = inputs.worktree || inputs.worktree_path || inputs.worktreePath || req.title || "a worktree";
+    return {
+      approve_label: "Authorize worktree retirement",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — worktree retirement",
+      mission_need: `Needs approval — Retire ${wt}`,
+      detail: `Remove the worktree ${wt} via git worktree remove · no --force · branch is not deleted`,
+    };
+  }
+  /*
+   * Census copy used to be the default. Restore, retire, and every new action then asked the
+   * operator to "Authorize census" for something that was not a census. A privileged action must
+   * never inherit another action's words.
+   */
+  const title = req.title || key || "governed action";
   return {
-    approve_label: "Authorize census",
+    approve_label: "Authorize",
     deny_label: "Deny",
     wait_label: "Waiting on Director",
-    mission_need: "Needs approval — read-only census",
-    detail: `Read-only database census · Target: ${req.target || DEFAULT_TARGET} · Data mode: Read-only`,
+    mission_need: `Needs approval — ${title}`,
+    detail: title,
   };
 }
 
@@ -2028,6 +2054,33 @@ function proposalForRequest(rec) {
   };
 }
 
+/**
+ * A repository-authorized request needs a live grant at execute time.
+ *
+ * Approval mints one. Execution used to bounce `authorization_required` without presenting it,
+ * which left `awaiting_operator` with `operator_approval` already set — the UI then hid the
+ * button, so a second click was impossible. If that grant later expired, remint against the
+ * same proposal rather than asking the operator to decide again.
+ */
+function ensureRepositoryGrant(rec, { actor, nowMs, root } = {}) {
+  if (rec.mission_id) return { ok: true };
+  const proposal = proposalForRequest(rec);
+  const existing = rec.grant_id ? getGrant(rec.grant_id, root) : null;
+  if (existing && grantIsValidFor(existing, proposal, { nowMs }).ok) return { ok: true, grant: existing };
+  const minted = mintGrant({
+    proposal,
+    approvedBy: actor || rec.operator_approval?.actor || "operator",
+    nowMs,
+    root,
+  });
+  if (!minted.ok) return minted;
+  rec.grant_id = minted.grant.grant_id;
+  rec.grant_expires_at = minted.grant.expires_at;
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  return { ok: true, grant: minted.grant, reminted: true };
+}
+
 function defaultExecute(rec, { nowMs, actor, root } = {}) {
   const scope = authorityScopeFor(rec);
   // Director-derived authority for THIS exact request, if any was minted.
@@ -2190,6 +2243,11 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   if (rec.action_key !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "action_unavailable" };
   }
+  // THE LIVE DEFECT. Every other fulfill*ForMission call below presents the grant and
+  // Director authorization. Census did not. A repository-authorized census therefore
+  // bounced `authorization_required` on every approval: the operator's click minted a
+  // grant, execution never saw it, and the request returned to awaiting_operator with
+  // operator_approval already recorded. The UI then hid the button.
   return fulfillDatabaseCensusForMission(scope, {
     assignmentId: rec.run_id || null,
     executionSessionId: rec.run_id || null,
@@ -2197,11 +2255,26 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
     worktreePath: rec.worktree_path,
     actor,
     nowMs,
+    grant,
+    authorizationId,
+    exactContext,
   });
 }
 
 function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
   if (out?.error === "authorization_required") {
+    // The operator already decided. Bouncing here hid the button (laneAwaitingOperatorApproval
+    // skips any record with operator_approval) and left the census card stuck. Fail so the
+    // refusal is visible; tick recovery is for the already-stuck records, not a new loop.
+    if (rec.operator_approval?.decision === "approved") {
+      const refused = out.action?.grantRefusal || out.error;
+      return failRequest(
+        rec,
+        "authorization_required",
+        `Operator approved, but the trusted host still refused (${refused}).`,
+        { nowMs, root },
+      );
+    }
     rec.status = "awaiting_operator";
     rec.operator_approval_required = true;
     rec.trusted_host_action_id = out.action?.id || rec.trusted_host_action_id;
@@ -2336,6 +2409,32 @@ export function processGovernedAction(requestId, {
     }
   }
   if (rec.status === "awaiting_operator") {
+    // THE LIVE DEFECT, SECOND HALF. Approval records operator_approval and then executes.
+    // If execution bounced, status stayed awaiting_operator with a decision already made.
+    // Tick ignored that status, and the UI hid the button. Resume execution; do not re-ask.
+    if (rec.operator_approval?.decision === "approved") {
+      if (!getActionDefinition(rec.action_key)) {
+        attachRunWait(rec, { nowMs, root });
+        return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+      }
+      // Census is the live bounce: execution never saw the grant, the button hid, and
+      // tick ignored awaiting_operator. Resume that. Do not silently execute a
+      // destructive already-approved action (worktree retirement) that may have
+      // inherited the census button label.
+      if (rec.action_key !== ACTION_TYPES.DATABASE_READ_CENSUS) {
+        attachRunWait(rec, { nowMs, root });
+        return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
+      }
+      const grant = ensureRepositoryGrant(rec, {
+        actor: rec.operator_approval.actor || actor,
+        nowMs,
+        root,
+      });
+      if (!grant.ok) {
+        return failRequest(rec, grant.error || "grant_missing", grant.error || "Could not remint the operator grant.", { nowMs, root });
+      }
+      return executeGovernedAction(rec.request_id, { nowMs, root, actor });
+    }
     attachRunWait(rec, { nowMs, root });
     return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
   }
@@ -2788,6 +2887,9 @@ export function tickGovernedActions({
   const pending = readGovernedActionStore(root).requests.filter((r) =>
     r.status === "requested"
     || r.status === "awaiting_director"
+    || (r.status === "awaiting_operator"
+      && r.operator_approval?.decision === "approved"
+      && r.action_key === ACTION_TYPES.DATABASE_READ_CENSUS)
     || (r.status === "awaiting_control_plane_refresh" && Boolean(getActionDefinition(r.action_key)))
   );
   const out = [...recovered];
@@ -3112,12 +3214,19 @@ export function attachLaneGovernedActions(lanes, root = runtimeRoot()) {
       // operator what happened. Report the last resolved decision alongside it,
       // so an approval that has just vanished from the screen still has an
       // answer on the screen.
+      //
+      // THE COMMUNICATIONS FOLLOW-ON. The 200-request store evicted
+      // gar_260730c554bcc9 after PR #510 merged. hydrate then found no record
+      // and kept the frozen awaiting_operator snapshot, so a closed lane kept
+      // saying "Needs approval" for a merge that had already landed.
       const outcome = governedOutcomeFor(lastResolvedGovernedActionForLane(hydrated?.lane_id, root));
-      const snapshot = hydrated.governed_action;
-      if (snapshot && !isPendingGovernedStatus(snapshot.status)) {
-        return { ...hydrated, governed_action: null, last_governed_outcome: outcome };
-      }
-      return outcome ? { ...hydrated, last_governed_outcome: outcome } : hydrated;
+      const next = {
+        ...hydrated,
+        governed_action: null,
+        execution_run: dropOrphanPendingGoverned(hydrated.execution_run),
+        previous_run: dropOrphanPendingGoverned(hydrated.previous_run),
+      };
+      return outcome ? { ...next, last_governed_outcome: outcome } : next;
     }
     const pub = publicGovernedAction(pending);
     const withAction = (r) => (r
@@ -3147,10 +3256,16 @@ export function attachLaneGovernedActions(lanes, root = runtimeRoot()) {
   });
 }
 
+function dropOrphanPendingGoverned(run) {
+  if (!run?.governed_action) return run || null;
+  if (!isPendingGovernedStatus(run.governed_action.status)) return run;
+  return { ...run, governed_action: null };
+}
+
 function hydrateGovernedOnRun(run, root) {
   if (!run?.governed_action?.request_id) return run || null;
   const rec = getGovernedAction(run.governed_action.request_id, root);
-  if (!rec) return run;
+  if (!rec) return dropOrphanPendingGoverned(run);
   return { ...run, governed_action: publicGovernedAction(rec) };
 }
 
@@ -3160,7 +3275,7 @@ export function applyGovernedActionToPublicRun(run, root = runtimeRoot()) {
   const pending = pendingGovernedActionForRun(hydrated?.run_id, root)
     || pendingGovernedActionForLane(hydrated?.lane_id, root);
   if (!pending) {
-    if (hydrated?.governed_action && !isPendingGovernedStatus(hydrated.governed_action.status)) {
+    if (hydrated?.governed_action) {
       return { ...hydrated, governed_action: null };
     }
     return hydrated;
