@@ -7,18 +7,21 @@ supersedes: []
 
 # 01 — Existing-state inventory
 
-> **This file has seven parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
+> **This file has eight parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
 > the **security threat & enforcement matrix** — required output #7. **Part III (§§24–36)** is the
 > **gap analysis** — required output #8. **Part IV (§§37–44)** is the **role-model depth and role-editor
 > surface inventory**, added on operator reopen. **Part V (§§45–57)** reads that chain as a **threat model**.
 > **Part VI (§§58–71)** is the **gap analysis, reopened**. **Part VII (§§72–85)** is the **Mission 3
 > re-anchor** — the accepted register re-adjudicated against a tree that has since executed most of the plan.
-> Parts II–VII were delivered by later mission phases and appended here per their assignment scopes; each
+> **Part VIII (§§86–91)** is a **re-dispatch record**, not an inventory pass: the same brief was compiled
+> again under a fresh mission id, and this part says what did not change and why nothing was re-derived.
+> Parts II–VIII were delivered by later mission phases and appended here per their assignment scopes; each
 > reuses what precedes it rather than restating it. Read Part I
 > first, or jump to [§10](#10-headline--the-unauthenticated-surface-is-the-best-defended-part-of-this-platform),
 > [§24](#24-headline--the-gap-is-no-longer-in-the-product-alone-it-is-between-the-corpus-and-its-plan),
-> [§37](#37-headline--there-is-no-role-hierarchy-to-flatten) or
-> [§72](#72-headline--the-resolvers-findings-are-closed-the-door-is-not).
+> [§37](#37-headline--there-is-no-role-hierarchy-to-flatten),
+> [§72](#72-headline--the-resolvers-findings-are-closed-the-door-is-not) or
+> [§86](#86-headline--the-artifact-was-dispatched-as-if-it-did-not-exist).
 >
 > **This header said "four parts" until 2026-09-01**, while carrying six. Parts V and VI were appended
 > without amending it — the same standing follow-up Part VI records as its limit 11 for `README.md`. §85
@@ -3191,3 +3194,254 @@ rg -n "CREATE POLICY" supabase/migrations | rg -c "'owner'"                 # 30
   highest-value open defect"* is superseded — G4 is closed, and §79 names its successor.
 - **Not re-verified:** all carried findings, all severities, `Q15`/`Q18`'s census zeros, the applied state of
   every migration, and every line number cited from Parts I–VI.
+
+---
+
+# Part VIII — Re-dispatch record: the same brief, compiled again
+
+> **Mission** `msn_bf2af64c94d814c11a` v1 · phase *Existing-state inventory* · assignment `asg_8bd0e63339fc30`
+> **contentHash** `282eace8ea5a991546ba9e8b1c19fc7e` — **the second occurrence of this hash** (§87)
+> **Worktree** `wt5-vacilando` @ `93793c373` (branch `agent/cursor/5-governed-approval-complete`,
+> **41 ahead / 1 behind** `origin/staging`)
+> **Date** 2026-09-01
+> **Method** static and file-grounded, as Parts II–VII. **No product-source claim is re-derived in this part**
+> — §88 establishes mechanically that none needed to be.
+
+---
+
+## 86. Headline — the artifact was dispatched as if it did not exist
+
+This part is deliberately short, and the shortness is the finding. It follows the precedent Part VII's own
+day set: `03…§4`'s eleventh W-0 entry established that when a generated re-issue arrives against a completed
+artifact, **a brief ledger entry is the honest response and a fresh audit is not**.
+
+Three facts carry it:
+
+1. **The assignment asked for a document that already exists in the path it named.**
+   `docs/platform/planning/access-identity-v2/01-existing-state-inventory.md` is this file — **237,208 bytes,
+   seven parts, §§0–85** — and Part VII was appended to it *the same afternoon* this assignment was issued.
+2. **The brief was not new. It was byte-identical to Part VII's.** Both carry contentHash
+   `282eace8ea5a991546ba9e8b1c19fc7e` under different mission ids, which by `computeContentHash`'s
+   construction means one brief re-ingested twice (§87).
+3. **Nothing under `web/` or `supabase/` has moved since Part VII's anchor** (§88). So every current-state
+   claim in §§75–81 holds verbatim, and there is no delta for an existing-state pass to report.
+
+Accordingly this pass **re-derives nothing, re-measures no census, and edits no prior part**. It mints one
+finding, `M4-1` (§87), in the `M4-n` space, and escalates (§89). `AC_d1_existing_state` — *"Existing-state
+inventory exists as a durable, reviewable specification with cited evidence"* — **was already satisfied by
+§§0–85 before this assignment was issued**, and is satisfied now.
+
+---
+
+## 87. `M4-1` — the compiler classified a present artifact as unstarted work
+
+**Finding.** `mission-compiler.mjs` scans for accepted artifacts before compiling deliverables. For this
+dispatch that scan **returned nothing for all four of `d1_existing_state`'s catalog paths**, all four of which
+exist in this worktree and are between 129× and 1,186× the scanner's own size floor.
+
+**How this pass knows the scan missed, without running the compiler.** The catalog entry has two mutually
+exclusive branches, and they emit different assignment shapes:
+
+| | `reused` branch (`:337-355`) | `to_execute` branch (`:356-368`) |
+|---|---|---|
+| `expectedPath` | `hit.path` — the file found (`:346`) | `cat.artifacts[0]` — the *first declared* path (`:365`) |
+| `acceptanceCriterionId` | **not set** | `AC_${cat.id}` (`:366`) |
+| Acceptance criterion minted | **none** — ACs are built only from `to_execute` (`:474-480`) | `AC_d1_existing_state` |
+| Phase synthesized | **none** — phases are built only from `to_execute` (`:248`, `:264-277`) | `p1` |
+
+This assignment carries criterion **`AC_d1_existing_state`**, scope **`cat.artifacts[0]`**, and exists as a
+phase at all. All three are reachable **only** through the `to_execute` branch. So `artifactPresent()`
+(`:183-196`) returned `null` — while, at `93793c373` in this worktree:
+
+| `d1_existing_state` catalog path (`mission-compiler.mjs:79-84`) | Bytes | Floor is `> 200` (`:189`) |
+|---|---:|---|
+| `docs/platform/planning/access-identity-v2/01-existing-state-inventory.md` | **237,208** | pass |
+| `docs/platform/planning/vacilando-os/qa/access-identity-v2/01-existing-state-inventory.md` | **34,402** | pass |
+| `docs/platform/planning/access-identity-v2/authority-path-inventory.md` | **26,473** | pass |
+| `docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md` | **26,473** | pass |
+
+`resolveRepoPath` (`:54-71`) names how a present file fails to resolve: **when `ALLOY_WORKTREE` is set, the
+root list collapses to that one directory with no fallback to the checkout** (`:57-59`). That is deliberate
+and its reason is stated at `:55-56` — *"do not fall through to the real checkout — that would falsely mark
+host artifacts as reused."* **This pass does not claim which root the compile used**, only that it was one in
+which these four paths did not resolve. The failure mode the comment guards against is a false *reuse*; the
+one observed here is its mirror, a false *to_execute*, and it is unguarded.
+
+**Every field of the assignment is a template literal, not authored text.**
+
+| Assignment field | Source |
+|---|---|
+| Objective — *"Produce Existing-state inventory as a durable specification artifact. Reuse accepted corpus as inputs — do not re-derive covered outputs."* | `mission-compiler.mjs:270` |
+| Criterion — *"Existing-state inventory exists as a durable, reviewable specification with cited evidence."* | `:477` |
+| Phase title, deliverable id, output path | `:76-85` |
+| Prohibited change — *"Do not reinterpret Compiled Mission intent — escalate if reality diverges"* | `worker-assignment.mjs:126` |
+
+**The brief behind it is a unit-test fixture.** `computeContentHash` (`mission-brief.mjs:49-62`) is sha256
+over brief content **including `title`** (`:50`), so a repeated hash means one byte-identical brief — title
+and all — re-ingested under fresh mission ids. This mission's title is **"Brief Spine Mission"**, the literal
+at `scripts/local-dev/tests/mission-runtime.test.mjs:1639` over `sampleBriefBody()` (`:1569-1586`); this
+assignment's sole constraint, *"No push without approval"*, is that fixture's `C1` at `:1581`. Because the
+hash covers the title, **Part VII's mission `msn_65f073b2e01cec4cbc` carried this same fixture brief.** This
+is the method the twelfth W-0 pass used (`03…§4`, twelfth entry) — *the repeated content hash names the
+generator* — applied to a second hash on a second ladder.
+
+**The brief's own plan was discarded en route.** The fixture declares two phases, *Catalog integrity* and
+*Audit trail*, with criteria `AC1`/`AC2` (`:1573-1580`). `compileMissionBrief:520-521` routes **any** brief
+matching `isAccessIdentityBrief` (`:198-201`) to `synthesizeAccessIdentityPhases`, which builds phases from
+the catalog rather than from the brief. The fixture objective that triggers the match is *"Ship Access &
+Identity V2 from the operator-owned plan"* (`:1572`) — **so the operator-owned plan named in the matching
+sentence is precisely what the compiler replaced.**
+
+One independent confirmation that this ran as a *non*-discovery brief through the discovery catalog: this
+assignment's `prohibitedChanges` carries **no `Out of scope:` entry**, and those are produced from
+`compiled.exclusions` (`worker-assignment.mjs:124`), which is populated only when `forbidsImplementation` is
+true (`mission-compiler.mjs:325-328`). It is false here — neither `:1572`'s objective nor `:1581`'s
+constraint matches `:205`'s regex.
+
+**Disposition.** Toolkit/governance, not a product defect. **No principal gains or loses any authority, and
+nothing in Parts I–VII is called into question by it.** The cost is duplicated worker passes against a
+completed artifact and a real risk of an artifact being *rewritten* by a worker that takes the objective's
+first clause at face value.
+
+---
+
+## 88. What was re-verified — and it is all that was
+
+The one question a re-dispatched existing-state pass must answer: **has the ground moved since the last
+anchor?**
+
+| Check | Result |
+|---|---|
+| Part VII's anchor (§85) vs HEAD | `2a8d332a6` → `93793c373`, **11 commits** |
+| `git diff --stat 2a8d332a6..HEAD -- web/ supabase/` | **empty** — no product source, schema or migration moved |
+| Same range over every toolkit file §87 cites | **empty** — so §87's line numbers are stable across the window |
+| Working tree at time of writing | clean |
+
+The eleven commits are documentation, tests and Vacilando-runtime work: Part VII itself (`82a052e50`), the
+W-0 tenth, eleventh and twelfth re-issue records, the DX-6 Discovery record (`660cc3e3f`), three Agent
+Session fixes, and two test-only changes. **The branch moved three times while this part was being written**
+— `890734e6b`, `660cc3e3f` and `93793c373` all landed mid-pass — which is why the anchor is restated here
+rather than assumed from §86's first reading.
+
+**Therefore §§75–81 hold verbatim at `93793c373`**: §75's re-adjudicated register, §76's workstream census,
+§77's counts, §78's enforced-vs-configured table, and `M3-1`, `M3-2` and `M3-3` all stand without
+re-derivation. **`M3-1` remains the highest-value open item in the corpus** — admission is still a role
+literal and `portal.access` is still seeded by no migration.
+
+§84's limit 4 carries unchanged: this branch is 1 commit behind `origin/staging`, and **nothing here is a
+claim about `origin/staging`**.
+
+---
+
+## 89. Escalation — required by this assignment's own prohibited-changes clause
+
+The assignment forbids reinterpreting Compiled Mission intent and directs the worker to **escalate if reality
+diverges**. It does.
+
+**The divergence.** The objective's two clauses contradict each other for this deliverable: *"Produce
+Existing-state inventory…"* and *"Reuse accepted corpus as inputs — do not re-derive covered outputs."* The
+corpus to be reused **is** the output to be produced. Honouring the first clause literally would mean
+re-deriving §§0–85 — which the second clause forbids, and which §88 shows would change nothing. This part
+resolves the contradiction the only way a worker can without reinterpreting intent: **produce nothing new
+about the product, record the dispatch, and hand the decision up.**
+
+**Remedies, all outside this assignment's scope** — it is a read-only documentation phase, and the compiler is
+Vacilando toolkit product code:
+
+1. **Fix reuse detection.** Resolve catalog artifacts against the repository checkout, or **fail loudly when
+   the scan cannot see the artifact roots**, rather than silently classifying a present 237 KB artifact as
+   `to_execute`. `resolveRepoPath:55-56` already reasons about the opposite error; this is the unguarded mirror.
+2. **Keep unit-test fixture briefs out of the live runtime root.** This is the third remedy the twelfth W-0
+   pass proposed. It now has a **second, independent instance on a second ladder**, which strengthens it.
+3. **Formally close `d1_existing_state`**, as `03…§4` asks for `W-0`.
+
+**One correction to how §4's escalation is currently framed.** `03…§4` reads as though a single routing
+change in `mission-advance.mjs`'s `resolveImplementationPlan` would stop the class of generated re-issues.
+**It would not have stopped this one.** W-0's twelve dispatches come from the plan-path fallback in
+`mission-advance.mjs`; this dispatch comes from the **reuse scan in `mission-compiler.mjs`** — a different
+generator, reached before the implementation ladder is consulted at all. The two share a cause — *a fixture
+brief in the live runtime root* — but not a mechanism, and **fixing the router alone would leave this path
+open.**
+
+As with every W-0 re-issue: **no operator decision is assumed here, and no runtime state was touched.**
+
+---
+
+## 90. Reproduce
+
+```bash
+# §86 / §87 — the artifact the assignment asked to produce, and its siblings
+git rev-parse --short HEAD                                                   # 93793c373
+wc -c docs/platform/planning/access-identity-v2/01-existing-state-inventory.md   # 237208 (pre-Part-VIII)
+ls -l docs/platform/planning/vacilando-os/qa/access-identity-v2/01-existing-state-inventory.md \
+      docs/platform/planning/access-identity-v2/authority-path-inventory.md \
+      docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md
+
+# §87 — the two branches, and which one emits an acceptance criterion
+sed -n '183,196p' scripts/local-dev/lib/vacilando/mission-compiler.mjs       # artifactPresent, 200-byte floor
+sed -n '337,368p' scripts/local-dev/lib/vacilando/mission-compiler.mjs       # reused vs to_execute
+sed -n '474,480p' scripts/local-dev/lib/vacilando/mission-compiler.mjs       # ACs only for to_execute
+sed -n '54,71p'   scripts/local-dev/lib/vacilando/mission-compiler.mjs       # ALLOY_WORKTREE collapses the roots
+
+# §87 — every assignment field as a template literal
+sed -n '270p;477p' scripts/local-dev/lib/vacilando/mission-compiler.mjs
+sed -n '126p'      scripts/local-dev/lib/vacilando/worker-assignment.mjs
+
+# §87 — the brief is the fixture; the hash covers the title
+sed -n '49,62p'      scripts/local-dev/lib/vacilando/mission-brief.mjs       # sha256 incl. title
+sed -n '1569,1586p'  scripts/local-dev/tests/mission-runtime.test.mjs        # sampleBriefBody
+sed -n '1637,1641p'  scripts/local-dev/tests/mission-runtime.test.mjs        # "Brief Spine Mission"
+
+# §87 — the catalog overrides the brief's own plan
+sed -n '198,201p;520,521p' scripts/local-dev/lib/vacilando/mission-compiler.mjs
+
+# §88 — the ground has not moved since Part VII's anchor
+git rev-list --count 2a8d332a6..HEAD                                         # 11
+git diff --stat 2a8d332a6..HEAD -- web/ supabase/                            # empty
+git diff --stat 2a8d332a6..HEAD -- \
+  scripts/local-dev/lib/vacilando/mission-compiler.mjs \
+  scripts/local-dev/lib/vacilando/worker-assignment.mjs \
+  scripts/local-dev/lib/vacilando/mission-brief.mjs \
+  scripts/local-dev/tests/mission-runtime.test.mjs                           # empty
+```
+
+---
+
+## 91. Limits and provenance — Part VIII
+
+1. **This part contains no new current-state measurement.** It re-derives nothing about `web/` or
+   `supabase/`, and every product claim it repeats is cited to §§75–81 with §88 as the warrant. If §88's
+   diff claim is wrong, this part's reuse of Part VII is wrong with it.
+2. **No test, build, typecheck, database or request.** §82's limits carry unchanged and unimproved — in
+   particular the 49 files under `web/tests/access` remain unexecuted in this worktree.
+3. **The compiler was not run.** `compileMissionBrief` persists state (`saveCompiledMission`,
+   `mission-compiler.mjs:605`) and updates the mission row (`:607-613`), so executing it to observe the
+   classification would have written live runtime state. **`M4-1` is established statically**, from the
+   branch structure at `:337-368` and `:474-480` against the assignment actually received. It is fully
+   decidable that way, and it is stated no more strongly than that evidence supports.
+4. **`M4-1` does not name the root the compile ran in**, only that these four paths did not resolve there.
+   Two mechanisms in `resolveRepoPath` could produce that; this pass does not choose between them, and it
+   does **not** claim a test run leaked into the live runtime — the same restraint the twelfth W-0 pass
+   applied to the same question.
+5. **`M4-1` is minted in a new `M4-n` namespace** and inherits `X-9`'s numbering risk, exactly as
+   `M3-1`…`M3-3` do (§84 limit 7). If the Director renumbers, it travels with the rest.
+6. **This part mints no decision, creates no workstream, and closes no finding.** It changes no severity and
+   re-adjudicates no row of §75.
+7. **Scope discipline.** The assignment names one output path and **only that file was written.** As in
+   Parts IV–VII, `README.md` was not updated — its document table still stops at `03…` and omits Parts
+   IV–VIII. That is Part VI's standing follow-up, now carried forward **unresolved for the third time**.
+8. **Header corrected, in the corpus's convention.** The file's own header said *"seven parts"*; it now says
+   eight. Parts I–VII's text is left unedited — a part records its state at its date, and §§86–91 are the
+   correction of record.
+9. **Read-only.** No source, schema, migration, test, UI or runtime state was modified by this phase.
+
+- **Verified at `93793c373`** in `wt5-vacilando`, branch `agent/cursor/5-governed-approval-complete`
+  (41 ahead / 1 behind `origin/staging`), working tree clean apart from this file.
+- **Read this pass:** `scripts/local-dev/lib/vacilando/mission-compiler.mjs` §§40–200, 247–330, 330–440,
+  470–520, 520–615; `scripts/local-dev/lib/vacilando/worker-assignment.mjs` §§118–132;
+  `scripts/local-dev/lib/vacilando/mission-brief.mjs` §§40–70;
+  `scripts/local-dev/tests/mission-runtime.test.mjs` §§1569–1706; `01…` §§0–85 (this file, all seven prior
+  parts, §§72–85 in full); `03…§4` and its ninth–twelfth re-issue entries (§§835–990).
+- **Mechanical checks:** every command in §90, each re-run at `93793c373` after the branch moved (§88).
+- **Not re-verified:** all carried findings, all severities, every line number cited from Parts I–VII, and
+  every claim `M3-1`…`M3-3` rest on beyond §88's diff.
