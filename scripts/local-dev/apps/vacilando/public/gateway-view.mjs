@@ -469,14 +469,38 @@ export function laneAgentLabel(lane) {
   return "Agent";
 }
 
+/**
+ * "Read-only" is a property of the TRANSPORT, not of Cursor.
+ *
+ * THE DEFECT THIS REPLACES: any Cursor lane without a live pane was labelled
+ * "Cursor (read-only)" — including a lane with nothing running at all, which is
+ * merely offline. Vacilando can start a writable cursor-agent session in the
+ * lane's pane (startCursorExecutableSession), so telling the operator the
+ * capability is read-only made a startable lane look permanently degraded.
+ *
+ * Read-only is true of exactly one thing: an ATTACHED Cursor IDE conversation,
+ * which is an observation-only transcript — a live session with no pane to
+ * deliver into. No session and no pane is "offline", and it is startable.
+ */
 export function laneProviderLabel(lane) {
   const kind = laneProviderKind(lane);
   if (kind === "cursor") {
-    return Boolean(lane?.tmux?.alive) ? "Cursor" : "Cursor (read-only)";
+    if (lane?.tmux?.alive) return "Cursor";
+    return cursorObservationOnly(lane) ? "Cursor (read-only)" : "Cursor (offline)";
   }
   if (kind === "claude") return "Claude";
   if (lane?.tmux?.alive) return "Session";
   return "Offline";
+}
+
+/**
+ * A Cursor session that exists but has no pane to deliver into: the attached
+ * IDE transcript. This, and only this, is read-only.
+ */
+export function cursorObservationOnly(lane) {
+  if (laneProviderKind(lane) !== "cursor") return false;
+  if (lane?.tmux?.alive) return false;
+  return LIVE_AGENT_SESSION_STATES.has(String(lane?.agent_session?.state || ""));
 }
 
 function liveAgentOnLane(lane) {
@@ -2705,7 +2729,9 @@ export function renderLaneSessionCallout(lane, extras = {}) {
   if (!bound) return "";
   const cap = extras.executionCapacity;
   const occupying = Array.isArray(cap?.running) ? cap.running.map((r) => r.name).filter(Boolean) : [];
-  const atProviderCap = who !== "Cursor"
+  // Compare the provider KIND, never the rendered label: "Cursor (offline)" is
+  // not "Cursor", and a label test sent Cursor lanes down Claude's capacity copy.
+  const atProviderCap = laneProviderKind(lane) !== "cursor"
     && cap
     && Number(cap.available) === 0
     && occupying.length > 0;
@@ -2721,7 +2747,7 @@ export function renderLaneSessionCallout(lane, extras = {}) {
   const detail = atProviderCap
     ? `Claude is at ${cap.active}/${cap.max_active}. Running: ${occupying.join(", ")}. Release one to start this session.`
     : (laneProviderKind(lane) === "cursor"
-      ? "Cursor transcript is read-only. Start a Claude session to send instructions."
+      ? "Start a writable Cursor Agent session in this worktree to send instructions."
       : "Existing worktree is connected. Start a persistent Claude session to continue queued work.");
   const btn = `<button type="button" class="btn primary" data-gw-session-start data-lane-id="${esc(lane.lane_id)}">Start Session</button>`;
   return `<aside class="gw-session-callout" data-gw-session-callout>
