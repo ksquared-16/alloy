@@ -96,6 +96,16 @@ indistinguishable, and **absence of a run no longer proves absence of an authori
 its **stored** refs, which cannot be pinned after the fact, so with `AC_W0` hardcoded a misrouted run 4 can now
 complete **with no operator in the loop at all**. Check for an approved-but-parked census **before the next
 tick** (§4)
+· **W-0 re-issued an eleventh time 2026-09-01** (mission `msn_b2ff78f79ebf051366`, assignment
+`asg_20d380858fac5b`) — mission titled *"DX-1 Executive Overview Fixture"*, dispatched Wave 0; sixth mission id,
+**new** content hash `5cc8a895…`, so the compiled content varies while the emitted assignment does not. Counts
+again **not re-asserted**; **no sixth audit block written** — the tenth pass's "no eleventh audit" is accepted
+and the record is a ledger entry only. **The one new fact is that the entry itself arrived**: a recommendation
+addressed to judgment cannot bind a generator, so **the hold is unenforceable by restraint**. `git log
+2a8d332a6..7df89cf04` over `governed-action-request.mjs`, `trusted-host-actions.mjs` and `mission-advance.mjs`
+is **empty** — all five prior findings hold verbatim at HEAD, and `combined_query` is still blob
+`24044e1ef…`, so run 4 needs no edit. The parked-approval check remains **unperformed** (sandbox refusal, not
+an empty result) (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -945,6 +955,36 @@ default. Both that and the `AC_W0` hardcoding are toolkit product code and are *
 **W-0's exit criteria remain met**, and this pass **endorses the hold** — with the one qualification that the
 check above is a Director/operator action rather than an audit, and it is time-sensitive against the tick. Full
 audit at the census file's `run_4_unattended_execution_risk`.
+
+#### W-0 re-issued an eleventh time — **2026-09-01**, assignment `asg_20d380858fac5b`: the hold cannot be honoured by restraint
+
+Mission `msn_b2ff78f79ebf051366`, titled **"DX-1 Executive Overview Fixture"**, handed *Wave 0 — Live authority
+census* with criterion `AC_W0`. Sixth mission id; content hash `5cc8a895…` is **new**, unlike the fifth/eighth
+collision, so compiled mission content **does** vary while the emitted W-0 assignment does not — the signature
+`reissue_root_cause_2026_09_01` predicts, since the ladder is chosen by resolved plan path rather than by
+mission content. **No count, query, hash, `results` field or `run_history` entry was touched, and no run was
+taken.**
+
+**This section is deliberately short, and that is the finding.** The tenth pass closed with *"an eleventh audit
+pass of this artifact returns less than it costs in merge risk."* That is accepted here — no sixth `run_4_*`
+block was written. **The eleventh dispatch arrived anyway.** No worker and no operator declined to honour the
+recommendation; no human chose it. A recommendation addressed to judgment cannot bind a generator, which is
+exactly `reissue_root_cause_2026_09_01`'s claim, now demonstrated rather than argued. **Restraint is not
+available as a remedy.** The only two that are: the routing change in `mission-advance.mjs`
+(`resolveImplementationPlan`'s fallback), or formal closure of W-0. Both are outside W-0's read-only scope.
+
+Verification performed, and it is all that was performed:
+
+| Check | Result |
+|---|---|
+| `git log 2a8d332a6..7df89cf04 --` over `governed-action-request.mjs`, `trusted-host-actions.mjs`, `mission-advance.mjs` | **empty** — no cited file moved; all five prior findings hold verbatim |
+| `combined_query` blob at HEAD vs `873a2f097` (run-3 record) | **`24044e1ef…` both** — artifact still executable **unamended** |
+| Hash keys | `query_hash` `a3982ca5…` (matches), `runs_1_2_query_hash` parked, `combined_query_hash` absent — gate passes |
+| Parked-approval check (tenth pass's time-sensitive action) | **still unperformed** — sandbox refusal at `~/.local/state/alloy-dev/vacilando`, not an empty result |
+
+**W-0's exit criteria remain met.** The operator decision is unchanged and now **eleven times unanswered**:
+grant the authorization on a correctly **pinned** request, or **close W-0** — and separately, stop routing
+plan-less missions into this ladder. Ledger entry at the census file's `reissue_11_2026_09_01`.
 
 ---
 

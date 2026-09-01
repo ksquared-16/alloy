@@ -1357,5 +1357,32 @@
       "Did not modify or restate the four sibling run_4_* audit blocks or reissue_root_cause_2026_09_01.",
       "Did not change product code, schema, or UI. The unattended-resume gap and the AC_W0 hardcoding are both registered as follow-ups, not fixed."
     ]
+  },
+  "reissue_11_2026_09_01": {
+    "deliberately_short": "This is the ELEVENTH W-0 dispatch. The tenth pass closed with 'an eleventh audit pass of this artifact returns less than it costs in merge risk.' That recommendation is accepted, so this block is a LEDGER ENTRY, not a sixth run_4_* audit. It adds no new analysis of mechanics that five sibling blocks already cover, restates nothing, and modifies no prior key.",
+    "audited_at": "2026-09-01",
+    "audited_by": "claude (Vacilando managed slot 5, worktree wt5-vacilando)",
+    "mission": "msn_b2ff78f79ebf051366",
+    "assignment": "asg_20d380858fac5b",
+    "content_hash": "5cc8a895477c55b065075f22faef3cbe",
+    "head": "7df89cf04",
+    "mission_title": "DX-1 Executive Overview Fixture — dispatched 'Wave 0 — Live authority census'. The SIXTH distinct mission id handed W-0 as its first assignment, and the third consecutive dispatch whose mission title names a Director-experience fixture rather than access work. reissue_root_cause_2026_09_01 confirmed a third time; not restated.",
+    "content_hash_is_new": "5cc8a895… has not appeared on any prior W-0 dispatch. The fifth and eighth collided on 5d17cc99… and the tenth carried 4624625b…. So the compiled content DOES vary across missions while the emitted W-0 assignment does not — which is the expected signature of mechanism step 3 in reissue_root_cause_2026_09_01 (the phase ladder is selected by resolved plan path, not by mission content), and mildly strengthens it: identical dispatch from non-identical missions.",
+    "dispatch_is_generated_verbatim_reconfirmed": "This assignment's Objective is byte-identical to mission-advance.mjs:72-73, its requiredOutputs to :76-77, its criterion to the literal AC_W0 at :79 — re-read this pass at HEAD 7df89cf04.",
+    "what_this_pass_verified_and_it_is_all_it_verified": {
+      "head_moved_since_the_tenth_pass": "49316559a → 7df89cf04, three commits (49316559a, 4f88dcb75, 7df89cf04), all fix(vacilando) on Agent Session provisioning.",
+      "sibling_citations_hold_verbatim": "`git log 2a8d332a6..HEAD --` over governed-action-request.mjs, trusted-host-actions.mjs and mission-advance.mjs returns EMPTY. None of the three files any sibling audit cites was touched. Spot-re-read at HEAD anyway: tick census clause at :2888-2892, ensureRepositoryGrant short-circuit `if (rec.mission_id) return { ok: true }` at :2066, Q15 refs default at :1562-1563, AC_W0 hardcode at trusted-host-actions.mjs:757-768, IMPLEMENTATION_PLAN_CANDIDATES at mission-advance.mjs:22-25. All five findings stand unamended.",
+      "artifact_still_executable_unamended": "combined_query blob = 24044e1ef1280212d5c753074c7edf8a70f08871, measured this pass at HEAD and at 873a2f097 (the run-3 record) — identical. query_hash a3982ca5… still matches by construction, runs_1_2_query_hash parked, combined_query_hash absent. Run 4 needs no edit to this file.",
+      "the_time_sensitive_check_is_still_unperformed": "run_4_unattended_execution_risk.operator_action_required_before_next_tick asks whether an approved-but-parked database.read_census record exists. This pass ATTEMPTED it and was refused by the sandbox at ~/.local/state/alloy-dev/vacilando, exactly as that block predicted — a refusal, not an empty result, so absence still cannot be inferred from a worker. It remains outstanding and remains a Director/operator action."
+    },
+    "the_one_new_data_point": "THE HOLD IS NOT ENFORCEABLE BY RESTRAINT, AND THIS PASS IS THE PROOF RATHER THAN THE ARGUMENT. The tenth pass recommended no eleventh audit. An eleventh dispatch arrived regardless, under a new mission id, a new content hash and an unrelated mission title. That is not a worker or an operator declining to honour the recommendation — no human chose it, which is precisely reissue_root_cause_2026_09_01's claim. A recommendation addressed to judgment cannot bind a generator. The remedy is the routing change (mission-advance.mjs resolveImplementationPlan) or formal closure of W-0; nothing a worker can do inside W-0's read-only scope will stop a twelfth.",
+    "escalation": "Reality diverges from Compiled Mission intent — mission 'DX-1 Executive Overview Fixture', phase 'Wave 0 — Live authority census'. Reported, not resolved, per this assignment's prohibited_changes. The operator decision is UNCHANGED and now eleven times unanswered: (1) grant the authorization on a correctly PINNED request (recipe at run_4_artifact_selection_audit.request_parameters_required), or formally close W-0; and (2) stop routing plan-less missions into the Access & Identity ladder. Both are outside this assignment's scope, which names only the plan and this file.",
+    "counts_untouched": "No Q1–Q6 count, no query text, no hash, no results field, no run_history entry, no target_identity and no sibling block was modified. Additive only. Runs 1–3 stand exactly as recorded and are NOT re-asserted as current.",
+    "what_this_pass_did_not_do": [
+      "Did not execute the census — no worker-side channel exists and the governed-action store is outside the sandbox.",
+      "Did not fabricate a results block, a run_history[4] entry, drift data or a target_identity for an unexecuted run.",
+      "Did not write a sixth run_4_* audit block, and did not restate or modify the five that exist.",
+      "Did not change product code, schema or UI."
+    ]
   }
 }
