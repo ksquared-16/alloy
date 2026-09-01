@@ -35,6 +35,7 @@ import {
   listDurableLanes,
   readDevelopmentLaneStore,
 } from "./development-lane.mjs";
+import { endAgentSession, listCurrentAgentSessions } from "./agent-session.mjs";
 
 export const DURABLE_BACKUP_SCHEMA = "vacilando.durable_backup.v1";
 export const DEFAULT_BACKUP_RETENTION = 7;
@@ -414,6 +415,7 @@ export function restoreDurableState({
   copyDurableTree(srcVac, destVac, durableRelPaths());
   const node = ensureLocalNode({ root: destRoot, nowMs });
   let bindings = { invalidated: 0 };
+  let sessionsEnded = 0;
   if (invalidateBindings) {
     bindings = invalidateStaleExecutionBindings({
       root: destRoot,
@@ -421,6 +423,15 @@ export function restoreDurableState({
       nowMs,
       currentNodeId: node.node_id,
     });
+    // A binding and a session are two halves of the same runtime claim. The
+    // binding was invalidated because the runtime it names is on another
+    // machine; a non-terminal session names a PROCESS on that same machine and
+    // is no more valid here. Left ACTIVE, it makes the lane permanently
+    // unstartable — createAgentSession refuses `lane_has_active_session`.
+    //
+    // History is preserved: the session is ended, never deleted, and SUSPENDED
+    // is untouched because a suspended session is what the operator resumes.
+    sessionsEnded = endSessionsFromAnotherNode(destRoot, nowMs);
   }
   return {
     ok: true,
@@ -428,6 +439,7 @@ export function restoreDurableState({
     node_id: node.node_id,
     backup_id: verified.backup_id,
     bindings_invalidated: bindings.invalidated,
+    agent_sessions_ended: sessionsEnded,
     git_mutated: false,
     worktree_mutated: false,
     lanes: listDurableLanes(destRoot).map((l) => ({
@@ -437,6 +449,29 @@ export function restoreDurableState({
       binding_status: l.binding?.status || (l.binding?.stale ? "stale" : (l.binding ? "bound" : "unbound")),
     })),
   };
+}
+
+/**
+ * End every non-terminal Agent Session carried in from another node.
+ *
+ * SUSPENDED is deliberately excluded: it is an operator-visible state meaning
+ * "the computation stopped, the session did not", and it survives a move.
+ */
+function endSessionsFromAnotherNode(destRoot, nowMs) {
+  const CARRIED_OVER = new Set([
+    "STARTING", "ACTIVE", "ROTATION_PENDING", "HANDOFF", "RESTARTING", "VERIFYING",
+  ]);
+  let ended = 0;
+  for (const session of listCurrentAgentSessions(destRoot)) {
+    if (!CARRIED_OVER.has(session.state)) continue;
+    const out = endAgentSession(session.agent_session_id, {
+      reason: "restored_onto_different_node",
+      nowMs,
+      root: destRoot,
+    });
+    if (out?.ok !== false) ended += 1;
+  }
+  return ended;
 }
 
 export function laneIdentitySnapshot(root) {

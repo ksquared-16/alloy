@@ -2614,6 +2614,21 @@ export function createVacilandoServer() {
             })
             .catch((e) => console.log(`[repositories] registry reconstruction error: ${e?.message || e}`));
         } catch { /* a provider start still reports worktree_not_managed truthfully */ }
+        // An Agent Session asserts a running provider. A restore onto a new host
+        // carries them across still ACTIVE, describing processes on a machine
+        // this one has never seen — and createAgentSession then refuses
+        // `lane_has_active_session` forever. Reaped against observed panes, and
+        // never on ignorance: unreadable tmux ends nothing.
+        try {
+          import("./vacilando/agent-session-lifecycle.mjs")
+            .then(({ reconcileAgentSessionsWithoutRuntime }) => reconcileAgentSessionsWithoutRuntime())
+            .then((out) => {
+              if (out?.ended?.length) {
+                console.log(`[agent-sessions] ended ${out.ended.length} session(s) with no runtime on this node`);
+              }
+            })
+            .catch(() => {});
+        } catch { /* a start still refuses truthfully */ }
         try { resumePendingOutputWatches(); } catch { /* */ }
         try {
           reconcileExclusiveWindow();

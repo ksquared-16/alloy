@@ -1852,6 +1852,72 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
   };
 }
 
+/**
+ * States a session can be reaped from. SUSPENDED is deliberately absent: a
+ * suspended session is the thing the operator will resume — the computation
+ * stopped, the session did not.
+ */
+const REAPABLE_SESSION_STATES = Object.freeze([
+  "STARTING", "ACTIVE", "ROTATION_PENDING", "HANDOFF", "RESTARTING", "VERIFYING",
+]);
+
+/**
+ * An Agent Session is a live provider process, not a record.
+ *
+ * THE DEFECT THIS REPLACES: a durable restore carries agent sessions across as
+ * AUTHORITATIVE history — correctly, they are the lane's record — but a session
+ * in a non-terminal state also ASSERTS a running provider on the node it was
+ * created on. Restoring the MacBook's state onto the Mac mini left
+ * agsess_77d709d8-cce ACTIVE, describing a Claude process on a machine this
+ * host has never seen. `createAgentSession` refuses `lane_has_active_session`,
+ * so the lane could never start a provider again: the third distinct reason a
+ * fresh operator send stayed on waiting_for_agent_session.
+ *
+ * Restore invalidated lane BINDINGS for exactly this reason. A session is the
+ * other half of that binding and needed the same treatment.
+ *
+ * Runs at boot, against observed panes. Never reaps on ignorance: if pane
+ * discovery is unavailable the sessions are left exactly as they are — only a
+ * positive observation of "no live pane for this lane" ends anything. Claude
+ * only: a Claude session always requires a live pane, whereas a Cursor session
+ * may legitimately be an observation-only IDE attachment with no pane at all.
+ */
+export async function reconcileAgentSessionsWithoutRuntime({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+  panes = null,
+  discover = null,
+} = {}) {
+  const { discoverLivePanes, inferClaudePresence } = await import("./lanes.mjs");
+  let live = panes;
+  if (!Array.isArray(live)) {
+    const seen = await (discover || discoverLivePanes)();
+    // Unknown is not absent. A tmux that could not answer ends nothing.
+    if (!seen?.ok) return { ok: true, ended: [], skipped: "pane_discovery_unavailable" };
+    live = seen.panes;
+  }
+  const claudePanes = live.filter((pane) => inferClaudePresence(pane) === "present");
+  const ended = [];
+  for (const session of listCurrentAgentSessions(root)) {
+    if (session.provider !== "claude") continue;
+    if (!REAPABLE_SESSION_STATES.includes(session.state)) continue;
+    const rec = getDurableLane(session.lane_id, root);
+    const boundSession = rec?.binding?.tmux_session || null;
+    const boundPath = rec?.binding?.worktree_path || null;
+    const alive = claudePanes.some((pane) =>
+      (boundSession && pane.session === boundSession)
+      || (boundPath && (pane.cwd === boundPath || pane.cwd?.startsWith(`${boundPath}/`))));
+    if (alive) continue;
+    endAgentSession(session.agent_session_id, { reason: "runtime_absent_on_this_node", nowMs, root });
+    ended.push({
+      lane_id: session.lane_id,
+      agent_session_id: session.agent_session_id,
+      was_state: session.state,
+    });
+  }
+  return { ok: true, ended };
+}
+
 export function observeOrCreateAgentSession(lane, { root = runtimeRoot(), nowMs = Date.now(), telemetry = null } = {}) {
   if (!lane?.lane_id) return null;
   const rec = activeAgentSessionForLane(lane.lane_id, root);

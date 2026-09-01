@@ -344,6 +344,92 @@ test("capacity is not degraded by the absence of a tmux server", async () => {
   rmSync(emptyTmux, { recursive: true, force: true });
 });
 
+// ---------------------------------------------------------------------------
+// 4. An Agent Session asserts a live process, and does not survive a move.
+// ---------------------------------------------------------------------------
+
+test("a session carried in from another node is ended, not left ACTIVE", async () => {
+  const { createAgentSession, markAgentSessionActive, getAgentSession, patchAgentSession } =
+    await import(join(LIB, "agent-session.mjs"));
+  const LC = await import(join(LIB, "agent-session-lifecycle.mjs"));
+
+  resetDevelopmentLanesForTests(ROOT);
+  const lane = createDurableLane({ name: "Carried", origin: "test", root: ROOT }).lane;
+  const made = createAgentSession({ laneId: lane.lane_id, root: ROOT });
+  assert.ok(made.ok);
+  markAgentSessionActive(made.session.agent_session_id, { root: ROOT });
+  assert.equal(getAgentSession(made.session.agent_session_id, ROOT).state, "ACTIVE");
+
+  // THE REGRESSION: the MacBook's ACTIVE session survived the restore, and
+  // createAgentSession then refused lane_has_active_session forever — the lane
+  // could never start a provider again.
+  const blocked = createAgentSession({ laneId: lane.lane_id, root: ROOT });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.error, "lane_has_active_session");
+
+  // Zero live panes is a positive observation that no provider is running.
+  const out = await LC.reconcileAgentSessionsWithoutRuntime({ root: ROOT, panes: [] });
+  assert.ok(out.ok);
+  assert.equal(out.ended.length, 1, `ended one session: ${JSON.stringify(out)}`);
+  assert.equal(getAgentSession(made.session.agent_session_id, ROOT).state, "ENDED");
+  assert.equal(getAgentSession(made.session.agent_session_id, ROOT).end_reason, "runtime_absent_on_this_node");
+
+  // And the lane can start again.
+  const again = createAgentSession({ laneId: lane.lane_id, root: ROOT });
+  assert.equal(again.ok, true, "a provider can be started once more");
+  patchAgentSession(again.session.agent_session_id, { state: "SUSPENDED" }, { root: ROOT });
+
+  // SUSPENDED is what an operator resumes. It is not a dead process and must
+  // never be reaped — that would silently discard put-down work.
+  const second = await LC.reconcileAgentSessionsWithoutRuntime({ root: ROOT, panes: [] });
+  assert.deepEqual(second.ended, [], "a suspended session survives");
+  assert.equal(getAgentSession(again.session.agent_session_id, ROOT).state, "SUSPENDED");
+});
+
+test("a live pane keeps its session, and unreadable tmux ends nothing", async () => {
+  const { createAgentSession, markAgentSessionActive, getAgentSession } =
+    await import(join(LIB, "agent-session.mjs"));
+  const { rebindDurableLane } = await import(join(LIB, "development-lane.mjs"));
+  const LC = await import(join(LIB, "agent-session-lifecycle.mjs"));
+
+  resetDevelopmentLanesForTests(ROOT);
+  const lane = createDurableLane({ name: "Live", origin: "test", root: ROOT }).lane;
+  const wt = join(WT_ROOT, "wt5-vacilando");
+  rebindDurableLane(lane.lane_id, {
+    worktree_path: wt, worktree_name: "wt5-vacilando", tmux_session: "alloy-live", provider: "claude",
+  }, { root: ROOT });
+  const made = createAgentSession({ laneId: lane.lane_id, root: ROOT });
+  markAgentSessionActive(made.session.agent_session_id, { root: ROOT });
+
+  // A pane that is this lane's, running Claude: the session is real.
+  const kept = await LC.reconcileAgentSessionsWithoutRuntime({
+    root: ROOT,
+    panes: [{ session: "alloy-live", cwd: wt, command: "claude", title: "", dead: false }],
+  });
+  assert.deepEqual(kept.ended, [], "a session with a live pane is kept");
+  assert.equal(getAgentSession(made.session.agent_session_id, ROOT).state, "ACTIVE");
+
+  // Unknown is not absent. A tmux that could not answer is not evidence that a
+  // provider stopped, and reaping on it would end live sessions during a
+  // transient fault — the opposite failure, and a far worse one.
+  const unreadable = await LC.reconcileAgentSessionsWithoutRuntime({
+    root: ROOT,
+    discover: async () => ({ ok: false, panes: [], error: "spawn tmux ENOENT" }),
+  });
+  assert.deepEqual(unreadable.ended, [], "an unreadable tmux ends nothing");
+  assert.equal(unreadable.skipped, "pane_discovery_unavailable");
+  assert.equal(getAgentSession(made.session.agent_session_id, ROOT).state, "ACTIVE");
+
+  // And with a positive observation of zero panes, the same session IS ended —
+  // proving the two cases are genuinely distinguished, not both no-ops.
+  const observed = await LC.reconcileAgentSessionsWithoutRuntime({
+    root: ROOT,
+    discover: async () => ({ ok: true, panes: [], tmux_server_running: false }),
+  });
+  assert.equal(observed.ended.length, 1, "zero observed panes ends the session");
+  assert.equal(getAgentSession(made.session.agent_session_id, ROOT).state, "ENDED");
+});
+
 test("Gateway boot reconstructs the registry from the immutable toolkit", async () => {
   // THE DEFECT ITSELF. migrateLanesToAlloy always worked when called; the bug
   // was that NOTHING in production called it — its only importer was a test.
