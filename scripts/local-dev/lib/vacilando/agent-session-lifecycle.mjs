@@ -1384,6 +1384,23 @@ function endActiveSessionForProviderSwitch(laneId, { nowMs, root, reason }) {
 async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root, origin }) {
   const transport = cursorExecutableTransport(found);
   if (transport.ok) {
+    // A SESSION THAT IS NOT BOUND IS NOT CONNECTED TO DELIVERY.
+    //
+    // This branch adopts a pane that is ALREADY running cursor-agent and used
+    // to return without binding it. The Agent Session was created and reported
+    // ACTIVE while the durable binding still said `provider: "claude"` and
+    // still pointed at the pane id the lane had before the switch — so the very
+    // next send resolved the provider as Claude, assessed a Cursor pane against
+    // Claude's prompt contract, and refused with provider_prompt_not_ready.
+    // Observed exactly this on lane_73a897409906: session ACTIVE on cursor,
+    // binding.provider=claude, tmux_pane=%2 while the live Cursor pane was %9.
+    //
+    // Adoption binds for the same reason a fresh start does.
+    bindCursorExecutable(rec, {
+      tmux_session: found.tmux?.session || rec.binding?.tmux_session,
+      tmux_pane: found.tmux?.pane_id || rec.binding?.tmux_pane,
+      worktree_path: boundPath,
+    }, { nowMs, root });
     const existing = activeAgentSessionForLane(found.lane_id, root);
     if (existing && ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) {
       if (existing.state !== "ACTIVE") {
