@@ -73,6 +73,33 @@ const { createDurableLane, getDurableLane, resetDevelopmentLanesForTests } =
   await import(join(LIB, "development-lane.mjs"));
 const { resolveRuntimeConfig } = await import(join(LIB, "workspace-facts.mjs"));
 
+test("an exported runtime root wins over the config file, as in lib/common.sh", () => {
+  // The Gateway exports its isolated root and spawns toolkit commands with it.
+  // If this function preferred the config file, the Gateway would read a
+  // different slot registry than the commands it spawns write.
+  const cfgOnly = join(ROOT, "alloy-dev.other-root.config");
+  const otherRoot = join(ROOT, "config-file-root");
+  writeFileSync(cfgOnly, [
+    `ALLOY_RUNTIME_ROOT="${otherRoot}"`,
+    `ALLOY_WORKTREE_ROOT="${WT_ROOT}"`,
+    `ALLOY_REPO="${REPO}"`,
+    "",
+  ].join("\n"));
+  const savedCfg = process.env.ALLOY_CONFIG_FILE;
+  const savedRoot = process.env.ALLOY_RUNTIME_ROOT;
+  try {
+    process.env.ALLOY_CONFIG_FILE = cfgOnly;
+    delete process.env.ALLOY_RUNTIME_ROOT;
+    assert.equal(resolveRuntimeConfig().runtime_root, otherRoot);
+    process.env.ALLOY_RUNTIME_ROOT = ROOT;
+    assert.equal(resolveRuntimeConfig().runtime_root, ROOT);
+    assert.equal(resolveRuntimeConfig().metadata_dir, META_DIR);
+  } finally {
+    process.env.ALLOY_CONFIG_FILE = savedCfg;
+    process.env.ALLOY_RUNTIME_ROOT = savedRoot;
+  }
+});
+
 test("the fixture host layout is actually in effect", () => {
   // If this fails, every assertion below would silently be testing the real
   // machine's worktrees instead of the fixtures.
@@ -311,7 +338,15 @@ test("capacity is not degraded by the absence of a tmux server", async () => {
   //
   // TMUX_TMPDIR at an empty directory is the real fresh-host condition: tmux
   // exits 1 with "error connecting to .../tmux-501/default".
+  //
+  // TMUX and TMUX_PANE must go with it. This suite runs inside a Vacilando
+  // lane's own tmux pane, and tmux prefers the inherited TMUX socket over
+  // TMUX_TMPDIR — so leaving them set pointed the "fresh host" fixture at the
+  // live server and the test measured the machine instead of the fixture.
   const emptyTmux = mkdtempSync(join(tmpdir(), "vac-mini-notmux-"));
+  const freshHostEnv = { ...process.env, TMUX_TMPDIR: emptyTmux };
+  delete freshHostEnv.TMUX;
+  delete freshHostEnv.TMUX_PANE;
   const { spawnSync } = await import("node:child_process");
   const r = spawnSync(process.execPath, ["--input-type=module", "-e", `
     const A = await import(${JSON.stringify(join(LIB, "alloy-dev-adapter.mjs"))});
@@ -320,8 +355,7 @@ test("capacity is not degraded by the absence of a tmux server", async () => {
   `], {
     encoding: "utf8",
     env: {
-      ...process.env,
-      TMUX_TMPDIR: emptyTmux,
+      ...freshHostEnv,
       ALLOY_RUNTIME_ROOT: ROOT,
       ALLOY_CONFIG_FILE: CFG,
       VACILANDO_DURABLE_LANES: "1",
@@ -331,7 +365,7 @@ test("capacity is not degraded by the absence of a tmux server", async () => {
 
   // Prove the fixture really had no tmux server, or the assertions below are hollow.
   const probe = spawnSync("tmux", ["list-panes", "-a"], {
-    encoding: "utf8", env: { ...process.env, TMUX_TMPDIR: emptyTmux },
+    encoding: "utf8", env: freshHostEnv,
   });
   assert.notEqual(probe.status, 0, "fixture has no tmux server");
 
