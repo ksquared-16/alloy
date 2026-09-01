@@ -311,5 +311,18 @@ await test("a malformed input record cannot leave a run in NEEDS_INPUT", async (
   assert.notEqual(getExecutionRun(run.run.run_id, ROOT).state, "NEEDS_INPUT");
 });
 
+await test("REGRESSION: the governor tick reaps runtime-absent sessions, not only boot", async () => {
+  const lane = makeLane({ provider: "claude", tmux: "alloy-lane" });
+  const id = activeSession(lane.lane_id, "claude");
+  // No tmux server on this hermetic root => zero panes, truthfully observed.
+  const { reconcileGovernor } = await import("../lib/vacilando/execution-reconcile.mjs");
+  await reconcileGovernor({ root: ROOT, reason: "test", depth: "cheap" });
+  assert.equal(
+    getAgentSession(id, ROOT).state,
+    "ENDED",
+    "a pane closed while the Gateway runs must be reaped without a restart",
+  );
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
