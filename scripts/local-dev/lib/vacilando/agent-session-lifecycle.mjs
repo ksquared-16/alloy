@@ -55,6 +55,7 @@ import {
   validateRuntimeBinding,
 } from "./development-lane.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
+import { localNodeId } from "./execution-node.mjs";
 
 export const ROTATION_POLICY = Object.freeze({
   auto_mode: "on",
@@ -1888,7 +1889,7 @@ export async function reconcileAgentSessionsWithoutRuntime({
   panes = null,
   discover = null,
 } = {}) {
-  const { discoverLivePanes, inferClaudePresence } = await import("./lanes.mjs");
+  const { discoverLivePanes, inferAgentPresence } = await import("./lanes.mjs");
   let live = panes;
   if (!Array.isArray(live)) {
     const seen = await (discover || discoverLivePanes)();
@@ -1896,26 +1897,79 @@ export async function reconcileAgentSessionsWithoutRuntime({
     if (!seen?.ok) return { ok: true, ended: [], skipped: "pane_discovery_unavailable" };
     live = seen.panes;
   }
-  const claudePanes = live.filter((pane) => inferClaudePresence(pane) === "present");
   const ended = [];
+  const skipped = [];
+  const localNode = localExecutionNodeId(root);
   for (const session of listCurrentAgentSessions(root)) {
-    if (session.provider !== "claude") continue;
     if (!REAPABLE_SESSION_STATES.includes(session.state)) continue;
     const rec = getDurableLane(session.lane_id, root);
+
+    // A session this node cannot see because it belongs to ANOTHER node is not
+    // absent, it is elsewhere. Reaping it here would end a live session on a
+    // different machine on the strength of local ignorance.
+    const boundNode = rec?.binding?.node_id || null;
+    if (localNode && boundNode && boundNode !== localNode) {
+      skipped.push({ agent_session_id: session.agent_session_id, why: "session_on_other_node" });
+      continue;
+    }
+
+    // An attached read-only transcript has no executable pane BY DESIGN. Its
+    // missing pane is its normal condition, not proof of death.
+    if (!sessionIsExecutable(session, rec)) {
+      skipped.push({ agent_session_id: session.agent_session_id, why: "non_executable_attachment" });
+      continue;
+    }
+
     const boundSession = rec?.binding?.tmux_session || null;
     const boundPath = rec?.binding?.worktree_path || null;
-    const alive = claudePanes.some((pane) =>
+    // Presence is judged for the session's OWN provider. The Claude-only test
+    // this replaces read every Cursor pane as "not Claude, therefore skip",
+    // which let a dead Cursor session stay ACTIVE forever and block every
+    // replacement with `lane_has_active_session`.
+    const providerPanes = live.filter(
+      (pane) => inferAgentPresence(pane, { provider: session.provider }) === "present",
+    );
+    const alive = providerPanes.some((pane) =>
       (boundSession && pane.session === boundSession)
       || (boundPath && (pane.cwd === boundPath || pane.cwd?.startsWith(`${boundPath}/`))));
     if (alive) continue;
+
+    // Positive proof of absence requires that we could actually observe panes
+    // for this provider at all. If tmux answered but reported no pane of ANY
+    // kind, that is still an answer; if the discovery itself was degraded we
+    // returned above without ending anything.
     endAgentSession(session.agent_session_id, { reason: "runtime_absent_on_this_node", nowMs, root });
     ended.push({
       lane_id: session.lane_id,
       agent_session_id: session.agent_session_id,
+      provider: session.provider,
       was_state: session.state,
     });
   }
-  return { ok: true, ended };
+  return { ok: true, ended, skipped };
+}
+
+/**
+ * Is this Agent Session backed by an executable provider process?
+ *
+ * Explicit marker first. Legacy records predate the marker: an ATTACHED IDE
+ * conversation is recorded with a provider session id and no tmux session on
+ * the binding to deliver into, which is exactly the read-only transcript case.
+ */
+export function sessionIsExecutable(session, rec) {
+  if (!session) return false;
+  if (session.executable === false) return false;
+  if (session.executable === true) return true;
+  if (session.provider_session_id && !rec?.binding?.tmux_session) return false;
+  return true;
+}
+
+function localExecutionNodeId(root) {
+  try {
+    return localNodeId(root);
+  } catch {
+    return null;
+  }
 }
 
 export function observeOrCreateAgentSession(lane, { root = runtimeRoot(), nowMs = Date.now(), telemetry = null } = {}) {

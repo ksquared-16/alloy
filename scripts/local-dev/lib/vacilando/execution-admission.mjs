@@ -182,7 +182,44 @@ export function createAdmissionRequest({
   if (!resolved) return { ok: false, error: "unsupported_provider" };
   const store = readAdmissionStore(root);
   const existing = (store.requests || []).find((r) => r.lane_id === id && ADMISSION_OPEN.has(r.state));
-  if (existing) return { ok: true, request: existing, existing: true };
+  if (existing) {
+    /**
+     * THE DEFECT THIS FIXES: one open admission per lane was treated as "this
+     * lane is already being handled", and the caller's run was silently
+     * dropped. On the Mac mini a single admission left in PROVISIONING since a
+     * previous Gateway process — PROVISIONING is never re-driven, because only
+     * QUEUED rows are heads — meant EVERY later operator send returned this
+     * dead row, created no admission of its own, and parked at
+     * `waiting_for_agent_session` forever on a completely healthy lane.
+     *
+     * An open admission only speaks for work that is still live. If its run is
+     * finished, gone, or it never had one, it is stale bookkeeping and the
+     * incoming run adopts it.
+     */
+    const holder = existing.run_id ? getExecutionRun(existing.run_id, root) : null;
+    const holderLive = Boolean(existing.run_id) && Boolean(holder) && !isTerminalRunState(holder.state);
+    if (holderLive && (!runId || existing.run_id === runId)) {
+      return { ok: true, request: existing, existing: true };
+    }
+    if (holderLive) {
+      // A different live run genuinely queues behind this one.
+      return { ok: true, request: existing, existing: true, queued_behind: existing.run_id };
+    }
+    existing.run_id = runId || null;
+    existing.provider = resolved;
+    existing.updated_at = iso(nowMs);
+    existing.failure_reason = null;
+    // Stranded mid-provision rows must return to the queue to be re-driven;
+    // an admission that is not QUEUED is never chosen as a head.
+    if (existing.state !== "QUEUED") {
+      existing.state = "QUEUED";
+      existing.provisioning_state = null;
+      existing.bootstrap_attempts = 0;
+    }
+    writeStore(store, root);
+    emitAdmissionEvent("admission_adopted", existing, root);
+    return { ok: true, request: existing, existing: true, adopted: true };
+  }
   const rec = {
     schema_version: ADMISSION_SCHEMA,
     admission_id: newAdmissionId(id, nowMs),
@@ -561,6 +598,46 @@ async function deliverRun(runRef, { lane, root, nowMs }) {
 }
 
 /**
+ * Return admissions stranded mid-provision to the queue.
+ *
+ * `provisioningInflight` is process memory. A Gateway restart (or a crash
+ * during bootstrap) leaves the durable row in PROVISIONING with nothing
+ * driving it: it is not a QUEUED head so it is never retried, it IS in
+ * ADMISSION_OPEN so it blocks new admissions for the lane, and it IS in
+ * ADMISSION_OCCUPYING so it consumes provider capacity. Positive proof of
+ * abandonment is simple and local: this process is not provisioning it.
+ */
+export function reconcileStrandedProvisioning({ root = runtimeRoot(), nowMs = Date.now() } = {}) {
+  const store = readAdmissionStore(root);
+  const requeued = [];
+  for (const rec of store.requests || []) {
+    if (rec.state !== "PROVISIONING") continue;
+    if (provisioningInflight.has(rec.admission_id)) continue;
+    const run = rec.run_id ? getExecutionRun(rec.run_id, root) : null;
+    if (rec.run_id && (!run || isTerminalRunState(run.state))) {
+      rec.state = "FAILED";
+      rec.provisioning_state = "failed";
+      rec.failure_reason = "run_no_longer_live";
+      rec.updated_at = iso(nowMs);
+      requeued.push({ admission_id: rec.admission_id, to: "FAILED" });
+      continue;
+    }
+    rec.state = "QUEUED";
+    rec.provisioning_state = null;
+    rec.updated_at = iso(nowMs);
+    requeued.push({ admission_id: rec.admission_id, to: "QUEUED" });
+  }
+  if (requeued.length) {
+    writeStore(store, root);
+    for (const r of requeued) {
+      const rec = (store.requests || []).find((x) => x.admission_id === r.admission_id);
+      if (rec) emitAdmissionEvent("admission_unstranded", rec, root);
+    }
+  }
+  return { ok: true, requeued };
+}
+
+/**
  * Admit the FIFO head when the adapter says capacity is available.
  * Does not steal ACTIVE/PROVISIONING capacity.
  */
@@ -568,6 +645,11 @@ export async function evaluateAdmissionQueue({
   root = runtimeRoot(),
   nowMs = Date.now(),
 } = {}) {
+  // A row can only be re-driven from QUEUED. Anything left mid-provision by a
+  // Gateway that exited (provisioningInflight is in-memory and does not
+  // survive a restart) would otherwise occupy capacity and block its lane for
+  // good, which is exactly how a healthy lane became permanently unusable.
+  try { reconcileStrandedProvisioning({ root, nowMs }); } catch { /* best effort */ }
   // Before choosing a head, return any admission that is "admitted" with no
   // provider to the queue. This is also the Gateway-restart reconciliation:
   // the first tick after a restart re-drives work that was stranded by a

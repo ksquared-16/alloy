@@ -70,6 +70,18 @@ export async function reconcileGovernor({
     depth,
   };
 
+  // NEEDS_INPUT must always be backed by something the operator can act on.
+  // A run parked there with no modeled input is an impossible operator state:
+  // the state is protective, so nothing else will ever close it.
+  try {
+    const { reconcileNeedsInputWithoutInput } = await import("./operator-input.mjs");
+    const out = reconcileNeedsInputWithoutInput({ root, nowMs });
+    if (out?.reconciled?.length) {
+      summary.repaired += out.reconciled.length;
+      summary.actions.push("needs_input_without_operator_input");
+    }
+  } catch { /* never block the tick */ }
+
   const store = readResourceRequestStore(root);
   const requests = store.requests || [];
 

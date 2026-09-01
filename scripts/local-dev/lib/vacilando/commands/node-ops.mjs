@@ -272,6 +272,8 @@ export function cmdAttachCursorSession({
     providerSessionId,
     model,
     root,
+    // An attached IDE conversation is a transcript, not a spawned process.
+    executable: false,
   });
   if (!created.ok) return created;
   const active = markAgentSessionActive(created.session.agent_session_id, {

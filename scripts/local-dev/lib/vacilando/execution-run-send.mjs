@@ -378,6 +378,95 @@ async function queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reas
 }
 
 /**
+ * A send is intent to provision.
+ *
+ * THE DEFECT THIS REPLACES: when a lane had no eligible session the send only
+ * ENQUEUED and reported `waiting_for_agent_session`, then relied on the
+ * admission tick to start a provider. Two things made that a dead end. The
+ * reason was a lie whenever the real condition was full provider capacity, and
+ * a lane whose admission row was stale never got re-driven at all — so a
+ * healthy bound lane rested at `waiting_for_agent_session` indefinitely and the
+ * operator had to click Start Session (or open a terminal) before every send.
+ *
+ * The send now provisions directly when capacity allows, and when it cannot it
+ * says WHICH condition it is waiting on.
+ */
+async function provisionSessionForSend({ rec, run, nowMs, root, size }) {
+  if (!bindingExists(rec)) {
+    // No worktree/tmux binding: a session is impossible, not merely slow.
+    // run-wait's `impossible_when: no_session_binding` fails this fast.
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "waiting_for_agent_session",
+    }) };
+  }
+  let capacity = null;
+  try {
+    const { assessSessionStartCapacity } = await import("./alloy-dev-adapter.mjs");
+    capacity = await assessSessionStartCapacity({ root });
+  } catch { capacity = null; }
+  const capacityAvailable = capacity && typeof capacity === "object"
+    ? capacity.ok !== false && capacity.available !== false
+    : true;
+  if (!capacityAvailable) {
+    // Explicitly a capacity wait, with a queue position — never a fake
+    // session wait. When capacity frees, the admission tick resumes it.
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "waiting_for_provider_capacity",
+    }) };
+  }
+  let start = null;
+  try {
+    const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
+    start = await startLaneAgentSession({ laneId: rec.lane_id, nowMs, root, origin: "operator" });
+  } catch (e) {
+    start = { ok: false, error: e?.message || "provider_start_failed" };
+  }
+  if (start?.ok && !start?.queued) {
+    // Provider is coming up. Queue the run so the admission/delivery path
+    // hands it over the moment the pane is ready, and say so truthfully.
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "provider_provisioning",
+    }) };
+  }
+  if (start?.queued || start?.waiting_for_execution_capacity || start?.error === "provider_capacity") {
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "waiting_for_provider_capacity",
+    }) };
+  }
+  if (start?.error === "lane_has_active_session") {
+    // A record says a session exists but it was not eligible above. The
+    // reaper owns proving it dead; until then this is a transport wait.
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "waiting_for_executable_transport",
+    }) };
+  }
+  // A real, named start failure. Surface it instead of resting forever.
+  const { patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
+  const reasonText = start?.error || "provider_start_failed";
+  patchRunFields(run.run_id, {
+    state_reason: "provider_start_failed",
+    delivery: {
+      acknowledged: false,
+      provider: rec.binding?.provider || null,
+      error: reasonText,
+      at: new Date(nowMs).toISOString(),
+    },
+  }, { nowMs, root });
+  return { queued: decorate({
+    ok: true,
+    schema_version: "vacilando.lane.send.v1",
+    lane_id: rec.lane_id,
+    status: "queued",
+    error: null,
+    provider_start_error: reasonText,
+    instruction_size: size,
+    delivered_at: null,
+    admission_queued: false,
+    session_required: true,
+  }, getExecutionRun(run.run_id, root) || run) };
+}
+
+/**
  * Delivery refusals that are transient, not failures.
  *
  * Kept in step with execution-resume's RETRYABLE set: a lane whose send lock is
@@ -679,8 +768,8 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
       }
       const eligible = await laneHasEligibleSession(rec.lane_id);
       if (!eligible) {
-        const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
-        return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
+        const provisioned = await provisionSessionForSend({ rec, run, nowMs, root, size });
+        return provisioned.queued;
       }
     }
   } catch { /* fall through to live send */ }
@@ -756,8 +845,8 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
           return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
         }
       }
-      const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
-      return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
+      const provisioned = await provisionSessionForSend({ rec, run, nowMs, root, size });
+      return provisioned.queued;
     }
   } catch { /* retain FAILED for true delivery failure */ }
 
