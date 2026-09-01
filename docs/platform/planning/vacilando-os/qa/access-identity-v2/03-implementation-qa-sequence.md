@@ -106,6 +106,19 @@ addressed to judgment cannot bind a generator, so **the hold is unenforceable by
 is **empty** — all five prior findings hold verbatim at HEAD, and `combined_query` is still blob
 `24044e1ef…`, so run 4 needs no edit. The parked-approval check remains **unperformed** (sandbox refusal, not
 an empty result) (§4)
+· **W-0 re-issued a twelfth time 2026-09-01** (mission `msn_a8776438f936d5d94a`, assignment
+`asg_07c75c5c112b25`, HEAD `84a291434`) — concurrent with the eleventh, mission titled *"DX-2 Explained
+Confidence Fixture"*. Counts **not re-asserted**, **no sixth audit block**, ledger entry only. **It corrects the
+entry above.** Content hash `5d17cc99…` is **not new — it is the third occurrence**, after the fifth and eighth
+dispatches. `computeContentHash` (`mission-brief.mjs:49-62`) is sha256 over brief content alone — no mission id,
+no timestamp — so **a repeated hash means a byte-identical brief re-ingested**, minting a fresh mission id each
+time. That brief is a **unit-test fixture literal** (`explained-confidence-dx2.test.mjs:144-160`), and the
+fixture marks every assignment complete (`:164-169`), which exhausts its brief phases and drops the mission into
+the implementation ladder — precisely where the plan-less fallback emits `impl_w0`. **Four of the last four
+dispatches are fixture-titled** (DX-5, DX-1, DX-2; DX-6 wrote `a.md` the same day). Adds a third, cheaper
+containment that does not touch the router: **keep fixture briefs out of the live runtime root**. *Not* claimed:
+that running the tests is the leak — the fixture isolates itself via `ALLOY_RUNTIME_ROOT` (`:10`, honoured at
+`execution-node.mjs:22-25`), so the ingesting path is elsewhere and is unreadable from a worker (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -985,6 +998,56 @@ Verification performed, and it is all that was performed:
 **W-0's exit criteria remain met.** The operator decision is unchanged and now **eleven times unanswered**:
 grant the authorization on a correctly **pinned** request, or **close W-0** — and separately, stop routing
 plan-less missions into this ladder. Ledger entry at the census file's `reissue_11_2026_09_01`.
+
+#### W-0 re-issued a twelfth time — **2026-09-01**, assignment `asg_07c75c5c112b25`: the generator has a name
+
+Mission `msn_a8776438f936d5d94a`, titled **"DX-2 Explained Confidence Fixture"**, handed *Wave 0 — Live authority
+census* with criterion `AC_W0` — **concurrent with the eleventh**, which was being written into the census file
+while this pass was reading it. **No count, query, hash, `results` field or `run_history` entry was touched, and
+no run was taken.** No sixth `run_4_*` block; ledger entry only, per the tenth pass's still-accepted advice.
+
+**This pass corrects the section above.** The eleventh read its `5cc8a895…` as *new* and concluded compiled
+content simply varies. It varies — but it also **repeats**, and the repeats identify the generator. This
+dispatch carries **`5d17cc99…`, its third occurrence**, after the fifth (`asg_4510de8147ebb6`) and eighth
+(`asg_796016be30b4e0`).
+
+That matters because `computeContentHash` (`mission-brief.mjs:49-62`) is `sha256` over brief content **alone** —
+title, objective, plan, criteria, constraints, sources; **no mission id, no timestamp, no version**. So an
+identical hash means a **byte-identical brief re-ingested**, minting a fresh mission id with an empty phase
+register each time. And that brief is a **unit-test fixture literal**:
+
+```
+explained-confidence-dx2.test.mjs:144-160   the brief — title :145, one phase p1 "Discovery",
+                                            requiredOutputs ["a.md"], acceptanceCriteria [AC1]
+:161                                        ingestMissionBrief(brief, …)
+:164-169                                    marks EVERY assignment complete
+```
+
+Line `:164-169` is the step that arms it: a mission with no incomplete **brief** phase falls through to the
+**implementation** ladder, which is exactly where `reissue_root_cause_2026_09_01`'s mechanism takes over
+(plan-less → Access & Identity is the first existing candidate → `/access-identity/i` at
+`mission-advance.mjs:203-206` → `order:1` is `impl_w0`). The fixture does not merely create a mission; **it
+advances it into the state that emits W-0.** Four of the last four dispatches are fixture-titled — DX-5, DX-1,
+DX-2, with DX-6 writing the contested `a.md` on this branch the same day.
+
+**What this adds is a third remedy, cheaper than the other two and not a router change: keep Director-experience
+fixture briefs out of the live runtime root.** It addresses the observed generator even if `resolveImplementationPlan`
+is left alone.
+
+**Explicitly not claimed:** that running the test suite is the leak. The fixture isolates itself — it sets
+`ALLOY_RUNTIME_ROOT` to a temp dir at `:10` before its dynamic imports, and `vacilandoRuntimeRoot`
+(`execution-node.mjs:22-25`) reads that env var at **call** time rather than caching it, so a test-run mission
+lands in the temp tree and cannot reach the live Director. Neither DX-2 nor DX-6 is referenced by any suite
+runner. Which path ingests the brief into a live root **could not be determined from a worker** — that store is
+outside the sandbox and returns a refusal, not an empty result.
+
+Also re-verified independently this pass, not inherited: the tenth pass's unattended-execution finding is
+**accurate at HEAD `84a291434`** (`governed-action-request.mjs:2890-2892`, the census-only gate at `:2424`, the
+`rec.mission_id` short-circuit at `:2066`). And the census still **cannot** be run from here — there is no
+`.env`/`.env.local` in the worktree at all, so no deployed-database credential exists on this side.
+
+**W-0's exit criteria remain met.** The operator decision is now **twelve times unanswered**. Ledger entry at the
+census file's `reissue_12_2026_09_01`.
 
 ---
 

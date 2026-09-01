@@ -1384,5 +1384,35 @@
       "Did not write a sixth run_4_* audit block, and did not restate or modify the five that exist.",
       "Did not change product code, schema or UI."
     ]
+  },
+  "reissue_12_2026_09_01": {
+    "deliberately_short": "TWELFTH W-0 dispatch, concurrent with the eleventh (reissue_11_2026_09_01 was written into this file by another session while this pass was reading it). A ledger entry, not a sixth run_4_* audit. It carries exactly ONE new fact, and that fact CORRECTS an inference the eleventh block drew minutes earlier. Nothing else is restated and no prior key was modified.",
+    "audited_at": "2026-09-01",
+    "audited_by": "claude (Vacilando managed slot 5, worktree wt5-vacilando)",
+    "mission": "msn_a8776438f936d5d94a",
+    "assignment": "asg_07c75c5c112b25",
+    "content_hash": "5d17cc99075c029bedda580dc02ef6cb",
+    "head": "84a291434",
+    "mission_title": "DX-2 Explained Confidence Fixture — dispatched 'Wave 0 — Live authority census'. Fourth consecutive dispatch whose title names a Director-experience FIXTURE rather than access work (DX-5 tenth, DX-1 eleventh, DX-2 twelfth; DX-6 wrote the contested a.md on this branch the same day).",
+    "the_one_new_fact_and_it_corrects_the_eleventh": {
+      "what_the_eleventh_concluded": "reissue_11_2026_09_01.content_hash_is_new reasoned that because 5cc8a895… was new, 'the compiled content DOES vary across missions while the emitted W-0 assignment does not'.",
+      "correction": "It varies, but it also REPEATS, and the repeats are the signal. This dispatch carries 5d17cc99075c029bedda580dc02ef6cb — the SAME hash the fifth (msn_498eb666188ffdabb1, asg_4510de8147ebb6) and eighth (msn_b98f46b92bc15d954c, asg_796016be30b4e0) dispatches carried. That is a THIRD occurrence, under a third distinct mission id. reissue_root_cause_2026_09_01.divergence_escalated.content_hash_collision already flagged the fifth/eighth pair as 'consistent with generation from a fixed template'; the third occurrence, plus the title, identifies the template.",
+      "why_a_repeated_hash_is_decisive": "computeContentHash (mission-brief.mjs:49-62) is sha256 over brief content ONLY — title, objective, context, plan, acceptanceCriteria, constraints, sourceMaterials, knownDecisions, outOfScope, executionPreferences. No mission id, no timestamp, no version. So identical hash IFF byte-identical brief. Three dispatches on 5d17cc99… are three ingestions of ONE brief, each minting a fresh mission id.",
+      "which_brief": "The brief titled 'DX-2 Explained Confidence Fixture' is a literal in a UNIT TEST: scripts/local-dev/tests/explained-confidence-dx2.test.mjs:144-160 — title :145, objective :146, one phase p1 'Discovery' with requiredOutputs ['a.md'] :147-156, acceptanceCriteria [{id:'AC1'}] :157, and empty constraints/sourceMaterials :158-159. It is ingested by ingestMissionBrief at :161. The eighth dispatch and this one both report that exact title.",
+      "the_completion_step_that_arms_it": "The fixture marks EVERY assignment complete at :164-169 before asserting. A mission whose brief phases are all complete has no brief phase left to open, so the next advance falls through to the implementation ladder — which is where reissue_root_cause_2026_09_01's mechanism takes over (plan-less mission → Access & Identity plan is the first existing candidate → implementationPhasesFor matches /access-identity/i at mission-advance.mjs:203-206 → order:1 is impl_w0). The fixture does not merely create a mission; it advances it to exactly the state that emits W-0."
+    },
+    "what_this_does_NOT_claim": "It is NOT claimed that running the test suite is the leak. The test isolates itself: it sets ALLOY_RUNTIME_ROOT to a mkdtempSync temp dir at :10 before its dynamic imports, and vacilandoRuntimeRoot (execution-node.mjs:22-25) reads that env var at CALL time rather than caching it at import, so a test-run mission lands in the temp tree and cannot reach the live Director. Neither DX-2 nor DX-6 is referenced by any suite runner (grep over scripts/local-dev returns only their own self-run header comments), so they are run standalone. The defensible claim is narrower and sufficient: the brief that produced THIS assignment is byte-identical to that fixture literal, and it has been ingested into a live runtime root at least three times. WHICH path ingests it could not be determined from here — the store under ~/.local/state/alloy-dev/vacilando is outside the sandbox and returns a refusal, not an empty result.",
+    "what_it_adds_to_the_remedy_list": "The two escalated remedies are unchanged and still correct (pin-and-authorize or formally close W-0; and stop routing plan-less missions into the Access & Identity ladder at resolveImplementationPlan). This adds a THIRD, narrower and cheaper containment that does not touch the router: keep Director-experience fixture briefs out of the live runtime root. Four of the last four dispatches were fixture-titled, so that one containment addresses the observed generator even if the router fix is deferred. All three are toolkit product code or operator actions, outside W-0's read-only scope — raised, not changed.",
+    "sibling_findings_reverified_at_head_84a291434": "Spot-checked, not restated: tick census clause governed-action-request.mjs:2890-2892; the resume gated to census only at :2424 with ensureRepositoryGrant then executeGovernedAction at :2428-2436; the mission_id short-circuit `if (rec.mission_id) return { ok: true }` at :2066. The tenth pass's unattended-execution finding is CONFIRMED accurate at HEAD, independently and not inherited. governed-action-request.mjs is still last touched by 2a8d332a6.",
+    "census_not_executed": "No worker-side channel exists. Verified first-hand this pass rather than inherited: there is no .env / .env.local / web/.env / web/.env.local in the worktree, so no credential for the deployed database is present at all, and psql/node/jq probes are permission-walled by the sandbox. The five SELECTs remain executable ONLY through the governed database.read_census action on the trusted host.",
+    "counts_untouched": "No Q1–Q6 count, no query text, no hash, no results field, no run_history entry, no target_identity, and no sibling block was modified. Additive only. Runs 1–3 stand as recorded and are NOT re-asserted as current.",
+    "escalation": "Reality diverges from Compiled Mission intent — mission 'DX-2 Explained Confidence Fixture', phase 'Wave 0 — Live authority census'. Reported, not resolved, per prohibited_changes. The operator decision is now twelve times unanswered.",
+    "what_this_pass_did_not_do": [
+      "Did not execute the census.",
+      "Did not fabricate a results block, a run_history[4] entry, drift data or a target_identity for an unexecuted run.",
+      "Did not write a sixth run_4_* audit block, and did not restate or modify the six that exist.",
+      "Did not edit reissue_11_2026_09_01, authored concurrently by another session — its inference is corrected here, in place, rather than rewritten there.",
+      "Did not change product code, schema or UI."
+    ]
   }
 }
