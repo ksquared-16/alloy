@@ -187,6 +187,16 @@ const COMPOSER_CARET = Object.freeze([
   new RegExp(`(^|\\n)${HSPACE}*[│|]?${HSPACE}*[>❯]${HSPACE}*(\\n|$)`),
 ]);
 
+/**
+ * cursor-agent's composer marker. Same anchoring contract as COMPOSER_CARET:
+ * start of line, then the marker followed by horizontal space (or end of line
+ * when the composer is empty), so scrollback prose cannot supply it.
+ */
+const CURSOR_COMPOSER = Object.freeze([
+  new RegExp(`(^|\\n)${HSPACE}*[│|]?${HSPACE}*\u2192${HSPACE}`),
+  new RegExp(`(^|\\n)${HSPACE}*[│|]?${HSPACE}*\u2192${HSPACE}*(\\n|$)`),
+]);
+
 const PROMPT_AFFORDANCES = Object.freeze([
   // The composer caret. Claude Code draws U+276F ("❯"); other TUIs draw ">".
   // Matching only ">" false-negatives every real Claude prompt.
@@ -200,6 +210,15 @@ const PROMPT_AFFORDANCES = Object.freeze([
   // Same NBSP correction as COMPOSER_CARET above: an empty Claude composer is
   // caret + U+00A0, which `[ \t]` does not match.
   ...COMPOSER_CARET,
+  // CURSOR'S COMPOSER. cursor-agent draws U+2192 ("→"), not ">" or "❯", and
+  // none of the Claude footer hints below appear on its pane — so a perfectly
+  // ready Cursor prompt matched NOTHING here and every Cursor send was refused
+  // as `provider_prompt_not_ready` with state "unknown". Verified against the
+  // live pane on this host: idle reads "→ Plan, search, build anything" and
+  // between turns "→ Add a follow-up".
+  ...CURSOR_COMPOSER,
+  /\bplan, search, build anything\b/i,
+  /\badd a follow-?up\b/i,
   // Footer hints. Claude Code varies this line by mode and context, so match
   // any of its stable fragments rather than one full phrasing.
   /\? for shortcuts/i,
@@ -376,6 +395,13 @@ function titleForBlocker(kind, who) {
  * @param {{provider?: string|null}} opts
  * @returns {null|{kind,provider,title,signal}}
  */
+/**
+ * Screens a provider shows once at startup and never re-asks in the same
+ * session. Their text remains on the pane after they are answered, so a match
+ * followed by a live prompt is residue rather than a live question.
+ */
+const ONE_SHOT_STARTUP_SCREENS = new Set(["trust", "onboarding", "setup", "update"]);
+
 export function detectPromptBlocker(text, { provider = null } = {}) {
   const tail = tailOf(text);
   if (!tail.trim()) return null;
@@ -385,6 +411,26 @@ export function detectPromptBlocker(text, { provider = null } = {}) {
     for (const re of sig.patterns) {
       const m = tail.match(re);
       if (!m) continue;
+      // AN ANSWERED SCREEN IS HISTORY, NOT A BLOCKER.
+      //
+      // The one-shot startup screens are answered once and then stay on the
+      // pane above whatever comes next — cursor-agent leaves the whole
+      // "Workspace Trust Required" box, including its "[a] Trust this
+      // workspace" row, sitting above a perfectly live prompt. Matching that
+      // residue blocks the lane forever on a question nobody is being asked.
+      //
+      // When a prompt affordance appears BELOW the match, the screen has been
+      // dealt with. Scoped to the startup screens: a permission or login modal
+      // is not assumed spent just because something prompt-shaped follows it.
+      if (ONE_SHOT_STARTUP_SCREENS.has(sig.kind)) {
+        const after = tail.slice((m.index ?? 0) + String(m[0]).length);
+        // Specifically Cursor's composer, not any affordance. A Claude modal
+        // draws its own selection rows with the SAME "❯" glyph as the composer
+        // caret, so "an affordance appears below" is not evidence a Claude
+        // modal was answered — it is the modal itself. cursor-agent's "→" is
+        // drawn only by the composer; its modal rows use "▶" and "[a]".
+        if (CURSOR_COMPOSER.some((re) => re.test(after))) continue;
+      }
       const resolved = sig.provider || laneProvider || null;
       const who = resolved === "cursor" ? "Cursor" : (resolved === "claude" ? "Claude" : "The agent");
       return {

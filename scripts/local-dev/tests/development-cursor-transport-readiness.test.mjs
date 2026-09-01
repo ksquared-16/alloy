@@ -199,5 +199,84 @@ await test("Claude's readiness contract is unchanged", async () => {
   assert.ok(state.listPaneCalls >= 3, "Claude still waits for its ❯ prompt");
 });
 
+// ---------------------------------------------------------------------------
+// The prompt-readiness half of the same failure: a Cursor pane that IS at its
+// prompt must be recognised as ready, and an answered first-run modal left on
+// screen above that prompt must not block delivery forever.
+// ---------------------------------------------------------------------------
+const { assessPanePromptReadiness, detectPromptBlocker, detectPromptAffordance } =
+  await import("../lib/vacilando/provider-prompt-readiness.mjs");
+
+/** The live cursor-agent pane on this host, idle and ready. */
+const CURSOR_IDLE_PANE = [
+  "",
+  "  Cursor Agent",
+  "  v2026.08.31-4057e58",
+  "  Tip: Use /config to customize Cursor settings and behavior.",
+  "",
+  "  → Plan, search, build anything",
+  "",
+  "  Auto",
+  "  ~/Code/alloy-worktrees/wt1-work-unit-grade-a ·",
+  "  agent/cursor/5-governed-approval-complete",
+].join("\n");
+
+/** The same pane the first time Cursor runs in a worktree. */
+const CURSOR_TRUST_PANE = [
+  "  ╭────────────────────────────────────────────────────────╮",
+  "  │  ⚠ Workspace Trust Required                            │",
+  "  │  Cursor Agent can execute code and access files here.  │",
+  "  │  Do you trust the contents of this directory?          │",
+  "  │    /Users/vacilando/Code/alloy-worktrees/wt1-work-unit │",
+  "  │  ▶ [a] Trust this workspace                            │",
+  "  │    [q] Quit                                            │",
+  "  ╰────────────────────────────────────────────────────────╯",
+].join("\n");
+
+await test("a ready Cursor prompt is recognised as ready", async () => {
+  // cursor-agent draws U+2192, not ">" or "❯", and shows none of Claude's
+  // footer hints — so a perfectly ready Cursor pane matched NO affordance and
+  // every Cursor send was refused as provider_prompt_not_ready/"unknown".
+  assert.ok(detectPromptAffordance(CURSOR_IDLE_PANE), "the → composer is a prompt affordance");
+  const a = assessPanePromptReadiness(CURSOR_IDLE_PANE, { provider: "cursor" });
+  assert.equal(a.state, "ready", a.summary);
+  assert.equal(a.ready, true);
+});
+
+await test("cursor-agent's first-run trust modal blocks, and names itself", async () => {
+  const blocker = detectPromptBlocker(CURSOR_TRUST_PANE, { provider: "cursor" });
+  assert.ok(blocker, "the Workspace Trust modal must be recognised");
+  assert.equal(blocker.kind, "trust");
+  const a = assessPanePromptReadiness(CURSOR_TRUST_PANE, { provider: "cursor" });
+  assert.equal(a.state, "blocked");
+});
+
+await test("an ANSWERED trust modal left above a live prompt does not block forever", async () => {
+  // OBSERVED LIVE: answering the modal does not clear it from the pane. The
+  // whole box, including its "[a] Trust this workspace" row, stays on screen
+  // above the working composer — so matching the residue refused every send on
+  // a lane that was in fact ready.
+  const answered = `${CURSOR_TRUST_PANE}\n${CURSOR_IDLE_PANE}`;
+  const a = assessPanePromptReadiness(answered, { provider: "cursor" });
+  assert.equal(a.state, "ready", `answered trust residue must not block: ${a.summary}`);
+});
+
+await test("a Claude modal is NOT dismissed by its own selection caret", async () => {
+  // The narrowing that keeps the rule above honest. Claude draws modal rows
+  // with the same "❯" as its composer, so "an affordance appears below the
+  // modal" is the modal itself, not evidence anyone answered it.
+  const claudeOnboarding = [
+    "╭──────────────────────────────────────────────╮",
+    "│ Teach auto mode about your environment?      │",
+    "│                                              │",
+    "│ ❯ 1. Yes, scan my environment                │",
+    "│   2. Not now                                 │",
+    "╰──────────────────────────────────────────────╯",
+  ].join("\n");
+  const blocker = detectPromptBlocker(claudeOnboarding, { provider: "claude" });
+  assert.ok(blocker, "a live Claude onboarding modal still blocks");
+  assert.equal(blocker.kind, "onboarding");
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
