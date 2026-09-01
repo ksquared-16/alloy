@@ -73,6 +73,14 @@ const BLOCKER_SIGNATURES = Object.freeze([
     patterns: [
       /do you trust the files in this folder\?/i,
       /trust the authors of the files in this (folder|workspace)\?/i,
+      // cursor-agent's own wording, seen the first time it starts in a
+      // worktree it has not been run in before. It says "contents" and
+      // "directory" where Claude says "files" and "folder", so none of the
+      // patterns above matched and the Gateway reported the blocked start as a
+      // bare `cursor_prompt_timeout` — a dead end that told the operator
+      // nothing about the modal actually sitting on the pane.
+      /workspace trust required/i,
+      /do you trust the contents of this directory\?/i,
     ],
   },
   {

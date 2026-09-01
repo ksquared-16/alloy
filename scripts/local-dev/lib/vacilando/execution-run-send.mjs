@@ -447,10 +447,19 @@ async function failCursorDeliveryUnavailable({ rec, run, nowMs, root, size }) {
     root,
     completion_report: { summary: CURSOR_DELIVERY_UNAVAILABLE_SUMMARY },
   });
-  try {
-    const { setLanePreferredProvider } = await import("./development-lane.mjs");
-    setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root });
-  } catch { /* retry with Claude must still be possible */ }
+  // THE LANE STAYS ON THE PROVIDER THE OPERATOR CHOSE.
+  //
+  // This used to call setLanePreferredProvider(lane, "claude") here, silently
+  // undoing the operator's explicit selection every time a Cursor delivery
+  // failed. That is the loop behind the reported symptom: select Cursor, send,
+  // the delivery loses the boot race, the runtime quietly puts the lane back on
+  // Claude, and the next Send is a Claude send again. The audit log for
+  // lane_db3431e755a8 records NINE consecutive `lane.set_provider cursor`
+  // events — the operator re-selecting Cursor against a runtime that kept
+  // un-selecting it.
+  //
+  // A failed delivery is reported, not answered by rewriting the choice that
+  // produced it. Switching back to Claude remains one operator action away.
   const next = failed.ok ? failed.run : (getExecutionRun(run.run_id, root) || run);
   return decorate({
     ok: false,

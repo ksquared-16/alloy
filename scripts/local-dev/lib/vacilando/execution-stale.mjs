@@ -68,7 +68,7 @@ import { runReceiptConfirmed, runReceiptToken } from "./lanes.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
 import { SEND_BASELINE_WINDOW_MS, readLaneRuntimeStore } from "./lane-runtime.mjs";
 import { activeAgentSessionForLane } from "./agent-session.mjs";
-import { canonicalLaneStoreId, getDurableLane, setLanePreferredProvider } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -765,9 +765,11 @@ export function reconcileUndeliveredRuns({
       root,
       completion_report: { summary },
     });
-    if (cursorUndelivered && rec?.lane_id) {
-      try { setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root }); } catch { /* retry with Claude */ }
-    }
+    // The governor reports an undelivered Cursor run; it does not re-decide
+    // which provider the lane is on. Silently reverting to Claude here undid
+    // the operator's explicit selection from a background sweep — invisible,
+    // and indistinguishable to the operator from "selecting Cursor did not
+    // work". See the matching note in execution-run-send.
     if (out.ok) failed.push(out.run);
   }
   return { ok: true, failed, count: failed.length };

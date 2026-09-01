@@ -627,6 +627,7 @@ const CURSOR_PROMPT_RE = /→/;
 async function waitForProviderPrompt(session, { provider = "claude", timeoutMs = 20000, intervalMs = 400 } = {}) {
   const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   const started = Date.now();
+  let lastText = "";
   while (Date.now() - started < timeoutMs) {
     const pane = sessionPane(session);
     const cap = runTmuxSync(["capture-pane", "-p", "-t", pane?.pane_id || `${session}:0.0`]);
@@ -641,12 +642,31 @@ async function waitForProviderPrompt(session, { provider = "claude", timeoutMs =
     } else if (present && /[❯›]/.test(text)) {
       return { ok: true, waited_ms: Date.now() - started };
     }
+    lastText = text;
     await sleep(intervalMs);
   }
+  // A TIMEOUT IS NOT A DIAGNOSIS.
+  //
+  // The first time cursor-agent runs in a worktree it draws a "Workspace Trust
+  // Required" modal and waits for a keypress, so the prompt never arrives and
+  // this returned a bare `cursor_prompt_timeout` — which told the operator
+  // nothing about the modal actually sitting on the pane, and read as "Cursor
+  // is broken" rather than "Cursor is asking you something". The runtime
+  // already classifies these screens for exactly this purpose; say which one
+  // is up so the caller can surface it.
+  let blocker = null;
+  try {
+    const { assessPanePromptReadiness, publicPromptReadiness } =
+      await import("./provider-prompt-readiness.mjs");
+    blocker = publicPromptReadiness(assessPanePromptReadiness(lastText, { provider: wanted }));
+  } catch { /* a diagnosis is a bonus; the timeout still stands */ }
   return {
     ok: false,
     error: wanted === "cursor" ? "cursor_prompt_timeout" : "claude_prompt_timeout",
     waited_ms: Date.now() - started,
+    prompt_readiness: blocker,
+    blocking_screen: blocker?.summary || null,
+    needs_terminal_operator: blocker?.needs_terminal_operator === true,
   };
 }
 
