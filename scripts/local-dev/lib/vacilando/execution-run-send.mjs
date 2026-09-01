@@ -412,6 +412,12 @@ async function ensureCursorDeliveryTransport({ rec, nowMs, root }) {
     if (start?.queued || start?.waiting_for_execution_capacity || start?.error === "provider_capacity") {
       return { ok: false, queue: true };
     }
+    // A pane that is still booting cursor-agent is a WAIT, not a refusal.
+    // Failing the run here is what turned "Cursor is starting" into a terminal
+    // `cursor_delivery_unavailable` the operator had to work around by hand.
+    if (start?.retryable) {
+      return { ok: false, queue: true };
+    }
     if (!start?.ok) {
       return { ok: false, error: start?.error || CURSOR_DELIVERY_UNAVAILABLE };
     }

@@ -3246,7 +3246,48 @@ export function laneAgentIsWorking(lane) {
   return lane?.provider_activity?.activity === "working";
 }
 
+/**
+ * The canonical completion summary, if this run has filed one.
+ *
+ * `finalized` is stamped by submitAgentReport when the report matches the run's
+ * terminal disposition. It is the run's own account of itself and the last item
+ * the operator is meant to read for that run.
+ */
+export function finalizedRunReport(lane) {
+  const run = lane?.execution_run || null;
+  const report = run?.agent_report || null;
+  if (report?.finalized === true) return { report, run };
+  const prev = lane?.previous_run || null;
+  const prevReport = prev?.agent_report || null;
+  // Only fall back to the previous run when no run is currently open — a new
+  // turn's output must not be hidden behind the last turn's summary.
+  const currentOpen = run && !["COMPLETE", "FAILED", "ABANDONED"].includes(run.state);
+  if (!currentOpen && prevReport?.finalized === true) return { report: prevReport, run: prev };
+  return null;
+}
+
 export function assistantMessageSource(lane, { output = null, outputText = "", latestResponse = null } = {}) {
+  // ORDERING IS THE GOVERNANCE RULE.
+  //
+  // Once a run has filed its canonical summary, that summary is the last thing
+  // the operator sees for that run. It is checked FIRST — ahead of the live
+  // spinner, the pane transcript and the status line — because every one of
+  // those can still produce text after a run finishes: a provider that keeps
+  // rendering, a delayed worker report, a pane poll that lands late. Each of
+  // them used to be able to take the bubble back and appear below the summary,
+  // which is exactly the "summary arrived late, after other output" the
+  // operator reported.
+  const finalized = finalizedRunReport(lane);
+  if (finalized?.report?.message) {
+    return {
+      kind: "report",
+      report: finalized.report,
+      text: finalized.report.message,
+      terminal: true,
+      finalized: true,
+    };
+  }
+
   const paneWorking = laneAgentIsWorking(lane);
   const live = lane?.provider_activity?.live_progress;
   const activity = lane?.provider_activity?.activity || null;

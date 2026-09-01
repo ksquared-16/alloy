@@ -55,6 +55,16 @@ export const AGENT_REPORT_REASON_MAX = 2000;
 export const AGENT_REPORT_CHOICES_MAX = 8;
 
 /** Which run state each report type drives, through the canonical transition owner. */
+/**
+ * The report type that IS a run's account of itself once it has reached that
+ * state. The inverse of REPORT_TRANSITION, and the thing the post-terminal
+ * guard must let through.
+ */
+const TERMINAL_REPORT_TYPE = Object.freeze({
+  COMPLETE: "completion",
+  FAILED: "failure",
+});
+
 const REPORT_TRANSITION = Object.freeze({
   progress: null,
   needs_input: "NEEDS_INPUT",
@@ -150,6 +160,8 @@ export function publicAgentReport(report) {
     choices: report.choices || null,
     blocking: report.blocking === true,
     result: report.result || null,
+    // Carried to the view so the canonical summary can be pinned last.
+    finalized: report.finalized === true,
   };
 }
 
@@ -230,9 +242,29 @@ export function submitAgentReport(runId, {
   // A run that already finished does not get a new story. Its final message
   // stands; this is what stops a late pane read or a stray retry from rewriting
   // a completion the operator has already seen.
+  //
+  // WITH ONE EXCEPTION, WHICH IS THE WHOLE POINT OF THE RULE. The turn is
+  // transitioned to its terminal state BEFORE its summary is filed (see
+  // vac-run-status), so the canonical completion summary always arrives at an
+  // already-terminal run. Refusing every differing type therefore refused the
+  // one report the operator is owed: any turn that had filed a mid-turn
+  // `progress` report ended with that stale progress line standing as its final
+  // message, and `vac run-status` exited 5 saying the summary was not
+  // presented. The report that MATCHES the run's terminal disposition is the
+  // run's own account of itself and must land.
+  //
+  // What stays refused is what the rule was written for: a non-terminal report
+  // (progress, needs_input) appended below a finished summary, and a terminal
+  // report that contradicts the state the run actually reached.
   const prior = run.agent_report || null;
-  if (isTerminalRunState(run.state) && prior && prior.type !== kind) {
+  const terminalKind = TERMINAL_REPORT_TYPE[String(run.state || "").toUpperCase()] || null;
+  if (isTerminalRunState(run.state) && prior && prior.type !== kind && kind !== terminalKind) {
     return { ok: false, error: "run_already_terminal", state: run.state };
+  }
+  // Nothing may be appended beneath a finalized canonical summary. Once the
+  // terminal report is filed, only that same report may be revised.
+  if (prior?.finalized === true && kind !== prior.type) {
+    return { ok: false, error: "run_summary_finalized", state: run.state };
   }
 
   // Number(null) is 0 and 0 is finite, so an ABSENT revision must be tested for
@@ -278,6 +310,10 @@ export function submitAgentReport(runId, {
     blocking: kind === "needs_input" ? blocking !== false : false,
     result: normalizeResult(result),
     origin,
+    // The canonical last item for this run. Marked at write time so the view
+    // layer can pin it below every other source and later output cannot
+    // displace it.
+    finalized: isTerminalRunState(run.state) && kind === terminalKind,
   };
 
   const history = [report, ...(Array.isArray(run.agent_reports) ? run.agent_reports : [])]

@@ -1331,6 +1331,17 @@ function bindCursorExecutable(rec, extra, { nowMs, root }) {
   return out;
 }
 
+/**
+ * The direct fallback spawn. It returned the instant `respawn-pane` exited —
+ * which is roughly a second before `cursor-agent` (a bash launcher that execs
+ * node) has a prompt. The caller took that as an attached transport, the very
+ * next `cursorExecutableTransport` read landed while the pane still said `bash`
+ * under the outgoing provider's title, and the send failed with
+ * `cursor_delivery_unavailable` while Cursor was booting normally.
+ *
+ * Spawning is not attaching. This now waits for the same prompt contract
+ * `startPersistentAgentSession` uses before it claims success.
+ */
 async function spawnCursorInPane({ lane }) {
   const argv = ["cursor-agent"];
   const forbidden = assertSafeSpawnArgv(argv);
@@ -1338,16 +1349,28 @@ async function spawnCursorInPane({ lane }) {
   if (spawnImpl) return spawnImpl({ lane, argv, provider: "cursor" });
   const pane = lane?.tmux?.pane_id;
   const cwd = lane?.worktree?.path;
+  const session = lane?.tmux?.session;
   if (!pane || !cwd) return { ok: false, error: "missing_pane" };
   try {
     execFileSync("tmux", [
       "respawn-pane", "-k", "-c", cwd, "-t", pane, "--",
       ...argv,
     ], { encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "pipe"] });
-    return { ok: true, argv, provider: "cursor" };
   } catch (e) {
     return { ok: false, error: "spawn_failed", detail: String(e.stderr || e.message || e).slice(0, 300) };
   }
+  if (!session) return { ok: true, argv, provider: "cursor", readiness: null };
+  const { waitForAgentPrompt } = await import("./alloy-dev-adapter.mjs");
+  const readiness = await waitForAgentPrompt(session, { provider: "cursor" });
+  if (!readiness.ok) {
+    return {
+      ok: false,
+      error: readiness.error || "cursor_prompt_timeout",
+      waited_ms: readiness.waited_ms,
+      retryable: true,
+    };
+  }
+  return { ok: true, argv, provider: "cursor", readiness };
 }
 
 function endActiveSessionForProviderSwitch(laneId, { nowMs, root, reason }) {
@@ -1515,6 +1538,38 @@ async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root
       createdRuntime = { ok: true, tmux_session: found.tmux?.session, pane_id: found.tmux?.pane_id, created: { tmux: false, provider: true } };
     } else {
       createdRuntime = started;
+    }
+  }
+
+  // CLOSE THE LOOP BEFORE CLAIMING A TRANSPORT.
+  //
+  // Everything above only STARTS cursor-agent. Whether a writable transport is
+  // actually attached is decided by `cursorExecutableTransport` reading the
+  // live pane — the same predicate the send path uses. Binding and returning
+  // `ok` without re-reading it is what let a still-booting pane be recorded as
+  // an attached Cursor session, so the send that followed refused with
+  // `cursor_delivery_unavailable`.
+  //
+  // A pane that has not converged yet is retryable, not a failure: the lane
+  // queues and the next attempt finds it up.
+  // Only a LIVE pane can contradict a successful start. When discovery shows no
+  // live pane yet it has simply not caught up with the session that was just
+  // created, and the start's own result is the better evidence — refusing there
+  // would fail a Cursor lane that is coming up exactly as intended. When a live
+  // pane IS visible and it is not a Cursor transport, the start did not converge
+  // and the lane must wait rather than have a send refused against it.
+  const attached = await observeLane(found.lane_id);
+  if (attached?.tmux?.alive) {
+    const verified = cursorExecutableTransport(attached);
+    if (!verified.ok) {
+      return {
+        ok: false,
+        error: CURSOR_DELIVERY_UNAVAILABLE,
+        detail: verified.detail || "transport_not_attached",
+        start_session_implemented: true,
+        retryable: true,
+        tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
+      };
     }
   }
 

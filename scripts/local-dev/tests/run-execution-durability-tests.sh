@@ -41,6 +41,8 @@ SUITES=(
   "development-lane-activity.test.mjs"
   "development-governed-approval.test.mjs"
   "development-run-summary-output.test.mjs"
+  "development-completion-summary-last.test.mjs"
+  "development-cursor-transport-readiness.test.mjs"
   "development-checkpoint-safety.test.mjs"
   "development-governed-promotion-chain.test.mjs"
   "development-certification-fixture.test.mjs"
