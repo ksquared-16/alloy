@@ -203,6 +203,14 @@ export const STATE_FAMILIES = Object.freeze([
     notes: "Certification artifacts and authz caches. Reconstruct from GitHub/DB on the trusted host.",
   },
   {
+    id: "repository_registry",
+    class: "RECONSTRUCTABLE",
+    paths: ["repositories.json"],
+    backup: false,
+    restore: false,
+    notes: "Absolute host paths. A MacBook's roots are wrong on a Mac mini, so it is never restored — the Gateway reconstructs it at boot from this host's ALLOY_REPO (migrateLanesToAlloy). It was previously unclassified and reconstructed by nobody, which left managedWorktreePath refusing every worktree on a fresh host.",
+  },
+  {
     id: "knowledge_cache",
     class: "RECONSTRUCTABLE",
     paths: ["knowledge", "director-capabilities.json", "director-idempotency", "resource-claims.json"],

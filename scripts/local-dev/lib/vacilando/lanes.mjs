@@ -126,6 +126,27 @@ export async function listTmuxPanesRaw() {
   return runTmux(["list-panes", "-a", "-F", TMUX_FORMAT]);
 }
 
+/**
+ * "There is no tmux server" is an OBSERVATION, not a failure.
+ *
+ * THE DEFECT THIS REPLACES: on a fresh host nobody has started tmux yet, so
+ * `tmux list-panes -a` exits 1 with "error connecting to .../tmux-501/default".
+ * Pane discovery reported that as `tmux_unavailable`, and lane discovery turned
+ * one unreadable OBSERVATION into "there are no lanes" — hiding every durable
+ * lane on the machine. The workaround was to start a dummy tmux session, which
+ * is the tell: the data was never missing, only the empty case was misread.
+ *
+ * No server means zero live panes. Durable lanes do not live in tmux and must
+ * still be returned. A tmux that is genuinely broken (missing binary, timeout,
+ * a server that answers with an error) is still a real failure and stays one.
+ */
+export function tmuxServerNotRunning(raw) {
+  if (!raw || raw.ok) return false;
+  const blob = `${raw.stderr || ""}\n${raw.error || ""}`;
+  return /no server running on/i.test(blob)
+    || /error connecting to .*\(No such file or directory\)/i.test(blob);
+}
+
 export function parseTmuxPaneLines(text) {
   const panes = [];
   for (const line of String(text || "").split("\n")) {
@@ -282,10 +303,25 @@ export function composeLane({ pane, gitFacts = null, slot = null, worktreeRoot, 
   };
 }
 
-async function defaultListPanes() {
-  const raw = await listTmuxPanesRaw();
+/**
+ * The canonical live-pane discovery boundary: a tmux exit code becomes an
+ * observation exactly here, and nowhere else.
+ *
+ * `readRaw` is injectable so this interpretation can be tested against the real
+ * strings tmux emits, rather than around it.
+ */
+export async function discoverLivePanes({ readRaw = listTmuxPanesRaw } = {}) {
+  const raw = await readRaw();
+  // No tmux server is zero panes, truthfully observed — not an error.
+  if (tmuxServerNotRunning(raw)) {
+    return { ok: true, panes: [], error: null, tmux_server_running: false };
+  }
   if (!raw.ok) return { ok: false, panes: [], error: raw.error || raw.stderr || "tmux_unavailable" };
-  return { ok: true, panes: parseTmuxPaneLines(raw.stdout), error: null };
+  return { ok: true, panes: parseTmuxPaneLines(raw.stdout), error: null, tmux_server_running: true };
+}
+
+async function defaultListPanes() {
+  return discoverLivePanes();
 }
 
 /**

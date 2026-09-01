@@ -2,6 +2,7 @@
  * CLI helpers for node identity, durable backup/restore, lane adoption,
  * and attaching a live Cursor session.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -69,6 +70,57 @@ export function cmdLanes({ root } = {}) {
   return listDurableLanes(root || vacilandoGatewayRoot()).map(publicDurableLane);
 }
 
+/**
+ * What Git says the worktree's HEAD is.
+ *
+ * Three OUTCOMES, kept distinct because they are different facts:
+ *   { state: "branch",   branch }  — on a named branch
+ *   { state: "detached" }          — a real state; there is no branch
+ *   { state: "unreadable" }        — Git could not answer
+ *
+ * `git rev-parse --abbrev-ref HEAD` prints the literal string `HEAD` when
+ * detached. Recording that as a branch name would be a different lie than the
+ * one this replaces: a lane bound to a branch called "HEAD" that no
+ * `git worktree list` will ever agree with.
+ *
+ * stderr is captured: a path that is not a repository is a value this function
+ * returns, not a line in the Gateway log.
+ */
+function readHeadBranch(worktreePath) {
+  let out;
+  try {
+    out = execFileSync("git", ["-C", worktreePath, "rev-parse", "--abbrev-ref", "HEAD"], {
+      encoding: "utf8", timeout: 10000, stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return { state: "unreadable" };
+  }
+  if (!out) return { state: "unreadable" };
+  if (out === "HEAD") return { state: "detached" };
+  return { state: "branch", branch: out };
+}
+
+/**
+ * Resolve a worktree by name.
+ *
+ * THE DEFECT THIS REPLACES: `branch` came from `meta?.branch_expected` — the
+ * value written into slot metadata when the worktree was CREATED. It is an
+ * expectation, and an expectation goes stale the moment the worktree checks out
+ * anything else. Binding wrote that stale expectation into the lane as if it
+ * were fact: after the Mac mini migration, `bind-lane` recorded
+ * `agent/cursor/5-vac-run-idle-complete` for a worktree standing on
+ * `agent/cursor/5-governed-approval-complete`.
+ *
+ * That is not cosmetic. The recorded branch is passed to
+ * startPersistentAgentSession as `expectedBranch`, which refuses
+ * `branch_mismatch` against Git truth — so a binding built from stale metadata
+ * makes the lane it describes unstartable.
+ *
+ * Git is the authority on what branch a worktree is on. Metadata answers only
+ * what Git cannot (slot, provider, sprint), and supplies `branch` ONLY when Git
+ * was unreadable. A detached worktree records no branch: `null` means "no
+ * branch", which is the truth, and is never overwritten by a stale guess.
+ */
 function lookupWorktree(worktreeName, { cfg = null } = {}) {
   const name = String(worktreeName || "").trim();
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) return { ok: false, error: "invalid_worktree_name" };
@@ -76,11 +128,28 @@ function lookupWorktree(worktreeName, { cfg = null } = {}) {
   const meta = readAllMetadata(runtime).find((m) => m.worktree === name);
   const path = meta?.path || join(runtime.worktree_root, name);
   if (!existsSync(path)) return { ok: false, error: "worktree_missing", path };
+  const head = readHeadBranch(path);
+  const expected = meta?.branch_expected || null;
+  let branch = null;
+  let branchSource = "unknown";
+  if (head.state === "branch") {
+    branch = head.branch;
+    branchSource = "git";
+  } else if (head.state === "detached") {
+    branch = null;
+    branchSource = "detached_head";
+  } else if (expected) {
+    branch = expected;
+    branchSource = "metadata_expected";
+  }
   return {
     ok: true,
     worktree_name: name,
     worktree_path: path,
-    branch: meta?.branch_expected || null,
+    branch,
+    branch_source: branchSource,
+    branch_expected: expected,
+    detached_head: head.state === "detached",
     slot: meta?.slot ? Number(meta.slot) : null,
     provider: normalizeExecutionProvider(meta?.provider, "claude") || "claude",
     sprint: meta?.sprint || null,
