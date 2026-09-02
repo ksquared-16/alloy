@@ -97,9 +97,26 @@ export function resolveRuntimeConfig() {
     ALLOY_WORKTREE_ROOT: join(HOME, "Code", "alloy-worktrees"),
     ALLOY_CONFIG_DIR: join(HOME, ".config", "alloy-dev"),
   };
+  // THE SPLIT-REGISTRY DEFECT THIS FIXES.
+  //
+  // The Gateway host runs itself, AND every toolkit command it spawns, with an
+  // isolated ALLOY_RUNTIME_ROOT (.../alloy-dev/gateway) so its ownership files
+  // cannot collide with the Electron app's. lib/common.sh honours that export
+  // ahead of the config file — "explicit export > config file > example >
+  // default" — so `alloy-worktree-adopt` writes slot metadata under the gateway
+  // root. This function read the CONFIG FILE only, so the Gateway looked for
+  // that metadata under the OTHER root and found none: the same host, two
+  // registries, and a lane whose slot, port, dev server and browser-auth state
+  // were permanently invisible to the surface that spawned the commands.
+  //
+  // Precedence here is now the precedence in lib/common.sh. Nothing else.
+  const explicitRuntimeRoot = String(process.env.ALLOY_RUNTIME_ROOT || "").trim();
+
   // Two-pass: defaults first, then re-read with expanded bases.
   bases.ALLOY_REPO = configGet("ALLOY_REPO", files, bases) || join(HOME, "Alloy");
-  bases.ALLOY_RUNTIME_ROOT = configGet("ALLOY_RUNTIME_ROOT", files, bases) || bases.ALLOY_RUNTIME_ROOT;
+  bases.ALLOY_RUNTIME_ROOT = explicitRuntimeRoot
+    || configGet("ALLOY_RUNTIME_ROOT", files, bases)
+    || bases.ALLOY_RUNTIME_ROOT;
   bases.ALLOY_WORKTREE_ROOT = configGet("ALLOY_WORKTREE_ROOT", files, bases) || bases.ALLOY_WORKTREE_ROOT;
   bases.ALLOY_CONFIG_DIR = configGet("ALLOY_CONFIG_DIR", files, bases) || bases.ALLOY_CONFIG_DIR;
   const baseRemote = configGet("ALLOY_BASE_REMOTE", files, bases) || "origin";

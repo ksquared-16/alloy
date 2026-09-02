@@ -766,6 +766,27 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
         }
         : null;
     }
+    /**
+     * Audit linkage to the run this one continues.
+     *
+     * A run correctly moved OUT of an impossible state is terminal and must
+     * stay terminal — its history is evidence. But the operator instruction it
+     * carried is not spent, and re-sending it should not look like unrelated
+     * new work. This records "this run continues that one" on the SUCCESSOR
+     * only; the historical run is never rewritten to pretend it executed.
+     */
+    if (fields.continuation_of !== undefined) {
+      found.continuation_of = fields.continuation_of
+        ? {
+          run_id: String(fields.continuation_of.run_id || fields.continuation_of),
+          reason: fields.continuation_of.reason ? bound(fields.continuation_of.reason, 200) : null,
+          instruction_sha256: fields.continuation_of.instruction_sha256
+            ? String(fields.continuation_of.instruction_sha256)
+            : null,
+          linked_at: iso(nowMs),
+        }
+        : null;
+    }
     if (fields.git_baseline !== undefined) {
       found.git_baseline = fields.git_baseline || null;
     }

@@ -40,7 +40,13 @@ function runtimeLayout() {
 function gitBranch(worktreePath) {
   if (!worktreePath || !existsSync(worktreePath)) return null;
   try {
-    return execFileSync("git", ["-C", worktreePath, "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8", timeout: 8000 }).trim() || null;
+    // stderr is CAPTURED, not inherited. execFileSync forwards a child's stderr
+    // to the parent unless stdio says otherwise, so a path that is not a Git
+    // repository printed `fatal: not a git repository` into the Gateway's log on
+    // every poll — a caught, handled condition masquerading as a runtime fault.
+    return execFileSync("git", ["-C", worktreePath, "rev-parse", "--abbrev-ref", "HEAD"], {
+      encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "ignore"],
+    }).trim() || null;
   } catch { return null; }
 }
 

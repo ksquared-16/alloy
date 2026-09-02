@@ -63,6 +63,59 @@ export const WAIT_REASONS = Object.freeze({
     policy: "bounded",
     bound_ms: 2 * HOUR,
   },
+  /**
+   * Provider capacity is full, and this run is explicitly queued for it.
+   *
+   * THE DEFECT THIS NAMES: the send path reported a capacity block as
+   * `waiting_for_agent_session`, so a run that was waiting for a perfectly
+   * healthy queue looked like a run whose session could not be created. The
+   * two have different owners and different resolutions; they are now
+   * different reasons.
+   */
+  waiting_for_provider_capacity: {
+    resource_type: "provider_capacity",
+    owner: "execution-admission",
+    policy: "bounded",
+    bound_ms: 2 * HOUR,
+  },
+  /** A provider start is actually in flight for this run. Short by design. */
+  provider_provisioning: {
+    resource_type: "agent_session",
+    owner: "agent-session-lifecycle",
+    policy: "bounded",
+    bound_ms: 10 * MIN,
+  },
+  /**
+   * The provider process started but its pane is sitting on onboarding/a modal
+   * that only a human can clear.
+   *
+   * Bounded on purpose. `needs_operator_input` is the single deliberate
+   * unbounded reason in this table; a pane stuck on a modal is a machine
+   * condition that must escalate rather than rest forever.
+   */
+  provider_prompt_block: {
+    resource_type: "provider_prompt",
+    owner: "execution-run-send",
+    policy: "bounded",
+    bound_ms: 30 * MIN,
+  },
+  /**
+   * Provider start failed for a real, named reason. Bounded and short: this is
+   * an actionable failure to surface, never a resting state.
+   */
+  provider_start_failed: {
+    resource_type: "agent_session",
+    owner: "agent-session-lifecycle",
+    policy: "bounded",
+    bound_ms: 5 * MIN,
+  },
+  /** Session exists, but no executable transport is attached to it yet. */
+  waiting_for_executable_transport: {
+    resource_type: "provider_transport",
+    owner: "execution-run-send",
+    policy: "bounded",
+    bound_ms: 15 * MIN,
+  },
   waiting_for_validation_capacity: {
     resource_type: "validation_tokens",
     owner: "validation-admission",

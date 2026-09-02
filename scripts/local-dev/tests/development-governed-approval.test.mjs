@@ -21,7 +21,8 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ROOT = mkdtempSync(join(tmpdir(), "vac-gov-approval-"));
 process.env.ALLOY_RUNTIME_ROOT = ROOT;
@@ -35,9 +36,12 @@ const {
   publicGovernedAction,
   getGovernedAction,
   governedProposalFor,
+  presentationForGovernedAction,
+  governedActionStorePath,
   resetGovernedActionsForTests,
   setGovernedActionExecuteImplForTests,
   setGovernedActionResumeImplForTests,
+  tickGovernedActions,
 } = await import("../lib/vacilando/governed-action-request.mjs");
 const {
   resolveGovernedAuthoritySync,
@@ -73,6 +77,9 @@ const {
 } = await import("../lib/vacilando/execution-run.mjs");
 const { DIRECTOR_GOVERNED_RESOURCE_KEY, orchestrateDirectorGovernedWait, processGovernedAction } =
   await import("../lib/vacilando/governed-action-request.mjs");
+const { ACTION_TYPES } = await import("../lib/vacilando/trusted-host-action-registry.mjs");
+
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const { repositoryStorePath } = await import("../lib/vacilando/repository-registry.mjs");
 const { renderGovernedProposal, renderOperatorDecisionActions, renderOperatorDecisionBar, operatorDecisionRun, renderGovernedOutcome } =
   await import("../apps/vacilando/public/gateway-view.mjs");
@@ -662,6 +669,35 @@ await test("a completed approval does not keep Authorize push on a frozen run sn
   assert.equal(renderOperatorDecisionBar(decision).includes("data-gw-governed-approve"), false);
 });
 
+await test("an evicted request does not keep Needs approval on a frozen run snapshot", async () => {
+  // THE COMMUNICATIONS LANE. PR #510 merged. The governed-action store keeps
+  // 200 records and dropped gar_260730c554bcc9. The COMPLETE run still carried
+  // awaiting_operator, and hydrate treated a missing record as "keep the
+  // snapshot" — so the closed lane kept asking for a merge that had already
+  // landed. No live request means there is nothing to authorize.
+  const { laneId, runId } = blockedRunIn("repo_alloy");
+  const made = orchestrateDirectorGovernedWait({ run: getExecutionRun(runId, ROOT), root: ROOT });
+  processGovernedAction(made.request.request_id, { root: ROOT });
+  assert.equal(transitionExecutionRun(runId, "NEEDS_INPUT", {
+    origin: "agent", root: ROOT, reason: "awaiting operator",
+  }).ok, true);
+  assert.equal(transitionExecutionRun(runId, "COMPLETE", {
+    origin: "agent", root: ROOT, reason: "turn_finished",
+    completion_report: { summary: "AWAITING_OPERATOR on the governed merge." },
+  }).ok, true);
+  assert.equal(getExecutionRun(runId, ROOT).governed_action.status, "awaiting_operator");
+  resetGovernedActionsForTests(ROOT);
+  assert.equal(getGovernedAction(made.request.request_id, ROOT), null);
+
+  const [lane] = attachLaneGovernedActions(attachLaneRuns([{ lane_id: laneId }], ROOT), ROOT);
+  assert.equal(lane.execution_run, null);
+  assert.equal(lane.governed_action, null);
+  assert.equal(lane.previous_run.governed_action, null);
+  const decision = operatorDecisionRun(lane);
+  assert.equal(renderOperatorDecisionBar(decision).includes("data-gw-governed-approve"), false);
+  assert.doesNotMatch(renderOperatorDecisionBar(decision) || "", /Needs approval/);
+});
+
 await test("nothing is widened when no approval is waiting", () => {
   // POSITIVE CONTROL for the test above. With no pending decision the resolver
   // must return exactly what it returned before, or the stale-run branch would
@@ -732,6 +768,96 @@ await test("a resolved approval still says what it did", async () => {
 function readMergeSource() {
   return readFileSync(new URL("../lib/vacilando/trusted-host-merge.mjs", import.meta.url), "utf8");
 }
+
+await test("census dispatch presents the grant the same way every other action does", () => {
+  // THE LIVE DEFECT. fulfillDatabaseCensusForMission already accepted a grant; defaultExecute
+  // never passed one. Operator approval minted grnt_* and execution bounced authorization_required.
+  const src = readFileSync(new URL("../lib/vacilando/governed-action-request.mjs", import.meta.url), "utf8");
+  const last = src.lastIndexOf("fulfillDatabaseCensusForMission");
+  assert.ok(last > 0, "census fulfill must be dispatched");
+  const snippet = src.slice(last, last + 500);
+  assert.match(snippet, /\bgrant,/);
+  assert.match(snippet, /authorizationId/);
+  assert.match(snippet, /exactContext/);
+});
+
+await test("census presentation is not inherited by other actions", () => {
+  const census = presentationForGovernedAction({ action_key: ACTION_TYPES.DATABASE_READ_CENSUS, target: "alloy_deployed_primary" });
+  assert.equal(census.approve_label, "Authorize census");
+  const retire = presentationForGovernedAction({
+    action_key: ACTION_TYPES.VACILANDO_RETIRE_WORKTREE,
+    title: "Retire wt1-drawer-product-eradication",
+    inputs: { worktree: "wt1-drawer-product-eradication" },
+  });
+  assert.match(retire.approve_label, /retire/i);
+  assert.ok(!/census/i.test(retire.approve_label));
+  const unknown = presentationForGovernedAction({ action_key: "vacilando.something_new", title: "Do a new thing" });
+  assert.equal(unknown.approve_label, "Authorize");
+  assert.ok(!/census/i.test(unknown.approve_label + unknown.detail));
+});
+
+await test("an already-approved census that bounced is executed on tick, not left parked", async () => {
+  // Live: gar_0266a335d01adf sat awaiting_operator with operator_approval.decision=approved.
+  // The UI hid the button; tick ignored awaiting_operator. Recovery must resume execution.
+  const laneId = laneIn("repo_alloy");
+  setGovernedActionExecuteImplForTests(() => ({
+    ok: false,
+    error: "authorization_required",
+    action: { id: "tha_census_bounce", state: "policy_review" },
+  }));
+  const made = requestGovernedAction({
+    action_key: "database.read_census",
+    lane_id: laneId,
+    target: "alloy_deployed_primary",
+    purpose: "Verify billable source customer census",
+    reason_worker_cannot_execute: "The lane cannot hold hosted database credentials.",
+    requesting_worker: laneId,
+    artifact_refs: ["docs/platform/planning/vacilando-os/qa/access-identity-v2/q15-authority-census.json"],
+    worktree_path: REPO,
+  }, { root: ROOT, processNow: true });
+  assert.equal(made.ok, true, made.error || "");
+  assert.equal(made.request.status, "awaiting_operator");
+
+  const storePath = governedActionStorePath(ROOT);
+  const store = JSON.parse(readFileSync(storePath, "utf8"));
+  const rec = store.requests.find((r) => r.request_id === made.request.request_id);
+  assert.ok(rec, "request must be in the store");
+  rec.operator_approval = { decision: "approved", actor: "kelly", at: new Date().toISOString() };
+  rec.operator_approval_required = false;
+  rec.policy_decision = "operator_approved";
+  const minted = mintGrant({
+    proposal: {
+      proposal_id: rec.request_id,
+      action_key: rec.action_key,
+      repository_id: rec.authority?.repository_id || "repo_alloy",
+      run_id: rec.run_id || null,
+      lane_id: rec.lane_id,
+      requested_by: rec.requesting_worker,
+      target_branch: rec.target,
+      merge_method: "merge",
+    },
+    approvedBy: "kelly",
+    root: ROOT,
+  });
+  assert.equal(minted.ok, true, minted.error || "");
+  rec.grant_id = minted.grant.grant_id;
+  writeFileSync(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+
+  setGovernedActionExecuteImplForTests(() => ({
+    ok: true,
+    action: {
+      id: "tha_census_recovered",
+      state: "completed",
+      actionType: "database.read_census",
+      inputs: {},
+      result: { census: { org_count: 1 }, evidencePath: join(ROOT, "census.json") },
+    },
+  }));
+  tickGovernedActions({ root: ROOT });
+  const after = getGovernedAction(made.request.request_id, ROOT);
+  assert.notEqual(after.status, "awaiting_operator", "an already-approved census must not stay parked");
+  assert.equal(after.status, "complete", after.failure_reason || after.status);
+});
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

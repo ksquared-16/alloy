@@ -52,6 +52,7 @@ import {
   notificationUiState,
   renderNotificationControls,
   outputPollIntervalMs,
+  laneProviderLabel,
   parseGatewayHash,
   presenceLine,
   railHtml,
@@ -1961,6 +1962,42 @@ await test("queued and connected lanes are not collapsed to Idle or Running", ()
   ], { max_providers: 3 });
   assert.equal(cap.active, 1);
   assert.equal(cap.running.map((r) => r.name).join(","), "Access & Identity");
+});
+
+await test("a Cursor lane with no session is offline and startable, not read-only", () => {
+  // Read-only is the ATTACHED IDE transcript: a live session with no pane.
+  const attachedTranscript = {
+    lane_id: "lane_cursoride00",
+    label: "Vacilando",
+    durable: true,
+    binding: { provider: "cursor", worktree_path: "/x/wt5" },
+    worktree: { path: "/x/wt5" },
+    agent_session: { state: "ACTIVE", provider: "cursor" },
+    claude: { presence: "absent" },
+    tmux: { alive: false },
+  };
+  assert.equal(laneProviderLabel(attachedTranscript), "Cursor (read-only)");
+
+  // Nothing running is offline. Vacilando can start a writable cursor-agent
+  // session here, so the operator must not be told the capability is read-only.
+  const noSession = {
+    lane_id: "lane_cursoroff00",
+    label: "Vacilando",
+    durable: true,
+    binding: { provider: "cursor", worktree_path: "/x/wt5" },
+    worktree: { path: "/x/wt5" },
+    claude: { presence: "absent" },
+    tmux: { alive: false },
+  };
+  assert.equal(laneProviderLabel(noSession), "Cursor (offline)");
+  const callout = renderLaneSessionCallout(noSession);
+  assert.match(callout, /Start Session/);
+  assert.match(callout, /writable Cursor Agent session/);
+  assert.doesNotMatch(callout, /read-only/);
+  assert.doesNotMatch(callout, /Start a Claude session/);
+
+  // A live pane is a writable Cursor session, labelled plainly.
+  assert.equal(laneProviderLabel({ ...noSession, tmux: { alive: true } }), "Cursor");
 });
 
 await test("canonical work state maps live execution to Working and stale heartbeats out of Working", () => {

@@ -378,6 +378,108 @@ async function queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reas
 }
 
 /**
+ * A send is intent to provision.
+ *
+ * THE DEFECT THIS REPLACES: when a lane had no eligible session the send only
+ * ENQUEUED and reported `waiting_for_agent_session`, then relied on the
+ * admission tick to start a provider. Two things made that a dead end. The
+ * reason was a lie whenever the real condition was full provider capacity, and
+ * a lane whose admission row was stale never got re-driven at all — so a
+ * healthy bound lane rested at `waiting_for_agent_session` indefinitely and the
+ * operator had to click Start Session (or open a terminal) before every send.
+ *
+ * The send now provisions directly when capacity allows, and when it cannot it
+ * says WHICH condition it is waiting on.
+ */
+async function provisionSessionForSend({ rec, run, nowMs, root, size }) {
+  if (!bindingExists(rec)) {
+    // No worktree/tmux binding: a session is impossible, not merely slow.
+    // run-wait's `impossible_when: no_session_binding` fails this fast.
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "waiting_for_agent_session",
+    }) };
+  }
+  let capacity = null;
+  try {
+    const { assessSessionStartCapacity } = await import("./alloy-dev-adapter.mjs");
+    capacity = await assessSessionStartCapacity({ root });
+  } catch { capacity = null; }
+  const capacityAvailable = capacity && typeof capacity === "object"
+    ? capacity.ok !== false && capacity.available !== false
+    : true;
+  if (!capacityAvailable) {
+    // Explicitly a capacity wait, with a queue position — never a fake
+    // session wait. When capacity frees, the admission tick resumes it.
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "waiting_for_provider_capacity",
+    }) };
+  }
+  let start = null;
+  try {
+    const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
+    start = await startLaneAgentSession({ laneId: rec.lane_id, nowMs, root, origin: "operator" });
+  } catch (e) {
+    start = { ok: false, error: e?.message || "provider_start_failed" };
+  }
+  if (start?.ok && !start?.queued) {
+    // Provider is coming up. Queue the run so the admission/delivery path
+    // hands it over the moment the pane is ready, and say so truthfully.
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "provider_provisioning",
+    }) };
+  }
+  if (start?.queued || start?.waiting_for_execution_capacity || start?.error === "provider_capacity") {
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "waiting_for_provider_capacity",
+    }) };
+  }
+  if (start?.error === "lane_has_active_session") {
+    // A record says a session exists but it was not eligible above. The
+    // reaper owns proving it dead; until then this is a transport wait.
+    return { queued: await queueWithoutImmediateDelivery({
+      rec, run, nowMs, root, size, reason: "waiting_for_executable_transport",
+    }) };
+  }
+  // A start that returned non-ok may still have produced a session: the
+  // admission tick and this send can race, and the loser must not label a
+  // healthy, starting provider as a failure. Only the absence of a session
+  // makes this an actual start failure.
+  try {
+    const { activeAgentSessionForLane } = await import("./agent-session.mjs");
+    if (activeAgentSessionForLane(rec.lane_id, root)) {
+      return { queued: await queueWithoutImmediateDelivery({
+        rec, run, nowMs, root, size, reason: "provider_provisioning",
+      }) };
+    }
+  } catch { /* fall through to the truthful failure below */ }
+
+  // A real, named start failure. Surface it instead of resting forever.
+  const { patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
+  const reasonText = start?.error || "provider_start_failed";
+  patchRunFields(run.run_id, {
+    state_reason: "provider_start_failed",
+    delivery: {
+      acknowledged: false,
+      provider: rec.binding?.provider || null,
+      error: reasonText,
+      at: new Date(nowMs).toISOString(),
+    },
+  }, { nowMs, root });
+  return { queued: decorate({
+    ok: true,
+    schema_version: "vacilando.lane.send.v1",
+    lane_id: rec.lane_id,
+    status: "queued",
+    error: null,
+    provider_start_error: reasonText,
+    instruction_size: size,
+    delivered_at: null,
+    admission_queued: false,
+    session_required: true,
+  }, getExecutionRun(run.run_id, root) || run) };
+}
+
+/**
  * Delivery refusals that are transient, not failures.
  *
  * Kept in step with execution-resume's RETRYABLE set: a lane whose send lock is
@@ -412,6 +514,12 @@ async function ensureCursorDeliveryTransport({ rec, nowMs, root }) {
     if (start?.queued || start?.waiting_for_execution_capacity || start?.error === "provider_capacity") {
       return { ok: false, queue: true };
     }
+    // A pane that is still booting cursor-agent is a WAIT, not a refusal.
+    // Failing the run here is what turned "Cursor is starting" into a terminal
+    // `cursor_delivery_unavailable` the operator had to work around by hand.
+    if (start?.retryable) {
+      return { ok: false, queue: true };
+    }
     if (!start?.ok) {
       return { ok: false, error: start?.error || CURSOR_DELIVERY_UNAVAILABLE };
     }
@@ -441,10 +549,19 @@ async function failCursorDeliveryUnavailable({ rec, run, nowMs, root, size }) {
     root,
     completion_report: { summary: CURSOR_DELIVERY_UNAVAILABLE_SUMMARY },
   });
-  try {
-    const { setLanePreferredProvider } = await import("./development-lane.mjs");
-    setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root });
-  } catch { /* retry with Claude must still be possible */ }
+  // THE LANE STAYS ON THE PROVIDER THE OPERATOR CHOSE.
+  //
+  // This used to call setLanePreferredProvider(lane, "claude") here, silently
+  // undoing the operator's explicit selection every time a Cursor delivery
+  // failed. That is the loop behind the reported symptom: select Cursor, send,
+  // the delivery loses the boot race, the runtime quietly puts the lane back on
+  // Claude, and the next Send is a Claude send again. The audit log for
+  // lane_db3431e755a8 records NINE consecutive `lane.set_provider cursor`
+  // events — the operator re-selecting Cursor against a runtime that kept
+  // un-selecting it.
+  //
+  // A failed delivery is reported, not answered by rewriting the choice that
+  // produced it. Switching back to Claude remains one operator action away.
   const next = failed.ok ? failed.run : (getExecutionRun(run.run_id, root) || run);
   return decorate({
     ok: false,
@@ -679,8 +796,8 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
       }
       const eligible = await laneHasEligibleSession(rec.lane_id);
       if (!eligible) {
-        const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
-        return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
+        const provisioned = await provisionSessionForSend({ rec, run, nowMs, root, size });
+        return provisioned.queued;
       }
     }
   } catch { /* fall through to live send */ }
@@ -756,8 +873,8 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
           return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
         }
       }
-      const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
-      return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
+      const provisioned = await provisionSessionForSend({ rec, run, nowMs, root, size });
+      return provisioned.queued;
     }
   } catch { /* retain FAILED for true delivery failure */ }
 

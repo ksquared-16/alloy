@@ -122,7 +122,15 @@ await test("Cursor send without tmux transport fails and never EXECUTING", async
   assert.equal(kept.instruction, "Do not treat this as delivered.");
   assert.equal(kept.status, "failed");
   const rec = getDurableLane(vac.lane.lane_id, ROOT);
-  assert.equal(rec.preferred_provider, "claude");
+  // THE SELECTION SURVIVES THE FAILURE.
+  //
+  // This used to assert "claude": a failed Cursor delivery silently rewrote the
+  // lane's preferred provider, so the operator's explicit choice was undone by
+  // the failure it caused. The live audit log for lane_db3431e755a8 records
+  // NINE consecutive `lane.set_provider cursor` events — the operator
+  // re-selecting Cursor against a runtime that kept un-selecting it. A failed
+  // delivery is reported; switching back to Claude stays an operator action.
+  assert.equal(rec.preferred_provider, "cursor");
   assert.equal(rec.binding.provider, "cursor");
   resetAgentSessionLifecycleForTests();
 });
@@ -154,7 +162,9 @@ await test("governor fails undelivered Cursor runs immediately and ignores Claud
   assert.equal(failed.state, "FAILED");
   assert.equal(failed.state_reason, CURSOR_DELIVERY_UNAVAILABLE);
   assert.equal(failed.delivery?.acknowledged, false);
-  assert.equal(getDurableLane(vac.lane.lane_id, ROOT).preferred_provider, "claude");
+  // The governor reports the undelivered run; it does not re-decide the lane's
+  // provider from a background sweep. See the note above.
+  assert.equal(getDurableLane(vac.lane.lane_id, ROOT).preferred_provider, "cursor");
 });
 
 await test("governor fails EXECUTING without delivery ack after timeout; Claude QUEUED is kept", async () => {
