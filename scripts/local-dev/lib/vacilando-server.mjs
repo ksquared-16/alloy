@@ -1976,13 +1976,20 @@ export function createVacilandoServer() {
         } catch { /* grouping is secondary to discovery */ }
         let unseen_count = 0;
         let unseen_by_lane = {};
+        // THE ONE ATTENTION PROJECTION. Every top-level indicator reads this:
+        // the home badge, the drawer and the lane rows. The browser used to
+        // count a pending-approvals array of its own alongside it, so a
+        // governed request with two lifecycle events, or a mission-delegated
+        // action that executed with no approval at all, made the two disagree.
+        let notification_counts = null;
         try {
           const n = await import("./vacilando/lane-notifications.mjs");
           unseen_count = n.unseenNotificationCount();
           unseen_by_lane = n.unseenCountByLane();
+          notification_counts = n.notificationCounts();
           for (const lane of lanes) lane.unseen_notifications = unseen_by_lane[lane.lane_id] || 0;
         } catch { /* indicators are secondary to discovery */ }
-        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, repositories, unseen_count, unseen_by_lane, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
+        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, repositories, unseen_count, unseen_by_lane, notification_counts, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "lane_discovery_failed", detail: String(e && e.message || e) });
       }
@@ -2043,13 +2050,22 @@ export function createVacilandoServer() {
     }
     if (path === "/api/notifications") {
       try {
-        const { listNotifications, unseenNotificationCount, unseenCountByLane } =
+        const { listNotifications, unseenNotificationCount, unseenCountByLane, notificationCounts } =
           await import("./vacilando/lane-notifications.mjs");
         const unseenOnly = url.searchParams.get("unseen") === "1";
+        const attentionOnly = url.searchParams.get("attention") === "1";
         return sendJson(res, 200, {
           ok: true,
-          notifications: listNotifications({ unseenOnly, laneId: url.searchParams.get("lane_id") || null }),
+          notifications: listNotifications({
+            unseenOnly,
+            attentionOnly,
+            laneId: url.searchParams.get("lane_id") || null,
+          }),
+          // ONE number, computed once, in the module that owns read state. The
+          // breakdown is here so a surface can EXPLAIN the badge without
+          // deriving a second answer from the list it was handed.
           unseen_count: unseenNotificationCount(),
+          counts: notificationCounts(),
           unseen_by_lane: unseenCountByLane(),
         });
       } catch (e) {

@@ -47,6 +47,8 @@ const G = {
   executionCapacity: null,
   unseenCount: 0,
   unseenByLane: {},
+  notificationCounts: null,
+  attentionCount: 0,
   attachments: [],
   attachmentsUploading: 0,
   attachmentError: null,
@@ -566,7 +568,7 @@ async function fetchLanes() {
   G.lanes = Array.isArray(j.lanes) ? j.lanes : [];
   if (Array.isArray(j.folders)) G.folders = j.folders;
   if (Array.isArray(j.repositories)) G.repositories = j.repositories;
-  if (typeof j.unseen_count === "number") applyUnseen(j.unseen_count, j.unseen_by_lane);
+  if (typeof j.unseen_count === "number") applyUnseen(j.unseen_count, j.unseen_by_lane, j.notification_counts);
   if (j.development_resources) G.developmentResources = j.development_resources;
   if (j.execution_capacity) G.executionCapacity = j.execution_capacity;
   else G.executionCapacity = View.summarizeExecutionCapacity(G.lanes);
@@ -645,7 +647,13 @@ function resources() {
 function paintRail() {
   const el = document.getElementById("lane-rail");
   const map = attentionMap();
-  if (el) el.innerHTML = View.railHtml(G.lanes, G.selected, map, G.telemetryByLane);
+  if (el) {
+    el.innerHTML = View.railHtml(G.lanes, G.selected, map, G.telemetryByLane, {
+      repositories: G.repositories,
+      folders: G.folders,
+      collapsedFolders: collapsedFolders(),
+    });
+  }
   const label = document.querySelector(".nav-missions-label");
   if (label) label.textContent = "Development Lanes";
 }
@@ -927,11 +935,18 @@ async function refreshFolders() {
  * funnels through here, so the lane indicators and the app tile can never
  * disagree with each other or drift out of sync with the store.
  */
-function applyUnseen(count, byLane) {
+function applyUnseen(count, byLane, counts) {
   G.unseenCount = Number(count) || 0;
+  // The attention count is the canonical projection's actionable count, not a
+  // length computed in the browser.
+  if (counts && typeof counts === "object") {
+    G.notificationCounts = counts;
+    G.attentionCount = Number(counts.actionable) || 0;
+  }
   if (byLane && typeof byLane === "object") G.unseenByLane = byLane;
   for (const lane of G.lanes || []) lane.unseen_notifications = G.unseenByLane[lane.lane_id] || 0;
   View.applyAppBadge(G.unseenCount);
+  paintAttentionBadge();
 }
 
 /**
@@ -949,7 +964,7 @@ async function acknowledgeLane(laneId) {
       body: JSON.stringify({ lane_id: laneId }),
     });
     const j = await r.json();
-    if (j.ok) { applyUnseen(j.unseen_count, j.unseen_by_lane); paint(); }
+    if (j.ok) { applyUnseen(j.unseen_count, j.unseen_by_lane, j.notification_counts); paint(); }
   } catch { /* the next list poll reconciles */ }
 }
 
@@ -1187,7 +1202,26 @@ async function refreshApprovals() {
     const out = await r.json().catch(() => ({}));
     G.approvals = Array.isArray(out.approvals) ? out.approvals : [];
   } catch { G.approvals = G.approvals || []; }
+  // THE BADGE NEEDS AN OWNER THAT ALWAYS RUNS.
+  //
+  // The canonical counts arrived on the lane-list poll, which only runs on the
+  // lanes route — so an operator sitting anywhere else watched a stale number.
+  // Reading them here gives the attention count the same refresh cadence as the
+  // approvals it describes, and it is still the SERVER's projection: this
+  // fetches the count, it does not compute one.
+  await refreshAttentionCounts();
   paintApprovals();
+}
+
+async function refreshAttentionCounts() {
+  try {
+    const r = await gwFetch("/api/notifications?limit=1");
+    const j = await r.json().catch(() => ({}));
+    if (j && typeof j.unseen_count === "number") {
+      // `counts` is what this route has always called the canonical breakdown.
+      applyUnseen(j.unseen_count, j.unseen_by_lane, j.counts);
+    }
+  } catch { /* the next poll carries it */ }
 }
 
 function paintApprovals() {
@@ -1196,12 +1230,28 @@ function paintApprovals() {
   const rows = G.approvals || [];
   el.innerHTML = View.renderPendingApprovalsBar(rows);
   el.hidden = rows.length === 0;
+  paintAttentionBadge();
+}
+
+/**
+ * ONE ATTENTION COUNT, FROM THE CANONICAL PROJECTION.
+ *
+ * The badge used to read `G.approvals.length` — a number this file computed
+ * from a list it had just fetched, alongside the notification store's own
+ * count. Two answers to "how much needs you", and they disagreed whenever a
+ * governed request produced more than one lifecycle event, or a delegated
+ * action executed without ever needing an approval.
+ *
+ * The approvals bar still RENDERS the approval records, because that is what
+ * the operator acts on. What it no longer does is count them.
+ */
+function paintAttentionBadge() {
   const badge = document.getElementById("nb-needs");
-  if (badge) {
-    badge.textContent = String(rows.length);
-    badge.hidden = rows.length === 0;
-    badge.setAttribute("aria-hidden", rows.length === 0 ? "true" : "false");
-  }
+  if (!badge) return;
+  const n = Number(G.attentionCount) || 0;
+  badge.textContent = String(n);
+  badge.hidden = n === 0;
+  badge.setAttribute("aria-hidden", n === 0 ? "true" : "false");
 }
 
 function startListPoll() {

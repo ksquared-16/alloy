@@ -90,6 +90,7 @@ import {
   releaseMissionDelegation,
   reserveMissionDelegation,
 } from "./mission-delegation.mjs";
+import { classForGovernedStatus, upsertNotification } from "./lane-notifications.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -1046,6 +1047,33 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
     mkdirSync(dirname(notifyPath(root)), { recursive: true });
     appendFileSync(notifyPath(root), `${JSON.stringify(event)}\n`);
   } catch { /* notify best-effort */ }
+  // THE CANONICAL RECORD, NOT A FIFTH EVENT.
+  //
+  // The JSONL above stays as the delivery/history log. What the operator counts
+  // now lives in the one notification store, keyed on the DECISION rather than
+  // the step, so requested -> approved -> executing -> complete mutate a single
+  // record instead of appending four unrelated ones with no read state. The
+  // class is derived from the request's own durable status, which is the same
+  // status the UI will render — so a notification cannot claim an outcome the
+  // state has not reached.
+  try {
+    const cls = classForGovernedStatus(rec.status);
+    if (cls) {
+      upsertNotification({
+        subjectKey: `governed:${rec.request_id}`,
+        requestId: rec.request_id,
+        laneId: rec.lane_id || null,
+        eventType: type,
+        state: rec.status || null,
+        attentionClass: cls,
+        summary: title || rec.title || rec.action_key,
+        path: rec.mission_id
+          ? `/#/missions/${encodeURIComponent(rec.mission_id)}`
+          : (rec.lane_id ? `/#/lanes/${encodeURIComponent(rec.lane_id)}` : "/#/lanes"),
+        root,
+      });
+    }
+  } catch { /* the canonical record is best-effort too; never break the action */ }
   return event;
 }
 
@@ -1054,8 +1082,44 @@ function artifactPathFrom(refs = []) {
   return first ? String(first) : Q15_CENSUS_ARTIFACT;
 }
 
+/**
+ * THE IDENTITY TWO REQUESTS SHARE IF THEY ARE THE SAME WORK.
+ *
+ * THE DEFECT THIS REMOVES. This read a PR number and a SHA and nothing else, so
+ * for a repository.push — which has no PR — the whole identity was the head SHA.
+ * Two pushes of one commit to DIFFERENT branches therefore collapsed into one
+ * governed request: the second returned the first's record, and the first
+ * verdict was read back as the second's. Measured twice during S15, and it
+ * forced a request to be withdrawn to get a clean decision.
+ *
+ * A branch IS part of a push's identity. Rather than adding a branch field here
+ * — a second parser, which is the defect family this codebase has already paid
+ * for four times — the action's identity comes from the canonical resolver that
+ * mints and resolves its authorization. If two requests would mint the same
+ * authorization, they are the same work; if they would not, they are not.
+ */
 function identityFromInputs(input = {}) {
   const inputs = input.inputs || {};
+  const actionKey = input.action_key || input.actionKey || null;
+  if (actionKey) {
+    const id = resolveActionAuthorizationIdentity({
+      actionType: actionKey,
+      scope: input.mission_id || input.authority?.repository_id || null,
+      inputs,
+      target: input.target || null,
+    });
+    if (id.ok) {
+      // Exactly the fields that make this action THIS action. Everything here
+      // is derived; nothing is spelled a second time.
+      const parts = [
+        id.repository, id.targetRef, id.sourceRef, id.sourceSha, id.subjectKey,
+        id.pullRequestNumber == null ? "" : String(id.pullRequestNumber),
+        id.mergeMethod || "",
+      ].map((v) => (v == null ? "" : String(v)));
+      const key = parts.join("#");
+      if (key.replace(/#/g, "")) return key;
+    }
+  }
   const pr = inputs.pull_request_number || inputs.pullRequestNumber || "";
   const sha = inputs.expected_head_sha || inputs.expectedHeadSha || inputs.expected_sha || inputs.expectedSha || "";
   const versions = Array.isArray(inputs.migrations)
@@ -1072,6 +1136,22 @@ function dedupeKey(input) {
     input.target || "",
     identityFromInputs(input),
   ].join("|");
+}
+
+/**
+ * The shape dedupeKey needs from a stored record. A stored request keeps its
+ * action key on `action_key`, so it reads through the same function.
+ */
+function dedupeShapeOf(rec) {
+  return {
+    mission_id: rec?.mission_id ?? null,
+    lane_id: rec?.lane_id ?? null,
+    action_key: rec?.action_key ?? null,
+    authority: rec?.authority ?? null,
+    target: rec?.target ?? null,
+    inputs: rec?.inputs ?? {},
+    artifact_refs: rec?.artifact_refs ?? null,
+  };
 }
 
 function releaseRunAfterGovernedFailure(rec, { nowMs, root } = {}) {
@@ -1713,10 +1793,11 @@ export function requestGovernedAction(input = {}, {
   }
 
   const existing = listGovernedActions({ missionId: shape.missionId, laneId, root: storeRoot })
-    .find((r) => isPendingGovernedStatus(r.status) && dedupeKey(r) === dedupeKey({
+    .find((r) => isPendingGovernedStatus(r.status) && dedupeKey(dedupeShapeOf(r)) === dedupeKey({
       mission_id: shape.missionId,
       lane_id: laneId,
       action_key: shape.actionKey,
+      authority: shape.authority,
       target: shape.target,
       artifact_refs: artifactRefs,
       inputs: shape.inputs,
@@ -1728,10 +1809,11 @@ export function requestGovernedAction(input = {}, {
 
   const failedMatch = listGovernedActions({ missionId: shape.missionId, laneId, root: storeRoot })
     .find((r) => r.status === "failed"
-      && dedupeKey(r) === dedupeKey({
+      && dedupeKey(dedupeShapeOf(r)) === dedupeKey({
         mission_id: shape.missionId,
         lane_id: laneId,
         action_key: shape.actionKey,
+        authority: shape.authority,
         target: shape.target,
         artifact_refs: artifactRefs,
         inputs: shape.inputs,
@@ -3071,6 +3153,56 @@ export async function reconcileGovernedApprovals({
   return { ok: true, satisfied, rebound, unchanged };
 }
 
+/**
+ * TERMINAL EXECUTION TRUTH IS IMMUTABLE.
+ *
+ * MEASURED. gar_f9e6b6cfd1143b was approved by the operator and EXECUTED
+ * successfully. Three minutes later a deny arrived — issued from a card that
+ * had been rendered before the approval — and it rewrote the materialized
+ * record from complete/approved to failed/denied. The append-only audit still
+ * held the real history, so the ledger and the record disagreed about whether a
+ * privileged action had happened.
+ *
+ * An approve or a deny is a decision about work that has NOT happened yet. Once
+ * the work has run, there is no decision left to make: the outcome is a fact,
+ * and a late command can only misdescribe it. Refuse, by name, and hand back the
+ * current request so the caller can redraw from the truth.
+ *
+ * A request that failed BEFORE it executed — a validation or policy refusal —
+ * never ran, so it stays reopenable exactly as it was. `execution_started_at` is
+ * what separates the two, because it is written when execution begins.
+ */
+function terminalByExecution(rec) {
+  if (!rec) return null;
+  if (rec.status === "complete") return "complete";
+  if (rec.status === "cancelled" || rec.status === "withdrawn") return rec.status;
+  if (rec.status === "failed" && rec.execution_started_at) return "failed_after_execution";
+  return null;
+}
+
+export const GOVERNED_TERMINAL_ERROR = "governed_action_terminal";
+
+function refuseTerminalDecision(rec, command, root) {
+  // RE-READ IMMEDIATELY BEFORE DECIDING. The caller resolved this request when
+  // it rendered a card; seconds or minutes may have passed, and the whole point
+  // of this guard is that the state can have moved underneath a stale
+  // instruction. Deciding on the record we were handed would re-open the hole.
+  const current = getGovernedAction(rec?.request_id, root) || rec;
+  const terminal = terminalByExecution(current);
+  if (!terminal) return { ok: true, rec: current };
+  return {
+    ok: false,
+    refusal: {
+      ok: false,
+      error: GOVERNED_TERMINAL_ERROR,
+      terminal_state: current.status,
+      terminal_reason: terminal,
+      detail: `This governed action is already ${current.status} because it executed. A late ${command} cannot rewrite an execution outcome; the append-only audit is the historical authority.`,
+      request: publicGovernedAction(current),
+    },
+  };
+}
+
 export async function approveGovernedAction(requestId, {
   actor = "operator",
   nowMs = Date.now(),
@@ -3086,7 +3218,11 @@ export async function approveGovernedAction(requestId, {
   const stale = rejectStaleDecision(rec, expectedFingerprint);
   if (stale) return stale;
   if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
+  const guard = refuseTerminalDecision(rec, "approval", root);
+  if (!guard.ok) return guard.refusal;
   if (rec.status === "failed") {
+    // Only reachable for a request that never executed — the guard above holds
+    // everything that did.
     rec.status = "awaiting_director";
     rec.failure_code = null;
     rec.failure_reason = null;
@@ -3183,6 +3319,11 @@ export function denyGovernedAction(requestId, {
   if (!rec) return { ok: false, error: "request_not_found" };
   const stale = rejectStaleDecision(rec, expectedFingerprint);
   if (stale) return stale;
+  // THE SITE OF THE MEASURED DEFECT. This wrote operator_approval and then
+  // failed the request with no terminal check at all, so a deny arriving after
+  // a successful execution rewrote complete/approved into failed/denied.
+  const guard = refuseTerminalDecision(rec, "denial", root);
+  if (!guard.ok) return guard.refusal;
   rec.operator_approval = {
     decision: "denied",
     actor,
