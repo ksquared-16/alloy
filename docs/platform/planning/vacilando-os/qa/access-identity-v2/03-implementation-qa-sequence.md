@@ -129,6 +129,19 @@ function re-creates all 57 keys on the next org creation, so M5 must edit that l
 RL-3's subject is repaired and re-runs green over the full catalog; W-11's instrument is deliberately
 **unnumbered** and a lock number is requested of the Director (`DR-12`). W-10's row and key counts are
 restated to **37 rows over 57 keys** (§7)
+· **W-0 re-issued a fifth time 2026-09-02** (mission `msn_8297859f4eac1e7d9e`, assignment
+`asg_7fdde4ab165d6d`) — **no run 4.** The census has no worker-side channel and its exit criteria have been met
+since 2026-07-31. The dispatch was spent auditing the artifact against a tree **26 days newer**, and three
+things have moved underneath it. **The hash gate is armed correctly, not stalely** — the Director's merge-back
+re-introduced a top-level `query_hash` holding `a3982ca5…`, which *is* the hash of the current
+`combined_query`, so the inverse hazard this section warns about did **not** fire and that key must not be
+"restored". **A second census artifact default now exists and disagrees with the first**: `Q15_CENSUS_ARTIFACT`
+pins the governed-action path to `q15-authority-census.json` (`governed-action-request.mjs:97,1082`) while the
+trusted-host path still defaults to `wave0-authority-census.json` (`trusted-host-actions.mjs:781,901`) — a
+run-4 request routed through the wrong one executes a **different, never-executed census** silently. And
+**`database.apply_migration` now exists** (`trusted-host-action-registry.mjs:27,433,545`), so §6's recorded
+reason M1 was never applied — *"no such action exists to authorize"* — is **false against this tree**, while
+`migrations_applied` is still `[]` (§4, §6, §11)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -604,6 +617,108 @@ the apply follows closely, and *an aged preflight is not a preflight*. W-0 suppl
 is W-6's to flip and is deliberately not set by the census file.** If time has passed, the correct move is
 another census — now a single authorization on a proven channel. Full rule-by-rule evaluation lives at the
 census file's `w6_m1_preflight.preflight_run_3_outcome`.
+
+#### W-0 re-issued a fifth time — **2026-09-02**, assignment `asg_7fdde4ab165d6d`: no run 4, and three facts that moved underneath the artifact
+
+W-0 was re-issued a fifth time, against exit criteria met on 2026-07-31 and re-confirmed twice since. **No run 4
+was performed, and none could be**: `database.read_census` is executed by the Director host-side, the worker
+protocol exposes only `vacilando-decision` and `vacilando-report`, and no privileged credential reaches the
+worker by design. That is the same structural fact recorded at `w6_m1_preflight.why_not_executed`, and it is
+unchanged. Re-asserting the file was the available cheap answer and is the one this section has twice named as
+wrong. **The dispatch was spent instead on the question no previous run could ask: is this artifact still true,
+and is it still executable, against a tree 26 days newer than the last census?** Three answers, all mechanical.
+
+**1. The hash gate is armed correctly — do not "fix" it.** After run 3, `asg_f34761f0f418ee` renamed the
+top-level `query_hash` to `runs_1_2_query_hash` precisely so `validateInputs` would resolve `expectedHash` to
+`undefined` and skip the comparison. `execution_mechanics_hash_trap` then recorded a standing *inverse* hazard:
+re-introducing a top-level `query_hash` would fail every future run with `query_hash_mismatch`. **A top-level
+`query_hash` is back** — written by the Director's own merge-back, which rewrites that key unconditionally. It
+would be exactly wrong to delete it. Measured: it holds `a3982ca5…`, which is the hash the Director itself
+computed over the `combined_query` it executed, and `combined_query` is **byte-identical to the text run 3 ran**
+(diffed against commit `747318753`; the eight `combined_query` hits in the intervening diff are all prose inside
+other keys). The key is therefore *self-consistent*, and run 4 validates against it rather than failing on it.
+**The hazard as written is still live and still correct — it just has not fired.** What it now also needs to
+say: the trap is a *stale* `query_hash`, not the *presence* of one.
+
+**2. There are now two census artifact defaults, and they name different files.** This is the same
+silent-wrong-artifact failure mode `promotion_2026_08_07` was written to foreclose, re-opened by a code path
+that did not exist when it was written. The trusted-host path still defaults to this file
+(`trusted-host-actions.mjs:781,901`). The newer governed-action path defaults to
+**`q15-authority-census.json`** (`Q15_CENSUS_ARTIFACT`, `governed-action-request.mjs:97`, resolved at `:1082`
+whenever no artifact ref is supplied, and used at `:1766`). Q15 is a *different* census — "real-tenant authority
+census for W-20 removal and the OD-7 conversion burndown", §9 and §8 — and it is `PREPARED — NOT EXECUTED` with
+no `query_hash` at all. **Consequence: a run-4 authorization requested without an explicit artifact reference
+may execute Q15's query and return no Q1–Q6 counts**, spending the authorization and producing nothing W-0 can
+read. Whoever requests run 4 must name `wave0-authority-census.json` explicitly rather than rely on a default.
+
+**3. `database.apply_migration` now exists, and §6's recorded reason M1 is unapplied is false against this
+tree.** `apply_authorization_2026_08_07.why_no_worker_applied_it` states that `database.read_census` is *"the
+ONLY trusted host action in the registry"* and that *"No `database.apply_migration` action exists to
+authorize."* Both were true when written. Neither is true now: the action is defined
+(`trusted-host-action-registry.mjs:27`, `:433`, registered `:545`, capability `trusted_host.database.migrate`
+`:436`), executed (`trusted-host-actions.mjs:619`), authorized (`trusted-host-authz.mjs:391`) and handled
+throughout `governed-action-request.mjs`, alongside `trusted-host-apply-migration.sh` and
+`trusted-host-migrate.mjs`. **M1 has been operator-authorized since 2026-08-07 and `migrations_applied` is still
+`[]`.** The programme gap that record identified — *"every one of the nine §11 migrations terminates in a
+privileged WRITE that has no equivalent channel"* — **has since been closed by the platform**, and the census
+file has been corrected in place rather than left asserting a blocker that no longer exists. This does not apply
+M1 and does not move its gate; it removes the stated reason it could not be applied, which is W-6's to act on.
+
+**W-0's exit criteria are unaffected and remain met.** Q1–Q6 counts and query text stay committed; nothing in
+this pass re-opens them. **What this pass does change is their age.** Run 3 is 2026-08-07 and today is
+2026-09-02 — **26 days**. Every previous drift comparison spanned three to four days. Rule 5 (immediacy) is now
+decisively unsatisfied, so `w6_m1_preflight.preflight.ok: true` is an **aged** preflight, and by this section's
+own standing rule an aged preflight is not a preflight. Per `w6_owner_acceptance.the_one_refinement_added` that
+staleness cannot cause a *wrong* apply — M1's post-conditions compare against an anti-join measured inside its
+own transaction — only an *unexplained* one. The counts should not be cited as current by any §11 preflight
+without a fresh run.
+
+#### W-0, same day, second dispatch — assignment `asg_807ff515a94356`: is the query still *valid* against the new schema?
+
+Two assignments were dispatched against W-0 on 2026-09-02. The pass directly above (`asg_7fdde4ab165d6d`)
+audited the **channel** — the hash gate, the artifact defaults, `database.apply_migration`. This pass audited
+the **schema**, which is the one dimension no previous run needed to check, and it reaches the same verdict on
+run 4 by a different route. Its findings are recorded at the census file's `run_4_prepared`. Both passes'
+conclusions are corroborated rather than merged: the two facts above that bear on this block —
+the artifact-default trap and the falsified "no apply channel" reason — were **independently re-verified here**
+before being cited, and `run_4_prepared` carries both.
+
+**Why the schema matters now and did not before.** Runs 1, 2 and 3 all measured the *pre-promotion* schema.
+On 2026-08-19 the ten-migration Access & Identity set (`20260818170000` … `20260819140000`) was promoted
+(`a61f989e0`) and W-20 deleted the legacy fallback from both resolvers (`37ec77367`) — all **after** run 3
+executed at 2026-08-07T17:24Z. `combined_query` is a *single* statement returning one JSON row, so **one
+dropped column would fail all six questions at once** and spend the authorization for nothing. That check had
+never been run.
+
+**It passes.** Every object and column the query reads still exists at `80417c586`. What moved:
+
+| Q | What landed since run 3 | Consequence |
+|---|---|---|
+| Q1 | The `handle_new_user()` drop (`20260819130000`) was **deferred** and pulled from the promotion set by `a61f989e0` — "applied to no database". | None. Still expect **defined and unattached**; a `q1_handle_new_user_defined` of 0 would mean the deferred migration ran unrecorded. |
+| Q2 | W-20 deleted the fallback from both resolvers and locked it with RL-12 — but **dropped no columns**. | None. `user_profiles.role` and `app_users.{role,org_id,auth_user_id}` all survive, so the `legacy` CTE still executes rather than erroring. |
+| Q3 / Q5 | `20260818190000` adds `FOREIGN KEY (org_id, role) REFERENCES role_definitions (org_id, role_key)`; `20260818180000` pins it to RESTRICT. | **Q3's zero becomes structural rather than observational.** Q5's `is_active` limb is unaffected — the FK deliberately ignores it (`20260818190000:21`). |
+| Q4 | M1 is on staging, still `applied: false`. | Expect **2**. |
+| Q6 | Nothing since `20260807140000` touches `department_scope` or `site_scope`; W-8 has not landed. | Expect 1 and 2. |
+| — | `20260818240000` drops `public.permission_keys` and `public.permissions`. | **Neither appears in `combined_query`** — W-60 cannot break this census. |
+
+This is a static check against migration files, **not proof about the deployed database**, and it cannot rule
+out drift applied to the target outside the repository. That is precisely what run 4 would settle.
+
+**`run_4_prepared` records predictions before execution**, so run 4 can confirm or refute rather than merely
+report — including the org fingerprint `ab7e5dde…`, which run 3 *established* and run 4 is the first run able
+to *check*. A different fingerprint would mean a different database and would make the counts incomparable.
+**The prediction worth watching is Q4's grain:** `q4_membership_rows` has held at 8 across all three runs, so
+W-5's closure of the product membership writers **has never actually been exercised**. Growth in membership
+rows with `q4_pairs_without_profile` still at 2 would be the first real evidence W-5 works; growth in *both*
+would mean a sixth writer exists.
+
+**This does not reopen the reflexive-re-run argument.** `w6_owner_acceptance.the_one_refinement_added` warns
+that reading "an aged preflight is not a preflight" too literally invites re-running the census before every
+apply, each costing an authorization. That warning is respected: run 4 is **not** requested as a W-6 preflight
+refresh. The refinement reasons about counts drifting under a *fixed* schema; the ten promoted migrations
+changed the schema those counts are read from. **W-0's exit criteria remain met on runs 1–3 either way**, and
+nothing in the programme is gated on run 4 — if it is declined, the counts of record simply stay dated
+2026-08-07 and every consumer keeps citing them with that date attached.
 
 ---
 
