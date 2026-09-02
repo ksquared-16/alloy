@@ -56,6 +56,14 @@ tree: the Q15 default is **still live and unfixed**, both delegation locks still
 run-4-ready (`query_hash` `a3982ca5…`, no `combined_query_hash`, `target_identity` and Q1–Q6 intact). Six
 dispatches have now produced five audits and zero runs, because the phase objective describes work a worker
 cannot perform. **Escalated to the operator as a decision rather than written up a sixth time** (§4)
+· **W-0 re-issued an eighth time 2026-09-02** (mission `msn_9a133c0d7bc9adee03`, assignment `asg_eef883c00dc22f`)
+— **no run 4; no count re-asserted.** One new finding, and it is the first that moves the blocker: **a worker
+can *file* the run-4 request even though it cannot execute it.** `vac governed-action` reaches
+`requestGovernedAction`, and a filed request persists `artifact_refs` verbatim, which approval later reads. So
+the filing channel is also the **only** channel that can set `MANDATORY_artifact_refs` — the control the
+seventh pass established is the sole defence against the Q15 default. **A worker-filed request is strictly
+safer than the operator's own UI click**, which takes that default. Escalated: filing pre-empts the standing
+*whether* (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -749,6 +757,46 @@ remains non-delegable on two independent grounds. *Caveat:* the four modules abo
 belonging to a concurrent delegation-V2 assignment in this worktree, so line numbers may move; re-check the two
 evidence points against the committed version before composing run 4. **W-0's exit criteria remain met and are
 untouched.**
+
+#### W-0 re-issued an eighth time — **2026-09-02**, assignment `asg_eef883c00dc22f`: the request can be filed, only the approval is gated
+
+**No run 4, no count re-asserted.** Per the sixth pass's ruling this is not audit block eight. It is one
+finding, and unlike the previous three passes it changes what is possible rather than what is known.
+
+**Every pass since the fifth has concluded that "nothing a worker does can supply the authorization." That is
+true of *executing* the census and false of *requesting* it, and the difference was never checked.**
+`vac governed-action --run <id> --lane <lane> --json '{...}'` (`vac-governed-action.mjs:80-86`) calls
+`requestGovernedAction` with a caller-supplied payload and `processNow: false` — it files a request for the
+operator and executes nothing. `database.read_census` is proposable through it: `vac governed-action --list`
+returns it first, `risk: privileged_read`, capability `trusted_host.database.read`. So the worker-side half of
+run 4 is reachable today, and the operator-gated half is exactly the one click that has been outstanding since
+2026-08-06.
+
+**The consequence is larger than convenience, because the filing channel is the only place the mandatory field
+can be set.** `requestGovernedAction` reads explicit refs at `:1683-1685` and only falls back to
+`Q15_CENSUS_ARTIFACT` when they are empty; a filed record persists them verbatim (`:1766`); and approval
+resolves the artifact from that stored record (`:2471`, `queryArtifactPath: artifactPathFrom(rec.artifact_refs)`).
+A request filed with `artifact_refs` named therefore **cannot** take the Q15 default — the branch that applies it
+is never entered.
+
+**This inverts the safety ordering the previous passes assumed.** The operator's own path — the
+`authorize_mission_census` decision handler that calls `handleGovernedDecisionAnswer` first (`v2-api.mjs:893-916`)
+— supplies no `artifact_refs`, so it takes the Q15 default and, per the seventh pass, nothing downstream will
+notice. **A worker-filed request is the safer of the two routes**, and it is the only one that discharges
+`MANDATORY_artifact_refs` mechanically rather than by the operator remembering to.
+
+**Not filed, deliberately.** The standing decision is not only *how* run 4 should run but *whether* — standalone,
+folded into W-23 (Wave 0b), or W-0 accepted complete on run-3 counts. Filing would answer *whether* on the
+operator's behalf and put a privileged read against the deployed database into the approval queue. **Escalated
+instead, now with the exact request body**, recorded at the census file's
+`run_4_request_requirements.eighth_issue_2026_09_02_the_request_can_be_filed.ready_to_file`.
+
+The seventh pass's caveat is **not discharged and cannot be**: `governed-action-request.mjs`,
+`trusted-host-actions.mjs`, `trusted-host-authz.mjs` and `action-authorization-identity.mjs` are **still
+uncommitted** in this worktree, so there is no committed version to re-check the two evidence points against.
+The Q15 default and both delegation locks were re-verified against the tree as it stands and are unchanged
+(`:95`, `:1053`, `:1685`; `mission-delegation.mjs:47-51`, `:57-59`, `:224`, `:504`). **W-0's exit criteria remain
+met and are untouched.**
 
 ---
 
