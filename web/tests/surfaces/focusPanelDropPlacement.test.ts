@@ -34,12 +34,29 @@ describe("resolveDropPlacement — the drop the operator was shown", () => {
         expect(gridOverlaps(placement.grid)).toEqual([]);
     });
 
-    it("finds that vacancy from anywhere on the row — the pointer need not hit column 9", () => {
+    it("takes the free right-hand third from any pointer column inside it", () => {
         const grid = processAndFinancials();
-        for (let col = 1; col <= 12; col += 1) {
+        // Columns 9-12 are the vacancy beside Process; anywhere in it lands there.
+        for (let col = 9; col <= 12; col += 1) {
             const placement = resolveDropPlacement(grid, at(grid, "financials"), col, 1);
             expect(at(placement.grid, "financials")).toMatchObject({ colStart: 9, rowStart: 1 });
+            expect(placement.how).toBe("exact");
         }
+    });
+
+    it("pointing AT an occupied card inserts there — it does not hunt for a distant hole", () => {
+        /*
+         * The rejected behaviour, from a live trace: asked column 1 row 6, answered
+         * column 9 row 9 — the far corner — because the resolver searched outward for
+         * a free rectangle. Pointing at a card now means "put me here in the order".
+         */
+        const grid = processAndFinancials();
+        const placement = resolveDropPlacement(grid, at(grid, "financials"), 1, 1);
+        expect(placement.how).toBe("insert");
+        expect(at(placement.grid, "financials")).toMatchObject({ colStart: 1, rowStart: 1 });
+        // Process yields the top row and settles directly beneath — the minimum move.
+        expect(at(placement.grid, "business_process").rowStart).toBeGreaterThan(1);
+        expect(gridOverlaps(placement.grid)).toEqual([]);
     });
 
     it("a card holding part of a row does not block the row's free columns", () => {
@@ -66,12 +83,13 @@ describe("resolveDropPlacement — the drop the operator was shown", () => {
         }
     });
 
-    it("never reorders an unrelated card while a vacancy exists", () => {
+    it("leaves every other card alone when the pointer's own cells are free", () => {
         const grid = processAndFinancials();
         const moving = at(grid, "financials");
-        for (let col = 1; col <= 12; col += 1) {
+        for (let col = 9; col <= 12; col += 1) {
             for (let row = 1; row <= 8; row += 1) {
                 const placement = resolveDropPlacement(grid, moving, col, row);
+                expect(placement.how).toBe("exact");
                 expect(at(placement.grid, "business_process")).toMatchObject({
                     colStart: 1,
                     rowStart: 1,
@@ -79,6 +97,18 @@ describe("resolveDropPlacement — the drop the operator was shown", () => {
                 });
             }
         }
+    });
+
+    it("moves the minimum when it must move anything at all", () => {
+        // Inserting above Process moves Process and nothing else — no card is reordered
+        // sideways, and none jumps a row it did not need to.
+        const grid = processAndFinancials();
+        const placement = resolveDropPlacement(grid, at(grid, "financials"), 1, 1);
+        const process = at(placement.grid, "business_process");
+        expect(process.colStart).toBe(1);
+        expect(process.colSpan).toBe(8);
+        // Directly beneath the inserted card, not pushed to the bottom of the canvas.
+        expect(process.rowStart).toBe(at(placement.grid, "financials").rowSpan + 1);
     });
 
     it("keeps the dragged card's own width — a drop never resizes it", () => {

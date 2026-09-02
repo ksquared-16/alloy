@@ -391,9 +391,27 @@ export function snapMoveTarget(
  * closes gaps without rearranging anything the operator authored.
  */
 export function compactGridRows(grid: FocusPanelGridLayout): FocusPanelGridLayout {
-    const ordered = [...grid.areas].sort((a, b) =>
-        a.rowStart !== b.rowStart ? a.rowStart - b.rowStart : a.colStart - b.colStart,
+    return packGridInReadingOrder(
+        grid,
+        [...grid.areas].sort((a, b) =>
+            a.rowStart !== b.rowStart ? a.rowStart - b.rowStart : a.colStart - b.colStart,
+        ),
     );
+}
+
+/**
+ * Gravity over a STATED order — the packing primitive both compaction and the
+ * drop resolver share.
+ *
+ * Reading order is the layout's real content: it says which card is "before"
+ * which. Compaction derives that order from the current rows; a drop states it,
+ * by putting the dragged card where the pointer asked to be in the sequence.
+ * Same packer either way, so a drop and a later re-compaction cannot disagree.
+ */
+export function packGridInReadingOrder(
+    grid: FocusPanelGridLayout,
+    ordered: readonly FocusPanelGridArea[],
+): FocusPanelGridLayout {
     const placed: FocusPanelGridArea[] = [];
     for (const area of ordered) {
         let rowStart = 1;
@@ -419,6 +437,10 @@ export type FocusPanelDropPlacement = {
     grid: FocusPanelGridLayout;
     /** True when another card had to move to make room. */
     reflowed: boolean;
+    /** How the destination was chosen — for the interaction trace, never for logic. */
+    how?: "exact" | "insert";
+    /** The clamped cell the pointer actually asked for. */
+    asked?: { colStart: number; rowStart: number };
 };
 
 /** Free = no placed card shares a cell with this rectangle. PURE. */
@@ -475,7 +497,7 @@ export function resolveDropPlacement(
     const maxColStart = Math.max(1, grid.columns - moving.colSpan + 1);
     const col = Math.min(maxColStart, Math.max(1, Math.round(targetColStart)));
     const row = Math.max(1, Math.round(targetRowStart));
-    const settle = (area: FocusPanelGridArea): FocusPanelDropPlacement => {
+    const settle = (area: FocusPanelGridArea, how: "exact" | "insert" = "exact"): FocusPanelDropPlacement => {
         // Compact BEFORE answering: the ghost must show the row the card will
         // actually occupy, not the row it was dropped on with dead tracks above it.
         const packed = compactGridRows({ ...grid, areas: [...others, area] });
@@ -483,44 +505,49 @@ export function resolveDropPlacement(
             area: findArea(packed, area.card) ?? area,
             grid: packed,
             reflowed: false,
+            how,
+            asked: { colStart: col, rowStart: row },
         };
     };
 
     const exact = { ...moving, colStart: col, rowStart: row };
-    if (rectangleIsFree(others, exact)) return settle(exact);
+    if (rectangleIsFree(others, exact)) return settle(exact, "exact");
 
     /*
-     * Nearest vacancy. Rows are searched outward from the pointer's row and
-     * columns outward from the pointer's column, so "beside where I am pointing"
-     * beats "somewhere below". The row window reaches one card-height past the
-     * last occupied row, which is enough to find the empty canvas underneath
-     * without wandering off down an unbounded grid.
+     * ── THE POINTER ASKS FOR A PLACE IN THE ORDER, NOT FOR A HOLE ──
+     *
+     * This searched outward for the nearest free rectangle, and on a packed canvas
+     * that is a lottery. A live trace of a rejected drag: the operator asked for
+     * column 1, row 6; the search walked rows and columns and answered column 9,
+     * row 9 — the far corner. The ghost and the commit agreed, so the model was
+     * "correct", and the operator still watched the card fly somewhere they had
+     * not pointed. That is the spottiness: it only bites when the asked cell is
+     * occupied, which depends on the layout, so some drags feel fine and some feel
+     * random.
+     *
+     * A packed grid with gravity has no holes to find. What a drop actually means
+     * is "put this card HERE in the reading order" — at the pointer's column, at
+     * the pointer's place in the sequence — and then let gravity settle everything
+     * as it always does. Cards at or after that point move down by the minimum;
+     * cards before it do not move at all; every cell is reachable because nothing
+     * depends on a vacancy existing.
      */
-    const lastRow = others.length
-        ? Math.max(...others.map((a) => a.rowStart + a.rowSpan - 1))
-        : 0;
-    const maxRow = lastRow + moving.rowSpan + 1;
-    for (let dRow = 0; dRow <= maxRow; dRow += 1) {
-        for (const rowCandidate of dRow === 0 ? [row] : [row + dRow, row - dRow]) {
-            if (rowCandidate < 1 || rowCandidate > maxRow) continue;
-            for (let dCol = 0; dCol <= grid.columns; dCol += 1) {
-                for (const colCandidate of dCol === 0 ? [col] : [col + dCol, col - dCol]) {
-                    if (colCandidate < 1 || colCandidate > maxColStart) continue;
-                    const candidate = {
-                        ...moving,
-                        colStart: colCandidate,
-                        rowStart: rowCandidate,
-                    };
-                    if (rectangleIsFree(others, candidate)) return settle(candidate);
-                }
-            }
-        }
-    }
-
-    // Nothing is free in range — reflow, and let the normalizer own the minimum move.
-    const reflowed = compactGridRows(placeArea(grid, exact));
-    const landed = findArea(reflowed, moving.card) ?? exact;
-    return { area: landed, grid: reflowed, reflowed: true };
+    const ordered = [...others].sort((a, b) =>
+        a.rowStart !== b.rowStart ? a.rowStart - b.rowStart : a.colStart - b.colStart,
+    );
+    const isBefore = (a: FocusPanelGridArea) =>
+        a.rowStart < row || (a.rowStart === row && a.colStart < col);
+    const packed = packGridInReadingOrder(
+        { ...grid, areas: [...others, exact] },
+        [...ordered.filter(isBefore), exact, ...ordered.filter((a) => !isBefore(a))],
+    );
+    return {
+        area: findArea(packed, moving.card) ?? exact,
+        grid: packed,
+        reflowed: true,
+        how: "insert",
+        asked: { colStart: col, rowStart: row },
+    };
 }
 
 /**

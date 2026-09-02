@@ -100,14 +100,31 @@ describe("drag activation is the same on every card", () => {
     const css = source("app/adminV2/components/alloyOsRuntime.css");
     const canvas = source("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
 
-    it("makes card content inert at rest, not only once a drag is already running", () => {
+    it("makes card content inert while composing, and live while configuring", () => {
         /*
          * Inert only while `.is-arranging` meant activation depended on what the card
          * drew under the pointer: a control-heavy card (Attendance) swallowed the press
          * and never dragged, while a text-heavy one (Process) did.
+         *
+         * It must not be inert ALWAYS either — a selected card is being configured and
+         * its controls have to work. So the two coexist deliberately: content is inert
+         * on unselected cards (uniform drag activation everywhere), live on the selected
+         * one, where the chrome drag bar remains the handle.
          */
-        expect(css).toContain(".alloy-os-fp-composer-cell > :first-child {\n  pointer-events: none;");
+        expect(css).toContain(
+            ".alloy-os-fp-composer-cell:not(.is-selected) > :first-child {\n  pointer-events: none;",
+        );
         expect(css).not.toContain(".alloy-os-fp-composer-cell.is-arranging > :first-child");
+        // The handle is generous and present in every mode.
+        expect(css).toContain("height: 44px;");
+    });
+
+    it("has no second coordinate system for the preview", () => {
+        // The dragged card marks itself in the resolved layout; a floating ghost
+        // rectangle measured against the pre-drop canvas is what used to lie.
+        expect(canvas).toContain('data-fp-composer-dragging={dragging ? "true" : undefined}');
+        expect(canvas).not.toContain('className="alloy-os-fp-composer__ghost"');
+        expect(canvas).toContain("const renderGrid = previewGrid ?? grid;");
     });
 
     it("routes every press through the one composer shell", () => {

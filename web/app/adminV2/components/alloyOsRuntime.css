@@ -5735,7 +5735,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * its own pointer events, so Configure, Remove and the resize handles are
  * unaffected.
  */
-.alloy-os-fp-composer-cell > :first-child {
+.alloy-os-fp-composer-cell:not(.is-selected) > :first-child {
   pointer-events: none;
   user-select: none;
 }
@@ -5751,9 +5751,17 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
    * now, so every card keeps a real grab target, and the Configure toolbar keeps
    * clear space on the cards wide enough to have one.
    */
-  left: min(34px, 10%);
-  right: clamp(44px, 34%, 156px);
-  height: 34px;
+  /*
+   * A GENEROUS, PREDICTABLE HANDLE.
+   *
+   * The bar is the one affordance that works in every mode — including while a
+   * card is selected and its content is live for configuration. It runs the full
+   * width of the card apart from the toolbar's corner, and it is tall enough to
+   * hit without aiming.
+   */
+  left: 0;
+  right: 96px;
+  height: 44px;
   z-index: 6;
   cursor: grab;
   touch-action: none;
@@ -10072,4 +10080,19 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   margin: 7px 0 0;
   font-size: 11.5px;
   color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/*
+ * THE DRAGGED CARD IS ITS OWN PREVIEW.
+ *
+ * While a drag is live the canvas renders the resolved layout, so this card is
+ * already standing where it will land. It marks itself rather than being traced
+ * by a floating rectangle in a second coordinate system — the arrangement the
+ * operator sees IS the arrangement that commits.
+ */
+.alloy-os-fp-composer-cell.is-dragging {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 12px;
+  opacity: 0.92;
 }

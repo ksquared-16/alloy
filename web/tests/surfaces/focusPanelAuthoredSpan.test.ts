@@ -69,7 +69,7 @@ describe("the gesture can start — the defects upstream of any placement maths"
          * a regression the browser caught and no unit test could.
          */
         expect(canvas).toContain(">= 4)");
-        expect(canvas).toContain("if (hasTravelled(ev)) applyGrid(");
+        expect(canvas).toContain('reason: "no_travel"');
         // Chrome inside the card keeps its own press.
         expect(canvas).toContain('target?.closest("button, a, input, textarea, select, [data-fp-composer-no-drag]")');
     });
