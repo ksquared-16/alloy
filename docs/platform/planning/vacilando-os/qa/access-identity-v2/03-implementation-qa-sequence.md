@@ -708,6 +708,48 @@ The decision put to the operator is the one open since 2026-08-06: authorize run
 `artifact_refs` named explicitly), fold it into W-23 (Wave 0b), or accept W-0 as complete on run-3 counts and
 stop re-dispatching the phase. **W-0's exit criteria remain met and are untouched.**
 
+#### W-0 re-issued a seventh time — **2026-09-02**, assignment `asg_4b765736a5af3c`: the authorization cannot see the artifact
+
+**No run 4, no count re-asserted.** Per the sixth pass's ruling this is not another audit block; it is one new
+finding about **new code**, and the escalation that ruling called for.
+
+This dispatch had something the previous five did not: `promote/mission-delegation-v2` gained an
+**authorization-identity layer** (commits `e79bc73cd`, `cc434675b`, `7b98f3abb`, plus uncommitted work in the
+tree) whose whole purpose is to make authority *exact* rather than ambient. It did not exist when the sixth pass
+re-verified hours earlier, and it sits on the path a census authorization is spent through.
+
+**The finding: that layer is blind to the field which chooses the census artifact.** `artifact_refs` — the field
+the Q15 defect turns on — is outside *both* halves of the census's authorization identity:
+
+- **Identity.** `action-authorization-identity.mjs:150-158` resolves `DATABASE_READ_CENSUS` identity as the
+  database target plus a `subjectKey` read only from `inputs.queryHash` / `expectedQueryHash`. No artifact path.
+- **Fingerprint.** `governedContentFingerprint` (`governed-action-request.mjs:605-639`) builds its `rest` bucket
+  by iterating `Object.keys(req.inputs)` only (`:621-625`) and never reads `req.artifact_refs`. Its own comment
+  rejects an allowlist precisely so that "a census *is* its query" stays inside the fingerprint — but the artifact
+  naming that query lives outside `inputs`, so it escapes anyway.
+- **The selector is elsewhere.** The artifact is chosen at `:2467` from `rec.artifact_refs`, a *sibling* of
+  `rec.inputs`. Identity and fingerprint are computed over one object; the artifact comes from another.
+- **No backstop.** `trusted-host-actions.mjs:661-668` compares `hashSql(sql)` to `action.inputs.queryHash`, but
+  both derive from the same artifact that was read — self-consistent, so it catches a *tampered* query, never a
+  *substituted* one.
+
+**Consequence.** A grant minted for "the Wave 0 census" and a request that will read `q15-authority-census.json`
+yield the *same* identity and the *same* content fingerprint — same mission, same action, same database target,
+`subjectKey` null on both. Even `exact_request`, the tightest binding in the system, does not pin which census
+runs. This adds no new route to the database and weakens no run-3 protection; it means the Q15 default is
+**unguarded**, not merely undefaulted.
+
+**So `MANDATORY_artifact_refs` is upgraded from advisable to the only control.** The fifth pass called naming
+`artifact_refs` a fix that "costs nothing"; it is also the only thing between the authorization and a green run
+against the wrong query, because no identity check, fingerprint, grant filter or execution-time hash comparison
+will notice its absence.
+
+Both delegation locks were re-checked and **still hold** — the new module loosens neither, and `database.read_census`
+remains non-delegable on two independent grounds. *Caveat:* the four modules above were **uncommitted** when read,
+belonging to a concurrent delegation-V2 assignment in this worktree, so line numbers may move; re-check the two
+evidence points against the committed version before composing run 4. **W-0's exit criteria remain met and are
+untouched.**
+
 ---
 
 ## 5. Wave 1 — Fail-closed quick wins
