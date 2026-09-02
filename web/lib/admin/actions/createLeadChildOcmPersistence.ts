@@ -6,10 +6,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
-import {
-    ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
-    createEnrollmentProcessInstance,
-} from "@/lib/process/processInstances";
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
@@ -221,33 +217,24 @@ export async function applyCreateLeadChildParticipationFromIdentity(
         outcomeStatusKey: NEW_LEAD_STATUS_KEY,
     });
 
-    // The journey anchors to the PARTICIPATION. The Opportunity stays reachable through it, which is
-    // what keeps acquisition context available without making it the child's Enrollment identity.
-    const piResult = await createEnrollmentProcessInstance(supabase, {
-        orgId: params.orgId,
-        subjectId: customerMemberId,     // child = customer_member
-        contextId: participation.ocmId,
-        contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
-        acquisitionOpportunityId: params.opportunityId,
-        stageKey: null,                  // rides the family track until a decision creates the child journey
-        state: null,                     // no enrollment outcome at intake
-        participation: {
-            start_date: params.ocm.start_date,
-            schedule_type: params.ocm.schedule_type,
-            program_category_id: programCategoryId,
-            location_id: params.ocm.location_id,
-            program_room_cohort_key: params.ocm.program_room_cohort_key,
-            notes: params.ocm.notes,
-        },
-    });
-    if (piResult.error) {
-        throw new Error(`Could not create Enrollment process instance for child: ${piResult.error}`);
-    }
+    /*
+     * NO CHILD ENROLLMENT PROCESS INSTANCE HERE.
+     *
+     * Intake owns family acquisition and the child's durable participation bridge. It does NOT own
+     * the decision that the child is entering Enrollment. Creating a journey here put a CHILD
+     * instance into the FAMILY-grain `lead` stage, which is why an acquisition child reported
+     * "Stage lead requires no Forms" and could never realize a participant objective.
+     *
+     * The child rides the family acquisition track on the Opportunity until the governed
+     * `decision → Continue to Enrolling` outcome, which creates the child journey at the CHILD
+     * stage `enrollment`. The OCM above is identity, not evidence that execution has begun.
+     */
 
     return {
         customer_member_id: customerMemberId,
         ocm_id: participation.ocmId,
-        process_instance_id: piResult.id,
+        // Intake creates no child journey; the Enrollment-entry outcome does.
+        process_instance_id: null,
     };
 }
 

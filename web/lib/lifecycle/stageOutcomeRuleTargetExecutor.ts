@@ -20,6 +20,8 @@ import {
 } from "@/lib/lifecycle/familyCloseGuard";
 import { reconcileBusinessProcessWorkAcrossStageMove } from "@/lib/lifecycle/reconcileBusinessProcessWorkAcrossStageMove";
 import {
+    ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+    createEnrollmentProcessInstance,
     moveEnrollmentInstanceStageByScope,
     setEnrollmentInstanceStateByScope,
     readEnrollmentInstanceState,
@@ -36,7 +38,12 @@ import {
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
-import { isReusableActiveParticipationStatus } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import {
+    CHILD_ENROLLMENT_ENTRY_STAGE_KEY,
+    ENROLLING_CHILD_STATUS_KEY,
+    isReusableActiveParticipationStatus,
+} from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 import { emitEvent } from "@/lib/emitEvent";
 // BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
 // inside the enrolled disposition, gated by the childcare feature flag. Target decoupling is a childcare
@@ -547,6 +554,101 @@ export async function applyStageOutcomeRuleTarget(
                 undo: undoChildState,
                 degraded: degradedEffects.length ? degradedEffects.join("; ") : undefined,
             };
+        }
+
+        case "enter_child_enrollment": {
+            /*
+             * THE ACQUISITION → ENROLLMENT HANDOFF, at the child grain.
+             *
+             * The family outcome has decided the family is proceeding. This begins the CHILD's
+             * Enrollment execution: durable child status, and one journey anchored to that child's
+             * participation at the CHILD stage `enrollment`.
+             *
+             * IT REFUSES RATHER THAN GUESSING WHICH CHILDREN. `family_enrolling` carries no per-child
+             * disposition, and a household's children genuinely diverge — one enrols, one waitlists.
+             * Advancing all of them because the family said yes would be inventing bulk advancement
+             * the operator never expressed. So: exactly one candidate proceeds; zero or several
+             * refuses and says which, and the operator records per-child decisions instead.
+             */
+            const entryStageKey = (target.stage_key ?? "").trim() || CHILD_ENROLLMENT_ENTRY_STAGE_KEY;
+
+            const threadedChildId = subject.customer_member_id?.trim() || null;
+            let childIds: string[] = threadedChildId ? [threadedChildId] : [];
+            if (!childIds.length) {
+                // No child threaded: the children this acquisition episode actually carries.
+                const { data, error } = await supabase
+                    .from("opportunity_customer_members")
+                    .select("customer_member_id")
+                    .eq("org_id", orgId)
+                    .eq("opportunity_id", subject.opportunity_id);
+                if (error) return { error: `Could not resolve this family's children: ${error.message}` };
+                childIds = [
+                    ...new Set(
+                        ((data ?? []) as Array<{ customer_member_id?: string }>)
+                            .map((r) => (r.customer_member_id ?? "").trim())
+                            .filter(Boolean),
+                    ),
+                ];
+            }
+
+            if (childIds.length === 0) {
+                return {
+                    error:
+                        "No child on this family is ready to enter Enrollment, so there is nothing to "
+                        + "begin. Add the child to the lead first.",
+                };
+            }
+            if (childIds.length > 1) {
+                return {
+                    error:
+                        `This family has ${childIds.length} children and the decision does not say which `
+                        + "are enrolling. Record the decision per child rather than moving them together.",
+                };
+            }
+
+            const childId = childIds[0]!;
+            const participation = await ensureOpportunityCustomerMemberParticipation({
+                supabase,
+                orgId,
+                opportunityId: subject.opportunity_id,
+                customerMemberId: childId,
+                source: "family_enrollment_decision",
+                outcomeStatusKey: ENROLLING_CHILD_STATUS_KEY,
+            });
+
+            // Durable child Enrollment status, through the canonical writer (audit + event parity).
+            const lifecycle = await updateOpportunityCustomerMemberLifecycleStatus({
+                supabase,
+                orgId,
+                opportunityId: (subject.opportunity_id ?? "").trim() || null,
+                opportunityCustomerMemberId: participation.ocmId,
+                nextStatusKey: ENROLLING_CHILD_STATUS_KEY,
+                actorUserId: userId,
+                source: "family_enrollment_decision",
+                rowGrain: "child",
+            } as Parameters<typeof updateOpportunityCustomerMemberLifecycleStatus>[0]).catch((e: unknown) => ({
+                error: { message: e instanceof Error ? e.message : String(e) },
+            }) as Awaited<ReturnType<typeof updateOpportunityCustomerMemberLifecycleStatus>>);
+            if (lifecycle.error) {
+                return { error: `Child enrollment status was not updated: ${lifecycle.error.message}` };
+            }
+
+            // ONE journey, anchored to the participation, at the CHILD entry stage.
+            const journey = await createEnrollmentProcessInstance(supabase, {
+                orgId,
+                subjectId: childId,
+                contextId: participation.ocmId,
+                contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+                acquisitionOpportunityId: subject.opportunity_id,
+                stageKey: entryStageKey,
+                state: null,
+                source: "family_enrollment_decision",
+            });
+            if (journey.error) {
+                return { error: `Could not begin this child's Enrollment: ${journey.error}` };
+            }
+
+            return { status_updated: true };
         }
 
         case "update_candidate_status": {

@@ -11,10 +11,6 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
-import {
-    ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
-    createEnrollmentProcessInstance,
-} from "@/lib/process/processInstances";
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { upsertCustomerMemberConfigFieldValues } from "@/lib/admin/customerMemberPatch";
@@ -334,20 +330,22 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
 
         async createProcessParticipation(ctx, input) {
             /*
-             * THE JOURNEY ANCHORS TO THE ENROLLMENT PARTICIPATION, not to the lead.
+             * INTAKE ESTABLISHES THE PARTICIPATION, NOT THE ENROLLMENT EXECUTION.
              *
-             * This is the INGEST-mode Create Lead seam, and it was the third place the Completion
-             * Anchor convergence had not reached — Start Enrollment was converged, the household
-             * commit path was converged, and this one still wrote `contextId: input.lead_id` with no
-             * context type, which defaults to the Opportunity shape.
+             * This used to create a child Enrollment Process Instance during Create Lead. The
+             * configured operating plans are explicit that `lead` is a FAMILY-grain stage, so that
+             * put a CHILD journey into a family stage — cross-grain impersonation — and it is why an
+             * acquisition child reported "Stage lead requires no Forms" and could never realize a
+             * participant objective.
              *
-             * Live certification found it rather than review: a child arriving through acquisition
-             * ended up with a journey anchored to the Opportunity, so the canonical anchor never
-             * existed for them and Start Enrollment later reused that legacy-shaped journey.
+             * What intake legitimately owns is the child's durable Enrollment Participation bridge:
+             * the OCM, carrying the acquisition Opportunity. That is identity, and it is kept. What
+             * it does not own is the decision that the child is ENTERING Enrollment — that is the
+             * governed family `decision → Continue to Enrolling` outcome, which creates the child
+             * journey at the CHILD stage `enrollment`.
              *
-             * The participation is established through the canonical find-or-create the rest of
-             * Enrollment uses, so this creates exactly one, carries the acquisition Opportunity on
-             * it, and stays idempotent under a repeated ingest.
+             * So the OCM id is what this returns. "Participation" was always the OCM; the command
+             * had merely been returning the journey it should not have been creating.
              */
             const participation = await ensureOpportunityCustomerMemberParticipation({
                 supabase: ctx.supabase,
@@ -357,16 +355,7 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                 source: "create_lead_ingest",
                 outcomeStatusKey: NEW_LEAD_STATUS_KEY,
             });
-            return createEnrollmentProcessInstance(ctx.supabase, {
-                orgId: ctx.orgId,
-                subjectId: input.child_id,
-                contextId: participation.ocmId,
-                contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
-                acquisitionOpportunityId: input.lead_id,
-                stageKey: input.stage_key,
-                state: (input.state as never) ?? null,
-                participation: input.participation,
-            });
+            return { id: participation.ocmId };
         },
 
         async updateProcessParticipation(ctx, input) {

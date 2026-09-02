@@ -377,7 +377,23 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
             {
                 rule_key: "family_enrolling_move",
                 when_outcome_key: "family_enrolling",
-                targets: [{ kind: "move_to_stage", transition_ref: "decision_to_enrolling" }],
+                targets: [
+                    // FAMILY effect: the case moves to the family-grain `enrolling` stage.
+                    { kind: "move_to_stage", transition_ref: "decision_to_enrolling" },
+                    /*
+                     * CHILD effect, at the child grain: the child's Enrollment execution begins.
+                     * One outcome, two grains, stated separately — collapsing them is what put a
+                     * child journey into the family `lead` stage in the first place.
+                     */
+                    /*
+                     * The literal, not the imported constant. This object is evaluated at module
+                     * init, and importing the constant here created a cycle whose symptom was a
+                     * silently `undefined` stage_key depending on which module a caller imported
+                     * first — a plan that looked right in the source and was wrong at runtime.
+                     * `childEnrollmentEntryStageMatchesPlan` pins the two together instead.
+                     */
+                    { kind: "enter_child_enrollment", stage_key: "enrollment" },
+                ],
             },
             {
                 rule_key: "needs_time_remain",
