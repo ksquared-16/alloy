@@ -54,8 +54,9 @@ BEGIN
       FROM public.charges c
      WHERE c.id = NEW.source_charge_id;
 
-    -- A dangling correction has nothing to correct. `source_charge_id` carries no FK on this table,
-    -- so this is the only place that says so.
+    -- A dangling correction has nothing to correct. `charges_source_charge_id_fkey` already refuses
+    -- an id that names no charge; this repeats it because the row is read here anyway, and because
+    -- the FK is ON DELETE SET NULL — it guarantees existence at write time and nothing more.
     IF NOT COALESCE(parent_exists, false) THEN
         RAISE EXCEPTION 'charge correction references charge % which does not exist', NEW.source_charge_id
             USING ERRCODE = '23503';
@@ -108,12 +109,20 @@ CREATE TRIGGER trg_enforce_charge_correction_lineage
 --
 -- Deliberately NOT scoped by org_id: `source_charge_id` is a charge primary key, so an org
 -- qualifier would only widen the rule to one reversal PER ORG.
+--
+-- It IS scoped to the childcare sources, for the same reason the trigger is. Without that clause the
+-- index refused a second correction of a JOB charge — a job-vertical regression, and precisely the
+-- hard rule P3.1 states: every gate is additive or scoped to the childcare path. The trigger was
+-- written that way and the index was not, so the two disagreed about whose money they governed.
+-- Live certification caught it (certification/financials/charge-spine-lifecycle.cert.sh, R13);
+-- no mock could, because a mock has no partial index.
 -- -----------------------------------------------------------------------------
 CREATE UNIQUE INDEX IF NOT EXISTS uq_charges_one_live_reversal_per_source
     ON public.charges (source_charge_id)
     WHERE source_charge_id IS NOT NULL
+      AND billable_source_type = ANY (ARRAY['enrollment_agreement'::text, 'customer'::text])
       AND status <> 'void'
       AND metadata ->> 'correction_kind' = 'reversal';
 
 COMMENT ON INDEX public.uq_charges_one_live_reversal_per_source IS
-    'At most one live reversal per source charge. Two concurrent reversals of one charge would each credit the family in full; the trigger cannot see the other transaction, this can.';
+    'At most one live reversal per CHILDCARE source charge. Two concurrent reversals of one charge would each credit the family in full; the trigger cannot see the other transaction, this can. Job rows are outside the predicate: job billing owns its own correction lifecycle.';

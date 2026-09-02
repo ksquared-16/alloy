@@ -8,6 +8,7 @@ import {
 } from "@/lib/financials/billingPeriod";
 import {
     isPostedMoney,
+    offersReverseTransition,
     pastDueFor,
     reconcileRows,
     type FinancialsLedgerRow,
@@ -31,6 +32,7 @@ function row(over: Partial<FinancialsLedgerRow>): FinancialsLedgerRow {
         correctsChargeId: null,
         correctionKind: null,
         reversedByChargeId: null,
+        offersReverse: false,
         dueDate: null,
         glCode: null,
         glAccountName: null,
@@ -262,5 +264,36 @@ describe("correction lineage — a reversed charge is a pair, not a disappearanc
             "2026-08-26",
         );
         expect(out?.amountCents).toBe(100_000);
+    });
+});
+
+/**
+ * THE ROW'S OWN TRANSITION, decided by the read model.
+ *
+ * The card renders `offersReverse` and asks nothing further, so this is the whole rule — and the
+ * live certification asserts this same field rather than restating the condition in a spec.
+ */
+describe("the transition a ledger row offers", () => {
+    const offers = (status: string, reversedBy: string | null = null, corrects: string | null = null) =>
+        offersReverseTransition({ status, reversedByChargeId: reversedBy, correctsChargeId: corrects });
+
+    it("offers Reverse on posted money that still stands", () => {
+        expect(offers("posted")).toBe(true);
+        expect(offers("partially_paid")).toBe(true);
+    });
+
+    it("offers nothing once the charge has been reversed", () => {
+        // The defect this closes: a reversed original still read `posted` and still carried the
+        // button, so the same charge was reversed twice and the family credited money never charged.
+        expect(offers("posted", "rev-1")).toBe(false);
+    });
+
+    it("offers nothing on a correction — a reversal is not itself reversed", () => {
+        expect(offers("posted", null, "orig-1")).toBe(false);
+    });
+
+    it("offers nothing on a draft or a void row", () => {
+        expect(offers("draft")).toBe(false);
+        expect(offers("void")).toBe(false);
     });
 });

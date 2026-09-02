@@ -87,6 +87,16 @@ export type FinancialsLedgerRow = {
     correctionKind: string | null;
     /** The correction that reversed THIS row, when one exists. Null while the charge stands. */
     reversedByChargeId: string | null;
+    /**
+     * Whether this row admits a correction — the transition the card renders as `Reverse`.
+     *
+     * Decided HERE, not in the component. The card asks one question of a ledger row and it is a
+     * question about money: posted money that still stands and is not itself a correction. Leaving
+     * that to JSX meant the rule existed twice — once in the component and once in every test and
+     * certification that restated it — and a certification that restates the rule proves only that
+     * it can restate it.
+     */
+    offersReverse: boolean;
     dueDate: string | null;
     /** Operator-facing GL code, or null when nothing maps it. Never silently blank. */
     glCode: string | null;
@@ -528,6 +538,7 @@ export async function buildFinancialsCardVM(
             correctsChargeId,
             correctionKind,
             reversedByChargeId,
+            offersReverse: offersReverseTransition({ status, reversedByChargeId, correctsChargeId }),
             dueDate: t(c.due_date) || null,
             glCode: account?.code ?? null,
             glAccountName: account?.name ?? null,
@@ -619,6 +630,27 @@ export async function buildFinancialsCardVM(
     return vm;
 }
 
+
+/**
+ * THE TRANSITION A LEDGER ROW OFFERS — posted money that still stands, and is not itself a
+ * correction.
+ *
+ * One definition, used by the composer and asserted directly by test and certification. A reversed
+ * row fails it (that is the bound: one reversal), and so does a correction (a reversal is not itself
+ * reversed). Drafts are posted, not reversed, and void rows have no lawful next step.
+ */
+export function offersReverseTransition(row: {
+    status: string;
+    reversedByChargeId: string | null;
+    correctsChargeId: string | null;
+}): boolean {
+    return (
+        row.status !== "draft"
+        && row.status !== "void"
+        && !row.reversedByChargeId
+        && !row.correctsChargeId
+    );
+}
 
 /**
  * Posted money, whether or not a later correction undid it.

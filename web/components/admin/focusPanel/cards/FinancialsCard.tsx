@@ -955,7 +955,10 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                             CORRECTION row offers nothing either: a
                                                             reversal is not itself reversed. A void
                                                             row and a scheduled draft have no lawful
-                                                            next step here.
+                                                            next step here. `offersReverse` is the
+                                                            READ MODEL's answer, so the rule is not
+                                                            restated in JSX — and a certification can
+                                                            assert the very value that renders it.
                                                         */}
                                                         <span className="alloy-os-financials__cell alloy-os-financials__cell--row-action">
                                                             {row.lifecycleStatus === "draft" ? (
@@ -969,10 +972,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                                 >
                                                                     Post
                                                                 </button>
-                                                            ) : (
-                                                                row.lifecycleStatus === "posted"
-                                                                && !row.correctsChargeId
-                                                            ) ? (
+                                                            ) : row.offersReverse ? (
                                                                 <button
                                                                     type="button"
                                                                     className="alloy-os-financials__action"

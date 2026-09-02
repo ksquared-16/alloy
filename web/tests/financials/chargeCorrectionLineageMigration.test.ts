@@ -32,7 +32,17 @@ describe("charge correction lineage migration", () => {
         // `source_charge_id` is a charge primary key. Adding org_id would widen the rule to one
         // reversal per org, which is not a bound at all.
         const indexBlock = sql.slice(sql.indexOf("CREATE UNIQUE INDEX"));
-        expect(indexBlock).not.toContain("org_id");
+        expect(indexBlock).not.toContain("(org_id");
+    });
+
+    it("scopes the unique index to the CHILDCARE sources, so job billing keeps its lifecycle", () => {
+        // Live certification (charge-spine-lifecycle.cert.sh, R13) caught the index refusing a
+        // second correction of a JOB charge while the trigger let it through: the two disagreed
+        // about whose money they governed. No mock can catch this — a mock has no partial index.
+        const indexBlock = sql.slice(sql.indexOf("CREATE UNIQUE INDEX"));
+        expect(indexBlock).toContain(
+            "billable_source_type = ANY (ARRAY['enrollment_agreement'::text, 'customer'::text])",
+        );
     });
 
     it("refuses a correction OF a correction, so the chain has a terminus", () => {
@@ -45,8 +55,8 @@ describe("charge correction lineage migration", () => {
     });
 
     it("refuses a correction that points at no charge at all", () => {
-        // `source_charge_id` carries no FK on this table, so the trigger is the only thing that says
-        // a correction must have something to correct.
+        // `charges_source_charge_id_fkey` already refuses an unknown id; the trigger repeats it
+        // because it reads the row anyway, and because the FK is ON DELETE SET NULL.
         expect(sql).toContain("which does not exist");
     });
 

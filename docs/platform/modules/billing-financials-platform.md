@@ -208,15 +208,17 @@ leaves the family credited $1,300 they were never charged. A reversal is posted 
 offered `Reverse` too — a chain with no terminus, in which the provenance of a balance is a walk
 rather than a fact.
 
-- **One live reversal per source charge**, asserted by the partial unique index
-  `uq_charges_one_live_reversal_per_source` (`status <> 'void'` and
+- **One live reversal per childcare source charge**, asserted by the partial unique index
+  `uq_charges_one_live_reversal_per_source` (childcare `billable_source_type`, `status <> 'void'`,
   `metadata->>'correction_kind' = 'reversal'`). The index rather than a service check, because two
   concurrent reversals each read zero siblings and each write — the same reason posting guards its
-  transition inside the UPDATE.
+  transition inside the UPDATE. Its predicate carries the childcare source clause because the first
+  version did not: the trigger exempted job rows and the index did not, so a second correction of a
+  **job** charge was refused — a job-vertical regression that only the live database could show.
 - **No correction of a correction, and no correction of a charge already reversed**, enforced by
   `enforce_charge_correction_lineage` on INSERT/UPDATE of `source_charge_id`. The same trigger
-  refuses a `source_charge_id` that points at no charge — the column carries no FK, so this is the
-  only place that says a correction must have something to correct. It quantifies over
+  refuses a `source_charge_id` that points at no charge, repeating what
+  `charges_source_charge_id_fkey` already guarantees at write time. It quantifies over
   `CHILDCARE_BILLABLE_SOURCE_TYPES`; `job` rows pass through to job billing's own lifecycle.
 - **The ledger says so.** `buildFinancialsCardVM` projects the lineage (`correctsChargeId`,
   `correctionKind`, `reversedByChargeId`) and derives a `reversed` lifecycle — a reading of a posted
@@ -253,6 +255,7 @@ history, so nothing existing is invalidated by it.
 - Do not raise on a repeated post — posting is idempotent and a retry reports the existing posting.
 - Do not leave a correction unbounded; a posted charge admits ONE live reversal and no further correction after it, and a correction is never itself corrected.
 - Do not enforce a money-uniqueness rule with a read-then-write in the service; two concurrent reversals both pass it. State it as a constraint and mirror it in the service for the message.
+- Do not write a childcare constraint whose predicate omits the childcare sources — a partial index naming only `correction_kind` governs job billing too, which is the job-vertical regression P3.1 forbids. Certify constraints against a real database; a mock has no index.
 - Do not render a reversed charge as plain `posted`, and do not offer a second correction on it — an operator acts on what the ledger says.
 - Do not drop a reversed original from a total; it nets against its reversal, and skipping it drives responsibility negative.
 - Do not write a charge without an actor; `created_by` / `updated_by` / `posted_by` are the audit trail money requires.
