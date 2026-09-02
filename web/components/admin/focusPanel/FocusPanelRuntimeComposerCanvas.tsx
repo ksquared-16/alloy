@@ -27,8 +27,11 @@ import {
     cardsInGrid,
     clampArea,
     COMPOSER_GRID_GAP_PX,
-    COMPOSER_GRID_ROW_UNIT_PX,
-    composerGhostBounds,
+    composerGridMetrics,
+    parseTrackSizes,
+    spanBounds,
+    trackEdges,
+    trackFromOffset,
     defaultRowSpanForCard,
     gridFromPublishedLayout,
     moveArea,
@@ -79,6 +82,15 @@ type Props = {
      */
     /** Records a placement variant's density on the card's own config. */
     onCardDensityChange?: (card: FocusPanelCardKey, density: FocusPanelCardDensity) => void;
+    /**
+     * Spans the inspector has asked for, by card.
+     *
+     * A presentation switch is two facts — the density the card reads, and the width
+     * the platform places it at. The density reaches the card through its config;
+     * this is the other half, applied to the grid the canvas owns rather than by
+     * letting a second writer edit that grid behind its back.
+     */
+    desiredSpanByCard?: Partial<Record<FocusPanelCardKey, number>>;
     catalog: {
         key: FocusPanelCardKey;
         label: string;
@@ -113,6 +125,7 @@ export default function FocusPanelRuntimeComposerCanvas({
     initialGrid,
     catalog,
     onCardDensityChange,
+    desiredSpanByCard,
     order,
     cards,
     vm,
@@ -170,6 +183,29 @@ export default function FocusPanelRuntimeComposerCanvas({
             return next;
         });
     }, [order]);
+
+    /*
+     * Apply a requested presentation span to the grid the canvas owns.
+     *
+     * Only when it actually differs, so this cannot fight the operator's own
+     * resize: a drag to a new width leaves `desiredSpanByCard` untouched, and this
+     * effect has nothing to say about it.
+     */
+    useEffect(() => {
+        if (!desiredSpanByCard) return;
+        setGrid((prev) => {
+            let next = prev;
+            for (const [card, span] of Object.entries(desiredSpanByCard)) {
+                if (typeof span !== "number") continue;
+                const area = next.areas.find((a) => a.card === card);
+                if (!area || area.colSpan === span) continue;
+                next = resizeArea(next, card as FocusPanelCardKey, span, area.rowSpan);
+            }
+            if (next === prev) return prev;
+            onLayoutChangeRef.current?.(buildPublishedLayoutFromGrid(next));
+            return next;
+        });
+    }, [desiredSpanByCard]);
 
     const publishedLayout = useMemo(() => buildPublishedLayoutFromGrid(grid), [grid]);
 
@@ -303,36 +339,68 @@ export default function FocusPanelRuntimeComposerCanvas({
         [vm.entity.id, record],
     );
 
+    /**
+     * The canvas's REAL geometry, read fresh from the browser.
+     *
+     * Rows are content-sized, so there is no constant pitch to compute from — and
+     * even the columns are better read than derived, because the browser has
+     * already resolved them. Re-reading on every call rather than caching is
+     * deliberate: rows resize as cards move during a drag, and a cached edge list
+     * is exactly the stale geometry that made a drop land where the ghost never
+     * showed.
+     */
+    const measureCanvas = useCallback(() => {
+        const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
+        const el = (canvas ?? gridContainerRef.current) as HTMLElement | null;
+        if (!el) return null;
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        const colSizes = parseTrackSizes(style.gridTemplateColumns);
+        const rowSizes = parseTrackSizes(style.gridTemplateRows);
+        const fallback = composerGridMetrics(rect.width, cols);
+        return {
+            rect,
+            colEdges: colSizes.length ? trackEdges(colSizes, COMPOSER_GRID_GAP_PX) : trackEdges(
+                Array.from({ length: cols }, () => fallback.trackWidth), COMPOSER_GRID_GAP_PX,
+            ),
+            rowEdges: rowSizes.length ? trackEdges(rowSizes, COMPOSER_GRID_GAP_PX) : [0],
+            colPitch: fallback.columnPitch,
+            rowPitch: fallback.rowPitch,
+        };
+    }, [cols]);
+
     const cellFromPointer = useCallback(
         (clientX: number, clientY: number) => {
-            const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
-            const el = canvas ?? gridContainerRef.current;
-            if (!el) return { col: 1, row: 1 };
-            const r = el.getBoundingClientRect();
-            const colW = r.width / cols;
-            const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
-            const col = Math.min(cols, Math.max(1, Math.floor((clientX - r.left) / colW) + 1));
-            const row = Math.max(1, Math.floor((clientY - r.top) / rowUnit) + 1);
-            return { col, row };
+            const m = measureCanvas();
+            if (!m) return { col: 1, row: 1 };
+            const col = trackFromOffset(clientX - m.rect.left, m.colEdges, m.colPitch);
+            const row = trackFromOffset(clientY - m.rect.top, m.rowEdges, m.rowPitch);
+            return { col: Math.min(cols, Math.max(1, col)), row: Math.max(1, row) };
         },
-        [cols],
+        [cols, measureCanvas],
     );
 
+    /*
+     * The ghost is drawn from the SAME measured tracks the drop resolves against, so
+     * the preview and the landing place cannot disagree. They used to be computed
+     * independently, which is how the ghost came to show a position the card did not
+     * take.
+     */
     const ghostBounds = useMemo(() => {
         if (!ghost || !gridContainerRef.current) return null;
         const container = gridContainerRef.current;
-        const canvas = container.querySelector(".alloy-os-fp-canvas--grid");
-        if (!canvas) return null;
+        const m = measureCanvas();
+        if (!m) return null;
         const cRect = container.getBoundingClientRect();
-        const gRect = canvas.getBoundingClientRect();
-        return composerGhostBounds({
-            ...ghost,
-            columns: cols,
-            surfaceWidthPx: gRect.width,
-            paddingX: gRect.left - cRect.left,
-            paddingY: gRect.top - cRect.top,
-        });
-    }, [ghost, cols, grid]);
+        const x = spanBounds(ghost.colStart, ghost.colSpan, m.colEdges, COMPOSER_GRID_GAP_PX, m.colPitch);
+        const y = spanBounds(ghost.rowStart, ghost.rowSpan, m.rowEdges, COMPOSER_GRID_GAP_PX, m.rowPitch);
+        return {
+            left: m.rect.left - cRect.left + x.offset,
+            top: m.rect.top - cRect.top + y.offset,
+            width: x.size,
+            height: y.size,
+        };
+    }, [ghost, measureCanvas, grid]);
 
     const applySnappedMove = useCallback(
         (area: FocusPanelGridArea, col: number, row: number) => {
@@ -404,25 +472,17 @@ export default function FocusPanelRuntimeComposerCanvas({
         const measureEl = canvas ?? gridContainerRef.current;
         const move = (ev: globalThis.PointerEvent) => {
             if (!measureEl) return;
-            const r = measureEl.getBoundingClientRect();
-            const colW = r.width / cols;
-            const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
-            const colSpan =
-                axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / colW) - area.colStart + 1);
-            const rowSpan =
-                axis === "w" ? area.rowSpan : Math.max(1, Math.round((ev.clientY - r.top) / rowUnit) - area.rowStart + 1);
+            const cell = cellFromPointer(ev.clientX, ev.clientY);
+            const colSpan = axis === "h" ? area.colSpan : Math.max(1, cell.col - area.colStart + 1);
+            const rowSpan = axis === "w" ? area.rowSpan : Math.max(1, cell.row - area.rowStart + 1);
             const next = clampArea(grid, { ...area, colSpan, rowSpan });
             setGhost({ colStart: next.colStart, colSpan: next.colSpan, rowStart: next.rowStart, rowSpan: next.rowSpan });
         };
         const up = (ev: globalThis.PointerEvent) => {
             if (measureEl) {
-                const r = measureEl.getBoundingClientRect();
-                const colW = r.width / cols;
-                const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
-                const colSpan =
-                    axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / colW) - area.colStart + 1);
-                const rowSpan =
-                    axis === "w" ? area.rowSpan : Math.max(1, Math.round((ev.clientY - r.top) / rowUnit) - area.rowStart + 1);
+                const cell = cellFromPointer(ev.clientX, ev.clientY);
+                const colSpan = axis === "h" ? area.colSpan : Math.max(1, cell.col - area.colStart + 1);
+                const rowSpan = axis === "w" ? area.rowSpan : Math.max(1, cell.row - area.rowStart + 1);
                 applyGrid(resizeArea(grid, area.card, colSpan, rowSpan));
             }
             setGhost(null);
@@ -458,7 +518,41 @@ export default function FocusPanelRuntimeComposerCanvas({
         // The density is part of the placement, so it is recorded with it rather than left to the
         // card's default — a Compact choice that renders as Summary is not a choice.
         if (placement?.density) onCardDensityChange?.(card, placement.density);
+        /*
+         * ADDING MUST BE VISIBLY CAUSAL.
+         *
+         * The grid gained a card and nothing else happened: on a long Surface the new
+         * card landed below the fold, so "I clicked Financials" produced no observable
+         * effect and the operator clicked again. Selecting it makes the inspector
+         * follow the add, and scrolling to it makes the placement legible — the packer
+         * already chose a real position, this only takes the operator there.
+         */
+        setJustAdded(card);
     };
+
+    /*
+     * Select and reveal the new card ON THE NEXT RENDER, not in the click handler.
+     *
+     * Selecting inline did nothing: the host resolves a card key against `order`,
+     * and `order` only gains the card when the layout change this same handler
+     * emitted is reconciled. Both updates batch, so the lookup ran against the
+     * order from BEFORE the add and found nothing — the card appeared, unselected,
+     * and the inspector kept pointing at whatever was selected before.
+     *
+     * Waiting a frame also fixes the reveal for the same underlying reason: the
+     * cell's geometry does not exist until the grid has laid it out.
+     */
+    const [justAdded, setJustAdded] = useState<FocusPanelCardKey | null>(null);
+    useEffect(() => {
+        if (!justAdded) return;
+        const frame = requestAnimationFrame(() => {
+            onSelectCard?.(justAdded);
+            const cell = gridContainerRef.current?.querySelector(`[data-fp-composer-cell="${justAdded}"]`);
+            cell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            setJustAdded(null);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [justAdded, onSelectCard]);
 
     const renderComposerCell = useCallback(
         (cellKey: string) => {
@@ -498,6 +592,9 @@ export default function FocusPanelRuntimeComposerCanvas({
                             : undefined
                     }
                 >
+                    {/* The AUTHORED placement travels into the preview, so a card whose
+                        presentation changes with its size — Financials Compact vs Summary —
+                        previews the presentation actually being placed. */}
                     <FocusPanelCardRenderer
                         model={model}
                         context={previewContext}
@@ -505,6 +602,12 @@ export default function FocusPanelRuntimeComposerCanvas({
                         coordination={coordination}
                         mutation={mutation}
                         compat={{ onSelectTab: () => {} }}
+                        authoringPreview={{
+                            columns: area?.colSpan ?? null,
+                            // `composeEffectiveCardModel` has already folded the authored
+                            // appearance density onto the model, so this IS the effective one.
+                            density: model.density ?? null,
+                        }}
                     />
                 </ComposerCellShell>
             );
@@ -539,6 +642,42 @@ export default function FocusPanelRuntimeComposerCanvas({
             data-fp-composer-edit-mode={composer?.drillIn ? "true" : undefined}
             data-fp-composer-depth-active={activeDepth ? "true" : undefined}
         >
+            {/* ADD CARD LEADS THE FLOW: add → place → configure → publish.
+                It used to sit under the canvas, so adding a second card to a long
+                Surface meant scrolling past everything already authored to reach the
+                control that adds more. */}
+            {tray.length > 0 ?
+                <div className="alloy-os-fp-composer__tray" data-fp-composer-tray="true" data-fp-composer-tray-position="top">
+                    <Plus className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />
+                    <span className="alloy-os-fp-composer__tray-label">Add card</span>
+                    {tray.map((c) => (
+                        <button
+                            // A variant is keyed by identity AND shape: Financials appears twice in
+                            // the tray, once per placement, and both are the same `cardKey`.
+                            key={`${c.key}:${c.variantLabel ?? "default"}`}
+                            type="button"
+                            className="alloy-os-fp-composer__chip"
+                            data-fp-composer-add-card={c.key}
+                            data-fp-composer-variant={c.variantLabel ?? undefined}
+                            data-fp-composer-columns={c.columns ?? undefined}
+                            title={trayName(c)}
+                            onClick={() => onAddCard(c.key, { colSpan: c.columns, density: c.density })}
+                        >
+                            {/*
+                              * THE PRODUCT NAME, AND NOTHING ELSE.
+                              *
+                              * The chip used to carry "6/12" beside every label. An operator
+                              * choosing a card is choosing a card, not a track count — and the
+                              * number was the internal grid primitive leaking into the product.
+                              * Where a card genuinely has two presentations, the DIFFERENCE is
+                              * named in operator language ("Financials — Compact"); the columns
+                              * still travel with the choice, silently, as its default placement.
+                              */}
+                            <span className="alloy-os-fp-composer__chip-label">{trayName(c)}</span>
+                        </button>
+                    ))}
+                </div>
+            :   null}
             <section
                 className="alloy-os-fp-composer__panel flex min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-sm"
                 aria-label="Focus Panel composer preview"
@@ -608,40 +747,23 @@ export default function FocusPanelRuntimeComposerCanvas({
                 </div>
             </section>
 
-            {tray.length > 0 ?
-                <div className="alloy-os-fp-composer__tray" data-fp-composer-tray="true">
-                    <Plus className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />
-                    <span className="alloy-os-fp-composer__tray-label">Add card</span>
-                    {tray.map((c) => (
-                        <button
-                            // A variant is keyed by identity AND shape: Financials appears twice in
-                            // the tray, once per placement, and both are the same `cardKey`.
-                            key={`${c.key}:${c.variantLabel ?? "default"}`}
-                            type="button"
-                            className="alloy-os-fp-composer__chip"
-                            data-fp-composer-add-card={c.key}
-                            data-fp-composer-variant={c.variantLabel ?? undefined}
-                            data-fp-composer-columns={c.columns ?? undefined}
-                            title={
-                                c.variantLabel ?
-                                    `${c.label} — ${c.variantLabel}, ${c.columns ?? 6} of 12 columns`
-                                :   `${c.label} — ${c.columns ?? 6} of 12 columns`
-                            }
-                            onClick={() => onAddCard(c.key, { colSpan: c.columns, density: c.density })}
-                        >
-                            <span className="alloy-os-fp-composer__chip-label">{c.label}</span>
-                            {/* The consequence of the choice, on the chip: an operator picking
-                                between two Financials placements can see which is which. */}
-                            <span className="alloy-os-fp-composer__chip-shape">
-                                {c.variantLabel ? `${c.variantLabel} · ` : ""}
-                                {c.columns ?? 6}/12
-                            </span>
-                        </button>
-                    ))}
-                </div>
-            :   null}
         </div>
     );
+}
+
+/**
+ * The operator-facing name of a tray entry.
+ *
+ * A variant is a different PRESENTATION of the same card, so it reads as one:
+ * "Financials" and "Financials — Compact". Never "Financials 4/12" — the span is
+ * how the platform places it, not what the operator is choosing.
+ */
+function trayName(entry: { label: string; variantLabel?: string }): string {
+    const variant = entry.variantLabel?.trim();
+    if (!variant) return entry.label;
+    // A variant that merely restates the card's default placement adds nothing.
+    if (variant.toLowerCase() === "summary") return entry.label;
+    return `${entry.label} — ${variant}`;
 }
 
 function findAreaForCard(grid: FocusPanelGridLayout, card: FocusPanelCardKey): FocusPanelGridArea | undefined {

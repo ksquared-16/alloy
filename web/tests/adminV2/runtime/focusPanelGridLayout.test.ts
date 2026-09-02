@@ -182,9 +182,18 @@ describe("focusPanelGridLayoutOps", () => {
         // readiness lands on the row after household (no overlap).
         expect(g.areas.find((a) => a.card === "readiness_kpi")!.rowStart).toBeGreaterThan(1);
 
-        // Move readiness beside household (col 9, row 1) — a vertical neighbour.
+        /*
+         * Move readiness onto col 9, row 1 — which is INSIDE household. `addCardToGrid`
+         * without a colSpan spans the full 12 columns, so household owns rows 1–3 across
+         * the whole canvas and there is no "beside" it on row 1.
+         *
+         * This once asserted the move landed there, which it only ever did because
+         * overlap was tolerated. It is not: a placement that collides is resolved below
+         * what it collides with, so the column is honoured and the row is pushed past
+         * household. `focusPanelGridNoOverlap.test.ts` owns the invariant itself.
+         */
         g = moveArea(g, "readiness_kpi", 9, 1);
-        expect(g.areas.find((a) => a.card === "readiness_kpi")).toMatchObject({ colStart: 9, rowStart: 1 });
+        expect(g.areas.find((a) => a.card === "readiness_kpi")).toMatchObject({ colStart: 9, rowStart: 4 });
 
         // Resize readiness to span 3 rows vertically.
         g = resizeArea(g, "readiness_kpi", 4, 3);
@@ -392,9 +401,17 @@ describe("focusPanelGridLayoutOps", () => {
             paddingX: 10,
             paddingY: 10,
         });
-        expect(bounds.left).toBe(10 + 6 * (1200 / 12));
+        /*
+         * A column is NOT surfaceWidth / columns. The browser subtracts the 11 gaps it
+         * inserts between 12 tracks first, then divides; a column's start advances by
+         * track + gap. Dividing by 12 alone drifts further right with every column, which
+         * is what made the ghost and the drop disagree toward the right of the canvas.
+         */
+        const track = (1200 - 11 * COMPOSER_GRID_GAP_PX) / 12;
+        expect(bounds.left).toBe(10 + 6 * (track + COMPOSER_GRID_GAP_PX));
         expect(bounds.top).toBe(10);
-        expect(bounds.width).toBeCloseTo(6 * (1200 / 12) - COMPOSER_GRID_GAP_PX);
+        // A span covers its own tracks plus the gaps between them, and no trailing gap.
+        expect(bounds.width).toBeCloseTo(6 * track + 5 * COMPOSER_GRID_GAP_PX);
         expect(bounds.height).toBe(
             2 * COMPOSER_GRID_ROW_UNIT_PX + (2 - 1) * COMPOSER_GRID_GAP_PX,
         );

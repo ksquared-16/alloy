@@ -31,6 +31,10 @@ const OpportunityDrawerVmTabPanes = dynamic(
 );
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
+import FocusPanelAuthoringPreview, {
+    hasAuthoringPreview,
+} from "@/lib/adminV2/runtime/focusPanel/authoring/focusPanelAuthoringPreview";
+import type { FocusPanelCardDensity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -69,6 +73,19 @@ type Props = {
     mutation?: FocusPanelMutation;
     /** Internal compatibility wrapper — see {@link FocusPanelCardCompat}. Pure cards ignore it. */
     compat: FocusPanelCardCompat;
+    /**
+     * AUTHORING ONLY. Set exclusively by the Surface Builder canvas.
+     *
+     * A card's production container fetches its own subject data, which a settings
+     * page has none of — so an authoring canvas renders the approved PRESENTATION
+     * with representative evidence instead. Absent (the runtime default) this whole
+     * branch is unreachable, and a guard test holds that no runtime path sets it.
+     */
+    authoringPreview?: {
+        /** The authored placement, so the preview answers at the size being placed. */
+        columns?: number | null;
+        density?: FocusPanelCardDensity | null;
+    };
 };
 
 function CardFooterAction({
@@ -104,8 +121,31 @@ export default function FocusPanelCardRenderer({
     coordination,
     mutation,
     compat,
+    authoringPreview,
 }: Props) {
     if (!model.visible) return null;
+
+    /*
+     * THE AUTHORING BRANCH, FIRST AND NARROW.
+     *
+     * Before any container runs. The containers are exactly what cannot resolve in
+     * a settings page — no scoped participant, no tenant account — and letting one
+     * run first is how the builder came to show "Select a child to see their day"
+     * as a preview of the Attendance card.
+     *
+     * `hasAuthoringPreview` is a short allowlist: a card whose container resolves
+     * fine from the composer's demo record falls straight through and keeps its
+     * real render.
+     */
+    if (authoringPreview && hasAuthoringPreview(model.key)) {
+        return (
+            <FocusPanelAuthoringPreview
+                cardKey={model.key}
+                columns={authoringPreview.columns}
+                density={authoringPreview.density}
+            />
+        );
+    }
 
     // Household is the first operational reference card (Identity archetype). It
     // observes the Operational Context (not the drawer VM), owns its collapsed →
@@ -183,6 +223,7 @@ export default function FocusPanelCardRenderer({
                 context={context}
                 receded={receded}
                 coordination={coordination}
+                mutation={mutation}
             />
         );
     }

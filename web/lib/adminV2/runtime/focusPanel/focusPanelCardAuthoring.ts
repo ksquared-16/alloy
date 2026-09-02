@@ -88,6 +88,60 @@ const WITHHELD_FROM_AUTHORING: Partial<Record<FocusPanelCardKey, string>> = {
 };
 
 /** One authorable choice in the builder — a card identity plus the shape it is placed in. */
+/**
+ * The presentations a card genuinely implements, named as the operator reads them.
+ *
+ * A card with more than one entry is one canonical identity with one read model
+ * and more than one PRESENTATION — Financials answers the same question at
+ * Summary and at Compact. The list is the authoring vocabulary: "Summary" and
+ * "Compact", never "standard", "8/12" or "span 8", which are how the platform
+ * places it and not what the operator is choosing.
+ */
+export function placementVariantsFor(
+    key: FocusPanelCardKey,
+): ReadonlyArray<{ variantLabel: string; density: FocusPanelCardDensity; columns: number }> {
+    return (PLACEMENT_VARIANTS[key] ?? []).map((v) => ({
+        variantLabel: v.variantLabel ?? "",
+        density: v.density,
+        columns: v.columns,
+    }));
+}
+
+/** The variant a placed card is currently in, matched on its authored density. */
+export function currentPlacementVariant(
+    key: FocusPanelCardKey,
+    density: FocusPanelCardDensity | null | undefined,
+): string | null {
+    const variants = placementVariantsFor(key);
+    if (!variants.length) return null;
+    const hit = variants.find((v) => v.density === density);
+    return (hit ?? variants[0]!).variantLabel;
+}
+
+/**
+ * A placeable model for an authorable card the PREVIEW SUBJECT does not produce.
+ *
+ * The composer's card map comes from a demo opportunity, so it contains models for
+ * the cards that opportunity has. Staff is not one of them — the demo subject is a
+ * family — and the consequence was silent and bad: the tray offered Staff, the click
+ * added it to the grid, the order/grid reconciliation found no model, dropped the
+ * entry, and the sync effect removed the card again. The operator saw a chip that
+ * did nothing.
+ *
+ * The registry is the authority on what is AUTHORABLE, so it is also the authority
+ * on what can be placed. This supplies the minimum a placement needs — identity,
+ * title and the declared placement — for exactly those cards the subject cannot
+ * model. It is never used where a real model exists, and it is authoring-only: a
+ * runtime panel composes from real card models or composes nothing.
+ */
+export function authoringPlacementModelFor(
+    key: FocusPanelCardKey,
+): { key: FocusPanelCardKey; title: string; span: FocusPanelCardSpan; density: FocusPanelCardDensity } | null {
+    const option = authorableFocusPanelCards().find((o) => o.cardKey === key);
+    if (!option) return null;
+    return { key, title: option.label, span: option.span, density: option.density };
+}
+
 export type AuthorableCardOption = {
     cardKey: FocusPanelCardKey;
     /** The card's CURRENT product name. Never a predecessor's. */

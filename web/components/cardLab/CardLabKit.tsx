@@ -74,10 +74,20 @@ export function Action({
     children,
     primary = false,
     onClick,
+    disabled = false,
+    title,
 }: {
     children: ReactNode;
     primary?: boolean;
     onClick?: () => void;
+    /**
+     * Configured but not currently executable. The platform decides this; the card only renders it.
+     * A configured command is never removed for being unavailable — an operator who cannot see a
+     * command cannot learn why it is unavailable.
+     */
+    disabled?: boolean;
+    /** The stated unavailable reason, surfaced on the control itself. */
+    title?: string;
 }) {
     // The family's primary action is FILLED bend-pine (What's Next's `primary-action`), not a
     // tinted outline. State decides which action earns it, and only one does.
@@ -88,6 +98,8 @@ export function Action({
                 primary ? "alloy-os-currentwork__primary-action" : "alloy-os-currentwork__helpful-action"
             }
             onClick={onClick}
+            disabled={disabled}
+            title={title}
         >
             {children}
         </button>

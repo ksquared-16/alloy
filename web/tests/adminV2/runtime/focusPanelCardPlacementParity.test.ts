@@ -98,6 +98,11 @@ describe("Focus Panel card placement parity", () => {
         );
         expect(css).toMatch(/--alloy-os-fp-gap-y:\s*10px/);
         expect(css).toContain("grid-auto-rows: minmax(76px, auto)");
-        expect(css).toContain(".alloy-os-fp-composer .alloy-os-fp-canvas--grid {\n  grid-auto-rows: 76px;");
+        // The composer's rows are content-sized too. A fixed row cannot grow, so a card
+        // whose content exceeded rowSpan x 76 overflowed its own grid area and painted over
+        // the card declared beneath it — with the declared areas still perfectly disjoint.
+        expect(css).toContain(
+            ".alloy-os-fp-composer .alloy-os-fp-canvas--grid {\n  grid-auto-rows: minmax(76px, auto);",
+        );
     });
 });
