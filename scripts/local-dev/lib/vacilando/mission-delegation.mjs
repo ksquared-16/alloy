@@ -228,6 +228,22 @@ export function validateDelegatedAction(entry = {}) {
       return { ok: false, error: "target_not_delegable_in_v1", action_key: actionKey, target_branch: target };
     }
   }
+  // OPTIONAL, EXACT, AND ONLY IF THE DIRECTOR TYPED IT.
+  //
+  // Absence means "no mission-level branch-name restriction" — NOT unrestricted
+  // push authority: repository, protected-ref refusal, the exact head SHA and
+  // the trusted-host grant all still bind the concrete push. Presence means an
+  // exact branch name and nothing else. No globbing: the platform has no
+  // bounded branch-pattern contract, and inventing loose matching here would be
+  // a new inference in the place we just removed one.
+  const rawSource = entry.source_branch ?? entry.sourceBranch ?? null;
+  const sourceBranch = rawSource == null ? null : normalizeBranch(rawSource);
+  if (rawSource != null && !sourceBranch) {
+    return { ok: false, error: "invalid_source_branch", action_key: actionKey };
+  }
+  if (sourceBranch && /[*?\[\]]/.test(sourceBranch)) {
+    return { ok: false, error: "source_branch_pattern_not_supported", source_branch: sourceBranch };
+  }
   const mergeMethod = String(entry.merge_method ?? entry.mergeMethod ?? "merge").trim();
   if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST && mergeMethod !== "merge") {
     return { ok: false, error: "merge_method_not_delegable_in_v1", merge_method: mergeMethod };
@@ -242,6 +258,7 @@ export function validateDelegatedAction(entry = {}) {
     action: {
       action_key: actionKey,
       target_branch: target,
+      source_branch: sourceBranch,
       merge_method: mergeMethod,
       checks_required: checksRequired,
     },
@@ -307,7 +324,10 @@ export function recordMissionDelegation({
       repository,
       action_key: a.action_key,
       target_branch: a.target_branch,
-      source_branch: sourceBranch || null,
+      // Only ever what the Director typed. There is no fallback and no
+      // inference; `sourceBranch` on the call is retained solely so an explicit
+      // caller-supplied value can still reach the record.
+      source_branch: a.source_branch || sourceBranch || null,
       merge_method: a.merge_method,
       checks_required: a.checks_required,
       status: DELEGATION_STATUS.UNCONSUMED,

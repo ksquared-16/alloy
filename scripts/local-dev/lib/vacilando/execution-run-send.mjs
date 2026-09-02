@@ -793,7 +793,23 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
         // the author check inside recordMissionDelegation.
         author: opts.delegationAuthor || "operator",
         repository: repo?.remote ? normalizeRemote(repo.remote) : null,
-        sourceBranch: laneRec?.binding?.branch || null,
+        // NO IMPLICIT SOURCE-BRANCH PIN.
+        //
+        // This used to pass laneRec.binding.branch, so a push delegation was
+        // silently constrained to the lane's own working branch. The Director
+        // never supplied that constraint, and Alloy's safe promotion workflow
+        // deliberately runs on a SEPARATE promote/* branch — so the pin made the
+        // correct workflow unreachable. S15 hit it: a delegated push of
+        // promote/s15-delegation-cert was refused delegation_branch_mismatch
+        // against agent/claude/5-work-unit-grade-a.
+        //
+        // A push delegation authorises this mission to push its validated
+        // promotion artifact, not one specific branch name. The concrete push is
+        // still pinned at execution by repository, exact branch, exact head SHA,
+        // worktree, protected-ref refusal and the trusted-host grant. A
+        // mission-level branch constraint is now only ever what the Director
+        // typed (source_branch on the delegated action).
+        sourceBranch: null,
         nowMs,
         root,
       });
