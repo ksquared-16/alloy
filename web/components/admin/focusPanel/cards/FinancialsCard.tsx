@@ -52,10 +52,18 @@ type Props = {
  *
  * ── SUBJECT, NOT HOUSEHOLD ──
  *
- * Attribution is `billable_source_type = 'enrollment_agreement'` → agreement → child, so the subject
- * filter offers All plus each child. There is no Household option: `billable_source_type` admits only
- * `job` and `enrollment_agreement`, so a household-level charge cannot be represented, and faking one
- * by attaching it to a single child would put a family expense on one sibling's ledger.
+ * Attribution is `billable_source_type` → subject. An enrolled child's charge hangs off their
+ * agreement (agreement → child), so the subject filter offers All plus each child. A pre-enrolment
+ * fee hangs off the HOUSEHOLD (`customer`) and belongs to the account rather than to any one child —
+ * it is never faked onto a sibling, which would put a family expense on one child's ledger.
+ *
+ * ── THE LIFECYCLE IS OPERABLE FROM HERE ──
+ *
+ * Add charge creates a DRAFT, and a draft is not owed. Posting is a separate authoritative step and
+ * a posted charge is immutable, so each ledger row offers exactly the transition its lifecycle
+ * admits: `Post` on a draft, `Reverse` on posted money. Both run registered actions; this card
+ * decides nothing about money and refreshes from the read model rather than patching a row it just
+ * changed.
  */
 export default function FinancialsCard({ model, context, receded = false, coordination }: Props) {
     const scope = context.participantScope ?? null;
@@ -297,6 +305,65 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         // domain refused with `missing_event_date` — after the operator had entered a date, and
         // after the PREVIEW had accepted it. A stale closure is invisible until the two disagree.
     }, [chargeEventDate, chargeNote, chargeTarget, load, pending, running]);
+
+    /**
+     * A LEDGER ROW'S OWN TRANSITION — post a draft, reverse posted money.
+     *
+     * Both are registered actions (`charge.post`, `charge.reverse`), so every rule about what may
+     * happen to a charge stays in the domain. Immutability is a DB trigger, idempotent posting is the
+     * service's guarded update, and the reversal's amount is derived by the service — none of it is
+     * decided here. The card refreshes from the read model afterwards, so what it shows is what
+     * committed, never an optimistic guess about it.
+     */
+    const runRowAction = useCallback(
+        async (
+            actionKey: "charge.post" | "charge.reverse",
+            row: { chargeId: string; description: string | null; subjectMemberId: string | null },
+        ) => {
+            if (running) return;
+            setRunning(true);
+            setCommandError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action_key: actionKey,
+                        entity_type: "child",
+                        /*
+                         * The ROW's own subject when it has one, and nothing when it does not.
+                         *
+                         * A household charge has no child subject and must not borrow one — sending
+                         * the panel's first child would attribute a family expense to one sibling in
+                         * the audit trail. Neither action requires an entity: the charge is the
+                         * subject of its own posting.
+                         */
+                        entity_id: row.subjectMemberId ?? "",
+                        mode: "execute",
+                        confirmation: { confirmed: true },
+                        payload: {
+                            charge_id: row.chargeId,
+                            charge_label: row.description ?? row.chargeId,
+                            ...(actionKey === "charge.reverse" ? { kind: "reversal" } : {}),
+                        },
+                    }),
+                });
+                const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+                if (!json?.ok) {
+                    const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                    // The domain refusing is an answer. Surfaced, never swallowed.
+                    setCommandError(err || "That could not be done.");
+                }
+            } catch {
+                setCommandError("The request could not be sent.");
+            } finally {
+                setRunning(false);
+                await load();
+            }
+        },
+        [load, running],
+    );
 
     const currency = vm?.rows[0]?.currencyCode ?? "USD";
     /*
@@ -869,6 +936,38 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                         </span>
                                                         <span className="alloy-os-financials__cell alloy-os-financials__cell--source">
                                                             {row.source ?? "—"}
+                                                        </span>
+                                                        {/*
+                                                            ONE TRANSITION PER LIFECYCLE STATE.
+                                                            A draft can be posted; posted money can
+                                                            only be corrected. A void row and a
+                                                            scheduled draft offer nothing, because
+                                                            neither has a lawful next step here.
+                                                        */}
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--row-action">
+                                                            {row.lifecycleStatus === "draft" ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="alloy-os-financials__action"
+                                                                    data-financials-row-command="charge.post"
+                                                                    data-financials-row-charge={row.chargeId}
+                                                                    disabled={running}
+                                                                    onClick={() => void runRowAction("charge.post", row)}
+                                                                >
+                                                                    Post
+                                                                </button>
+                                                            ) : row.lifecycleStatus === "posted" ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="alloy-os-financials__action"
+                                                                    data-financials-row-command="charge.reverse"
+                                                                    data-financials-row-charge={row.chargeId}
+                                                                    disabled={running}
+                                                                    onClick={() => void runRowAction("charge.reverse", row)}
+                                                                >
+                                                                    Reverse
+                                                                </button>
+                                                            ) : null}
                                                         </span>
                                                     </div>
                                                 ))}

@@ -46,6 +46,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "attendance.mark_absent",
     "charge.add",
     "charge.post",
+    "charge.reverse",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -223,8 +224,27 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         registeredActionKey: "charge.post",
         implementationStatus: "production",
         reason:
-            "Makes a draft charge OWED. The result is immutable by DB rule — a posted childcare charge "
+            "Makes a draft charge OWED. Idempotent — a retried post returns the charge already posted "
+            + "rather than posting twice. The result is immutable by DB rule: a posted childcare charge "
             + "cannot be deleted or edited in place, only corrected through source_charge_id.",
+    }),
+    def({
+        capabilityKey: "charge.reverse",
+        canonicalCommandKey: "charge.reverse",
+        operatorLabel: "Reverse charge",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "charge.reverse",
+        implementationStatus: "production",
+        reason:
+            "The lawful way posted money changes. Writes a NEW corrective row referencing the original "
+            + "through source_charge_id; the original stays exactly as posted. Immutability without a "
+            + "correction path is a dead end, not a guarantee.",
     }),
     def({
         capabilityKey: "attendance.check_in",

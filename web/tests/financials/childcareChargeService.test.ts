@@ -63,7 +63,7 @@ describe("childcareChargeService (P3.1)", () => {
             chargeCategory: "tuition",
             amountCents: 120000,
         });
-        const posted = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
+        const { charge: posted } = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
         expect(posted.status).toBe("posted");
         await expect(
             recalculateDraftCharge(supabase, { orgId: ORG_ID, chargeId: posted.id, amountCents: 1 })
@@ -78,7 +78,7 @@ describe("childcareChargeService (P3.1)", () => {
             chargeCategory: "tuition",
             amountCents: 130000,
         });
-        const posted = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
+        const { charge: posted } = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
         const reversal = await createChildcareCorrection(supabase, {
             orgId: ORG_ID,
             sourceChargeId: posted.id,
@@ -104,7 +104,7 @@ describe("childcareChargeService (P3.1)", () => {
             chargeCategory: "tuition",
             amountCents: 100000,
         });
-        const posted = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
+        const { charge: posted } = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
         await expect(
             createChildcareCorrection(supabase, {
                 orgId: ORG_ID,
@@ -123,7 +123,7 @@ describe("childcareChargeService (P3.1)", () => {
             chargeCategory: "tuition",
             amountCents: 100000,
         });
-        const posted = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
+        const { charge: posted } = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
         await expect(
             createChildcareCorrection(supabase, { orgId: ORG_ID, sourceChargeId: posted.id, kind: "credit" })
         ).rejects.toMatchObject({ code: "invalid_input" });
@@ -160,6 +160,83 @@ describe("childcareChargeService (P3.1)", () => {
         await expect(
             createChildcareCorrection(supabase, { orgId: ORG_ID, sourceChargeId: "job-charge-1", kind: "reversal" })
         ).rejects.toMatchObject({ code: "invalid_state" });
+    });
+
+    /*
+     * The guarantees that protect an enrolment charge protect a HOUSEHOLD charge too. `customer` was
+     * admitted as a billable source so a family can be charged before anyone is enrolled; the service
+     * still tested the `enrollment_agreement` literal, so those charges could be created and then
+     * neither posted nor corrected.
+     */
+    it("posts and corrects a HOUSEHOLD (customer-source) charge, not only an enrolment one", async () => {
+        const { supabase } = setup([
+            {
+                id: "household-charge-1",
+                org_id: ORG_ID,
+                job_id: null,
+                billable_source_type: "customer",
+                billable_source_id: "cust-1",
+                charge_type: "fee",
+                charge_category: "one_time",
+                status: "draft",
+                currency_code: "USD",
+                amount_cents: 7500,
+                source_charge_id: null,
+                metadata: {},
+            },
+        ]);
+        const { charge: posted, alreadyPosted } = await postChildcareCharge(supabase, {
+            orgId: ORG_ID,
+            chargeId: "household-charge-1",
+            actorUserId: "user-9",
+        });
+        expect(alreadyPosted).toBe(false);
+        expect(posted.status).toBe("posted");
+        expect(posted.posted_by).toBe("user-9");
+        expect(posted.posted_at).toBeTruthy();
+
+        const reversal = await createChildcareCorrection(supabase, {
+            orgId: ORG_ID,
+            sourceChargeId: posted.id,
+            kind: "reversal",
+            actorUserId: "user-9",
+        });
+        // The correction stays on the HOUSEHOLD; it is never re-pinned onto an agreement.
+        expect(reversal.billable_source_type).toBe("customer");
+        expect(reversal.billable_source_id).toBe("cust-1");
+        expect(reversal.amount_cents).toBe(-7500);
+        expect(reversal.source_charge_id).toBe(posted.id);
+        expect(reversal.posted_by).toBe("user-9");
+    });
+
+    it("posting is idempotent: a retry reports the existing posting and writes nothing", async () => {
+        const { store, supabase } = setup();
+        const draft = await createChildcareDraftCharge(supabase, {
+            orgId: ORG_ID,
+            enrollmentAgreementId: AGREEMENT_ID,
+            chargeCategory: "tuition",
+            amountCents: 110000,
+            actorUserId: "user-1",
+        });
+        expect(draft.created_by).toBe("user-1");
+
+        const first = await postChildcareCharge(supabase, {
+            orgId: ORG_ID,
+            chargeId: draft.id,
+            actorUserId: "user-1",
+        });
+        const second = await postChildcareCharge(supabase, {
+            orgId: ORG_ID,
+            chargeId: draft.id,
+            actorUserId: "user-2",
+        });
+        expect(first.alreadyPosted).toBe(false);
+        expect(second.alreadyPosted).toBe(true);
+        // The second call must not re-stamp the posting: the first actor is the one who posted it.
+        expect(second.charge.posted_at).toBe(first.charge.posted_at);
+        expect(second.charge.posted_by).toBe("user-1");
+        // And it must not have produced a second row.
+        expect((store.charges as ChargeRow[]).length).toBe(1);
     });
 
     it("rejects invalid charge_category and zero/non-integer amounts", async () => {

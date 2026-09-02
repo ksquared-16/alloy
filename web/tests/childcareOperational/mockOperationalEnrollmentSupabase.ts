@@ -560,6 +560,26 @@ export function createOperationalEnrollmentMockSupabase(
         });
 
         chain.maybeSingle = vi.fn(async () => {
+            /*
+             * `maybeSingle` after a MUTATION returns what the mutation touched — and NULL, not an
+             * error, when the filters matched nothing. That is exactly how PostgREST behaves, and it
+             * is the shape a guarded update relies on: `update(...).eq('status','draft')` matching
+             * zero rows is the signal that someone else already advanced the row, not a failure.
+             * Without this, the mock silently performed no update and answered with the unchanged
+             * row it had merely read.
+             */
+            if (isInsert && pendingInsert) {
+                const inserted = insertRows(pendingInsert);
+                return { data: clone(inserted[0]) ?? null, error: null };
+            }
+            if (isUpdate && pendingUpdate) {
+                const rows = tableRows(table);
+                const idx = rows.findIndex((r) => applyFilters([r], filters).length === 1);
+                if (idx < 0) return { data: null, error: null };
+                const updated = { ...rows[idx], ...pendingUpdate, updated_at: new Date().toISOString() };
+                rows[idx] = updated;
+                return { data: clone(updated), error: null };
+            }
             const rows = applyFilters(tableRows(table), filters);
             let sorted = rows;
             if (orderCol) {

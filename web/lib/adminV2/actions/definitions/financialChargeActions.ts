@@ -38,12 +38,17 @@ import {
     previewTemplateCharge,
     writeTemplateDraftCharge,
 } from "@/lib/financials/chargeLifecycle/chargeLifecycleService";
-import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
+import {
+    createChildcareCorrection,
+    postChildcareCharge,
+    type CorrectionKind,
+} from "@/lib/financials/childcareChargeService";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const CHARGE_ADD_ACTION_KEY = "charge.add";
 export const CHARGE_POST_ACTION_KEY = "charge.post";
+export const CHARGE_REVERSE_ACTION_KEY = "charge.reverse";
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -318,7 +323,16 @@ const postCharge: RegisteredAction = {
     description: "Post a draft charge so it becomes owed.",
     supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
     supportedProcessKeys: [],
-    requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
+    /*
+     * THE SUBJECT OF A POST IS THE CHARGE, not a child.
+     *
+     * `charge.add` needs a child because it has to resolve what the charge hangs off. Posting does
+     * not: the charge id names the row, and the service is org-scoped. Demanding an entity id here
+     * refused exactly the case the household source exists for — a family with a registration fee
+     * and no enrolled child has no `customer_member_id` to send, so their charge could be created
+     * and never posted. `validatePayload` enforces the context this action actually needs.
+     */
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
     bosProposalSupport: false,
     confirmationPolicy: "none",
@@ -354,9 +368,10 @@ const postCharge: RegisteredAction = {
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
         try {
-            const row = await postChildcareCharge(supabase as SupabaseClient, {
+            const { charge, alreadyPosted } = await postChildcareCharge(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
                 chargeId: t(payload.charge_id),
+                actorUserId: ctx.userId ?? null,
             });
             return {
                 ok: true,
@@ -365,8 +380,15 @@ const postCharge: RegisteredAction = {
                     actionKey: CHARGE_POST_ACTION_KEY,
                     entityType: invocation.entityType,
                     entityId: t(invocation.entityId),
-                    affectedId: String((row as { id?: unknown }).id ?? ""),
-                    detail: { status: (row as { status?: unknown }).status },
+                    affectedId: charge.id,
+                    /*
+                     * A RETRY IS A SUCCESS, and says so.
+                     *
+                     * Posting is idempotent, so a resubmitted request returns the charge that is
+                     * already posted rather than failing. `already_posted` is how the caller tells
+                     * "I posted it" from "it was posted" without either being an error.
+                     */
+                    detail: { status: charge.status, already_posted: alreadyPosted },
                 },
             };
         } catch (err) {
@@ -375,4 +397,106 @@ const postCharge: RegisteredAction = {
     },
 };
 
-export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge];
+/**
+ * CORRECT A POSTED CHARGE — the only way posted money changes.
+ *
+ * A posted childcare charge is immutable by DB rule: it cannot be deleted, and its financial fields
+ * cannot be edited in place. `createChildcareCorrection` writes a NEW row pointing at the original
+ * through `source_charge_id`, so the original stays exactly as it was posted and the correction is
+ * visible as its own line in the ledger. Without a registered intent, the platform enforced
+ * immutability and then offered no lawful way to fix a mistake — which is not immutability, it is a
+ * dead end.
+ *
+ * `reversal` derives its amount (the negation of the source) and is the default. `credit` and
+ * `replacement` take an explicit signed amount. All three rules live in the service; this adds none.
+ */
+const reverseCharge: RegisteredAction = {
+    actionKey: CHARGE_REVERSE_ACTION_KEY,
+    defaultLabel: "Reverse charge",
+    description: "Reverse or adjust a posted charge with a new corrective record.",
+    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedProcessKeys: [],
+    // Same as posting: the corrective record's subject is the charge it references.
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        if (!t(src.charge_id)) {
+            return {
+                ok: false,
+                blockers: [{ code: "missing_charge", message: "A charge is required.", field: "charge_id" }],
+            };
+        }
+        const kind = t(src.kind) || "reversal";
+        if (!["reversal", "credit", "replacement"].includes(kind)) {
+            return {
+                ok: false,
+                blockers: [{ code: "invalid_correction_kind", message: `Unknown correction: ${kind}.`, field: "kind" }],
+            };
+        }
+        return { ok: true, value: src };
+    },
+
+    async resolveEligibility({ payload }) {
+        const chargeId = t(payload?.charge_id);
+        return {
+            eligible: Boolean(chargeId),
+            blockers: chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview({ payload }) {
+        const kind = t(payload?.kind) || "reversal";
+        return {
+            summary: `${kind === "reversal" ? "Reverse" : kind === "credit" ? "Credit" : "Replace"} ${
+                t(payload?.charge_label) || t(payload?.charge_id)
+            }`,
+            changes: [
+                "The original posted charge is left exactly as posted.",
+                "A new corrective line references it and moves the balance.",
+            ],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        try {
+            const kind = (t(payload.kind) || "reversal") as CorrectionKind;
+            const row = await createChildcareCorrection(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                sourceChargeId: t(payload.charge_id),
+                kind,
+                // A reversal DERIVES its amount; passing one is refused by the service. Only an
+                // explicit credit/replacement carries an operator amount.
+                ...(kind === "reversal"
+                    ? {}
+                    : { amountCents: payload.amount_cents == null ? undefined : Number(payload.amount_cents) }),
+                actorUserId: ctx.userId ?? null,
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: CHARGE_REVERSE_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: t(invocation.entityId),
+                    affectedId: row.id,
+                    detail: {
+                        correction_kind: kind,
+                        source_charge_id: row.source_charge_id,
+                        amount_cents: row.amount_cents,
+                    },
+                },
+            };
+        } catch (err) {
+            return mapError(err, correlationId);
+        }
+    },
+};
+
+export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge, reverseCharge];
