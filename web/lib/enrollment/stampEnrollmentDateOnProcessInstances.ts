@@ -8,7 +8,6 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-    ENROLLMENT_CONTEXT_TYPE,
     ENROLLMENT_SUBJECT_TYPE,
     PROCESS_INSTANCES_TABLE,
 } from "@/lib/process/processInstances";
@@ -76,14 +75,37 @@ export async function stampEnrollmentDateOnProcessInstances(
         reason: args.reason ?? null,
     };
 
+    /*
+     * THE OPPORTUNITY'S JOURNEYS, UNDER EITHER ANCHOR.
+     *
+     * This matched `context_type = 'opportunity' AND context_id = <opportunity>`, which is now only
+     * the older shape. A journey anchored to its Enrollment Participation would have matched
+     * NOTHING — and the failure is silent by construction: stamping reports the rows it stamped, so
+     * zero rows reads as "no journeys here" rather than as a defect. An acquisition outcome would
+     * have recorded an enrollment date onto nobody.
+     *
+     * So the participations belonging to this Opportunity are resolved first, and both anchors are
+     * accepted. The Opportunity id itself stays in the list: journeys written before the convergence
+     * are still stamped by the same call, with no backfill dependency.
+     */
+    const { data: participationRows, error: participationError } = await supabase
+        .from("opportunity_customer_members")
+        .select("id")
+        .eq("org_id", args.orgId)
+        .eq("opportunity_id", args.opportunityId);
+    if (participationError) return { stamped: [], error: participationError.message };
+    const contextIds = [
+        args.opportunityId,
+        ...((participationRows ?? []) as { id: string }[]).map((r) => String(r.id)),
+    ];
+
     let query = supabase
         .from(PROCESS_INSTANCES_TABLE)
         .select("id, subject_id, metadata")
         .eq("org_id", args.orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
         .eq("subject_type", ENROLLMENT_SUBJECT_TYPE)
-        .eq("context_type", ENROLLMENT_CONTEXT_TYPE)
-        .eq("context_id", args.opportunityId);
+        .in("context_id", contextIds);
 
     const processInstanceId = args.processInstanceId?.trim();
     const customerMemberId = args.customerMemberId?.trim();

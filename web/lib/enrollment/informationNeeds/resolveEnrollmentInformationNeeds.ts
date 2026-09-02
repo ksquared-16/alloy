@@ -39,6 +39,7 @@ import {
 } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import { readEnrollmentNeedDeclines } from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
+import { readEnrollmentValueProvenance } from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
 import { readEnrollmentNeedConfirmations } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
 import {
     projectEnrollmentInformationNeeds,
@@ -85,6 +86,8 @@ export type EnrollmentNeedsContext = {
     readonly session: SessionRow | null;
     readonly subjectId: string | null;
     readonly forms: readonly PinnedRequirementForm[];
+    /** The tenant's canonical person roles, for recognising party-slot destinations. */
+    readonly partyRoles?: readonly string[];
 };
 
 /** Assemble the needs value from a loaded context — PURE, reusable against a post-write session. */
@@ -115,6 +118,8 @@ export function assembleEnrollmentInformationNeeds(
         canonicalValues: input.canonicalValues,
         confirmations: readEnrollmentNeedConfirmations(session.metadata),
         declines: readEnrollmentNeedDeclines(session.metadata),
+        provenance: readEnrollmentValueProvenance(session.metadata),
+        partyRoles: context.partyRoles,
         requiresConfirmation: input.requiresConfirmation,
     });
     return {

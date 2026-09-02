@@ -1,6 +1,18 @@
 /**
  * Canonical path for updating OCM child lifecycle (`outcome_status_key`) with audit/event parity (Card 10).
  * Does not mutate opportunities.status_key or delete placement candidates.
+ *
+ * ## The acquisition Opportunity is OPTIONAL
+ *
+ * `opportunityId` may be null, and that is an ordinary participation rather than a degraded one: a
+ * family already known to the school enrolls a second child with no acquisition episode at all.
+ * Requiring one here would have forced the governed completion outcome to either fabricate an
+ * Opportunity or write `outcome_status_key` itself, and a second writer of the child's durable
+ * Enrollment state is exactly what this module exists to prevent.
+ *
+ * When it is null the row is scoped with `opportunity_id IS NULL` rather than an equality filter —
+ * Postgres never matches NULL by `=`, so an equality filter would silently update nothing and
+ * report "not found" for a row that is sitting right there.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -12,7 +24,8 @@ import { ensurePlacementCandidateForWaitlistedChild } from "@/lib/orchestration/
 export type UpdateOpportunityCustomerMemberLifecycleStatusParams = {
     supabase: SupabaseClient;
     orgId: string;
-    opportunityId: string;
+    /** Acquisition context. Null for a context-free Enrollment Participation. */
+    opportunityId: string | null;
     opportunityCustomerMemberId: string;
     nextStatusKey: string | null;
     /** When omitted, loads current outcome_status_key from DB. */
@@ -30,7 +43,8 @@ export type UpdateOpportunityCustomerMemberLifecycleStatusParams = {
 export type OpportunityCustomerMemberLifecycleRow = {
     id: string;
     org_id: string;
-    opportunity_id: string;
+    /** Null for a context-free Enrollment Participation. */
+    opportunity_id: string | null;
     customer_member_id: string;
     outcome_status_key: string | null;
     updated_at?: string | null;
@@ -70,18 +84,23 @@ export async function updateOpportunityCustomerMemberLifecycleStatus(
     } = params;
 
     const ocmId = opportunityCustomerMemberId.trim();
-    const oppId = opportunityId.trim();
-    if (!orgId.trim() || !ocmId || !oppId) {
-        return { error: { message: "orgId, opportunityId, and opportunityCustomerMemberId are required" } };
+    const oppId = (opportunityId ?? "").trim() || null;
+    if (!orgId.trim() || !ocmId) {
+        return { error: { message: "orgId and opportunityCustomerMemberId are required" } };
     }
 
-    const { data: existing, error: loadErr } = await supabase
+    // Scope to the acquisition episode, or to the absence of one. NULL is never matched by `=`, so
+    // the context-free branch must use `IS NULL` or it silently updates nothing.
+    const COLUMNS = "id, org_id, opportunity_id, customer_member_id, outcome_status_key, updated_at";
+
+    const loadBase = supabase
         .from("opportunity_customer_members")
-        .select("id, org_id, opportunity_id, customer_member_id, outcome_status_key, updated_at")
+        .select(COLUMNS)
         .eq("id", ocmId)
-        .eq("org_id", orgId)
-        .eq("opportunity_id", oppId)
-        .maybeSingle();
+        .eq("org_id", orgId);
+    const { data: existing, error: loadErr } = await (
+        oppId ? loadBase.eq("opportunity_id", oppId) : loadBase.is("opportunity_id", null)
+    ).maybeSingle();
 
     if (loadErr) return { error: { message: loadErr.message } };
     if (!existing) {
@@ -106,13 +125,15 @@ export async function updateOpportunityCustomerMemberLifecycleStatus(
         if (!chk.ok) return { error: { message: chk.message } };
     }
 
-    const { data: updated, error: upErr } = await supabase
+    const updateBase = supabase
         .from("opportunity_customer_members")
         .update({ outcome_status_key: next })
         .eq("id", ocmId)
-        .eq("org_id", orgId)
-        .eq("opportunity_id", oppId)
-        .select("id, org_id, opportunity_id, customer_member_id, outcome_status_key, updated_at")
+        .eq("org_id", orgId);
+    const { data: updated, error: upErr } = await (
+        oppId ? updateBase.eq("opportunity_id", oppId) : updateBase.is("opportunity_id", null)
+    )
+        .select(COLUMNS)
         .single();
 
     if (upErr || !updated) {
@@ -141,7 +162,8 @@ export async function updateOpportunityCustomerMemberLifecycleStatus(
     }
 
     let placementHook: { attempted: boolean; created: boolean; skipped_reason?: string } | undefined;
-    if (params.runPlacementHook !== false && next === "waitlisted" && previous !== "waitlisted") {
+    // The waitlist placement hook is acquisition-shaped and has no meaning without an Opportunity.
+    if (oppId && params.runPlacementHook !== false && next === "waitlisted" && previous !== "waitlisted") {
         try {
             placementHook = await ensurePlacementCandidateForWaitlistedChild(supabase, {
                 orgId,

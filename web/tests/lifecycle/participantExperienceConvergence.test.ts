@@ -244,9 +244,19 @@ describe("one interaction per unique need, and no raw form beneath it", () => {
             }),
             { subjectDisplayName: "Test Process" },
         );
-        expect(participantQuestion(wire)).toContain("I filled out");
+        /*
+         * PREPARATION LANGUAGE MUST BE TRUTHFUL.
+         *
+         * "I filled out your paperwork" was said while a required attachment had not been asked
+         * for, let alone supplied — the CIS asked for the immunization record inside the review,
+         * after the claim. The selector now places `collect_evidence` ahead of this turn, so
+         * reaching it means collection AND required evidence really are complete, and the sentence
+         * describes what is happening rather than claiming something already finished.
+         */
+        expect(participantQuestion(wire)).toContain("preparing");
+        expect(participantQuestion(wire)).not.toContain("I filled out");
         // The instruction lives on the [Review paperwork] action, not in the sentence.
-        expect(participantQuestion(wire)).toContain("that's everything I needed");
+        expect(participantQuestion(wire)).toContain("that's everything I need");
         // No progress line at all during review — the artifact itself is the context.
         expect(progressLine(wire)).toBe("");
     });

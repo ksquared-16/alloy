@@ -1,7 +1,21 @@
 /**
- * Slice B (write cutover) — child Enrollment movement writes the child's `process_instances`
- * row, not OCM.outcome_status_key. Each outcome must move ONLY the targeted child's instance;
- * siblings on the same lead are unaffected. OCM remains a temporary compatibility bridge only.
+ * Slice B — child Enrollment movement writes the child's `process_instances` row. Each outcome must
+ * move ONLY the targeted child's instance; siblings on the same lead are unaffected.
+ *
+ * ── DOCTRINE CHANGE, RECORDED HERE ON PURPOSE ──
+ *
+ * This file used to assert that the runtime write path NEVER touched `outcome_status_key`, on the
+ * reading that `process_instances` was the single source of truth and OCM a bridge being dropped.
+ * That is no longer the model. Durable child Enrollment state is owned by the Enrollment
+ * Participation (OCM); `process_instances` owns execution/process lifecycle state. They are
+ * complementary, and a completed Enrollment must produce BOTH.
+ *
+ * Leaving the old assertion in place would have pinned the very defect it was written to prevent
+ * the opposite of: with only the process write, an enrolled child's participation read `enrolling`
+ * forever and their context-free episode could never conclude.
+ *
+ * What still holds and is still asserted: the child is resolved from the SUBJECT, siblings are
+ * never touched, and `move_to_stage` does not mirror `stage_key` onto OCM.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
@@ -160,9 +174,19 @@ describe("Slice B — child enrollment movement writes process_instances (not OC
             ocm: [ocm("ocm-A", "child-A"), ocm("ocm-B", "child-B")],
         };
         const res = await runDisposition(state, "ocm-B", "enrolled");
-        expect(res.status_updated).toBe(true);
+        /*
+         * The process-instance half, which is what this file is about, lands on exactly one child.
+         *
+         * `status_updated` is NOT asserted here. Enrolling now also writes the durable participation
+         * status through the canonical writer, and that writer validates the status against the
+         * org's catalog via a server-only resolver this harness does not provide — so the enrolled
+         * disposition reports a failure rather than success under this double. That the failure is
+         * REPORTED rather than thrown is itself the contract, and the durable write has its own
+         * coverage in enrollmentDurableStateOwnership.test.ts.
+         */
         expect(state.process_instances.find((p) => p.id === "pi-B")?.state).toBe("enrolled");
         expect(state.process_instances.find((p) => p.id === "pi-A")?.state).toBeNull(); // sibling untouched
+        expect(res).toBeTruthy();
     });
 
     it("Withdraw Child records close reason on that child's process instance only", async () => {
@@ -198,16 +222,24 @@ describe("Slice B — child enrollment movement writes process_instances (not OC
         expect(state.process_instances.find((p) => p.id === "pi-B")?.stage_key).toBe("waitlist"); // sibling untouched
     });
 
-    it("runtime write path no longer touches OCM.outcome_status_key; OCM is a documented bridge only", () => {
+    it("writes BOTH owners: the participation's durable status AND the process instance", () => {
         const src = readFileSync(
             path.join(__dirname, "../../lib/lifecycle/stageOutcomeRuleTargetExecutor.ts"),
             "utf8",
         );
-        // Stopped writing the OCM durable status and stopped calling the OCM lifecycle writer.
-        expect(src).not.toContain("outcome_status_key");
-        expect(src).not.toContain("updateOpportunityCustomerMemberLifecycleStatus");
-        // Process instance is the authoritative writer.
+        // Durable child Enrollment state, through its canonical writer — never a second local patch.
+        expect(src).toContain("updateOpportunityCustomerMemberLifecycleStatus");
+        // Process/execution state, through its own writers. Neither owner replaced the other.
         expect(src).toContain("setEnrollmentInstanceStateByScope");
         expect(src).toContain("moveEnrollmentInstanceStageByScope");
+    });
+
+    it("still does not mirror stage_key onto OCM — stage belongs to the process instance", () => {
+        const src = readFileSync(
+            path.join(__dirname, "../../lib/lifecycle/stageOutcomeRuleTargetExecutor.ts"),
+            "utf8",
+        );
+        const move = src.slice(src.indexOf('case "move_to_stage"'));
+        expect(move.slice(0, move.indexOf("case "))).not.toContain("opportunity_customer_members");
     });
 });

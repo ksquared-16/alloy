@@ -45,10 +45,11 @@ import type {
     StageWorkParticipantDecisionV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
-    getEnrollmentInstanceIdByScope,
     readEnrollmentInstanceStageKey,
     readEnrollmentInstanceState,
+    resolveEnrollmentInstanceIdForScope,
 } from "@/lib/process/processInstances";
+import { assertSingleParticipantWrite } from "@/lib/lifecycle/assertSingleParticipantWrite";
 import {
     runPlatformTransaction,
     type PlatformTransactionResult,
@@ -238,16 +239,40 @@ export async function executeParticipantDecisionForChild(
         };
     }
 
-    const processInstanceId = await getEnrollmentInstanceIdByScope(input.supabase, {
+    /*
+     * "No journey" and "more than one journey" are different refusals and must not collapse.
+     *
+     * The identification helper answers `null` for both, which would report a child with a
+     * DUPLICATE enrollment track as having none — the operator would go looking for a missing track
+     * while the real defect is two of them. The scope resolver distinguishes the two, so ambiguity
+     * is reported as the integrity failure it is, before anything is written.
+     */
+    const journey = await resolveEnrollmentInstanceIdForScope(input.supabase, {
         orgId: input.orgId,
-        opportunityId,
         customerMemberId,
+        opportunityId,
     });
+    const processInstanceId = journey.id;
     const affected: ParticipantDecisionAffected = {
         opportunity_id: opportunityId,
         customer_member_id: customerMemberId,
         process_instance_id: processInstanceId,
     };
+    if (journey.ambiguous) {
+        const ambiguity = assertSingleParticipantWrite({
+            moved: 2,
+            operation: "enrollment path",
+            participantLabel: input.participantLabel,
+        });
+        return {
+            ok: false,
+            code: "write_count_violation",
+            decision_key: decisionKey,
+            affected,
+            message: ambiguity.ok ? "More than one enrollment track matched." : ambiguity.failure.message,
+            write_error: ambiguity.ok ? undefined : ambiguity.failure,
+        };
+    }
     if (!processInstanceId) {
         // Caught here rather than at the write so the operator gets the real reason instead of a
         // zero-row write failure, and so nothing is attempted at all.

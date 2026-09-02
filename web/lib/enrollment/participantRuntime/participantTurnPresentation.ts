@@ -38,6 +38,10 @@ export type ParticipantTurnControl =
       }
     | ParticipantValueControl
     | { readonly kind: "handoff" }
+    /** Required documents to attach, BEFORE any paperwork is prepared. */
+    | { readonly kind: "evidence" }
+    /** A person to add by role — reuse someone known, or collect a new one. */
+    | { readonly kind: "party" }
     | { readonly kind: "done" };
 
 /** The controls that actually collect a value. Shared by collection and by correction. */
@@ -66,6 +70,8 @@ export type ParticipantValueControl =
  */
 export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): ParticipantTurnControl {
     if (turn.kind === "complete") return { kind: "done" };
+    if (turn.kind === "collect_party") return { kind: "party" };
+    if (turn.kind === "collect_evidence") return { kind: "evidence" };
     if (turn.kind === "complete_artifact") return { kind: "handoff" };
     if (turn.kind === "confirm_known_value") {
         return {
@@ -350,8 +356,29 @@ export type ConversationVoice = {
 
 export function conversationVoice(objective: ParticipantObjectiveWire): ConversationVoice {
     const turn = objective.next_turn as { scope?: string | null; entity_type?: string | null };
-    const child = familiarName(objective);
+    return voiceForSubject({
+        entityType: turn.entity_type ?? null,
+        scope: turn.scope ?? null,
+        childName: familiarName(objective),
+    });
+}
+
+/**
+ * The same voice, addressed by SUBJECT rather than by the current turn.
+ *
+ * A grouped confirmation speaks about a subject before any one of its facts is the turn, so the
+ * heading needs the voice without a turn to read it from. Extracted rather than duplicated: the card
+ * that says "let's check your details" and the question that follows it must never describe
+ * different people, and the only way to guarantee that is for both to ask this one function.
+ */
+export function voiceForSubject(input: {
+    readonly entityType: string | null;
+    readonly scope: string | null;
+    readonly childName: string;
+}): ConversationVoice {
+    const child = input.childName;
     const childPossessive = child ? `${child}'s` : "your child's";
+    const turn = { scope: input.scope, entity_type: input.entityType };
 
     // The canonical entity is the strongest signal, because it names the record the fact lives on.
     switch ((turn.entity_type ?? "").toLowerCase()) {
@@ -442,6 +469,11 @@ export function questionForNeed(
     } as unknown as ParticipantObjectiveWire);
 }
 
+/** "a middle name", "an emergency contact" — article by sound, not by spelling rules nobody reads. */
+function indefiniteArticle(label: string): string {
+    return /^[aeiou]/i.test(label.trim()) ? "an" : "a";
+}
+
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
     const turn = objective.next_turn;
     const subject = familiarName(objective);
@@ -482,19 +514,68 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
          * These prompts are the school's own, and the topic heading above them supplies the context
          * a possessive was standing in for. So they are asked as written.
          */
-        if (!(turn as { entity_type?: string | null }).entity_type) {
+        /*
+         * NEVER A NAKED LABEL.
+         *
+         * This branch used to return the authored label with a question mark bolted on, so a parent
+         * was asked, in its entirety, "Middle Name?" — the runtime knew it was talking about Malik
+         * and said none of it. Every active question must be understandable on its own, which means
+         * carrying its subject.
+         *
+         * Where the destination declares no entity, `subject_entity_type` supplies one from the
+         * packet's own layout, and where even that is absent the question still gets a stem and a
+         * possessive rather than being handed over raw.
+         */
+        /*
+         * NO SUBJECT, NO INVENTED POSSESSIVE.
+         *
+         * A destination the packet gives no subject for keeps the school's own words. That was a
+         * deliberate earlier decision and it is still right: "General health" belongs to nobody the
+         * runtime can name, and "What is your family's General health?" is worse than the label.
+         *
+         * What changed is that far fewer destinations are subject-less than before, because
+         * `subject_entity_type` reads the packet's layout. "Middle Name" sits between child-bound
+         * boxes, so it now HAS a subject and gets a real question.
+         */
+        const hasSubject = Boolean((turn as { entity_type?: string | null }).entity_type);
+        if (!hasSubject) {
             const own = (turn.label ?? "").trim().replace(/\s*[:?]+\s*$/, "");
             if (own.length >= 2) return `${own}?`;
+        }
+        if (turn.optional) {
+            // A yes/no shape for an optional attribute — the same shape allergies already uses, and
+            // what a specialist actually says: "Does Malik have a middle name?"
+            return `Does ${them} have ${indefiniteArticle(label)} ${label}?`;
         }
         // "What is your phone number?" — not "What is your your phone number?".
         return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;
     }
+    if (turn.kind === "collect_party") {
+        // The runtime's own sentence — a question about a PERSON, never about a numbered box.
+        return turn.prompt;
+    }
+    if (turn.kind === "collect_evidence") {
+        /*
+         * ASKED BEFORE ANY PAPERWORK IS PREPARED.
+         *
+         * The runtime used to reach this obligation inside the artifact review, having already said
+         * it filled the paperwork out. The sentence names the document rather than the form, because
+         * that is what the parent has to go and find.
+         */
+        return turn.prompt;
+    }
     if (turn.kind === "complete_artifact") {
-        // The instruction lives on the [Review paperwork] action, not in the sentence — the
-        // conversation ends by saying what was done, and the button says what happens next.
+        /*
+         * PREPARATION LANGUAGE MUST BE TRUTHFUL.
+         *
+         * "I filled out your paperwork" was said while a required attachment had not been asked for,
+         * let alone supplied. This turn is now only reachable once collection AND required evidence
+         * are complete — the selector puts `collect_evidence` ahead of it — so the sentence can
+         * describe what is actually happening, in the present tense.
+         */
         return subject
-            ? `Great — that's everything I needed. I filled out ${subject}'s enrollment paperwork.`
-            : "Great — that's everything I needed. I filled out the enrollment paperwork.";
+            ? `Great — that's everything I need. I'm preparing ${subject}'s paperwork now.`
+            : "Great — that's everything I need. I'm preparing the paperwork now.";
     }
     if (turn.kind === "complete") {
         return "That's everything — thank you.";
@@ -598,3 +679,36 @@ export function progressLine(objective: ParticipantObjectiveWire): string {
  */
 export const PARTICIPANT_CLARIFICATION_MESSAGE =
     "Sorry — I didn't catch that. You can use the buttons or type the value directly.";
+
+/**
+ * What to say when the runtime could not read a typed answer — and there IS a better way.
+ *
+ * ## The dead end this closes
+ *
+ * A parent answered "it's Bend" to a question about their address and got "Sorry — I didn't catch
+ * that." That is true, and it is useless: it names no way forward, and their only remaining option
+ * was to retype an address they had not meant to change.
+ *
+ * The reason the runtime cannot read it is worth being honest about. The tenant's packet binds ONE
+ * address datum — `customer:address` — while D-101 admits the COMPONENTIZED address domains
+ * (`address_line1`, `city`, `postal_code`). So there is no `city` need for "Bend" to be a candidate
+ * correction to; a candidate for this need would be a candidate for the ENTIRE address, and
+ * accepting it would replace "418 NE Hancock St, Portland, OR 97212" with "Bend". Refusing is
+ * correct. Saying only "sorry" is not.
+ *
+ * So where the fact has a structured editor, the runtime says what it can do instead and opens it.
+ * This widens NOTHING: no new domain becomes interpretable, no provider is consulted, and the
+ * deterministic controls are unchanged. It replaces a dead end with a door.
+ */
+export function participantUnreadableAnswerMessage(
+    objective: ParticipantObjectiveWire,
+): string {
+    const editor = objective.next_turn.editor;
+    if (editor?.kind === "address") {
+        return "I can only change an address as a whole, so I've opened it below — change just the part that's wrong.";
+    }
+    if (editor) {
+        return "Sorry — I didn't catch that. I've opened the field below so you can set it directly.";
+    }
+    return PARTICIPANT_CLARIFICATION_MESSAGE;
+}

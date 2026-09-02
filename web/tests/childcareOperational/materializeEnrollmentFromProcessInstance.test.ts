@@ -45,16 +45,33 @@ const pi = (extra: Rec = {}): Rec => ({
 
 /** Mock Supabase over the reads the materializer makes; captures the process_instances update patch. */
 function mockSupabase(cfg: { processInstance?: Rec | null; candidate?: Rec | null; ocm?: Rec | null; opportunity?: Rec | null; scopeId?: string | null }) {
-    const captured: { piUpdate: Rec | null; ocmAccess: number } = { piUpdate: null, ocmAccess: 0 };
+    /*
+     * `ocmAccess` counts OCM reads that could SUPPLY A FACT — nothing else.
+     *
+     * The materializer now resolves the journey's anchor through the participation, so it touches
+     * `opportunity_customer_members` on every run. Counting every touch would turn this guard into
+     * "the materializer never mentions OCM", which is not the rule; the rule is that OCM must not be
+     * a source of operational facts unless the legacy flag says so. Fact reads are told apart by
+     * what they SELECT — the anchor lookup asks only for ids.
+     */
+    const captured: { piUpdate: Rec | null; ocmAccess: number; ocmAnchorReads: number } = {
+        piUpdate: null,
+        ocmAccess: 0,
+        ocmAnchorReads: 0,
+    };
     const client = {
         from(table: string) {
-            if (table === "opportunity_customer_members") captured.ocmAccess++;
             let op: "select" | "update" = "select";
             let cols = "*";
             let patch: Rec | null = null;
             const builder: Rec = {
                 select(c?: string) {
                     cols = c ?? "*";
+                    if (table === "opportunity_customer_members") {
+                        const factColumns = /program_category_id|program_room_cohort_key|schedule_type|start_date|person_id|location_id/;
+                        if (factColumns.test(cols)) captured.ocmAccess++;
+                        else captured.ocmAnchorReads++;
+                    }
                     return builder;
                 },
                 update(p: Rec) {
@@ -84,11 +101,13 @@ function mockSupabase(cfg: { processInstance?: Rec | null; candidate?: Rec | nul
 describe("materializeEnrollmentFromProcessInstance", () => {
     beforeEach(() => core.mockClear());
 
-    it("skips when the process is not enrollment × child × opportunity", async () => {
+    it("skips when the process is not an enrollment journey about a child", async () => {
         const { client } = mockSupabase({ processInstance: pi({ process_key: "billing" }) });
         const res = await materializeEnrollmentFromProcessInstance(client, { processInstanceId: "pi-1", orgId: ORG });
         expect(res.skipped).toBe(true);
-        expect(res.reason).toBe("not_enrollment_child_opportunity_process");
+        // The gate no longer requires an Opportunity context — an Enrollment journey anchored to its
+        // participation is a first-class enrollment, so the reason names what is actually checked.
+        expect(res.reason).toBe("not_enrollment_child_process");
         expect(core).not.toHaveBeenCalled();
     });
 
@@ -139,7 +158,10 @@ describe("materializeEnrollmentFromProcessInstance", () => {
         });
         const res = await materializeEnrollmentFromProcessInstance(client, { processInstanceId: "pi-1", orgId: ORG });
         expect(res.ok).toBe(true);
-        expect(captured.ocmAccess).toBe(0); // OCM never queried
+        expect(captured.ocmAccess).toBe(0); // OCM never consulted for a FACT
+        // …though the anchor IS resolved through it, which is how a participation-anchored journey
+        // finds its Opportunity at all. Asserted so the distinction stays deliberate.
+        expect(captured.ocmAnchorReads).toBeGreaterThan(0);
         expect(core.mock.calls[0][1].facts.siteLocationId).toBe("site-cand"); // from placement candidate, not OCM
         expect(res.fact_sources?.siteLocationId).toBe("placement_candidate");
     });

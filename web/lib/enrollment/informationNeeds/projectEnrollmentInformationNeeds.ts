@@ -25,6 +25,8 @@ import {
     resolveEnrollmentNeedIdentity,
     type EnrollmentNeedIdentity,
 } from "@/lib/enrollment/informationNeeds/enrollmentNeedIdentity";
+import { inferUnboundDestinationEntity } from "@/lib/enrollment/informationNeeds/unboundDestinationSubject";
+import { broadcastingPartyFieldIds } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
 import {
     confirmationSatisfiesCurrentValue,
     type EnrollmentNeedConfirmationMap,
@@ -71,6 +73,21 @@ export type ProjectNeedsInput = {
      */
     readonly declines?: EnrollmentNeedDeclineMap;
     /**
+     * How each settled value came to be — the confirmation/collection distinction.
+     *
+     * Passed in beside the confirmations and declines because it lives in the same session
+     * metadata and answers a question neither of them can: a D-99 entry proves a value was
+     * evidenced, never that it pre-existed the ask.
+     */
+    readonly provenance?: import("@/lib/enrollment/informationNeeds/enrollmentValueProvenance").EnrollmentValueProvenanceMap;
+    /**
+     * The tenant's canonical person-role vocabulary (`customer_person_role_types`).
+     *
+     * Supplied so party-slot destinations can be recognised and excluded from the conversation.
+     * Absent, nothing is excluded and the historical behaviour stands.
+     */
+    readonly partyRoles?: readonly string[];
+    /**
      * Which canonical keys require participant confirmation for this objective.
      *
      * NARROW BY DESIGN. No repository-wide assurance framework exists, and inventing one would be a
@@ -104,6 +121,14 @@ export function projectEnrollmentInformationNeeds(
     const byKey = new Map<string, Accumulator>();
 
     for (const form of input.forms) {
+        // Per artifact: which of its destinations are waiting for a person rather than an answer.
+        /*
+         * Always on. Role detection is owned by `relationshipDefinitions.ts`, which needs no tenant
+         * list — the tenant vocabulary is only a narrow fallback for roles the relationship model
+         * does not define. Gating recognition on that list meant a tenant with no configured
+         * `customer_person_role_types` rows kept broadcasting one phone number across six people.
+         */
+        const partySlots = broadcastingPartyFieldIds(form.schema, input.partyRoles ?? []);
         // The authored section each destination sits in — read once per Form, not per field.
         const sectionByFieldId = new Map<string, string>();
         for (const sec of ((form.schema as { sections?: { title?: string; field_ids?: string[] }[] }).sections ?? [])) {
@@ -152,11 +177,24 @@ export function projectEnrollmentInformationNeeds(
              */
             if (field.type === "file_ref") return;
 
+            /*
+             * A SHARED PARTY DESTINATION IS NOT A QUESTION.
+             *
+             * "Parent/Guardian #2 Phone Number", "Emergency Contact #3 Phone Number", the
+             * physician's and the dentist's all carry `entity_type: person, field_key: phone`, so
+             * the ask-once layer collapsed six different people's phones into ONE canonical need —
+             * and one answer would have printed into all six boxes. These are filled by projecting
+             * a party into them; they never join dedupe and are never asked about directly.
+             */
+            if (partySlots.has(field.id)) return;
+
             const identity = resolveEnrollmentNeedIdentity({
                 field,
                 subjectId: input.subjectId,
                 formDefinitionId: form.form_definition_id,
                 insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
+                // The packet's own layout, for grammar and ordering only — never for identity.
+                inferredEntityType: inferUnboundDestinationEntity(form.schema, field.id),
                 formDefinitionVersionId: form.form_definition_version_id,
                 sessionItemId: form.session_item_id,
             });
@@ -251,6 +289,7 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
             has_value: false,
             current_value: null,
             value_source: "none",
+            value_origin: null,
             requires_participant_action: false,
         };
     }
@@ -302,6 +341,7 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
                 has_value: false,
                 current_value: null,
                 value_source: "none",
+                value_origin: null,
                 requires_participant_action: false,
                 optional: true,
             };
@@ -313,6 +353,7 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
             has_value: false,
             current_value: null,
             value_source: "none",
+            value_origin: null,
             requires_participant_action: blocking,
             optional: !blocking,
         };
@@ -340,6 +381,7 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         has_value: true,
         current_value,
         value_source,
+        value_origin: input.provenance?.[identity.key]?.origin ?? null,
         requires_participant_action: state === "known_requires_confirmation",
     };
 }

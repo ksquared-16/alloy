@@ -9,6 +9,7 @@
  * enrollment process instance. Legacy OCM is read-only (never created, never written).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { enrollmentContextIdsForOpportunities } from "@/lib/enrollment/completion/resolveEnrollmentJourneyContext";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { getOperationalAgreementForMemberSite } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { getOperationalPlacementForAgreement } from "@/lib/childcareOperational/childPlacementService";
@@ -102,7 +103,18 @@ export async function applyChildParticipationEdit(
         .eq("org_id", args.orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
         .eq("subject_id", args.customerMemberId);
-    if (args.opportunityId) piQuery = piQuery.eq("context_id", args.opportunityId);
+    /*
+     * Scoping to an Opportunity must not exclude the journeys that belong to it. A journey anchored
+     * to the child's Enrollment Participation carries an OCM id here, so an equality on the
+     * Opportunity id matched nothing and the edit failed with `no_enrollment_process_instance` —
+     * loud, but wrong: the journey was there.
+     */
+    if (args.opportunityId) {
+        const { contextIds } = await enrollmentContextIdsForOpportunities(supabase, args.orgId, [
+            args.opportunityId,
+        ]);
+        piQuery = piQuery.in("context_id", contextIds);
+    }
     const { data: piRows, error: piErr } = await piQuery.order("created_at", { ascending: false }).limit(1);
     if (piErr) return { ok: false, routed: "none", error: piErr.message };
     const pi = (piRows ?? [])[0] as { id: string; context_id: string | null; metadata: Record<string, unknown> | null } | undefined;

@@ -23,18 +23,50 @@ type PiRow = {
     metadata: Record<string, unknown>;
 };
 
-function makeSupabase(rows: PiRow[]) {
+/**
+ * @param participations Enrollment Participations belonging to the Opportunity, if any.
+ *   Stamping resolves these so it can match journeys anchored to a participation as well as
+ *   journeys still anchored to the Opportunity itself.
+ */
+function makeSupabase(rows: PiRow[], participations: { id: string; opportunity_id: string }[] = []) {
     const updates: Array<{ id: string; metadata: Record<string, unknown> }> = [];
     return {
         updates,
         client: {
             from(table: string) {
+                if (table === "opportunity_customer_members") {
+                    const f: Record<string, unknown> = {};
+                    const b: Record<string, unknown> = {
+                        select: () => b,
+                        eq: (c: string, v: unknown) => {
+                            f[c] = v;
+                            return b;
+                        },
+                        then: (resolve: (r: { data: unknown; error: null }) => void) =>
+                            resolve({
+                                data: participations.filter((r) =>
+                                    Object.entries(f).every(
+                                        ([k, v]) => k === "org_id" || (r as Record<string, unknown>)[k] === v,
+                                    ),
+                                ),
+                                error: null,
+                            }),
+                    };
+                    return b;
+                }
                 if (table !== "process_instances") throw new Error(`unexpected table ${table}`);
                 let op: "select" | "update" = "select";
                 let patch: Record<string, unknown> | null = null;
                 const filters: Record<string, unknown> = {};
+                const inFilters: Record<string, unknown[]> = {};
                 const matching = () =>
-                    rows.filter((r) => Object.entries(filters).every(([k, v]) => (r as Record<string, unknown>)[k] === v));
+                    rows.filter(
+                        (r) =>
+                            Object.entries(filters).every(([k, v]) => (r as Record<string, unknown>)[k] === v) &&
+                            Object.entries(inFilters).every(([k, vals]) =>
+                                vals.includes((r as Record<string, unknown>)[k]),
+                            ),
+                    );
                 const builder: Record<string, unknown> = {
                     select() {
                         return builder;
@@ -46,6 +78,11 @@ function makeSupabase(rows: PiRow[]) {
                     },
                     eq(col: string, val: unknown) {
                         filters[col] = val;
+                        return builder;
+                    },
+                    // Stamping now accepts EITHER anchor, so the context filter is a set.
+                    in(col: string, vals: unknown[]) {
+                        inFilters[col] = vals;
                         return builder;
                     },
                     then(resolve: (r: { data: unknown; error: null }) => void) {

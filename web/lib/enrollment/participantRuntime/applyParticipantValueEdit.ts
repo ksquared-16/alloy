@@ -38,6 +38,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { canonicalKeyFor } from "@/lib/pos/packet/packetFieldPlan";
 import { shallowMergeSharedValues } from "@/lib/forms/packets/formPacketService";
 import { buildEnrollmentNeedConfirmationPatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
+import { buildEnrollmentValueProvenancePatch } from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 
@@ -107,7 +108,18 @@ export async function applyParticipantValueEdit(
             confirmedValue: input.value,
             confirmedAtIso: input.nowIso,
         });
-        if (metadata) patch.metadata = metadata;
+        /*
+         * An edit at review keeps whatever origin is already on file — a corrected fact is the same
+         * fact. Where none is recorded, this is a value the participant supplied during the session,
+         * which is what an edit at review is.
+         */
+        patch.metadata = buildEnrollmentValueProvenancePatch({
+            metadata: metadata ?? row.metadata ?? {},
+            needKey: input.needKey,
+            origin: "collected_in_session",
+            recordedAtIso: input.nowIso,
+            preserveExisting: true,
+        });
     }
 
     const { error: writeError } = await supabase

@@ -18,6 +18,7 @@
 
 import type { FieldScope } from "@/lib/forms/fieldScope";
 import type { EnrollmentNeedIdentity } from "@/lib/enrollment/informationNeeds/enrollmentNeedIdentity";
+import type { EnrollmentValueOrigin } from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
 
 /**
  * The smallest vocabulary the repository can actually prove.
@@ -115,6 +116,16 @@ export type EnrollmentInformationNeed = {
      */
     readonly current_value: unknown;
     readonly value_source: EnrollmentNeedValueSource;
+    /**
+     * WHERE this settled value came from — pre-existing truth the parent verified, an answer they
+     * gave in this session, an attachment, or a platform writer.
+     *
+     * Distinct from `value_source`, which says where the value is READ from now and becomes
+     * `session_shared_value` for everything the moment it is written. This says what happened, and
+     * it is recorded at the instant it happens rather than inferred afterwards. Null when nothing
+     * was recorded — which fails closed: a fact with no provenance is not a confirmation.
+     */
+    readonly value_origin: EnrollmentValueOrigin | null;
     /** True when the participant must still do something: supply or confirm. */
     readonly requires_participant_action: boolean;
 };

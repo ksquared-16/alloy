@@ -10,8 +10,8 @@
  * The Agreement/Placement/Schedule are the source of truth once materialized; OCM is never the model.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveEnrollmentJourneyContext } from "@/lib/enrollment/completion/resolveEnrollmentJourneyContext";
 import {
-    ENROLLMENT_CONTEXT_TYPE,
     ENROLLMENT_SUBJECT_TYPE,
     PROCESS_INSTANCES_TABLE,
     getEnrollmentInstanceIdByScope,
@@ -59,8 +59,17 @@ export async function resolveEnrollmentFactsForProcessInstance(
     input: ResolveInput,
 ): Promise<{ facts: ResolvedEnrollmentFacts | null; sources: EnrollmentFactSources; reason?: string }> {
     const { supabase, orgId, pi, todayYmd } = input;
-    const customerMemberId = trimOrNull(pi.subject_id);
-    const opportunityId = trimOrNull(pi.context_id);
+    /*
+     * The acquisition Opportunity comes from the canonical graph, not from `context_id`.
+     *
+     * Reading the context id directly was safe only while every Enrollment journey anchored to an
+     * Opportunity. With a participation-anchored journey it would query `opportunities` and
+     * `placement_candidates` by an OCM id — matching nothing, and silently producing "insufficient
+     * facts" for an enrolment whose facts were all present.
+     */
+    const journey = await resolveEnrollmentJourneyContext(input.supabase, { orgId: input.orgId, processInstance: pi });
+    const customerMemberId = journey.customerMemberId ?? trimOrNull(pi.subject_id);
+    const opportunityId = journey.opportunityId;
     if (!customerMemberId) return { facts: null, sources: {}, reason: "missing_subject" };
 
     const meta = (pi.metadata ?? {}) as Record<string, unknown>;
@@ -184,24 +193,30 @@ export async function materializeEnrollmentFromProcessInstance(
     if (!piData) return { ...base, skipped: true, reason: "process_instance_not_found" };
     const pi = piData as ProcessInstanceRow;
 
-    // Confirm this is an enrollment × child × opportunity process.
-    if (
-        pi.process_key !== ENROLLMENT_PROCESS_KEY ||
-        pi.subject_type !== ENROLLMENT_SUBJECT_TYPE ||
-        pi.context_type !== ENROLLMENT_CONTEXT_TYPE
-    ) {
-        return { ...base, skipped: true, reason: "not_enrollment_child_opportunity_process" };
+    /*
+     * An Enrollment journey about a child. The CONTEXT is no longer required to be an Opportunity.
+     *
+     * This gate demanded `context_type === "opportunity"`, so the moment a journey anchored to its
+     * Enrollment Participation it was skipped as "not an enrollment process" — and the line below
+     * would have written that participation's id into `opportunity_id`. A legitimate context-free
+     * enrolment could never have materialised at all.
+     */
+    if (pi.process_key !== ENROLLMENT_PROCESS_KEY || pi.subject_type !== ENROLLMENT_SUBJECT_TYPE) {
+        return { ...base, skipped: true, reason: "not_enrollment_child_process" };
     }
+    const journey = await resolveEnrollmentJourneyContext(supabase, { orgId: input.orgId, processInstance: pi });
 
     const { facts, sources, reason } = await resolveEnrollmentFactsForProcessInstance({ supabase, orgId: input.orgId, pi, todayYmd });
-    base.customer_member_id = trimOrNull(pi.subject_id);
-    base.opportunity_id = trimOrNull(pi.context_id);
+    base.customer_member_id = journey.customerMemberId;
+    // The Opportunity comes from the PARTICIPATION, never from the context id — which is exactly
+    // what would have put an OCM id in this field.
+    base.opportunity_id = journey.opportunityId;
     base.fact_sources = sources;
     if (!facts) return { ...base, skipped: true, reason: reason ?? "insufficient_facts" };
 
     const trio = await applyChildEnrollmentMaterialization(supabase, {
         orgId: input.orgId,
-        opportunityId: trimOrNull(pi.context_id),
+        opportunityId: journey.opportunityId,
         customerId: null, // agreement.customer_id derived by the service when null
         facts,
         todayYmd,

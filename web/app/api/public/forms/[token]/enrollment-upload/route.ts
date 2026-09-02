@@ -30,10 +30,8 @@ import { randomUUID } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
-import { resolveActiveArtifact } from "@/lib/enrollment/participantRuntime/renderParticipantEnrollmentDocument";
+import { resolveParticipantUploadDestination } from "@/lib/enrollment/participantRuntime/resolveParticipantUploadDestination";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
-import { uploadDestinationForField } from "@/lib/enrollment/participantRuntime/participantUploadRequests";
-import type { FormSchemaV1 } from "@/lib/forms/schema";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -99,13 +97,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const kind = sniff(bytes);
     if (!kind) return publicErr("Please attach a PDF, PNG or JPEG.", 400, { code: "BAD_TYPE" });
 
-    // The ARTIFACT decides what this attachment is — not the caller.
-    const artifact = await resolveActiveArtifact(supabase, { orgId: access.value.orgId, sessionId: access.value.sessionId });
-    if (!artifact.ok) return publicErr("No artifact is open for this journey.", 409, { code: "NO_ARTIFACT" });
-    const destination = uploadDestinationForField(artifact.envelope.schemaJson as FormSchemaV1, fieldId);
-    if (!destination) {
-        return publicErr("That is not an attachment on this document.", 400, { code: "NOT_AN_UPLOAD" });
+    /*
+     * The ARTIFACT decides what this attachment is — not the caller.
+     *
+     * Searched across every artifact THIS SESSION realized, not just the active one. Required
+     * evidence is now collected before any paperwork is prepared, so the parent is asked for all of
+     * it at once while only one artifact is active; resolving against the active one alone refused
+     * the Exemption's two attachments with "That is not an attachment on this document". The
+     * authority boundary is unchanged: the caller names a field id and nothing else, and everything
+     * about the destination still comes from a pinned schema this session owns.
+     */
+    const resolved = await resolveParticipantUploadDestination(supabase, {
+        orgId: access.value.orgId,
+        sessionId: access.value.sessionId,
+        fieldId,
+    });
+    if (!resolved) {
+        return publicErr("That is not an attachment on this enrollment.", 400, { code: "NOT_AN_UPLOAD" });
     }
+    const destination = resolved.request;
+    const artifact = { formDefinitionId: resolved.formDefinitionId, versionId: resolved.versionId };
 
     // The session's own child — the D-95 anchor's subject — is the only entity this can attach to.
     const { data: pi } = await supabase

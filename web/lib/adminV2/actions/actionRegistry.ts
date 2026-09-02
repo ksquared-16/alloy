@@ -42,6 +42,7 @@ import {
 import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
 import { financialChargeActions } from "@/lib/adminV2/actions/definitions/financialChargeActions";
 import { healthFactActions } from "@/lib/adminV2/actions/definitions/healthFactActions";
+import { enrollmentRequirementExceptionActions } from "@/lib/adminV2/actions/definitions/enrollmentRequirementExceptionActions";
 
 /** Actions with fully code-owned, executable handlers. */
 const REGISTERED_ACTION_LIST: RegisteredAction[] = [
@@ -68,6 +69,8 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     ...childAttendanceActions,
     ...financialChargeActions,
     ...healthFactActions,
+    // Governed requirement exception: make one requirement non-blocking, and put it back.
+    ...enrollmentRequirementExceptionActions,
 ];
 
 const REGISTERED_ACTIONS: Map<string, RegisteredAction> = new Map(
