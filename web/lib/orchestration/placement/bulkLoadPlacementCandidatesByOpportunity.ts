@@ -194,57 +194,72 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
     const candidates = (rawCandidates as unknown as Row[]).map(normalizeCandidateRow);
     const candidateIds = candidates.map((c) => c.id);
 
+    /*
+     * LINK GROUPS AND OVERRIDES ARE INDEPENDENT READS OF THE SAME KEY SET.
+     *
+     * Both are keyed by `candidateIds` and org-scoped; neither reads the other's result. Running them
+     * in sequence simply added one round trip to every placement-bearing page. They now run together
+     * and are joined below — same queries, same org scoping, same maps, same active-only semantics.
+     */
     const linkByCandidate = new Map<string, PlacementCandidateLinkGroupSummary>();
-    if (candidateIds.length) {
-        const { data: memberRows, error: memErr } = await params.supabase
-            .from("placement_link_group_members")
-            .select(
-                "placement_candidate_id, placement_link_group_id, placement_link_groups(id, link_mode, placement_link_group_members(id))"
-            )
-            .eq("org_id", params.orgId)
-            .in("placement_candidate_id", candidateIds);
-
-        if (memErr) {
-            throw new Error(`placement_link_group_members bulk load failed: ${memErr.message}`);
-        }
-
-        for (const row of memberRows ?? []) {
-            const normalized = normalizePlacementLinkMemberRow(row);
-            const grp = normalized.placement_link_groups;
-            if (!grp) continue;
-            linkByCandidate.set(normalized.placement_candidate_id, {
-                id: grp.id,
-                link_mode: asLinkMode(grp.link_mode),
-                member_count: grp.placement_link_group_members?.length ?? 0,
-            });
-        }
-    }
-
     const overridesByCandidate = new Map<string, PlacementCandidateActiveOverrideSummary[]>();
-    if (candidateIds.length) {
-        const { data: overrideRows, error: ovErr } = await params.supabase
-            .from("placement_overrides")
-            .select("id, placement_candidate_id, override_kind, reason, expires_at, payload")
-            .eq("org_id", params.orgId)
-            .eq("is_active", true)
-            .in("placement_candidate_id", candidateIds);
 
-        if (ovErr) {
-            throw new Error(`placement_overrides bulk load failed: ${ovErr.message}`);
-        }
+    const linkRead = (async () => {
+        if (candidateIds.length) {
+            const { data: memberRows, error: memErr } = await params.supabase
+                .from("placement_link_group_members")
+                .select(
+                    "placement_candidate_id, placement_link_group_id, placement_link_groups(id, link_mode, placement_link_group_members(id))"
+                )
+                .eq("org_id", params.orgId)
+                .in("placement_candidate_id", candidateIds);
 
-        for (const row of (overrideRows ?? []) as OverrideRow[]) {
-            const list = overridesByCandidate.get(row.placement_candidate_id) ?? [];
-            list.push({
-                id: row.id,
-                override_kind: asOverrideKind(row.override_kind),
-                reason: row.reason,
-                expires_at: row.expires_at,
-                payload: row.payload,
-            });
-            overridesByCandidate.set(row.placement_candidate_id, list);
+            if (memErr) {
+                throw new Error(`placement_link_group_members bulk load failed: ${memErr.message}`);
+            }
+
+            for (const row of memberRows ?? []) {
+                const normalized = normalizePlacementLinkMemberRow(row);
+                const grp = normalized.placement_link_groups;
+                if (!grp) continue;
+                linkByCandidate.set(normalized.placement_candidate_id, {
+                    id: grp.id,
+                    link_mode: asLinkMode(grp.link_mode),
+                    member_count: grp.placement_link_group_members?.length ?? 0,
+                });
+            }
         }
-    }
+    })();
+
+    const overrideRead = (async () => {
+        if (candidateIds.length) {
+            const { data: overrideRows, error: ovErr } = await params.supabase
+                .from("placement_overrides")
+                .select("id, placement_candidate_id, override_kind, reason, expires_at, payload")
+                .eq("org_id", params.orgId)
+                .eq("is_active", true)
+                .in("placement_candidate_id", candidateIds);
+
+            if (ovErr) {
+                throw new Error(`placement_overrides bulk load failed: ${ovErr.message}`);
+            }
+
+            for (const row of (overrideRows ?? []) as OverrideRow[]) {
+                const list = overridesByCandidate.get(row.placement_candidate_id) ?? [];
+                list.push({
+                    id: row.id,
+                    override_kind: asOverrideKind(row.override_kind),
+                    reason: row.reason,
+                    expires_at: row.expires_at,
+                    payload: row.payload,
+                });
+                overridesByCandidate.set(row.placement_candidate_id, list);
+            }
+        }
+    })();
+
+    // Either read failing must surface exactly as it did when they ran in sequence.
+    await Promise.all([linkRead, overrideRead]);
 
     for (const c of candidates) {
         const meta =
