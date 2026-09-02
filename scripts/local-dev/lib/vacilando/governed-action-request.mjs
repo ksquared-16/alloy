@@ -81,6 +81,10 @@ import {
   resolveGovernedAuthoritySync,
 } from "./governed-repository-authority.mjs";
 import { inspectPullRequest, readMergeInputIdentity } from "./trusted-host-merge.mjs";
+import {
+  consumeMissionDelegation,
+  findCoveringDelegation,
+} from "./mission-delegation.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -997,6 +1001,11 @@ function appendAudit(rec, event, extra = {}, root = runtimeRoot()) {
     target: rec.target || null,
     artifact_refs: rec.artifact_refs || [],
     policy_decision: rec.policy_decision || null,
+    // Inspectable authority: what the mission delegated, and the Director's own
+    // sentence that delegated it. Present only when delegation supplied the
+    // approval; `delegation_declined` says why it did not when it could have.
+    mission_delegation: rec.mission_delegation || null,
+    delegation_declined: rec.delegation_declined || null,
     operator_approval: rec.operator_approval || null,
     execution_started_at: rec.execution_started_at || null,
     execution_ended_at: rec.execution_ended_at || null,
@@ -1457,6 +1466,96 @@ function actionQueryHash(rec) {
   return null;
 }
 
+/**
+ * CAN THE MISSION'S OWN WORDS SATISFY THIS APPROVAL?
+ *
+ * Called ONLY where the ordinary evaluation has already concluded that a live
+ * operator approval would be required. It can therefore never widen anything:
+ * the worst it can do is decline, leaving the behaviour exactly as it was.
+ *
+ * It answers with the CONCRETE request in hand — repository, PR, head SHA,
+ * target, method, check state, and whether reconciliation found unrelated
+ * commits — so an intent captured at orientation is only spent on an execution
+ * proven to be inside it. The identity comes from the shared parsers, never
+ * re-derived here.
+ *
+ * A match does not execute anything and does not bypass the grant: the request
+ * still travels the normal governed path and the trusted host still validates
+ * its own PR/SHA/target/method binding.
+ */
+function missionDelegationDecision(rec, { nowMs, evidence = null } = {}) {
+  const actionKey = rec?.action_key;
+  const identity = readMergeInputIdentity(rec?.inputs || {});
+  const inputs = rec?.inputs || {};
+  const repository = inputs.repository || inputs.repo || null;
+  if (!repository) return { ok: false, error: "no_repository" };
+
+  // Checks. `true` only when observed green; unknown is NOT green, because a
+  // card that has not looked must never read as "fine".
+  let checksGreen = null;
+  const snapChecks = rec?.proposal_snapshot?.checks || null;
+  if (snapChecks) {
+    checksGreen = (snapChecks.failing || []).length === 0
+      && (snapChecks.pending || []).length === 0
+      && (snapChecks.unknown || []).length === 0;
+  } else if (inputs.required_checks_green === true || inputs.requiredChecksGreen === true) {
+    checksGreen = true;
+  }
+
+  // Unrelated content found during reconciliation disqualifies delegated
+  // authority outright: a mission that delegated ITS work never delegated
+  // whatever else landed on the branch.
+  const changed = Array.isArray(evidence?.unrelated_commits)
+    ? evidence.unrelated_commits.length
+    : Number(inputs.unrelated_commits || 0);
+
+  const targetBranch = actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
+    ? (inputs.base || inputs.baseBranch || rec.target)
+    : (identity.targetBranch || inputs.target_branch || inputs.targetBranch || rec.target);
+
+  return findCoveringDelegation({
+    missionId: rec.mission_id || null,
+    laneId: rec.lane_id || null,
+    actionKey,
+    repository,
+    targetBranch,
+    branch: inputs.branch || inputs.headBranch || inputs.head_branch || null,
+    mergeMethod: actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST ? identity.mergeMethod : null,
+    checksGreen,
+    unrelatedCommits: changed,
+  }, { root: runtimeRoot(), nowMs });
+}
+
+/**
+ * Wrap a decision that would require a live click. Returns the delegated
+ * decision when the mission already authorised exactly this, and the original
+ * decision otherwise — including the reason it did NOT apply, so the approval
+ * card can explain why it is still asking.
+ */
+function withMissionDelegation(rec, decision, { nowMs, evidence = null } = {}) {
+  if (!decision?.operator_approval_required) return decision;
+  let out;
+  try {
+    out = missionDelegationDecision(rec, { nowMs, evidence });
+  } catch (e) {
+    // A broken delegation path must never approve. Fall through to the operator.
+    return { ...decision, delegation_error: String(e?.message || e) };
+  }
+  if (!out?.ok) {
+    return { ...decision, delegation_declined: out?.error || "no_delegation" };
+  }
+  return {
+    auto_execute: true,
+    operator_approval_required: false,
+    reason: "mission_delegation",
+    authorized_by: "mission_delegation",
+    delegation_id: out.delegation.delegation_id,
+    delegation_mission_clause: out.delegation.mission_clause,
+    delegation_action_key: out.delegation.action_key,
+    delegation_target_branch: out.delegation.target_branch,
+  };
+}
+
 function policyDecision(rec, { nowMs } = {}) {
   const auth = findAuthorization({
     missionId: rec.mission_id,
@@ -1509,27 +1608,27 @@ function policyDecision(rec, { nowMs } = {}) {
       };
     }
     if (verdict.decision === "policy_denied") {
-      return {
+      return withMissionDelegation(rec, {
         auto_execute: false,
         operator_approval_required: true,
         reason: "policy_denied_requires_operator",
         director_decision: verdict,
-      };
+      }, { nowMs, evidence });
     }
-    return {
+    return withMissionDelegation(rec, {
       auto_execute: false,
       operator_approval_required: true,
       reason: "policy_default_requires_operator",
       director_decision: verdict,
-    };
+    }, { nowMs, evidence });
   } catch {
     // A broken evaluator must never approve. Fall through to the operator.
   }
-  return {
+  return withMissionDelegation(rec, {
     auto_execute: false,
     operator_approval_required: true,
     reason: "policy_default_requires_operator",
-  };
+  }, { nowMs });
 }
 
 function requestTitle(rec) {
@@ -2558,6 +2657,39 @@ export function processGovernedAction(requestId, {
   const policy = policyDecision(rec, { nowMs });
   rec.policy_decision = policy.reason;
   rec.operator_approval_required = Boolean(policy.operator_approval_required);
+  // WHY VACILANDO DID NOT ASK, RECORDED WHERE THE OPERATOR CAN READ IT.
+  //
+  // A delegated authorisation is spent HERE, at the moment it satisfies this
+  // one request, so it can never be replayed for another PR or another head.
+  // The mission's own words travel with it: the operator inspects the sentence
+  // the Director actually wrote, not the runtime's paraphrase of it.
+  if (policy.authorized_by === "mission_delegation" && policy.delegation_id) {
+    const spent = consumeMissionDelegation(policy.delegation_id, {
+      requestId: rec.request_id,
+      nowMs,
+      root: runtimeRoot(),
+    });
+    if (!spent.ok) {
+      // The delegation went away between the decision and here. Fail closed:
+      // the operator is asked, exactly as they would have been without it.
+      rec.policy_decision = "policy_default_requires_operator";
+      rec.operator_approval_required = true;
+      rec.delegation_declined = spent.error;
+    } else {
+      rec.mission_delegation = {
+        delegation_id: policy.delegation_id,
+        action_key: policy.delegation_action_key,
+        target_branch: policy.delegation_target_branch,
+        mission_clause: policy.delegation_mission_clause,
+        authorized_by: "mission_delegation",
+        at: iso(nowMs),
+      };
+    }
+  } else if (policy.delegation_declined) {
+    // Say why the mission did NOT cover this, so "it asked me again" has an
+    // answer that is not "unknown".
+    rec.delegation_declined = policy.delegation_declined;
+  }
   // A DIRECTOR APPROVAL IS NEVER DRESSED UP AS THE OPERATOR'S. It is recorded
   // in its own field, naming the policy and the evidence that authorised it,
   // so the ledger can always answer WHO decided and on what grounds. The
