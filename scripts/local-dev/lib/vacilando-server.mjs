@@ -39,7 +39,7 @@
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { attachLaneAppUrls } from "./vacilando/lane-app-url.mjs";
+import { attachLaneAppUrls, laneAppUrl, readServeStatus } from "./vacilando/lane-app-url.mjs";
 import { isManagedSlot, managedSlots } from "./vacilando/managed-slots.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -396,8 +396,17 @@ function resilientBoard(snap) {
     : enrichedCount === 0 ? "projection_unavailable"
     : enrichedCount < merged.length ? "partial"
     : "live";
+  // The Director drives this from a MacBook while the apps run here. Give every
+  // slot the Director-facing URL so the UI never has to construct one — the UI
+  // constructing `http://127.0.0.1:${port}` is precisely why "Open App" opened
+  // the operator's own laptop and appeared to be a dead lane.
+  const serveStatus = readServeStatus();
+  const withUrls = merged.map((sp) => {
+    const derived = laneAppUrl({ binding: { slot: sp.slot } }, { serveStatus });
+    return { ...sp, app_url: derived.url, app_url_reason: derived.reason };
+  });
   return {
-    ...snap, sprints: merged,
+    ...snap, sprints: withUrls,
     board_source: enrichedCount === merged.length ? "live" : enrichedCount === 0 ? "registry" : "mixed",
     board_state,
     board_note: board_state === "projection_unavailable" ? "Live projection unavailable (host under load) — showing registered workers from the slot registry."

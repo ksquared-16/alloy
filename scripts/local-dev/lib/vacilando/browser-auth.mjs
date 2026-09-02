@@ -28,6 +28,7 @@
  * status display actually needs.
  */
 import { execFile, spawnSync } from "node:child_process";
+import { laneAppUrl, readServeStatus } from "./lane-app-url.mjs";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -562,6 +563,26 @@ export function redactAuthText(text) {
 }
 
 /** The durable record. Metadata only — this is written down and kept. */
+
+/**
+ * The address a human should open for this slot, on their own device.
+ *
+ * Returns null rather than guessing when no Director-facing origin is
+ * published — "open it on your laptop" with no working URL is worse than
+ * saying the route is missing.
+ */
+export function directorSignInUrl(validated, { serveStatus = null, env = process.env } = {}) {
+  try {
+    const out = laneAppUrl({ binding: { slot: validated?.slot } }, {
+      serveStatus: serveStatus == null ? readServeStatus() : serveStatus,
+      env,
+    });
+    return out.url ? `${out.url}/login` : null;
+  } catch {
+    return null;
+  }
+}
+
 export function publicAuthOutcome({ validated, state, status = null, detail = null, nowMs = Date.now() }) {
   return {
     schema_version: "vacilando.browser_auth.v1",
@@ -573,6 +594,21 @@ export function publicAuthOutcome({ validated, state, status = null, detail = nu
     slot: validated.slot,
     port: validated.port,
     base_url: validated.base_url,
+    /*
+     * WHERE A HUMAN SHOULD OPEN THIS.
+     *
+     * `base_url` is and stays loopback: the automated driver may only drive a
+     * loopback base, which is a safety property, not an oversight. But the
+     * Director is on a MacBook (and sometimes a phone), and telling them to open
+     * 127.0.0.1 is telling them to open their own device — which is exactly why
+     * a human sign-in ended up being performed on the execution host's GUI.
+     *
+     * So the human gets a SEPARATE address: the same app on the Director-facing
+     * HTTPS origin, reachable from any device on the tailnet. Nothing about the
+     * automated path changes, and no credential or session crosses machines —
+     * this is a URL, and the human signs in on their own browser.
+     */
+    director_url: directorSignInUrl(validated),
     worktree_path: validated.worktree_path,
     expected_identity: validated.expected_identity,
     verified_at: state === BROWSER_AUTH_STATES.RESTORED ? new Date(nowMs).toISOString() : null,
