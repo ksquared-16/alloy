@@ -47,7 +47,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActions";
-import { resolveCreateLeadEntryDepartmentForOrg } from "@/lib/lifecycle/resolveCreateLeadEntryDepartment";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { addChild } from "@/lib/records/addChildService";
 import { startEnrollment } from "@/lib/records/startEnrollmentService";
@@ -147,27 +146,6 @@ export async function findFixtureHousehold(
         .limit(1)
         .maybeSingle();
     return { customerId: t((link as { customer_id?: string } | null)?.customer_id) || null, personId };
-}
-
-/**
- * The Enrollment process must already be configured. Checked BEFORE any write, so a misconfigured
- * tenant produces one clear refusal instead of a half-built family.
- */
-async function assertEnrollmentConfigured(
-    supabase: SupabaseClient,
-    orgId: string,
-): Promise<{ ok: true } | { ok: false; code: string; detail: string }> {
-    const entry = await resolveCreateLeadEntryDepartmentForOrg(supabase, orgId).catch(() => null);
-    if (!entry) {
-        return {
-            ok: false,
-            code: "enrollment_not_configured",
-            detail:
-                "No Create Lead entry department resolves for this org. The certification tenant must "
-                + "already carry a configured Enrollment Business Process; this fixture will not create one.",
-        };
-    }
-    return { ok: true };
 }
 
 /** The child's participation row for a household, if the product made one. */
@@ -298,9 +276,19 @@ export async function ensureEnrollmentCertification(
     orgId: string,
 ): Promise<EnrollmentCertEnsureResult> {
     await assertNamespaceIsolated(supabase, orgId);
-    const configured = await assertEnrollmentConfigured(supabase, orgId);
-    if (!configured.ok) return configured;
 
+    /*
+     * NO CONFIGURATION PRECHECK HERE, deliberately.
+     *
+     * An earlier version called `resolveCreateLeadEntryDepartmentForOrg` first, to fail early with a
+     * friendly message. That resolver reaches `unstable_cache`, which needs a Next request context
+     * that a `tsx` script does not have -- so the precheck threw "incrementalCache missing" and
+     * reported it as a configuration problem the tenant did not have.
+     *
+     * `executeCreateLeadAction` is the authority on whether Create Lead is configured and it already
+     * fails closed with its own message. A second opinion that cannot run in this process is worse
+     * than none.
+     */
     const families: CertFamilyResult[] = [];
     for (const key of Object.keys(CERT_FAMILIES) as CertFamilyKey[]) {
         families.push(await ensureFamily(supabase, orgId, CERT_FAMILIES[key]));
