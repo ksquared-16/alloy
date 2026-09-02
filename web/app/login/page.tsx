@@ -14,6 +14,36 @@ import { MARKETING_BRAND } from "@/lib/marketing/artifactPaths";
 /** Dev-only: safe Supabase connectivity hints (hostname + booleans only). */
 function DevSupabaseAuthPanel() {
   const d = getPublicSupabaseAuthDebug();
+
+  /*
+   * THE SERVER'S VIEW, FETCHED SO THE TWO CAN BE COMPARED.
+   *
+   * `d.origin` above is what THIS PAGE'S JAVASCRIPT will post to. That is not necessarily what the
+   * server is configured with: a dev server can serve a client bundle compiled against an older
+   * environment, and then the server renders one project while the browser signs in against another.
+   * Every server-side check agrees with itself and none of them can see the browser's value, so the
+   * disagreement is invisible from either side alone. It took a screenshot to find, twice.
+   *
+   * So the panel asks the server directly and says plainly when they differ.
+   */
+  const [serverOrigin, setServerOrigin] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/dev/supabase-origin", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!cancelled) setServerOrigin((j?.origin as string | null) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setServerOrigin(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const stale = Boolean(d.origin && serverOrigin && d.origin !== serverOrigin);
+
   return (
     <div
       className="mb-4 rounded-md border border-alloy-forge/10 bg-alloy-stone/50 px-3 py-2 text-left text-[11px] leading-relaxed text-alloy-forge/80 font-mono"
@@ -30,6 +60,15 @@ function DevSupabaseAuthPanel() {
             and sent a certification run chasing a defect that did not exist. */}
         Password sign-in expects: {d.authTokenUrl ? `POST ${d.authTokenUrl}` : "(set URL to see)"}
       </div>
+      {stale ? (
+        <div className="mt-2 rounded border border-red-300 bg-red-50 px-2 py-1.5 font-sans text-[11px] font-semibold text-red-800">
+          STALE BUNDLE — this page&rsquo;s JavaScript targets <span className="font-mono">{d.origin}</span>,
+          but the server is configured for <span className="font-mono">{serverOrigin}</span>. Sign-in will
+          fail against the wrong project. Restart the dev server and hard-reload; if it persists, open the
+          page on <span className="font-mono">127.0.0.1</span> instead of <span className="font-mono">localhost</span> —
+          a different origin, so a different cache.
+        </div>
+      ) : null}
     </div>
   );
 }

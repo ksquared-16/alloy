@@ -125,3 +125,35 @@ describe("an unreachable auth service is never reported as a wrong password", ()
         expect(classifySignInFailure({ message: "a new provider string", status: 400 })).toBe("credentials");
     });
 });
+
+describe("a stale client bundle announces itself", () => {
+    const page = () => read("../../app/login/page.tsx");
+    const route = () => read("../../app/api/dev/supabase-origin/route.ts");
+
+    it("compares this page's target against the server's own view", async () => {
+        const src = await page();
+        expect(src).toContain('fetch("/api/dev/supabase-origin"');
+        expect(src).toContain("d.origin !== serverOrigin");
+    });
+
+    it("says so loudly rather than letting it present as a wrong password", async () => {
+        const src = await page();
+        expect(src).toContain("STALE BUNDLE");
+        // Names BOTH origins: one alone would not tell you which half is wrong.
+        const banner = src.slice(src.indexOf("STALE BUNDLE"));
+        expect(banner.slice(0, 400)).toContain("{d.origin}");
+        expect(banner.slice(0, 400)).toContain("{serverOrigin}");
+    });
+
+    it("the route refuses to exist in production", async () => {
+        expect(await route()).toContain('process.env.NODE_ENV === "production"');
+        expect(await route()).toContain("not_available");
+    });
+
+    it("the route returns an origin and never key material", async () => {
+        const src = await route();
+        expect(src).toContain("new URL(raw).origin");
+        expect(src).not.toMatch(/ANON_KEY[^_]/);
+        expect(src).not.toContain("SERVICE_ROLE");
+    });
+});
