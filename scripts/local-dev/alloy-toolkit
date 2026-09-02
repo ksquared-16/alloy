@@ -32,6 +32,7 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CANONICAL="${ALLOY_REPO:-$HOME/Alloy}"
 SUBDIR="scripts/local-dev"
 ROOT="${ALLOY_TOOLKIT_ROOT:-$HOME/.local/share/alloy/toolkit}"
@@ -43,6 +44,38 @@ _g=$'\033[32m'; _y=$'\033[33m'; _r=$'\033[31m'; _d=$'\033[2m'; _o=$'\033[0m'
 ok()   { printf '%s✓%s %s\n' "$_g" "$_o" "$1"; }
 warn() { printf '%s!%s %s\n' "$_y" "$_o" "$1"; }
 info() { printf '  %s\n' "$1"; }
+
+# =============================================================================
+# Shared-host exclusivity.
+#
+# THE DEFECT THIS FIXES: `current` is the machine-wide pointer to the live
+# toolkit, and the Gateway resolves through it. Two Execution Runs installed
+# concurrently on this host and the second silently overwrote the first —
+# last-writer-wins on shared host state, with no warning and no audit.
+#
+# install-vacilando-gateway.sh already gates on `gateway_host_mutation`; the
+# toolkit flip, which is the more consequential mutation, did not. Same
+# resource, same fail-closed preflight, no second locking system. An UNOWNED
+# host is still permitted: this guards against a concurrent owner, not against
+# operating the machine by hand.
+# =============================================================================
+assert_host_mutation_allowed() {
+  local what="$1"
+  local guard_js="${SCRIPT_DIR}/lib/vacilando/gateway-host-mutation.mjs"
+  [[ "${VACILANDO_SKIP_HOST_MUTATION_GUARD:-0}" == "1" ]] && return 0
+  [[ -f "$guard_js" ]] || return 0
+  local node_bin
+  node_bin="$(command -v node || true)"
+  [[ -n "$node_bin" ]] || return 0
+  if ! "$node_bin" "$guard_js" check ${VACILANDO_RUN_ID:+--run "$VACILANDO_RUN_ID"} >/dev/null; then
+    local holder
+    holder="$("$node_bin" "$guard_js" holder 2>/dev/null || echo unknown)"
+    printf '%s✗%s refusing to %s: another Execution Run holds gateway_host_mutation (%s)\n' \
+      "$_r" "$_o" "$what" "$holder" >&2
+    printf '  Wait for release rather than overwriting shared host state.\n' >&2
+    exit 3
+  fi
+}
 dim()  { printf '%s  %s%s\n' "$_d" "$1" "$_o"; }
 die()  { printf '%s✗%s %s\n' "$_r" "$_o" "$1" >&2; exit 1; }
 
@@ -141,6 +174,7 @@ EOF
   # INSIDE the old version instead of replacing the pointer. That failed
   # silently: the install reported success, verify reported durable, and the
   # toolkit stayed on the previous commit. `ln -sfn` replaces the link itself.
+  assert_host_mutation_allowed "flip toolkit/current to ${short}"
   mkdir -p "$ROOT"
   rm -f "${ROOT}/.current.tmp"
   ln -sfn "$dest" "${ROOT}/current"
@@ -240,6 +274,7 @@ cmd_rollback() {
   # resolved to the old version and a stray `.current.tmp` sat inside it.
   # `ln -sfn` replaces the link itself. Retaining ten versions for a rollback
   # that silently no-ops is retention theatre, which is why S9 fixes it here.
+  assert_host_mutation_allowed "roll toolkit/current back to ${sha}"
   rm -f "${ROOT}/.current.tmp"
   ln -sfn "${ROOT}/${sha}" "${ROOT}/current"
 

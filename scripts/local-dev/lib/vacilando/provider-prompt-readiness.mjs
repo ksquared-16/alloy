@@ -646,6 +646,84 @@ export function promptReadinessSummary(assessment) {
  * rest are genuine provider-account state that Vacilando has no authority over
  * and cannot answer on anyone's behalf.
  */
+/**
+ * Benign provider onboarding that Vacilando may answer for the operator.
+ *
+ * THE DEFECT THIS FIXES: a freshly spawned Claude pane can land on "Teach auto
+ * mode about your environment?". The readiness gate accepts any "❯", and that
+ * modal draws its options with the SAME glyph, so the session looked started
+ * while a modal held the pane — and delivery then failed
+ * `undelivered_provider_prompt_block`, requiring a human to SSH in and press a
+ * key on a trusted, managed worktree.
+ *
+ * THE BOUNDARY IS DELIBERATELY NARROW. An entry qualifies only if it is a
+ * provider PREFERENCE interstitial with a safe declining answer and no side
+ * effect on the repository, the host, credentials or permissions. Everything
+ * else — permission grants, workspace trust, login, updates, destructive
+ * confirmations, governed Alloy actions — stays blocked and operator-owned.
+ * We only ever DECLINE; we never opt in to anything on the operator's behalf.
+ */
+export const BENIGN_ONBOARDING_ANSWERS = Object.freeze([
+  Object.freeze({
+    id: "claude_auto_mode_environment_onboarding",
+    provider: "claude",
+    match: /teach auto mode about your environment\?/i,
+    // The decline affordance must actually be on screen; if the layout ever
+    // changes, we refuse rather than press a key we cannot account for.
+    requires: /(^|\n)\s*[❯>\s]*2\.\s*not now/i,
+    keys: Object.freeze(["2"]),
+    answer: "Not now",
+    why: "optional preference interstitial; declining has no side effect",
+  }),
+]);
+
+/**
+ * Text that disqualifies ANY automatic answer, regardless of match. A screen
+ * that mixes an onboarding question with a permission/trust/credential request
+ * is not benign, and ambiguity resolves to the operator.
+ */
+const NEVER_AUTO_ANSWER = Object.freeze([
+  /\ballow\b[^\n]{0,40}\?/i,
+  /\bpermission\b/i,
+  /do you trust/i,
+  /workspace trust/i,
+  /\bsign in\b|\blog ?in\b|\bauthenticat/i,
+  /\bapi key\b|\btoken\b|\bpassword\b|\bcredential/i,
+  /\bdelete\b|\boverwrite\b|\breset\b|\bforce\b|\bdestroy\b/i,
+  /\bsudo\b|\badmin\b|\bprivilege/i,
+  /\bpush\b|\bmerge\b|\bdeploy\b|\bpublish\b/i,
+  /\bgoverned action\b/i,
+]);
+
+/**
+ * The safe deterministic answer for a known benign onboarding screen, or null.
+ *
+ * Callers MUST additionally prove the execution context is trusted (managed
+ * worktree, registered repository, authenticated provider). This function
+ * classifies the SCREEN only — it does not authorise anything by itself.
+ */
+export function benignOnboardingAnswer(text, { provider = null } = {}) {
+  const tail = tailOf(text);
+  if (!tail.trim()) return null;
+  const laneProvider = String(provider || "").toLowerCase() || null;
+  for (const re of NEVER_AUTO_ANSWER) {
+    if (re.test(tail)) return null;
+  }
+  for (const entry of BENIGN_ONBOARDING_ANSWERS) {
+    if (entry.provider && laneProvider && entry.provider !== laneProvider) continue;
+    if (!entry.match.test(tail)) continue;
+    if (entry.requires && !entry.requires.test(tail)) return null;
+    return {
+      id: entry.id,
+      keys: [...entry.keys],
+      answer: entry.answer,
+      why: entry.why,
+      provider: entry.provider,
+    };
+  }
+  return null;
+}
+
 export const OPERATOR_TERMINAL_BLOCKERS = Object.freeze([
   "onboarding", "setup", "trust", "update", "login", "resume_picker", "selection", "error_modal",
 ]);

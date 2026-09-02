@@ -624,10 +624,26 @@ const CURSOR_PROMPT_RE = /→/;
  * Both providers now hold the same contract: the process is present AND its
  * prompt is on screen.
  */
-async function waitForProviderPrompt(session, { provider = "claude", timeoutMs = 20000, intervalMs = 400 } = {}) {
+async function waitForProviderPrompt(session, {
+  provider = "claude",
+  timeoutMs = 20000,
+  intervalMs = 400,
+  // Only the verified start path sets this. It proves the execution context
+  // is trusted: a managed worktree inside a registered repository, on this
+  // node, with an authenticated provider.
+  allowOnboardingAutoAnswer = false,
+} = {}) {
   const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   const started = Date.now();
   let lastText = "";
+  let onboarding = null;
+  const onboardingKeysSent = new Map();
+  let onboardingEvents = 0;
+  if (allowOnboardingAutoAnswer) {
+    try {
+      ({ benignOnboardingAnswer: onboarding } = await import("./provider-prompt-readiness.mjs"));
+    } catch { onboarding = null; }
+  }
   while (Date.now() - started < timeoutMs) {
     const pane = sessionPane(session);
     const cap = runTmuxSync(["capture-pane", "-p", "-t", pane?.pane_id || `${session}:0.0`]);
@@ -635,6 +651,31 @@ async function waitForProviderPrompt(session, { provider = "claude", timeoutMs =
     const probe = { command: pane?.command, title: pane?.title || "" };
     const present = paneHasWantedProvider(probe, wanted)
       || inferAgentPresence(probe, { provider: wanted }) === "present";
+
+    // A known benign onboarding interstitial is answered here, BEFORE the pane
+    // is ever declared deliverable. The readiness test below accepts any "❯",
+    // and these modals draw their options with the same glyph — so without
+    // this the session reports started while a modal owns the pane, and the
+    // first send fails `undelivered_provider_prompt_block`.
+    //
+    // Bounded and declining only. An unknown or security-shaped screen returns
+    // null from the classifier and still blocks for the operator.
+    if (onboarding && present && onboardingEvents < 4) {
+      const safe = onboarding(text, { provider: wanted });
+      if (safe) {
+        const sent = onboardingKeysSent.get(safe.id) || 0;
+        const key = sent === 0 ? safe.keys[0] : "Enter";
+        if (sent < 2) {
+          runTmuxSync(["send-keys", "-t", pane?.pane_id || `${session}:0.0`, key]);
+          onboardingKeysSent.set(safe.id, sent + 1);
+          onboardingEvents += 1;
+          lastText = text;
+          await sleep(intervalMs);
+          continue;
+        }
+      }
+    }
+
     if (wanted === "cursor") {
       if (present && CURSOR_PROMPT_RE.test(text)) {
         return { ok: true, waited_ms: Date.now() - started };
@@ -949,7 +990,12 @@ export async function startPersistentAgentSession({
   // run outright.
   let readiness = null;
   if (startedProvider) {
-    readiness = await waitForProviderPrompt(session, { provider: wanted });
+    // Trust is already proven above: managedWorktreePath() accepted this cwd,
+    // the repository matched when the caller named one, and the branch matched.
+    readiness = await waitForProviderPrompt(session, {
+      provider: wanted,
+      allowOnboardingAutoAnswer: true,
+    });
     if (!readiness.ok) {
       return {
         ok: false,
