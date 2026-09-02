@@ -18,6 +18,7 @@ import { resolve } from "path";
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
+    CERT_FAMILIES,
     ENROLLMENT_CERT_DOMAIN,
     assertNamespaceIsolated,
     ensureEnrollmentCertification,
@@ -28,6 +29,13 @@ loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
 type Supabase = ReturnType<typeof createAdminClient>;
+
+/**
+ * The invented surnames this fixture uses -- read off the family specs themselves, never retyped.
+ * They are the only thing that identifies an Opportunity the fixture orphaned, so a list that
+ * drifted from the specs would make the sweep silently stop working while still reporting zero.
+ */
+const FIXTURE_SURNAMES: readonly string[] = Object.values(CERT_FAMILIES).map((f) => f.lastName);
 
 /**
  * One org, or an explicit one. Guessing between several would let the fixture write into a tenant
@@ -46,11 +54,43 @@ async function resolveOrgId(supabase: Supabase): Promise<string> {
 /**
  * Remove ONLY what the reserved namespace reaches, deepest-first.
  *
- * The selector is the e-mail domain and nothing else — never a name, never a date, never "created
- * recently". The certification tenant's real families are not matched, so they cannot be reached.
+ * The selector is the reserved e-mail domain — never a date, never "created recently". The
+ * certification tenant's real families are not matched, so they cannot be reached.
+ *
+ * ONE exception, and it is stated rather than hidden: an Opportunity the fixture orphaned holds no
+ * household to reach it by, so the sweep below matches an invented surname AND a null household
+ * reference together. That pair was measured against the live tenant before it was used, and the
+ * reasoning is with the code that relies on it.
  */
 async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<string, number>> {
     await assertNamespaceIsolated(supabase, orgId);
+
+    /*
+     * The already-leaked ones, swept once.
+     *
+     * Deleting a household does not cascade to its Opportunities -- it NULLs `customer_id` -- so
+     * every earlier reset left an Opportunity attached to nothing. Thirteen had accumulated before
+     * the delta census caught it.
+     *
+     * The selector was measured before it was used, which for a DELETE is the only acceptable order:
+     * of every Opportunity in this tenant holding a null `customer_id`, all carried a fixture
+     * surname and none did not, while the tenant's real Opportunities all hold live household
+     * references. So "null household AND a surname this fixture invented" reaches the leak exactly
+     * and nothing else. Neither half is sufficient alone: a tenant may legitimately hold a
+     * customer-less Opportunity, and a surname match alone would reach a live family's row.
+     */
+    const orphanSurnameFilter = FIXTURE_SURNAMES.map((n) => `name.ilike.%${n}%,title.ilike.%${n}%`).join(",");
+    const { data: orphans } = await supabase
+        .from("opportunities")
+        .select("id")
+        .eq("org_id", orgId)
+        .is("customer_id", null)
+        .or(orphanSurnameFilter);
+    const orphanIds = ((orphans ?? []) as Array<{ id: string }>).map((r) => r.id);
+    const orphanedOpportunities = orphanIds.length;
+    if (orphanIds.length) {
+        await supabase.from("opportunities").delete().eq("org_id", orgId).in("id", orphanIds);
+    }
 
     // Reach households through the canonical person → customer link; `customers` carries no e-mail.
     const { data: persons } = await supabase
@@ -59,14 +99,18 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         .eq("org_id", orgId)
         .ilike("email", `%@${ENROLLMENT_CERT_DOMAIN}`);
     const personIds = ((persons ?? []) as Array<{ id: string }>).map((r) => r.id);
-    if (!personIds.length) return { households: 0, children: 0, participations: 0, journeys: 0 };
+    if (!personIds.length) {
+        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities };
+    }
     const { data: links } = await supabase
         .from("customer_persons")
         .select("customer_id")
         .eq("org_id", orgId)
         .in("person_id", personIds);
     const customerIds = [...new Set(((links ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id))];
-    if (!customerIds.length) return { households: 0, children: 0, participations: 0, journeys: 0 };
+    if (!customerIds.length) {
+        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities };
+    }
 
     const { data: members } = await supabase
         .from("customer_members")
@@ -75,7 +119,31 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         .in("customer_id", customerIds);
     const memberIds = ((members ?? []) as Array<{ id: string }>).map((r) => r.id);
 
-    const counts: Record<string, number> = { households: customerIds.length, children: memberIds.length };
+    const counts: Record<string, number> = {
+        households: customerIds.length,
+        children: memberIds.length,
+        orphaned_opportunities: orphanedOpportunities,
+    };
+
+    /*
+     * OPPORTUNITIES, and this is where the fixture leaked.
+     *
+     * Reset removed households, children, participations and journeys but never the Opportunity
+     * Create Lead mints, so every ensure-after-reset orphaned one and the certification tenant's
+     * Opportunity count climbed on every iteration. The delta census caught it; nothing else would
+     * have, because the fixture verified green each time.
+     *
+     * Collected through `customer_id` -- the household link -- and deleted BEFORE the households
+     * are, or the selector that finds them is gone by the time we need it. That ordering is the
+     * whole fix: a leak here is not a missing DELETE so much as a DELETE that ran too late.
+     */
+    const { data: opportunities } = await supabase
+        .from("opportunities")
+        .select("id")
+        .eq("org_id", orgId)
+        .in("customer_id", customerIds);
+    const opportunityIds = ((opportunities ?? []) as Array<{ id: string }>).map((r) => r.id);
+    counts.opportunities = opportunityIds.length;
 
     if (memberIds.length) {
         const { data: journeys } = await supabase
@@ -99,6 +167,11 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
             .in("customer_member_id", memberIds);
 
         await supabase.from("customer_members").delete().eq("org_id", orgId).in("id", memberIds);
+    }
+
+    // Opportunities before households: the household link is the only selector that reaches them.
+    if (opportunityIds.length) {
+        await supabase.from("opportunities").delete().eq("org_id", orgId).in("id", opportunityIds);
     }
 
     await supabase.from("customers").delete().eq("org_id", orgId).in("id", customerIds);
