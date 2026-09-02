@@ -130,8 +130,15 @@ test("a malformed PR value stays null and is never guessed", () => {
 test("no second merge alias list exists in governed-action-request", () => {
   // The structural guard. Each of these consumers must read the shared parser,
   // and none may re-derive merge identity from rec.inputs itself.
+  // actionQueryHash used to be checked here. It was DELETED when the canonical
+  // action-authorization identity resolver landed: it was the last place that
+  // spelled a subject key for itself, and a retained-but-unused derivation is a
+  // call site waiting to be re-added. Its absence is asserted below.
+  assert.ok(
+    !/function actionQueryHash\b/.test(REQ_SRC),
+    "actionQueryHash must stay deleted; subject identity comes from the shared resolver",
+  );
   for (const sig of [
-    "function actionQueryHash(rec)",
     "function requestTitle(rec)",
     "function proposalForRequest(rec)",
   ]) {
@@ -139,12 +146,6 @@ test("no second merge alias list exists in governed-action-request", () => {
     const own = body.match(
       /rec\.inputs\??\.\s*(pull_request_number|pullRequestNumber|pull_request|pullRequest|pr|expected_head_sha|expectedHeadSha|head_sha|merge_method|mergeMethod)\b/g,
     );
-    // actionQueryHash legitimately reads push/open_pr SHAs, which are not merge
-    // identity; assert only that the MERGE branch went through the parser.
-    if (sig.startsWith("function actionQueryHash")) {
-      assert.ok(body.includes("mergeIdentityFor"), "actionQueryHash must use the shared merge identity");
-      continue;
-    }
     assert.equal(own, null, `${sig} re-derives merge identity: ${JSON.stringify(own)}`);
   }
   assert.ok(
