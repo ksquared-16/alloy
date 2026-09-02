@@ -38,6 +38,7 @@ import {
     resizeArea,
     resolveDropPlacement,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
+import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import { composeEffectiveCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import {
@@ -177,7 +178,20 @@ export default function FocusPanelRuntimeComposerCanvas({
             if (toRemove.length === 0 && toAdd.length === 0) return prev;
             let next = prev;
             for (const key of toRemove) next = removeArea(next, key);
-            for (const key of toAdd) next = addCardToGrid(next, key);
+            for (const key of toAdd) {
+                /*
+                 * A card made Visible used to arrive FULL WIDTH: `addCardToGrid` defaults
+                 * `colSpan` to the whole row when the caller states none, and this call
+                 * stated none. So a surface built through the visibility control had every
+                 * card spanning 12 columns, no row ever had a vacancy beside anything, and
+                 * a drag could only ever stack. The tray's own add path
+                 * (`onAddCard`) has always passed a width; this one simply never did.
+                 */
+                next = addCardToGrid(next, key, {
+                    colSpan: defaultColumnsForCard(key),
+                    rowSpan: defaultRowSpanForCard(key),
+                });
+            }
             onLayoutChangeRef.current?.(buildPublishedLayoutFromGrid(next));
             return next;
         });
@@ -804,6 +818,54 @@ function ComposerCellShell({
     onEnterDrillIn,
     children,
 }: ComposerCellShellProps) {
+    /*
+     * THE WHOLE CARD IS THE HANDLE.
+     *
+     * Picking a card up used to require a 34px strip along its top edge, inset
+     * 34px from the left and up to 156px from the right, and invisible until
+     * hover — on a 1/3 card that is roughly 8% of its surface. Press anywhere
+     * else and nothing happened at all. No placement arithmetic downstream can
+     * be reached if the gesture never starts, which is why the canvas kept
+     * reading as "constrained", "rigid" and "fighting the layout" while the
+     * resolver underneath was answering correctly.
+     *
+     * So the card body starts the drag, with two guards that keep the rest of
+     * the chrome usable:
+     *
+     *   · anything interactive inside the card (the Configure/Remove buttons,
+     *     the resize handles, links, inputs) keeps its own press;
+     *   · a 4px movement threshold, so a click still selects the card and only
+     *     an actual drag becomes a drag.
+     *
+     * The visible drag bar stays. It is now an affordance that shows where to
+     * grab rather than the only place that works.
+     */
+    const bodyPointerDown = (e: PointerEvent) => {
+        if (!onStartMove || e.button !== 0) return;
+        const target = e.target as HTMLElement | null;
+        if (target?.closest("button, a, input, textarea, select, [data-fp-composer-no-drag]")) return;
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const armed = e;
+        let started = false;
+        const onMove = (ev: globalThis.PointerEvent) => {
+            if (started) return;
+            if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) < 4) return;
+            started = true;
+            release();
+            onStartMove(armed);
+        };
+        const release = () => {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", release);
+            window.removeEventListener("pointercancel", release);
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", release);
+        window.addEventListener("pointercancel", release);
+    };
+
     return (
         <div
             className={[
@@ -812,6 +874,7 @@ function ComposerCellShell({
                 arranging ? "is-arranging" : "",
             ].join(" ")}
             data-fp-composer-cell={cardKey}
+            onPointerDown={onStartMove ? bodyPointerDown : undefined}
         >
             {children}
             {onStartMove ?
