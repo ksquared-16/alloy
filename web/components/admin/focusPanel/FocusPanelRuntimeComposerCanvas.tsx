@@ -40,15 +40,6 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import {
-    beginRecording,
-    markActivated,
-    recordedGestureCount,
-    recordingActivated,
-    recordingIsAutomatic,
-    finishRecording,
-    recordFrame,
-} from "@/lib/adminV2/runtime/focusPanel/composition/composerDragRecorder";
-import {
     applyDropCandidate,
     enumerateDropCandidates,
     pickDropCandidate,
@@ -133,7 +124,6 @@ type Props = {
     nestedSurfaceByCard?: Partial<Record<FocusPanelCardKey, NestedSurfaceTarget>>;
 };
 
-
 /**
  * Runtime-first Focus Panel composer canvas.
  *
@@ -172,14 +162,6 @@ export default function FocusPanelRuntimeComposerCanvas({
      */
     const [previewGrid, setPreviewGrid] = useState<FocusPanelGridLayout | null>(null);
     const [draggingCard, setDraggingCard] = useState<FocusPanelCardKey | null>(null);
-    /*
-     * A VISIBLE SIGN THAT THE RECORDER IS IN THIS TAB.
-     *
-     * Two rounds of operator QA produced no trace, and the sink was fine both
-     * times — the page simply predated the recorder. "Nothing was captured" reads
-     * identically to "nothing happened", so the builder says which it is.
-     */
-    const [tracedGestures, setTracedGestures] = useState(0);
     const renderGrid = previewGrid ?? grid;
     const [activeMode, setActiveMode] = useState<FocusPanelMode>("summary");
     const [arranging, setArranging] = useState(false);
@@ -476,50 +458,6 @@ export default function FocusPanelRuntimeComposerCanvas({
      * using when placement became column-aware. Reading the DOM keeps composer and
      * runtime on one description of the canvas.
      */
-    /*
-     * EVERY PRESS ON A CARD IS RECORDED — activated or not.
-     *
-     * The recorder used to begin inside `startMove`, so a press that picked
-     * nothing up produced no trace at all. That is the single most useful thing it
-     * could have told us: the operator reproduced the failure with recording on
-     * and the directory stayed empty, which is itself the answer — the gesture
-     * never activated. It cannot say that if it only records gestures that did.
-     */
-    useEffect(() => {
-        const container = gridContainerRef.current;
-        if (!container || !recordingIsAutomatic()) return;
-        const onDown = (ev: globalThis.PointerEvent) => {
-            const cell = (ev.target as HTMLElement | null)?.closest?.("[data-fp-composer-cell]");
-            if (!cell) return;
-            beginRecording({
-                card: cell.getAttribute("data-fp-composer-cell"),
-                activator: null,
-                grab: null,
-                layoutBefore: grid.areas.map((a) =>
-                    `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`),
-            });
-            recordFrame("down", ev);
-            // Once it is a real drag the runtime records the frames WITH decisions;
-            // this listener only covers the presses that never got that far.
-            const onMove = (m: globalThis.PointerEvent) => {
-                if (!recordingActivated()) recordFrame("move", m);
-            };
-            const onUp = (u: globalThis.PointerEvent) => {
-                recordFrame("up", u);
-                window.removeEventListener("pointermove", onMove, true);
-                window.removeEventListener("pointerup", onUp, true);
-                window.removeEventListener("pointercancel", onUp, true);
-                // The drag runtime finishes its own recording; this only closes the
-                // ones it never took over.
-                window.setTimeout(() => finishRecording(null), 0);
-            };
-            window.addEventListener("pointermove", onMove, true);
-            window.addEventListener("pointerup", onUp, true);
-            window.addEventListener("pointercancel", onUp, true);
-        };
-        container.addEventListener("pointerdown", onDown, true);
-        return () => container.removeEventListener("pointerdown", onDown, true);
-    }, [grid]);
 
     const measureCardBoxes = useCallback(() => {
         const boxes = new Map<string, { top: number; height: number }>();
@@ -545,7 +483,6 @@ export default function FocusPanelRuntimeComposerCanvas({
         },
         [cols, measureCanvas],
     );
-
 
     /*
      * ── EXPLICIT DESTINATIONS, ENUMERATED ONCE PER DRAG ──
@@ -627,10 +564,6 @@ export default function FocusPanelRuntimeComposerCanvas({
             labelFor: cardLabel,
         });
 
-        markActivated({
-            activator: describeTraceTarget(e.currentTarget as EventTarget),
-            grab: { candidates: candidates.length },
-        });
         traceComposerDrag("pointerdown", {
             card: area.card,
             gridColumns: gridAtStart.columns,
@@ -658,7 +591,6 @@ export default function FocusPanelRuntimeComposerCanvas({
             setDraggingCard(null);
             setDropZones([]);
             setActiveZoneId(null);
-            window.setTimeout(() => setTracedGestures(recordedGestureCount()), 600);
             interacting.current = false;
             setArranging(false);
             try {
@@ -710,16 +642,6 @@ export default function FocusPanelRuntimeComposerCanvas({
                     top: Math.round(candidate.top),
                 },
             });
-            recordFrame("move", ev, {
-                zone: candidate.id,
-                after: candidate.after,
-                overlapping: candidate.overlapping,
-                landed: {
-                    colStart: candidate.colStart,
-                    colSpan: candidate.colSpan,
-                    top: Math.round(candidate.top),
-                },
-            });
             // Only when the answer changes: a re-render per pointer sample is jank.
             const signature = next.areas
                 .map((a) => `${a.card}:${a.colStart}:${a.rowStart}:${a.colSpan}:${a.rowSpan}`)
@@ -762,25 +684,12 @@ export default function FocusPanelRuntimeComposerCanvas({
                 layout: next.areas.map((a) =>
                     `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`),
             });
-            recordFrame("up", ev, {
-                zone: candidate.id,
-                committed: {
-                    colStart: candidate.colStart,
-                    colSpan: candidate.colSpan,
-                    top: Math.round(candidate.top),
-                },
-            });
-            finishRecording(next.areas.map((a) =>
-                `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`));
             applyGrid(next);
             cleanup();
         };
 
         const cancel = (ev: globalThis.PointerEvent) => {
             // Invalid/cancelled drop returns the card to its exact original position.
-            recordFrame("cancel", ev);
-            finishRecording(gridAtStart.areas.map((a) =>
-                `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`));
             cleanup();
         };
         window.addEventListener("pointermove", move);
@@ -976,15 +885,6 @@ export default function FocusPanelRuntimeComposerCanvas({
                 <div className="alloy-os-fp-composer__tray" data-fp-composer-tray="true" data-fp-composer-tray-position="top">
                     <Plus className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />
                     <span className="alloy-os-fp-composer__tray-label">Add card</span>
-                    {recordingIsAutomatic() ?
-                        <span
-                            className="alloy-os-fp-composer__tray-label"
-                            data-fp-drag-tracing="on"
-                            title="Every drag on this canvas is recorded to /tmp/alloy-surface-drag-traces/"
-                        >
-                            · drag tracing ON{tracedGestures ? ` · ${tracedGestures} captured` : ""}
-                        </span>
-                    :   null}
                     {tray.map((c) => (
                         <button
                             // A variant is keyed by identity AND shape: Financials appears twice in
