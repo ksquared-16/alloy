@@ -400,7 +400,17 @@ describe("Canvas builder mounted in the settings editor (Experience Builder V4)"
         expect(canvas).toContain("moveArea"); // drag to move a region (snaps to grid)
         expect(canvas).toContain("resizeArea"); // edge drag resizes the region
         expect(canvas).toContain("onSelectCard"); // click selects → inspector
-        expect(canvas).toContain("snapMoveTarget");
+        /*
+         * Composition is owned by the EXPLICIT CANDIDATE MODEL now. The canvas used
+         * to import `snapMoveTarget` — a pointer→row→column inference the operator
+         * could not see and six rounds of QA could not make predictable. It
+         * enumerates the legal destinations, draws them, and commits the one the
+         * pointer selected, so the guard is that those three are the same call.
+         */
+        expect(canvas).toContain("enumerateDropCandidates");
+        expect(canvas).toContain("pickDropCandidate");
+        expect(canvas).toContain("applyDropCandidate");
+        expect(canvas).not.toContain("snapMoveTarget");
     });
 });
 

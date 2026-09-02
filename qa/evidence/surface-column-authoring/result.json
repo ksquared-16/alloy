@@ -1,0 +1,984 @@
+{
+  "attendance": {
+    "before": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 1687
+      },
+      "areas": [
+        {
+          "card": "readiness_kpi",
+          "row": "3/3",
+          "x": 481,
+          "y": 851,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "3/4",
+          "x": 965,
+          "y": 851,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "6/2",
+          "x": 481,
+          "y": 1109,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "household",
+          "row": "7/4",
+          "x": 965,
+          "y": 1247,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "attendance",
+          "row": "8/2",
+          "x": 481,
+          "y": 1485,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "health_safety",
+          "row": "10/2",
+          "x": 481,
+          "y": 1920,
+          "w": 474,
+          "h": 369
+        },
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "financials",
+          "row": "1/2",
+          "x": 1126,
+          "y": 602,
+          "w": 312,
+          "h": 239
+        }
+      ]
+    },
+    "during": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 1687
+      },
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "attendance",
+          "row": "2/2",
+          "x": 481,
+          "y": 851,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "financials",
+          "row": "3/2",
+          "x": 1126,
+          "y": 602,
+          "w": 312,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "4/3",
+          "x": 481,
+          "y": 1286,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "5/4",
+          "x": 965,
+          "y": 851,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "6/2",
+          "x": 481,
+          "y": 1544,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "household",
+          "row": "7/4",
+          "x": 965,
+          "y": 1247,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "health_safety",
+          "row": "8/2",
+          "x": 481,
+          "y": 1920,
+          "w": 474,
+          "h": 369
+        }
+      ]
+    },
+    "after": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 1687
+      },
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "attendance",
+          "row": "2/2",
+          "x": 481,
+          "y": 851,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "financials",
+          "row": "3/2",
+          "x": 1126,
+          "y": 602,
+          "w": 312,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "4/3",
+          "x": 481,
+          "y": 1286,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "5/4",
+          "x": 965,
+          "y": 851,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "6/2",
+          "x": 481,
+          "y": 1544,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "household",
+          "row": "7/4",
+          "x": 965,
+          "y": 1247,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "health_safety",
+          "row": "8/2",
+          "x": 481,
+          "y": 1920,
+          "w": 474,
+          "h": 369
+        }
+      ]
+    },
+    "trace": [
+      {
+        "at": 10580,
+        "phase": "move",
+        "card": "attendance",
+        "pointer": {
+          "x": 546,
+          "y": 929
+        },
+        "pointerCell": {
+          "col": 1,
+          "row": 1
+        },
+        "after": "business_process",
+        "overlapping": [
+          "business_process",
+          "readiness_kpi",
+          "billing_preview",
+          "health_safety"
+        ],
+        "asked": {
+          "colStart": 1,
+          "rowStart": 2
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 1,
+          "colSpan": 6,
+          "rowStart": 2,
+          "rowSpan": 2
+        }
+      },
+      {
+        "at": 10680,
+        "phase": "move",
+        "card": "attendance",
+        "pointer": {
+          "x": 543,
+          "y": 905
+        },
+        "pointerCell": {
+          "col": 1,
+          "row": 1
+        },
+        "after": "business_process",
+        "overlapping": [
+          "business_process",
+          "readiness_kpi",
+          "billing_preview",
+          "health_safety"
+        ],
+        "asked": {
+          "colStart": 1,
+          "rowStart": 2
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 1,
+          "colSpan": 6,
+          "rowStart": 2,
+          "rowSpan": 2
+        }
+      },
+      {
+        "at": 10839,
+        "phase": "move",
+        "card": "attendance",
+        "pointer": {
+          "x": 541,
+          "y": 881
+        },
+        "pointerCell": {
+          "col": 1,
+          "row": 1
+        },
+        "after": "business_process",
+        "overlapping": [
+          "business_process",
+          "readiness_kpi",
+          "billing_preview",
+          "health_safety"
+        ],
+        "asked": {
+          "colStart": 1,
+          "rowStart": 2
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 1,
+          "colSpan": 6,
+          "rowStart": 2,
+          "rowSpan": 2
+        }
+      }
+    ],
+    "pointer": {
+      "x": 541,
+      "y": 881
+    }
+  },
+  "healthUp": {
+    "before": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 1687
+      },
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "attendance",
+          "row": "2/2",
+          "x": 481,
+          "y": 851,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "financials",
+          "row": "3/2",
+          "x": 1126,
+          "y": 602,
+          "w": 312,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "4/3",
+          "x": 481,
+          "y": 1286,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "5/4",
+          "x": 965,
+          "y": 851,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "6/2",
+          "x": 481,
+          "y": 1544,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "household",
+          "row": "7/4",
+          "x": 965,
+          "y": 1247,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "health_safety",
+          "row": "8/2",
+          "x": 481,
+          "y": 1920,
+          "w": 474,
+          "h": 369
+        }
+      ]
+    },
+    "during": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 2074
+      },
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "attendance",
+          "row": "2/2",
+          "x": 481,
+          "y": 851,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "health_safety",
+          "row": "3/2",
+          "x": 884,
+          "y": 1286,
+          "w": 474,
+          "h": 369
+        },
+        {
+          "card": "financials",
+          "row": "4/2",
+          "x": 1126,
+          "y": 1665,
+          "w": 312,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "5/3",
+          "x": 481,
+          "y": 1286,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "6/4",
+          "x": 965,
+          "y": 1914,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "7/2",
+          "x": 481,
+          "y": 1665,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "household",
+          "row": "8/4",
+          "x": 965,
+          "y": 2310,
+          "w": 474,
+          "h": 366
+        }
+      ]
+    },
+    "after": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 2074
+      },
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "attendance",
+          "row": "2/2",
+          "x": 481,
+          "y": 851,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "health_safety",
+          "row": "3/2",
+          "x": 884,
+          "y": 1286,
+          "w": 474,
+          "h": 369
+        },
+        {
+          "card": "financials",
+          "row": "4/2",
+          "x": 1126,
+          "y": 1665,
+          "w": 312,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "5/3",
+          "x": 481,
+          "y": 1286,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "6/4",
+          "x": 965,
+          "y": 1914,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "7/2",
+          "x": 481,
+          "y": 1665,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "household",
+          "row": "8/4",
+          "x": 965,
+          "y": 2310,
+          "w": 474,
+          "h": 366
+        }
+      ]
+    },
+    "trace": [
+      {
+        "at": 14949,
+        "phase": "move",
+        "card": "health_safety",
+        "pointer": {
+          "x": 992,
+          "y": 1319
+        },
+        "pointerCell": {
+          "col": 7,
+          "row": 1
+        },
+        "after": "attendance",
+        "overlapping": [
+          "business_process",
+          "attendance",
+          "financials",
+          "billing_preview",
+          "children",
+          "household"
+        ],
+        "asked": {
+          "colStart": 6,
+          "rowStart": 3
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 6,
+          "colSpan": 6,
+          "rowStart": 3,
+          "rowSpan": 2
+        }
+      },
+      {
+        "at": 15079,
+        "phase": "move",
+        "card": "health_safety",
+        "pointer": {
+          "x": 1009,
+          "y": 1293
+        },
+        "pointerCell": {
+          "col": 7,
+          "row": 1
+        },
+        "after": "attendance",
+        "overlapping": [
+          "business_process",
+          "attendance",
+          "financials",
+          "billing_preview",
+          "children",
+          "household"
+        ],
+        "asked": {
+          "colStart": 6,
+          "rowStart": 3
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 6,
+          "colSpan": 6,
+          "rowStart": 3,
+          "rowSpan": 2
+        }
+      },
+      {
+        "at": 15182,
+        "phase": "move",
+        "card": "health_safety",
+        "pointer": {
+          "x": 1025,
+          "y": 1267
+        },
+        "pointerCell": {
+          "col": 7,
+          "row": 1
+        },
+        "after": "attendance",
+        "overlapping": [
+          "business_process",
+          "attendance",
+          "financials",
+          "billing_preview",
+          "children",
+          "household"
+        ],
+        "asked": {
+          "colStart": 6,
+          "rowStart": 3
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 6,
+          "colSpan": 6,
+          "rowStart": 3,
+          "rowSpan": 2
+        }
+      }
+    ],
+    "pointer": {
+      "x": 1025,
+      "y": 1267
+    }
+  },
+  "healthDown": {
+    "before": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 2074
+      },
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "attendance",
+          "row": "2/2",
+          "x": 481,
+          "y": 851,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "health_safety",
+          "row": "3/2",
+          "x": 884,
+          "y": 1286,
+          "w": 474,
+          "h": 369
+        },
+        {
+          "card": "financials",
+          "row": "4/2",
+          "x": 1126,
+          "y": 1665,
+          "w": 312,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "5/3",
+          "x": 481,
+          "y": 1286,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "6/4",
+          "x": 965,
+          "y": 1914,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "7/2",
+          "x": 481,
+          "y": 1665,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "household",
+          "row": "8/4",
+          "x": 965,
+          "y": 2310,
+          "w": 474,
+          "h": 366
+        }
+      ]
+    },
+    "during": {
+      "grid": {
+        "x": 481,
+        "y": 234,
+        "w": 957,
+        "h": 2063
+      },
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 234,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "attendance",
+          "row": "2/2",
+          "x": 481,
+          "y": 483,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "financials",
+          "row": "3/2",
+          "x": 1126,
+          "y": 234,
+          "w": 312,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "4/3",
+          "x": 481,
+          "y": 918,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "5/4",
+          "x": 965,
+          "y": 483,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "6/2",
+          "x": 481,
+          "y": 1176,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "health_safety",
+          "row": "7/2",
+          "x": 884,
+          "y": 1552,
+          "w": 474,
+          "h": 369
+        },
+        {
+          "card": "household",
+          "row": "8/4",
+          "x": 965,
+          "y": 1931,
+          "w": 474,
+          "h": 366
+        }
+      ]
+    },
+    "after": {
+      "grid": {
+        "x": 481,
+        "y": 602,
+        "w": 957,
+        "h": 1687
+      },
+      "areas": [
+        {
+          "card": "business_process",
+          "row": "1/2",
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        {
+          "card": "attendance",
+          "row": "2/2",
+          "x": 481,
+          "y": 851,
+          "w": 474,
+          "h": 425
+        },
+        {
+          "card": "financials",
+          "row": "3/2",
+          "x": 1126,
+          "y": 602,
+          "w": 312,
+          "h": 239
+        },
+        {
+          "card": "readiness_kpi",
+          "row": "4/3",
+          "x": 481,
+          "y": 1286,
+          "w": 312,
+          "h": 248
+        },
+        {
+          "card": "children",
+          "row": "5/4",
+          "x": 965,
+          "y": 851,
+          "w": 474,
+          "h": 386
+        },
+        {
+          "card": "billing_preview",
+          "row": "6/2",
+          "x": 481,
+          "y": 1544,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "household",
+          "row": "7/4",
+          "x": 965,
+          "y": 1247,
+          "w": 474,
+          "h": 366
+        },
+        {
+          "card": "health_safety",
+          "row": "8/2",
+          "x": 884,
+          "y": 1920,
+          "w": 474,
+          "h": 369
+        }
+      ]
+    },
+    "trace": [
+      {
+        "at": 19280,
+        "phase": "move",
+        "card": "health_safety",
+        "pointer": {
+          "x": 1023,
+          "y": 2552
+        },
+        "pointerCell": {
+          "col": 7,
+          "row": 1
+        },
+        "after": "billing_preview",
+        "overlapping": [
+          "business_process",
+          "financials",
+          "attendance",
+          "children",
+          "household",
+          "billing_preview"
+        ],
+        "asked": {
+          "colStart": 6,
+          "rowStart": 7
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 6,
+          "colSpan": 6,
+          "rowStart": 7,
+          "rowSpan": 2
+        }
+      },
+      {
+        "at": 19380,
+        "phase": "move",
+        "card": "health_safety",
+        "pointer": {
+          "x": 1024,
+          "y": 2604
+        },
+        "pointerCell": {
+          "col": 7,
+          "row": 1
+        },
+        "after": "household",
+        "overlapping": [
+          "business_process",
+          "financials",
+          "attendance",
+          "children",
+          "billing_preview",
+          "household"
+        ],
+        "asked": {
+          "colStart": 6,
+          "rowStart": 8
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 6,
+          "colSpan": 6,
+          "rowStart": 8,
+          "rowSpan": 2
+        }
+      },
+      {
+        "at": 19480,
+        "phase": "move",
+        "card": "health_safety",
+        "pointer": {
+          "x": 1025,
+          "y": 2656
+        },
+        "pointerCell": {
+          "col": 7,
+          "row": 1
+        },
+        "after": "billing_preview",
+        "overlapping": [
+          "business_process",
+          "financials",
+          "attendance",
+          "children",
+          "household",
+          "billing_preview"
+        ],
+        "asked": {
+          "colStart": 6,
+          "rowStart": 7
+        },
+        "how": "insert",
+        "ghost": {
+          "colStart": 6,
+          "colSpan": 6,
+          "rowStart": 7,
+          "rowSpan": 2
+        }
+      }
+    ],
+    "pointer": {
+      "x": 1025,
+      "y": 2656
+    }
+  },
+  "errs": []
+}

@@ -1,0 +1,61 @@
+{
+  "household": {
+    "card": "household",
+    "x": 965,
+    "y": 602,
+    "w": 474,
+    "h": 366
+  },
+  "health": {
+    "card": "health_safety",
+    "x": 884,
+    "y": 978,
+    "w": 474,
+    "h": 369
+  },
+  "attendance": {
+    "card": "attendance",
+    "x": 481,
+    "y": 2240,
+    "w": 474,
+    "h": 425
+  },
+  "gapBetween": 10,
+  "sameColumn": false,
+  "lastDecision": [
+    {
+      "at": 18249,
+      "phase": "move",
+      "card": "health_safety",
+      "pointer": {
+        "x": 1025,
+        "y": 948
+      },
+      "pointerCell": {
+        "col": 7,
+        "row": 1
+      },
+      "after": "household",
+      "overlapping": [
+        "household",
+        "business_process",
+        "financials",
+        "children",
+        "billing_preview",
+        "attendance"
+      ],
+      "asked": {
+        "colStart": 6,
+        "rowStart": 2
+      },
+      "how": "insert",
+      "ghost": {
+        "colStart": 6,
+        "colSpan": 6,
+        "rowStart": 2,
+        "rowSpan": 2
+      }
+    }
+  ],
+  "errs": []
+}

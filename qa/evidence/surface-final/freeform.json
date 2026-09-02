@@ -1,0 +1,191 @@
+{
+  "ops": [
+    {
+      "i": 0,
+      "op": "drag",
+      "card": "billing_preview",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "i": 1,
+      "op": "resize",
+      "card": "attendance",
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "i": 2,
+      "op": "configure",
+      "card": "readiness_kpi"
+    },
+    {
+      "i": 3,
+      "op": "configure",
+      "card": "billing_preview"
+    },
+    {
+      "i": 4,
+      "op": "drag",
+      "card": "readiness_kpi",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "i": 5,
+      "op": "drag",
+      "card": "attendance",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "i": 6,
+      "op": "resize",
+      "card": "readiness_kpi",
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "i": 7,
+      "op": "resize",
+      "card": "attendance",
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "i": 8,
+      "op": "drag",
+      "card": "readiness_kpi",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 9,
+      "op": "resize",
+      "card": "attendance",
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 10,
+      "op": "drag",
+      "card": "readiness_kpi",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 11,
+      "op": "resize",
+      "card": "attendance",
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 12,
+      "op": "drag",
+      "card": "billing_preview",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 13,
+      "op": "configure",
+      "card": "attendance"
+    },
+    {
+      "i": 14,
+      "op": "resize",
+      "card": "readiness_kpi",
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 15,
+      "op": "configure",
+      "card": "attendance"
+    },
+    {
+      "i": 16,
+      "op": "configure",
+      "card": "billing_preview"
+    },
+    {
+      "i": 17,
+      "op": "drag",
+      "card": "billing_preview",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 18,
+      "op": "resize",
+      "card": "attendance",
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 19,
+      "op": "resize",
+      "card": "attendance",
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 20,
+      "op": "drag",
+      "card": "billing_preview",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 21,
+      "op": "drag",
+      "card": "billing_preview",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 22,
+      "op": "drag",
+      "card": "billing_preview",
+      "where": 0,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 11,
+      "overlaps": 0
+    },
+    {
+      "i": 23,
+      "op": "configure",
+      "card": "readiness_kpi"
+    }
+  ],
+  "pageErrors": []
+}

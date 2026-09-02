@@ -189,6 +189,34 @@ const PLACEMENT_VARIANTS: Partial<Record<FocusPanelCardKey, readonly Omit<Author
  * These are the widths the runtime compositions actually use, so a card authored at its default
  * lands where the shipped panels put it.
  */
+/**
+ * THE SPANS AN OPERATOR CHOOSES BETWEEN, named the way they read a layout.
+ *
+ * Width is a property of THIS composition, not of the card. A card states a
+ * recommended default; the surface author decides what it is here. The values
+ * are the platform's existing vocabulary — columns out of twelve, the same units
+ * the grid areas and the placement variants already persist — so this adds a
+ * control, not a second sizing system. Density stays what it always was: which
+ * composition the card renders, not how wide it is.
+ */
+export const SURFACE_SPAN_CHOICES: ReadonlyArray<{ label: string; columns: number }> = [
+    { label: "1/3", columns: 4 },
+    { label: "1/2", columns: 6 },
+    { label: "2/3", columns: 8 },
+    { label: "Full width", columns: 12 },
+];
+
+/** The closest named width for a span, so an authored value always shows as something. */
+export function spanChoiceLabelForColumns(columns: number): string {
+    let best = SURFACE_SPAN_CHOICES[0]!;
+    for (const choice of SURFACE_SPAN_CHOICES) {
+        // `<=` on a tie takes the wider choice: a card sitting between two named
+        // widths is described by the one that gives it room, not the one that clips it.
+        if (Math.abs(choice.columns - columns) <= Math.abs(best.columns - columns)) best = choice;
+    }
+    return best.label;
+}
+
 const DEFAULT_COLUMNS: Partial<Record<FocusPanelCardKey, number>> = {
     business_process: 12,
     attendance: 8,
@@ -209,6 +237,19 @@ const DEFAULT_COLUMNS: Partial<Record<FocusPanelCardKey, number>> = {
     milestones: 4,
     employment: 6,
 };
+
+/**
+ * ONE PRECEDENCE FOR A CARD'S WIDTH: surface-authored → card default → platform fallback.
+ *
+ * This is the LAST two steps of it. The authored span lives on the surface's own
+ * grid area and is read there, because that is the whole point: a published
+ * composition keeps the width it was saved with, and nothing here may migrate it.
+ * When a card has never been placed, its declared default answers; when it
+ * declares none, six columns is the platform's honest "I do not know".
+ */
+export function defaultColumnsForCard(key: FocusPanelCardKey): number {
+    return DEFAULT_COLUMNS[key] ?? 6;
+}
 
 /**
  * Is this card offered for NEW authoring?
@@ -257,7 +298,7 @@ export function authorableFocusPanelCards(): readonly AuthorableCardOption[] {
             label,
             density: "standard",
             span: 1,
-            columns: DEFAULT_COLUMNS[key] ?? 6,
+            columns: defaultColumnsForCard(key),
         });
     }
     return options;

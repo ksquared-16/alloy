@@ -1,0 +1,85 @@
+{
+  "rows": [
+    {
+      "card": "business_process",
+      "asked": 8,
+      "renderedColumns": 8,
+      "landedColumns": 8,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 0,
+      "overlaps": 0
+    },
+    {
+      "card": "business_process",
+      "asked": 12,
+      "renderedColumns": 12,
+      "landedColumns": 12,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "card": "business_process",
+      "asked": 6,
+      "renderedColumns": 6,
+      "landedColumns": 6,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 0,
+      "overlaps": 0
+    },
+    {
+      "card": "financials",
+      "asked": 4,
+      "renderedColumns": 4,
+      "landedColumns": 4,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 0,
+      "overlaps": 0
+    },
+    {
+      "card": "financials",
+      "asked": 6,
+      "renderedColumns": 6,
+      "landedColumns": 6,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 0,
+      "overlaps": 0
+    },
+    {
+      "card": "financials",
+      "asked": 8,
+      "renderedColumns": 8,
+      "landedColumns": 8,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 0,
+      "overlaps": 0
+    },
+    {
+      "card": "attendance",
+      "asked": 6,
+      "renderedColumns": 6,
+      "landedColumns": 6,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "card": "attendance",
+      "asked": 4,
+      "renderedColumns": 4,
+      "landedColumns": 4,
+      "activated": true,
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    }
+  ],
+  "pageErrors": []
+}

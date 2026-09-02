@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelRuntimeComposerCanvas from "@/components/admin/focusPanel/FocusPanelRuntimeComposerCanvas";
 import FocusPanelVisibilityZones from "@/components/adminV2/settings/surfaces/FocusPanelVisibilityZones";
-import { gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
+import { closeEmptyRowBands, gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import {
     readFocusPanelPublishedLayout,
     type FocusPanelPublishedLayout,
@@ -107,6 +107,8 @@ function FocusPanelComposerInspectorSlot({
     order,
     cards,
     onPresentationChange,
+    authoredColumnsByCard,
+    onSpanChange,
 }: {
     selectedEntry: SummaryCardOrderEntry | null;
     selectedBaseModel: FocusPanelCardModel | null;
@@ -117,6 +119,8 @@ function FocusPanelComposerInspectorSlot({
     order: SummaryCardOrderEntry[];
     cards: Map<FocusPanelCardKey, FocusPanelCardModel>;
     onPresentationChange?: (card: FocusPanelCardKey, variantLabel: string) => void;
+    authoredColumnsByCard: Partial<Record<FocusPanelCardKey, number>>;
+    onSpanChange?: (card: FocusPanelCardKey, columns: number) => void;
 }) {
     const composer = useFocusPanelComposer();
     if (composer?.drillIn) {
@@ -138,6 +142,8 @@ function FocusPanelComposerInspectorSlot({
         return (
             <FocusPanelCardInspector
                 onPresentationChange={onPresentationChange}
+                authoredColumns={authoredColumnsByCard[selectedBaseModel.key] ?? null}
+                onSpanChange={onSpanChange}
                 baseModel={selectedBaseModel}
                 instanceId={selectedInstanceId!}
                 config={selectedEntry.config ?? {}}
@@ -504,6 +510,31 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
         [handleVariantDensity],
     );
 
+    /*
+     * THE AUTHORED WIDTHS THIS SURFACE HAS SAVED.
+     *
+     * Read from the composition's own grid, never from the card definitions: an
+     * existing published Surface must keep the width it was published with, and
+     * nothing here may migrate it to a new default.
+     */
+    const authoredColumnsByCard = useMemo(() => {
+        const out: Partial<Record<FocusPanelCardKey, number>> = {};
+        for (const area of rowLayout?.grid?.areas ?? []) out[area.card] = area.colSpan;
+        return out;
+    }, [rowLayout]);
+
+    /*
+     * A width change is a placement change, so it travels the path placement
+     * already travels: `desiredSpanByCard` → the canvas resize effect → the grid →
+     * `onLayoutChange`. The canvas reflows immediately and the operator sees the
+     * consequence before publishing. The card's own default is untouched.
+     */
+    const handleSpanChange = useCallback((cardKey: FocusPanelCardKey, columns: number) => {
+        if (!Number.isFinite(columns) || columns <= 0) return;
+        setDesiredSpanByCard((prev) => ({ ...prev, [cardKey]: columns }));
+        setDirty(true);
+    }, []);
+
     const selectedEntry = selectedInstanceId ? byInstance.get(selectedInstanceId) ?? null : null;
     const selectedBaseModel = selectedEntry ? cards.get(selectedEntry.key) ?? null : null;
 
@@ -541,8 +572,15 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
     );
     // EB V5: the canvas authors a responsive GRID. Seed it from the loaded layout's grid,
     // or convert its rows → grid placement (so an existing row layout opens cleanly).
+    /*
+     * The seed is compacted, because layouts saved before rows had gravity carry
+     * empty row indices — and an empty index is still a 76px track. Opening such a
+     * surface showed the operator phantom bands before they touched anything.
+     * Compaction moves no card sideways and reorders nothing; it only closes gaps,
+     * so a published composition keeps its widths and its reading order.
+     */
     const builderInitialGrid = useMemo(
-        () => gridFromPublishedLayout(builderInitial),
+        () => closeEmptyRowBands(gridFromPublishedLayout(builderInitial)),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [loaded],
     );
@@ -648,6 +686,8 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
                         order={order}
                         cards={cards}
                         onPresentationChange={handlePresentationChange}
+                        authoredColumnsByCard={authoredColumnsByCard}
+                        onSpanChange={handleSpanChange}
                     />
                 </div>
             ) : null}

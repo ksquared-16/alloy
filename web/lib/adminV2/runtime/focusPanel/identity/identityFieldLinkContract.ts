@@ -19,8 +19,29 @@ import {
     type FocusPanelCardLinkNavState,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLinkNavigation";
 
+/**
+ * The Children row that opens Health & Safety for THAT child.
+ *
+ * `child.medical_summary` is registered as a provider and resolves to null by
+ * construction — there is no medical value on the child evidence model, and
+ * there must not be one: Health & Safety owns that truth. What the Children card
+ * can honestly offer is the same thing it already offers for Program and Room —
+ * a LINK to the card that owns it, carrying this child as the subject.
+ *
+ * This is the Assignments interaction, not a second one: same allowlist, same
+ * destination/open/subject authoring, same `navigateIdentityFieldLink` runtime,
+ * same Back stack. Only the destination card differs.
+ */
+export const CHILD_HEALTH_LINK_FIELD_REF = "child.medical_summary" as const;
+
+/** True when this ref is offered purely as a Health & Safety link, not as a value. PURE. */
+export function childFieldRefOffersHealthLink(ref: string): boolean {
+    return ref.trim() === CHILD_HEALTH_LINK_FIELD_REF;
+}
+
 /** Enrollment / schedule ownership — navigate to Assignments instead of inline edit. */
 const LINKABLE_IDENTITY_FIELD_REFS = new Set<string>([
+    CHILD_HEALTH_LINK_FIELD_REF,
     // Location is NOT linkable — siblings can differ and sites change over time;
     // child + lead each own an editable site select (child inherits lead when unset).
     "inquiry_child.program",
@@ -62,10 +83,12 @@ const DEFAULT_LINK_DESTINATIONS: Readonly<Record<string, FocusPanelCardKey>> = {
     "child.schedule": "scheduling",
     "child.start_date": "scheduling",
     "child.desired_start_date": "scheduling",
+    [CHILD_HEALTH_LINK_FIELD_REF]: "health_safety",
 };
 
 export const IDENTITY_LINK_CARD_OPTIONS: ReadonlyArray<{ value: FocusPanelCardKey; label: string }> = [
     { value: "scheduling", label: "Assignments" },
+    { value: "health_safety", label: "Health & Safety" },
     { value: "children", label: "Children" },
     { value: "household", label: "Household" },
     { value: "current_work", label: "What's Next" },
@@ -121,6 +144,8 @@ export function defaultIdentityFieldLinkTarget(fieldRef: string): IdentityFieldL
     return {
         toCard,
         open: "detail",
+        // Health is asked of a child, so the subject is the clicked child — with more
+        // than one child in a family, anything else opens the wrong record.
         subject: toCard === "scheduling" ? "current_schedule" : "this_child",
     };
 }
@@ -140,6 +165,7 @@ export function resolveIdentityFieldLinkContract(fieldRef: string): IdentityFiel
     const dest = defaultTarget.toCard;
     const linkLabel =
         dest === "scheduling" ? "Assignments"
+        : dest === "health_safety" ? "Health & Safety"
         : dest === "household" ? "Household"
         : dest === "children" ? "Children"
         : dest === "communications" ? "Contacts"
@@ -178,6 +204,9 @@ export function summarizeIdentityFieldLinkTarget(
     // Operator-facing: describe the destination in plain language (Advanced may still show keys).
     if (target.toCard === "scheduling" && target.open === "detail") {
         return `Displays the child’s Primary Assignment summary`;
+    }
+    if (target.toCard === "health_safety") {
+        return `Opens Health & Safety for this child`;
     }
     return `Opens ${card} · ${open} · ${subject}`;
 }
