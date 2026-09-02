@@ -1909,6 +1909,37 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
   if (!created.ok) return created;
   patchAgentSession(created.session.agent_session_id, { state: "STARTING" }, { root });
   const cwd = boundPath;
+  /*
+   * A SESSION WITH NOTHING TO ORIENT AGAINST MUST NOT SIT IN STARTING FOREVER.
+   *
+   * MEASURED. The Financials lane was created through the Vacilando wizard at
+   * 18:23:15 and its session was created at 18:23:59 with no run in flight —
+   * the operator had not sent anything yet. The block below only runs when
+   * there IS a non-terminal run, so the session was left at STARTING and
+   * NOTHING ever promoted it. Two and a half hours later the agent had accepted
+   * two instructions and completed a whole run, and Vacilando still displayed
+   * the lane as "Starting", because the UI reads session state. The operator
+   * reasonably read a live agent as a hung one.
+   *
+   * reconcilePendingOrientation cannot rescue it either: it only acts on a run
+   * QUEUED with state_reason "waiting_for_agent_session", so a session with no
+   * run is invisible to it. STARTING had an entry and no exit.
+   *
+   * When there is no run, there is nothing to verify. The provider is spawned
+   * and answering, which is the whole meaning of "started" — so say so.
+   */
+  if (!run || isTerminalRunState(run.state)) {
+    const sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+    return {
+      ok: true,
+      started: true,
+      status: "active",
+      provider: "claude",
+      agent_session_id: sess.agent_session_id,
+      tmux_session: createdRuntime?.tmux_session || lane.tmux?.session || rec.binding?.tmux_session,
+      start_session_implemented: true,
+    };
+  }
   if (run && !isTerminalRunState(run.state)) {
     const instruction = buildContinuationInstruction({
       run,
@@ -2123,6 +2154,47 @@ export async function reconcilePendingOrientation({ root = runtimeRoot(), nowMs 
     if (delivered.ok) retried += 1;
   }
   return { ok: true, retried };
+}
+
+/**
+ * PROMOTE A SESSION THAT IS DEMONSTRABLY UP BUT STILL SAYS STARTING.
+ *
+ * STARTING and VERIFYING are transitional by definition: something is supposed
+ * to move them along. When the thing that would have moved them never runs —
+ * no orientation was owed, or its delivery was refused and never retried — the
+ * session keeps a transitional label indefinitely while the provider sits there
+ * working. That is what made a live Financials lane read as stuck.
+ *
+ * This promotes ONLY on positive evidence: a recognised provider is present on
+ * the lane's own pane, and no orientation is still owed. It never invents
+ * liveness from the absence of a signal, and it never touches a session that is
+ * genuinely mid-orientation.
+ */
+export async function reconcileStuckStartingSessions({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+  minAgeMs = 90_000,
+  observe = null,
+} = {}) {
+  const { listDurableLanes } = await import("./development-lane.mjs");
+  const look = observe || observeLane;
+  const promoted = [];
+  for (const rec of listDurableLanes(root)) {
+    const session = activeAgentSessionForLane(rec.lane_id, root);
+    if (!session || !["STARTING", "VERIFYING"].includes(session.state)) continue;
+    // Give a genuinely starting session time to start.
+    const started = session.started_at ? Date.parse(session.started_at) : nowMs;
+    if (nowMs - started < minAgeMs) continue;
+    // An orientation still owed is a real transitional state; leave it alone.
+    const run = activeRunForLane(rec.lane_id, root);
+    if (run && run.state === "QUEUED" && run.state_reason === "waiting_for_agent_session") continue;
+    let found = null;
+    try { found = await look(rec.lane_id); } catch { found = null; }
+    if (!found || !laneClaudePresent(found)) continue;
+    markAgentSessionActive(session.agent_session_id, { root });
+    promoted.push({ lane_id: rec.lane_id, agent_session_id: session.agent_session_id, from: session.state });
+  }
+  return { ok: true, promoted };
 }
 
 export function attachLaneAgentSessions(lanes, root = runtimeRoot()) {
