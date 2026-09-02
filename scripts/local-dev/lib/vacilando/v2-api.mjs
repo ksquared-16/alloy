@@ -380,6 +380,31 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     return { status: laneInstructionHttpStatus(out), body: out };
   }
 
+  /**
+   * CLOSING A LANE IS A PRODUCT ACTION, NOT A LIBRARY CALL.
+   *
+   * Three disposable certification lanes — Fixture Proof, Lifecycle Cert,
+   * Processing — sat in the operator's navigation with no way to remove them
+   * except editing a store by hand. `closeDurableLane` is the one path that may
+   * retire a lane's worktree; this is the supported route to it, so removal
+   * runs the same capacity gates and writes the same record as every other
+   * close. Lane history is retained: closing is not deleting.
+   */
+  if (path === "/api/v2/lane/close" || path === "/api/v2/lanes/close") {
+    const { closeDurableLane } = await import("./lane-worktree-lifecycle.mjs");
+    const laneId = v.lane_id || v.laneId || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "lane_id_required" } };
+    const out = await closeDurableLane(String(laneId), {
+      actor: actorDefault,
+      reason: v.reason || null,
+      acknowledgeUncommitted: v.acknowledge_uncommitted === true,
+    });
+    return {
+      status: out.ok ? 200 : (out.error === "lane_not_found" ? 404 : 409),
+      body: out,
+    };
+  }
+
   if (path === "/api/v2/lane/run/close-stale" || path === "/api/v2/lanes/run/close-stale") {
     const id = v.lane_id || v.id;
     if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };

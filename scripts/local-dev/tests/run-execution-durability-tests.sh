@@ -48,6 +48,8 @@ SUITES=(
   "development-delegation-scope-lifecycle.test.mjs"
   "development-mission-delegation-integration.test.mjs"
   "development-notification-count.test.mjs"
+  "development-control-plane-truth.test.mjs"
+  "development-gateway-rail.test.mjs"
   "development-run-summary-output.test.mjs"
   "development-completion-summary-last.test.mjs"
   "development-cursor-transport-readiness.test.mjs"

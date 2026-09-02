@@ -4986,36 +4986,77 @@ export function renderGatewayShell({
   </div>`;
 }
 
-export function railHtml(lanes, selectedId, attentionByLane, telemetryByLane) {
+/**
+ * ONE ROW, LEFT-ALIGNED, INSIDE ITS REPOSITORY.
+ *
+ * The desktop rail was the SECOND implementation of the lane list: a flat map
+ * over whatever order the poll happened to return, with no repository grouping,
+ * no way to create a lane, and no shared ordering owner. Mobile already had all
+ * three. Two implementations of one list is how they drift, so the rail now
+ * reads the same owners the lane index reads and renders them in rail chrome.
+ *
+ * ORDER comes from `laneActivityMs` through `sortLanesForIndex`: a delivered
+ * prompt, a run transition, an agent report, a notifiable result. Never
+ * `observed_at`, which discovery stamps on every lane on every poll and which
+ * therefore made "recency" mean "whatever resolved first" and reshuffled the
+ * rail while it was being read.
+ */
+export function railLaneRow(lane, selectedId, attentionByLane, telemetryByLane) {
+  const active = lane.lane_id === selectedId ? " active" : "";
+  const st = laneListStatus(lane, attentionByLane?.[lane.lane_id]);
+  const tone = st.tone;
+  const wait = lane.execution_run?.resource_wait;
+  const runState = lane.execution_run?.state;
+  let queue = "";
+  if (lane.runtime_posture?.state === "SESSION_ROTATING" || lane.execution_run?.runtime_posture?.state === "SESSION_ROTATING") {
+    queue = " · Refreshing Claude context";
+  } else if (lane.agent_session?.state === "ROTATION_PENDING" || lane.session_rotation?.need === "pending") {
+    queue = " · Refresh pending";
+  } else if (lane.runtime_posture?.state === "RECOVERING" || lane.execution_run?.runtime_posture?.state === "RECOVERING") {
+    queue = ` · ${lane.runtime_posture?.reason || lane.execution_run?.runtime_posture?.reason || "Resource ownership"}`;
+  } else if (lane.runtime_posture?.state === "QUIESCED") queue = ` · ${lane.runtime_posture.reason || "Runtime timing certification"}`;
+  else if (runState === "WAITING_RESOURCE" && wait?.exclusive_phase && wait.exclusive_phase !== "EXCLUSIVE_ACTIVE") {
+    queue = ` · ${wait.exclusive_detail || "Preparing exclusive timing"}`;
+  } else if (runState === "WAITING_RESOURCE" && wait?.resuming) queue = " · Resuming…";
+  else if (runState === "WAITING_RESOURCE" && !wait?.ready_to_resume && wait?.queue_position) queue = ` · #${wait.queue_position} in queue`;
+  else if (runState === "VALIDATING" && wait?.resource_key === "runtime_timing_certification") queue = " · Exclusive timing window";
+  else if (runState === "VALIDATING" && wait?.label) queue = ` · ${wait.label}`;
+  const attn = `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}${esc(queue)}</span>`;
+  const ctx = contextCompact(telemetryByLane?.[lane.lane_id]);
+  const who = agentLabel(lane);
+  const meta = ctx ? `${who} · ${ctx}` : who;
+  const unseen = laneUnseenCount(lane);
+  const badge = unseen ? `<span class="badge">${unseen}</span>` : "";
+  return `<a class="mission-rail-item${active}" data-route="lanes/${esc(lane.lane_id)}" data-gw-lane="${esc(lane.lane_id)}">
+    <span class="mission-rail-title">${esc(lane.label || lane.lane_id)}<span class="mission-rail-meta">${esc(meta)}</span></span>
+    ${attn}${badge}
+  </a>`;
+}
+
+export function railHtml(lanes, selectedId, attentionByLane, telemetryByLane, {
+  repositories = [],
+  folders = [],
+  collapsedFolders = null,
+  nowMs = Date.now(),
+} = {}) {
   const list = Array.isArray(lanes) ? lanes : [];
-  if (!list.length) return `<div class="gw-empty-rail">No lanes</div>`;
-  return list.map((lane) => {
-    const active = lane.lane_id === selectedId ? " active" : "";
-    const st = laneListStatus(lane, attentionByLane?.[lane.lane_id]);
-    const tone = st.tone;
-    const wait = lane.execution_run?.resource_wait;
-    const runState = lane.execution_run?.state;
-    let queue = "";
-    if (lane.runtime_posture?.state === "SESSION_ROTATING" || lane.execution_run?.runtime_posture?.state === "SESSION_ROTATING") {
-      queue = " · Refreshing Claude context";
-    } else if (lane.agent_session?.state === "ROTATION_PENDING" || lane.session_rotation?.need === "pending") {
-      queue = " · Refresh pending";
-    } else if (lane.runtime_posture?.state === "RECOVERING" || lane.execution_run?.runtime_posture?.state === "RECOVERING") {
-      queue = ` · ${lane.runtime_posture?.reason || lane.execution_run?.runtime_posture?.reason || "Resource ownership"}`;
-    } else if (lane.runtime_posture?.state === "QUIESCED") queue = ` · ${lane.runtime_posture.reason || "Runtime timing certification"}`;
-    else if (runState === "WAITING_RESOURCE" && wait?.exclusive_phase && wait.exclusive_phase !== "EXCLUSIVE_ACTIVE") {
-      queue = ` · ${wait.exclusive_detail || "Preparing exclusive timing"}`;
-    } else if (runState === "WAITING_RESOURCE" && wait?.resuming) queue = " · Resuming…";
-    else if (runState === "WAITING_RESOURCE" && !wait?.ready_to_resume && wait?.queue_position) queue = ` · #${wait.queue_position} in queue`;
-    else if (runState === "VALIDATING" && wait?.resource_key === "runtime_timing_certification") queue = " · Exclusive timing window";
-    else if (runState === "VALIDATING" && wait?.label) queue = ` · ${wait.label}`;
-    const attn = `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}${esc(queue)}</span>`;
-    const ctx = contextCompact(telemetryByLane?.[lane.lane_id]);
-    const who = agentLabel(lane);
-    const meta = ctx ? `${who} · ${ctx}` : who;
-    return `<a class="mission-rail-item${active}" data-route="lanes/${esc(lane.lane_id)}" data-gw-lane="${esc(lane.lane_id)}">
-      <span class="mission-rail-title">${esc(lane.label || lane.lane_id)}<span class="mission-rail-meta">${esc(meta)}</span></span>
-      ${attn}
-    </a>`;
+  // Creating a lane must be reachable from the navigation itself, not only from
+  // the lane index — the browser had no affordance at all. Same hook the index
+  // uses, so both open the one canonical lane wizard.
+  const add = `<button type="button" class="gw-rail-add" data-gw-add title="Create a new Development Lane">`
+    + `<span class="gw-rail-add-plus" aria-hidden="true">+</span> New lane</button>`;
+  if (!list.length) return `${add}<div class="gw-empty-rail">No lanes</div>`;
+
+  const groups = groupLanesByRepository(list, repositories, folders, {
+    collapsed: collapsedFolders || new Set(), nowMs,
+  });
+  const rendered = groups.map((g) => {
+    const rows = g.lanes.map((lane) => railLaneRow(lane, selectedId, attentionByLane, telemetryByLane)).join("");
+    // Quiet header: the repository is the boundary, not the loudest thing in the
+    // rail. Its count is enough; the lane rows carry the attention.
+    return `<div class="gw-rail-repo${g.unknown ? " is-unattributed" : ""}" data-gw-rail-repo="${esc(g.repository_id)}">`
+      + `<div class="gw-rail-repo-h">${esc(g.name)}<span class="gw-rail-repo-count">${g.lane_count}</span></div>`
+      + `${rows}</div>`;
   }).join("");
+  return `${add}${rendered}`;
 }

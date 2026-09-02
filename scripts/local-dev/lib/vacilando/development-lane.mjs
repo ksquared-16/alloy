@@ -181,9 +181,24 @@ export function isDurableLaneId(id) {
   return DURABLE_LANE_ID_RE.test(String(id || ""));
 }
 
-export function listDurableLanes(root = runtimeRoot()) {
+/**
+ * Statuses that mean "this lane is finished and is not part of the working set".
+ *
+ * A CLOSED lane has had its worktree retired by the explicit lane-close path.
+ * Its record and its whole run history stay in the store — closing a lane is
+ * not deleting its history — but it is no longer navigation, no longer
+ * dispatchable, and no longer counted as fleet capacity. Listing it kept three
+ * disposable certification lanes in front of the operator forever.
+ */
+export const RETIRED_LANE_STATUSES = Object.freeze(["ARCHIVED", "CLOSED"]);
+
+export function isRetiredLaneStatus(status) {
+  return RETIRED_LANE_STATUSES.includes(String(status || "").toUpperCase());
+}
+
+export function listDurableLanes(root = runtimeRoot(), { includeRetired = false } = {}) {
   return Object.values(readDevelopmentLaneStore(root).lanes || {})
-    .filter((l) => l && l.status !== "ARCHIVED");
+    .filter((l) => l && (includeRetired || !isRetiredLaneStatus(l.status)));
 }
 
 export function getDurableLane(laneId, root = runtimeRoot()) {
