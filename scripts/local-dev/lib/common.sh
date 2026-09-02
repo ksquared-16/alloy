@@ -459,10 +459,32 @@ alloy_process_command() {
   ps -p "$pid" -o command= 2>/dev/null || true
 }
 
+# `lsof` lives in /usr/sbin on macOS, which is NOT on every PATH this toolkit runs under.
+# Resolving it by name alone silently loses the cwd signal, and ownership then falls back to
+# matching the worktree path inside a command line — which `npm run start` and `next-server` do not
+# contain. A managed production server was therefore classified `stale` while serving correctly, and
+# `browser-auth verify` refuses a server it cannot call toolkit-owned. Dev only escaped this by the
+# accident of its own command string.
+alloy_lsof_bin() {
+  if alloy_have_cmd lsof; then
+    printf 'lsof'
+    return 0
+  fi
+  local candidate
+  for candidate in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 alloy_process_cwd() {
   local pid="$1"
-  if alloy_have_cmd lsof; then
-    lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | awk '/^n/ {print substr($0,2); exit}'
+  local lsof_bin
+  if lsof_bin="$(alloy_lsof_bin)"; then
+    "$lsof_bin" -a -p "$pid" -d cwd -Fn 2>/dev/null | awk '/^n/ {print substr($0,2); exit}'
     return 0
   fi
   return 1
