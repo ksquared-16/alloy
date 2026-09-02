@@ -4,8 +4,9 @@ import {
     trackEdges,
     COMPOSER_GRID_GAP_PX,
     COMPOSER_GRID_ROW_UNIT_PX,
-    type FocusPanelGridLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
+// The type's home is the published-layout contract; the ops module only consumes it.
+import type { FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 
 /**
  * VISUAL VACANCY MUST EQUAL LOGICAL VACANCY.
