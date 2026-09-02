@@ -58,15 +58,6 @@ export const ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY: EnrollmentStatusVocabula
  */
 export const ENROLLING_CHILD_STATUS_KEY = "enrolling" as const;
 
-/**
- * The CHILD-grain stage a child enters when Enrollment execution begins.
- *
- * `enrollment`, not `enrolling`. The configured operating plans declare `enrolling` as a FAMILY
- * stage and `enrollment` as a CHILD stage — adjacent names at opposite grains, which is exactly the
- * pair that produced a child journey sitting in a family stage. Naming it once, here, keeps the two
- * from being typed interchangeably again.
- */
-export const CHILD_ENROLLMENT_ENTRY_STAGE_KEY = "enrollment" as const;
 export const ENROLLED_CHILD_STATUS_KEY = "enrolled" as const;
 
 /** Dispositions that CONCLUDE a child's enrollment episode. Mirrors `terminal` below. */

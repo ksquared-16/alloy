@@ -384,15 +384,15 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                      * CHILD effect, at the child grain: the child's Enrollment execution begins.
                      * One outcome, two grains, stated separately — collapsing them is what put a
                      * child journey into the family `lead` stage in the first place.
+                     *
+                     * NO STAGE IS NAMED HERE, deliberately. The child entry stage is already
+                     * declared by the tenant in `entry_points_v1.by_intent.enrollment_start`, and
+                     * this target begins the journey with that same intent so Start Enrollment and
+                     * a family decision land on one stage by construction. A stage_key here would
+                     * be a second, silently-winning answer to a question the configuration has
+                     * already answered — which is exactly the defect this replaced.
                      */
-                    /*
-                     * The literal, not the imported constant. This object is evaluated at module
-                     * init, and importing the constant here created a cycle whose symptom was a
-                     * silently `undefined` stage_key depending on which module a caller imported
-                     * first — a plan that looked right in the source and was wrong at runtime.
-                     * `childEnrollmentEntryStageMatchesPlan` pins the two together instead.
-                     */
-                    { kind: "enter_child_enrollment", stage_key: "enrollment" },
+                    { kind: "enter_child_enrollment" },
                 ],
             },
             {

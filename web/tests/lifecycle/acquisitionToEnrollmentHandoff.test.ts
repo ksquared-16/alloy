@@ -12,21 +12,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-    CHILD_ENROLLMENT_ENTRY_STAGE_KEY,
-    ENROLLING_CHILD_STATUS_KEY,
-} from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import { ENROLLING_CHILD_STATUS_KEY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import { ENROLLMENT_START_ENTRY_INTENT } from "@/lib/lifecycle/processEntryPointsV1";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 
 const read = (rel: string) =>
     import("node:fs/promises").then((fs) => fs.readFile(new URL(rel, import.meta.url), "utf8"));
 
 describe("the two grains are named separately and cannot be typed interchangeably", () => {
-    it("the child entry stage is `enrollment`, not the family `enrolling`", () => {
-        expect(CHILD_ENROLLMENT_ENTRY_STAGE_KEY).toBe("enrollment");
-        expect(CHILD_ENROLLMENT_ENTRY_STAGE_KEY).not.toBe("enrolling");
-    });
-
     it("`enrolling` is configured FAMILY-grain and `enrollment` CHILD-grain", () => {
         expect(defaultStageOperatingPlanForEnrollmentStage("enrolling")?.journey_segment).toBe("family");
         expect(defaultStageOperatingPlanForEnrollmentStage("enrollment")?.journey_segment).toBe("child");
@@ -71,13 +64,19 @@ describe("the family decision carries a declared child-grain effect", () => {
         expect(move?.transition_ref).toBe("decision_to_enrolling");
     });
 
-    it("and separately begins the CHILD's Enrollment at the child entry stage", () => {
+    it("and separately begins the CHILD's Enrollment", () => {
         const enter = rule.targets.find((t) => t.kind === "enter_child_enrollment");
         expect(enter).toBeTruthy();
-        // childEnrollmentEntryStageMatchesPlan: the plan states the literal (module-init safety),
-        // and this is what stops the two drifting apart.
-        expect(enter?.stage_key).toBe(CHILD_ENROLLMENT_ENTRY_STAGE_KEY);
-        expect(enter?.stage_key).toBe("enrollment");
+    });
+
+    it("names NO stage, leaving the declared entry stage the only answer", () => {
+        /*
+         * A stage_key here would win over `entry_points_v1.by_intent.enrollment_start` at runtime,
+         * because a persisted stage always beats the declaration. That is how this path came to sit
+         * on a stage carrying no Form requirements while Start Enrollment realized its objective.
+         */
+        const enter = rule.targets.find((t) => t.kind === "enter_child_enrollment");
+        expect(enter?.stage_key ?? null).toBeNull();
     });
 
     it("states the two effects separately rather than collapsing them into one stage", () => {
@@ -103,11 +102,20 @@ describe("the handoff refuses rather than advancing siblings implicitly", () => 
         expect(await body()).toContain("childIds.length === 0");
     });
 
-    it("anchors the one journey to the participation at the child entry stage", async () => {
+    it("anchors the one journey to the participation", async () => {
         const b = await body();
         expect(b).toContain("contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE");
         expect(b).toContain("contextId: participation.ocmId");
-        expect(b).toContain("stageKey: entryStageKey");
+    });
+
+    it("stamps no stage and carries the enrollment_start intent, exactly as Start Enrollment does", async () => {
+        const b = await body();
+        expect(b).toContain("stageKey: null");
+        expect(b).toContain("source: ENROLLMENT_START_ENTRY_INTENT");
+        expect(ENROLLMENT_START_ENTRY_INTENT).toBe("enrollment_start");
+        // The intent Start Enrollment writes, so both doors resolve one declared stage.
+        const startEnrollment = await read("../../lib/records/startEnrollmentService.ts");
+        expect(startEnrollment).toContain(`source: "${ENROLLMENT_START_ENTRY_INTENT}"`);
     });
 
     it("sets durable child status through the canonical writer, never a direct patch", async () => {

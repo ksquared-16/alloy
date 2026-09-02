@@ -3,6 +3,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ENROLLMENT_START_ENTRY_INTENT } from "@/lib/lifecycle/processEntryPointsV1";
 import { instantiateStageWorkFromTemplate } from "@/lib/lifecycle/instantiateStageWorkFromTemplate";
 import {
     mergeEnrollmentOperationalIntoMetadata,
@@ -39,7 +40,6 @@ import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orche
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import {
-    CHILD_ENROLLMENT_ENTRY_STAGE_KEY,
     ENROLLING_CHILD_STATUS_KEY,
     isReusableActiveParticipationStatus,
 } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
@@ -562,7 +562,15 @@ export async function applyStageOutcomeRuleTarget(
              *
              * The family outcome has decided the family is proceeding. This begins the CHILD's
              * Enrollment execution: durable child status, and one journey anchored to that child's
-             * participation at the CHILD stage `enrollment`.
+             * participation.
+             *
+             * IT DOES NOT NAME THE ENTRY STAGE. `process_instances.stage_key` stays NULL at creation
+             * by design, and `resolveEffectiveStageKey` governs an unmoved journey by the stage the
+             * tenant DECLARED for its intent in `entry_points_v1`. Stamping a stage key here would
+             * always win over that declaration, which is how this path came to sit on a stage the
+             * tenant had configured no requirements on while Start Enrollment -- which stamps
+             * nothing -- realized its objective. One Enrollment product, one declared entry stage,
+             * two ways in.
              *
              * IT REFUSES RATHER THAN GUESSING WHICH CHILDREN. `family_enrolling` carries no per-child
              * disposition, and a household's children genuinely diverge — one enrols, one waitlists.
@@ -570,8 +578,6 @@ export async function applyStageOutcomeRuleTarget(
              * the operator never expressed. So: exactly one candidate proceeds; zero or several
              * refuses and says which, and the operator records per-child decisions instead.
              */
-            const entryStageKey = (target.stage_key ?? "").trim() || CHILD_ENROLLMENT_ENTRY_STAGE_KEY;
-
             const threadedChildId = subject.customer_member_id?.trim() || null;
             let childIds: string[] = threadedChildId ? [threadedChildId] : [];
             if (!childIds.length) {
@@ -633,16 +639,25 @@ export async function applyStageOutcomeRuleTarget(
                 return { error: `Child enrollment status was not updated: ${lifecycle.error.message}` };
             }
 
-            // ONE journey, anchored to the participation, at the CHILD entry stage.
+            /*
+             * ONE journey, anchored to the participation, at the DECLARED entry stage.
+             *
+             * `source` here is the process ENTRY INTENT, not audit provenance -- it is what
+             * `resolveEffectiveStageKey` reads back to find the declared stage. A family deciding to
+             * enrol a child IS an enrollment start, so it carries the same intent Start Enrollment
+             * carries and lands on the same configured stage. (The OCM ensure and the lifecycle
+             * writer above keep `family_enrollment_decision`: those are audit source, where saying
+             * how this child got here is the whole point.)
+             */
             const journey = await createEnrollmentProcessInstance(supabase, {
                 orgId,
                 subjectId: childId,
                 contextId: participation.ocmId,
                 contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
                 acquisitionOpportunityId: subject.opportunity_id,
-                stageKey: entryStageKey,
+                stageKey: null,
                 state: null,
-                source: "family_enrollment_decision",
+                source: ENROLLMENT_START_ENTRY_INTENT,
             });
             if (journey.error) {
                 return { error: `Could not begin this child's Enrollment: ${journey.error}` };
