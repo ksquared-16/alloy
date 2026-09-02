@@ -1,18 +1,24 @@
 /**
  * Childcare charge service (P3.1) — server-side financial write posture.
  *
- * Generalized substrate plumbing only. This is NOT Charge Resolution or Posting
- * (those arrive in later P3 batches); it provides the safe, role-aware write
- * surface for childcare charges on the SHARED `charges` table using the generic
- * billable-source dimension (`billable_source_type = 'enrollment_agreement'`).
+ * The safe, role-aware write surface for childcare charges on the SHARED `charges`
+ * table, addressed through the generic billable-source dimension. A childcare
+ * source is `enrollment_agreement` OR `customer` — an enrolled child's charge hangs
+ * off their agreement, a family's pre-enrolment fee off the household — and every
+ * rule below quantifies over that SET rather than one of its members.
  *
  * Invariants (DB triggers/constraints are authoritative; these mirror them for
  * friendly errors):
- *   - Childcare charges always carry billable_source_type='enrollment_agreement'
- *     and billable_source_id=<agreement id>; job_id is NULL.
+ *   - Childcare charges carry a childcare billable_source_type + billable_source_id;
+ *     job_id is NULL.
  *   - Draft charges are freely recalculable.
  *   - Posted charges are immutable: corrections are NEW rows via source_charge_id
  *     (reversal / credit / replacement), never in-place edits.
+ *   - Posting is IDEMPOTENT: posting an already-posted charge returns it and writes
+ *     nothing, so a retried request cannot post twice.
+ *   - A posted charge is corrected ONCE: it admits no second reversal, and a correction is
+ *     never itself corrected.
+ *   - Every write is actor-attributed (`created_by` / `updated_by` / `posted_by`).
  *
  * Posture: callers MUST pass a server-only Supabase client (service-role admin
  * client). There is no broad authenticated client write path for childcare
@@ -28,8 +34,10 @@ import {
     trimOrNull,
 } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import {
+    CHILDCARE_BILLABLE_SOURCE_TYPES,
     DEFAULT_CURRENCY_CODE,
     isChargeCategory,
+    isChildcareBillableSource,
     isPostedStatus,
     type ChargeCategory,
 } from "@/lib/financials/billableSource";
@@ -56,6 +64,10 @@ export type ChargeRow = {
     metadata: Record<string, unknown>;
     created_at: string;
     updated_at: string;
+    /** Actor attribution. `posted_by` is the actor of the authoritative money transition. */
+    created_by: string | null;
+    updated_by: string | null;
+    posted_by: string | null;
 };
 
 const BILLABLE_SOURCE_ENROLLMENT = "enrollment_agreement" as const;
@@ -63,6 +75,8 @@ const BILLABLE_SOURCE_ENROLLMENT = "enrollment_agreement" as const;
 export type CreateChildcareDraftChargeInput = {
     orgId: string;
     enrollmentAgreementId: string;
+    /** The operator making the write. Recorded as `created_by`; null for system writes. */
+    actorUserId?: string | null;
     /** Frozen legacy taxonomy; defaults to 'service'. Use chargeCategory for meaning. */
     chargeType?: string;
     chargeCategory: ChargeCategory;
@@ -77,6 +91,8 @@ export type CreateChildcareDraftChargeInput = {
 export type RecalculateDraftChargeInput = {
     orgId: string;
     chargeId: string;
+    /** The operator making the write. Recorded as `updated_by`; null for system writes. */
+    actorUserId?: string | null;
     amountCents?: number;
     chargeCategory?: ChargeCategory;
     serviceDate?: string | null;
@@ -92,6 +108,8 @@ export type CreateChildcareCorrectionInput = {
     /** The posted charge being corrected. */
     sourceChargeId: string;
     kind: CorrectionKind;
+    /** The operator recording the correction. Corrections are posted money, so this is `posted_by` too. */
+    actorUserId?: string | null;
     /**
      * For 'credit'/'replacement' the explicit signed amount (cents). For
      * 'reversal' the amount is derived as the negation of the source and must be
@@ -193,7 +211,7 @@ async function loadCharge(
     const { data, error } = await supabase
         .from("charges")
         .select(
-            "id, org_id, job_id, source_charge_id, billable_source_type, billable_source_id, charge_type, charge_category, status, currency_code, amount_cents, service_date, due_date, posted_at, voided_at, description, metadata, created_at, updated_at"
+            "id, org_id, job_id, source_charge_id, billable_source_type, billable_source_id, charge_type, charge_category, status, currency_code, amount_cents, service_date, due_date, posted_at, voided_at, description, metadata, created_at, updated_at, created_by, updated_by, posted_by"
         )
         .eq("org_id", orgId)
         .eq("id", chargeId)
@@ -207,11 +225,20 @@ async function loadCharge(
     return data as ChargeRow;
 }
 
+/**
+ * This service governs CHILDCARE money — every childcare billable source, not one of them.
+ *
+ * It used to test the `enrollment_agreement` literal, which meant a household charge (a waitlist,
+ * registration or application fee incurred before anyone is enrolled) could be created by Add Charge
+ * and then never posted or corrected: the two transitions that make a charge real both refused it.
+ * The set is the vocabulary's, so a source the substrate admits is a source this service governs.
+ */
 function assertChildcareCharge(charge: ChargeRow): void {
-    if (charge.billable_source_type !== BILLABLE_SOURCE_ENROLLMENT) {
+    if (!isChildcareBillableSource(charge.billable_source_type)) {
         throw new OperationalEnrollmentServiceError(
             "invalid_state",
-            "this service only governs childcare (enrollment_agreement) charges; job charges use the job billing path"
+            `this service only governs childcare charges (${CHILDCARE_BILLABLE_SOURCE_TYPES.join(" | ")}); `
+                + "job charges use the job billing path"
         );
     }
 }
@@ -249,6 +276,8 @@ export async function createChildcareDraftCharge(
             description: trimOrNull(input.description),
             metadata: input.metadata ?? {},
             updated_at: now,
+            created_by: input.actorUserId ?? null,
+            updated_by: input.actorUserId ?? null,
         })
         .select("*")
         .single();
@@ -272,7 +301,10 @@ export async function recalculateDraftCharge(
         );
     }
 
-    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const patch: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+        updated_by: input.actorUserId ?? null,
+    };
     if (input.amountCents !== undefined) {
         assertAmountNonZeroInt(input.amountCents);
         patch.amount_cents = input.amountCents;
@@ -299,27 +331,89 @@ export async function recalculateDraftCharge(
     return data as ChargeRow;
 }
 
-/** Post a DRAFT childcare charge (draft -> posted). After this it is immutable. */
+export type PostChildcareChargeResult = {
+    charge: ChargeRow;
+    /**
+     * False when this call performed the posting; true when the charge was ALREADY posted and
+     * nothing was written. The caller can tell "I posted it" from "it was posted" without either
+     * answer being an error.
+     */
+    alreadyPosted: boolean;
+};
+
+/**
+ * Post a DRAFT childcare charge (draft -> posted). After this it is immutable.
+ *
+ * ── POSTING IS IDEMPOTENT ──
+ *
+ * A retried request — a double click, a network retry, a resubmitted form — must not be able to post
+ * twice, and must not present the second attempt as a failure. This used to raise `invalid_state` on
+ * an already-posted charge, which made the harmless case indistinguishable from a real conflict and
+ * pushed every caller into guessing. The transition is guarded by `status = 'draft'` IN THE UPDATE
+ * ITSELF, so two concurrent posts race on the row and exactly one of them writes: the loser sees
+ * zero rows updated, re-reads, and reports `alreadyPosted`. The read-then-write pair alone would not
+ * have been enough.
+ */
 export async function postChildcareCharge(
     supabase: SupabaseClient,
-    input: { orgId: string; chargeId: string }
-): Promise<ChargeRow> {
+    input: { orgId: string; chargeId: string; actorUserId?: string | null }
+): Promise<PostChildcareChargeResult> {
     const charge = await loadCharge(supabase, input.orgId, input.chargeId);
     assertChildcareCharge(charge);
     if (isPostedStatus(charge.status)) {
-        throw new OperationalEnrollmentServiceError("invalid_state", "charge is already posted");
+        return { charge, alreadyPosted: true };
     }
+    const now = new Date().toISOString();
     const { data, error } = await supabase
         .from("charges")
-        .update({ status: "posted", posted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .update({
+            status: "posted",
+            posted_at: now,
+            posted_by: input.actorUserId ?? null,
+            updated_at: now,
+            updated_by: input.actorUserId ?? null,
+        })
         .eq("org_id", input.orgId)
         .eq("id", input.chargeId)
+        // The transition guard. Without it, two concurrent posts both pass the read above.
+        .eq("status", "draft")
         .select("*")
-        .single();
+        .maybeSingle();
     if (error) {
         throw new OperationalEnrollmentServiceError("db_error", error.message);
     }
-    return data as ChargeRow;
+    if (!data) {
+        // Someone else won the race. Their posting is the one that stands.
+        return { charge: await loadCharge(supabase, input.orgId, input.chargeId), alreadyPosted: true };
+    }
+    return { charge: data as ChargeRow, alreadyPosted: false };
+}
+
+/**
+ * The LIVE reversal of a charge, if one exists.
+ *
+ * `status <> 'void'` and `metadata.correction_kind = 'reversal'` are the same predicate the partial
+ * unique index uses, so the friendly refusal and the authoritative one describe the same row. A
+ * voided correction is not a correction that stands.
+ */
+async function findLiveReversal(
+    supabase: SupabaseClient,
+    orgId: string,
+    sourceChargeId: string
+): Promise<{ id: string } | null> {
+    const { data, error } = await supabase
+        .from("charges")
+        .select("id, status, metadata")
+        .eq("org_id", orgId)
+        .eq("source_charge_id", sourceChargeId);
+    if (error) {
+        throw new OperationalEnrollmentServiceError("db_error", error.message);
+    }
+    const rows = (data ?? []) as Array<{ id: string; status: string; metadata: Record<string, unknown> | null }>;
+    const reversal = rows.find(
+        (r) => r.status !== "void" && (r.metadata ?? {}).correction_kind === "reversal"
+    );
+    return reversal ? { id: reversal.id } : null;
 }
 
 /**
@@ -327,6 +421,15 @@ export async function postChildcareCharge(
  * original via source_charge_id. Never mutates the original.
  *   - reversal: negation of the source amount (amountCents must be omitted).
  *   - credit / replacement: explicit signed amount.
+ *
+ * ── A CHARGE IS CORRECTED ONCE ──
+ *
+ * The correction path shipped with no bound, and an unbounded correction invents money: reversing a
+ * $1,300 charge twice leaves the family owed $1,300 they were never charged, and a reversal — being
+ * posted money itself — could be reversed in turn without end. The rule is asserted by the database
+ * (`20260902140000`: the lineage trigger plus a partial unique index that two concurrent reversals
+ * cannot both pass). These checks mirror it so an operator reads a sentence rather than a
+ * constraint name.
  */
 export async function createChildcareCorrection(
     supabase: SupabaseClient,
@@ -338,6 +441,28 @@ export async function createChildcareCorrection(
         throw new OperationalEnrollmentServiceError(
             "invalid_state",
             "only posted childcare charges are corrected via source_charge_id; recalculate the draft instead"
+        );
+    }
+
+    // A correction is recorded against the ORIGINAL charge. Correcting a correction reinstates a
+    // charge as a side effect and starts a chain with no terminus; a charge that should stand again
+    // is re-billed as its own charge, which leaves a record of that decision.
+    if (source.source_charge_id) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `charge ${source.id} is itself a correction of ${source.source_charge_id}; `
+                + "record the correction against the original charge"
+        );
+    }
+
+    // Once reversed, the charge no longer stands, so it admits no further correction of any kind —
+    // a second reversal credits the family twice, and a credit against money already removed in
+    // full removes it again.
+    const existingReversal = await findLiveReversal(supabase, input.orgId, source.id);
+    if (existingReversal) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `charge ${source.id} has already been reversed by ${existingReversal.id} and admits no further correction`
         );
     }
 
@@ -366,7 +491,9 @@ export async function createChildcareCorrection(
         .insert({
             org_id: input.orgId,
             job_id: null,
-            billable_source_type: BILLABLE_SOURCE_ENROLLMENT,
+            // The SOURCE's own attribution, not a hardcoded one: a household charge is corrected on
+            // the household, never re-pinned onto an agreement it never belonged to.
+            billable_source_type: source.billable_source_type,
             billable_source_id: source.billable_source_id,
             source_charge_id: source.id,
             charge_type: source.charge_type,
@@ -383,6 +510,10 @@ export async function createChildcareCorrection(
                 `${input.kind} of charge ${source.id}`,
             metadata: { ...(input.metadata ?? {}), correction_kind: input.kind, source_charge_id: source.id },
             updated_at: now,
+            // A correction is posted money the moment it is written, so its author is its poster.
+            created_by: input.actorUserId ?? null,
+            updated_by: input.actorUserId ?? null,
+            posted_by: input.actorUserId ?? null,
         })
         .select("*")
         .single();

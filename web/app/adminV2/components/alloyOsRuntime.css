@@ -9843,7 +9843,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 .alloy-os-financials__row {
   display: grid;
-  grid-template-columns: 82px 76px 92px minmax(90px, 1fr) 72px 78px 68px 84px;
+  /* Eight columns of ledger + the row's own lifecycle transition. */
+  grid-template-columns: 82px 76px 92px minmax(90px, 1fr) 72px 78px 68px 84px 62px;
   gap: 8px;
   padding: 3px 0;
   font-size: 11.5px;
@@ -9865,6 +9866,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-financials__cell--source,
 .alloy-os-financials__cell--desc {
   color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* The row's transition sits at the end of the row, quiet until there is one to offer. */
+.alloy-os-financials__cell--row-action {
+  overflow: visible;
+  text-align: right;
 }
 /* The expanded view's shallow top: one line, so the ledger keeps the surface. */
 .alloy-os-financials__shallow {

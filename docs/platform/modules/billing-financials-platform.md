@@ -175,7 +175,68 @@ Migration `supabase/migrations/20260630120000_financial_substrate_generalization
 - **Gate 3 — write posture:** `RESTRICTIVE` policy `*_childcare_write_rolegate` on all three tables — childcare rows (`billable_source_type='enrollment_agreement'`) additionally require `has_org_role(org_id, ARRAY['owner','admin','ops'])`; job rows and `service_role` are unaffected. The write surface is the server-only service (`web/lib/financials/childcareChargeService.ts`); there is no browser/client money-write path.
 - **Gate 5 — currency:** the substrate already carries `charges.currency_code` / `ledger.currency` / `gl.currency`, so P3.1 makes **no structural currency change**; the service sets `currency_code` explicitly (default `USD`). Rate-plan `currency_code` arrives with rate plans in P3.2.
 
-Code surface: vocabularies/types in `web/lib/financials/billableSource.ts`; the server-side, immutability-aware, `source_charge_id`-correction service in `web/lib/financials/childcareChargeService.ts` (create draft → recalc draft → post → reversal/credit/replacement). No API route, no UI. DB triggers/constraints are authoritative; the service mirrors them for friendly errors.
+Code surface: vocabularies/types in `web/lib/financials/billableSource.ts`; the server-side, immutability-aware, `source_charge_id`-correction service in `web/lib/financials/childcareChargeService.ts` (create draft → recalc draft → post → reversal/credit/replacement). DB triggers/constraints are authoritative; the service mirrors them for friendly errors.
+
+---
+
+### Household parity + actor attribution as-built (September 2026)
+
+Migration `supabase/migrations/20260902130000_financial_spine_actor_and_household_parity.sql`.
+
+`20260827120000_household_billable_source` admitted `billable_source_type = 'customer'` so a family can be charged **before anyone is enrolled** — a waitlist, registration or application fee, a deposit. It widened the CHECK constraints and stopped there. Gates 2 and 3 above were written against the `'enrollment_agreement'` **literal**, so the pre-enrolment charge was made *representable* without being made *safe*: a posted household charge could be edited in place, and household money rows escaped the role gate. Confirmed on the deployed database, not inferred — census `certification/financials/charge-spine-actor-and-parity-census.sql` returned `enrollment_agreement_only` for the trigger and for all three `*_childcare_write_rolegate` policies.
+
+- **Gate 2 (extended)** — `enforce_childcare_charge_immutability` now tests membership of the **childcare source set** (`enrollment_agreement | customer`, code-owned as `CHILDCARE_BILLABLE_SOURCE_TYPES`) rather than one literal, so a source the substrate admits is a source the rule protects. `posted_at` and `posted_by` join the frozen field list. `job` rows are still exempt: job billing owns its own lifecycle.
+- **Gate 3 (extended)** — the same set in the RESTRICTIVE `*_childcare_write_rolegate` policies on all three tables.
+- **Actor attribution** — `charges` gains `created_by` / `updated_by` / `posted_by` (plain `uuid`, matching `payments.created_by`). The charge decides what a family owes and recorded only *when*, never *who*; the same census showed the columns absent on the deployed database, which is also why `chargeLifecycleService`'s recalculate path — already writing `updated_by` — could never have succeeded against it. `posted_by` is separate from `updated_by` because "who last touched this row" does not answer "who made this owed".
+
+**Posting is idempotent.** `postChildcareCharge` guards the transition inside the UPDATE (`status = 'draft'`), so two concurrent posts race on the row and exactly one writes; the loser re-reads and reports `alreadyPosted` rather than raising. A retried request cannot post twice and is not reported as a conflict.
+
+**The lifecycle is operable.** `charge.add`, `charge.post` and `charge.reverse` are registered actions (`web/lib/adminV2/actions/definitions/financialChargeActions.ts`) surfaced on the Financials card: Add charge on the card, and per ledger row **Post** on a draft, **Reverse** on posted money. Immutability without a correction path is a dead end, not a guarantee — `charge.reverse` is the lawful way posted money changes, and it writes a new row through `source_charge_id` on the source's own billable source.
+
+**Idempotency scope is the billable source.** `resolution_key` is `tpl:<template_key>:<occurs_on>:<scopeKey>` where `scopeKey` is the **billable source id**. It was the agreement id falling back to the literal `"org"`, which made two different households' fees share a key on the same day and skipped the dedupe read entirely for household charges — two submissions wrote two drafts.
+
+### Correction lineage — a charge is corrected once (September 2026)
+
+Migration `supabase/migrations/20260902140000_charge_correction_lineage.sql`.
+
+Making posted money correctable is only half a rule; the other half is how many corrections a charge
+admits. `charge.reverse` shipped with one check — that its source is posted — so nothing stopped a
+second reversal, and the Financials card made that the likely path rather than an exotic one: it
+offers a transition per lifecycle state, a reversed original still read `posted`, and the operator
+saw an apparently-unreversed charge with a `Reverse` button on it. Reversing a $1,300 charge twice
+leaves the family credited $1,300 they were never charged. A reversal is posted money itself, so it
+offered `Reverse` too — a chain with no terminus, in which the provenance of a balance is a walk
+rather than a fact.
+
+- **One live reversal per childcare source charge**, asserted by the partial unique index
+  `uq_charges_one_live_reversal_per_source` (childcare `billable_source_type`, `status <> 'void'`,
+  `metadata->>'correction_kind' = 'reversal'`). The index rather than a service check, because two
+  concurrent reversals each read zero siblings and each write — the same reason posting guards its
+  transition inside the UPDATE. Its predicate carries the childcare source clause because the first
+  version did not: the trigger exempted job rows and the index did not, so a second correction of a
+  **job** charge was refused — a job-vertical regression that only the live database could show.
+- **No correction of a correction, and no correction of a charge already reversed**, enforced by
+  `enforce_charge_correction_lineage` on INSERT/UPDATE of `source_charge_id`. The same trigger
+  refuses a `source_charge_id` that points at no charge, repeating what
+  `charges_source_charge_id_fkey` already guarantees at write time. It quantifies over
+  `CHILDCARE_BILLABLE_SOURCE_TYPES`; `job` rows pass through to job billing's own lifecycle.
+- **The ledger says so.** `buildFinancialsCardVM` projects the lineage (`correctsChargeId`,
+  `correctionKind`, `reversedByChargeId`) and derives a `reversed` lifecycle — a reading of a posted
+  row, not a new status and not a new column. The card offers `Reverse` only on posted money that
+  still stands and is not itself a correction.
+- **Reversed money is still posted money.** The reversed original stays in the reconciliation and in
+  the period total, where it nets against its reversal; dropping it would leave the credit unmatched
+  and drive responsibility negative. It is excluded from **past due** only, together with its
+  reversal — a correction copies the source's `due_date`, so both halves would otherwise report an
+  overdue balance of zero for money nobody owes. Credits and replacements stay in past due: they are
+  partial and legitimately reduce what is still overdue.
+
+Whether the deployed database can accept the bound was asked of it rather than assumed — a unique
+index fails to build against data that already violates it, and that is a deploy-time discovery.
+Census `certification/financials/charge-correction-lineage-census.sql` returned **0** sources with
+more than one live reversal, **0** corrections whose source is itself a correction, and no
+correction rows at all on any billable source: the bound is asserted over a table with no correction
+history, so nothing existing is invalidated by it.
 
 ---
 
@@ -190,6 +251,14 @@ Code surface: vocabularies/types in `web/lib/financials/billableSource.ts`; the 
 - Do not expand the legacy `charge_type` CHECK; add financial taxonomy on `charge_category` (P3.1 gate 1).
 - Do not update a posted childcare charge in place; correct via `source_charge_id` reversal/credit/replacement (P3.1 gate 2).
 - Do not allow broad `authenticated` client writes for childcare money; writes are server-side + `has_org_role` (P3.1 gate 3).
+- Do not write a childcare money guarantee against the `'enrollment_agreement'` literal; quantify over `CHILDCARE_BILLABLE_SOURCE_TYPES`, or the next source admitted escapes it silently.
+- Do not raise on a repeated post — posting is idempotent and a retry reports the existing posting.
+- Do not leave a correction unbounded; a posted charge admits ONE live reversal and no further correction after it, and a correction is never itself corrected.
+- Do not enforce a money-uniqueness rule with a read-then-write in the service; two concurrent reversals both pass it. State it as a constraint and mirror it in the service for the message.
+- Do not write a childcare constraint whose predicate omits the childcare sources — a partial index naming only `correction_kind` governs job billing too, which is the job-vertical regression P3.1 forbids. Certify constraints against a real database; a mock has no index.
+- Do not render a reversed charge as plain `posted`, and do not offer a second correction on it — an operator acts on what the ledger says.
+- Do not drop a reversed original from a total; it nets against its reversal, and skipping it drives responsibility negative.
+- Do not write a charge without an actor; `created_by` / `updated_by` / `posted_by` are the audit trail money requires.
 - Do not add a childcare-specific ledger FK or a second ledger/GL; use the generic billable-source dimension (P3.1 gate 4).
 - Do not book expected subsidy as AR before a claim/posting; expected subsidy is L3-derived.
 - Do not collapse Rate / Charge / Financial Resolution into Posting — Posting is the only authoritative-write stage.
