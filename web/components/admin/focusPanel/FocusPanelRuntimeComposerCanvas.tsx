@@ -47,7 +47,7 @@ import {
     finishRecording,
     recordFrame,
 } from "@/lib/adminV2/runtime/focusPanel/composition/composerDragRecorder";
-import { resolveColumnAwareDrop } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelColumnAwareLayout";
+import { resolveColumnAwareDrop, snapColumnStart } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelColumnAwareLayout";
 import { publishComposerLayoutDump } from "@/lib/adminV2/runtime/focusPanel/composition/composerLayoutDump";
 import {
     beginComposerDragTrace,
@@ -633,7 +633,17 @@ export default function FocusPanelRuntimeComposerCanvas({
             const drop = resolveColumnAwareDrop({
                 layout: gridAtStart,
                 moving: area,
-                colStart: col - grabColOffset,
+                /*
+                 * The pointer names the destination; the grip does not. Subtracting the
+                 * grab offset here made reachable columns depend on where inside the card
+                 * the press landed — grab a 6-span card on its right and the left half
+                 * needed the cursor off-canvas to reach.
+                 */
+                colStart: snapColumnStart({
+                    pointerColumn: col,
+                    colSpan: area.colSpan,
+                    columns: gridAtStart.columns,
+                }),
                 pointerY: clientY - canvasTop,
                 boxes: boxesAtStart,
                 gapPx: COMPOSER_GRID_GAP_PX,

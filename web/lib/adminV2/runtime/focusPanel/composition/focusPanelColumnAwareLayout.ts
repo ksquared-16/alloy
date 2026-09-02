@@ -191,6 +191,42 @@ export type ColumnAwareDropResult = {
  * extension. That is why this needs no schema change and no migration: the field
  * keeps its shape and gains an honest meaning.
  */
+/**
+ * THE COLUMN THE POINTER IS ASKING FOR — and grab offset is not part of it.
+ *
+ * The destination used to be `pointerColumn - grabOffset`, so where inside the
+ * card you happened to press decided which start columns you could reach. Grab a
+ * six-column card by its right side and the left half became unreachable without
+ * dragging the cursor off the canvas; grab it in the middle and it straddled
+ * columns 5-10 instead of snapping to a half. Same pointer, different answer,
+ * depending on an invisible detail of the pickup. That is the flakiness.
+ *
+ * Surface Builder is a snap-to-layout composer, not a window manager. The card
+ * centres on the pointer and snaps to the nearest legal start for its span, so
+ * every start owns a contiguous band of pointer positions and the answer is a
+ * function of (pointer, span, canvas) alone. Where you grabbed it affects the
+ * pickup and nothing else.
+ */
+export function snapColumnStart(args: {
+    pointerColumn: number;
+    colSpan: number;
+    columns: number;
+}): number {
+    const columns = Math.max(1, args.columns);
+    const colSpan = Math.max(1, Math.min(args.colSpan, columns));
+    const maxStart = columns - colSpan + 1;
+    /*
+     * Slots, not free positions. A six-column card has a left half and a right
+     * half; a four-column card has thirds. Centring the card on the pointer would
+     * be smoother and wrong — pointer column 7 would centre a 6-span card across
+     * 5-10, straddling the middle, which is the composition nobody asks for. So
+     * the canvas is divided into span-sized bands and the card takes the band the
+     * pointer is in, clamped to the last legal start.
+     */
+    const slot = 1 + Math.floor((args.pointerColumn - 1) / colSpan) * colSpan;
+    return Math.min(maxStart, Math.max(1, slot));
+}
+
 export function resolveColumnAwareDrop(input: ColumnAwareDropInput): ColumnAwareDropResult {
     const { layout, moving, colStart, pointerY, boxes, gapPx = 10 } = input;
     const columns = Math.max(1, layout.columns);
