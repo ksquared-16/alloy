@@ -75,6 +75,30 @@ export function classifySignInFailure(error: unknown): SignInFailureKind {
                 ? ((error as { message: string }).message)
                 : "";
 
+    /*
+     * NETWORK FAILURES BY SHAPE, BEFORE ANY TEXT MATCHING.
+     *
+     * A dev server was left pointing at a Supabase that was not running. Every sign-in posted into a
+     * refused connection, and this function answered "Email or password is incorrect" -- because
+     * supabase-js reports that as AuthRetryableFetchError with status 0, whose MESSAGE need not
+     * contain "fetch" at all, so the UNREACHABLE regex missed it and the default took over. The
+     * operator then spent hours retyping a password that was never wrong, and so did I.
+     *
+     * The default-to-credentials rule is right and stays: an unrecognised PROVIDER string must reveal
+     * nothing about an account. But a transport failure is not a provider string, and it is not about
+     * the caller's account -- it is true of every caller, exactly like `misconfigured`. Recognising it
+     * by shape rather than by prose is what stops a wording change upstream from silently turning an
+     * unreachable service back into a wrong password.
+     *
+     * `status === 0` is the signature of a request that never got an HTTP answer.
+     */
+    const name = (error as { name?: unknown } | null)?.name;
+    const status = (error as { status?: unknown } | null)?.status;
+    if (typeof name === "string" && /AuthRetryableFetchError|TypeError|NetworkError/i.test(name)) {
+        return "unreachable";
+    }
+    if (status === 0) return "unreachable";
+
     if (MISCONFIGURED.test(raw)) return "misconfigured";
     if (UNREACHABLE.test(raw)) return "unreachable";
     if (RATE_LIMIT.test(raw)) return "rate_limited";

@@ -96,3 +96,32 @@ describe("an already-signed-in operator is not shown a login form", () => {
         expect(src.match(/POST_SIGN_IN_PATH/g)?.length).toBeGreaterThanOrEqual(3);
     });
 });
+
+describe("an unreachable auth service is never reported as a wrong password", () => {
+    /*
+     * The incident this exists for: a dev server pointing at a Supabase that was not running. Every
+     * sign-in posted into a refused connection and the page said the password was incorrect, so the
+     * operator retyped a correct password for hours. supabase-js reports that as
+     * AuthRetryableFetchError with status 0, and its message need not contain "fetch" -- so matching
+     * on prose alone missed it and the credentials default took over.
+     */
+    it("classifies AuthRetryableFetchError by NAME, whatever its message says", () => {
+        const e = Object.assign(new Error("Request failed"), { name: "AuthRetryableFetchError", status: 0 });
+        expect(classifySignInFailure(e)).toBe("unreachable");
+    });
+
+    it("classifies a browser TypeError from a refused connection", () => {
+        const e = Object.assign(new Error("Load failed"), { name: "TypeError" });
+        expect(classifySignInFailure(e)).toBe("unreachable");
+    });
+
+    it("classifies any error that never received an HTTP answer", () => {
+        expect(classifySignInFailure({ message: "something opaque", status: 0 })).toBe("unreachable");
+    });
+
+    it("still defaults an unrecognised PROVIDER string to credentials", () => {
+        // The anti-enumeration default is the point and must survive this change.
+        expect(classifySignInFailure({ message: "Email not confirmed", status: 400 })).toBe("credentials");
+        expect(classifySignInFailure({ message: "a new provider string", status: 400 })).toBe("credentials");
+    });
+});
