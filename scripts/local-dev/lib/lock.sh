@@ -161,10 +161,49 @@ alloy_validate_queue_is_head() {
   [[ -n "$first" && "$first" == "$entry" ]]
 }
 
+# A HEARTBEAT IS ONLY MEANINGFUL WHILE THE LEASE IS HELD.
+#
+# THE DEFECT THIS CLOSES. `alloy-validate` moved to the S5 broker as the single
+# capacity authority and stopped taking the validate mutex — "One decision, not
+# two" — but a heartbeat loop from the old mutex model survived it. Every
+# fifteen seconds it wrote into a lock directory that is never created, and the
+# shell printed
+#
+#   lock.sh: line 167: .../locks/validate.lock/heartbeat: No such file or directory
+#
+# into the middle of a real typecheck, which still exited 0. A writer with no
+# reader, failing silently, in a mechanism whose entire job is to prove liveness.
+#
+# This now refuses rather than writing into nowhere, and says so through its
+# exit status so a caller that DOES hold the lease can treat a failed heartbeat
+# as the liveness failure it is.
+# Does THIS process hold the validation lease right now?
+#
+# Not "is a lease held" — that was already answerable — but "is it mine". The
+# heartbeat loop needs the second question, because refreshing someone else's
+# heartbeat is how a dead lease keeps looking alive.
+alloy_validate_lock_held_by_self() {
+  local owner held_pid
+  [[ -d "$ALLOY_VALIDATE_LOCK_DIR" ]] || return 1
+  owner="$(alloy_validate_owner_file)"
+  [[ -f "$owner" ]] || return 1
+  held_pid="$(grep -m1 '^ALLOY_VALIDATE_PID=' "$owner" 2>/dev/null | cut -d'"' -f2)"
+  [[ -n "$held_pid" && "$held_pid" == "$$" ]]
+}
+
 alloy_validate_write_heartbeat() {
-  local now
+  local now owner
+  [[ -d "$ALLOY_VALIDATE_LOCK_DIR" ]] || return 1
+  owner="$(alloy_validate_owner_file)"
+  if [[ -f "$owner" ]]; then
+    local held_pid
+    held_pid="$(grep -m1 '^ALLOY_VALIDATE_PID=' "$owner" 2>/dev/null | cut -d'"' -f2)"
+    # Only the holder refreshes the holder's heartbeat. Anyone else writing it
+    # would keep a dead lease looking alive.
+    [[ -z "$held_pid" || "$held_pid" == "$$" ]] || return 1
+  fi
   now="$(alloy_validate_now_epoch)"
-  printf '%s\n' "$now" >"$(alloy_validate_heartbeat_file)"
+  printf '%s\n' "$now" >"$(alloy_validate_heartbeat_file)" || return 1
   # Refresh owner.env heartbeat field when possible.
   local owner
   owner="$(alloy_validate_owner_file)"

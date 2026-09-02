@@ -36,7 +36,8 @@
  * kept slot 1 — dual truth, which this module resolves in one direction only:
  * registry -> binding, never the reverse.
  */
-import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -69,6 +70,7 @@ export const LANE_LIFECYCLE_ERRORS = Object.freeze({
   NOT_MANAGED: "lane_worktree_not_managed",
   SLOT_UNREGISTERED: "lane_slot_unregistered",
   SLOT_MISMATCH: "lane_slot_mismatch",
+  BRANCH_DRIFT: "lane_branch_drift",
 });
 
 const DETAIL = Object.freeze({
@@ -80,6 +82,7 @@ const DETAIL = Object.freeze({
   lane_worktree_not_managed: "The lane's worktree registration is marked finished, so the worktree is no longer managed. Managed worktree registration is required before this operation.",
   lane_slot_unregistered: "The lane's worktree is registered without a slot, so it has no port or managed environment.",
   lane_slot_mismatch: "The registered slot points at a different worktree than the lane is bound to.",
+  lane_branch_drift: "The worktree is checked out on a different branch than the lane and its registration expect.",
 });
 
 export function lifecycleDetail(code) {
@@ -87,6 +90,12 @@ export function lifecycleDetail(code) {
 }
 
 const norm = (v) => String(v ?? "").trim();
+/** One spelling of a branch name: no refs/heads/, no origin/, no whitespace. */
+export function normalizeBranchName(b) {
+  const v = String(b ?? "").trim().replace(/^refs\/heads\//, "").replace(/^origin\//, "");
+  return v || null;
+}
+
 const asSlot = (v) => {
   const n = Number(v);
   return Number.isInteger(n) && n >= 1 && n <= 6 ? n : null;
@@ -112,7 +121,7 @@ export function registrationForWorktree(name, { cfg = null, metadata = null } = 
  * decision reads this. It never treats a directory on disk, or a stale
  * `binding.worktree_path`, as proof of ownership.
  */
-export function resolveLaneWorktree(laneId, { root = runtimeRoot(), cfg = null, metadata = null } = {}) {
+export function resolveLaneWorktree(laneId, { root = runtimeRoot(), cfg = null, metadata = null, gitImpl = null } = {}) {
   const lane = getDurableLane(String(laneId || "").trim(), root);
   if (!lane) {
     return { ok: false, code: LANE_LIFECYCLE_ERRORS.LANE_NOT_FOUND, detail: lifecycleDetail("lane_not_found"), lane_id: laneId || null };
@@ -129,6 +138,8 @@ export function resolveLaneWorktree(laneId, { root = runtimeRoot(), cfg = null, 
     branch: binding.branch || null,
     tmux_session: binding.tmux_session || null,
     binding_slot: asSlot(binding.slot),
+    branch_expected: null,
+    branch_actual: null,
   };
 
   if (!base.lane_open) {
@@ -191,6 +202,31 @@ export function resolveLaneWorktree(laneId, { root = runtimeRoot(), cfg = null, 
     return { ...out, ok: false, code: LANE_LIFECYCLE_ERRORS.WORKTREE_MISSING, detail: lifecycleDetail("lane_worktree_missing") };
   }
 
+  // BRANCH IDENTITY IS PART OF LANE IDENTITY.
+  //
+  // THE DEFECT THIS CLOSES. The Surfaces lane binding said
+  // `agent/claude/6-surfaces-faacca`, its slot registration said the same, and
+  // the worktree was checked out on `agent/claude/6-surfaces-followup`. Path,
+  // slot and lifecycle all agreed, so this resolver reported OK — it had never
+  // been told to look at the branch. Every governed push identity for that lane
+  // is derived from a branch name nobody had verified against the worktree.
+  //
+  // Fail closed and say which two answers disagree. This adds no new source of
+  // truth: the expectation still comes from the registration, and the fact still
+  // comes from git.
+  const expectedBranch = normalizeBranchName(out.registry.branch_expected || base.branch);
+  const actualBranch = normalizeBranchName(actualWorktreeBranch(path, { git: gitImpl }));
+  out.branch_expected = expectedBranch;
+  out.branch_actual = actualBranch;
+  if (expectedBranch && actualBranch && expectedBranch !== actualBranch) {
+    return {
+      ...out,
+      ok: false,
+      code: LANE_LIFECYCLE_ERRORS.BRANCH_DRIFT,
+      detail: `${lifecycleDetail("lane_branch_drift")} Expected ${expectedBranch}; the worktree is on ${actualBranch}.`,
+    };
+  }
+
   // ONE SLOT TRUTH: the registration decides, the binding follows.
   out.slot = out.registry.slot;
   out.port = out.registry.port ?? (out.registry.slot ? 3010 + out.registry.slot : null);
@@ -205,6 +241,23 @@ export function resolveLaneWorktree(laneId, { root = runtimeRoot(), cfg = null, 
     return { ...out, ok: false, code: LANE_LIFECYCLE_ERRORS.SLOT_UNREGISTERED, detail: lifecycleDetail("lane_slot_unregistered") };
   }
   return { ...out, ok: true, code: "managed", detail: null };
+}
+
+/**
+ * What branch is this worktree ACTUALLY on?
+ *
+ * Read, never inferred. `git -C <path> rev-parse --abbrev-ref HEAD` is the only
+ * thing that knows; a detached HEAD returns "HEAD" and is reported as such
+ * rather than being smoothed into a name.
+ */
+export function actualWorktreeBranch(worktreePath, { git = null } = {}) {
+  const path = norm(worktreePath);
+  if (!path || !existsSync(path)) return null;
+  const run = git || ((args) => spawnSync("git", ["-C", path, ...args], { encoding: "utf8", timeout: 10_000 }));
+  const out = run(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!out || out.status !== 0) return null;
+  const b = String(out.stdout || "").trim();
+  return b || null;
 }
 
 /**
@@ -432,4 +485,151 @@ export function auditLaneWorktrees({ root = runtimeRoot(), cfg = null } = {}) {
     .filter((m) => !ownedNames.has(norm(m.worktree)))
     .map((m) => ({ worktree: m.worktree, slot: asSlot(m.slot), port: asPort(m.port), path: m.path || null, lifecycle: m.lifecycle || null }));
   return { lanes, orphans, metadata_count: metadata.length };
+}
+
+/**
+ * WHAT DOES THE HOST ACTUALLY HAVE A DEV SERVER FOR?
+ *
+ * Deliberately NOT a second implementation of the rule. `alloy-dev-status` is
+ * the canonical classifier — it owns the port, PID-file, ownership and
+ * process-shape logic — so this reads ITS verdict rather than recomputing one.
+ * A second implementation is how the shell and the JS policy came to disagree
+ * about how many servers exist in the first place.
+ */
+export function devServerCensus({ toolkitDir = null, root = runtimeRoot(), spawn = null } = {}) {
+  const bin = join(toolkitDir || join(process.env.HOME || "", ".local", "share", "alloy", "toolkit", "current"), "alloy-dev-status");
+  const run = spawn || ((cmd, args, opts) => spawnSync(cmd, args, opts));
+  const out = run(bin, [], { encoding: "utf8", timeout: 30_000, env: { ...process.env, ALLOY_RUNTIME_ROOT: root } });
+  if (!out || out.status !== 0) return { ok: false, error: "dev_status_unavailable", servers: [] };
+  const servers = [];
+  for (const line of String(out.stdout || "").split("\n")) {
+    const m = line.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)/);
+    if (!m) continue;
+    const [, worktree, agent, branch, port, state, pid, path] = m;
+    servers.push({
+      worktree, agent, branch, port: Number(port), state,
+      pid: pid === "-" ? null : Number(pid), path,
+      counts_toward_capacity: state === "running",
+      reclaimable: state === "unattributable-owner" || state === "stale",
+    });
+  }
+  return {
+    ok: true,
+    servers,
+    running: servers.filter((x) => x.counts_toward_capacity).length,
+    reclaimable: servers.filter((x) => x.reclaimable),
+  };
+}
+
+/**
+ * A REGISTRATION WHOSE RESOURCE IS GONE.
+ *
+ * THE DEFECT THIS CLOSES. wt2-fixture-two held slot 2 and port 3912 in the
+ * registry while its directory — under a deleted /tmp fixture root — had not
+ * existed for days. `vac worktree-retire` could not see it, because that command
+ * works from directories and this one has none. `vac reconcile` offered only
+ * adoptions. So the only way to remove it was to delete a file by hand, which is
+ * exactly what a registry is supposed to make unnecessary.
+ *
+ * This classifies rather than deletes, and it FAILS CLOSED in every direction
+ * that matters:
+ *
+ *   active            the directory exists — never a cleanup candidate
+ *   owned             a durable lane is bound to it — never a cleanup candidate
+ *   unreadable        the registry could not be read at all; a transient
+ *                     filesystem error must never read as "gone"
+ *   detached          no directory, no owning lane, and the registration says
+ *                     it was finished — historical, keep
+ *   stale_missing     no directory, no owning lane, still marked active — the
+ *                     only class this proposes removing
+ *
+ * `apply` is required to change anything, every decision carries its evidence,
+ * and the removed file is recorded so the action is auditable after the fact.
+ */
+export const REGISTRATION_CLASSES = Object.freeze([
+  "active", "owned", "detached", "stale_missing", "unreadable",
+]);
+
+export function classifyRegistrations({ root = runtimeRoot(), cfg = null, metadata = null } = {}) {
+  let conf;
+  let meta;
+  try {
+    conf = cfg || resolveRuntimeConfig();
+    // AN ABSENT REGISTRY IS NOT AN EMPTY ONE. `readAllMetadata` returns [] for a
+    // directory that does not exist, which at this layer is indistinguishable
+    // from "there are no registrations" — and acting on that reading would
+    // propose removing nothing, or worse, teach a caller that the registry is
+    // empty. A registry we cannot read is refused outright.
+    if (!metadata && !existsSync(conf.metadata_dir)) {
+      return { ok: false, error: "registry_unreadable", detail: `no registry directory at ${conf.metadata_dir}`, registrations: [] };
+    }
+    meta = metadata || readAllMetadata(conf);
+    if (!Array.isArray(meta)) {
+      return { ok: false, error: "registry_unreadable", detail: "the registry did not read as a list", registrations: [] };
+    }
+  } catch (e) {
+    // A registry we could not read is not a registry full of dead entries.
+    return { ok: false, error: "registry_unreadable", detail: String(e?.message || e), registrations: [] };
+  }
+  const owners = new Map();
+  for (const lane of listDurableLanes(root)) {
+    const n = norm(lane?.binding?.worktree_name);
+    if (n) owners.set(n, lane.lane_id);
+  }
+  const registrations = meta.map((m) => {
+    const name = norm(m.worktree);
+    const path = norm(m.path);
+    const lifecycle = norm(m.lifecycle).toLowerCase();
+    const owner = owners.get(name) || null;
+    const present = path ? existsSync(path) : null;
+    let klass;
+    let reason;
+    if (present === null) { klass = "unreadable"; reason = "the registration records no path, so its resource cannot be located"; }
+    else if (present) { klass = "active"; reason = "the worktree directory exists"; }
+    else if (owner) { klass = "owned"; reason = `a durable lane (${owner}) is still bound to this worktree`; }
+    else if (lifecycle === "finished") { klass = "detached"; reason = "no directory and no owning lane, but the registration is already marked finished"; }
+    else { klass = "stale_missing"; reason = "no directory, no owning lane, and still marked active"; }
+    return {
+      worktree: name, path: path || null, slot: asSlot(m.slot), port: asPort(m.port),
+      lifecycle: lifecycle || null, owner_lane_id: owner, directory_present: present,
+      class: klass, reason,
+      cleanup_candidate: klass === "stale_missing",
+    };
+  });
+  return { ok: true, registrations, candidates: registrations.filter((r) => r.cleanup_candidate) };
+}
+
+export function reconcileStaleRegistrations({
+  root = runtimeRoot(),
+  cfg = null,
+  metadata = null,
+  apply = false,
+  actor = "operator",
+  nowMs = Date.now(),
+} = {}) {
+  const classified = classifyRegistrations({ root, cfg, metadata });
+  if (!classified.ok) return { ...classified, applied: false };
+  const conf = cfg || resolveRuntimeConfig();
+  const plan = classified.candidates.map((c) => ({
+    worktree: c.worktree, slot: c.slot, port: c.port, path: c.path,
+    action: "remove_registration",
+    file: join(conf.metadata_dir, `${c.worktree}.env`),
+    evidence: c.reason,
+  }));
+  if (!apply) {
+    return { ok: true, applied: false, plan, classified: classified.registrations, planned_at: iso(nowMs) };
+  }
+  const removed = [];
+  const refused = [];
+  for (const step of plan) {
+    // Re-check at the moment of action: the plan may be seconds old, and a
+    // worktree that came back must not be removed on a stale reading.
+    if (step.path && existsSync(step.path)) {
+      refused.push({ ...step, refused: "directory_reappeared" });
+      continue;
+    }
+    try { rmSync(step.file, { force: true }); removed.push(step); }
+    catch (e) { refused.push({ ...step, refused: String(e?.message || e) }); }
+  }
+  return { ok: true, applied: true, removed, refused, actor, applied_at: iso(nowMs) };
 }

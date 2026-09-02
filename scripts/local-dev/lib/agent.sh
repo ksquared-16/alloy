@@ -95,6 +95,53 @@ alloy_ensure_agent_runtime_dirs() {
   mkdir -p "${ALLOY_RUNTIME_ROOT}/instructions"
 }
 
+# BEING IN THE RIGHT DIRECTORY IS NOT BEING THE RIGHT PROCESS.
+#
+# THE DEFECT THIS CLOSES. Port 3013 — the Communications slot — was held for
+# more than seventeen hours by
+#
+#   node -e require("http").createServer((q,s)=>{s.end("ok")}).listen(...)
+#
+# a PPID-1 test fixture that answers "ok" to everything. It was started with its
+# cwd inside the lane's worktree, so `alloy_pid_belongs_to_worktree` said yes on
+# the cwd test alone, `alloy_server_state_for` returned `running`, the 3-server
+# limit counted it, and a real lane was refused a dev server because a dead
+# fixture held the slot. Any naive health probe would have read HTTP 200 and
+# agreed the lane's server was up.
+#
+# Location was being accepted as identity. A toolkit-owned dev server is started
+# through `alloy-dev-start`, which runs the package script — so the process, or
+# something in its subtree, must actually LOOK like a Next dev server. This is
+# deliberately a shape test and not a version test: it must keep passing when
+# Next changes, and must keep failing for anything that merely listens.
+alloy_process_is_dev_server() {
+  local pid="$1"
+  local cmd child
+  [[ -n "$pid" ]] || return 1
+  cmd="$(alloy_process_command "$pid" 2>/dev/null || true)"
+  case "$cmd" in
+    *"npm run dev"*|*"next dev"*|*next-server*|*"node_modules/.bin/next"*) return 0 ;;
+  esac
+  # The recorded PID is usually the npm wrapper; the server itself is a child.
+  # One generation of descent is enough and keeps this cheap.
+  while read -r child; do
+    [[ -n "$child" ]] || continue
+    cmd="$(alloy_process_command "$child" 2>/dev/null || true)"
+    case "$cmd" in
+      *"next dev"*|*next-server*|*"node_modules/.bin/next"*) return 0 ;;
+    esac
+    local grandchild
+    while read -r grandchild; do
+      [[ -n "$grandchild" ]] || continue
+      cmd="$(alloy_process_command "$grandchild" 2>/dev/null || true)"
+      case "$cmd" in
+        *"next dev"*|*next-server*|*"node_modules/.bin/next"*) return 0 ;;
+      esac
+    done < <(pgrep -P "$child" 2>/dev/null || true)
+  done < <(pgrep -P "$pid" 2>/dev/null || true)
+  return 1
+}
+
 alloy_server_state_for() {
   local name="$1"
   local path="$ALLOY_WORKTREE_PATH"
@@ -111,7 +158,14 @@ alloy_server_state_for() {
     pid="$(alloy_read_pid_file "$pid_path" || true)"
     if [[ -n "${pid:-}" ]] && alloy_pid_alive "$pid"; then
       if alloy_pid_belongs_to_worktree "$pid" "$path"; then
-        printf 'running'
+        # OWNERSHIP AND IDENTITY, NOT OWNERSHIP ALONE.
+        if alloy_process_is_dev_server "$pid"; then
+          printf 'running'
+        else
+          # Recorded, alive, in the right worktree — and not a dev server. It
+          # holds the slot and answers the port; it is not this lane's server.
+          printf 'unattributable-owner'
+        fi
         return
       fi
       printf 'stale'
@@ -121,7 +175,11 @@ alloy_server_state_for() {
 
   if listener="$(alloy_port_listener_pid "$port" 2>/dev/null)"; then
     if alloy_pid_belongs_to_worktree "$listener" "$path"; then
-      printf 'running'
+      if alloy_process_is_dev_server "$listener"; then
+        printf 'running'
+      else
+        printf 'unattributable-owner'
+      fi
       return
     fi
     printf 'foreign-port-owner'
