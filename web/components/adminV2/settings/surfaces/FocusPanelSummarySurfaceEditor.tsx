@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelRuntimeComposerCanvas from "@/components/admin/focusPanel/FocusPanelRuntimeComposerCanvas";
 import FocusPanelVisibilityZones from "@/components/adminV2/settings/surfaces/FocusPanelVisibilityZones";
-import { gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
+import { compactGridRows, gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import {
     readFocusPanelPublishedLayout,
     type FocusPanelPublishedLayout,
@@ -572,8 +572,15 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
     );
     // EB V5: the canvas authors a responsive GRID. Seed it from the loaded layout's grid,
     // or convert its rows → grid placement (so an existing row layout opens cleanly).
+    /*
+     * The seed is compacted, because layouts saved before rows had gravity carry
+     * empty row indices — and an empty index is still a 76px track. Opening such a
+     * surface showed the operator phantom bands before they touched anything.
+     * Compaction moves no card sideways and reorders nothing; it only closes gaps,
+     * so a published composition keeps its widths and its reading order.
+     */
     const builderInitialGrid = useMemo(
-        () => gridFromPublishedLayout(builderInitial),
+        () => compactGridRows(gridFromPublishedLayout(builderInitial)),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [loaded],
     );

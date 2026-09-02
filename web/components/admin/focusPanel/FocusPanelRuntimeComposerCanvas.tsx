@@ -446,10 +446,30 @@ export default function FocusPanelRuntimeComposerCanvas({
     const startMove = (e: PointerEvent, area: FocusPanelGridArea) => {
         if (interacting.current) return;
         interacting.current = true;
-        setArranging(true);
-        e.preventDefault();
-        e.stopPropagation();
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        /*
+         * NOT preventDefault/stopPropagation here.
+         *
+         * Suppressing the press outright also suppresses the click that follows it,
+         * so every other affordance on the card — selection, Configure — died the
+         * moment the whole body became a drag surface. Both are deferred to the
+         * first qualifying MOVE, where a real drag is actually underway.
+         */
+        // Capture on the element itself, read now — the event object does not outlive dispatch.
+        const captureEl = e.currentTarget as HTMLElement | null;
+        try {
+            captureEl?.setPointerCapture(e.pointerId);
+        } catch {
+            /* capture is an optimisation; window listeners below do the real work */
+        }
+        // A press is a click until the pointer travels. Nothing is arranged, previewed
+        // or committed before that, so selecting a card never nudges the layout.
+        const pressX = e.clientX;
+        const pressY = e.clientY;
+        let travelled = false;
+        const hasTravelled = (ev: globalThis.PointerEvent) =>
+            travelled
+            || (travelled =
+                Math.abs(ev.clientX - pressX) + Math.abs(ev.clientY - pressY) >= 4);
         // Preserve grab point so the card does not teleport under the cursor mid-drag.
         const origin = cellFromPointer(e.clientX, e.clientY);
         const grabColOffset = origin.col - area.colStart;
@@ -464,7 +484,7 @@ export default function FocusPanelRuntimeComposerCanvas({
             interacting.current = false;
             setArranging(false);
             try {
-                (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                captureEl?.releasePointerCapture(e.pointerId);
             } catch {
                 /* pointer already released */
             }
@@ -473,6 +493,12 @@ export default function FocusPanelRuntimeComposerCanvas({
             window.removeEventListener("pointercancel", cancel);
         };
         const move = (ev: globalThis.PointerEvent) => {
+            if (!hasTravelled(ev)) return;
+            if (!arranging) {
+                setArranging(true);
+                // Now it is a drag: stop the browser turning it into a text selection.
+                ev.preventDefault();
+            }
             const placement = resolveTarget(ev.clientX, ev.clientY);
             setGhost({
                 colStart: placement.area.colStart,
@@ -482,8 +508,8 @@ export default function FocusPanelRuntimeComposerCanvas({
             });
         };
         const up = (ev: globalThis.PointerEvent) => {
-            // Commit the grid the ghost was drawn from — not a second computation of it.
-            applyGrid(resolveTarget(ev.clientX, ev.clientY).grid);
+            // A press that never travelled is a click: leave the layout untouched.
+            if (hasTravelled(ev)) applyGrid(resolveTarget(ev.clientX, ev.clientY).grid);
             cleanup();
         };
         const cancel = () => {
@@ -858,25 +884,18 @@ function ComposerCellShell({
         const target = e.target as HTMLElement | null;
         if (target?.closest("button, a, input, textarea, select, [data-fp-composer-no-drag]")) return;
 
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const armed = e;
-        let started = false;
-        const onMove = (ev: globalThis.PointerEvent) => {
-            if (started) return;
-            if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) < 4) return;
-            started = true;
-            release();
-            onStartMove(armed);
-        };
-        const release = () => {
-            window.removeEventListener("pointermove", onMove);
-            window.removeEventListener("pointerup", release);
-            window.removeEventListener("pointercancel", release);
-        };
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", release);
-        window.addEventListener("pointercancel", release);
+        /*
+         * SYNCHRONOUSLY, because a React event is only alive during its dispatch.
+         *
+         * This deferred the call until the pointer had moved 4px and handed
+         * `onStartMove` the original event. By then React had cleared
+         * `currentTarget`, so `setPointerCapture` threw on null, the handler died,
+         * and no ghost was ever drawn — the drag looked dead in the browser while
+         * every unit test passed. The threshold that keeps a click a click now
+         * lives inside `startMove`, where it can be applied without holding a
+         * stale event.
+         */
+        onStartMove(e);
     };
 
     return (

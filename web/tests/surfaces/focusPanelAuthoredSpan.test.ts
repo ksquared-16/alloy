@@ -61,8 +61,15 @@ describe("the gesture can start — the defects upstream of any placement maths"
 
     it("lets the whole card body start a drag, not a 34px strip along its top edge", () => {
         expect(canvas).toContain("onPointerDown={onStartMove ? bodyPointerDown : undefined}");
-        // A click must still select, so the drag arms on movement rather than on press.
-        expect(canvas).toContain("< 4) return;");
+        /*
+         * A press is a click until the pointer travels: the threshold lives in
+         * `startMove`, and `preventDefault` is deferred to the first qualifying move.
+         * Suppressing the press itself also suppressed the click behind it, which
+         * killed selection and Configure the moment the body became a drag surface —
+         * a regression the browser caught and no unit test could.
+         */
+        expect(canvas).toContain(">= 4)");
+        expect(canvas).toContain("if (hasTravelled(ev)) applyGrid(");
         // Chrome inside the card keeps its own press.
         expect(canvas).toContain('target?.closest("button, a, input, textarea, select, [data-fp-composer-no-drag]")');
     });
