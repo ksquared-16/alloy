@@ -1,13 +1,33 @@
 "use client";
 
 /**
- * Waitlist placement adjustment — opens the existing manual-position admin command
- * (POST /api/admin/placement-candidates/[id]/manual-position). No queue-local rank mutation.
+ * Waitlist placement adjustment — a COMPACT POPOVER ANCHORED TO THE ROW.
+ *
+ * It drives the existing manual-position admin command
+ * (POST /api/admin/placement-candidates/[id]/manual-position). No queue-local rank mutation, no
+ * second ranking rule, and the placement authority is unchanged.
+ *
+ * ── WHY THIS IS NO LONGER A CENTERED MODAL ──
+ *
+ * Nudging one row by one place opened a full-screen backdrop and a centred dialog: the operator lost
+ * sight of the row they were adjusting, and a small correction cost a large interaction. The popover
+ * stays visually attached to its row, so the thing being changed and the control changing it are on
+ * screen together.
+ *
+ * Two further simplifications, both about not asking for more than the task needs:
+ *   POSITION is a dropdown of the positions the model can actually express (see
+ *   `waitlistAdjustPositionModel`), with Custom for the rest — replacing a free-text 1-999 box that
+ *   happily accepted numbers meaningless in this row's group.
+ *   REASON is optional and hidden behind "Add reason", because most adjustments do not need one and
+ *   an always-present empty field reads as required.
  */
 
 import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
-import { useCallback, useEffect, useId, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+    isValidWaitlistAdjustPosition,
+    waitlistAdjustPositionModel,
+} from "@/lib/ui-v2/waitlistAdjustPositionOptions";
 import { useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { ATTENTION_SCOPE, type AttentionSource } from "@/lib/runtime/kernel/attention";
 import { provisioningKey } from "@/lib/runtime/kernel/provisioning";
@@ -17,20 +37,34 @@ type Props = {
     /** Current operator-facing position label when known (e.g. "Position 1/1"). */
     currentPositionLabel?: string | null;
     childDisplayName?: string | null;
+    /** Canonical precedence reason from placement — never inferred from rendered order. */
+    precedenceReason?: string | null;
 };
 
 export function WaitlistPlacementAdjustControl({
     placementCandidateId,
     currentPositionLabel,
     childDisplayName,
+    precedenceReason,
 }: Props) {
     const [open, setOpen] = useState(false);
     const titleId = useId();
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+    // Focus returns to the trigger on close, so keyboard operators are never dropped at the top of
+    // the queue after adjusting a row deep in it.
+    const close = useCallback(() => {
+        setOpen(false);
+        triggerRef.current?.focus();
+    }, []);
 
     return (
-        <>
+        <span className="relative inline-flex" data-waitlist-adjust-anchor>
             <button
+                ref={triggerRef}
                 type="button"
+                aria-haspopup="dialog"
+                aria-expanded={open ? true : undefined}
                 data-queue-row-waitlist-adjust
                 data-placement-candidate-id={placementCandidateId}
                 title="Adjust waitlist position"
@@ -45,45 +79,64 @@ export function WaitlistPlacementAdjustControl({
                 Adjust
             </button>
             {open ? (
-                <WaitlistPlacementAdjustModal
+                <WaitlistPlacementAdjustPopover
                     titleId={titleId}
                     placementCandidateId={placementCandidateId}
                     currentPositionLabel={currentPositionLabel}
                     childDisplayName={childDisplayName}
-                    onClose={() => setOpen(false)}
+                    precedenceReason={precedenceReason}
+                    onClose={close}
                 />
             ) : null}
-        </>
+        </span>
     );
 }
 
-function WaitlistPlacementAdjustModal({
+function WaitlistPlacementAdjustPopover({
     titleId,
     placementCandidateId,
     currentPositionLabel,
     childDisplayName,
+    precedenceReason,
     onClose,
 }: {
     titleId: string;
     placementCandidateId: string;
     currentPositionLabel?: string | null;
     childDisplayName?: string | null;
+    precedenceReason?: string | null;
     onClose: () => void;
 }) {
     const kernel = useRuntimeKernel();
-    const [pinOrdinal, setPinOrdinal] = useState("1");
+    const model = waitlistAdjustPositionModel(currentPositionLabel, precedenceReason);
+    // Opens on the row's CURRENT position, so applying without touching the dropdown is a no-op
+    // rather than a silent move to 1 — the old default.
+    const [pinOrdinal, setPinOrdinal] = useState(String(model.current ?? 1));
+    const [custom, setCustom] = useState(model.options.length === 0);
+    const [showReason, setShowReason] = useState(false);
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [mounted, setMounted] = useState(false);
 
+    const panelRef = useRef<HTMLDivElement | null>(null);
     useEffect(() => {
         setMounted(true);
         const onKey = (e: KeyboardEvent) => {
             if (e.key === "Escape") onClose();
         };
+        // Dismiss on an outside press rather than behind a full-screen backdrop, so the rest of the
+        // queue stays live and clickable while the popover is open.
+        const onDown = (e: PointerEvent) => {
+            const el = panelRef.current;
+            if (el && e.target instanceof Node && !el.contains(e.target)) onClose();
+        };
         window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        window.addEventListener("pointerdown", onDown, true);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("pointerdown", onDown, true);
+        };
     }, [onClose]);
 
     /*
@@ -132,8 +185,15 @@ function WaitlistPlacementAdjustModal({
                       };
             if (action === "move") {
                 const n = Number.parseInt(pinOrdinal, 10);
-                if (!Number.isFinite(n) || n < 1 || n > 999) {
-                    setError("Enter a position between 1 and 999.");
+                if (!isValidWaitlistAdjustPosition(n, model)) {
+                    // Bounded by THIS ROW's scope, not the command's 1-999 guard: a position past the
+                    // end of its group is a move the model cannot express, so it is refused here
+                    // rather than sent and rendered as something the operator did not ask for.
+                    setError(
+                        model.total != null
+                            ? `Enter a position between 1 and ${model.total}.`
+                            : "Enter a position of 1 or more.",
+                    );
                     setBusy(false);
                     return;
                 }
@@ -162,139 +222,155 @@ function WaitlistPlacementAdjustModal({
 
     if (!mounted) return null;
 
-    return createPortal(
-        <div
-            className="fixed inset-0 z-[999] flex items-center justify-center bg-alloy-midnight-forge/35 p-4"
-            data-waitlist-placement-adjust-modal
-            onClick={onClose}
-            role="presentation"
+    const positionField = custom ? (
+        <input
+            type="number"
+            min={1}
+            max={model.total ?? 999}
+            autoFocus
+            value={pinOrdinal}
+            onChange={(e) => setPinOrdinal(e.target.value)}
+            className="mt-1 w-full rounded-[8px] border bg-white px-2 py-1 text-[12px] text-alloy-midnight outline-none focus:ring-2"
+            style={{ borderColor: "color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef))" }}
+            data-waitlist-adjust-pin-ordinal
+        />
+    ) : (
+        <select
+            value={pinOrdinal}
+            onChange={(e) => {
+                if (e.target.value === "__custom") {
+                    setCustom(true);
+                    return;
+                }
+                setPinOrdinal(e.target.value);
+            }}
+            className="mt-1 w-full rounded-[8px] border bg-white px-2 py-1 text-[12px] text-alloy-midnight outline-none focus:ring-2"
+            style={{ borderColor: "color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef))" }}
+            data-waitlist-adjust-pin-ordinal
         >
-            <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                className="alloy-os-ucard w-full max-w-md overflow-hidden"
-                data-waitlist-adjust-dialog="true"
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                    // Match Focus Panel cards exactly (border / radius / elevation).
-                    border: "1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 30%, #dde3eb))",
-                    borderRadius: "var(--alloy-os-fp-card-radius, 14px)",
-                    boxShadow: "var(--alloy-os-fp-card-shadow, 0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -12px rgba(15,23,42,0.12))",
-                    background: "var(--alloy-os-fp-card-surface, #fff)",
-                }}
-            >
-                <div
-                    className="alloy-os-ucard__header border-b px-4 py-3"
-                    style={{
-                        borderColor:
-                            "color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, var(--alloy-os-border, #e5e9ef))",
-                    }}
-                >
-                    <p
-                        className="text-[10px] font-semibold uppercase tracking-[0.06em]"
-                        style={{ color: "var(--alloy-os-bend-pine, #00a283)" }}
-                    >
-                        Waitlist
+            {model.options.map((n) => (
+                <option key={n} value={String(n)}>
+                    {n === model.current ? `${n} (current)` : String(n)}
+                </option>
+            ))}
+            <option value="__custom">Custom…</option>
+        </select>
+    );
+
+    return (
+        <div
+            ref={panelRef}
+            role="dialog"
+            aria-labelledby={titleId}
+            data-waitlist-placement-adjust-popover
+            className="absolute right-0 top-full z-50 mt-1 w-[236px] text-left"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+                border: "1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 30%, #dde3eb))",
+                borderRadius: "var(--alloy-os-fp-card-radius, 12px)",
+                boxShadow: "var(--alloy-os-fp-card-shadow, 0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -12px rgba(15,23,42,0.12))",
+                background: "var(--alloy-os-fp-card-surface, #fff)",
+            }}
+        >
+            <div className="px-3 pt-2.5">
+                <h2 id={titleId} className="text-[12px] font-semibold text-alloy-midnight">
+                    Adjust position
+                </h2>
+                <p className="mt-0.5 text-[10px] leading-[13px] text-alloy-midnight/55">
+                    {childDisplayName ? `${childDisplayName} · ` : null}
+                    {currentPositionLabel?.trim() || "Placement ranking"}
+                </p>
+                {model.scopedToGroup ? (
+                    /* The same canonical truth the row states, kept where the move is chosen: the
+                       positions below are within this group, and groups are ordered separately. */
+                    <p className="mt-1 text-[10px] leading-[13px] text-alloy-midnight/55" data-waitlist-adjust-group-note>
+                        Positions are within this group. Groups are ordered separately.
                     </p>
-                    <h2
-                        id={titleId}
-                        className="mt-0.5 text-[15px] font-semibold text-alloy-midnight"
+                ) : null}
+            </div>
+            <div className="px-3 pb-2 pt-2">
+                <label className="block text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/60">
+                    Position
+                    {positionField}
+                </label>
+                {custom && model.options.length > 0 ? (
+                    <button
+                        type="button"
+                        className="mt-1 bg-transparent p-0 text-[10px] font-medium text-alloy-bend-pine underline underline-offset-2"
+                        onClick={() => {
+                            setCustom(false);
+                            setPinOrdinal(String(model.current ?? 1));
+                        }}
                     >
-                        Adjust position
-                    </h2>
-                    <p className="mt-1 text-[12px] text-alloy-midnight/60">
-                        {childDisplayName ? `${childDisplayName} · ` : null}
-                        {currentPositionLabel?.trim() || "Placement ranking"}
-                    </p>
-                </div>
-                <div className="alloy-os-ucard__body px-4 py-3">
-                    <label className="block text-[11px] font-semibold text-alloy-midnight/70">
-                        Hold position (pin ordinal)
-                        <input
-                            type="number"
-                            min={1}
-                            max={999}
-                            value={pinOrdinal}
-                            onChange={(e) => setPinOrdinal(e.target.value)}
-                            className="mt-1 w-full rounded-[10px] border bg-white px-2.5 py-2 text-[13px] text-alloy-midnight outline-none focus:ring-2"
-                            style={{
-                                borderColor:
-                                    "color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef))",
-                            }}
-                            data-waitlist-adjust-pin-ordinal
-                        />
-                    </label>
-                    <label className="mt-3 block text-[11px] font-semibold text-alloy-midnight/70">
+                        Use list
+                    </button>
+                ) : null}
+                {showReason ? (
+                    <label className="mt-2 block text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/60">
                         Reason
                         <input
                             type="text"
+                            autoFocus
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            className="mt-1 w-full rounded-[10px] border bg-white px-2.5 py-2 text-[13px] text-alloy-midnight outline-none focus:ring-2"
-                            style={{
-                                borderColor:
-                                    "color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef))",
-                            }}
+                            className="mt-1 w-full rounded-[8px] border bg-white px-2 py-1 text-[12px] text-alloy-midnight outline-none focus:ring-2"
+                            style={{ borderColor: "color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef))" }}
                             data-waitlist-adjust-reason
                         />
                     </label>
-                    {error ? (
-                        <p className="mt-2 text-[12px] font-medium text-alloy-ember" role="alert">
-                            {error}
-                        </p>
-                    ) : null}
-                </div>
-                <div
-                    className="alloy-os-ucard__footer flex flex-wrap items-center justify-end gap-2 border-t px-4 py-3"
-                    style={{
-                        borderColor:
-                            "color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, var(--alloy-os-border, #e5e9ef))",
-                        background: "color-mix(in srgb, var(--alloy-os-stone, #F4F6F9) 55%, #fff)",
-                    }}
-                >
+                ) : (
                     <button
                         type="button"
-                        className="rounded-[10px] border bg-white px-3 py-1.5 text-[12px] font-medium text-alloy-midnight/70 hover:text-alloy-bend-pine"
-                        style={{
-                            borderColor:
-                                "color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, var(--alloy-os-border, #e5e9ef))",
-                        }}
+                        className="mt-2 bg-transparent p-0 text-[11px] font-medium text-alloy-bend-pine underline underline-offset-2"
+                        onClick={() => setShowReason(true)}
+                        data-waitlist-adjust-add-reason
+                    >
+                        Add reason
+                    </button>
+                )}
+                {error ? (
+                    <p className="mt-1.5 text-[11px] font-medium text-alloy-ember" role="alert" data-waitlist-adjust-error>
+                        {error}
+                    </p>
+                ) : null}
+            </div>
+            <div
+                className="flex items-center justify-between gap-1.5 border-t px-3 py-2"
+                style={{ borderColor: "color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, var(--alloy-os-border, #e5e9ef))" }}
+            >
+                <button
+                    type="button"
+                    className="bg-transparent p-0 text-[11px] font-medium text-alloy-midnight/55 hover:text-alloy-bend-pine disabled:opacity-60"
+                    onClick={() => void submit("reset")}
+                    disabled={busy}
+                    data-waitlist-adjust-reset
+                >
+                    Reset pin
+                </button>
+                <span className="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        className="rounded-[8px] border bg-white px-2 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:text-alloy-bend-pine disabled:opacity-60"
+                        style={{ borderColor: "color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, var(--alloy-os-border, #e5e9ef))" }}
                         onClick={onClose}
                         disabled={busy}
+                        data-waitlist-adjust-cancel
                     >
                         Cancel
                     </button>
                     <button
                         type="button"
-                        className="rounded-[10px] border bg-white px-3 py-1.5 text-[12px] font-medium hover:bg-alloy-bend-pine/5"
-                        style={{
-                            borderColor:
-                                "color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 35%, var(--alloy-os-border, #e5e9ef))",
-                            color: "var(--alloy-os-bend-pine, #00a283)",
-                        }}
-                        onClick={() => void submit("reset")}
-                        disabled={busy}
-                        data-waitlist-adjust-reset
-                    >
-                        Reset pin
-                    </button>
-                    <button
-                        type="button"
-                        className="rounded-[10px] border px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-60"
-                        style={{
-                            background: "var(--alloy-os-bend-pine, #00a283)",
-                            borderColor: "var(--alloy-os-bend-pine, #00a283)",
-                        }}
+                        className="rounded-[8px] border px-2 py-1 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                        style={{ background: "var(--alloy-os-bend-pine, #00a283)", borderColor: "var(--alloy-os-bend-pine, #00a283)" }}
                         onClick={() => void submit("move")}
                         disabled={busy}
                         data-waitlist-adjust-submit
                     >
-                        {busy ? "Saving…" : "Apply position"}
+                        {busy ? "Saving…" : "Apply"}
                     </button>
-                </div>
+                </span>
             </div>
-        </div>,
-        document.body,
+        </div>
     );
 }
