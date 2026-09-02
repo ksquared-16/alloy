@@ -41,6 +41,7 @@ SUITES=(
   "development-lane-activity.test.mjs"
   "development-governed-approval.test.mjs"
   "development-merge-grant-binding.test.mjs"
+  "development-input-contract-convergence.test.mjs"
   "development-run-summary-output.test.mjs"
   "development-completion-summary-last.test.mjs"
   "development-cursor-transport-readiness.test.mjs"
