@@ -51,6 +51,7 @@ SUITES=(
   "development-control-plane-truth.test.mjs"
   "development-gateway-rail.test.mjs"
   "development-host-lifecycle-truth.test.mjs"
+  "development-lane-create-identity.test.mjs"
   "development-run-summary-output.test.mjs"
   "development-completion-summary-last.test.mjs"
   "development-cursor-transport-readiness.test.mjs"

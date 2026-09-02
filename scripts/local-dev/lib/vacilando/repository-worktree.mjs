@@ -64,8 +64,35 @@ export function worktreeNameFor(laneName, { suffix = "" } = {}) {
  * because inventing a naming scheme for someone else's repository is exactly
  * the Alloy-specific assumption this work removes.
  */
+/**
+ * A HUMAN STRING BECOMES A SAFE BRANCH; IT IS NOT ASKED TO ALREADY BE ONE.
+ *
+ * An explicit branch used to be accepted only if it already matched BRANCH_RE
+ * and returned null otherwise — so an operator who typed "Billing & Invoices"
+ * into the wizard's Branch name field got no branch at all, having been shown a
+ * field whose placeholder was a slug. The operator should not have to know
+ * which punctuation Git will accept.
+ *
+ * An explicit value that is already a valid ref is honoured EXACTLY, because an
+ * operator who typed `agent/claude/5-work` meant that ref. Anything else is put
+ * through the same slug the lane name uses, under the repository's own prefix.
+ * Nothing that cannot be normalised is invented: that still returns null.
+ */
 export function branchNameFor(repository, laneName, { explicit = null } = {}) {
-  if (explicit) return BRANCH_RE.test(explicit) ? explicit : null;
+  if (explicit) {
+    const raw = String(explicit).trim();
+    if (BRANCH_RE.test(raw) && !raw.includes("..")) return raw;
+    // NO SILENT SUBSTITUTION. worktreeNameFor falls back to "lane" for a string
+    // with nothing to slug, which is right when Vacilando is naming an unnamed
+    // lane and wrong here: an operator who typed "!!!" into the branch field
+    // must be told, not handed `agent/claude/lane` and left to discover it.
+    if (!/[a-z0-9]/i.test(raw)) return null;
+    const policy = repository?.branch_policy || profileFor(repository?.profile).branch_policy;
+    const slug = worktreeNameFor(raw);
+    if (!slug) return null;
+    const name = `${policy?.prefix || ""}${slug}`;
+    return BRANCH_RE.test(name) ? name : null;
+  }
   const policy = repository?.branch_policy || profileFor(repository?.profile).branch_policy;
   const slug = worktreeNameFor(laneName);
   if (!slug) return null;

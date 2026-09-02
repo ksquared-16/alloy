@@ -20,12 +20,56 @@ import {
 import { getDevelopmentLane, listDevelopmentLanes } from "./lanes.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
 
-function pathLikeFields(body = {}) {
-  const keys = [
-    "path", "worktree_path", "cwd", "filesystem_path", "dir", "directory",
-    "branch", "slot", "tmux", "tmux_session", "port", "command", "argv", "worktree",
-  ];
+/**
+ * RUNTIME IDENTITY A CALLER MAY NEVER SUPPLY.
+ *
+ * Slot, port, tmux session, command line and filesystem location are things
+ * Vacilando DERIVES. A caller that could name them could aim a lane at another
+ * slot's port or another worktree's directory, so they are refused outright
+ * wherever they appear.
+ */
+const RUNTIME_IDENTITY_FIELDS = Object.freeze([
+  "path", "cwd", "filesystem_path", "dir", "directory",
+  "slot", "tmux", "tmux_session", "port", "command", "argv", "worktree",
+]);
+
+/**
+ * Workspace inputs the CREATE endpoint documents and consumes.
+ *
+ * THE DEFECT THIS SEPARATES. `branch` and `worktree_path` used to sit in the
+ * list above, so `createNewLaneRequest` refused them on its first line — and
+ * then, seventy lines later, read `body.branch` to name a new worktree's branch
+ * and `body.worktree_path` to connect an existing one. The function could never
+ * reach either of its own workspace modes. The route's allowlist named both
+ * fields as accepted; the handler rejected them; the browser rendered the
+ * refusal as "That path contains characters Vacilando will not open."
+ *
+ * Measured: creating a lane named "Billing & Invoices" succeeds, and the same
+ * request with the wizard's own Branch name field filled in returns
+ * `path_refused fields=['branch']`. The lane NAME was never the problem — the
+ * operator was being refused for using a field the wizard offers them.
+ *
+ * These are still not trusted. They are NORMALISED by the canonical owner
+ * (branchNameFor / the worktree path checks) rather than taken as given.
+ */
+const WORKSPACE_INPUT_FIELDS = Object.freeze(["branch", "base_ref", "worktree_path"]);
+
+function fieldsPresent(body, keys) {
   return keys.filter((k) => body[k] != null && String(body[k]).trim() !== "");
+}
+
+/** Every field a caller may not supply, anywhere. */
+function runtimeIdentityFields(body = {}) {
+  return fieldsPresent(body, RUNTIME_IDENTITY_FIELDS);
+}
+
+/**
+ * The stricter rule, for entry points with no workspace step: rename and
+ * connect-existing-candidate accept a name and a candidate id and nothing else,
+ * so a workspace field there is as much a caller overreach as a slot number.
+ */
+function pathLikeFields(body = {}) {
+  return fieldsPresent(body, [...RUNTIME_IDENTITY_FIELDS, ...WORKSPACE_INPUT_FIELDS]);
 }
 
 export function publicCandidate(c) {
@@ -183,8 +227,20 @@ export function renameLaneRequest(laneId, body = {}, { actor = "operator", nowMs
 }
 
 export async function createNewLaneRequest(body = {}, { actor = "operator", nowMs = Date.now() } = {}) {
-  const extra = pathLikeFields(body);
-  if (extra.length) return { status: 400, body: { ok: false, error: "path_refused", fields: extra } };
+  // CREATE HAS A WORKSPACE STEP, so `branch`, `base_ref` and `worktree_path` are
+  // inputs it owns and normalises. Only runtime identity is refused here.
+  const supplied = runtimeIdentityFields(body);
+  if (supplied.length) {
+    return {
+      status: 400,
+      body: {
+        ok: false,
+        error: "runtime_identity_refused",
+        fields: supplied,
+        detail: "Vacilando derives the slot, port, tmux session and filesystem location of a lane; they cannot be supplied.",
+      },
+    };
+  }
   const instructionText = body.instruction != null ? String(body.instruction) : "";
   // A name is no longer required to start. If the operator did not give one,
   // the opening message names the lane — and Rename Lane changes it later.

@@ -198,6 +198,13 @@ export function repositoryErrorText(error, detail = {}) {
     case "path_not_found": return "There is nothing at that path.";
     case "path_must_be_absolute": return "Enter the full path, starting with /.";
     case "path_refused": return "That path contains characters Vacilando will not open.";
+    // NOT ABOUT CHARACTERS, AND NOT ABOUT A PATH. This refusal means the request
+    // named something Vacilando derives for itself. Saying so is the difference
+    // between an operator removing punctuation from a lane name that was never
+    // the problem, and an operator reading what actually happened.
+    case "runtime_identity_refused":
+      return `Vacilando decides a lane's slot, port, session and folder. Remove ${
+        (detail.fields || []).join(", ") || "those fields"} and try again.`;
     case "not_a_git_repository": return "That folder is not a Git repository.";
     case "path_is_worktree":
       return `That is a worktree of ${detail.parent_root || "another repository"}. Register that repository instead.`;
