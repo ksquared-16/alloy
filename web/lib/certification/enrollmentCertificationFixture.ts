@@ -205,6 +205,63 @@ async function findFixtureChild(
 }
 
 /**
+ * Execute the real `family_enrolling` outcome on the family `decision` stage.
+ *
+ * This is the acquisition → Enrollment handoff an operator performs. Running it here rather than
+ * fabricating the child's journey is the whole point: the fixture certifies the product's decision,
+ * not the fixture's idea of one.
+ */
+async function enterEnrollmentByFamilyDecision(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string,
+    customerMemberId: string,
+): Promise<{ ok: true } | { ok: false; detail: string }> {
+    const { defaultStageOperatingPlanForEnrollmentStage } = await import(
+        "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans"
+    );
+    const { executeStageOperatingOutcome } = await import("@/lib/lifecycle/executeStageOperatingOutcome");
+
+    const plan = defaultStageOperatingPlanForEnrollmentStage("decision");
+    if (!plan) return { ok: false, detail: "the decision stage has no configured operating plan" };
+
+    const { data: opp } = await supabase
+        .from("opportunities")
+        .select("id, department_id")
+        .eq("org_id", orgId)
+        .eq("id", opportunityId)
+        .maybeSingle();
+    const departmentId = t((opp as { department_id?: string } | null)?.department_id);
+
+    const result = await executeStageOperatingOutcome({
+        supabase,
+        orgId,
+        userId: "",
+        departmentId,
+        plan,
+        outcomeKey: "family_enrolling",
+        subject: {
+            journey_segment: "family",
+            opportunity_id: opportunityId,
+            // Named explicitly: the handoff refuses to guess which child a family decision meant.
+            customer_member_id: customerMemberId,
+        },
+        /*
+         * The FAMILY stage move is skipped here and only here. It needs the org's configured stage
+         * inventory, which a fixture has no business asserting; the effect under certification is the
+         * CHILD one. The family half is certified through the operator UI in manual QA.
+         */
+        skipTargetKinds: ["move_to_stage"],
+    });
+
+    const failed = result.failed_targets ?? [];
+    if (failed.length) {
+        return { ok: false, detail: (result.errors ?? []).join("; ") || "child enrollment entry failed" };
+    }
+    return { ok: true };
+}
+
+/**
  * Re-enter an existing fixture family without minting anything.
  *
  * `addChild` is find-or-create on the household, and `startEnrollment` reuses an open journey, so
@@ -368,6 +425,19 @@ async function ensureFamily(
             await concludeAcquisition(supabase, orgId, participation.id, participation.opportunity_id);
         }
         acquisition = "concluded";
+    }
+
+    /*
+     * PATH B ENTERS ENROLLMENT THROUGH THE GOVERNED FAMILY DECISION, not Start Enrollment.
+     *
+     * Intake no longer creates a child journey, so the acquisition Opportunity is not a LIVE episode
+     * and Start Enrollment would correctly run context-free. That is the model working: an
+     * acquisition-backed child begins Enrollment when the family decides, and the fixture has to make
+     * the same decision an operator would rather than route around it.
+     */
+    if (spec.key === "opportunity_backed" && opportunityId) {
+        const entered = await enterEnrollmentByFamilyDecision(supabase, orgId, opportunityId, customerMemberId);
+        if (!entered.ok) throw new Error(`family enrollment decision failed: ${entered.detail}`);
     }
 
     const started = await startEnrollment(supabase, { orgId, customerMemberId });
