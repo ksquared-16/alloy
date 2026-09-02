@@ -219,5 +219,34 @@ await test("alloy-toolkit refuses to flip toolkit/current while another run hold
   releaseGatewayHostMutation({ runId: ra.run_id, root: ROOT });
 });
 
+await test("REGRESSION: the guard CLI works when invoked through a symlink", async () => {
+  // Every real caller reaches this module through toolkit/current, a symlink.
+  // Comparing import.meta.url to argv[1] made the CLI block never run, so
+  // `check` exited 0 and reported a free host no matter who held it.
+  const { symlinkSync, mkdirSync: mkd } = await import("node:fs");
+  resetDevelopmentLanesForTests(ROOT);
+  resetExecutionRunsForTests(ROOT);
+  const a = lane("symlinkowner");
+  const ra = createQueuedRun({ laneId: a.lane_id, instruction: "install", root: ROOT }).run;
+  const got = acquireGatewayHostMutation({ runId: ra.run_id, laneId: a.lane_id, root: ROOT });
+  assert.equal(got.granted, true);
+
+  const linkDir = join(ROOT, "linkdir");
+  mkd(linkDir, { recursive: true });
+  const link = join(linkDir, "current-lib");
+  try { symlinkSync(join(HERE, "..", "lib", "vacilando"), link); } catch { /* exists */ }
+  const viaSymlink = join(link, "gateway-host-mutation.mjs");
+
+  let code = 0;
+  try {
+    execFileSync(process.execPath, [viaSymlink, "check"], {
+      env: { ...process.env, ALLOY_RUNTIME_ROOT: ROOT },
+      encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (e) { code = e.status; }
+  assert.equal(code, 3, "a held host must REFUSE even when reached through a symlink");
+  releaseGatewayHostMutation({ runId: ra.run_id, root: ROOT });
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

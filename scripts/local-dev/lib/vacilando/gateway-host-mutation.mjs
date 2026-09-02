@@ -24,7 +24,9 @@ import {
   readResourceRequestStore,
   releaseResourceRequest,
 } from "./execution-resource.mjs";
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 /** Same resolution the resource governor uses; kept local, not re-exported. */
@@ -130,7 +132,28 @@ export function assertGatewayHostMutationAllowed({ runId = null, root = runtimeR
 //   node gateway-host-mutation.mjs check [--run <run_id>]
 // Exit 0 = may proceed. Exit 3 = another lane holds the host.
 // ---------------------------------------------------------------------------
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Is this module being RUN, rather than imported?
+ *
+ * THE DEFECT THIS FIXES: the check was `import.meta.url === \`file://${argv[1]}\``.
+ * Every caller invokes this through ~/.local/share/alloy/toolkit/CURRENT, which
+ * is a symlink, so argv[1] was the symlink path while import.meta.url resolved
+ * to the real versioned path. They never matched, the CLI block never ran, and
+ * `node gateway-host-mutation.mjs check` exited 0 — reporting "you may mutate
+ * the host" no matter who held it. Both this guard and the one already wired
+ * into install-vacilando-gateway.sh were silently inert. Compare real paths.
+ */
+function invokedDirectly() {
+  const arg = process.argv[1];
+  if (!arg) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(arg);
+  } catch {
+    return import.meta.url === `file://${arg}`;
+  }
+}
+
+if (invokedDirectly()) {
   const argv = process.argv.slice(2);
   const cmd = argv[0] || "check";
   const runId = argv.includes("--run") ? argv[argv.indexOf("--run") + 1] : (process.env.VACILANDO_RUN_ID || null);
