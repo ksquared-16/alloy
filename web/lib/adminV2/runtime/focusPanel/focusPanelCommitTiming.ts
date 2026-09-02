@@ -17,6 +17,7 @@
  * `window.__alloyPerf.marks` under `focus_panel_chain_*`.
  */
 
+import { cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { emitPerf } from "@/lib/perf/perfNamespaceLog";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { perceivedMarksEnabled } from "@/lib/perf/perceivedPerf";
@@ -84,7 +85,33 @@ export function markFocusPanelWorkModeModel(model: FocusPanelWorkModeModel): voi
     const entityId = model.subject.id;
     const readyKeys: string[] = [];
     for (const [key, readiness] of model.cardReadiness) {
-        if (readiness === "ready") readyKeys.push(key);
+        if (readiness !== "ready") continue;
+        /*
+         * A RETIRED IDENTITY IS NOT A READY CARD.
+         *
+         * Every composed cell resolves through `normalizeFocusPanelCardKey`, where SUPERSESSION
+         * OUTRANKS EXACT MATCH — so a globally superseded key is rewritten to its successor before
+         * any cell exists, and no composition (a tenant's published doc or the platform's own
+         * default doc) can produce a cell that answers to it. A producer may still key its map that
+         * way: `current_work` remains a canonical DATA OWNER and other consumers read its model.
+         * But the renderer will never ask for it, so counting it here reports a card the operator
+         * cannot be looking at.
+         *
+         * That matters because THIS is the series the Grade-A protocol reads. `ready_count` and
+         * `card_ready` are the evidence for "meaningfully complete at commit"; admitting an
+         * unrenderable identity inflates both and overstates operator-visible readiness — on the
+         * enrollment composition it counted the panel's largest cell as ready while that cell was
+         * showing its reserved state.
+         *
+         * GLOBAL supersession only. `cardSuccessor` without a grain answers exactly that question
+         * by design, and the asymmetry is what keeps this correct: a GRAIN-SCOPED supersession
+         * (Employment → Staff, on `person` alone) still renders on every other grain, so excluding
+         * it would under-report a card the operator really does see.
+         *
+         * This names no card — it asks the registry, so a future supersession inherits the rule.
+         */
+        if (cardSuccessor(key) !== null) continue;
+        readyKeys.push(key);
     }
 
     if (model.source === "provisioning_answer" && chain.modelAt == null) {
