@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: sprint
-last_reviewed: 2026-08-10
+last_reviewed: 2026-09-02
 supersedes: []
 ---
 
@@ -43,6 +43,19 @@ the authorization on a byte-identical run. **That rename must not be reverted** 
 run** across all of Q1–Q6, and the census **identifies its own target for the first time**: org fingerprint
 `ab7e5dde…`. Query hash `743cd63b…` → `a3982ca5…`, which is the added key, not drift. The Supabase project ref
 is still unproven, so `target.confirmed_against_live` stays `false` (§4)
+· **W-0 re-issued a fifth time 2026-09-02** (mission `msn_af54a002c89f97893c`, assignment `asg_a615ce2e26d264`)
+— **no run 4; no count re-asserted.** Delegation V2 does **not** make a census unattended-runnable:
+`database.read_census` is `action_not_delegable` and `alloy_deployed_primary` is operator-only, two independent
+locks. The audit found **§4's own finding 3 has inverted** — the governed-action route now defaults
+`artifact_refs` to the **Q15** artifact, not `wave0-authority-census.json`, and the write side follows it, so an
+unqualified run 4 would validate, report green, refresh **no Q1–Q6 count**, and spend the authorization. The
+run-4 request must name its artifact explicitly (§4)
+· **W-0 re-issued a sixth time 2026-09-02** (mission `msn_26cb94b3a79c594f51`, assignment `asg_d1f8c8708a713c`)
+— **no run 4; no count re-asserted; no new finding.** Re-verified the fifth-issue block against the working
+tree: the Q15 default is **still live and unfixed**, both delegation locks still hold, and the artifact is still
+run-4-ready (`query_hash` `a3982ca5…`, no `combined_query_hash`, `target_identity` and Q1–Q6 intact). Six
+dispatches have now produced five audits and zero runs, because the phase objective describes work a worker
+cannot perform. **Escalated to the operator as a decision rather than written up a sixth time** (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -604,6 +617,96 @@ the apply follows closely, and *an aged preflight is not a preflight*. W-0 suppl
 is W-6's to flip and is deliberately not set by the census file.** If time has passed, the correct move is
 another census — now a single authorization on a proven channel. Full rule-by-rule evaluation lives at the
 census file's `w6_m1_preflight.preflight_run_3_outcome`.
+
+#### W-0 re-issued a fifth time — **2026-09-02**, assignment `asg_a615ce2e26d264`: the default artifact has inverted
+
+W-0 was re-issued a fifth time, on branch `promote/mission-delegation-v2`, with an objective reading *"run five
+read-only SELECTs against the deployed database"*. **No run 4 was executed and no count was re-asserted.** The
+counts of record are still run 3's. What follows changes no number.
+
+**Run 4 needs an operator authorization, and delegation V2 does not supply one.** This branch adds
+mission-scoped delegated authority, and the obvious question for this pass was whether a census can now run
+unattended under a mission delegation. It cannot, by two independent locks: `DELEGABLE_ACTIONS`
+(`mission-delegation.mjs:47-51`) is exactly `repository.push`, `promotion.open_pr` and
+`repository.merge_pull_request`, and anything else is refused `action_not_delegable` (`:224-225`, pinned for this
+key by `development-mission-delegation-prose.test.mjs:158`); and `alloy_deployed_primary` — this census's target —
+is in `OPERATOR_ONLY_ENVIRONMENTS` (`:57-59`). **No future pass should read delegation V2 as having removed the
+authorization requirement.**
+
+So this pass did what the run-3 preparation passes did: audit the plumbing the authorization will be spent on.
+It found one defect, and it is the run-3 trap pointing the other way.
+
+**The finding: §4's own finding 3 is now false, and the default points away from this file.** That finding
+recorded that read and write are *both* hard-pinned to `wave0-authority-census.json`, so "only that file can be
+run 3." On this branch the governed-action route defaults `artifact_refs` for `database.read_census` to
+**`Q15_CENSUS_ARTIFACT`** (`governed-action-request.mjs:1685`), and `artifactPathFrom` (`:1051-1054`) falls back
+to the same constant — `q15-authority-census.json` (`:95-96`). That value is passed as `queryArtifactPath` into
+`fulfillDatabaseCensusForMission` (`:2467-2472`), **overriding its `wave0` default parameter**. The write side
+follows it: `trusted-host-actions.mjs:780-782` derives the evidence path from `action.inputs.queryArtifactPath`,
+so a Q15-defaulted run also *writes* `q15-authority-census.results.json`.
+
+The two routes now disagree, which is the part that is invisible from either the artifact or the approval dialog:
+
+```
+governed-action-request.mjs:2467   defaults to Q15   ← the operator's Approve reaches this FIRST
+v2-api.mjs:770, v2-api.mjs:907     default to wave0  (no queryArtifactPath passed)
+trusted-host-director.mjs:72       passes through when supplied
+```
+
+`v2-api.mjs:893-916` calls `handleGovernedDecisionAnswer` first and only falls through to the wave0-defaulting
+direct call if the governed path did not return `ok` — **so the route that defaults to Q15 is normally the one
+that wins.**
+
+**The failure mode is the bad one again: not a refusal, but a silent success.** The Q15 artifact validates
+cleanly as read-only census SQL — `governed-action-request.test.mjs` asserts exactly that. A Q15-defaulted run 4
+would validate, execute, report green, write the Q15 results file, and **refresh no Q1–Q6 count at all**, having
+spent the single authorization this workstream waits on each time.
+
+**The fix is one field.** `artifact_refs` is caller-supplied on `requestGovernedAction` and is only defaulted
+when omitted, so the run-4 request must name
+`docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json` explicitly. Recorded at
+the census file's `run_4_request_requirements.MANDATORY_artifact_refs`, with the full call-site evidence.
+
+**One precondition that was broken is now fixed**, worth recording because it is another way an authorization
+could have been spent for nothing: `governed-action-request.mjs:2461-2466` documents a defect where the census
+path did not present its grant, so a repository-authorized census bounced `authorization_required` on every
+approval — the click minted a grant, execution never saw it, and the UI then hid the button. The call now passes
+`grant`, `authorizationId` and `exactContext`.
+
+**Two smaller items.** `last_execution_attempt_at` still read `2026-08-04T17:00:23Z` — run 2's — three weeks
+after run 3; corrected to run 3's timestamp. This is exactly the hand-maintained-key drift run 3 predicted, since
+the merge-back rewrites only `status`, `query_hash`, `execution` and `results`. And the worker's inability to
+compute `sha256` is **confirmed a third time**: `node --version` answers (v22.21.1 → v22.23.2) but executing a
+script file is walled, as are `node -e` and `shasum -a 256`. What was checkable was checked — top-level
+`query_hash` is `a3982ca5…` and not `743cd63b…`, no `combined_query_hash` exists, and `combined_query` still
+carries `target_identity`, so **the run-3 stale-hash trap is confirmed still disarmed.**
+
+**W-0's exit criteria remain met and are untouched by this pass.** The open item is unchanged and is now an
+operator decision rather than an engineering one: the counts are **26 days old**, W-6/M1's rule 5 (immediacy) has
+definitively expired, and whether run 4 goes alone or folds into W-23 (Wave 0b) is still the choice §4 recorded
+on 2026-08-06 and still has not been taken.
+
+#### W-0 re-issued a sixth time — **2026-09-02**, assignment `asg_d1f8c8708a713c`: escalated, not re-audited
+
+W-0 was dispatched again with the same objective text. **No run 4, no count re-asserted, and deliberately no new
+audit section.** This pass re-verified the fifth-issue findings against the working tree and found them still
+exactly true: the governed-action route **still** defaults `artifact_refs` to the Q15 artifact
+(`governed-action-request.mjs:1685`, `:1051-1054`, `:2467-2477`) and the write side still follows it
+(`trusted-host-actions.mjs:780-782`) — **the defect is unfixed**; both delegation locks still hold; the grant
+plumbing fix is still present; and the artifact is still run-4-ready (`query_hash` `a3982ca5…`,
+`runs_1_2_query_hash` held separately, no `combined_query_hash`, `target_identity` and Q1–Q6 all intact).
+
+**The point of this entry is the pattern, not the findings.** Six dispatches have produced five audit passes and
+zero runs. The objective — *"run five read-only SELECTs against the deployed database"* — describes work a worker
+structurally cannot do: `database.read_census` is executed Director-side against a credential the worker has no
+path to, and reaching for that credential would bypass the operator gate the action exists to enforce. Each pass
+correctly re-derives this and writes it down at length; the artifact is now 122KB and this plan 332KB, and the
+blocker has not moved. **This pass escalated the standing decision to the operator instead.** A future pass that
+finds itself about to write audit block number seven should escalate rather than write it.
+
+The decision put to the operator is the one open since 2026-08-06: authorize run 4 standalone now (with
+`artifact_refs` named explicitly), fold it into W-23 (Wave 0b), or accept W-0 as complete on run-3 counts and
+stop re-dispatching the phase. **W-0's exit criteria remain met and are untouched.**
 
 ---
 
