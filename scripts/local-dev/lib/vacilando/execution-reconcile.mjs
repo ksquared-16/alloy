@@ -288,9 +288,18 @@ export async function reconcileGovernor({
   } catch { /* admission must not fail the resource pass */ }
 
   try {
-    const { reconcilePendingOrientation, tickAutomaticSessionRotation } = await import("./agent-session-lifecycle.mjs");
+    const {
+      reconcilePendingOrientation,
+      reconcileStuckStartingSessions,
+      tickAutomaticSessionRotation,
+    } = await import("./agent-session-lifecycle.mjs");
     const orient = await reconcilePendingOrientation({ root, nowMs });
     if (orient?.retried > 0) summary.repaired += orient.retried;
+    // A session left transitional with nothing to move it along reads as a hung
+    // lane in the UI while the provider works. Rides the pass that already
+    // exists rather than adding a timer.
+    const stuck = await reconcileStuckStartingSessions({ root, nowMs });
+    if (stuck?.promoted?.length) summary.repaired += stuck.promoted.length;
     const rot = await tickAutomaticSessionRotation({ root, nowMs });
     if (rot?.considered > 0) summary.repaired += rot.considered;
   } catch { /* orientation retry / auto-rotation must not fail the resource pass */ }
