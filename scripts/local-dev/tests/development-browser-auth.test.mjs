@@ -403,5 +403,77 @@ await test("QA identity is read from config files, not by spawning a shell", () 
   assert.ok(Date.now() - cached < 20);
 });
 
+// ------------------------------------------------- the address a human can open
+
+// Real Serve output from the execution host. One publishes slot 5's port; the
+// other publishes a different lane's, which is how "there is no route yet" looks.
+const SERVE_SLOT5 = `https://vacilandos-mac-mini.tail2aa1af.ts.net:3015 (tailnet only)
+|-- / proxy http://127.0.0.1:3015
+`;
+const SERVE_OTHER_LANE = `https://vacilandos-mac-mini.tail2aa1af.ts.net:3016 (tailnet only)
+|-- / proxy http://127.0.0.1:3016
+`;
+const REMOTE_ENV = { ALLOY_FIRST_AGENT_PORT: "3011" };
+
+await test("the card carries an address the Director can open, not the driver's loopback", () => {
+  // THE DEFECT, EXACTLY. `base_url` is loopback by design — the automated driver
+  // may only drive loopback, which is a safety property. The card rendered it as
+  // "Address", so the single actionable line on a card whose whole purpose is
+  // "go and sign in" named the Director's own MacBook, where nothing listens.
+  const root = makeRoot();
+  const lane = { ...laneFor(WT), app_url: "https://vacilandos-mac-mini.tail2aa1af.ts.net:3015", app_url_reason: null };
+  const a = attachLaneBrowserAuth([lane], { root, qaIdentityFor: () => IDENTITY })[0].browser_auth;
+  assert.equal(a.director_url, "https://vacilandos-mac-mini.tail2aa1af.ts.net:3015");
+  assert.equal(a.director_url_reason, null);
+  // The driver's base is untouched, and still loopback.
+  assert.equal(a.base_url, `http://127.0.0.1:${SLOT_PORTS[5]}`);
+  assert.equal(isLoopbackBase(a.base_url), true);
+  // The human's address can never be loopback, or the defect is back.
+  assert.doesNotMatch(a.director_url, /127\.0\.0\.1|localhost/);
+});
+
+await test("a lane's own app_url is reused, never constructed a second time", () => {
+  // ONE OWNER. A second construction here is how a loopback address reached this
+  // card in the first place. With an empty Serve config nothing could be
+  // derived, so a value that survives can only have been carried.
+  const root = makeRoot();
+  const lane = { ...laneFor(WT), app_url: "https://carried.example:3015" };
+  const a = attachLaneBrowserAuth([lane], { root, qaIdentityFor: () => IDENTITY, serveStatus: "" })[0].browser_auth;
+  assert.equal(a.director_url, "https://carried.example:3015");
+});
+
+await test("a lane that carries no app_url still gets one, from the one owner", () => {
+  const root = makeRoot();
+  const a = attachLaneBrowserAuth([laneFor(WT)], {
+    root, qaIdentityFor: () => IDENTITY, serveStatus: SERVE_SLOT5, env: REMOTE_ENV,
+  })[0].browser_auth;
+  assert.equal(a.director_url, "https://vacilandos-mac-mini.tail2aa1af.ts.net:3015");
+  assert.equal(a.director_url_reason, null);
+});
+
+await test("no route is stated as a reason, never filled in with a guess", () => {
+  // "There is no route" and "the app is down" are different problems, and an
+  // operator who cannot tell them apart debugs the wrong one.
+  const root = makeRoot();
+  const notServed = attachLaneBrowserAuth([laneFor(WT)], {
+    root, qaIdentityFor: () => IDENTITY, serveStatus: SERVE_OTHER_LANE, env: REMOTE_ENV,
+  })[0].browser_auth;
+  assert.equal(notServed.director_url, null);
+  assert.equal(notServed.director_url_reason, "no_serve_mapping_for_port");
+
+  // No published origin at all is its own answer, and still not a loopback.
+  const noOrigin = attachLaneBrowserAuth([laneFor(WT)], {
+    root, qaIdentityFor: () => IDENTITY, serveStatus: "", env: REMOTE_ENV,
+  })[0].browser_auth;
+  assert.equal(noOrigin.director_url, null);
+  assert.equal(noOrigin.director_url_reason, "no_director_facing_origin");
+
+  // A reason the lane already carries is republished verbatim, not re-derived.
+  const carried = attachLaneBrowserAuth([{ ...laneFor(WT), app_url: null, app_url_reason: "no_director_facing_origin" }],
+    { root, qaIdentityFor: () => IDENTITY, serveStatus: SERVE_SLOT5, env: REMOTE_ENV })[0].browser_auth;
+  assert.equal(carried.director_url, null);
+  assert.equal(carried.director_url_reason, "no_director_facing_origin");
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

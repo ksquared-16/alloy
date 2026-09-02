@@ -77,6 +77,8 @@ import {
   outputReviewHint,
   renderOutputChrome,
   renderRecentSystemActivity,
+  renderBrowserAuthRecovery,
+  browserAuthAddressNote,
   renderStatus,
   sendPayload,
   shouldPollList,
@@ -2212,6 +2214,56 @@ test("the lanes endpoint attaches browser_auth to lanes", () => {
   assert.match(api, /attachLaneBrowserAuth/);
   // Identity comes from the toolkit, not from a second definition here.
   assert.match(api, /qaIdentityFor:\s*qaIdentityForSlot/);
+});
+
+test("the browser-session card shows the address the Director can open", () => {
+  // THE DEFECT THIS ENCODES. The Address row printed `base_url` — the loopback
+  // base the automated driver is restricted to. Read on the MacBook that names
+  // the MacBook, so a card asking the Director to go and sign in pointed at a
+  // machine with nothing listening, and the lane read as down.
+  const lane = { lane_id: "l", browser_auth: {
+    blocks_execution: true, headline: "Browser session expired — Re-authentication required",
+    slot: 5, base_url: "http://127.0.0.1:3015",
+    director_url: "https://vacilandos-mac-mini.tail2aa1af.ts.net:3015",
+    director_url_reason: null, expected_identity: "qa-slot5@example.com",
+  } };
+  const html = renderBrowserAuthRecovery(lane);
+  assert.match(html, /<dt>Address<\/dt><dd data-gw-browser-auth-address><a href="https:\/\/vacilandos-mac-mini\.tail2aa1af\.ts\.net:3015"/);
+  // It is a link because it is meant to be opened, on whatever device the
+  // Director is actually holding.
+  assert.match(html, /rel="noreferrer noopener"/);
+  // The driver's loopback is still shown, labelled for what it is, so nobody has
+  // to guess which of the two addresses is theirs.
+  assert.match(html, /<dt>Driver base<\/dt><dd data-gw-browser-auth-base>http:\/\/127\.0\.0\.1:3015</);
+  const addressRow = html.slice(html.indexOf("<dt>Address</dt>"), html.indexOf("<dt>Driver base</dt>"));
+  assert.doesNotMatch(addressRow, /127\.0\.0\.1|localhost/, "loopback must never be what Address means again");
+});
+
+test("a lane with no route says so, instead of offering an address that fails", () => {
+  const lane = { lane_id: "l", browser_auth: {
+    blocks_execution: true, headline: "Browser session expired — Re-authentication required",
+    slot: 5, base_url: "http://127.0.0.1:3015",
+    director_url: null, director_url_reason: "no_serve_mapping_for_port",
+  } };
+  const html = renderBrowserAuthRecovery(lane);
+  const addressRow = html.slice(html.indexOf("<dt>Address</dt>"), html.indexOf("<dt>Driver base</dt>"));
+  assert.doesNotMatch(addressRow, /<a href/, "there is no link to offer");
+  assert.match(addressRow, /port not published to the tailnet/);
+  assert.equal(browserAuthAddressNote("no_director_facing_origin"), "no Director-facing origin published");
+  assert.equal(browserAuthAddressNote("lane_has_no_slot"), "no slot assigned");
+});
+
+test("both lane endpoints attach app URLs before the cards that render them", () => {
+  // THE WIRING FAILURE. The list endpoint attached app URLs OUTSIDE every other
+  // attacher, so the browser-session card was assembled before the one
+  // Director-facing address the server had already derived existed. The
+  // single-lane endpoint — the pane the Director actually reads — never attached
+  // them at all, which is why fixing only the list changed nothing on screen.
+  const server = readFileSync(join(HERE, "..", "lib", "vacilando-server.mjs"), "utf8");
+  assert.match(server, /attachLaneInstructions\(attachLaneAppUrls\(out\.lanes \|\| \[\]\)\)/);
+  assert.match(server, /attachLaneInstructions\(attachLaneAppUrls\(\[out\.lane\]\)\)/);
+  assert.doesNotMatch(server, /attachLaneAppUrls\(attachLaneBrowserAuth\(/,
+    "app URLs must not wrap the chain that consumes them");
 });
 
 test("the Sign in and Re-check buttons have handlers", () => {

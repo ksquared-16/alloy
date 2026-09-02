@@ -1958,7 +1958,17 @@ export function createVacilandoServer() {
         try { evaluateExclusiveWindow(); } catch { /* exclusive tick must not fail discovery */ }
         try { await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" }); } catch { /* */ }
         const out = await listDevelopmentLanes();
-        const lanes = attachLaneAppUrls(attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false }))))))))));
+        /*
+         * APP URLS ARE ATTACHED FIRST, NOT LAST.
+         *
+         * They used to wrap the whole chain, which meant every attacher inside
+         * it — the browser-session card among them — ran without the one
+         * Director-facing address the server had already derived, and had to
+         * either do without or construct its own. Innermost, the Serve config is
+         * still read exactly once for the list, and everything downstream can
+         * simply carry `app_url` rather than re-deriving it.
+         */
+        const lanes = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(attachLaneAppUrls(out.lanes || [])), undefined, { includeInstruction: false })))))))));
         const development_resources = developmentResourceSnapshot();
         let execution_capacity = null;
         try {
@@ -2250,7 +2260,14 @@ export function createVacilandoServer() {
           const out = await getDevelopmentLane(laneId);
           if (out.lane) {
             try { await maybeAdvanceSessionRotation(out.lane); } catch { /* planned rotation advance must not fail inspect */ }
-            out.lane = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions([out.lane]), undefined, { includeInstruction: true })))))))))[0];
+            /*
+             * THE LANE PANE IS WHERE THE DIRECTOR ACTUALLY LOOKS, and this
+             * endpoint never attached app URLs at all — only the list did. So
+             * the one surface that shows a lane on its own had no
+             * Director-facing address to render, and every card on it fell back
+             * to a loopback the Director cannot open.
+             */
+            out.lane = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(attachLaneAppUrls([out.lane])), undefined, { includeInstruction: true })))))))))[0];
             try {
               const { attachLaneProviderActivity } = await import("./vacilando/lane-provider-activity.mjs");
               const [withActivity] = await attachLaneProviderActivity([out.lane]);
