@@ -5,7 +5,7 @@ import { useEffect, useMemo } from "react";
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
-import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
+import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import { useAttentionCardFocus } from "@/lib/runtime/kernel/useAttentionCardFocus";
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";

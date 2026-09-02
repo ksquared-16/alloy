@@ -26,7 +26,7 @@ import {
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
-import { setFocusPanelCardParticipation } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
+import { setFocusPanelCardParticipation } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
 import { focusPanelSummaryDefaultDocForGrain } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";

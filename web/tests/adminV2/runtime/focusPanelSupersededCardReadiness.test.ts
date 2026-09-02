@@ -27,7 +27,7 @@ import { cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRe
 import { buildFocusPanelSummaryDefaultDoc } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
-import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
+import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
 import { focusPanelCardBackLabel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";

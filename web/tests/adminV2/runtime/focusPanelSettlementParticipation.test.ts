@@ -18,7 +18,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
     markFocusPanelWorkModeModel,
     setFocusPanelCardParticipation,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
 import { cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
