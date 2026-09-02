@@ -50,11 +50,17 @@ import type {
 /** Levels Business Process treats as genuinely blocking. `recommended` is guidance. */
 const BLOCKING_LEVELS: ReadonlySet<string> = new Set(["required", "enforced"]);
 
-/** An approved, active exception for one requirement. Deliberately minimal. */
+/**
+ * An approved, active exception for one requirement. Deliberately minimal.
+ *
+ * `approved_by` is nullable because the approver's account can later be deleted — the decision
+ * survives the person. It is never null at the moment one is granted; the write seam requires an
+ * actor.
+ */
 export type RequirementExceptionRef = {
     readonly requirement_id: string;
     readonly reason: string;
-    readonly approved_by: string;
+    readonly approved_by: string | null;
     readonly approved_at: string;
 };
 
@@ -155,6 +161,17 @@ export function evaluateEnrollmentCompletionSufficiency(input: {
  * Deliberately thin: it resolves the EXISTING progress projection and classifies it. There is no
  * second requirement resolver, and a caller that already holds progress should use the pure
  * function above rather than re-resolving.
+ *
+ * ## Exceptions are loaded here, not asked for
+ *
+ * A caller that had to remember to pass exceptions is a caller that can forget, and forgetting
+ * would silently re-block a requirement a person had already decided about — on one surface and not
+ * another. So the standing decisions are read from their canonical owner unless the caller supplies
+ * a set explicitly, which the pure tests and preview paths still do.
+ *
+ * The subject is the Enrollment Participation, resolved through the one journey-context resolver,
+ * so both anchor shapes reach the same exceptions. An unresolvable subject yields NO exceptions:
+ * absence can only ever make completion harder.
  */
 export async function resolveEnrollmentCompletionSufficiency(
     supabase: import("@supabase/supabase-js").SupabaseClient,
@@ -175,11 +192,54 @@ export async function resolveEnrollmentCompletionSufficiency(
         processInstanceId: input.processInstanceId,
     });
     if (!progress.ok) return { ok: false, refusal: progress.refusal };
+
+    const exceptions = input.exceptions ?? (await resolveStandingExceptions(supabase, {
+        orgId: input.orgId,
+        processInstanceId: input.processInstanceId,
+        stageKey: progress.value.stage_key,
+    }));
+
     return {
         ok: true,
         sufficiency: evaluateEnrollmentCompletionSufficiency({
             progress: progress.value,
-            exceptions: input.exceptions,
+            exceptions,
         }),
     };
+}
+
+/** The standing exceptions for this journey's durable subject, at the stage being evaluated. */
+async function resolveStandingExceptions(
+    supabase: import("@supabase/supabase-js").SupabaseClient,
+    input: { readonly orgId: string; readonly processInstanceId: string; readonly stageKey: string | null },
+): Promise<Readonly<Record<string, RequirementExceptionRef>>> {
+    if (!input.stageKey) return {};
+
+    const { data } = await supabase
+        .from("process_instances")
+        .select("id, subject_id, context_type, context_id")
+        .eq("org_id", input.orgId)
+        .eq("id", input.processInstanceId)
+        .maybeSingle();
+    const row = data as
+        | { id: string; subject_id: string | null; context_type: string | null; context_id: string | null }
+        | null;
+    if (!row) return {};
+
+    const { resolveEnrollmentJourneyContext } = await import(
+        "@/lib/enrollment/completion/resolveEnrollmentJourneyContext"
+    );
+    const journey = await resolveEnrollmentJourneyContext(supabase, {
+        orgId: input.orgId,
+        processInstance: row,
+    });
+
+    const { loadActiveRequirementExceptions } = await import(
+        "@/lib/enrollment/completion/requirementExceptionService"
+    );
+    return loadActiveRequirementExceptions(supabase, {
+        orgId: input.orgId,
+        participationId: journey.participationId,
+        stageKey: input.stageKey,
+    });
 }
