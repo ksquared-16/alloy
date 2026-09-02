@@ -74,28 +74,40 @@ test("D3: matching branch identity passes", () => {
   assert.equal(r.branch_actual, "agent/claude/6-surfaces");
 });
 
-test("D3: drifted branch fails closed, and names both answers", () => {
+test("D3: a drifted branch is OBSERVED, not refused", () => {
+  // THIS ASSERTION IS INVERTED FROM WHAT IT ORIGINALLY SAID, DELIBERATELY.
+  //
+  // It used to require `ok: false` and `lane_branch_drift`. That refusal took
+  // the Surfaces lane off the air — "Delivery refused (lane_branch_drift)" — and
+  // Runtime Performance with it, on a promote/* branch it created to follow the
+  // safe promotion workflow. Both lanes did the right thing and both became
+  // unreachable. The recorded branch is display and expectation, not an
+  // authorization input; drift is the record trailing the worktree.
+  //
+  // What survives is the part that was worth having: the mismatch is visible,
+  // named on both sides, and reconcilable. See
+  // development-lane-branch-reconcile.test.mjs for the full contract.
   const s = seed("Surfaces drift", { slot: 5, worktree: "wt5-drift", branch: "agent/claude/6-surfaces-faacca" });
   const r = L.resolveLaneWorktree(s.laneId, { root: ROOT, gitImpl: gitSaying("agent/claude/6-surfaces-followup") });
-  assert.equal(r.ok, false);
-  assert.equal(r.code, "lane_branch_drift");
-  assert.match(r.detail, /Expected agent\/claude\/6-surfaces-faacca/);
-  assert.match(r.detail, /on agent\/claude\/6-surfaces-followup/);
+  assert.equal(r.ok, true, "a moved branch is not a lifecycle failure");
+  assert.equal(r.branch_drift, true, "and it is still visible");
+  assert.equal(r.branch_expected, "agent/claude/6-surfaces-faacca");
   assert.equal(r.branch_actual, "agent/claude/6-surfaces-followup");
+  assert.equal(r.branch, "agent/claude/6-surfaces-followup", "the branch reported is git's answer");
 });
 
-test("D3: branch drift blocks dispatch and the environment actions", () => {
+test("D3: branch drift does not block dispatch", () => {
   const s = seed("Drifted", { slot: 4, worktree: "wt4-drift", branch: "agent/claude/4-a" });
   const opts = { root: ROOT, gitImpl: gitSaying("agent/claude/4-b") };
-  // The guards resolve through the same function, so they inherit the refusal.
-  const r = L.resolveLaneWorktree(s.laneId, opts);
-  assert.equal(r.code, "lane_branch_drift");
+  assert.equal(L.assertLaneDispatchable(s.laneId, opts).ok, true);
+  assert.notEqual(L.resolveLaneWorktree(s.laneId, opts).code, "lane_branch_drift");
 });
 
 test("D3: spelling differences are not drift", () => {
   const s = seed("Refs", { slot: 3, worktree: "wt3-refs", branch: "agent/claude/3-x" });
   const r = L.resolveLaneWorktree(s.laneId, { root: ROOT, gitImpl: gitSaying("refs/heads/agent/claude/3-x") });
   assert.equal(r.ok, true, r.code);
+  assert.equal(r.branch_drift, false, "one branch spelled two ways is one branch");
 });
 
 test("D3: an unreadable branch is not asserted to be drift", () => {
@@ -103,7 +115,7 @@ test("D3: an unreadable branch is not asserted to be drift", () => {
   // mean fail-noisy on a transient read.
   const s = seed("Unreadable", { slot: 2, worktree: "wt2-unread", branch: "agent/claude/2-x" });
   const r = L.resolveLaneWorktree(s.laneId, { root: ROOT, gitImpl: gitSaying(null) });
-  assert.notEqual(r.code, "lane_branch_drift");
+  assert.equal(r.branch_drift, false, "a failed read is not a moved branch");
   assert.equal(r.branch_actual, null);
 });
 
