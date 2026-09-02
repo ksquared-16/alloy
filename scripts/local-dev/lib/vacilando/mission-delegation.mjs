@@ -69,74 +69,33 @@ export const DELEGATION_STATUS = Object.freeze({
 export const DEFAULT_DELEGATION_TTL_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
-// Grammar
+// Typed authority — there is no grammar, and that is the point
 // ---------------------------------------------------------------------------
 
 /**
- * Phrases that make a clause NOT a delegation, however action-shaped it looks.
+ * V2 DELETED THE PROSE PARSER. AUTHORITY IS DATA, NEVER LANGUAGE.
  *
- * "do not merge to staging", "ask me before you merge", "check with me first"
- * all contain a perfectly good merge clause. Reading only the verb would turn a
- * prohibition into permission, which is the worst failure this module could
- * have. A clause carrying any of these is refused outright.
+ * V1 read the mission's words and minted authority from imperatives it
+ * recognised. It could not tell an imperative that DELEGATES from one that is
+ * quoted, described, or warned against. Measured against the real V1 parser:
+ *
+ *     "merge to staging after required checks pass"              -> DELEGATED
+ *     "The mission should say: merge it to staging when checks"   -> DELEGATED
+ *     "Example of what NOT to write: merge to staging"            -> DELEGATED
+ *
+ * The last grants exactly the authority it warns against. The S15 authorization
+ * brief itself, which only LISTED the phrases a certification mission should
+ * contain, produced two live delegations for the lane it was sent to.
+ *
+ * No amount of extra refusal markers fixes this: each new marker is another
+ * phrase somebody will legitimately write, and the parser is racing English.
+ *
+ * So there is no parser. Prose is never an authorization source. Authority
+ * arrives ONLY as a typed field on the Director-facing mission path, so "did
+ * the Director delegate this" is answered by reading a structured value rather
+ * than interpreting a sentence. Use and mention cannot collide, because mention
+ * is not an input.
  */
-const REFUSAL_MARKERS = [
-  /\b(do not|don'?t|never|do n[o']t|cannot|can'?t|must not|mustn'?t|should not|shouldn'?t|without)\b/i,
-  /\b(ask|confirm|check with|checking with|approval|approve|permission|authoris|authoriz|sign[- ]?off|let me know|wait for|hold off|pause|stop before)\b/i,
-  /\b(unless|until i|if i|only if|maybe|might|consider|probably|prefer)\b/i,
-];
-
-/** Vague completion language that never delegates anything. */
-const VAGUE_MARKERS = [
-  /\bfinish (this|it|up)\b/i,
-  /\btake care of it\b/i,
-  /\bget (this|it) done\b/i,
-  /\bship it\b/i,
-  /\bhandle (this|it)\b/i,
-  /\bdo the needful\b/i,
-  /\bmake it happen\b/i,
-];
-
-/**
- * The action patterns. Each REQUIRES a concrete object, and the two that move
- * code between refs require an explicit named target. "merge it" alone is not a
- * delegation: merge it WHERE.
- */
-const ACTION_PATTERNS = Object.freeze([
-  {
-    action: ACTION_TYPES.REPOSITORY_PUSH,
-    // "push this branch", "push the branch", "push it" only when a branch is
-    // named elsewhere in the same clause.
-    patterns: [
-      /\bpush\b[^.;]{0,40}\b(this|the|that)\s+(branch|work|promotion|change|commit)s?\b/i,
-      /\bpush\b\s+(it|this)\b/i,
-      /\bpush\b[^.;]{0,30}\bto\s+(the\s+)?remote\b/i,
-    ],
-    requiresTarget: false,
-  },
-  {
-    action: ACTION_TYPES.PROMOTION_OPEN_PR,
-    patterns: [
-      /\bopen\b[^.;]{0,30}\b(pull request|pr)\b/i,
-      /\braise\b[^.;]{0,30}\b(pull request|pr)\b/i,
-      /\bcreate\b[^.;]{0,30}\b(pull request|pr)\b/i,
-    ],
-    requiresTarget: true,
-  },
-  {
-    action: ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST,
-    patterns: [
-      /\bmerge\b/i,
-    ],
-    requiresTarget: true,
-  },
-]);
-
-/** The target branch, only when the clause names it explicitly. */
-const TARGET_RE = /\b(?:to|into|onto|against)\s+(?:the\s+)?([a-z0-9][a-z0-9._\/-]{0,60}?)\s*(?:branch\b)?(?=[\s,.;]|$)/i;
-
-/** An explicit "only when checks pass" qualifier. */
-const CHECKS_RE = /\b(when|once|after|if)\b[^.;]{0,60}\b(checks?|ci|validation|tests?)\b[^.;]{0,30}\b(pass|passed|green|clean|succeed)/i;
 
 function normalizeBranch(raw) {
   const b = String(raw || "").trim().toLowerCase().replace(/[.,;:]+$/, "");
@@ -186,87 +145,6 @@ export function isProtectedPushRef(branch) {
   return PROTECTED_PUSH_REFS.includes(normalizeBranch(branch) || "");
 }
 
-/**
- * Split a mission into clauses the grammar can judge one at a time.
- *
- * A refusal marker must only disarm the clause it appears in — "push the branch,
- * but ask me before merging" delegates the push and refuses the merge. Splitting
- * on sentence ends alone would let "ask me" poison the whole mission, and
- * splitting on nothing would let it authorise the merge.
- */
-export function splitClauses(text) {
-  return String(text || "")
-    .split(/[.;\n]+|\band then\b|\bbut\b|\bhowever\b|\balthough\b|\bthough\b/i)
-    .map((c) => c.trim())
-    .filter(Boolean);
-}
-
-/**
- * Read a mission's explicit delegations.
- *
- * Returns `{ delegations, refusals, vague }`. `delegations` is what the mission
- * unambiguously authorised; everything else is reported so the operator can see
- * why a phrase did NOT grant authority.
- */
-export function parseMissionDelegation(text, { defaultTargetBranch = null } = {}) {
-  const raw = String(text || "");
-  const clauses = splitClauses(raw);
-  const delegations = [];
-  const refusals = [];
-  let vague = false;
-
-  for (const marker of VAGUE_MARKERS) {
-    if (marker.test(raw)) vague = true;
-  }
-
-  for (const clause of clauses) {
-    const refused = REFUSAL_MARKERS.find((re) => re.test(clause));
-    for (const spec of ACTION_PATTERNS) {
-      const hit = spec.patterns.some((re) => re.test(clause));
-      if (!hit) continue;
-      if (refused) {
-        refusals.push({ action: spec.action, clause, reason: "refusal_or_approval_marker" });
-        continue;
-      }
-      const m = clause.match(TARGET_RE);
-      // "merge to staging" binds the target from the clause. A later clause may
-      // carry the action while an earlier one named the target; V1 does not
-      // infer across clauses, because inferring is how "to production" would
-      // eventually be read off the wrong sentence.
-      let target = m ? normalizeBranch(m[1]) : null;
-      if (!target && !spec.requiresTarget) target = defaultTargetBranch || null;
-      if (spec.requiresTarget && !target) {
-        refusals.push({ action: spec.action, clause, reason: "no_explicit_target_branch" });
-        continue;
-      }
-      if (target && isOperatorOnlyBranch(target)) {
-        refusals.push({ action: spec.action, clause, reason: "operator_only_target" });
-        continue;
-      }
-      if (spec.requiresTarget && !DELEGABLE_TARGET_BRANCHES.includes(target)) {
-        refusals.push({ action: spec.action, clause, reason: "target_not_delegable_in_v1" });
-        continue;
-      }
-      delegations.push({
-        action: spec.action,
-        target_branch: target,
-        checks_required: spec.action === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
-          ? true                       // a merge always requires green checks in V1
-          : CHECKS_RE.test(clause),
-        clause,
-      });
-    }
-  }
-
-  // One delegation per action; the first explicit clause wins and a later
-  // refusal of the same action removes it.
-  const byAction = new Map();
-  for (const d of delegations) if (!byAction.has(d.action)) byAction.set(d.action, d);
-  for (const r of refusals) byAction.delete(r.action);
-
-  return { delegations: [...byAction.values()], refusals, vague };
-}
-
 // ---------------------------------------------------------------------------
 // Durable store
 // ---------------------------------------------------------------------------
@@ -311,15 +189,85 @@ const iso = (ms) => new Date(ms ?? Date.now()).toISOString();
  * never carries a PR or a SHA — those are bound at execution, from the concrete
  * request, by the existing identity parsers.
  */
+/**
+ * WHO MAY WRITE AUTHORITY.
+ *
+ * Only the Director-facing mission path. A lane cannot add authority to its own
+ * mission; an agent's summary, a quoted prompt, a README, a test fixture or a
+ * tool result cannot either — none of them travel this author list, and prose is
+ * not read at all. Every record carries its author so a delegation can always
+ * answer who created it.
+ */
+export const DELEGATION_AUTHORS = Object.freeze(["director", "operator"]);
+
+export function isAuthorizedDelegationAuthor(author) {
+  return DELEGATION_AUTHORS.includes(String(author || "").trim().toLowerCase());
+}
+
+/**
+ * Validate ONE typed delegated action.
+ *
+ * Everything is checked against a closed list; nothing is inferred and nothing
+ * defaults into more authority than was asked for. An unreadable entry is a
+ * refusal with a name, never a silently dropped or silently widened one.
+ */
+export function validateDelegatedAction(entry = {}) {
+  const actionKey = String(entry.action_key || entry.actionKey || "").trim();
+  if (!actionKey) return { ok: false, error: "missing_action_key" };
+  if (!DELEGABLE_ACTIONS.includes(actionKey)) {
+    return { ok: false, error: "action_not_delegable", action_key: actionKey };
+  }
+  const rawTarget = entry.target_branch ?? entry.targetBranch ?? null;
+  const target = rawTarget == null ? null : normalizeBranch(rawTarget);
+  if (actionKey !== ACTION_TYPES.REPOSITORY_PUSH) {
+    if (!target) return { ok: false, error: "missing_target_branch", action_key: actionKey };
+    if (isOperatorOnlyBranch(target)) {
+      return { ok: false, error: "operator_only_target", action_key: actionKey, target_branch: target };
+    }
+    if (!DELEGABLE_TARGET_BRANCHES.includes(target)) {
+      return { ok: false, error: "target_not_delegable_in_v1", action_key: actionKey, target_branch: target };
+    }
+  }
+  const mergeMethod = String(entry.merge_method ?? entry.mergeMethod ?? "merge").trim();
+  if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST && mergeMethod !== "merge") {
+    return { ok: false, error: "merge_method_not_delegable_in_v1", merge_method: mergeMethod };
+  }
+  // A merge always requires green checks in V1, whatever the field says. The
+  // Director may not delegate away the check gate.
+  const checksRequired = actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
+    ? true
+    : Boolean(entry.checks_required ?? entry.checksRequired ?? false);
+  return {
+    ok: true,
+    action: {
+      action_key: actionKey,
+      target_branch: target,
+      merge_method: mergeMethod,
+      checks_required: checksRequired,
+    },
+  };
+}
+
+/**
+ * Capture the Director's TYPED delegation for a mission.
+ *
+ * `delegatedActions` is structured data supplied by the Director-facing path.
+ * There is no prose argument: the mission's words are stored with the mission
+ * for the human to read, and are never an input to this function.
+ *
+ * The record answers exactly one question: WHAT CLASS of future governed action
+ * did the Director authorise in this mission? It is never a boolean, and it
+ * never carries a PR or a SHA — those are bound at execution, from the concrete
+ * request, by the existing identity parsers.
+ */
 export function recordMissionDelegation({
   missionId = null,
   laneId = null,
   runId = null,
   repository,
-  missionText,
-  defaultTargetBranch = null,
+  delegatedActions = [],
+  author = null,
   sourceBranch = null,
-  mergeMethod = "merge",
   ttlMs = DEFAULT_DELEGATION_TTL_MS,
   nowMs = Date.now(),
   root = runtimeRoot(),
@@ -327,13 +275,28 @@ export function recordMissionDelegation({
   const scopeKey = missionId || laneId;
   if (!scopeKey) return { ok: false, error: "missing_mission_or_lane" };
   if (!repository) return { ok: false, error: "missing_repository" };
-  const parsed = parseMissionDelegation(missionText, { defaultTargetBranch });
-  if (!parsed.delegations.length) {
-    return { ok: true, created: 0, delegations: [], parsed };
+  // AUTHORSHIP IS CHECKED BEFORE ANYTHING IS READ. A lane, an agent or a tool
+  // result cannot mint authority even with a perfectly formed typed field.
+  if (!isAuthorizedDelegationAuthor(author)) {
+    return { ok: false, error: "unauthorized_delegation_author", author: author || null, created: 0 };
   }
+  const entries = Array.isArray(delegatedActions) ? delegatedActions : [];
+  if (!entries.length) return { ok: true, created: 0, delegations: [], refusals: [] };
+
+  const accepted = [];
+  const refusals = [];
+  for (const entry of entries) {
+    const v = validateDelegatedAction(entry);
+    if (!v.ok) { refusals.push(v); continue; }
+    // One delegation per action key; a repeated entry is not extra authority.
+    if (accepted.some((a) => a.action_key === v.action.action_key)) continue;
+    accepted.push(v.action);
+  }
+  if (!accepted.length) return { ok: true, created: 0, delegations: [], refusals };
+
   const store = readDelegationStore(root);
   const created = [];
-  for (const d of parsed.delegations) {
+  for (const a of accepted) {
     const rec = {
       schema_version: MISSION_DELEGATION_SCHEMA,
       delegation_id: `mdlg_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
@@ -342,15 +305,16 @@ export function recordMissionDelegation({
       run_id: runId || null,
       scope_key: scopeKey,
       repository,
-      action_key: d.action,
-      target_branch: d.target_branch,
+      action_key: a.action_key,
+      target_branch: a.target_branch,
       source_branch: sourceBranch || null,
-      merge_method: mergeMethod,
-      checks_required: d.checks_required,
+      merge_method: a.merge_method,
+      checks_required: a.checks_required,
       status: DELEGATION_STATUS.UNCONSUMED,
-      // The Director's own words, kept so the operator can inspect WHY an
-      // action was auto-authorised rather than taking the runtime's word.
-      mission_clause: String(d.clause || "").slice(0, 400),
+      // Provenance, so an auto-authorised action can always say who granted it
+      // and through which path — replacing V1's quoted prose clause.
+      authored_by: String(author).trim().toLowerCase(),
+      authority_source: "structured_mission_delegation",
       created_at: iso(nowMs),
       expires_at: iso(nowMs + ttlMs),
       consumed_at: null,
@@ -361,7 +325,7 @@ export function recordMissionDelegation({
     created.push(rec);
   }
   writeStore(store, root);
-  return { ok: true, created: created.length, delegations: created, parsed };
+  return { ok: true, created: created.length, delegations: created, refusals };
 }
 
 export function listMissionDelegations({ scopeKey = null, root = runtimeRoot() } = {}) {
@@ -506,41 +470,36 @@ export function findCoveringDelegation(context, { root = runtimeRoot(), nowMs = 
 }
 
 /**
- * CAPTURE AT ORIENTATION, FROM THE DIRECTOR'S OWN WORDS.
+ * CAPTURE AT ORIENTATION, FROM TYPED DIRECTOR AUTHORITY.
  *
- * The Director's instruction for a lane IS the mission text for this runtime,
- * so delegation is read once when the prompt arrives rather than re-judged at
- * every execution. Reading it later, at the moment of a privileged action,
- * would be exactly the "LLM guess at execution time" the contract forbids.
+ * V1 read `instruction` here and parsed it. This takes `delegatedActions` — a
+ * structured value the Director-facing send path supplies — and never looks at
+ * the prompt text at all. The prose still travels with the mission for a human
+ * to read; it is simply not an authorization input.
  *
- * Best-effort and non-fatal by construction: a lane with no repository, or a
- * prompt with no explicit delegation, simply records nothing and the ordinary
- * operator-approval behaviour is untouched. It can only ever ADD an explicit
- * authority the Director wrote down.
+ * Best-effort and non-fatal: no typed delegation, no repository, or an
+ * unauthorized author records nothing, and the ordinary operator-approval
+ * behaviour is untouched. It can only ever ADD an authority the Director typed.
  */
 export function captureDelegationFromInstruction({
   laneId,
   runId = null,
   missionId = null,
-  instruction,
+  delegatedActions = [],
+  author = null,
   repository = null,
   sourceBranch = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
   try {
-    if (!laneId || !instruction || !repository) {
-      return { ok: false, error: "insufficient_context", created: 0 };
+    if (!laneId || !repository) return { ok: false, error: "insufficient_context", created: 0 };
+    if (!Array.isArray(delegatedActions) || !delegatedActions.length) {
+      return { ok: true, created: 0, delegations: [], reason: "no_structured_delegation" };
     }
     return recordMissionDelegation({
-      missionId,
-      laneId,
-      runId,
-      repository,
-      missionText: instruction,
-      sourceBranch,
-      nowMs,
-      root,
+      missionId, laneId, runId, repository,
+      delegatedActions, author, sourceBranch, nowMs, root,
     });
   } catch (e) {
     return { ok: false, error: String(e?.message || e), created: 0 };

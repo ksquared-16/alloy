@@ -1378,13 +1378,22 @@ export function createVacilandoServer() {
         if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-        const extra = Object.keys(body.value || {}).filter((k) => !["instruction", "provider", "lane_id", "attachment_ids"].includes(k));
+        // `delegated_actions` is the ONLY way privileged mission authority can be
+        // granted. It is a typed field on this authenticated operator route, kept
+        // deliberately separate from `instruction` so that the prompt's prose is
+        // never an authorization input. The allowlist below still refuses every
+        // other control field.
+        const extra = Object.keys(body.value || {}).filter((k) => !["instruction", "provider", "lane_id", "attachment_ids", "delegated_actions"].includes(k));
         if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
         try {
           const instruction = body.value?.instruction;
           const out = await deliverManagedLaneInstruction(laneId, instruction, {
             provider: body.value?.provider,
             attachmentIds: body.value?.attachment_ids,
+            delegatedActions: body.value?.delegated_actions,
+            // This route is the Director-facing send. Authorship is recorded on
+            // every delegation so it can always say who granted it.
+            delegationAuthor: "operator",
           });
           const status = laneInstructionHttpStatus(out);
           return sendJson(res, status, out);
