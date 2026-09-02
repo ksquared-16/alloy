@@ -39,6 +39,37 @@ function emptyChain(commitAt: number | null = null): ChainState {
 /** One chain — commits are serialized by K3, so the current chain is the only live one. */
 let chain: ChainState = emptyChain();
 
+/**
+ * WHICH CARDS THE RESOLVED COMPOSITION ACTUALLY PLACES, for the subject they were resolved against.
+ *
+ * Kept OUTSIDE the chain deliberately. The grid resolves a new subject's composition before the body
+ * marks that subject's model — child effects run before parent effects — so participation for the
+ * incoming subject would be wiped by the chain reset if it lived on the chain. Pinning it to its own
+ * subject id makes the two orders equivalent instead of racing.
+ */
+let participation: { subjectId: string; keys: ReadonlySet<string> } | null = null;
+
+/**
+ * The Focus Panel reports which card types it actually placed.
+ *
+ * READINESS AND PARTICIPATION ARE DIFFERENT QUESTIONS, and conflating them is what made settlement
+ * over-report: a producer answers "is this model's truth known", and a composition answers "does a
+ * cell for it exist". A drawer VM legitimately builds canonical models for consumers that are not
+ * this surface — on the enrollment composition it produced 26 ready models for 8 placed cells — and
+ * counting all of them described a panel the operator was not looking at.
+ *
+ * The fix belongs HERE rather than in any producer. Asking each producer "am I currently placed in
+ * this Focus Panel?" would contaminate data ownership with surface participation; the grid already
+ * holds both truths, so it simply says what it placed and the measurement intersects them.
+ */
+export function setFocusPanelCardParticipation(
+    subjectId: string,
+    placedCardKeys: Iterable<string>,
+): void {
+    if (!perceivedMarksEnabled()) return;
+    participation = { subjectId, keys: new Set(placedCardKeys) };
+}
+
 function now(): number | null {
     if (typeof performance === "undefined") return null;
     return performance.now();
@@ -83,6 +114,7 @@ export function markFocusPanelWorkModeModel(model: FocusPanelWorkModeModel): voi
     chain.subjectId = model.subject.id;
 
     const entityId = model.subject.id;
+    const placed = participation && participation.subjectId === entityId ? participation.keys : null;
     const readyKeys: string[] = [];
     for (const [key, readiness] of model.cardReadiness) {
         if (readiness !== "ready") continue;
@@ -111,6 +143,15 @@ export function markFocusPanelWorkModeModel(model: FocusPanelWorkModeModel): voi
          * This names no card — it asks the registry, so a future supersession inherits the rule.
          */
         if (cardSuccessor(key) !== null) continue;
+        /*
+         * A READY MODEL THE COMPOSITION DOES NOT PLACE IS NOT A READY CARD.
+         *
+         * Only filtered when the composition for THIS subject has actually been reported. Unknown
+         * participation is not treated as "nothing is placed" — that would trade over-reporting for
+         * silence, which is the worse error in a measurement — so the previous behaviour stands
+         * until the grid has spoken for this subject.
+         */
+        if (placed && !placed.has(key)) continue;
         readyKeys.push(key);
     }
 
