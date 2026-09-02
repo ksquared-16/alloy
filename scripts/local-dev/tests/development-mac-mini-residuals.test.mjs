@@ -91,6 +91,25 @@ await test("a layout change without the decline affordance refuses to press anyt
   assert.equal(benignOnboardingAnswer(moved, { provider: "claude" }), null);
 });
 
+await test("REGRESSION: unrelated scrollback above the modal cannot veto it", () => {
+  // A real transcript mentioning "push"/"merge" three lines up refused a screen
+  // that was itself clean, sending the operator to a terminal anyway.
+  const withHistory = [
+    "  Branch pushed to origin; merge is pending review.",
+    "  Deleted the stale worktree and reset the index.",
+    "  ─────────────────────────",
+    REAL_ONBOARDING,
+  ].join("\n");
+  const out = benignOnboardingAnswer(withHistory, { provider: "claude" });
+  assert.ok(out, "history above the modal is not the screen being answered");
+  assert.equal(out.answer, "Not now");
+});
+
+await test("danger INSIDE the modal region still blocks", () => {
+  const mixed = "  Teach auto mode about your environment?\n  Allow push to origin?\n    2. Not now\n";
+  assert.equal(benignOnboardingAnswer(mixed, { provider: "claude" }), null);
+});
+
 await test("the answer table only ever declines", () => {
   for (const e of BENIGN_ONBOARDING_ANSWERS) {
     assert.match(e.answer, /not now|no|skip|later|dismiss/i, `${e.id} must decline`);

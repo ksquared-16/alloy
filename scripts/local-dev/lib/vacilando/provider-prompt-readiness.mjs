@@ -706,13 +706,23 @@ export function benignOnboardingAnswer(text, { provider = null } = {}) {
   const tail = tailOf(text);
   if (!tail.trim()) return null;
   const laneProvider = String(provider || "").toLowerCase() || null;
-  for (const re of NEVER_AUTO_ANSWER) {
-    if (re.test(tail)) return null;
-  }
   for (const entry of BENIGN_ONBOARDING_ANSWERS) {
     if (entry.provider && laneProvider && entry.provider !== laneProvider) continue;
-    if (!entry.match.test(tail)) continue;
-    if (entry.requires && !entry.requires.test(tail)) return null;
+    const m = tail.match(entry.match);
+    if (!m) continue;
+
+    // Judge the SCREEN, not the scrollback above it.
+    //
+    // Scanning the whole capture meant any word in unrelated history could veto
+    // a benign modal: on the enrollment lane the word "push" sat three lines
+    // into the transcript and refused a screen that was itself clean, so the
+    // operator was sent to a terminal anyway. The region from the question to
+    // the end of the pane IS the thing being answered.
+    const region = tail.slice(m.index ?? 0);
+    for (const re of NEVER_AUTO_ANSWER) {
+      if (re.test(region)) return null;
+    }
+    if (entry.requires && !entry.requires.test(region)) return null;
     return {
       id: entry.id,
       keys: [...entry.keys],
