@@ -67,6 +67,17 @@ export type StartEnrollmentResult = {
     customerId: string;
     /** Null = context-free, which is a legitimate journey and not a degraded one. */
     opportunityId: string | null;
+    /**
+     * The durable Enrollment subject this journey belongs to — the canonical anchor.
+     *
+     * Always present, including on the context-free path: a journey without an acquisition episode
+     * still has a participation, and it is the participation the journey is anchored to. A caller
+     * that wanted the subject previously had to re-resolve it from the process instance, which is
+     * how two callers end up disagreeing about the same enrolment.
+     */
+    enrollmentParticipationId: string;
+    /** True when this start established the participation rather than joining an existing one. */
+    participationCreated: boolean;
     contextOutcome: "joined_live_episode" | "context_free";
     /** True when an open journey already existed and was returned instead of a second one. */
     reused: boolean;

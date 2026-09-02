@@ -342,7 +342,6 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
                 current_value: null,
                 value_source: "none",
                 value_origin: null,
-            value_origin: null,
                 requires_participant_action: false,
                 optional: true,
             };
