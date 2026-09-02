@@ -4,6 +4,8 @@ import { useState, FormEvent, Suspense, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
+
 import { createClient } from "@/lib/supabaseClient";
 import { getPublicSupabaseAuthDebug } from "@/lib/supabase/publicAuthEnv";
 import CTAButton from "@/components/marketing/CTAButton";
@@ -32,7 +34,9 @@ function DevSupabaseAuthPanel() {
     fetch("/api/dev/supabase-origin", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (!cancelled) setServerOrigin((j?.origin as string | null) ?? null);
+        if (cancelled) return;
+        setServerOrigin((j?.origin as string | null) ?? null);
+        if (j?.url && j?.anonKey) setServerSupabaseConfig({ url: j.url as string, anonKey: j.anonKey as string });
       })
       .catch(() => {
         if (!cancelled) setServerOrigin(null);
@@ -86,6 +90,22 @@ function DevSupabaseAuthPanel() {
 
 /** Where a signed-in operator belongs. Named once so the two paths here cannot drift apart. */
 const POST_SIGN_IN_PATH = "/workspace";
+
+/**
+ * THE SERVER'S OWN SUPABASE CONFIG, WHEN THIS BUNDLE'S IS STALE.
+ *
+ * A dev server can serve a client bundle compiled against an older environment. When that happened,
+ * sign-in posted at a Supabase that was not running and the page reported "Email or password is
+ * incorrect" -- so a correct password looked wrong, for hours, twice over.
+ *
+ * The bundle cannot fix its own inlined value, but it can ask the server what the value should be
+ * and use THAT. Development only, and only when the two actually disagree: a normal dev session
+ * never takes this path, and production has no route to ask.
+ */
+let serverSupabaseConfig: { url: string; anonKey: string } | null = null;
+function setServerSupabaseConfig(c: { url: string; anonKey: string }) {
+  serverSupabaseConfig = c;
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -164,7 +184,27 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
+      /*
+       * Prefer the SERVER's configuration when this bundle's disagrees with it. The stale half is
+       * always the bundle -- the server read its environment moments ago, the bundle was compiled
+       * whenever it was compiled -- so trusting the server is trusting the fresher of the two.
+       */
+      const clientOrigin = getPublicSupabaseAuthDebug().origin;
+      const useServerConfig =
+        isDev
+        && serverSupabaseConfig !== null
+        && clientOrigin !== null
+        && (() => {
+          try {
+            return new URL(serverSupabaseConfig!.url).origin !== clientOrigin;
+          } catch {
+            return false;
+          }
+        })();
+
+      const supabase = useServerConfig
+        ? createBrowserClient(serverSupabaseConfig!.url, serverSupabaseConfig!.anonKey)
+        : createClient();
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,

@@ -22,6 +22,7 @@ export async function GET() {
     }
 
     const raw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
     let origin: string | null = null;
     try {
         origin = raw ? new URL(raw).origin : null;
@@ -29,8 +30,17 @@ export async function GET() {
         origin = null;
     }
 
+    /*
+     * The URL and anon key are returned so a client running a STALE BUNDLE can sign in against the
+     * project this server is actually configured for, instead of whatever was compiled into it.
+     *
+     * Neither is a secret: both are NEXT_PUBLIC_ values that are already shipped to every browser
+     * that loads the app. What makes this safe is not that they are harmless in general -- it is that
+     * this route does not exist in production, and in development it reveals nothing the page itself
+     * does not already carry.
+     */
     return NextResponse.json(
-        { origin, urlDefined: Boolean(raw) },
+        { origin, url: raw || null, anonKey: anonKey || null, urlDefined: Boolean(raw) },
         { headers: { "cache-control": "no-store" } },
     );
 }

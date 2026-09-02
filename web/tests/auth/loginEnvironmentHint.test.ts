@@ -161,10 +161,47 @@ describe("a stale client bundle announces itself", () => {
         expect(await route()).toContain("not_available");
     });
 
-    it("the route returns an origin and never key material", async () => {
+    it("the route returns the PUBLIC config and never a server secret", async () => {
+        /*
+         * This deliberately changed. The route now returns the anon key as well, so a stale bundle
+         * can sign in against the project the server is actually configured for. Neither the URL nor
+         * the anon key is a secret -- both already ship to every browser that loads the app -- and
+         * the route does not exist in production. The line that matters is the service role key,
+         * which is a real secret and must never leave the server.
+         */
         const src = await route();
         expect(src).toContain("new URL(raw).origin");
-        expect(src).not.toMatch(/ANON_KEY[^_]/);
+        expect(src).toContain("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+        expect(src).not.toContain("SERVICE_ROLE");
+    });
+});
+
+describe("a stale bundle cannot send credentials to the wrong project", () => {
+    const page = () => read("../../app/login/page.tsx");
+    const route = () => read("../../app/api/dev/supabase-origin/route.ts");
+
+    it("signs in against the SERVER's config when the bundle disagrees", async () => {
+        const src = await page();
+        expect(src).toContain("createBrowserClient(serverSupabaseConfig!.url, serverSupabaseConfig!.anonKey)");
+    });
+
+    it("only when they actually disagree, and only in development", async () => {
+        const src = await page();
+        const block = src.slice(src.indexOf("const useServerConfig"));
+        expect(block.slice(0, 400)).toContain("isDev");
+        expect(block.slice(0, 400)).toContain("!== clientOrigin");
+    });
+
+    it("falls back to the normal client on the ordinary path", async () => {
+        // A normal dev session must not take the recovery path, or the recovery becomes the design.
+        expect(await page()).toContain(": createClient();");
+    });
+
+    it("the route supplies url and anon key, and still refuses in production", async () => {
+        const src = await route();
+        expect(src).toContain("anonKey");
+        expect(src).toContain('process.env.NODE_ENV === "production"');
+        // Never the service role key -- that one is not public and must never leave the server.
         expect(src).not.toContain("SERVICE_ROLE");
     });
 });
