@@ -2417,6 +2417,16 @@ export function renderOperatorDecisionActions(run, { activity = null } = {}) {
  * Deliberately quiet: one line, no controls, and nothing at all when there has
  * never been a governed decision on this lane.
  */
+/** Why there is no Director-facing address, in words an operator can act on. */
+export function browserAuthAddressNote(reason) {
+  switch (reason) {
+    case "lane_has_no_slot": return "no slot assigned";
+    case "no_serve_mapping_for_port": return "port not published to the tailnet";
+    case "no_director_facing_origin": return "no Director-facing origin published";
+    default: return reason ? String(reason) : "no route";
+  }
+}
+
 /**
  * Browser-session recovery, where the Director is already looking.
  *
@@ -2425,17 +2435,29 @@ export function renderOperatorDecisionActions(run, { activity = null } = {}) {
  * way back was a terminal. This is the status and the one action that replaces
  * that: the Director signs in through a browser Vacilando opens, and nothing
  * they type passes through the agent.
+ *
+ * THE ADDRESS IS THE ONE THE DIRECTOR CAN OPEN. This card used to print
+ * `base_url` under "Address" — the loopback base the automated driver uses. Read
+ * on a MacBook that names the MacBook, so the single actionable line on a card
+ * whose whole purpose is "go and sign in" pointed at a machine with nothing
+ * listening. The Director-facing address is what "Address" now means, it is a
+ * link because it is meant to be opened, and the driver's loopback base is still
+ * shown — labelled as the driver's, so nobody has to guess which is which.
  */
 export function renderBrowserAuthRecovery(lane) {
   const a = lane?.browser_auth;
   if (!a || !a.blocks_execution) return "";
+  const address = a.director_url
+    ? `<a href="${esc(a.director_url)}" target="_blank" rel="noreferrer noopener">${esc(a.director_url)}</a>`
+    : `<span class="gw-kv-none" title="${esc(a.director_url_reason || "")}">${esc(browserAuthAddressNote(a.director_url_reason))}</span>`;
   return `<div class="gw-decision-bar" data-gw-decision-bar data-kind="auth">
     <div class="gw-decision-h">Browser session</div>
     <div class="gw-work-stale" data-gw-browser-auth>
       <p class="gw-work-stale-copy">${esc(a.headline)}</p>
       <dl class="gw-kv">
         <dt>Slot</dt><dd>${esc(String(a.slot ?? "—"))}</dd>
-        <dt>Address</dt><dd>${esc(a.base_url || "—")}</dd>
+        <dt>Address</dt><dd data-gw-browser-auth-address>${address}</dd>
+        <dt>Driver base</dt><dd data-gw-browser-auth-base>${esc(a.base_url || "—")}</dd>
         <dt>Sign in as</dt><dd>${esc(a.expected_identity || "—")}</dd>
         ${a.storage_captured_at ? `<dt>Last captured</dt><dd>${esc(ago(Date.parse(a.storage_captured_at)))} ago</dd>` : ""}
       </dl>
