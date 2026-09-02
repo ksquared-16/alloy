@@ -19,6 +19,7 @@
  * (declared unsupported with a reason) — the toolkit prints but never runs them.
  */
 import { execFileSync } from "node:child_process";
+import { isManagedSlot, managedSlots } from "../managed-slots.mjs";
 import { capacityValue } from "../capacity-precedence.mjs";
 import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import os from "node:os";
@@ -676,7 +677,7 @@ const COMMANDS = {
     resolveTarget: (v) => target("slot", v.slot ? `slot ${v.slot}` : "auto slot", { slot: v.slot ?? null }),
     eligibility: (t, snap, v) => {
       const occupied = new Set((snap.sprints || []).map((s) => s.slot));
-      const free = [1, 2, 3, 4, 5, 6].filter((n) => !occupied.has(n));
+      const free = managedSlots().filter((n) => !occupied.has(n));
       if (v.slot && occupied.has(v.slot)) return { eligible: false, reason: `slot ${v.slot} is occupied` };
       if (!free.length) return { eligible: false, reason: "all six slots are occupied — end a worker to free capacity" };
       return { eligible: true };

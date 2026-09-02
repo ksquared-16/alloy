@@ -39,6 +39,7 @@
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { isManagedSlot, managedSlots } from "./vacilando/managed-slots.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
@@ -526,7 +527,7 @@ function resolveRunSlot(requested) {
   // in conflict (wrong branch, missing worktree). Only a slot with no worktree at
   // all is free. (listSlotIdentities already returns only slots that have one.)
   const withWorktree = new Set(listSlotIdentities().map((i) => i.slot));
-  const freeSlots = [1, 2, 3, 4, 5, 6].filter((n) => !withWorktree.has(n));
+  const freeSlots = managedSlots().filter((n) => !withWorktree.has(n));
   const req = (typeof requested === "string" && /^-?\d+$/.test(requested)) ? Number(requested) : requested;
   if (Number.isInteger(req)) {
     if (req < 1 || req > 6) return { error: "bad_slot", detail: `slot ${req} out of range`, available: freeSlots };
@@ -1680,7 +1681,7 @@ export function createVacilandoServer() {
       const body = await readJsonBody(req);
       if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
       const { slot, instruction, request_type = "worker-instruction", retry_of = null } = body.value || {};
-      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { ok: false, error: "bad_slot" });
+      if (!isManagedSlot(slot)) return sendJson(res, 400, { ok: false, error: "bad_slot" });
       if (typeof instruction !== "string" || !instruction.trim()) return sendJson(res, 400, { ok: false, error: "empty_instruction" });
       if (instruction.length > 24000) return sendJson(res, 400, { ok: false, error: "too_long", detail: `${instruction.length} chars exceeds 24000` });
       // Metadata resolve is instant (no compose) — the send must not wait on a
@@ -1933,12 +1934,12 @@ export function createVacilandoServer() {
     }
     if (path === "/api/director") {
       const slot = Number(url.searchParams.get("slot"));
-      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+      if (!isManagedSlot(slot)) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, log: readDirectorLog(slot) });
     }
     if (path === "/api/director/requests") {
       const slot = url.searchParams.get("slot") != null ? Number(url.searchParams.get("slot")) : null;
-      if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
+      if (slot != null && (!isManagedSlot(slot))) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, requests: readRequests(slot) });
     }
     // ---- Single source of truth: who is this slot, and where does this runtime live? ----
@@ -2260,7 +2261,7 @@ export function createVacilandoServer() {
       const reg = hostRegistration();
       if (slotParam != null) {
         const slot = Number(slotParam);
-        if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+        if (!isManagedSlot(slot)) return sendJson(res, 400, { error: "bad_slot" });
         return sendJson(res, 200, { identity: resolveSlotIdentity(slot), host, host_registered: reg.registered, host_slot: reg.slot });
       }
       const slots = [];
@@ -2352,7 +2353,7 @@ export function createVacilandoServer() {
 
     if (path === "/api/missions") {
       const slot = url.searchParams.get("slot") != null ? Number(url.searchParams.get("slot")) : null;
-      if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
+      if (slot != null && (!isManagedSlot(slot))) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, missions: readMissions(slot) });
     }
     // Director Conversations — the mission re-told as a living dialogue.
@@ -2446,7 +2447,7 @@ export function createVacilandoServer() {
     }
     if (path === "/api/closeout") {
       const slot = Number(url.searchParams.get("slot"));
-      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+      if (!isManagedSlot(slot)) return sendJson(res, 400, { error: "bad_slot" });
       // SINGLE SOURCE OF TRUTH: closeout describes the slot's AUTHORITATIVE
       // worktree, and says which one — never an inferred or stale name.
       const identity = resolveSlotIdentity(slot);

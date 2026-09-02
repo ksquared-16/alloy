@@ -52,6 +52,7 @@
  * process and cannot outlive it or leak into a later session.
  */
 import { existsSync, readFileSync } from "node:fs";
+import { managedSlotCount } from "./managed-slots.mjs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -63,8 +64,11 @@ import { join } from "node:path";
  * bounded by the six managed slots; there is no seventh place to put one.
  */
 export const CAPACITY_LIMITS = Object.freeze({
-  ALLOY_MAX_RUNNING_SERVERS: { default: 3, max: 6, axis: "dev_server_capacity" },
-  ALLOY_MAX_ACTIVE_PROVIDERS: { default: 3, max: 6, axis: "provider_capacity" },
+  // `max` is the FALLBACK bound. The live bound for the two slot-shaped
+  // ceilings comes from managed-slots, so an override can never ask for a
+  // server or a provider that has no slot to live in — at any topology.
+  ALLOY_MAX_RUNNING_SERVERS: { default: 3, max: 6, axis: "dev_server_capacity", bounded_by_slots: true },
+  ALLOY_MAX_ACTIVE_PROVIDERS: { default: 3, max: 6, axis: "provider_capacity", bounded_by_slots: true },
   ALLOY_MAX_CONCURRENT_INSTALLS: { default: 1, max: 4, axis: null },
   ALLOY_MAX_CONCURRENT_HEAVY_JOBS: { default: 1, max: 4, axis: null },
 });
@@ -120,7 +124,8 @@ export function parseCapacityOverride(env = process.env) {
     if (!/^\d+$/.test(value)) { refusals.push({ entry, error: "not_a_positive_integer" }); continue; }
     const n = Number(value);
     if (n < 1) { refusals.push({ entry, error: "not_a_positive_integer" }); continue; }
-    if (n > limit.max) { refusals.push({ entry, error: "above_hard_ceiling", max: limit.max }); continue; }
+    const hardMax = limit.bounded_by_slots ? managedSlotCount(env) : limit.max;
+    if (n > hardMax) { refusals.push({ entry, error: "above_hard_ceiling", max: hardMax }); continue; }
     applied[name] = n;
   }
   return { active: Object.keys(applied).length > 0, applied, refusals, reason };

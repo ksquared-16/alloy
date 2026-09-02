@@ -8,6 +8,7 @@
  * clickable Vacilando actions.
  */
 import { execFileSync } from "node:child_process";
+import { isManagedSlot, managedSlots } from "./managed-slots.mjs";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -52,7 +53,7 @@ function listActiveSlotsFromMetadata() {
       const g = (k) => (t.match(new RegExp(`^${k}="?([^"\\n]*)"?`, "m")) || [])[1] || null;
       const slot = Number(g("ALLOY_WORKTREE_SLOT"));
       const life = g("ALLOY_WORKER_LIFECYCLE") || "";
-      if (Number.isFinite(slot) && slot >= 1 && slot <= 6 && life !== "finished") {
+      if (isManagedSlot(slot) && life !== "finished") {
         out.push({
           slot,
           worktree: g("ALLOY_WORKTREE_NAME"),

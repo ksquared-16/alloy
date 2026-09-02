@@ -5,6 +5,7 @@
  * local worktrees, slot metadata, and tmux sessions into adoption candidates.
  */
 import { execFile, execFileSync } from "node:child_process";
+import { isManagedSlot, managedSlots } from "./managed-slots.mjs";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -69,7 +70,7 @@ export async function listAlloyAdoptionCandidates({
   for (const m of meta) {
     if (!m.path || !existsSync(m.path)) continue;
     const slot = Number(m.slot);
-    if (!Number.isInteger(slot) || slot < 1 || slot > 6) continue;
+    if (!isManagedSlot(slot)) continue;
     if (String(m.lifecycle || "").toLowerCase() === "finished") continue;
     add({
       worktree_path: m.path,
@@ -226,7 +227,7 @@ export function assessProvisionCapacity({ cfg = null, metadata = null, providerP
   const meta = metadata || readAllMetadata(runtime);
   const occupied = meta.filter((m) => {
     const slot = Number(m.slot);
-    if (!Number.isInteger(slot) || slot < 1 || slot > 6) return false;
+    if (!isManagedSlot(slot)) return false;
     if (String(m.lifecycle || "").toLowerCase() === "finished") return false;
     return Boolean(m.path && existsSync(m.path));
   });
