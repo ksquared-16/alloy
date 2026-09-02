@@ -1,0 +1,236 @@
+{
+  "trusted_host_action_id": "tha_fadae984cca943",
+  "query_hash": "92b0aba9605e52d96f46318c2d2ab74ec87ef6a745690d2cb07b742db7698e40",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T16:14:32.293Z",
+    "question_ids": [
+      "duplicate_active_context_free",
+      "exception_baseline",
+      "journey_population",
+      "ledger",
+      "operational_baseline",
+      "participation_baseline",
+      "post_20260827160000_nullable",
+      "post_20260827160000_trigger",
+      "post_20260827180000_anchor",
+      "post_20260901120000_objects",
+      "post_20260901120000_table",
+      "post_context_free_indexes",
+      "session_baseline"
+    ],
+    "questions": {
+      "duplicate_active_context_free": {
+        "question_id": "duplicate_active_context_free",
+        "row_count": null,
+        "rows": [
+          {
+            "groups": 0
+          }
+        ]
+      },
+      "exception_baseline": {
+        "question_id": "exception_baseline",
+        "row_count": null,
+        "rows": [
+          {
+            "total": 0,
+            "active": 0,
+            "revoked": 0
+          }
+        ]
+      },
+      "journey_population": {
+        "question_id": "journey_population",
+        "row_count": null,
+        "rows": [
+          {
+            "context_type": "null",
+            "episode_open": false,
+            "journeys": 6,
+            "children": 2,
+            "orgs": 1
+          },
+          {
+            "context_type": "opportunity",
+            "episode_open": false,
+            "journeys": 2,
+            "children": 2,
+            "orgs": 1
+          },
+          {
+            "context_type": "opportunity",
+            "episode_open": true,
+            "journeys": 17,
+            "children": 17,
+            "orgs": 1
+          }
+        ]
+      },
+      "ledger": {
+        "question_id": "ledger",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20260827160000",
+            "recorded": true
+          },
+          {
+            "version": "20260827170000",
+            "recorded": true
+          },
+          {
+            "version": "20260827180000",
+            "recorded": true
+          },
+          {
+            "version": "20260901120000",
+            "recorded": true
+          },
+          {
+            "version": "20260902090000",
+            "recorded": true
+          }
+        ]
+      },
+      "operational_baseline": {
+        "question_id": "operational_baseline",
+        "row_count": null,
+        "rows": [
+          {
+            "agreements": 2,
+            "placements": 2,
+            "schedule_assignments": 2
+          }
+        ]
+      },
+      "participation_baseline": {
+        "question_id": "participation_baseline",
+        "row_count": null,
+        "rows": [
+          {
+            "opportunities": 2,
+            "participations": 2,
+            "context_free": 0,
+            "active_context_free": 0,
+            "enrolled": 0
+          }
+        ]
+      },
+      "post_20260827160000_nullable": {
+        "question_id": "post_20260827160000_nullable",
+        "row_count": null,
+        "rows": [
+          {
+            "column": "opportunity_id",
+            "is_nullable": true
+          }
+        ]
+      },
+      "post_20260827160000_trigger": {
+        "question_id": "post_20260827160000_trigger",
+        "row_count": null,
+        "rows": [
+          {
+            "function": "validate_opportunity_customer_members_consistency",
+            "handles_absent_opportunity": true
+          }
+        ]
+      },
+      "post_20260827180000_anchor": {
+        "question_id": "post_20260827180000_anchor",
+        "row_count": null,
+        "rows": [
+          {
+            "participation_anchored_journeys": 0,
+            "opportunity_anchored_journeys": 19,
+            "unanchored_journeys": 6,
+            "context_free_participations": 0
+          }
+        ]
+      },
+      "post_20260901120000_objects": {
+        "question_id": "post_20260901120000_objects",
+        "row_count": null,
+        "rows": [
+          {
+            "indexes": [
+              "enrollment_requirement_exceptions_pkey",
+              "idx_enrollment_requirement_exception_subject",
+              "uq_enrollment_requirement_exception_active"
+            ],
+            "policies": [
+              "enrollment_requirement_exception_select_org",
+              "enrollment_requirement_exception_write_org"
+            ],
+            "permission_registered": true
+          }
+        ]
+      },
+      "post_20260901120000_table": {
+        "question_id": "post_20260901120000_table",
+        "row_count": null,
+        "rows": [
+          {
+            "table_exists": true,
+            "rls_enabled": true,
+            "rls_forced": true
+          }
+        ]
+      },
+      "post_context_free_indexes": {
+        "question_id": "post_context_free_indexes",
+        "row_count": null,
+        "rows": [
+          {
+            "index": "idx_opportunity_customer_members_org_customer_member",
+            "definition": "CREATE INDEX idx_opportunity_customer_members_org_customer_member ON public.opportunity_customer_members USING btree (org_id, customer_member_id)"
+          },
+          {
+            "index": "idx_opportunity_customer_members_org_location",
+            "definition": "CREATE INDEX idx_opportunity_customer_members_org_location ON public.opportunity_customer_members USING btree (org_id, location_id) WHERE (location_id IS NOT NULL)"
+          },
+          {
+            "index": "idx_opportunity_customer_members_org_opportunity",
+            "definition": "CREATE INDEX idx_opportunity_customer_members_org_opportunity ON public.opportunity_customer_members USING btree (org_id, opportunity_id)"
+          },
+          {
+            "index": "idx_opportunity_customer_members_org_outcome_status",
+            "definition": "CREATE INDEX idx_opportunity_customer_members_org_outcome_status ON public.opportunity_customer_members USING btree (org_id, outcome_status_key)"
+          },
+          {
+            "index": "idx_opportunity_customer_members_org_stage",
+            "definition": "CREATE INDEX idx_opportunity_customer_members_org_stage ON public.opportunity_customer_members USING btree (org_id, stage_key) WHERE (stage_key IS NOT NULL)"
+          },
+          {
+            "index": "idx_opportunity_customer_members_program_category",
+            "definition": "CREATE INDEX idx_opportunity_customer_members_program_category ON public.opportunity_customer_members USING btree (org_id, program_category_id) WHERE (program_category_id IS NOT NULL)"
+          },
+          {
+            "index": "opportunity_customer_members_pkey",
+            "definition": "CREATE UNIQUE INDEX opportunity_customer_members_pkey ON public.opportunity_customer_members USING btree (id)"
+          },
+          {
+            "index": "uq_ocm_active_context_free_episode",
+            "definition": "CREATE UNIQUE INDEX uq_ocm_active_context_free_episode ON public.opportunity_customer_members USING btree (org_id, customer_member_id) WHERE ((opportunity_id IS NULL) AND (COALESCE(outcome_status_key, ''::text) <> ALL (ARRAY['withdrawn'::text, 'not_enrolling'::text, 'enrolled'::text])))"
+          },
+          {
+            "index": "uq_opportunity_customer_members_unique",
+            "definition": "CREATE UNIQUE INDEX uq_opportunity_customer_members_unique ON public.opportunity_customer_members USING btree (org_id, opportunity_id, customer_member_id)"
+          }
+        ]
+      },
+      "session_baseline": {
+        "question_id": "session_baseline",
+        "row_count": null,
+        "rows": [
+          {
+            "sessions_bound_to_enrollment_journey": 21,
+            "distinct_journeys": 21
+          }
+        ]
+      }
+    },
+    "row_count": 27
+  }
+}
