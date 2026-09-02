@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Make a REGISTERED worktree actually runnable: install its worktree-local
+# dependencies, through the same guarded path alloy-sprint-start uses.
+#
+# WHY THIS COMMAND EXISTS. A worktree can enter the fleet two ways.
+# alloy-sprint-start creates one AND installs its dependencies.
+# alloy-worktree-adopt is deliberately a "registers reality" tool that creates
+# nothing — no Git state, no server, no node_modules. Every worktree that
+# arrived by adoption (the Mac mini migration batch, and every lane created
+# through the Vacilando wizard) was therefore registered as server-capable while
+# being unable to start: wt3-communications-inbound-sms held slot 3 and port
+# 3013 for a day, and `next dev` died with `sh: next: command not found`.
+#
+# Until now the only route to the canonical installer was to start a whole
+# sprint, so the practical advice was "just run npm install" — a second,
+# unguarded provisioning path, which is the same shape of mistake that produced
+# the first one. This is that installer, reachable on its own: one concurrency
+# slot, the memory-pressure refusal, and the refusal to accept another
+# worktree's symlinked node_modules, all unchanged.
+#
+# It installs dependencies. It creates no Git state, no branch, no server, no
+# tmux session, and no Development Lane.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+
+usage() {
+  cat <<'USAGE'
+Usage: alloy-worktree-provision <worktree-name> [--force]
+
+Installs worktree-local dependencies for an already-registered worktree so it
+can start its Next dev server. Reports readiness before and after.
+
+  --force   reinstall even when node_modules is already present
+
+Registers nothing, creates no Git state, starts no server.
+USAGE
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
+
+  local name="$1"; shift
+  local force=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=1 ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    shift
+  done
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local before after remedy
+  before="$(alloy_server_readiness_for_path "$path" || true)"
+  alloy_info "readiness before: ${before}"
+
+  case "$before" in
+    no_worktree|no_web_dir|no_manifest)
+      # Nothing an install can fix. Saying so is better than an npm error.
+      remedy="$(alloy_server_readiness_remedy "$before" "$path")"
+      alloy_die "cannot provision ${name}: ${before} — ${remedy}"
+      ;;
+    ready)
+      if [[ "$force" -ne 1 ]]; then
+        alloy_info "${name} is already server-capable (use --force to reinstall)"
+        exit 0
+      fi
+      ;;
+  esac
+
+  [[ "$force" -eq 1 ]] && export ALLOY_SPRINT_FORCE_INSTALL=1
+  alloy_sprint_install_deps "$path" "$name"
+
+  after="$(alloy_server_readiness_for_path "$path" || true)"
+  if [[ "$after" != "ready" ]]; then
+    alloy_die "provision did not make ${name} runnable (readiness: ${after}) — inspect $(alloy_web_dir_for "$path")"
+  fi
+
+  cat <<EOS
+
+Provisioned
+  worktree:  ${name}
+  path:      ${path}
+  readiness: ${before} -> ${after}
+  port:      ${PORT}
+
+Start it with: alloy-dev-start ${name}
+EOS
+}
+
+main "$@"

@@ -757,6 +757,72 @@ alloy_web_dir_for() {
   printf '%s/%s' "$worktree_path" "$ALLOY_WEB_DIR"
 }
 
+# --- Server readiness: registered is not runnable ---
+#
+# THE DEFECT THIS CLOSES. wt3-communications-inbound-sms held slot 3 and port
+# 3013 as a fully registered, server-capable worktree, and could not start a
+# server at all — its web/ has no node_modules, so `next dev` died with
+# `sh: next: command not found` in a log nobody was reading. The capacity
+# experiment counted it as one of the host's server slots and only discovered
+# otherwise by trying. A 17-hour `s.end("ok")` stub had been left listening on
+# that same port, which is what a fake server is FOR: it makes an unrunnable
+# slot look ready.
+#
+# The cause is that a worktree can be registered two ways and only one of them
+# provisions dependencies. alloy-sprint-start installs them; alloy-worktree-adopt
+# is deliberately a "registers reality" tool that creates nothing — no Git state,
+# no server, and no node_modules. Every worktree that entered the fleet by
+# adoption (the Mac mini migration batch, and now every lane created through the
+# Vacilando wizard) was registered as server-capable while being unable to start.
+#
+# So server capability is MEASURED, never assumed, and the answer is a reason
+# rather than a boolean, because "no" without "why" is what sent a capacity
+# experiment looking at the wrong thing.
+#
+#   ready                the dev command can actually start
+#   no_worktree          the registered directory is gone
+#   no_web_dir           no web/ under it
+#   no_manifest          no web/package.json
+#   dependencies_missing web/node_modules absent — install, do not stub
+#   dev_binary_missing   dependencies are installed but the binary the dev
+#                        command actually needs is not among them
+#
+# The binary check is derived from the dev script, never hardcoded to Next.
+# ALLOY_DEV_COMMAND is configurable, and a worktree whose dev command is not Next
+# must not be declared unrunnable because a Next binary is absent — that would be
+# the same mistake in the other direction.
+alloy_server_readiness_for_path() {
+  local path="$1"
+  local web_dir dev_script
+  [[ -n "$path" && -d "$path" ]] || { printf 'no_worktree'; return 1; }
+  web_dir="$(alloy_web_dir_for "$path")"
+  [[ -d "$web_dir" ]] || { printf 'no_web_dir'; return 1; }
+  [[ -f "${web_dir}/package.json" ]] || { printf 'no_manifest'; return 1; }
+  # An empty node_modules is not installed dependencies. A partially removed tree
+  # reads as present to `-d` and fails at `next dev` exactly like an absent one.
+  if [[ ! -d "${web_dir}/node_modules" ]] || [[ -z "$(ls -A "${web_dir}/node_modules" 2>/dev/null)" ]]; then
+    printf 'dependencies_missing'; return 1
+  fi
+  dev_script="$(sed -n 's/.*"dev"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${web_dir}/package.json" 2>/dev/null | head -1)"
+  if [[ "$dev_script" == *next* ]] && [[ ! -x "${web_dir}/node_modules/.bin/next" ]]; then
+    printf 'dev_binary_missing'; return 1
+  fi
+  printf 'ready'
+  return 0
+}
+
+# The remediation that belongs with each reason. An operator reading a refusal
+# should not have to go and look this up.
+alloy_server_readiness_remedy() {
+  case "$1" in
+    dependencies_missing|dev_binary_missing)
+      printf 'run: alloy-worktree-provision %s — the guarded installer (one install slot, no symlinked node_modules)' "$2" ;;
+    no_worktree)   printf 'the registered worktree directory is gone — reconcile the registration' ;;
+    no_web_dir|no_manifest) printf 'this worktree has no web app; it is not server-capable' ;;
+    *) printf '' ;;
+  esac
+}
+
 # True when a process command line is an active Playwright *test runner*
 # (not hostnames, sandbox policy JSON, browsers, or inspection tools).
 alloy_command_is_playwright_test_runner() {

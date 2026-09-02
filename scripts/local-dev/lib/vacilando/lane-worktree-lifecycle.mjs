@@ -576,12 +576,20 @@ export function devServerCensus({ toolkitDir = null, root = runtimeRoot(), spawn
   if (!out || out.status !== 0) return { ok: false, error: "dev_status_unavailable", servers: [] };
   const servers = [];
   for (const line of String(out.stdout || "").split("\n")) {
-    const m = line.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)/);
+    const m = line.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(\S+))?/);
     if (!m) continue;
-    const [, worktree, agent, branch, port, state, pid, path] = m;
+    const [, worktree, agent, branch, port, state, pid, path, readiness] = m;
+    // READY is optional so a census taken against an older toolkit still parses;
+    // when it is absent capability is UNKNOWN, never assumed true. A slot that
+    // cannot start a server is not a server slot, and the capacity experiment
+    // that counted slot 3 as one learned that by trying.
+    const ready = readiness || null;
     servers.push({
       worktree, agent, branch, port: Number(port), state,
       pid: pid === "-" ? null : Number(pid), path,
+      readiness: ready,
+      server_capable: ready == null ? null : ready === "ready",
+      not_server_capable_reason: ready && ready !== "ready" ? ready : null,
       counts_toward_capacity: state === "running",
       reclaimable: state === "unattributable-owner" || state === "stale",
     });
@@ -591,6 +599,12 @@ export function devServerCensus({ toolkitDir = null, root = runtimeRoot(), spawn
     servers,
     running: servers.filter((x) => x.counts_toward_capacity).length,
     reclaimable: servers.filter((x) => x.reclaimable),
+    // How many slots could actually serve, which is the number a capacity
+    // experiment needs and is not the same as how many are registered.
+    server_capable: servers.filter((x) => x.server_capable === true).length,
+    not_server_capable: servers
+      .filter((x) => x.server_capable === false)
+      .map((x) => ({ worktree: x.worktree, reason: x.not_server_capable_reason })),
   };
 }
 

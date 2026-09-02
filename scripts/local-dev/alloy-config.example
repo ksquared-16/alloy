@@ -125,6 +125,25 @@ ALLOY_VALIDATE_HEARTBEAT_STALE_SECONDS="90"
 
 # Managed Sprint Operations V1 — resource guardrails.
 # Six assigned worktrees must not automatically mean six servers or six heavy jobs.
+#
+# PRECEDENCE, later wins:
+#
+#   1. canonical derived capacity   capacity-policy.mjs, from measured hardware
+#   2. local host config            ~/.config/alloy-dev/config (these names)
+#   3. explicit scoped override     ALLOY_CAPACITY_OVERRIDE, one process only
+#
+# EXPORTING ONE OF THESE NAMES DOES NOTHING. This file and the host config both
+# assign them unconditionally and alloy_load_config sources both, so an exported
+# value is overwritten before anything reads it. That is deliberate: an ambient
+# export must not be able to move a production ceiling. To raise one for an
+# experiment or an incident, use the scoped override, which requires a reason,
+# is bounded by the managed slot count, refuses malformed entries without moving
+# anything, is reported by `vac health`, and is never written anywhere — so it
+# cannot outlive the process that set it:
+#
+#   ALLOY_CAPACITY_OVERRIDE="ALLOY_MAX_RUNNING_SERVERS=5" \
+#   ALLOY_CAPACITY_OVERRIDE_REASON="capacity certification phase 2" \
+#     alloy-dev-start wt3-communications-inbound-sms
 ALLOY_MAX_ACTIVE_PROVIDERS="3"
 ALLOY_MAX_RUNNING_SERVERS="3"
 ALLOY_MAX_CONCURRENT_INSTALLS="1"
