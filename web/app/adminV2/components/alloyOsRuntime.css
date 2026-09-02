@@ -5768,14 +5768,13 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
    * hit without aiming.
    */
   /*
-   * FULL WIDTH. A right-hand grab produced ZERO pointer frames in the recorder —
-   * the gesture never began — because the bar stopped 96px short and the press
-   * landed one pixel outside an invisible boundary. The Configure/Remove toolbar
-   * sits above this on z-index 8 with its own pointer events, so it still takes
-   * its own clicks; the bar simply no longer leaves a dead strip beside it.
+   * The bar stops short of the toolbar's corner. A hit test across the card's top
+   * strip: 30%/50%/70% land on this bar, 5% lands on the grip (which starts the
+   * drag through its own handler), and 80%/90% land on the Configure button —
+   * which is deliberate, and is NOT a dead strip.
    */
   left: 0;
-  right: 0;
+  right: 96px;
   height: 44px;
   z-index: 6;
   cursor: grab;
