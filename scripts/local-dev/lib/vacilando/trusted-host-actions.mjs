@@ -625,9 +625,10 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   try { unlinkSync(sqlFile); } catch { /* */ }
 
   if (child.status !== 0) {
-    const code = /trusted_credential_unavailable/.test(errText)
-      ? "trusted_credential_unavailable"
-      : (child.error?.code === "ETIMEDOUT" ? "timeout" : "execution_failed");
+    const code = classifySqlChildFailure(
+      errText,
+      child.error?.code === "ETIMEDOUT" ? "timeout" : "execution_failed",
+    );
     const transient = code === "timeout" || /could not connect|timeout|Connection refused/i.test(errText);
     action.failureReason = code;
     action.executionState = "failed";
@@ -1010,6 +1011,25 @@ export function executeMergeTrustedHostAction(action, { actor = "director", nowM
   return completeTrustedAction(action, publicMergeResult(out), { nowMs });
 }
 
+/**
+ * Classify a trusted-host SQL child's stderr into a NAMED code.
+ *
+ * A missing executable used to reach the caller as a generic `preflight_failed` / `execution_failed`
+ * / `apply_failed`, so the one line that actually mattered -- "psql: command not found" -- never
+ * reached anyone who could act on it. That cost several certification runs across a product lane,
+ * which spent them re-requesting a capability that could never succeed.
+ *
+ * `fallback` is the caller's own operation-shaped code and still applies to genuine SQL failures.
+ */
+function classifySqlChildFailure(errText, fallback) {
+  if (/trusted_credential_unavailable/.test(errText)) return "trusted_credential_unavailable";
+  if (/trusted_host_dependency_missing/.test(errText)) return "trusted_host_dependency_missing";
+  // Defence in depth: the child resolves psql itself now, but an older child or a different missing
+  // binary must still surface as a dependency problem rather than as a failed query.
+  if (/command not found|No such file or directory/.test(errText)) return "trusted_host_dependency_missing";
+  return fallback;
+}
+
 function defaultInspectLedger({ version }) {
   const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
@@ -1038,7 +1058,7 @@ function defaultInspectLedger({ version }) {
     return {
       ok: false,
       applied: false,
-      code: /trusted_credential_unavailable/.test(errText) ? "trusted_credential_unavailable" : "preflight_failed",
+      code: classifySqlChildFailure(errText, "preflight_failed"),
       detail: errText.slice(0, 400) || "Ledger inspect failed",
     };
   }
@@ -1070,7 +1090,7 @@ function defaultApplyMigrationFile({ entry, text }) {
   const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
   try { unlinkSync(file); } catch { /* */ }
   if (child.status !== 0) {
-    return { ok: false, code: /trusted_credential_unavailable/.test(errText) ? "trusted_credential_unavailable" : "apply_failed", detail: errText.slice(0, 400) };
+    return { ok: false, code: classifySqlChildFailure(errText, "apply_failed"), detail: errText.slice(0, 400) };
   }
   return { ok: true, ledger: "applied" };
 }

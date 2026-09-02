@@ -48,10 +48,43 @@ sanitize_database_url() {
   printf '%s' "$url"
 }
 
+# ── THE POSTGRES CLIENT IS RESOLVED, NOT ASSUMED ──
+#
+# The same defect as in trusted-host-run-sql.sh, and it hid behind that one: fixing the READ path
+# let the ledger preflight pass, and the apply then failed here for the identical reason one step
+# later. Homebrew's libpq is keg-only, so `brew install libpq` alone leaves psql off PATH; the known
+# location is consulted directly rather than force-linking host-global state.
+resolve_psql() {
+  if command -v psql >/dev/null 2>&1; then
+    command -v psql
+    return 0
+  fi
+  local candidate
+  for candidate in \
+    /opt/homebrew/opt/libpq/bin/psql \
+    /usr/local/opt/libpq/bin/psql \
+    /opt/homebrew/bin/psql \
+    /usr/local/bin/psql \
+    /Applications/Postgres.app/Contents/Versions/latest/bin/psql
+  do
+    [[ -x "$candidate" ]] && { printf '%s' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+if ! PSQL_BIN="$(resolve_psql)"; then
+  {
+    printf 'trusted_host_dependency_missing dependency=psql\n'
+    printf 'No PostgreSQL client found on PATH or at the known keg-only locations.\n'
+    printf 'Install with: brew install libpq  (keg-only; this script resolves it directly)\n'
+  } >"$ERR_FILE"
+  exit 43
+fi
+
 SAFE_DATABASE_URL="$(sanitize_database_url "$DATABASE_URL")"
 unset DATABASE_URL || true
 
-psql "$SAFE_DATABASE_URL" -X -v ON_ERROR_STOP=1 --no-psqlrc -f "$MIG_FILE" >"$OUT_FILE" 2>"$ERR_FILE"
+"$PSQL_BIN" "$SAFE_DATABASE_URL" -X -v ON_ERROR_STOP=1 --no-psqlrc -f "$MIG_FILE" >"$OUT_FILE" 2>"$ERR_FILE"
 EXIT=$?
 
 unset SAFE_DATABASE_URL PGPASSWORD SUPABASE_SERVICE_ROLE_KEY || true

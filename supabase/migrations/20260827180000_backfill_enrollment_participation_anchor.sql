@@ -20,7 +20,11 @@ begin;
 --    (`NEW_LEAD_STATUS_KEY`), so a backfilled participation is indistinguishable from one the
 --    runtime would have created. Divergence here would be invisible and permanent.
 insert into public.opportunity_customer_members (org_id, customer_member_id, opportunity_id, outcome_status_key)
-select distinct pi.org_id, pi.subject_id, null, 'new_inquiry'
+-- `null::uuid`, not a bare `null`. In an INSERT ... SELECT Postgres infers an untyped NULL as
+-- TEXT and then refuses it against a uuid column ("column opportunity_id is of type uuid but
+-- expression is of type text"). The intent is unchanged -- a context-free participation has no
+-- acquisition Opportunity -- but the type has to be said out loud here.
+select distinct pi.org_id, pi.subject_id, null::uuid, 'new_inquiry'
 from public.process_instances pi
 join public.customer_members cm on cm.id = pi.subject_id and cm.org_id = pi.org_id
 where pi.process_key = 'enrollment'
