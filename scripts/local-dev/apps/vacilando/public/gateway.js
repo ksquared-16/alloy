@@ -1202,7 +1202,26 @@ async function refreshApprovals() {
     const out = await r.json().catch(() => ({}));
     G.approvals = Array.isArray(out.approvals) ? out.approvals : [];
   } catch { G.approvals = G.approvals || []; }
+  // THE BADGE NEEDS AN OWNER THAT ALWAYS RUNS.
+  //
+  // The canonical counts arrived on the lane-list poll, which only runs on the
+  // lanes route — so an operator sitting anywhere else watched a stale number.
+  // Reading them here gives the attention count the same refresh cadence as the
+  // approvals it describes, and it is still the SERVER's projection: this
+  // fetches the count, it does not compute one.
+  await refreshAttentionCounts();
   paintApprovals();
+}
+
+async function refreshAttentionCounts() {
+  try {
+    const r = await gwFetch("/api/notifications?limit=1");
+    const j = await r.json().catch(() => ({}));
+    if (j && typeof j.unseen_count === "number") {
+      // `counts` is what this route has always called the canonical breakdown.
+      applyUnseen(j.unseen_count, j.unseen_by_lane, j.counts);
+    }
+  } catch { /* the next poll carries it */ }
 }
 
 function paintApprovals() {

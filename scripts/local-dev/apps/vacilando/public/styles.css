@@ -127,9 +127,20 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
    group, whatever the lane's state: no centring, and no state-dependent
    indent. Status is carried by the mark and the badge, never by moving the
    name. */
+/* MEASURED IN THE BROWSER, NOT ASSUMED. `.mission-rail-item` already carried
+   `align-items:flex-start`, and every lane name was still centred: `.nav a` is
+   one class PLUS one type, so its `align-items:center` outranked a bare class
+   and won. In a column flex that centres each row's text horizontally, which is
+   why the left edge moved with the length of the lane's name — 39px for
+   "Runtime Performance", 79px for "Surfaces", in the same rail. The selector
+   below outranks it, and the rail test measures the rendered edges rather than
+   reading the rule. */
+.nav a.mission-rail-item,
 .mission-rail-item{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;padding:7px 10px 7px 12px;border-radius:8px;color:var(--ink-2);font-size:13px;font-weight:500;text-decoration:none;cursor:pointer;border-left:2px solid transparent;}
 .mission-rail-item .gw-lane-attn{display:block;white-space:normal;line-height:1.3;}
+.nav a.mission-rail-item:hover,
 .mission-rail-item:hover{background:var(--card-2);}
+.nav a.mission-rail-item.active,
 .mission-rail-item.active{background:var(--bg-tint);color:var(--ink);font-weight:600;border-left-color:var(--vacilando-juniper);}
 /* Attention is a quiet mark on the row, not a repaint of the rail. */
 .mission-rail-item .gw-lane-attn.is-warn{color:var(--terra);}
