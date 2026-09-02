@@ -1,3 +1,10 @@
+---
+owner: platform
+status: proposed
+last_reviewed: 2026-09-02
+supersedes: []
+---
+
 # Operator QA host-identity defect — `localhost` is not an address, it is a question
 
 **Found:** 2026-09-02, Surfaces lane `lane_faacca6079ad`, slot 6
