@@ -80,7 +80,7 @@ import {
   mintGrant,
   resolveGovernedAuthoritySync,
 } from "./governed-repository-authority.mjs";
-import { inspectPullRequest } from "./trusted-host-merge.mjs";
+import { inspectPullRequest, readMergeInputIdentity } from "./trusted-host-merge.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -2033,18 +2033,24 @@ function authorityScopeFor(rec) {
 
 /** Everything a Director actually weighs, in the shape the grant is pinned to. */
 function proposalForRequest(rec) {
+  const mergeIdentity = readMergeInputIdentity(rec.inputs || {});
   return {
     proposal_id: rec.request_id,
     action_key: rec.action_key,
     repository_id: rec.authority?.repository_id || null,
-    pull_request_number: rec.inputs?.pull_request_number ?? rec.inputs?.pullRequestNumber ?? null,
-    expected_head_sha: rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || null,
+    // Read through the SAME normalizer the executor uses. These two lines used
+    // to carry their own shorter spelling list, so a lane that wrote
+    // `pull_request` / `head_sha` — spellings the executor resolves fine — got a
+    // grant pinned to null and a `grant_pull_request_mismatch` it could never
+    // satisfy. See readMergeInputIdentity for the measured incident.
+    pull_request_number: mergeIdentity.pullRequestNumber,
+    expected_head_sha: mergeIdentity.expectedHeadSha,
     // Normalized the way validateMergeInputs will normalize them, so the grant
     // pins the values the action is actually built from. Comparing an unset
     // merge_method against the action's defaulted "merge" would make every
     // grant look stale.
-    target_branch: rec.target || "staging",
-    merge_method: rec.inputs?.merge_method || rec.inputs?.mergeMethod || "merge",
+    target_branch: mergeIdentity.targetBranch || rec.target || "staging",
+    merge_method: mergeIdentity.mergeMethod,
     // Present for a push or a promotion; null for a merge, whose identity is
     // the pull request number rather than a branch name.
     branch: rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || null,
