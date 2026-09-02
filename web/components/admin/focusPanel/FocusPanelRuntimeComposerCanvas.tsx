@@ -34,10 +34,9 @@ import {
     trackFromOffset,
     defaultRowSpanForCard,
     gridFromPublishedLayout,
-    moveArea,
     removeArea,
     resizeArea,
-    snapMoveTarget,
+    resolveDropPlacement,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import { composeEffectiveCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
@@ -402,17 +401,19 @@ export default function FocusPanelRuntimeComposerCanvas({
         };
     }, [ghost, measureCanvas, grid]);
 
-    const applySnappedMove = useCallback(
-        (area: FocusPanelGridArea, col: number, row: number) => {
-            const snapped = snapMoveTarget(grid, area, Math.min(col, cols - area.colSpan + 1), row);
-            return {
-                colStart: snapped.colStart,
-                colSpan: snapped.colSpan,
-                rowStart: snapped.rowStart,
-                rowSpan: snapped.rowSpan,
-            };
-        },
-        [grid, cols],
+    /*
+     * The preview and the drop ask the SAME question of the SAME authority.
+     *
+     * They used to ask different ones — the ghost `snapMoveTarget`, the drop
+     * `moveArea` — and the answers differed for most of the canvas, so the card
+     * landed where the operator had not been shown. `resolveDropPlacement`
+     * returns both the landing area and the layout that lands it; the ghost
+     * draws the first and the drop commits the second.
+     */
+    const resolvePlacement = useCallback(
+        (source: FocusPanelGridLayout, area: FocusPanelGridArea, col: number, row: number) =>
+            resolveDropPlacement(source, area, col, row),
+        [],
     );
 
     const startMove = (e: PointerEvent, area: FocusPanelGridArea) => {
@@ -429,7 +430,7 @@ export default function FocusPanelRuntimeComposerCanvas({
         const gridAtStart = grid;
         const resolveTarget = (clientX: number, clientY: number) => {
             const { col, row } = cellFromPointer(clientX, clientY);
-            return applySnappedMove(area, col - grabColOffset, row - grabRowOffset);
+            return resolvePlacement(gridAtStart, area, col - grabColOffset, row - grabRowOffset);
         };
         const cleanup = () => {
             setGhost(null);
@@ -445,11 +446,17 @@ export default function FocusPanelRuntimeComposerCanvas({
             window.removeEventListener("pointercancel", cancel);
         };
         const move = (ev: globalThis.PointerEvent) => {
-            setGhost(resolveTarget(ev.clientX, ev.clientY));
+            const placement = resolveTarget(ev.clientX, ev.clientY);
+            setGhost({
+                colStart: placement.area.colStart,
+                colSpan: placement.area.colSpan,
+                rowStart: placement.area.rowStart,
+                rowSpan: placement.area.rowSpan,
+            });
         };
         const up = (ev: globalThis.PointerEvent) => {
-            const snapped = resolveTarget(ev.clientX, ev.clientY);
-            applyGrid(moveArea(gridAtStart, area.card, snapped.colStart, snapped.rowStart));
+            // Commit the grid the ghost was drawn from — not a second computation of it.
+            applyGrid(resolveTarget(ev.clientX, ev.clientY).grid);
             cleanup();
         };
         const cancel = () => {

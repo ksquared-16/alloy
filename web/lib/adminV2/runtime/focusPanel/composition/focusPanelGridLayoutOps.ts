@@ -369,6 +369,113 @@ export function snapMoveTarget(
     return clampArea(grid, next);
 }
 
+/** A resolved drop: the card's landing area AND the grid that lands it. PURE. */
+export type FocusPanelDropPlacement = {
+    /** Where the dragged card ends up — this is what the ghost draws. */
+    area: FocusPanelGridArea;
+    /** The whole committed layout, including any reflow the drop required. */
+    grid: FocusPanelGridLayout;
+    /** True when another card had to move to make room. */
+    reflowed: boolean;
+};
+
+/** Free = no placed card shares a cell with this rectangle. PURE. */
+function rectangleIsFree(
+    others: readonly FocusPanelGridArea[],
+    candidate: FocusPanelGridArea,
+): boolean {
+    return !others.some((other) => regionsCollide(other, candidate));
+}
+
+/**
+ * ONE PLACEMENT AUTHORITY FOR THE DRAG PREVIEW AND THE DROP.
+ *
+ * ── THE DEFECT THIS REPLACES ──
+ *
+ * There were two. The ghost asked `snapMoveTarget`, and the drop asked
+ * `moveArea` → `placeArea` → `normalizeGridColumnStacking`. Nothing made them
+ * agree, and they routinely did not. With Process at 8/12 on row 1 and
+ * Financials 4/12 below it, dragging Financials anywhere over columns 2-8
+ * previewed row 1 and committed row 4 — the operator saw the card snap into the
+ * top row, let go, and watched it drop to the bottom. That is the reported
+ * "preview and final placement disagree" and "lands much farther down than the
+ * pointer" in one arithmetic.
+ *
+ * ── AND WHY THE MODEL WAS THE WRONG SHAPE ──
+ *
+ * `snapMoveTarget` reasons about NEIGHBOURS: it finds cards in the same stack
+ * column and decides whether to insert above or below one. That is a sortable
+ * list wearing a grid's clothes. It cannot express "there is empty space to the
+ * right of Process, put the card there", because empty space is not a neighbour.
+ * So a card already holding part of a row read as a blocker for the whole row.
+ *
+ * This function answers spatially instead, and answers once:
+ *
+ *   1. The pointer's own cells, when they are free. Spatial intent wins outright
+ *      — a card occupying columns 1-8 does not own columns 9-12.
+ *   2. Otherwise the NEAREST free rectangle, searched same-row-first so a drag
+ *      into a partly-filled row lands in that row's vacancy rather than being
+ *      thrown to the bottom of the canvas.
+ *   3. Only when nothing is free anywhere in range does the layout reflow, and
+ *      then through the existing stacking normalizer — the minimum move, and the
+ *      only path on which another card shifts at all.
+ *
+ * The ghost draws `area` and the drop commits `grid`, so the two cannot disagree:
+ * they are the same answer.
+ */
+export function resolveDropPlacement(
+    grid: FocusPanelGridLayout,
+    moving: FocusPanelGridArea,
+    targetColStart: number,
+    targetRowStart: number,
+): FocusPanelDropPlacement {
+    const others = grid.areas.filter((area) => area.card !== moving.card);
+    const maxColStart = Math.max(1, grid.columns - moving.colSpan + 1);
+    const col = Math.min(maxColStart, Math.max(1, Math.round(targetColStart)));
+    const row = Math.max(1, Math.round(targetRowStart));
+    const settle = (area: FocusPanelGridArea): FocusPanelDropPlacement => ({
+        area,
+        grid: { ...grid, areas: [...others, area] },
+        reflowed: false,
+    });
+
+    const exact = { ...moving, colStart: col, rowStart: row };
+    if (rectangleIsFree(others, exact)) return settle(exact);
+
+    /*
+     * Nearest vacancy. Rows are searched outward from the pointer's row and
+     * columns outward from the pointer's column, so "beside where I am pointing"
+     * beats "somewhere below". The row window reaches one card-height past the
+     * last occupied row, which is enough to find the empty canvas underneath
+     * without wandering off down an unbounded grid.
+     */
+    const lastRow = others.length
+        ? Math.max(...others.map((a) => a.rowStart + a.rowSpan - 1))
+        : 0;
+    const maxRow = lastRow + moving.rowSpan + 1;
+    for (let dRow = 0; dRow <= maxRow; dRow += 1) {
+        for (const rowCandidate of dRow === 0 ? [row] : [row + dRow, row - dRow]) {
+            if (rowCandidate < 1 || rowCandidate > maxRow) continue;
+            for (let dCol = 0; dCol <= grid.columns; dCol += 1) {
+                for (const colCandidate of dCol === 0 ? [col] : [col + dCol, col - dCol]) {
+                    if (colCandidate < 1 || colCandidate > maxColStart) continue;
+                    const candidate = {
+                        ...moving,
+                        colStart: colCandidate,
+                        rowStart: rowCandidate,
+                    };
+                    if (rectangleIsFree(others, candidate)) return settle(candidate);
+                }
+            }
+        }
+    }
+
+    // Nothing is free in range — reflow, and let the normalizer own the minimum move.
+    const reflowed = placeArea(grid, exact);
+    const landed = findArea(reflowed, moving.card) ?? exact;
+    return { area: landed, grid: reflowed, reflowed: true };
+}
+
 /**
  * MEASURED TRACK GEOMETRY — the composer's real coordinate system.
  *
