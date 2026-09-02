@@ -105,6 +105,20 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
     return counts;
 }
 
+/** An actual member of this org to attribute the fixture's writes to. */
+async function resolveActorUserId(supabase: Supabase, orgId: string): Promise<string | null> {
+    const explicit = process.env.ALLOY_CERT_ACTOR_USER_ID?.trim();
+    if (explicit) return explicit;
+    const { data } = await supabase
+        .from("user_roles")
+        .select("user_id, role")
+        .eq("org_id", orgId)
+        .in("role", ["owner", "admin"])
+        .limit(1);
+    const row = ((data ?? []) as Array<{ user_id?: string }>)[0];
+    return (row?.user_id ?? "").trim() || null;
+}
+
 async function main(): Promise<void> {
     const argv = process.argv.slice(2);
     const wantsVerify = argv.includes("--verify");
@@ -125,7 +139,13 @@ async function main(): Promise<void> {
         return;
     }
 
-    const result = await ensureEnrollmentCertification(supabase, orgId);
+    /*
+     * A REAL actor, resolved from the org's own membership — never a literal.
+     * `ALLOY_CERT_ACTOR_USER_ID` overrides; otherwise the first admin/owner in this org is used,
+     * because the audit trail should name someone who genuinely holds the org.
+     */
+    const actorUserId = await resolveActorUserId(supabase, orgId);
+    const result = await ensureEnrollmentCertification(supabase, orgId, { actorUserId });
     console.log(JSON.stringify({ operation: "ensure", ...result }, null, 2));
     if (!result.ok) process.exit(1);
 }

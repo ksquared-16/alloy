@@ -35,7 +35,7 @@
         "screenshots:action-workspace-bos-cloud": "playwright test playwright/tests/action-workspace-bos-cloud.spec.ts",
         "dev:tenant:childcare": "tsx --tsconfig tsconfig.json scripts/spinupChildcareTenant.ts",
         "dev:seed:operational-cards-certification": "tsx --tsconfig tsconfig.json scripts/seedOperationalCardsCertification.ts",
-        "dev:seed:enrollment-certification": "tsx --tsconfig tsconfig.json scripts/seedEnrollmentCertification.ts",
+        "dev:seed:enrollment-certification": "NODE_ENV=test tsx --tsconfig tsconfig.json scripts/seedEnrollmentCertification.ts",
         "dev:seed:staff-certification": "tsx --tsconfig tsconfig.json scripts/seedStaffCertificationFixture.ts",
         "dev:seed:work-unit-job-queues": "tsx --tsconfig tsconfig.json scripts/seedWorkUnitJobQueueDefinitionV1.ts",
         "dev:seed:enrollment-opportunity-queues": "tsx --tsconfig tsconfig.json scripts/seedEnrollmentOpportunityQueuesV1.ts",

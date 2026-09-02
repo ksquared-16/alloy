@@ -199,11 +199,18 @@ async function ensureFamily(
     supabase: SupabaseClient,
     orgId: string,
     spec: (typeof CERT_FAMILIES)[CertFamilyKey],
+    actorUserId: string | null,
 ): Promise<CertFamilyResult> {
-    // THE REAL COMMAND. Identity is settled by the command, not by this caller.
+    /*
+     * THE REAL COMMAND. Identity is settled by the command, not by this caller.
+     *
+     * The actor is a real user id, not a placeholder. Omitting it let a downstream audit write
+     * reach a uuid column with the literal string "unknown" — the create ran for seven seconds and
+     * then failed on a type error that named nothing about the actor.
+     */
     const created = await executeCreateLeadAction(
         supabase,
-        { orgId },
+        { orgId, userId: actorUserId ?? undefined },
         {
             merged: {
                 first_name: spec.parentFirstName,
@@ -227,8 +234,18 @@ async function ensureFamily(
         );
     }
     const opportunityId = t((created as { opportunity_id?: string }).opportunity_id) || null;
-    const customerId = t((created as { customer_id?: string }).customer_id);
-    if (!customerId) throw new Error(`create_lead produced no customer for ${spec.email}`);
+
+    /*
+     * The household is RESOLVED, not read off the command result. Create Lead returns the
+     * opportunity it made and the processing case that made it; the customer is reached the way
+     * everything else reaches it -- person e-mail through `customer_persons`. Reading a field the
+     * result does not carry is how this failed after a successful create, which reported
+     * "produced no customer" for a household that existed.
+     */
+    const { customerId } = await findFixtureHousehold(supabase, orgId, spec.email);
+    if (!customerId) {
+        throw new Error(`create_lead committed but no household resolves for ${spec.email}`);
+    }
 
     const child = await addChild(supabase, {
         orgId,
@@ -274,6 +291,7 @@ async function ensureFamily(
 export async function ensureEnrollmentCertification(
     supabase: SupabaseClient,
     orgId: string,
+    options: { actorUserId?: string | null } = {},
 ): Promise<EnrollmentCertEnsureResult> {
     await assertNamespaceIsolated(supabase, orgId);
 
@@ -291,7 +309,7 @@ export async function ensureEnrollmentCertification(
      */
     const families: CertFamilyResult[] = [];
     for (const key of Object.keys(CERT_FAMILIES) as CertFamilyKey[]) {
-        families.push(await ensureFamily(supabase, orgId, CERT_FAMILIES[key]));
+        families.push(await ensureFamily(supabase, orgId, CERT_FAMILIES[key], options.actorUserId ?? null));
     }
     return { ok: true, orgId, families };
 }
