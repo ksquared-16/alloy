@@ -181,6 +181,58 @@ test("J: a consumed delegation cannot be replayed for another PR", () => {
 
 // --------------------------------------------------------------- lifecycle
 
+// --------------------------------------- source branch: absence vs constraint
+
+test("the canonical promotion workflow is covered: no pin, different branch", () => {
+  // THE S15 FAILURE, AS A REGRESSION TEST.
+  //
+  // The lane works on agent/claude/5-work-unit-grade-a; safe promotion runs on a
+  // SEPARATE promote/* branch. V2 auto-derived source_branch from the lane
+  // binding, so the delegated push of promote/s15-delegation-cert was refused
+  // delegation_branch_mismatch and the correct workflow was unreachable. Absence
+  // of a typed source_branch must mean no mission-level branch restriction.
+  delegate([{ action_key: PUSH }]);
+  const rec = D.listMissionDelegations({ scopeKey: MISSION, root: ROOT })
+    .find((d) => d.action_key === PUSH);
+  assert.equal(rec.source_branch, null, "no pin may be inferred");
+  const c = cover(PUSH, { branch: "promote/s15-delegation-cert" });
+  assert.equal(c.ok, true, `the promotion branch must be covered: ${c.error}`);
+  // And the lane's own branch is equally covered — absence restricts neither.
+  assert.equal(cover(PUSH, { branch: "agent/claude/5-work-unit-grade-a" }).ok, true);
+});
+
+test("absence of a pin is not unrestricted push authority", () => {
+  // Everything else still binds: repository, protected refs, and at execution
+  // the exact SHA and the trusted-host grant.
+  delegate([{ action_key: PUSH }]);
+  assert.equal(cover(PUSH, { branch: "promote/x", repository: "someone-else/other" }).error,
+    "delegation_repository_mismatch");
+  assert.equal(cover(PUSH, { branch: "staging" }).error, "protected_branch_push_refused");
+  assert.equal(cover(PUSH, { branch: "main" }).error, "protected_branch_push_refused");
+});
+
+test("an explicit typed source_branch still bites", () => {
+  delegate([{ action_key: PUSH, source_branch: "agent/claude/5-work-unit-grade-a" }]);
+  const rec = D.listMissionDelegations({ scopeKey: MISSION, root: ROOT })
+    .find((d) => d.action_key === PUSH);
+  assert.equal(rec.source_branch, "agent/claude/5-work-unit-grade-a", "a typed pin is persisted");
+  const refused = cover(PUSH, { branch: "promote/s15-delegation-cert" });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.error, "delegation_branch_mismatch");
+  // The pinned branch itself is still covered.
+  assert.equal(cover(PUSH, { branch: "agent/claude/5-work-unit-grade-a" }).ok, true);
+});
+
+test("branch patterns are refused rather than loosely matched", () => {
+  // No bounded branch-pattern contract exists, so a glob is a named refusal
+  // instead of an invented matching rule.
+  for (const bad of ["promote/*", "promote/?", "promote/[abc]"]) {
+    const v = D.validateDelegatedAction({ action_key: PUSH, source_branch: bad });
+    assert.equal(v.ok, false, `${bad} must refuse`);
+    assert.equal(v.error, "source_branch_pattern_not_supported");
+  }
+});
+
 test("a push delegation does not license a protected-ref write", () => {
   delegate();
   for (const b of ["staging", "main", "production"]) {
