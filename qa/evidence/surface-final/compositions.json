@@ -1,0 +1,85 @@
+{
+  "record": [
+    {
+      "composition": "2/3 + 1/3",
+      "topRow": [
+        {
+          "card": "business_process",
+          "columns": 8
+        },
+        {
+          "card": "financials",
+          "columns": 4
+        }
+      ],
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "composition": "1/3 + 2/3",
+      "topRow": [
+        {
+          "card": "business_process",
+          "columns": 4
+        },
+        {
+          "card": "financials",
+          "columns": 8
+        }
+      ],
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "composition": "1/2 + 1/2",
+      "topRow": [
+        {
+          "card": "business_process",
+          "columns": 6
+        },
+        {
+          "card": "financials",
+          "columns": 6
+        }
+      ],
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "composition": "1/3 + 1/3 + 1/3",
+      "topRow": [
+        {
+          "card": "business_process",
+          "columns": 4
+        },
+        {
+          "card": "financials",
+          "columns": 4
+        },
+        {
+          "card": "attendance",
+          "columns": 4
+        }
+      ],
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    },
+    {
+      "composition": "full width",
+      "topRow": [
+        {
+          "card": "financials",
+          "columns": 12
+        }
+      ],
+      "previewMatchesCommit": true,
+      "band": 10,
+      "overlaps": 0
+    }
+  ],
+  "pageErrors": []
+}
