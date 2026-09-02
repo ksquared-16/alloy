@@ -524,6 +524,30 @@ alloy_load_trusted_server_env_exports() {
 
 # ── Auth storage state ───────────────────────────────────────────────────────
 
+# Is every cookie in the captured storage past its expiry? Answers the ONE question the word
+# "expired" should ever be based on, so a login redirect is never reported as an expiry.
+alloy_auth_storage_is_expired() {
+  local path="$1"
+  [[ -f "$path" ]] || return 0
+  python3 - "$path" <<'PYEOF' 2>/dev/null || return 1
+import json, sys, time
+try:
+    data = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(1)
+cookies = data.get("cookies") or []
+if not cookies:
+    sys.exit(0)
+now = time.time()
+for c in cookies:
+    exp = c.get("expires")
+    # A session cookie (no positive expiry) never "expires" on the clock.
+    if not isinstance(exp, (int, float)) or exp <= 0 or exp > now:
+        sys.exit(1)
+sys.exit(0)
+PYEOF
+}
+
 alloy_auth_state_status() {
   local slot="$1"
   local port="$2"
@@ -569,9 +593,22 @@ alloy_auth_state_status() {
     ALLOY_AUTH_CHECK_RESULT="$(
       node "$check_script" "${check_args[@]}" 2>/dev/null || echo "failed"
     )" || true
+    # ── "EXPIRED" IS A VERDICT, NOT A CATCH-ALL ──
+    #
+    # `login` and `unauthorized` both used to print `expired`, and every caller repeated that word
+    # to the operator. It sent a certification lane hunting a stale session while the storage was
+    # 50 seconds old with an hour of runway: the cookies were present, correctly scoped to BOTH
+    # localhost and 127.0.0.1, and unexpired -- the app simply did not accept them. Naming the
+    # observed state costs nothing and points at the right half of the system.
+    #
+    # `session_expired` is reserved for a session that genuinely aged out, which the caller can now
+    # tell apart from an app that redirected to login for some other reason.
     case "${ALLOY_AUTH_CHECK_RESULT}" in
       ok) printf 'valid'; return ;;
-      login|unauthorized) printf 'expired'; return ;;
+      login)
+        if alloy_auth_storage_is_expired "$path"; then printf 'session_expired'; else printf 'login_redirect'; fi
+        return ;;
+      unauthorized) printf 'unauthorized'; return ;;
     esac
   fi
 
@@ -914,7 +951,11 @@ alloy_agent_ready_evaluate() {
   auth="$(alloy_auth_state_status "$slot" "$port" "$(alloy_web_dir_for "$path")")"
   case "$auth" in
     missing) issues+=("auth: storage state missing — alloy-agent-login $slot") ;;
-    expired|invalid|invalid-permissions) issues+=("auth: storage state $auth — alloy-agent-login $slot") ;;
+    session_expired|invalid|invalid-permissions) issues+=("auth: storage state $auth — alloy-agent-login $slot") ;;
+    # A live-app refusal is NOT a storage problem, and telling an operator to re-capture storage
+    # sends them to re-mint a session that was already valid. Name what was actually observed.
+    login_redirect) issues+=("auth: storage is valid but the app redirected to /login — session not accepted by the app (auth_origin/session contract), not an expiry") ;;
+    unauthorized) issues+=("auth: the app returned unauthorized for a valid, unexpired storage state") ;;
   esac
 
   # Browser duplicate
