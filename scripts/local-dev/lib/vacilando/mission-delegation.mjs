@@ -60,6 +60,13 @@ export const OPERATOR_ONLY_ENVIRONMENTS = Object.freeze([
 
 export const DELEGATION_STATUS = Object.freeze({
   UNCONSUMED: "unconsumed",
+  /**
+   * Bound to one concrete request while its executable authority is being
+   * established. Single-use is preserved — a second request cannot reserve or
+   * use a delegation another request holds — but the spend is not yet final, so
+   * a failure BEFORE authority is usable can hand it back.
+   */
+  RESERVED: "reserved",
   CONSUMED: "consumed",
   REVOKED: "revoked",
   EXPIRED: "expired",
@@ -358,11 +365,69 @@ export function delegationById(delegationId, root = runtimeRoot()) {
 }
 
 /** Live means unconsumed, unrevoked and unexpired. Anything else is inert. */
+/**
+ * Available to be matched by a NEW request. A reserved delegation is held by
+ * another request and is deliberately not live to anyone else.
+ */
 export function delegationIsLive(rec, nowMs = Date.now()) {
   if (!rec) return false;
   if (rec.status !== DELEGATION_STATUS.UNCONSUMED) return false;
   if (rec.revoked_at) return false;
   return Date.parse(rec.expires_at || 0) > nowMs;
+}
+
+/**
+ * RESERVE: bind this delegation to one request while its executable authority
+ * is minted and proven resolvable. Atomic single-use — a delegation already
+ * reserved or consumed cannot be reserved again, so two concurrent workers
+ * cannot both proceed on it.
+ */
+export function reserveMissionDelegation(delegationId, { requestId, nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const store = readDelegationStore(root);
+  const rec = store.delegations.find((d) => d.delegation_id === delegationId);
+  if (!rec) return { ok: false, error: "delegation_not_found" };
+  if (rec.status === DELEGATION_STATUS.RESERVED) {
+    return rec.reserved_by_request_id === requestId
+      ? { ok: true, already: true, delegation: rec }
+      : { ok: false, error: "delegation_reserved_by_another_request", held_by: rec.reserved_by_request_id };
+  }
+  if (!delegationIsLive(rec, nowMs)) return { ok: false, error: "delegation_not_live", status: rec.status };
+  rec.status = DELEGATION_STATUS.RESERVED;
+  rec.reserved_by_request_id = requestId || null;
+  rec.reserved_at = iso(nowMs);
+  writeStore(store, root);
+  return { ok: true, delegation: rec };
+}
+
+/**
+ * RELEASE: hand a reservation back because authority never became usable.
+ *
+ * S15 measured the case this exists for: the delegation was spent the instant
+ * policy selected it, then the exact-request authorization could not be
+ * resolved at the execution boundary, the run escalated, and nothing was
+ * pushed — but the authority was gone. A failure BEFORE privileged execution
+ * begins must not permanently spend a delegation.
+ *
+ * Only the holder may release, so a late or foreign release cannot free
+ * authority another request is using.
+ */
+export function releaseMissionDelegation(delegationId, { requestId, reason = null, nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const store = readDelegationStore(root);
+  const rec = store.delegations.find((d) => d.delegation_id === delegationId);
+  if (!rec) return { ok: false, error: "delegation_not_found" };
+  if (rec.status !== DELEGATION_STATUS.RESERVED) {
+    return { ok: false, error: "delegation_not_reserved", status: rec.status };
+  }
+  if (requestId && rec.reserved_by_request_id && rec.reserved_by_request_id !== requestId) {
+    return { ok: false, error: "delegation_reserved_by_another_request", held_by: rec.reserved_by_request_id };
+  }
+  rec.status = DELEGATION_STATUS.UNCONSUMED;
+  rec.reserved_by_request_id = null;
+  rec.reserved_at = null;
+  rec.released_at = iso(nowMs);
+  rec.released_reason = reason || null;
+  writeStore(store, root);
+  return { ok: true, delegation: rec };
 }
 
 export function revokeMissionDelegation(delegationId, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
@@ -387,7 +452,16 @@ export function consumeMissionDelegation(delegationId, { requestId, nowMs = Date
   const store = readDelegationStore(root);
   const rec = store.delegations.find((d) => d.delegation_id === delegationId);
   if (!rec) return { ok: false, error: "delegation_not_found" };
-  if (!delegationIsLive(rec, nowMs)) return { ok: false, error: "delegation_not_live", status: rec.status };
+  // Consumption is the END of the reservation this request already holds. It is
+  // reached only once the executable authority has been minted AND proven
+  // resolvable, so authority is spent when it is actually about to be used.
+  if (rec.status === DELEGATION_STATUS.RESERVED) {
+    if (requestId && rec.reserved_by_request_id && rec.reserved_by_request_id !== requestId) {
+      return { ok: false, error: "delegation_reserved_by_another_request", held_by: rec.reserved_by_request_id };
+    }
+  } else if (!delegationIsLive(rec, nowMs)) {
+    return { ok: false, error: "delegation_not_live", status: rec.status };
+  }
   rec.status = DELEGATION_STATUS.CONSUMED;
   rec.consumed_at = iso(nowMs);
   rec.consumed_by_request_id = requestId || null;

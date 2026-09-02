@@ -84,6 +84,8 @@ import { inspectPullRequest, readMergeInputIdentity } from "./trusted-host-merge
 import {
   consumeMissionDelegation,
   findCoveringDelegation,
+  releaseMissionDelegation,
+  reserveMissionDelegation,
 } from "./mission-delegation.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
@@ -1558,7 +1560,8 @@ function withMissionDelegation(rec, decision, { nowMs, evidence = null } = {}) {
 
 function policyDecision(rec, { nowMs } = {}) {
   const auth = findAuthorization({
-    missionId: rec.mission_id,
+    // Same resolver the mint and the execution boundary use.
+    missionId: authorityScopeFor(rec),
     actionType: rec.action_key,
     databaseTarget: rec.target,
     queryHash: actionQueryHash(rec),
@@ -2180,11 +2183,28 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
 }
 
 /**
- * The key the trusted-host stores are partitioned by.
+ * THE ONE KEY EXECUTION AUTHORITY IS SCOPED BY. Mint and lookup both use it.
  *
  * A mission when there is one; otherwise the repository that vouched. Same
- * store, same states, same execution path — only the authority differs, which
- * is the whole point of this change.
+ * store, same states, same execution path — only the authority differs.
+ *
+ * S15 FAILED ON THREE DIFFERENT ANSWERS TO THIS ONE QUESTION. The delegated
+ * path minted under `mission_id || lane_id` (-> lane_73a897409906), the policy
+ * lookup asked for `mission_id` (-> null), and the trusted-host action was
+ * created under this resolver (-> repo_alloy). A repository-authorized lane has
+ * no mission, so the freshly minted authorization was written to one partition
+ * and searched for in another: authority minted and then not found, escalating
+ * a delegated push to awaiting_operator.
+ *
+ * That is the merge-input-alias defect for a third time — two sides
+ * independently deriving the same identity. This resolver already existed and
+ * the execution boundary already used it, so the fix is that everyone adopts it
+ * rather than a fourth spelling being invented.
+ *
+ * Lane isolation does not depend on the partition: an exact-request
+ * authorization is additionally bound to requestId, contentFingerprint,
+ * actionType, environment, repository and sourceSha, so one lane's authority
+ * cannot cover another lane's request even inside a shared repository scope.
  */
 function authorityScopeFor(rec) {
   return rec?.mission_id || rec?.authority?.repository_id || null;
@@ -2664,57 +2684,95 @@ export function processGovernedAction(requestId, {
   // The mission's own words travel with it: the operator inspects the sentence
   // the Director actually wrote, not the runtime's paraphrase of it.
   if (policy.authorized_by === "mission_delegation" && policy.delegation_id) {
-    const spent = consumeMissionDelegation(policy.delegation_id, {
+    // RESERVE FIRST, CONSUME ONLY ONCE THE AUTHORITY IS USABLE.
+    //
+    // S15 spent the delegation the instant policy selected it. The
+    // exact-request authorization was then minted into one partition and
+    // searched for in another, the run escalated to awaiting_operator, nothing
+    // was pushed — and the authority was gone anyway. A failure BEFORE
+    // privileged execution begins must not permanently spend a delegation.
+    //
+    // Reservation keeps single-use intact throughout: while this request holds
+    // it, no other request can reserve or use it.
+    const held = reserveMissionDelegation(policy.delegation_id, {
       requestId: rec.request_id,
       nowMs,
       root: runtimeRoot(),
     });
-    if (!spent.ok) {
-      // The delegation went away between the decision and here. Fail closed:
-      // the operator is asked, exactly as they would have been without it.
+    if (!held.ok) {
       rec.policy_decision = "policy_default_requires_operator";
       rec.operator_approval_required = true;
-      rec.delegation_declined = spent.error;
+      rec.delegation_declined = held.error;
+      policy.operator_approval_required = true;
     } else {
       rec.mission_delegation = {
         delegation_id: policy.delegation_id,
         action_key: policy.delegation_action_key,
         target_branch: policy.delegation_target_branch,
-        mission_clause: policy.delegation_mission_clause,
         authorized_by: "mission_delegation",
         at: iso(nowMs),
       };
-      // THE DELEGATION SATISFIED THE CLICK; IT MUST NOW MINT THE SAME EXECUTION
-      // AUTHORITY A DIRECTOR APPROVAL WOULD.
-      //
-      // Without this the request executes, reaches the trusted-host boundary
-      // with no authorization for this exact content, and escalates straight
-      // back to awaiting_operator — the redundant click this feature exists to
-      // remove, simply relocated. It is the SAME primitive the Director path
-      // uses: bound to one request id, content fingerprint, action, environment,
-      // repository and source SHA, expiring, verified again at the boundary,
-      // and refused outright for operator-only environments.
       const gInputs = rec.inputs || {};
       const gIdentity = readMergeInputIdentity(gInputs);
+      const scopeKey = authorityScopeFor(rec);
+      const sourceSha = gIdentity.expectedHeadSha
+        || gInputs.expectedHeadSha || gInputs.expected_head_sha || gInputs.expectedSha || null;
+      const environment = policy.delegation_target_branch || rec.target;
       const gGranted = grantExactRequestAuthorization({
-        missionId: rec.mission_id || rec.lane_id,
+        missionId: scopeKey,
         requestId: rec.request_id,
         contentFingerprint: governedContentFingerprint(rec),
         actionType: rec.action_key,
-        environment: policy.delegation_target_branch || rec.target,
+        environment,
         repository: gInputs.repository || null,
-        sourceSha: gIdentity.expectedHeadSha
-          || gInputs.expectedHeadSha || gInputs.expected_head_sha || gInputs.expectedSha || null,
+        sourceSha,
         decisionActor: "mission_delegation",
         policyId: "mission_delegation_v1",
         nowMs: nowMs ?? Date.now(),
       });
-      if (gGranted?.ok && gGranted.authorization) {
+      // MINTED IS NOT ENOUGH — IT MUST BE FINDABLE. This is the exact failure
+      // S15 hit, so it is now proven here rather than discovered at the
+      // trusted-host boundary after the delegation was already spent.
+      const resolvable = gGranted?.ok && gGranted.authorization
+        ? findAuthorization({
+          missionId: scopeKey,
+          actionType: rec.action_key,
+          databaseTarget: environment,
+          queryHash: sourceSha,
+          requestId: rec.request_id,
+          contentFingerprint: governedContentFingerprint(rec),
+          environment,
+          repository: gInputs.repository || null,
+          nowMs: nowMs ?? Date.now(),
+        })
+        : null;
+      if (gGranted?.ok && resolvable) {
+        const spent = consumeMissionDelegation(policy.delegation_id, {
+          requestId: rec.request_id,
+          nowMs,
+          root: runtimeRoot(),
+        });
         rec.mission_delegation.authorization_id = gGranted.authorization.authorizationId;
+        rec.mission_delegation.authorization_scope = scopeKey;
+        rec.mission_delegation.consumed = Boolean(spent.ok);
+        if (!spent.ok) {
+          rec.mission_delegation.consume_error = spent.error;
+          rec.policy_decision = "policy_default_requires_operator";
+          rec.operator_approval_required = true;
+          policy.operator_approval_required = true;
+        }
       } else {
-        // Could not derive authority — fail CLOSED, back to the operator, with
-        // the reason recorded rather than an unexplained second ask.
-        rec.mission_delegation.authorization_error = gGranted?.error || "authorization_not_derived";
+        // Hand the reservation back: nothing privileged happened.
+        releaseMissionDelegation(policy.delegation_id, {
+          requestId: rec.request_id,
+          reason: gGranted?.ok ? "authorization_not_resolvable" : (gGranted?.error || "authorization_not_derived"),
+          nowMs,
+          root: runtimeRoot(),
+        });
+        rec.mission_delegation.authorization_error = gGranted?.ok
+          ? "authorization_not_resolvable"
+          : (gGranted?.error || "authorization_not_derived");
+        rec.mission_delegation.released = true;
         rec.policy_decision = "policy_default_requires_operator";
         rec.operator_approval_required = true;
         policy.operator_approval_required = true;
@@ -2752,7 +2810,7 @@ export function processGovernedAction(requestId, {
       // the execution boundary rather than merely presented.
       const dInputs = rec.inputs || {};
       const dGranted = grantExactRequestAuthorization({
-        missionId: rec.mission_id,
+        missionId: authorityScopeFor(rec),
         requestId: rec.request_id,
         contentFingerprint: policy.director_decision.content_fingerprint,
         actionType: rec.action_key,
