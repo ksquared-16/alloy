@@ -52,6 +52,7 @@ SUITES=(
   "development-gateway-rail.test.mjs"
   "development-host-lifecycle-truth.test.mjs"
   "development-lane-branch-reconcile.test.mjs"
+  "development-lane-provisioning.test.mjs"
   "development-capacity-precedence.test.mjs"
   "development-server-readiness.test.mjs"
   "development-run-summary-output.test.mjs"

@@ -19,6 +19,7 @@ import {
 } from "./development-lane.mjs";
 import { getDevelopmentLane, listDevelopmentLanes } from "./lanes.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
+import { registerCreatedWorktree } from "./lane-worktree-lifecycle.mjs";
 
 function pathLikeFields(body = {}) {
   const keys = [
@@ -302,17 +303,39 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
       // is ready; the operator can retry provisioning without losing the lane.
       workspace = { mode: workspaceMode, provisioned: false, error: made.error, detail: made.detail || null };
     } else {
+      // A CREATED WORKTREE MUST ALSO BE A REGISTERED ONE.
+      //
+      // Creating the worktree is not provisioning the lane. Without a slot and a
+      // metadata registration the lane has no port, no dev server, no managed QA
+      // environment — and, since the dispatch guard, no delivery at all. The
+      // Financials lane was created this way: worktree, branch, tmux and a live
+      // Claude, and every message refused `lane_worktree_unregistered` while the
+      // operator watched for an agent that was already running.
+      //
+      // The canonical writer is `alloy-worktree-adopt`; this calls it rather
+      // than writing metadata of its own.
+      const registered = await registerCreatedWorktree({
+        worktreeName: made.worktree_name,
+        provider,
+      });
       const { bindDurableLane } = await import("./development-lane.mjs");
       bindDurableLane(created.lane.lane_id, {
         worktree_path: made.worktree_path,
         worktree_name: made.worktree_name,
         branch: made.branch,
         provider,
+        ...(registered.ok ? { slot: registered.slot, port: registered.port } : {}),
       }, { nowMs });
       workspace = {
-        mode: workspaceMode, provisioned: true,
+        mode: workspaceMode,
+        // Provisioned means USABLE. A worktree the fleet cannot see is not a
+        // provisioned lane, and reporting it as one is what hid this.
+        provisioned: registered.ok,
         worktree_path: made.worktree_path, branch: made.branch,
         base_ref: made.base_ref, repository_id: made.repository_id,
+        ...(registered.ok
+          ? { slot: registered.slot, port: registered.port, registered: true }
+          : { registered: false, error: registered.error, detail: registered.detail || null }),
       };
     }
   } else if (workspaceMode === "connect_existing" && repositoryId && body.worktree_path) {
