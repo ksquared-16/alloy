@@ -59,6 +59,7 @@ SUITES=(
   "development-managed-slot-topology.test.mjs"
   "development-session-starting-stuck.test.mjs"
   "development-capacity-cohort.test.mjs"
+  "development-lane-app-url.test.mjs"
   "development-run-summary-output.test.mjs"
   "development-completion-summary-last.test.mjs"
   "development-cursor-transport-readiness.test.mjs"

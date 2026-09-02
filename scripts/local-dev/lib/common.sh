@@ -239,6 +239,53 @@ alloy_metadata_path() {
   printf '%s/%s.env' "$ALLOY_METADATA_DIR" "$name"
 }
 
+# --- Director-facing route for a lane's app ---
+#
+# WHY THIS IS PART OF STARTING A SERVER. Execution is on the Mac mini; the
+# Director drives Vacilando from a MacBook. A dev server that is running but not
+# routed is invisible to the operator, and the obvious link — localhost:PORT —
+# means the MacBook when clicked there. Routing is therefore not a separate
+# setup step somebody remembers; it is part of what "the server is available"
+# means, so every lane inherits it and no lane needs a hand-written config.
+#
+# Per-port HTTPS on the tailnet hostname Tailscale Serve already publishes. Not
+# a path mount: the app stays at the root so absolute /_next asset paths and the
+# HMR socket keep working. Not the raw tailnet IP: plain HTTP on an IP literal
+# breaks Secure cookies and cannot appear in an OAuth redirect allowlist, and
+# the human sign-in ceremony has to live on this origin.
+#
+# Best effort by construction. A missing or unconfigured Tailscale must never
+# stop a dev server from starting — the server is still correct locally, it is
+# only the remote route that is absent, and lane-app-url reports that honestly
+# as `no_serve_mapping_for_port` rather than emitting a URL that cannot connect.
+alloy_tailscale_bin() {
+  if command -v tailscale >/dev/null 2>&1; then command -v tailscale; return 0; fi
+  [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]] \
+    && printf '/Applications/Tailscale.app/Contents/MacOS/Tailscale' && return 0
+  return 1
+}
+
+alloy_ensure_director_route() {
+  local port="$1" ts
+  [[ -n "$port" ]] || return 0
+  [[ "${ALLOY_DIRECTOR_ROUTE:-1}" == "1" ]] || return 0
+  ts="$(alloy_tailscale_bin)" || return 0
+  # Idempotent: if the mapping is already published, adding it again is a no-op
+  # but we avoid the call so a normal restart is quiet.
+  if "$ts" serve status 2>/dev/null | grep -q ":${port}\b"; then return 0; fi
+  "$ts" serve --bg "--https=${port}" "http://127.0.0.1:${port}" >/dev/null 2>&1 || return 0
+  return 0
+}
+
+alloy_remove_director_route() {
+  local port="$1" ts
+  [[ -n "$port" ]] || return 0
+  [[ "${ALLOY_DIRECTOR_ROUTE:-1}" == "1" ]] || return 0
+  ts="$(alloy_tailscale_bin)" || return 0
+  "$ts" serve "--https=${port}" off >/dev/null 2>&1 || return 0
+  return 0
+}
+
 # --- Dev-server lifecycle audit ---
 #
 # THE GAP THIS CLOSES. During capacity certification the server on slot 1

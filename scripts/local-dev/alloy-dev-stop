@@ -81,6 +81,7 @@ EOF
     exit 1
   fi
 
+  alloy_remove_director_route "${PORT:-}"
   alloy_record_server_lifecycle "stop" "$name" \
     "$([[ "$stopped_any" == 1 ]] && printf 'ok' || printf 'nothing_to_stop')" \
     "${ALLOY_SERVER_AUDIT_REASON:-stop requested}" "${pid:-}" ""
