@@ -1,0 +1,74 @@
+{
+  "trusted_host_action_id": "tha_d9adca247d1fe3",
+  "query_hash": "08470fb9eb64cbe0423393743fe12b4dde29d377dda6c774ef0ef435c86f53f5",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T18:58:40.753Z",
+    "question_ids": [
+      "entry_points",
+      "requirement_kinds_latest"
+    ],
+    "questions": {
+      "entry_points": {
+        "question_id": "entry_points",
+        "row_count": null,
+        "rows": [
+          {
+            "intent": "create_lead",
+            "declared_stage_key": "lead",
+            "revisions": 10
+          },
+          {
+            "intent": "enrollment_start",
+            "declared_stage_key": "enrolling",
+            "revisions": 10
+          }
+        ]
+      },
+      "requirement_kinds_latest": {
+        "question_id": "requirement_kinds_latest",
+        "row_count": null,
+        "rows": [
+          {
+            "stage_key": "enrolled",
+            "requirement_kind": "field",
+            "requirements": 1
+          },
+          {
+            "stage_key": "enrolling",
+            "requirement_kind": "form",
+            "requirements": 1
+          },
+          {
+            "stage_key": "lead",
+            "requirement_kind": "field",
+            "requirements": 10
+          },
+          {
+            "stage_key": "tour",
+            "requirement_kind": "field",
+            "requirements": 2
+          },
+          {
+            "stage_key": "waitlist",
+            "requirement_kind": "field",
+            "requirements": 4
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-02T18:58:40.080Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_3e05b848b01547",
+    "authorization_id": "grnt_74771e9bf97a41cf",
+    "query_hash": "08470fb9eb64cbe0423393743fe12b4dde29d377dda6c774ef0ef435c86f53f5",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  }
+}
