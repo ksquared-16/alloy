@@ -1186,6 +1186,9 @@ async function prePasteObservation(target, { tmux, capturePane, provider, nowMs 
     maxChars: LANE_OUTPUT_RECENT_CHARS,
   });
   return {
+    // The bounded pane text, returned so callers that must CLASSIFY the screen
+    // (not merely gate on it) do not have to capture the pane a second time.
+    text: bounded.text,
     readiness: assessPanePromptReadiness(bounded.text, {
       provider: provider || null,
       captured: captured && Boolean(bounded.text.trim()),
@@ -1324,19 +1327,63 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
         nowMs,
       });
     }
-    const gate = promptReadinessAllowsSend(observed.readiness, {
+    let gate = promptReadinessAllowsSend(observed.readiness, {
       strictCapture: opts.strictPromptCapture === true,
     });
+
+    // A KNOWN BENIGN ONBOARDING INTERSTITIAL IS NOT AN OPERATOR QUESTION.
+    //
+    // Answering it during provider bootstrap is not sufficient on its own:
+    // Claude satisfies the readiness gate as soon as it draws its banner
+    // prompt, and only THEN paints "Teach auto mode about your environment?".
+    // The modal therefore arrives after the start path has stopped watching,
+    // and the first send is refused `provider_prompt_not_ready` — which is what
+    // made the operator SSH into the mini to press a key.
+    //
+    // The trust conditions are the same ones the start path proves, re-checked
+    // here because this is a different entry point: the lane's worktree must be
+    // a managed worktree of a registered repository. The classifier itself
+    // refuses anything that is not a declining preference interstitial.
     if (!gate.allow) {
-      return auditAndReturn(sendResult({
-        ok: false,
-        laneId: durableId,
-        error: PROMPT_NOT_READY_ERROR,
-        status: "refused",
-        nowMs,
-        size,
-        readiness: observed.readiness,
-      }));
+      let cleared = false;
+      try {
+        const wtPath = found.lane?.binding?.worktree_path || found.lane?.worktree?.path || null;
+        if (wtPath) {
+          const { managedWorktreePath } = await import("./repository-registry.mjs");
+          if (managedWorktreePath(wtPath)?.ok) {
+            const { benignOnboardingAnswer } = await import("./provider-prompt-readiness.mjs");
+            const safe = benignOnboardingAnswer(observed.text || "", { provider });
+            if (safe) {
+              for (const key of [...safe.keys, "Enter"]) {
+                await tmux(["send-keys", "-t", targetCheck.target, key]);
+              }
+              const sleep = typeof opts.sleep === "function" ? opts.sleep : (ms) => new Promise((r) => setTimeout(r, ms));
+              await sleep(900);
+              observed = await prePasteObservation(targetCheck.target, {
+                tmux,
+                capturePane: opts.capturePane,
+                provider,
+                nowMs,
+              });
+              gate = promptReadinessAllowsSend(observed.readiness, {
+                strictCapture: opts.strictPromptCapture === true,
+              });
+              cleared = gate.allow;
+            }
+          }
+        }
+      } catch { /* an unclearable pane simply stays refused below */ }
+      if (!cleared && !gate.allow) {
+        return auditAndReturn(sendResult({
+          ok: false,
+          laneId: durableId,
+          error: PROMPT_NOT_READY_ERROR,
+          status: "refused",
+          nowMs,
+          size,
+          readiness: observed.readiness,
+        }));
+      }
     }
 
     const delivered = await defaultDeliverInstruction({
