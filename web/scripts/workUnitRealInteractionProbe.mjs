@@ -17,11 +17,51 @@
  * text that differs from the previous row's text for that same card. Stale prior-row content is
  * therefore never scored as truth.
  */
+import { execFileSync } from "node:child_process";
+
 import { BASE, redact, withOperatorPage } from "./pe3HarnessEnv.mjs";
+import { openObservationSink } from "./lib/perfObservationSink.mjs";
 
 const MODE = process.env.WU_MODE ?? "switch";
 const N = Number(process.env.WU_N ?? 10);
 const SLUG = process.env.WU_SLUG ?? "waitlist";
+
+/**
+ * The exact code these observations describe, read from Git rather than passed in — a run that
+ * cannot name its SHA is a run whose numbers cannot be pooled with anything, and asking the operator
+ * to supply it by hand is how the wrong SHA gets attached.
+ */
+function headSha() {
+    try {
+        return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Observations are appended AS THEY ARE TAKEN (see `perfObservationSink`). An admitted window is
+ * expensive; a harness killed near the end of one must not cost the whole window.
+ */
+const SINK_PATH = process.env.WU_OUT ?? `/tmp/pe3/work-unit-${MODE}-${Date.now()}.jsonl`;
+
+const UUID_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Cells are keyed by the layout's INSTANCE key, which a published composition may set to a uuid.
+ * That is a structural id, not a person — but the sink refuses uuids on principle rather than
+ * guessing which ones are harmless, so the substitution belongs here, where we know what the key
+ * means. A uuid instance becomes a stable positional alias; a named card keeps its name, which is
+ * the part the report is actually about.
+ */
+function anonymiseCardKeys(cards) {
+    const out = {};
+    let n = 0;
+    for (const [key, value] of Object.entries(cards)) {
+        out[UUID_KEY.test(key) ? `cell_${n++}` : key] = value;
+    }
+    return out;
+}
 
 {
     let h;
@@ -92,6 +132,9 @@ function analyse(frames, baseline) {
 
 const pct = (xs, p) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))]; };
 
+const sink = openObservationSink(SINK_PATH, { sha: headSha(), probe: "work-unit", mode: MODE, slug: SLUG, n: N });
+console.log(`observations -> ${SINK_PATH}`);
+
 await withOperatorPage(async (page, context) => {
     const cdp = await context.newCDPSession(page);
     await cdp.send("Network.enable");
@@ -120,8 +163,18 @@ await withOperatorPage(async (page, context) => {
         console.log(`   ${k.padEnd(16)} truthful ${String(v.truthful_ms ?? "NEVER").padStart(6)}ms  skeleton@${String(v.first_skeleton_ms ?? "—").padStart(5)}  blank_frames ${String(v.blank_frames).padStart(4)}  missing ${v.missing_frames}`);
     }
     console.log(`  drawer VM: issued ${vmIssue ? vmIssue - tEnter : "—"}ms rel click, completed ${vmEnd ? vmEnd - tEnter : "—"}ms, requests ${vmCount}`);
+    sink.append({
+        phase: "entry",
+        selected_row_ms: entry.selected_row_ms ?? null,
+        panel_counts: entry.panel_counts,
+        remount: entry.remount,
+        cards: anonymiseCardKeys(entry.cards),
+        vm_issue_ms: vmIssue ? vmIssue - tEnter : null,
+        vm_end_ms: vmEnd ? vmEnd - tEnter : null,
+        vm_count: vmCount,
+    });
 
-    if (MODE === "entry") return;
+    if (MODE === "entry") { sink.close({ phase: "entry" }); return; }
 
     // B. Rapid row switching — no hover, no dwell, alternating near and distant rows.
     await page.waitForTimeout(1500);
@@ -149,7 +202,10 @@ await withOperatorPage(async (page, context) => {
         const frames = await page.evaluate(STOP);
         const a = analyse(frames, baseline);
         const changed = Object.values(a.cards).some((c) => c.truthful_ms != null);
+        const observation = { phase: "switch", row_index: idx, admissible: changed, ...a, cards: anonymiseCardKeys(a.cards), vm_issue_ms: vmIssue ? vmIssue - t0 : null, vm_end_ms: vmEnd ? vmEnd - t0 : null, vm_count: vmCount };
         per.push({ idx, admissible: changed, ...a, vm_issue: vmIssue ? vmIssue - t0 : null, vm_end: vmEnd ? vmEnd - t0 : null, vm_count: vmCount });
+        // Flushed before the next switch, so an interrupted run keeps every switch it completed.
+        sink.append(observation);
         const cw = a.cards.current_work ?? {};
         console.log(`  row ${String(idx).padStart(2)} ${changed ? "" : "[NO CHANGE] "}sel ${String(a.selected_row_ms ?? "—").padStart(4)}ms  current_work prior_removed ${String(cw.prior_removed_ms ?? "—").padStart(5)} truthful ${String(cw.truthful_ms ?? "NEVER").padStart(6)} blank_frames ${String(cw.blank_frames ?? 0).padStart(4)}  remount ${a.remount}  vm ${vmCount}`);
         // new baseline = the settled state we just reached
@@ -168,4 +224,6 @@ await withOperatorPage(async (page, context) => {
     const sel = ok.map((p) => p.selected_row_ms).filter((v) => v != null);
     console.log(`   selected-row feedback  p50 ${pct(sel, 50)}  p90 ${pct(sel, 90)}  max ${sel.length ? Math.max(...sel) : "—"}`);
     console.log(`   remounts during switch: ${per.filter((p) => p.remount).length}   drawer VM requests per switch: ${JSON.stringify(per.map((p) => p.vm_count))}`);
+    sink.close({ phase: "switch", admissible: ok.length, attempted: per.length });
+    console.log(`\n   observations persisted -> ${SINK_PATH}`);
 }, { assertFreshBuild: process.env.WU_FRESH === "1" });
