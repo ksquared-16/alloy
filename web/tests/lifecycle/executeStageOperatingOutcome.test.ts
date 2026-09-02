@@ -88,8 +88,12 @@ function withConfiguredDept(
             // write asserts it touched exactly one row, the stub has to say which operation it is
             // standing in for.
             let isUpdate = false;
+            const eqCols: string[] = [];
             chain.select = () => chain;
-            chain.eq = () => chain;
+            chain.eq = (col: string) => {
+                eqCols.push(col);
+                return chain;
+            };
             chain.update = () => {
                 isUpdate = true;
                 return chain;
@@ -103,8 +107,35 @@ function withConfiguredDept(
                     : { data: null, error: null };
             };
             chain.single = async () => ({ data: {}, error: null });
-            chain.then = (resolve: (value: unknown) => unknown) =>
-                resolve({ data: isUpdate ? [{ id: "pi-1" }] : [], error: null });
+            /*
+             * Three shapes now resolve through `then`, and they must not answer alike:
+             *
+             *   UPDATE                     → one row, so a scope-targeted write asserts it moved 1
+             *   READ filtered by subject   → the child's own journey (the anchor scope resolver)
+             *   READ filtered by context   → [], the lead enumeration the family-close guard makes
+             *
+             * The last one stays empty on purpose: "this lead has no child tracks" is true for the
+             * family-level cases here. The middle one used to fall into that same empty answer,
+             * which said the CHILD had no journey — so every child write reported "no enrollment
+             * track was found" for a child these tests had given one.
+             */
+            chain.then = (resolve: (value: unknown) => unknown) => {
+                if (isUpdate) return resolve({ data: [{ id: "pi-1" }], error: null });
+                if (eqCols.includes("subject_id")) {
+                    return resolve({
+                        data: [
+                            {
+                                id: "pi-1",
+                                context_type: "enrollment_participation",
+                                context_id: "ocm-1",
+                                state: "enrolling",
+                            },
+                        ],
+                        error: null,
+                    });
+                }
+                return resolve({ data: [], error: null });
+            };
             return chain;
         }
         return originalFrom(table);

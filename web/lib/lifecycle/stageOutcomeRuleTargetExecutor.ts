@@ -329,10 +329,20 @@ export async function applyStageOutcomeRuleTarget(
             const childId = await resolveChildSubjectId(supabase, orgId, subject);
             if (!childId) return { error: "Could not resolve child for enrollment state update" };
             // Prior state (from process_instances, not OCM) for the transition event.
+            /*
+             * The write REPORTS the row it touched, and the compensation names that row.
+             *
+             * Re-deriving it would break the undo: by then the journey is `enrolled`, which is
+             * CONCLUDED, so the live-journey predicate would no longer match it and the
+             * compensation would silently restore nothing while reporting a clean abort.
+             */
+            const journeyInstanceId = subject.process_instance_id ?? null;
+
             const prevState = await readEnrollmentInstanceState(supabase, {
                 orgId,
                 opportunityId: subject.opportunity_id,
                 customerMemberId: childId,
+                processInstanceId: journeyInstanceId,
             });
             // Authoritative writer: the child's process instance owns durable state + close reason.
             // The OCM durable enrollment-status column is NOT written — process_instances is the
@@ -344,7 +354,10 @@ export async function applyStageOutcomeRuleTarget(
                 customerMemberId: childId,
                 state: dispositionKey as EnrollmentProcessState,
                 closeReasonKey,
+                processInstanceId: journeyInstanceId,
             });
+            // The exact row the write landed on — the compensation must not re-derive it.
+            const writtenInstanceId = journeyInstanceId ?? pi.instanceId ?? null;
             if (pi.error) return { error: pi.error };
 
             const degradedEffects: string[] = [];
@@ -354,6 +367,7 @@ export async function applyStageOutcomeRuleTarget(
                     opportunityId: subject.opportunity_id,
                     customerMemberId: childId,
                     state: (prevState ?? null) as EnrollmentProcessState,
+                    processInstanceId: writtenInstanceId,
                 });
                 if (restored.error) throw new Error(`restore child enrollment state: ${restored.error}`);
             };
@@ -742,10 +756,14 @@ export async function applyStageOutcomeRuleTarget(
                 const childId = await resolveChildSubjectId(supabase, orgId, subject);
                 if (!childId) return { error: "Child enrollment track required for move_to_stage" };
                 stageMoveChildId = childId;
+                // The move reports the row it touched; the compensation names that row rather than
+                // re-deriving it under a predicate the move itself may have changed.
+                const stageInstanceId = subject.process_instance_id ?? null;
                 const priorStage = await readEnrollmentInstanceStageKey(supabase, {
                     orgId,
                     opportunityId: subject.opportunity_id,
                     customerMemberId: childId,
+                    processInstanceId: stageInstanceId,
                 });
                 stageMovePreviousKey = priorStage;
                 const pi = await moveEnrollmentInstanceStageByScope(supabase, {
@@ -753,8 +771,10 @@ export async function applyStageOutcomeRuleTarget(
                     opportunityId: subject.opportunity_id,
                     customerMemberId: childId,
                     stageKey: targetStageKey,
+                    processInstanceId: stageInstanceId,
                 });
                 if (pi.error) return { error: pi.error };
+                const movedInstanceId = stageInstanceId ?? pi.instanceId ?? null;
                 if (priorStage != null) {
                     undoStageMove = async () => {
                         const restored = await moveEnrollmentInstanceStageByScope(supabase, {
@@ -762,6 +782,7 @@ export async function applyStageOutcomeRuleTarget(
                             opportunityId: subject.opportunity_id,
                             customerMemberId: childId,
                             stageKey: priorStage,
+                            processInstanceId: movedInstanceId,
                         });
                         if (restored.error) throw new Error(`restore child stage: ${restored.error}`);
                     };

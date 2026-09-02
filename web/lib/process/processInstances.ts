@@ -441,24 +441,128 @@ export async function setProcessInstanceState(
 }
 
 /**
- * Move a child's enrollment instance stage by scope (opportunity + child), not by instance id —
- * the outcome executor knows the lead + child, and this targets exactly that sibling's instance.
+ * THE CHILD'S ENROLLMENT JOURNEY, UNDER WHICHEVER ANCHOR IT CARRIES.
+ *
+ * ── THE DEFECT THIS CLOSES ──
+ *
+ * Every `*ByScope` helper below matched the journey with `.eq("context_id", opportunityId)`. That
+ * was exact while an Enrollment journey could only anchor to an Opportunity. It is no longer:
+ *
+ *     context_type = enrollment_participation
+ *     context_id   = the exact OCM id
+ *
+ * So for every journey the participation anchor created — which is now every NEW journey — those
+ * helpers compared an Opportunity id against an OCM id and matched NOTHING. The state write moved
+ * zero rows, the stage write moved zero rows, and the reads returned null. The convergence commit
+ * that taught the rest of Enrollment to read either anchor never reached this module.
+ *
+ ── WHY RESOLVE AN ID RATHER THAN WIDEN THE PREDICATE ──
+ *
+ * Matching on `subject_id` alone would match EVERY episode the child has ever had, including last
+ * year's concluded one — turning a precise single-row write into a multi-row one. The participation
+ * lifecycle makes that a real shape: a re-enrolling child legitimately holds two journeys.
+ *
+ * So the journey is resolved to ONE id and the writers act on that id. `ambiguous` is reported as a
+ * multi-row write so the caller's existing single-write assertion still refuses a duplicate track —
+ * collapsing that case into a silent `moved: 0` would read as "no journey" and lose the signal.
+ *
+ * Each writer also RETURNS the id it acted on, so a compensation names that row instead of
+ * re-deriving it: by the time an undo runs the journey is concluded and a fresh lookup would no
+ * longer find it as the child's open one.
+ *
+ * ── AMBIGUITY IS REPORTED, NEVER GUESSED ──
+ *
+ * Two open journeys for one child is a data defect. Picking one would write a durable enrollment
+ * outcome onto a coin flip, so this returns `ambiguous` and lets the caller's single-write assertion
+ * refuse.
+ */
+export type EnrollmentInstanceScope = {
+    orgId: string;
+    customerMemberId: string;
+    /** Legacy acquisition anchor. Optional: a context-free journey has none. */
+    opportunityId?: string | null;
+    /** Most specific identity. When present nothing is resolved. */
+    processInstanceId?: string | null;
+};
+
+export type ResolvedEnrollmentInstance = {
+    id: string | null;
+    /** True when several journeys matched and none could be preferred. Never guessed. */
+    ambiguous: boolean;
+};
+
+export async function resolveEnrollmentInstanceIdForScope(
+    supabase: SupabaseClient,
+    args: EnrollmentInstanceScope,
+): Promise<ResolvedEnrollmentInstance> {
+    const direct = (args.processInstanceId ?? "").trim();
+    if (direct) return { id: direct, ambiguous: false };
+
+    const subjectId = (args.customerMemberId ?? "").trim();
+    if (!subjectId) return { id: null, ambiguous: false };
+
+    const { data, error } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("id, context_id, context_type, state")
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("subject_id", subjectId);
+    if (error) return { id: null, ambiguous: false };
+
+    const rows = (data ?? []) as {
+        id: string;
+        context_id: string | null;
+        context_type: string | null;
+        state: string | null;
+    }[];
+    if (!rows.length) return { id: null, ambiguous: false };
+    if (rows.length === 1) return { id: rows[0].id, ambiguous: false };
+
+    const opportunityId = (args.opportunityId ?? "").trim();
+    if (opportunityId) {
+        const legacy = rows.filter((r) => (r.context_id ?? "") === opportunityId);
+        if (legacy.length === 1) return { id: legacy[0].id, ambiguous: false };
+        if (legacy.length > 1) return { id: null, ambiguous: true };
+    }
+
+    const open = rows.filter(
+        (r) => !CONCLUDED_ENROLLMENT_PROCESS_STATES.includes((r.state ?? "").trim().toLowerCase()),
+    );
+    if (open.length === 1) return { id: open[0].id, ambiguous: false };
+    if (open.length > 1) return { id: null, ambiguous: true };
+
+    return { id: null, ambiguous: rows.length > 1 };
+}
+
+/**
+ * Move a child's enrollment instance stage. Resolves the journey under EITHER anchor, then writes
+ * by id, so a participation-anchored journey is targeted exactly and siblings are untouched.
  */
 export async function moveEnrollmentInstanceStageByScope(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; customerMemberId: string; stageKey: string },
-): Promise<{ moved: number; error?: string }> {
+    args: {
+        orgId: string;
+        opportunityId: string;
+        customerMemberId: string;
+        stageKey: string;
+        processInstanceId?: string | null;
+    },
+): Promise<{ moved: number; error?: string; instanceId?: string | null }> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    // Duplicate journeys are an INTEGRITY failure, not "no journey". Reported as a multi-row write
+    // so the caller's single-write assertion refuses it and the transaction unwinds.
+    if (resolved.ambiguous) return { moved: 2, instanceId: null };
+    if (!resolved.id) return { moved: 0, instanceId: null };
+
     const nowIso = stageEnteredAtNowIso();
     const { data, error } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
         .update({ stage_key: args.stageKey, stage_entered_at: nowIso, updated_at: nowIso })
         .eq("org_id", args.orgId)
-        .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("context_id", args.opportunityId)
-        .eq("subject_id", args.customerMemberId)
+        .eq("id", resolved.id)
         .select("id");
     if (error) return { moved: 0, error: error.message };
-    return { moved: (data ?? []).length };
+    return { moved: (data ?? []).length, instanceId: resolved.id };
 }
 
 /** Set a child's enrollment instance durable state (+ close reason) by scope (opportunity + child). */
@@ -470,51 +574,48 @@ export async function setEnrollmentInstanceStateByScope(
         customerMemberId: string;
         state: EnrollmentProcessState;
         closeReasonKey?: string | null;
+        processInstanceId?: string | null;
     },
-): Promise<{ moved: number; error?: string }> {
+): Promise<{ moved: number; error?: string; instanceId?: string | null }> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    // Duplicate journeys are an INTEGRITY failure, not "no journey". Reported as a multi-row write
+    // so the caller's single-write assertion refuses it and the transaction unwinds.
+    if (resolved.ambiguous) return { moved: 2, instanceId: null };
+    if (!resolved.id) return { moved: 0, instanceId: null };
+
     const patch: Record<string, unknown> = { state: args.state, updated_at: new Date().toISOString() };
     if (args.closeReasonKey !== undefined) patch.close_reason_key = args.closeReasonKey;
     const { data, error } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
         .update(patch)
         .eq("org_id", args.orgId)
-        .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("context_id", args.opportunityId)
-        .eq("subject_id", args.customerMemberId)
+        .eq("id", resolved.id)
         .select("id");
     if (error) return { moved: 0, error: error.message };
-    return { moved: (data ?? []).length };
+    return { moved: (data ?? []).length, instanceId: resolved.id };
 }
 
 /** Resolve a child's enrollment process-instance id by scope (opportunity + child). */
 export async function getEnrollmentInstanceIdByScope(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; customerMemberId: string },
+    args: { orgId: string; opportunityId: string; customerMemberId: string; processInstanceId?: string | null },
 ): Promise<string | null> {
-    const { data } = await supabase
-        .from(PROCESS_INSTANCES_TABLE)
-        .select("id")
-        .eq("org_id", args.orgId)
-        .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("context_id", args.opportunityId)
-        .eq("subject_id", args.customerMemberId)
-        .maybeSingle();
-    const id = (data as { id?: string } | null)?.id;
-    return typeof id === "string" && id.trim() ? id.trim() : null;
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    return resolved.ambiguous ? null : resolved.id;
 }
 
 /** Read a child's current enrollment instance state by scope (for transition events). */
 export async function readEnrollmentInstanceState(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; customerMemberId: string },
+    args: { orgId: string; opportunityId: string; customerMemberId: string; processInstanceId?: string | null },
 ): Promise<string | null> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    if (resolved.ambiguous || !resolved.id) return null;
     const { data } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
         .select("state")
         .eq("org_id", args.orgId)
-        .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("context_id", args.opportunityId)
-        .eq("subject_id", args.customerMemberId)
+        .eq("id", resolved.id)
         .maybeSingle();
     return (data as { state?: string | null } | null)?.state ?? null;
 }
@@ -525,15 +626,15 @@ export async function readEnrollmentInstanceState(
  */
 export async function readEnrollmentInstanceStageKey(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; customerMemberId: string },
+    args: { orgId: string; opportunityId: string; customerMemberId: string; processInstanceId?: string | null },
 ): Promise<string | null> {
+    const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
+    if (resolved.ambiguous || !resolved.id) return null;
     const { data } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
         .select("stage_key")
         .eq("org_id", args.orgId)
-        .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("context_id", args.opportunityId)
-        .eq("subject_id", args.customerMemberId)
+        .eq("id", resolved.id)
         .maybeSingle();
     return (data as { stage_key?: string | null } | null)?.stage_key ?? null;
 }
