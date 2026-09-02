@@ -160,6 +160,7 @@ main() {
     alloy_record_server_lifecycle "start" "$name" "failed" "process did not stay alive" "" "$pid"
     alloy_die "${mode} server failed to stay alive. Inspect log: $log_path"
   fi
+  alloy_ensure_director_route "$port"
   alloy_record_server_lifecycle "start" "$name" "ok" "${ALLOY_SERVER_AUDIT_REASON:-start requested}" "" "$pid"
 
   cat <<EOF
