@@ -487,7 +487,7 @@ async function provisionSessionForSend({ rec, run, nowMs, root, size }) {
  */
 export const RETRYABLE_DELIVERY_REFUSALS = new Set(["send_in_progress"]);
 
-function refused(laneId, error, nowMs, size, run = null) {
+function refused(laneId, error, nowMs, size, run = null, extra = null) {
   return decorate({
     ok: false,
     schema_version: "vacilando.lane.send.v1",
@@ -497,6 +497,9 @@ function refused(laneId, error, nowMs, size, run = null) {
     instruction_size: size,
     delivered_at: new Date(nowMs).toISOString(),
     audit_id: null,
+    // A lifecycle refusal says WHICH invariant failed, so the operator reads a
+    // repair instruction rather than a denial.
+    ...(extra && typeof extra === "object" ? extra : {}),
   }, run);
 }
 
@@ -631,6 +634,41 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     promptKey = A.promptFingerprint(text, preflight.attachments.map((a) => ({
       checksum_sha256: a.checksum_sha256,
     })));
+  }
+
+  // ---------------------------------------------------------------------
+  // THE DISPATCH INVARIANT: NO INSTRUCTION ENTERS AN UNMANAGED WORKTREE.
+  //
+  // This is the guard whose absence turned one bad retirement into a day of
+  // silent failures. wt1-work-unit-grade-a kept its DIRECTORY and its tmux
+  // session after its registration was archived, so send after send was
+  // delivered into a worktree that was no longer managed, had no slot, no port
+  // and no QA environment — and every one of them looked delivered.
+  //
+  // A surviving directory is not ownership, and a stale `binding.worktree_path`
+  // is not ownership. The lane must resolve, through the canonical resolver, to
+  // a worktree that is registered, managed and slot-bound. If it does not, this
+  // fails CLOSED with a named lifecycle error instead of pasting into a pane
+  // that happens to exist.
+  //
+  // The one repair it will perform is the unambiguous one: a registration that
+  // already names THIS lane's worktree with a slot, whose binding has merely
+  // forgotten it. Dispatch never guesses ownership.
+  // ---------------------------------------------------------------------
+  try {
+    const { assertLaneDispatchable } = await import("./lane-worktree-lifecycle.mjs");
+    const guard = assertLaneDispatchable(laneId, { root, nowMs, repair: true });
+    if (!guard.ok) {
+      return refused(laneId, guard.error, nowMs, size, activeRunForLane(laneId, root), {
+        lifecycle_detail: guard.detail,
+        lane_worktree: guard.resolution || null,
+      });
+    }
+  } catch (e) {
+    // A guard that cannot run must not become a guard that passes.
+    return refused(laneId, "lane_worktree_not_managed", nowMs, size, null, {
+      lifecycle_detail: `Lane lifecycle could not be resolved: ${String(e?.message || e)}`,
+    });
   }
 
   if (opts.provider) {

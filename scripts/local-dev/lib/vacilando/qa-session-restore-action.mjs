@@ -23,6 +23,7 @@ import {
 import { getDurableLane } from "./development-lane.mjs";
 import { authorizeQaBootstrap, consumeQaBootstrap, openQaBootstrap } from "./qa-session-bootstrap.mjs";
 import { runQaSessionMint, runQaSessionMintSync } from "./qa-session-mint-runner.mjs";
+import { assertManagedLaneEnvironment } from "./lane-worktree-lifecycle.mjs";
 
 /** Inputs a caller may never supply. Present so the refusal is explicit rather than implied. */
 export const FORBIDDEN_RESTORE_INPUTS = Object.freeze([
@@ -73,6 +74,21 @@ export function validateRestoreQaSessionInputs(rawInputs = {}) {
     const unknown = supplied.filter((k) => !["laneId", "lane_id", "registrationToken", "registration_token"].includes(k));
     if (unknown.length) {
         return { ok: false, error: "unexpected_input", detail: unknown.join(", ") };
+    }
+    // MANAGED REGISTRATION IS A PRECONDITION, NOT A RUNTIME SURPRISE.
+    //
+    // This action resolves slot, port, worktree and QA identity from the
+    // registries at EXECUTION time. Accepting it for a lane whose worktree is
+    // unregistered creates a governed action that can never execute — an
+    // operator card asking approval for something impossible.
+    // gar_97d071ef22861f was exactly that: filed against Slot 1 after Slot 1's
+    // registration had been archived by a capacity release.
+    //
+    // The refusal names the missing prerequisite, so the answer is "register
+    // the worktree", not "denied".
+    const managed = assertManagedLaneEnvironment(String(laneId));
+    if (!managed.ok) {
+        return { ok: false, error: managed.error, detail: managed.detail, lane_worktree: managed.resolution || null };
     }
     return { ok: true, normalized: { laneId: String(laneId) } };
 }

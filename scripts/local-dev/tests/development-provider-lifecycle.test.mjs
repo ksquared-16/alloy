@@ -191,7 +191,21 @@ function seedParkedLane(name = "Parked", { question = "Which default do you want
   seedN += 1;
   const wt = join(WT, `seed${seedN}`);
   mkdirSync(wt, { recursive: true });
-  const bound = bindDurableLane(laneId, { worktree_path: wt, tmux_session: `alloy-seed${seedN}`, slot: null }, { root: ROOT });
+  // A BOUND WORKTREE MUST ALSO BE A REGISTERED ONE.
+  //
+  // Dispatch now refuses to deliver into a worktree the slot registry does not
+  // know — that is the guard whose absence let instructions keep landing in
+  // wt1-work-unit-grade-a after its registration was archived. A lane bound to
+  // an unregistered directory is no longer a state the runtime will send into,
+  // so the fixture registers what it binds.
+  mkdirSync(join(ROOT, "metadata"), { recursive: true });
+  writeFileSync(join(ROOT, "metadata", `seed${seedN}.env`), [
+    `ALLOY_WORKTREE_SLOT=${seedN}`,
+    `ALLOY_WORKTREE_PATH=${wt}`,
+    `ALLOY_WORKER_LIFECYCLE=active`,
+    "",
+  ].join("\n"), "utf8");
+  const bound = bindDurableLane(laneId, { worktree_path: wt, worktree_name: `seed${seedN}`, tmux_session: `alloy-seed${seedN}`, slot: null }, { root: ROOT });
   assert.equal(bound.ok, true, `bind failed: ${bound.error}`);
   const WT_LANE = wt;
   const run = createQueuedRun({ laneId, instruction: "do the work", worktreePath: WT_LANE, root: ROOT }).run;

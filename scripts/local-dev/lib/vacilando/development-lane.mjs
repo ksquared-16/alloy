@@ -501,7 +501,16 @@ export function releaseDurableLaneRuntimeBinding(laneId, { nowMs = Date.now(), r
     branch: rec.binding?.branch || null,
     tmux_session: null,
     tmux_pane: null,
-    slot: null,
+    // THE SLOT IS LANE-LIFETIME, NOT CAPACITY-LIFETIME.
+    //
+    // This nulled it, and the worktree registration did not: the registry said
+    // Runtime Performance was slot 1 while its own lane binding said it had no
+    // slot at all. Two answers to one question, and the Gateway could read
+    // either. What a capacity release ends is the SESSION — tmux, pane,
+    // admission — not the lane's ownership of its slot and port, which end only
+    // when the lane itself closes.
+    slot: rec.binding?.slot ?? null,
+    port: rec.binding?.port ?? null,
     provider: normalizeExecutionProvider(rec.binding?.provider, "claude") || "claude",
     stale: true,
     status: "idle",
@@ -510,6 +519,7 @@ export function releaseDurableLaneRuntimeBinding(laneId, { nowMs = Date.now(), r
   rec.execution_capacity = {
     state: "IDLE",
     released_at: iso(nowMs),
+    // The CAPACITY holds no slot once released; the LANE still owns one.
     slot: null,
   };
   rec.updated_at = iso(nowMs);
