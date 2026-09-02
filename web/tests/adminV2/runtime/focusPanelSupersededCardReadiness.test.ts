@@ -67,7 +67,7 @@ function eventsOf(emissions: Array<Record<string, unknown>>, event: string) {
 }
 
 /** Every card TYPE a composed cell can actually resolve to, as the runtime resolves it. */
-function renderableTypeKeys(): Set<string> {
+function renderableTypeKeys(): Set<FocusPanelCardKey> {
     const inputs = deriveFocusPanelSummaryCompositionInputs(buildFocusPanelSummaryDefaultDoc());
     return new Set(Array.from(inputs.cellResolution.values()).map((r) => r.typeKey));
 }
