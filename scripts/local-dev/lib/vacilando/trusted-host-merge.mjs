@@ -21,6 +21,36 @@ export function allowlistedRepositories() {
   return [...new Set([...DEFAULT_REPOS, ...extra])];
 }
 
+/**
+ * SAY WHAT WOULD HAVE WORKED.
+ *
+ * MEASURED. The Waitlist lane filed the same governed push five times and was
+ * refused every time with "Repository repo_alloy is not allowlisted" — accurate,
+ * and useless. `repo_alloy` is the internal repository REGISTRY id; this action
+ * takes the GitHub `owner/name` slug. The refusal named the wrong value without
+ * ever naming a right one, so each retry repeated the same mistake.
+ *
+ * That is only half of why it repeated. The explanation never reached the lane
+ * at all: the failure notification was refused `provider_prompt_not_ready`
+ * because the lane's own pane was still executing the turn that filed the
+ * action. A refusal nobody can read is indistinguishable from no refusal, which
+ * is exactly how one input error became five identical attempts.
+ */
+export function repositoryRefusalDetail(repository) {
+  const allowed = allowlistedRepositories();
+  const given = String(repository || "");
+  const looksLikeRegistryId = /^repo_[a-z0-9_]+$/i.test(given);
+  const parts = [`Repository ${given} is not allowlisted.`];
+  if (looksLikeRegistryId) {
+    parts.push(
+      `"${given}" is a repository registry id, not a GitHub repository. `
+      + "This action takes the owner/name slug.",
+    );
+  }
+  parts.push(`Allowlisted: ${allowed.join(", ")}.`);
+  return parts.join(" ");
+}
+
 function normRepo(value) {
   return String(value || "")
     .trim()
@@ -92,7 +122,7 @@ export function validateMergeInputs(inputs = {}) {
   const repository = normRepo(inputs.repository || inputs.repo);
   if (!repository) return { ok: false, code: "missing_repository", detail: "repository is required" };
   if (!allowlistedRepositories().includes(repository)) {
-    return { ok: false, code: "repository_not_allowlisted", detail: `Repository ${repository} is not allowlisted` };
+    return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
   }
   // `pull_request` is accepted alongside the other spellings. A lane proposed
   // `{"pull_request": 522}` — an unambiguous pull request number by any reading —

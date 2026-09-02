@@ -987,6 +987,15 @@ function putRequest(store, rec) {
   return store;
 }
 
+/**
+ * The store write, exported for the one module that must persist a record it
+ * did not create: governed-notification-delivery, which owns the redelivery
+ * state on these records and is imported lazily to avoid a cycle.
+ */
+export function saveGovernedActionRecord(rec, root = runtimeRoot()) {
+  return saveRequest(rec, root);
+}
+
 function saveRequest(rec, root) {
   const store = readGovernedActionStore(root);
   writeStore(putRequest(store, rec), root);
@@ -3593,6 +3602,45 @@ export function continuationTextForFailedGovernedAction(rec) {
   ].filter((line) => line != null).join("\n"));
 }
 
+/**
+ * REDELIVER WHAT THE LANE IS STILL OWED.
+ *
+ * Called when a lane's run reaches a terminal state — the canonical "I have
+ * yielded", and the only moment its pane is expected to become pastable — and
+ * again from the conductor tick, for turns that end without a clean transition.
+ *
+ * This rebuilds the SAME message the original attempt would have sent, from the
+ * same record, so a redelivery is the delivery that was deferred and never a
+ * second notification about the same action.
+ */
+export async function drainGovernedNotificationsForLane(laneId, {
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+} = {}) {
+  const {
+    drainGovernedNotifications,
+  } = await import("./governed-notification-delivery.mjs");
+  const { sendLaneInstruction, getDevelopmentLane } = await import("./lanes.mjs");
+  const { getTrustedHostAction } = await import("./trusted-host-actions.mjs");
+  const send = sendImpl || sendLaneInstruction;
+  return drainGovernedNotifications({
+    root,
+    laneId: laneId || null,
+    nowMs,
+    send,
+    getLane: (id) => getDevelopmentLane(id, { includeGitFacts: false }),
+    buildText: async (rec) => {
+      if (rec.notification_delivery?.kind === "governed_action_failed") {
+        return continuationTextForFailedGovernedAction(rec);
+      }
+      const action = rec.trusted_host_action_id
+        ? await getTrustedHostAction(rec.trusted_host_action_id)
+        : null;
+      return continuationTextForGovernedAction(rec, action);
+    },
+  });
+}
+
 export async function resumeLaneAfterFailedGovernedAction(requestId, {
   nowMs = Date.now(),
   root = runtimeRoot(),
@@ -3635,9 +3683,17 @@ export async function resumeLaneAfterFailedGovernedAction(requestId, {
     fresh_session: Boolean(startedSession?.ok),
     failed: true,
   };
-  rec.updated_at = iso(nowMs);
-  saveRequest(rec, root);
-  appendAudit(rec, "failed_notified", { nowMs, detail: rec.resume_delivery }, root);
+  // A busy pane is not a dead letter. Classify the outcome and, when the lane is
+  // merely mid-turn, leave the notification owed rather than discarded — this is
+  // the field that used to end here as `provider_prompt_not_ready` and never be
+  // looked at again.
+  const { recordDeliveryAttempt } = await import("./governed-notification-delivery.mjs");
+  recordDeliveryAttempt(rec, delivered, {
+    kind: "governed_action_failed",
+    nowMs,
+    save: (r) => saveRequest(r, root),
+  });
+  appendAudit(rec, "failed_notified", { nowMs, detail: { ...rec.resume_delivery, delivery: rec.notification_delivery } }, root);
   return {
     ok: Boolean(delivered?.ok),
     request: publicGovernedAction(rec),
@@ -3706,9 +3762,15 @@ export async function resumeLaneAfterGovernedAction(requestId, {
     error: delivered?.error || null,
     fresh_session: Boolean(startedSession?.ok),
   };
-  rec.updated_at = iso(nowMs);
-  saveRequest(rec, root);
-  appendAudit(rec, "resumed", { nowMs, detail: rec.resume_delivery }, root);
+  // The success path had the same hole: a lane could miss the result of an
+  // action that WORKED, for exactly the same reason.
+  const { recordDeliveryAttempt: recordResumeAttempt } = await import("./governed-notification-delivery.mjs");
+  recordResumeAttempt(rec, delivered, {
+    kind: "governed_action_resume",
+    nowMs,
+    save: (r) => saveRequest(r, root),
+  });
+  appendAudit(rec, "resumed", { nowMs, detail: { ...rec.resume_delivery, delivery: rec.notification_delivery } }, root);
   emitNotification("governed_action_worker_resumed", rec, {
     title: "Worker resumed",
     body: `Continuing ${rec.lane_id} with governed-action results.`,

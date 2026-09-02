@@ -55,6 +55,7 @@ SUITES=(
   "development-lane-provisioning.test.mjs"
   "development-capacity-precedence.test.mjs"
   "development-server-readiness.test.mjs"
+  "development-governed-notification-delivery.test.mjs"
   "development-run-summary-output.test.mjs"
   "development-completion-summary-last.test.mjs"
   "development-cursor-transport-readiness.test.mjs"
