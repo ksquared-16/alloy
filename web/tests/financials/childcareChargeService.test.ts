@@ -239,6 +239,100 @@ describe("childcareChargeService (P3.1)", () => {
         expect((store.charges as ChargeRow[]).length).toBe(1);
     });
 
+    /*
+     * A CORRECTION IS BOUNDED. The correction path shipped with only one check — that its source is
+     * posted — so the same posted charge could be reversed repeatedly, each reversal crediting the
+     * family the full amount again. The database asserts the bound (20260902140000); these are the
+     * friendly refusals that mirror it.
+     */
+    it("reverses a posted charge ONCE — a second reversal would credit the family twice", async () => {
+        const { store, supabase } = setup();
+        const draft = await createChildcareDraftCharge(supabase, {
+            orgId: ORG_ID,
+            enrollmentAgreementId: AGREEMENT_ID,
+            chargeCategory: "tuition",
+            amountCents: 130000,
+        });
+        const { charge: posted } = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
+        await createChildcareCorrection(supabase, {
+            orgId: ORG_ID,
+            sourceChargeId: posted.id,
+            kind: "reversal",
+        });
+        await expect(
+            createChildcareCorrection(supabase, { orgId: ORG_ID, sourceChargeId: posted.id, kind: "reversal" })
+        ).rejects.toMatchObject({ code: "invalid_state" });
+        // Two rows, not three: the charge and the one reversal that stands.
+        expect((store.charges as ChargeRow[]).length).toBe(2);
+        expect((store.charges as ChargeRow[]).reduce((sum, r) => sum + r.amount_cents, 0)).toBe(0);
+    });
+
+    it("admits no credit against a charge already reversed in full", async () => {
+        const { supabase } = setup();
+        const draft = await createChildcareDraftCharge(supabase, {
+            orgId: ORG_ID,
+            enrollmentAgreementId: AGREEMENT_ID,
+            chargeCategory: "tuition",
+            amountCents: 130000,
+        });
+        const { charge: posted } = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
+        await createChildcareCorrection(supabase, { orgId: ORG_ID, sourceChargeId: posted.id, kind: "reversal" });
+        // The money was already removed in full; a credit on top removes it a second time.
+        await expect(
+            createChildcareCorrection(supabase, {
+                orgId: ORG_ID,
+                sourceChargeId: posted.id,
+                kind: "credit",
+                amountCents: -2500,
+            })
+        ).rejects.toMatchObject({ code: "invalid_state" });
+    });
+
+    it("refuses to correct a correction — the lineage has a terminus", async () => {
+        const { supabase } = setup();
+        const draft = await createChildcareDraftCharge(supabase, {
+            orgId: ORG_ID,
+            enrollmentAgreementId: AGREEMENT_ID,
+            chargeCategory: "tuition",
+            amountCents: 130000,
+        });
+        const { charge: posted } = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
+        const reversal = await createChildcareCorrection(supabase, {
+            orgId: ORG_ID,
+            sourceChargeId: posted.id,
+            kind: "reversal",
+        });
+        // Reversing a reversal reinstates the charge by side effect and admits another after it.
+        await expect(
+            createChildcareCorrection(supabase, { orgId: ORG_ID, sourceChargeId: reversal.id, kind: "reversal" })
+        ).rejects.toMatchObject({ code: "invalid_state" });
+    });
+
+    it("still allows a SECOND partial credit — only a reversal closes the charge", async () => {
+        const { supabase } = setup();
+        const draft = await createChildcareDraftCharge(supabase, {
+            orgId: ORG_ID,
+            enrollmentAgreementId: AGREEMENT_ID,
+            chargeCategory: "tuition",
+            amountCents: 130000,
+        });
+        const { charge: posted } = await postChildcareCharge(supabase, { orgId: ORG_ID, chargeId: draft.id });
+        const first = await createChildcareCorrection(supabase, {
+            orgId: ORG_ID,
+            sourceChargeId: posted.id,
+            kind: "credit",
+            amountCents: -2500,
+        });
+        const second = await createChildcareCorrection(supabase, {
+            orgId: ORG_ID,
+            sourceChargeId: posted.id,
+            kind: "credit",
+            amountCents: -1000,
+        });
+        expect(first.source_charge_id).toBe(posted.id);
+        expect(second.source_charge_id).toBe(posted.id);
+    });
+
     it("rejects invalid charge_category and zero/non-integer amounts", async () => {
         const { supabase } = setup();
         await expect(

@@ -72,8 +72,21 @@ export type FinancialsLedgerRow = {
     amountCents: number;
     currencyCode: string;
     status: string;
-    /** `scheduled` when a draft's billable date has not arrived — derived, never a stored status. */
-    lifecycleStatus: "scheduled" | "draft" | "posted" | "void";
+    /**
+     * DERIVED lifecycle, never a stored status.
+     *
+     * `scheduled` — a draft whose billable date has not arrived.
+     * `reversed`  — posted money that a later correction has fully undone. The row is still `posted`
+     *               in the database and still stands in the ledger; what changed is that it no
+     *               longer represents an open obligation, and no further correction is lawful.
+     */
+    lifecycleStatus: "scheduled" | "draft" | "posted" | "reversed" | "void";
+    /** The charge this row corrects, when it is a correction. Null for an original charge. */
+    correctsChargeId: string | null;
+    /** `reversal` | `credit` | `replacement` — from the correction's own metadata. */
+    correctionKind: string | null;
+    /** The correction that reversed THIS row, when one exists. Null while the charge stands. */
+    reversedByChargeId: string | null;
     dueDate: string | null;
     /** Operator-facing GL code, or null when nothing maps it. Never silently blank. */
     glCode: string | null;
@@ -389,7 +402,7 @@ export async function buildFinancialsCardVM(
         supabase
             .from("charges")
             .select(
-                "id, billable_source_type, billable_source_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
+                "id, billable_source_type, billable_source_id, source_charge_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
                 + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
             )
             .eq("org_id", args.orgId)
@@ -450,6 +463,29 @@ export async function buildFinancialsCardVM(
     );
 
     const charges = (chargeResult.data ?? []) as unknown as Array<Record<string, unknown>>;
+
+    /*
+     * CORRECTION LINEAGE — which posted charge no longer stands.
+     *
+     * A reversal is a NEW row pointing at the original through `source_charge_id`, and the original
+     * is left exactly as posted because posted money is immutable. Read without that link the
+     * ledger shows a charge still reading `posted` beside an unexplained credit — and the card,
+     * which offers a transition per lifecycle state, offered `Reverse` on it a second time. That is
+     * how one charge came to be reversible twice. Projecting the link is what lets the ledger say
+     * `reversed` and the card offer nothing further.
+     *
+     * `status <> 'void'` and `correction_kind = 'reversal'` are the same predicate the database's
+     * unique index uses, so the card and the constraint agree on what a live reversal is.
+     */
+    const reversalBySource = new Map<string, string>();
+    for (const c of charges) {
+        const sourceId = t(c.source_charge_id);
+        const kind = t(((c.metadata ?? {}) as Record<string, unknown>).correction_kind);
+        if (sourceId && kind === "reversal" && t(c.status) !== "void") {
+            reversalBySource.set(sourceId, t(c.id));
+        }
+    }
+
     const rows: FinancialsLedgerRow[] = charges.map((c) => {
         const categoryKey = t(c.charge_category) || t(c.charge_type) || "one_time";
         const metadata = (c.metadata ?? {}) as Record<string, unknown>;
@@ -463,6 +499,9 @@ export async function buildFinancialsCardVM(
         const billableOn = t(c.billable_on) || null;
         const agreementId = t(c.billable_source_id);
         const subjectMemberId = memberByAgreement.get(agreementId) ?? null;
+        const correctsChargeId = t(c.source_charge_id) || null;
+        const correctionKind = t(metadata.correction_kind) || null;
+        const reversedByChargeId = reversalBySource.get(t(c.id)) ?? null;
         return {
             chargeId: t(c.id),
             date: billableOn ?? t(c.occurs_on) ?? t(c.service_date) ?? null,
@@ -480,10 +519,15 @@ export async function buildFinancialsCardVM(
                 status === "void"
                     ? "void"
                     : status !== "draft"
-                      ? "posted"
+                      ? reversedByChargeId
+                          ? "reversed"
+                          : "posted"
                       : billableOn && billableOn > today
                         ? "scheduled"
                         : "draft",
+            correctsChargeId,
+            correctionKind,
+            reversedByChargeId,
             dueDate: t(c.due_date) || null,
             glCode: account?.code ?? null,
             glAccountName: account?.name ?? null,
@@ -540,8 +584,14 @@ export async function buildFinancialsCardVM(
         return {
             period: billingPeriodFromKey(key),
             rows: periodRows,
+            /*
+             * POSTED MONEY INCLUDES REVERSED MONEY. A reversed original and its reversal are both
+             * posted rows that sum to zero; counting only the ones still reading `posted` would drop
+             * the original and leave the period showing the credit alone — a negative total for a
+             * period in which nothing was refunded.
+             */
             totalCents: periodRows
-                .filter((r) => r.lifecycleStatus === "posted")
+                .filter((r) => isPostedMoney(r.lifecycleStatus))
                 .reduce((sum, r) => sum + r.amountCents, 0),
         };
     });
@@ -570,6 +620,17 @@ export async function buildFinancialsCardVM(
 }
 
 
+/**
+ * Posted money, whether or not a later correction undid it.
+ *
+ * `reversed` is a derived READING of a posted row, not a different kind of row: the charge was
+ * posted, it still stands in the ledger, and its reversal stands beside it. Any total over "what was
+ * posted" has to include both or it reports half of a pair.
+ */
+export function isPostedMoney(lifecycleStatus: FinancialsLedgerRow["lifecycleStatus"]): boolean {
+    return lifecycleStatus === "posted" || lifecycleStatus === "reversed";
+}
+
 /** THE reconciliation rule, in one place so no scope can compute it differently. */
 export function reconcileRows(
     rows: readonly FinancialsLedgerRow[],
@@ -587,6 +648,12 @@ export function reconcileRows(
             out.draftCents += row.amountCents;
             continue;
         }
+        /*
+         * A REVERSED CHARGE IS STILL A LINE IN THE RECONCILIATION. It is not skipped: the original
+         * lands in gross and its reversal lands in reductions, and the two net to zero. Skipping the
+         * original would leave the credit unmatched and drive responsibility NEGATIVE — the ledger
+         * would show money owed TO a family that was only ever charged and refunded.
+         */
         if (!OWED_STATUSES.has(row.status)) continue;
         if (FUNDING_CATEGORIES.has(row.categoryKey)) out.fundingCents += row.amountCents;
         else if (REDUCTION_CATEGORIES.has(row.categoryKey)) out.discountsCents += row.amountCents;
@@ -601,10 +668,23 @@ export function reconcileRows(
     return out;
 }
 
-/** Past due over owed, unpaid rows whose due date has passed. */
+/**
+ * Past due over owed, unpaid rows whose due date has passed.
+ *
+ * A REVERSED CHARGE IS NOT PAST DUE, and neither is the reversal that undid it. A correction copies
+ * the source's `due_date`, so the pair would otherwise both qualify and report an overdue balance of
+ * zero — announcing a collections problem for money nobody owes. Credits and replacements are kept:
+ * they are partial and legitimately reduce what is still overdue.
+ */
 export function pastDueFor(rows: readonly FinancialsLedgerRow[], today: string): FinancialsPastDue | null {
     const overdue = rows.filter(
-        (r) => OWED_STATUSES.has(r.status) && r.status !== "paid" && r.dueDate != null && r.dueDate < today,
+        (r) =>
+            OWED_STATUSES.has(r.status)
+            && r.status !== "paid"
+            && r.lifecycleStatus !== "reversed"
+            && r.correctionKind !== "reversal"
+            && r.dueDate != null
+            && r.dueDate < today,
     );
     if (overdue.length === 0) return null;
     const oldest = overdue.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));

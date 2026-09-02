@@ -61,9 +61,13 @@ type Props = {
  *
  * Add charge creates a DRAFT, and a draft is not owed. Posting is a separate authoritative step and
  * a posted charge is immutable, so each ledger row offers exactly the transition its lifecycle
- * admits: `Post` on a draft, `Reverse` on posted money. Both run registered actions; this card
- * decides nothing about money and refreshes from the read model rather than patching a row it just
- * changed.
+ * admits: `Post` on a draft, `Reverse` on posted money that still stands. Both run registered
+ * actions; this card decides nothing about money and refreshes from the read model rather than
+ * patching a row it just changed.
+ *
+ * A charge is reversed ONCE. A reversed row reads `reversed` and offers nothing, and a correction
+ * row is never itself reversed — the bound is the database's (`20260902140000`) and the read model
+ * projects it, so this card renders the answer rather than deciding it.
  */
 export default function FinancialsCard({ model, context, receded = false, coordination }: Props) {
     const scope = context.participantScope ?? null;
@@ -938,11 +942,20 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                             {row.source ?? "—"}
                                                         </span>
                                                         {/*
-                                                            ONE TRANSITION PER LIFECYCLE STATE.
+                                                            ONE TRANSITION PER LIFECYCLE STATE, AND
+                                                            AT MOST ONE CORRECTION.
+
                                                             A draft can be posted; posted money can
-                                                            only be corrected. A void row and a
-                                                            scheduled draft offer nothing, because
-                                                            neither has a lawful next step here.
+                                                            only be corrected, and only once. A
+                                                            REVERSED row is no longer `posted` here,
+                                                            so it offers nothing — it used to still
+                                                            read `posted`, which is how the same
+                                                            charge was reversed twice and the family
+                                                            credited for money never charged. A
+                                                            CORRECTION row offers nothing either: a
+                                                            reversal is not itself reversed. A void
+                                                            row and a scheduled draft have no lawful
+                                                            next step here.
                                                         */}
                                                         <span className="alloy-os-financials__cell alloy-os-financials__cell--row-action">
                                                             {row.lifecycleStatus === "draft" ? (
@@ -956,7 +969,10 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                                 >
                                                                     Post
                                                                 </button>
-                                                            ) : row.lifecycleStatus === "posted" ? (
+                                                            ) : (
+                                                                row.lifecycleStatus === "posted"
+                                                                && !row.correctsChargeId
+                                                            ) ? (
                                                                 <button
                                                                     type="button"
                                                                     className="alloy-os-financials__action"

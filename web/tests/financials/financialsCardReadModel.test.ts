@@ -7,6 +7,7 @@ import {
     sortBillingPeriodKeysDescending,
 } from "@/lib/financials/billingPeriod";
 import {
+    isPostedMoney,
     pastDueFor,
     reconcileRows,
     type FinancialsLedgerRow,
@@ -27,6 +28,9 @@ function row(over: Partial<FinancialsLedgerRow>): FinancialsLedgerRow {
         currencyCode: "USD",
         status: "posted",
         lifecycleStatus: "posted",
+        correctsChargeId: null,
+        correctionKind: null,
+        reversedByChargeId: null,
         dueDate: null,
         glCode: null,
         glAccountName: null,
@@ -176,5 +180,87 @@ describe("past due — real due-date semantics", () => {
 
     it("is null when nothing is overdue, rather than a zero that reads as a debt", () => {
         expect(pastDueFor([row({ dueDate: "2026-09-30" })], "2026-08-26")).toBeNull();
+    });
+});
+
+/**
+ * A REVERSAL IS A PAIR, and every total has to read both halves.
+ *
+ * The original stays exactly as posted — posted money is immutable — and the reversal stands beside
+ * it. `reversed` is a derived reading of that pair, not a third kind of row, so the moment a total
+ * treats it as "no longer posted" it reports one half of something that sums to zero.
+ */
+describe("correction lineage — a reversed charge is a pair, not a disappearance", () => {
+    const original = row({
+        chargeId: "orig",
+        amountCents: 130_000,
+        categoryKey: "tuition",
+        lifecycleStatus: "reversed",
+        reversedByChargeId: "rev",
+    });
+    const reversal = row({
+        chargeId: "rev",
+        amountCents: -130_000,
+        categoryKey: "credit",
+        lifecycleStatus: "posted",
+        correctsChargeId: "orig",
+        correctionKind: "reversal",
+    });
+
+    it("keeps the reversed original in the reconciliation, so the pair nets to zero", () => {
+        const out = reconcileRows([original, reversal], "2026-08", "2026-08-26");
+        expect(out.grossCents).toBe(130_000);
+        expect(out.discountsCents).toBe(-130_000);
+        expect(out.responsibilityCents).toBe(0);
+        expect(out.balanceCents).toBe(0);
+    });
+
+    it("would drive responsibility NEGATIVE if the reversed original were skipped", () => {
+        // The failure this guards: dropping the original leaves the credit unmatched and the ledger
+        // claims the family is owed money it was only ever charged and refunded.
+        const creditOnly = reconcileRows([reversal], "2026-08", "2026-08-26");
+        expect(creditOnly.responsibilityCents).toBe(-130_000);
+    });
+
+    it("counts reversed money as posted money, so a period total is not the credit alone", () => {
+        expect(isPostedMoney("posted")).toBe(true);
+        expect(isPostedMoney("reversed")).toBe(true);
+        expect(isPostedMoney("draft")).toBe(false);
+        expect(isPostedMoney("scheduled")).toBe(false);
+        expect(isPostedMoney("void")).toBe(false);
+        const total = [original, reversal]
+            .filter((r) => isPostedMoney(r.lifecycleStatus))
+            .reduce((sum, r) => sum + r.amountCents, 0);
+        expect(total).toBe(0);
+    });
+
+    it("reports no past due for a reversed charge — nobody owes reversed money", () => {
+        // A correction copies the source's due date, so BOTH halves would otherwise qualify and the
+        // card would announce an overdue balance of $0.00 for money nobody owes.
+        const overdue = [
+            { ...original, dueDate: "2026-08-01" },
+            { ...reversal, dueDate: "2026-08-01" },
+        ];
+        expect(pastDueFor(overdue, "2026-08-26")).toBeNull();
+    });
+
+    it("still counts a PARTIALLY credited charge as past due, net of the credit", () => {
+        // A credit is partial and legitimately reduces what is still overdue; only a reversal closes
+        // the charge, so credits are not excluded with it.
+        const out = pastDueFor(
+            [
+                row({ chargeId: "orig", amountCents: 130_000, dueDate: "2026-08-01" }),
+                row({
+                    chargeId: "cr",
+                    amountCents: -30_000,
+                    categoryKey: "credit",
+                    dueDate: "2026-08-01",
+                    correctsChargeId: "orig",
+                    correctionKind: "credit",
+                }),
+            ],
+            "2026-08-26",
+        );
+        expect(out?.amountCents).toBe(100_000);
     });
 });

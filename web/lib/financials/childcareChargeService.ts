@@ -16,6 +16,8 @@
  *     (reversal / credit / replacement), never in-place edits.
  *   - Posting is IDEMPOTENT: posting an already-posted charge returns it and writes
  *     nothing, so a retried request cannot post twice.
+ *   - A posted charge is corrected ONCE: it admits no second reversal, and a correction is
+ *     never itself corrected.
  *   - Every write is actor-attributed (`created_by` / `updated_by` / `posted_by`).
  *
  * Posture: callers MUST pass a server-only Supabase client (service-role admin
@@ -388,10 +390,46 @@ export async function postChildcareCharge(
 }
 
 /**
+ * The LIVE reversal of a charge, if one exists.
+ *
+ * `status <> 'void'` and `metadata.correction_kind = 'reversal'` are the same predicate the partial
+ * unique index uses, so the friendly refusal and the authoritative one describe the same row. A
+ * voided correction is not a correction that stands.
+ */
+async function findLiveReversal(
+    supabase: SupabaseClient,
+    orgId: string,
+    sourceChargeId: string
+): Promise<{ id: string } | null> {
+    const { data, error } = await supabase
+        .from("charges")
+        .select("id, status, metadata")
+        .eq("org_id", orgId)
+        .eq("source_charge_id", sourceChargeId);
+    if (error) {
+        throw new OperationalEnrollmentServiceError("db_error", error.message);
+    }
+    const rows = (data ?? []) as Array<{ id: string; status: string; metadata: Record<string, unknown> | null }>;
+    const reversal = rows.find(
+        (r) => r.status !== "void" && (r.metadata ?? {}).correction_kind === "reversal"
+    );
+    return reversal ? { id: reversal.id } : null;
+}
+
+/**
  * Create a correction for a posted childcare charge as a NEW row referencing the
  * original via source_charge_id. Never mutates the original.
  *   - reversal: negation of the source amount (amountCents must be omitted).
  *   - credit / replacement: explicit signed amount.
+ *
+ * ── A CHARGE IS CORRECTED ONCE ──
+ *
+ * The correction path shipped with no bound, and an unbounded correction invents money: reversing a
+ * $1,300 charge twice leaves the family owed $1,300 they were never charged, and a reversal — being
+ * posted money itself — could be reversed in turn without end. The rule is asserted by the database
+ * (`20260902140000`: the lineage trigger plus a partial unique index that two concurrent reversals
+ * cannot both pass). These checks mirror it so an operator reads a sentence rather than a
+ * constraint name.
  */
 export async function createChildcareCorrection(
     supabase: SupabaseClient,
@@ -403,6 +441,28 @@ export async function createChildcareCorrection(
         throw new OperationalEnrollmentServiceError(
             "invalid_state",
             "only posted childcare charges are corrected via source_charge_id; recalculate the draft instead"
+        );
+    }
+
+    // A correction is recorded against the ORIGINAL charge. Correcting a correction reinstates a
+    // charge as a side effect and starts a chain with no terminus; a charge that should stand again
+    // is re-billed as its own charge, which leaves a record of that decision.
+    if (source.source_charge_id) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `charge ${source.id} is itself a correction of ${source.source_charge_id}; `
+                + "record the correction against the original charge"
+        );
+    }
+
+    // Once reversed, the charge no longer stands, so it admits no further correction of any kind —
+    // a second reversal credits the family twice, and a credit against money already removed in
+    // full removes it again.
+    const existingReversal = await findLiveReversal(supabase, input.orgId, source.id);
+    if (existingReversal) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            `charge ${source.id} has already been reversed by ${existingReversal.id} and admits no further correction`
         );
     }
 
