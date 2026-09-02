@@ -43,6 +43,7 @@ import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPan
 import {
     beginRecording,
     markActivated,
+    recordedGestureCount,
     recordingActivated,
     recordingIsAutomatic,
     finishRecording,
@@ -168,6 +169,14 @@ export default function FocusPanelRuntimeComposerCanvas({
      */
     const [previewGrid, setPreviewGrid] = useState<FocusPanelGridLayout | null>(null);
     const [draggingCard, setDraggingCard] = useState<FocusPanelCardKey | null>(null);
+    /*
+     * A VISIBLE SIGN THAT THE RECORDER IS IN THIS TAB.
+     *
+     * Two rounds of operator QA produced no trace, and the sink was fine both
+     * times — the page simply predated the recorder. "Nothing was captured" reads
+     * identically to "nothing happened", so the builder says which it is.
+     */
+    const [tracedGestures, setTracedGestures] = useState(0);
     const renderGrid = previewGrid ?? grid;
     const [activeMode, setActiveMode] = useState<FocusPanelMode>("summary");
     const [ghost, setGhost] = useState<Ghost | null>(null);
@@ -707,6 +716,7 @@ export default function FocusPanelRuntimeComposerCanvas({
             setGhost(null);
             setPreviewGrid(null);
             setDraggingCard(null);
+            window.setTimeout(() => setTracedGestures(recordedGestureCount()), 600);
             interacting.current = false;
             setArranging(false);
             try {
@@ -1001,6 +1011,15 @@ export default function FocusPanelRuntimeComposerCanvas({
                 <div className="alloy-os-fp-composer__tray" data-fp-composer-tray="true" data-fp-composer-tray-position="top">
                     <Plus className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />
                     <span className="alloy-os-fp-composer__tray-label">Add card</span>
+                    {recordingIsAutomatic() ?
+                        <span
+                            className="alloy-os-fp-composer__tray-label"
+                            data-fp-drag-tracing="on"
+                            title="Every drag on this canvas is recorded to /tmp/alloy-surface-drag-traces/"
+                        >
+                            · drag tracing ON{tracedGestures ? ` · ${tracedGestures} captured` : ""}
+                        </span>
+                    :   null}
                     {tray.map((c) => (
                         <button
                             // A variant is keyed by identity AND shape: Financials appears twice in

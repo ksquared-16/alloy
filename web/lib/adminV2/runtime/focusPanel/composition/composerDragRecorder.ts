@@ -61,13 +61,14 @@ type RecorderWindow = typeof globalThis & {
         label: string;
         current: DragRecording | null;
         last: DragRecording | null;
+        count: number;
     };
 };
 
 function store(): RecorderWindow["__ALLOY_DRAG_RECORDER__"] {
     if (typeof window === "undefined") return undefined;
     const w = window as RecorderWindow;
-    w.__ALLOY_DRAG_RECORDER__ ??= { armed: false, label: "drag", current: null, last: null };
+    w.__ALLOY_DRAG_RECORDER__ ??= { armed: false, label: "drag", current: null, last: null, count: 0 };
     return w.__ALLOY_DRAG_RECORDER__;
 }
 
@@ -134,6 +135,12 @@ export function markActivated(args: { activator: string; grab: Record<string, un
 /** True while a gesture is being recorded — the press listener owns the lifecycle. */
 export function recordingInFlight(): boolean {
     return Boolean(store()?.current);
+}
+
+/** How many gestures this page has recorded — shown so a stale tab is obvious. */
+export function recordedGestureCount(): number {
+    const s = store();
+    return s?.count ?? 0;
 }
 
 /** True once the press became a drag; the drag runtime then owns the frames. */
@@ -219,6 +226,7 @@ export function finishRecording(layoutAfter: unknown): void {
         }, delay);
     }
     s.last = recording;
+    s.count = (s.count ?? 0) + 1;
     s.current = null;
     s.armed = false;
 }

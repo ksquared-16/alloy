@@ -114,3 +114,57 @@ describe("the same pointer gives the same rectangle, however the card was grabbe
         }
     });
 });
+
+describe("the left band, against the real canvas the operator is using", () => {
+    /*
+     * Operator QA isolated it: left fails, centre and right work, same card. The
+     * bands are therefore checked against the MEASURED canvas — 957px wide, twelve
+     * columns, 10px gutters, taken from the live layout dump — rather than a
+     * synthetic width.
+     */
+    const WIDTH = 957;
+
+    const bandsFor = (colSpan: number) => {
+        const track = (WIDTH - 11 * 10) / 12;
+        const pitch = track + 10;
+        const seen = new Map<number, [number, number]>();
+        for (let x = 0; x <= WIDTH; x += 1) {
+            const pointerColumn = Math.min(12, Math.max(1, Math.floor(x / pitch) + 1));
+            const start = snapColumnStart({ pointerColumn, colSpan, columns: 12 });
+            const band = seen.get(start);
+            if (!band) seen.set(start, [x, x]); else band[1] = x;
+        }
+        return seen;
+    };
+
+    it("the left band starts at the canvas edge — no dead strip before it", () => {
+        for (const colSpan of [4, 6, 8]) {
+            const bands = bandsFor(colSpan);
+            expect(bands.get(1)?.[0], `span ${colSpan}`).toBe(0);
+        }
+    });
+
+    it("the left band is not narrower than the others", () => {
+        for (const colSpan of [4, 6]) {
+            const bands = [...bandsFor(colSpan).entries()].sort((a, b) => a[0] - b[0]);
+            const widths = bands.map(([, [lo, hi]]) => hi - lo);
+            const first = widths[0]!;
+            for (const w of widths) expect(Math.abs(w - first)).toBeLessThan(24);
+        }
+    });
+
+    it("sweeping left always ends at colStart 1 and stays there", () => {
+        for (const colSpan of [4, 6, 8]) {
+            const track = (WIDTH - 11 * 10) / 12;
+            const pitch = track + 10;
+            let last = 99;
+            for (let x = WIDTH; x >= 0; x -= 1) {
+                const pointerColumn = Math.min(12, Math.max(1, Math.floor(x / pitch) + 1));
+                const start = snapColumnStart({ pointerColumn, colSpan, columns: 12 });
+                expect(start).toBeLessThanOrEqual(last);
+                last = start;
+            }
+            expect(last, `span ${colSpan}`).toBe(1);
+        }
+    });
+});
