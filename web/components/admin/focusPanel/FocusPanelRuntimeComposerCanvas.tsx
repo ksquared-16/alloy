@@ -26,6 +26,7 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
+    compactGridRows,
     COMPOSER_GRID_GAP_PX,
     composerGridMetrics,
     parseTrackSizes,
@@ -153,10 +154,22 @@ export default function FocusPanelRuntimeComposerCanvas({
     const inOrder = new Set(order.map((entry) => entry.key));
     const tray = catalog.filter((c) => !placed.has(c.key) && !inOrder.has(c.key));
 
+    /*
+     * EVERY COMMITTED LAYOUT IS A COMPACT ONE.
+     *
+     * Rows are placed by explicit line and sized `minmax(76px, auto)`, so a row
+     * index nothing occupies is still a track that reserves its height. Removing
+     * a card, resizing one, or moving one out of the bottom row all leave such
+     * indices behind — and the canvas grew hundreds of pixels of empty space
+     * above the cards as a result. Gravity is applied HERE, at the single seam
+     * every layout change already passes through, so no caller can forget it and
+     * what is saved is exactly what is shown.
+     */
     const applyGrid = useCallback(
         (next: FocusPanelGridLayout) => {
-            setGrid(next);
-            onLayoutChange?.(buildPublishedLayoutFromGrid(next));
+            const packed = compactGridRows(next);
+            setGrid(packed);
+            onLayoutChange?.(buildPublishedLayoutFromGrid(packed));
         },
         [onLayoutChange],
     );

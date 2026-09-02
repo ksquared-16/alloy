@@ -369,6 +369,48 @@ export function snapMoveTarget(
     return clampArea(grid, next);
 }
 
+/**
+ * GRAVITY — pull every card up to the earliest row that will hold it. PURE.
+ *
+ * ── WHY AN EMPTY ROW IS NOT FREE ──
+ *
+ * Cards are placed by explicit line (`grid-row: <start> / span <n>`), and the
+ * canvas sizes its rows `minmax(76px, auto)`. So a row index nothing occupies is
+ * still a TRACK: the container generates every implicit row between the top and
+ * the highest declared start, and each one reserves at least 76px plus its gap.
+ *
+ * Spatial placement made that visible. Dragging Financials out of row 4 and into
+ * the vacancy beside Process on row 1 left rows 4-6 declared by nothing — and the
+ * grid duly rendered three empty 76px tracks, ~258px of whitespace, above
+ * everything that came after. Nothing was "reserving" it in the DOM; the model
+ * was simply still describing rows that no longer had a reason to exist.
+ *
+ * Compaction answers it in the model, where the cause is. Cards are visited top
+ * to bottom, left to right, and each falls to the earliest row where it collides
+ * with nothing already placed. Columns and relative order are preserved, so this
+ * closes gaps without rearranging anything the operator authored.
+ */
+export function compactGridRows(grid: FocusPanelGridLayout): FocusPanelGridLayout {
+    const ordered = [...grid.areas].sort((a, b) =>
+        a.rowStart !== b.rowStart ? a.rowStart - b.rowStart : a.colStart - b.colStart,
+    );
+    const placed: FocusPanelGridArea[] = [];
+    for (const area of ordered) {
+        let rowStart = 1;
+        // The earliest row this card fits: rise until nothing collides.
+        for (let guard = 0; guard <= placed.length; guard += 1) {
+            const candidate = { ...area, rowStart };
+            const hit = placed.find((prior) => regionsCollide(prior, candidate));
+            if (!hit) break;
+            rowStart = hit.rowStart + hit.rowSpan;
+        }
+        placed.push({ ...area, rowStart });
+    }
+    // Preserve the caller's array order so downstream tie-breaks are unchanged.
+    const byCard = new Map(placed.map((a) => [a.card, a]));
+    return { ...grid, areas: grid.areas.map((a) => byCard.get(a.card) ?? a) };
+}
+
 /** A resolved drop: the card's landing area AND the grid that lands it. PURE. */
 export type FocusPanelDropPlacement = {
     /** Where the dragged card ends up — this is what the ghost draws. */
@@ -433,11 +475,16 @@ export function resolveDropPlacement(
     const maxColStart = Math.max(1, grid.columns - moving.colSpan + 1);
     const col = Math.min(maxColStart, Math.max(1, Math.round(targetColStart)));
     const row = Math.max(1, Math.round(targetRowStart));
-    const settle = (area: FocusPanelGridArea): FocusPanelDropPlacement => ({
-        area,
-        grid: { ...grid, areas: [...others, area] },
-        reflowed: false,
-    });
+    const settle = (area: FocusPanelGridArea): FocusPanelDropPlacement => {
+        // Compact BEFORE answering: the ghost must show the row the card will
+        // actually occupy, not the row it was dropped on with dead tracks above it.
+        const packed = compactGridRows({ ...grid, areas: [...others, area] });
+        return {
+            area: findArea(packed, area.card) ?? area,
+            grid: packed,
+            reflowed: false,
+        };
+    };
 
     const exact = { ...moving, colStart: col, rowStart: row };
     if (rectangleIsFree(others, exact)) return settle(exact);
@@ -471,7 +518,7 @@ export function resolveDropPlacement(
     }
 
     // Nothing is free in range — reflow, and let the normalizer own the minimum move.
-    const reflowed = placeArea(grid, exact);
+    const reflowed = compactGridRows(placeArea(grid, exact));
     const landed = findArea(reflowed, moving.card) ?? exact;
     return { area: landed, grid: reflowed, reflowed: true };
 }

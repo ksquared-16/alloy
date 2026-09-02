@@ -5718,7 +5718,24 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-fp-composer__chip:hover { border-color: var(--alloy-os-accent, #2f6f4f); color: var(--alloy-os-accent, #2f6f4f); }
 
 .alloy-os-fp-composer-cell { position: relative; }
-.alloy-os-fp-composer-cell.is-arranging > :first-child {
+/*
+ * THE COMPOSER OWNS EVERY PRESS, ON EVERY CARD.
+ *
+ * The rendered card was inert only while ALREADY arranging, so before a drag
+ * began the press landed on whatever the card happened to draw there. On a
+ * text-heavy card (Process, Financials) that is the card, and the drag started.
+ * On a control-heavy one (Attendance, with a control under most of its surface)
+ * it was a button, the composer never saw the press, and the card "would not
+ * drag" — the same gesture, two behaviours, decided by what a card renders.
+ *
+ * The canvas is an authoring preview, so nothing inside a card should be
+ * operable here. Making the content inert at rest — not only mid-drag — is what
+ * makes the gesture card-agnostic by construction rather than by each card
+ * agreeing to behave. The composer's own chrome sits above this and re-enables
+ * its own pointer events, so Configure, Remove and the resize handles are
+ * unaffected.
+ */
+.alloy-os-fp-composer-cell > :first-child {
   pointer-events: none;
   user-select: none;
 }
