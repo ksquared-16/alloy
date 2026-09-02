@@ -763,6 +763,32 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   if (!created.ok) {
     return refused(laneId, created.error, nowMs, size, created.run || null);
   }
+  // READ THE DIRECTOR'S DELEGATION ONCE, HERE, FROM THE PROMPT ITSELF.
+  //
+  // If this instruction explicitly authorises push / open-PR / merge-to-staging,
+  // that authority is captured now, while the words are in hand — never
+  // re-interpreted later at the moment a privileged action wants permission.
+  // Entirely additive: no explicit delegation means nothing is recorded and the
+  // ordinary approval behaviour is exactly what it was.
+  try {
+    const { captureDelegationFromInstruction } = await import("./mission-delegation.mjs");
+    const { getDurableLane } = await import("./development-lane.mjs");
+    const laneRec = getDurableLane(laneId, root);
+    const { getRepository, normalizeRemote } = await import("./repository-registry.mjs");
+    const repo = laneRec?.repository_id ? getRepository(laneRec.repository_id, root) : null;
+    captureDelegationFromInstruction({
+      laneId,
+      runId: created.run.run_id,
+      missionId: laneRec?.mission_id || null,
+      instruction: text,
+      // The registry's own normalizer owns the remote -> owner/repo shape, so
+      // this cannot drift from what the governed actions compare against.
+      repository: repo?.remote ? normalizeRemote(repo.remote) : null,
+      sourceBranch: laneRec?.binding?.branch || null,
+      nowMs,
+      root,
+    });
+  } catch { /* delegation capture never blocks a send */ }
 
   let run = created.run;
   // Bind BEFORE the eligibility branch below. A run that queues for a session
