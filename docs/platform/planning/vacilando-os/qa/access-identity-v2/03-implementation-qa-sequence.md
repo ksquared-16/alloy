@@ -64,6 +64,13 @@ ceilings moved into the register. The finding is a **correction to this workstre
 escape it handed W-15 on 2026-08-06 was generalised too far — **W-5 and W-7 both extracted helpers and neither
 left the enforced set**, because the escape is caused by a helper that *constructs or returns* the service
 client, not by helper extraction (§5)
+· **W-0 re-issued a fifth time 2026-09-02** (mission `msn_0a2037193b0f08ad3f`, assignment
+`asg_037307224c59c5`) — counts not re-asserted, nothing changed. **Run 4 not executed and the census is now 26
+days old**, so W-6/M1's preflight is *aged* and Q4 = 2 is a historical reading. A **worker-side governed-action
+channel now exists** (registry 1 → 12 actions; `POST /api/v2/lane/governed-action`, `origin: "agent"`), retiring
+the "no channel exists" claim — but the V2 API has **one credential and a self-declared actor**, so the token
+that files a request also approves it, and a worker must not hold one. Found a trap that would waste the next
+authorization: a census request without explicit `artifact_refs` **silently runs the Q15 query, not W-0's** (§4)
 · **W-1…W-3 re-executed 2026-08-06 under the reopen** (same mission and assignment) — 55 suites green
 on arrival across a 192-commit interval; RL-1 widened from three directories to the whole of
 `web/app/api` and hardened against comment-only gates; **W-2's exit criterion is not met — two
@@ -604,6 +611,71 @@ the apply follows closely, and *an aged preflight is not a preflight*. W-0 suppl
 is W-6's to flip and is deliberately not set by the census file.** If time has passed, the correct move is
 another census — now a single authorization on a proven channel. Full rule-by-rule evaluation lives at the
 census file's `w6_m1_preflight.preflight_run_3_outcome`.
+
+#### W-0 re-issued a fifth time — **2026-09-02**, assignment `asg_037307224c59c5`: the channel exists now, and it is still not a worker's to use
+
+W-0 was issued a fifth time against exit criteria met on 2026-07-31 and re-confirmed on 2026-08-04 and
+2026-08-07. §4's standing rule for re-issues was applied — **the counts were not re-asserted and no fourth
+identical run was requested.** No count, query, hash, schema or product file was changed. The pass was spent on
+the one thing that had actually moved since the last issuance, and it turns out to have moved a long way.
+
+**Run 4 was not executed, and the counts are now 26 days old.** That is the first fact a reader needs. Nothing
+in the census file is known to describe the database today, and the consequence lands hardest on W-6: the M1
+preflight riding run 3 is **aged**, and §6's own rule 5 says an aged preflight is not a preflight. **Q4 = 2 is
+now a historical reading, not the number M1 must equal.** Zero drift across runs 1–3 does not rescue it —
+`q4_membership_rows` held at 8 in all three, so the growth path was never exercised, and a 26-day gap with
+unknown activity is exactly where that stops being safe to assume.
+
+**A worker-side governed-action channel now exists.** This retires the sentence this programme has repeated
+since 2026-07-31. The trusted-host registry has gone from **one action to twelve**, and `requestGovernedAction`
+is reachable at `POST /api/v2/lane/governed-action`, explicitly built for a worker to file its own blocked
+action — `v2-api.mjs:452` stamps `origin: "agent"`, and the abbreviated-SHA guard is commented *"refused HERE,
+when the worker files it, rather than after a decision has been spent on it."* Two claims in
+[`wave0-authority-census.json`](./wave0-authority-census.json) that say no such channel exists are now stale and
+are corrected in place (they are retained as history, not deleted).
+
+**And a worker still cannot run the census — for a better reason, which is worth keeping rather than closing.**
+Vacilando's V2 API has exactly **one credential and no role separation**: `authorizeV2Request` validates the
+bearer token and then reads the actor off a caller-supplied header, defaulting to `"operator"`
+(`vacilando-api-auth.mjs:119`). The token that authorizes *filing* a governed action also authorizes
+`POST /api/v2/governed-actions/approve`. **Any holder of it can approve its own request as the operator** — a
+worker holding it could self-authorize `database.apply_migration`. So the right posture is not to obtain the
+token; it is that a worker must not hold one, and this pass deliberately did not try. The workspace boundary
+enforces exactly that (listing the token directory from the lane is refused, measured this session), and the
+control plane returned `401` on `/api/v2/health` and `/api/v2/governed-actions`. **The gating resource is still
+an operator authorization, not worker availability.** What changed is that the *request* half is now automatable
+and only the *approval* half is human.
+
+**One configuration finding, logged and not fixed here.** `authGate` (`v2-api.mjs:138-152`) enforces the token
+on every path **only in gateway-remote mode**; outside it, everything except `/api/v2/deliverable-reviews` and
+`/api/v2/director/messages` returns `ok: true`. This host is in remote mode today — that is what the 401s
+prove — so the approve endpoint is protected right now. **On a host that is not, `POST
+/api/v2/governed-actions/approve` is reachable with no credential from any loopback process.** Outside W-0's
+scope and outside this assignment's permitted files; it belongs to whoever owns the gateway.
+
+**A trap that would have wasted the next authorization**, found the same way the last two were — by reading the
+execution path rather than the artifact. `requestGovernedAction` defaults a census's `artifact_refs` to
+`Q15_CENSUS_ARTIFACT` — **`q15-authority-census.json`, not this one** (`governed-action-request.mjs:1764-1766`,
+`:97`) — and the executed `queryArtifactPath` is derived from those same refs (`:1506`, `:2553`). **It fails
+silently rather than loudly:** `q15-authority-census.json` carries a `combined_query` and **no** `query_hash`
+(verified with `jq`), so the registry skips the hash comparison, passes read-only validation, and executes the
+*wrong query* successfully. The results land in `q15-authority-census.results.json` — a file that already exists
+— leaving plausible evidence in a plausible place while Q1–Q6 go unmeasured and the authorization is spent.
+**Whoever files run 4 must pass `artifact_refs` explicitly**, and the approval card is the cheap place to catch
+it: a card naming `q15-authority-census.json` *is* the symptom.
+
+**Run 4 is otherwise armed correctly.** The top-level `query_hash` (`a3982ca5…`) is by construction the hash of
+the `combined_query` now in the file — run 3 executed against that exact SQL and the Director records the hash
+it computed — so run 4 validates rather than failing on `query_hash_mismatch`. The inverse hazard
+`execution_mechanics_hash_trap` warns about is re-introducing the *runs 1/2* hash (`743cd63b…`); that has not
+happened and must not. `sha256` was not computed to confirm this — `shasum` and `node -e` are still
+permission-walled in this lane — and the claim is recorded as derived from the merge-back's semantics rather
+than measured.
+
+**W-0's exit criteria were unaffected and remain met.** The recommendation is one authorization, not another
+worker: a single `database.read_census` against `wave0-authority-census.json` refreshes Q1–Q6 *and* re-derives
+the fresh Q4 that W-6/M1 needs, discharging both as run 3 did. **Five passes have now established that no worker
+can move this deliverable**; each further dispatch costs a session to return the same needs-operator state.
 
 ---
 
