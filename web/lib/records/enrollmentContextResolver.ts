@@ -24,6 +24,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { enrollmentContextIdsForOpportunities } from "@/lib/enrollment/completion/resolveEnrollmentJourneyContext";
 
 import { CONCLUDED_ENROLLMENT_PROCESS_STATES } from "@/lib/process/processInstances";
 
@@ -84,15 +85,25 @@ export async function resolveLiveEnrollmentContextForHousehold(
     );
     if (eligible.length === 0) return { context: null, consideredOpportunityIds };
 
+    /*
+     * A LIVE EPISODE IS FOUND UNDER EITHER ANCHOR.
+     *
+     * "Live" here means an episode that already contains a running journey, and journeys are found
+     * by context id. Once a journey anchors to the child's Enrollment Participation, matching only
+     * Opportunity ids finds none of them — so a household with running enrollments would look like a
+     * household with none, and a sibling starting enrollment would be given no context at all.
+     */
+    const { contextIds, opportunityIdByContextId } = await enrollmentContextIdsForOpportunities(
+        supabase,
+        orgId,
+        eligible.map((o) => o.id),
+    );
     const { data: piRows, error: piErr } = await supabase
         .from("process_instances")
         .select("context_id, subject_id, state")
         .eq("org_id", orgId)
         .eq("subject_type", "child")
-        .in(
-            "context_id",
-            eligible.map((o) => o.id)
-        );
+        .in("context_id", contextIds);
     if (piErr) throw new Error(piErr.message);
 
     const runningByOpportunity = new Map<string, string[]>();
@@ -101,7 +112,10 @@ export async function resolveLiveEnrollmentContextForHousehold(
         subject_id: string | null;
         state: string | null;
     }[]) {
-        const oppId = (pi.context_id ?? "").trim();
+        // Back to the Opportunity, whichever anchor the journey used — the map below is keyed by
+        // Opportunity, and an OCM id in it would be a key nothing else can match.
+        const rawContextId = (pi.context_id ?? "").trim();
+        const oppId = opportunityIdByContextId.get(rawContextId) ?? rawContextId;
         const subjectId = (pi.subject_id ?? "").trim();
         if (!oppId || !subjectId || concluded(pi.state)) continue;
         runningByOpportunity.set(oppId, [...(runningByOpportunity.get(oppId) ?? []), subjectId]);

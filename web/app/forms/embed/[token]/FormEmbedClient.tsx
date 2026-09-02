@@ -299,6 +299,13 @@ export function FormEmbedClient({
      * the semantic fallback, where the parent met an HTML form instead of the document Alloy had
      * composed for them.
      */
+    /**
+     * The values the RENDERER produced this document from.
+     *
+     * Null until the artifact contract answers, and reset whenever the artifact changes, so the
+     * review list never describes one artifact with another's values.
+     */
+    const [resolvedArtifactValues, setResolvedArtifactValues] = useState<Record<string, unknown> | null>(null);
     const [artifactModel, setArtifactModel] = useState<{
         renderer: "source_fidelity" | "generated_document";
         page_count: number;
@@ -429,6 +436,7 @@ export function FormEmbedClient({
              */
             setSignaturePlacement(null);
             setArtifactModel(null);
+            setResolvedArtifactValues(null);
             void (async () => {
                 try {
                     const res = await fetch(`/api/public/forms/${encToken}/enrollment-artifact`);
@@ -438,9 +446,22 @@ export function FormEmbedClient({
                             renderer?: "source_fidelity" | "generated_document";
                             page_count?: number;
                             signatures?: Array<Record<string, unknown>>;
+                            /** The values this rendering was produced from — the review list's truth. */
+                            resolvedValues?: Record<string, unknown>;
                         };
                     };
                     const slots = Array.isArray(body?.data?.signatures) ? body.data.signatures : [];
+                    /*
+                     * ONE ARTIFACT, ONE SET OF VALUES.
+                     *
+                     * The review list used to compile from the draft payload, which has never heard
+                     * of canonical party projection — so it showed a guardian's destination blank
+                     * beside a document that printed their name. Taking the renderer's own resolved
+                     * values means both surfaces describe the same artifact.
+                     */
+                    if (body?.ok && body.data?.resolvedValues) {
+                        setResolvedArtifactValues(body.data.resolvedValues);
+                    }
                     if (body?.ok && body.data?.renderer) {
                         setArtifactModel({
                             renderer: body.data.renderer,
@@ -898,7 +919,12 @@ export function FormEmbedClient({
     const compiled = enrollmentReview
         ? compileParticipantArtifact(
               schema,
-              (payload.values ?? {}) as Record<string, unknown>,
+              /*
+               * The RENDERER's resolved values where they have arrived, the draft payload until
+               * then. Same artifact, one description — a party destination can no longer read blank
+               * beside a document that shows the person.
+               */
+              (resolvedArtifactValues ?? payload.values ?? {}) as Record<string, unknown>,
               sourceMapping as Parameters<typeof compileParticipantArtifact>[2],
           )
         : null;
@@ -1181,7 +1207,14 @@ export function FormEmbedClient({
                         <button
                             type="button"
                             onClick={() => setReviewStep("review")}
-                            className="mt-4 w-full rounded-xl bg-alloy-midnight px-5 py-3.5 text-[16px] font-medium text-white"
+                            /*
+                             * BEND PINE, like every other primary action in Participant Runtime.
+                             *
+                             * This one was Midnight, so the single most important action on the
+                             * surface was the only one not speaking the runtime's primary language.
+                             * Pinned by a token regression control rather than a literal colour.
+                             */
+                            className="mt-4 w-full rounded-xl bg-alloy-bend-pine px-5 py-3.5 text-[16px] font-medium text-white"
                             data-review-paperwork="true"
                         >
                             Review paperwork

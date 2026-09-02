@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { enrollmentContextIdsForOpportunities } from "@/lib/enrollment/completion/resolveEnrollmentJourneyContext";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { ENROLLMENT_PARTICIPATION_CONTRACT } from "@/lib/process/definitions/enrollment/enrollmentContract";
 import { buildProcessParticipant } from "@/lib/process/engine/processParticipant";
@@ -38,12 +39,24 @@ export async function loadEffectiveEnrollmentStagesByOpportunity(params: {
     const ids = [...new Set(params.opportunityIds.map((id) => id.trim()).filter(Boolean))];
     if (!ids.length) return { stagesByOpportunityId, rollupLabelsByOpportunityId };
 
+    /*
+     * Both anchors, then grouped BY OPPORTUNITY.
+     *
+     * This rolls each Opportunity's children up into an effective stage, so a journey it fails to
+     * find is not an error — it is an Opportunity that appears to have fewer children than it has,
+     * or none. Matching Opportunity ids alone stopped finding participation-anchored journeys.
+     */
+    const { contextIds, opportunityIdByContextId } = await enrollmentContextIdsForOpportunities(
+        params.supabase,
+        params.orgId,
+        ids,
+    );
     const { data, error } = await params.supabase
         .from("process_instances")
         .select("id, org_id, process_key, subject_type, subject_id, context_id, stage_key, state, close_reason_key, metadata")
         .eq("org_id", params.orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .in("context_id", ids)
+        .in("context_id", contextIds)
         .is("close_reason_key", null);
 
     if (error) {
@@ -65,7 +78,10 @@ export async function loadEffectiveEnrollmentStagesByOpportunity(params: {
 
     const byContext = new Map<string, PiRow[]>();
     for (const raw of (data ?? []) as PiRow[]) {
-        const ctx = typeof raw.context_id === "string" ? raw.context_id.trim() : "";
+        const rawCtx = typeof raw.context_id === "string" ? raw.context_id.trim() : "";
+        // Grouped under the OPPORTUNITY: the loop below reads this map by Opportunity id, so a
+        // participation id as a key would simply never be looked up.
+        const ctx = opportunityIdByContextId.get(rawCtx) ?? rawCtx;
         if (!ctx) continue;
         const list = byContext.get(ctx) ?? [];
         list.push(raw);

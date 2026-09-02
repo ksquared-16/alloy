@@ -1,34 +1,105 @@
 /**
- * Ensure a household child has an opportunity_customer_members participation row.
- * Shared by relationship actions and related-subject Waitlist resolution.
+ * Ensure a child has an ENROLLMENT PARTICIPATION row (`opportunity_customer_members`).
+ *
+ * Shared by relationship actions, related-subject Waitlist resolution, and Start Enrollment.
+ *
+ * ## An acquisition Opportunity is optional context, not identity
+ *
+ * The participation is the durable subject of Enrollment — it owns the child's Enrollment state
+ * (`outcome_status_key`: waitlisted / enrolling / enrolled / withdrawn / not_enrolling). A family
+ * already known to the school enrolling a second child has no acquisition episode and needs none,
+ * and Start Enrollment deliberately refuses to manufacture one. So `opportunityId` may be omitted,
+ * and the row is written with `opportunity_id = null`.
+ *
+ * ## Idempotency differs by case, and the difference is the whole point
+ *
+ * With an opportunity, identity is the existing unique constraint
+ * `(org_id, opportunity_id, customer_member_id)`. Without one that constraint cannot help: Postgres
+ * treats NULLs as DISTINCT in a unique index, so it would silently permit unlimited duplicate
+ * participations for one child.
+ *
+ * The context-free replacement is scoped to the EPISODE, because that is what a participation is —
+ * 600 children in the certification tenant hold two of them and 600 hold three, each carrying its
+ * own `start_date`, `stage_key` and `outcome_status_key`. So `uq_ocm_active_context_free_episode`
+ * constrains one ACTIVE context-free participation per child, and a concluded episode releases the
+ * slot. The lookup below matches that index exactly: reusing a CONCLUDED participation would hand a
+ * new journey the previous episode's outcome.
+ *
+ * ## Concluded includes ENROLLED
+ *
+ * The first version of this read "concluded" as `withdrawn` / `not_enrolling` — the statuses the
+ * vocabulary marks `terminal`. But those are the ways an episode ends WITHOUT enrolling, and the
+ * ordinary way it ends is by enrolling. While `enrolled` counted as active, a child who enrolled
+ * last year held their slot forever: this lookup returned last year's participation to this year's
+ * Start Enrollment, and the unique index made a second one impossible.
+ *
+ * Reuse therefore asks `PARTICIPATION_REUSE_CONCLUDED_STATUS_KEYS`, not the terminal set. They are
+ * different questions and only one of them is about reuse.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { isReusableActiveParticipationStatus } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 
 export async function ensureOpportunityCustomerMemberParticipation(params: {
     supabase: SupabaseClient;
     orgId: string;
-    opportunityId: string;
+    /** Acquisition context. Omit for a legitimate context-free Enrollment Participation. */
+    opportunityId?: string | null;
     customerMemberId: string;
     /** Audit/source stamp in OCM metadata when inserting. */
     source?: string;
+    /** Initial child Enrollment state. Defaults to the historical lead status. */
+    outcomeStatusKey?: string;
 }): Promise<{ ocmId: string; created: boolean }> {
-    const opportunityId = params.opportunityId.trim();
+    const opportunityId = (params.opportunityId ?? "").trim() || null;
     const customerMemberId = params.customerMemberId.trim();
-    if (!opportunityId || !customerMemberId) {
-        throw new Error("Opportunity and child member are required.");
+    if (!customerMemberId) {
+        throw new Error("Child member is required.");
     }
 
-    const { data: existingOcm } = await params.supabase
-        .from("opportunity_customer_members")
-        .select("id")
-        .eq("org_id", params.orgId)
-        .eq("opportunity_id", opportunityId)
-        .eq("customer_member_id", customerMemberId)
-        .maybeSingle();
-    if (existingOcm?.id) return { ocmId: String(existingOcm.id), created: false };
+    /**
+     * Matches whichever uniqueness protects this case — the constraint, or the partial index.
+     *
+     * The context-free branch selects and filters in code rather than composing a `not.in` filter:
+     * the concluded set has an owner (`PARTICIPATION_REUSE_CONCLUDED_STATUS_KEYS`) and reusing it keeps one
+     * vocabulary, where a hand-written PostgREST predicate would be a second copy of it.
+     */
+    async function findParticipation(): Promise<string | null> {
+        if (opportunityId) {
+            const { data } = await params.supabase
+                .from("opportunity_customer_members")
+                .select("id")
+                .eq("org_id", params.orgId)
+                .eq("customer_member_id", customerMemberId)
+                .eq("opportunity_id", opportunityId)
+                .maybeSingle();
+            return data?.id ? String(data.id) : null;
+        }
+        const { data } = await params.supabase
+            .from("opportunity_customer_members")
+            .select("id, opportunity_id, outcome_status_key")
+            .eq("org_id", params.orgId)
+            .eq("customer_member_id", customerMemberId);
+        const rows = (data ?? []) as { id: string; opportunity_id: string | null; outcome_status_key: string | null }[];
+        /*
+         * Only an ACTIVE context-free episode may be reused. A concluded one is history, and
+         * returning it would start a new journey already holding the previous episode's outcome.
+         *
+         * "Concluded" includes ENROLLED. That is the whole correction: enrolling is the ordinary way
+         * an episode ends, and while `enrolled` counted as active a child who enrolled last year
+         * could never start a second episode — this lookup handed back last year's participation,
+         * and the partial unique index forbade creating another.
+         */
+        const active = rows.find(
+            (r) => r.opportunity_id === null && isReusableActiveParticipationStatus(r.outcome_status_key),
+        );
+        return active?.id ? String(active.id) : null;
+    }
+
+    const existingId = await findParticipation();
+    if (existingId) return { ocmId: existingId, created: false };
 
     const { data: inserted, error } = await params.supabase
         .from("opportunity_customer_members")
@@ -36,21 +107,15 @@ export async function ensureOpportunityCustomerMemberParticipation(params: {
             org_id: params.orgId,
             opportunity_id: opportunityId,
             customer_member_id: customerMemberId,
-            outcome_status_key: NEW_LEAD_STATUS_KEY,
+            outcome_status_key: params.outcomeStatusKey ?? NEW_LEAD_STATUS_KEY,
             metadata: { source: params.source ?? "eligible_enrollment_children" },
         })
         .select("id")
         .single();
 
     if (error?.code === "23505") {
-        const { data: retry } = await params.supabase
-            .from("opportunity_customer_members")
-            .select("id")
-            .eq("org_id", params.orgId)
-            .eq("opportunity_id", opportunityId)
-            .eq("customer_member_id", customerMemberId)
-            .maybeSingle();
-        if (retry?.id) return { ocmId: String(retry.id), created: false };
+        const retryId = await findParticipation();
+        if (retryId) return { ocmId: retryId, created: false };
     }
     if (error || !inserted?.id) {
         throw new Error(error?.message ?? "Could not link child to this enrollment.");

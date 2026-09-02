@@ -60,6 +60,15 @@ export function buildEnrollmentParticipants(
     opportunities: readonly OppRow[],
     members: readonly MemberRow[],
     ocmLocations: readonly OcmLocationRow[] = [],
+    /**
+     * OCM context id -> its Opportunity, for journeys anchored to an Enrollment Participation.
+     *
+     * Empty by default, which is exactly the historical behaviour: a context id that is already an
+     * Opportunity id resolves to itself. Without it, every participation-anchored journey fails the
+     * inner join below and vanishes from Family Leads, Pipeline Children and every Work View — the
+     * same silent drop, one layer down.
+     */
+    opportunityIdByContextId: ReadonlyMap<string, string> = new Map(),
 ): ProcessParticipant<EnrollmentAttributes>[] {
     const oppById = new Map(opportunities.map((o) => [o.id, o]));
     const memberById = new Map(members.map((m) => [m.id, m]));
@@ -68,12 +77,17 @@ export function buildEnrollmentParticipants(
     );
     const out: ProcessParticipant<EnrollmentAttributes>[] = [];
     for (const pi of piRows) {
-        const opp = pi.context_id ? oppById.get(pi.context_id) : undefined;
+        // The journey's Opportunity, whichever anchor it uses.
+        const opportunityId = pi.context_id
+            ? opportunityIdByContextId.get(pi.context_id) ?? pi.context_id
+            : null;
+        const opp = opportunityId ? oppById.get(opportunityId) : undefined;
         if (!opp) continue;
         const member = memberById.get(pi.subject_id);
+        // Keyed by the OPPORTUNITY, which is what the OCM location rows are keyed by.
         const subjectLocationId =
-            (pi.context_id
-                ? ocmLocationByPair.get(`${pi.context_id}:${pi.subject_id}`)
+            (opportunityId
+                ? ocmLocationByPair.get(`${opportunityId}:${pi.subject_id}`)
                 : null) ?? null;
         out.push(
             buildProcessParticipant<EnrollmentAttributes>(pi, {
@@ -135,6 +149,8 @@ async function loadEnrollmentParticipants(
 
     let piRows: PiRow[];
     let opportunities: OppRow[];
+    /** OCM context id -> its Opportunity, filled by whichever branch below runs. */
+    const opportunityIdByContextId = new Map<string, string>();
 
     if (scopeId) {
         // Work-unit scope must NOT mean "only opportunities parked on this work_unit_id".
@@ -176,8 +192,33 @@ async function loadEnrollmentParticipants(
         if (oppErr) throw new Error(oppErr.message);
         opportunities = (oppData ?? []) as OppRow[];
         if (!opportunities.length) return [];
+        /*
+         * Journeys are found by BOTH anchors.
+         *
+         * Fetching by Opportunity id alone stopped finding anything the moment Enrollment journeys
+         * began anchoring to the child's Enrollment Participation — and the failure is a shorter
+         * list, not an error, so a Work View would simply have looked empty.
+         */
+        const scopedParticipations = await fetchIn<{ id: string; opportunity_id: string | null }>(
+            supabase,
+            "opportunity_customer_members",
+            "id, opportunity_id",
+            "opportunity_id",
+            opportunities.map((o) => o.id),
+            orgId,
+        );
+        for (const row of scopedParticipations) {
+            if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
+        }
         piRows = (
-            await fetchIn<PiRow>(supabase, PROCESS_INSTANCES_TABLE, PI_COLUMNS, "context_id", opportunities.map((o) => o.id), orgId)
+            await fetchIn<PiRow>(
+                supabase,
+                PROCESS_INSTANCES_TABLE,
+                PI_COLUMNS,
+                "context_id",
+                [...opportunities.map((o) => o.id), ...scopedParticipations.map((r) => String(r.id))],
+                orgId,
+            )
         ).filter((pi) => pi.process_key === ENROLLMENT_PROCESS_KEY);
     } else {
         const { data: piData, error: piErr } = await supabase
@@ -187,12 +228,26 @@ async function loadEnrollmentParticipants(
             .eq("process_key", ENROLLMENT_PROCESS_KEY);
         if (piErr) throw new Error(piErr.message);
         piRows = (piData ?? []) as PiRow[];
+        // Resolve participation anchors to their Opportunity BEFORE loading opportunities, or the
+        // journeys that use them find no context and are dropped by the inner join.
+        const contextIds = [...new Set(piRows.map((pi) => pi.context_id ?? "").filter(Boolean))];
+        const contextParticipations = await fetchIn<{ id: string; opportunity_id: string | null }>(
+            supabase,
+            "opportunity_customer_members",
+            "id, opportunity_id",
+            "id",
+            contextIds,
+            orgId,
+        );
+        for (const row of contextParticipations) {
+            if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
+        }
         opportunities = await fetchIn<OppRow>(
             supabase,
             "opportunities",
             "id, stage_key, status_key, work_unit_id, location_id",
             "id",
-            piRows.map((pi) => pi.context_id ?? "").filter(Boolean),
+            contextIds.map((id) => opportunityIdByContextId.get(id) ?? id),
             orgId,
         );
     }
@@ -214,7 +269,7 @@ async function loadEnrollmentParticipants(
         opportunities.map((o) => o.id),
         orgId,
     );
-    return buildEnrollmentParticipants(piRows, opportunities, members, ocmLocations);
+    return buildEnrollmentParticipants(piRows, opportunities, members, ocmLocations, opportunityIdByContextId);
 }
 
 /** The Enrollment projection — contract + loader, satisfying the engine port. */

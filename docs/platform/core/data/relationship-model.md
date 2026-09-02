@@ -190,6 +190,94 @@ behind the same rule.
 
 ---
 
+## Participant collection and artifact projection
+
+Established by Real Enrollment V1 (Participant Runtime R1–R6) and certified against a real imported
+packet plus three unrelated synthetic Forms. This is the contract between the relationship model and
+any surface that collects people or prints them onto a document.
+
+### A source's numbered slots are destinations, not people
+
+"Parent/Guardian #2", "Emergency Contact #3", "Primary Physician" are boxes a school printed. They
+are **capacity**, and they are neither runtime identities nor a statement that such people exist.
+
+Participant Runtime therefore operates on relationships, never on slots:
+
+```
+person identity
+  -> relationship to the subject
+  -> one or more relationship roles
+  -> role-specific facts only where required
+  -> deterministic projection into whatever destinations the artifact exposes
+```
+
+One person may occupy several artifact roles with no duplicate identity: one `persons` row, one
+`person_child_relationships` edge, several `person_child_relationship_roles`. An aunt who is both the
+second emergency contact and an authorised pickup is collected once.
+
+**Artifact slot capacity never establishes a semantic minimum.** A packet printing three emergency
+contact rows means "this artifact can print up to three", never "this family must supply one".
+
+### Repeatable parties use one generic interaction
+
+There is a single semantic collection interaction for every repeatable party. It may offer people
+already known to the household, create a new canonical person, establish or reuse the relationship,
+attach explicit roles, and ask whether another should be added. Role order follows the authored
+order of the definition rows, so a tenant whose definitions are ordered differently gets a different
+conversation with no code change.
+
+Two rules that are easy to lose:
+
+- **Source labels are never participant identities.** A parent is asked about a person and a role;
+  which ordinal box they land in is decided afterwards by projection.
+- **A role is never implied by another role.** Being an emergency contact does not grant pickup
+  authorisation; that role is attached explicitly or not at all, and a pickup destination is filled
+  only from a party actually holding it.
+
+### `resolveArtifactValues` is the single resolved-value authority
+
+Every participant surface that describes an artifact reads one resolution, in this order:
+
+```
+draft values                     the artifact's own current state, and it WINS
+  -> shared-value prefill        what the conversation settled, filling only what is absent
+  -> derived stamps              execution dates, never over a recorded value
+  -> canonical party projection  LAST, and authoritative
+```
+
+Party projection **clears** each party-owned destination before filling it. No earlier step can know
+that several destinations declaring one canonical key belong to several different people, so a stale
+draft or shared value must not survive on someone's box merely because it was merged first. That
+clearing is the reason one answer can no longer fan out across unrelated parties.
+
+Both **document rendering** and **participant review-list compilation** consume the same resolved
+values. Neither the renderer nor the review surface owns party semantics — they receive field ids
+and values. A destination with no corresponding canonical party renders blank, which is the truth.
+
+### Requirement versus capacity
+
+A minimum comes from a governed semantic requirement or from nowhere:
+
+| Configured requirement | Minimum |
+|---|---|
+| explicit count | that count |
+| required, no count | 1 |
+| none | **0** |
+
+Artifact destination count remains print capacity only and never raises a minimum. Where no governed
+requirement exists, repeatable parties are optional and additive in the conversation.
+
+### Effect on the future-proof test
+
+The write boundary previously validated operational roles against the platform-FIXED constant, so a
+role carried by a definition row — `child_physicians`, `child_dentists` — was refused with
+`Unsupported operational role`. That contradicted the test above and is now closed: the boundary
+validates against the full vocabulary (`isOperationalRoleKey`). Adding Physician really is one
+definition row; participant collection, canonical persistence and artifact projection all inherit it
+with no new code, proven on a boarding kennel, a sailing club and a trust deed.
+
+---
+
 ## Household relationships
 
 | Attribute | Value |

@@ -11,7 +11,12 @@ export const CHILD_LIFECYCLE_STATUS_CHANGED_EVENT = "child_lifecycle_status_chan
 export type EmitChildLifecycleStatusChangedEventParams = {
     supabase: SupabaseClient;
     orgId: string;
-    opportunityId: string;
+    /**
+     * Acquisition context, when there is any. NULL for a context-free Enrollment Participation —
+     * the event is keyed on the participation itself (`entity_id`), never on the Opportunity, so a
+     * child enrolling without an acquisition episode still emits a first-class lifecycle event.
+     */
+    opportunityId: string | null;
     opportunityCustomerMemberId: string;
     previousStatusKey: string | null;
     nextStatusKey: string | null;
@@ -51,7 +56,7 @@ export async function emitChildLifecycleStatusChangedEvent(
 
     const now = new Date().toISOString();
     const payload: Record<string, unknown> = {
-        opportunity_id: params.opportunityId,
+        opportunity_id: params.opportunityId ?? null,
         opportunity_customer_member_id: params.opportunityCustomerMemberId,
         previous_status_key: previous,
         next_status_key: next,

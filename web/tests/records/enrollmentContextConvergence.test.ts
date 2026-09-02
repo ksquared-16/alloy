@@ -140,7 +140,13 @@ describe("a closed episode is never reopened for a sibling", () => {
 
         const inserted = m.writes.find((w) => w.table === "process_instances" && w.op === "insert")!.row;
         expect(inserted.subject_id).toBe(CHILD_B);
-        expect(inserted.context_id).toBeUndefined();
+        /*
+         * NO OPPORTUNITY — asserted above, and unchanged. What the journey anchors to is the
+         * child's own Enrollment Participation, which exists whether or not acquisition does; the
+         * instance used to carry no context at all here.
+         */
+        expect(inserted.context_type).toBe("enrollment_participation");
+        expect(inserted.context_id).toBe(result.enrollmentParticipationId);
     });
 });
 
@@ -183,7 +189,11 @@ describe("a live episode is joined, not duplicated", () => {
         const inserted = m.writes.find((w) => w.table === "process_instances" && w.op === "insert")!.row;
         // The sibling does NOT share child A's journey.
         expect(inserted.subject_id).toBe(CHILD_B);
-        expect(inserted.context_id).toBe(LIVE_OPP);
+        // Anchored to the sibling's OWN participation in the joined episode — never to the shared
+        // Opportunity, which is what made two siblings' journeys look like one context.
+        expect(inserted.context_type).toBe("enrollment_participation");
+        expect(inserted.context_id).toBe(result.enrollmentParticipationId);
+        expect(inserted.context_id).not.toBe(LIVE_OPP);
     });
 });
 

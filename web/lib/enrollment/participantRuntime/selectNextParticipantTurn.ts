@@ -24,6 +24,9 @@ import type {
 } from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import type { ParticipantTurn } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
+import type { ParticipantEvidenceObligation } from "@/lib/enrollment/participantRuntime/participantEvidenceObligations";
+import { orderNeedsForTraversal } from "@/lib/enrollment/participantRuntime/participantTraversalOrder";
+import type { PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
 
 /**
  * Deterministic wording — the FALLBACK that always exists.
@@ -52,6 +55,25 @@ export function deterministicPrompt(need: EnrollmentInformationNeed): string {
     return `What is ${label}?`;
 }
 
+/**
+ * "Physicians" -> "physician", "Parents / Guardians" -> "parent or guardian".
+ *
+ * A definition's label names the COLLECTION it manages; the question asks for one member of it. The
+ * slash form matters: "Would you like to add a parents / guardian?" is what a naive trailing-s trim
+ * produced, and a parent reads that as a mistake rather than a question.
+ */
+function singular(label: string): string {
+    return label
+        .split("/")
+        .map((part) => part.trim().replace(/s$/i, "").toLowerCase())
+        .filter(Boolean)
+        .join(" or ");
+}
+
+function article(label: string): string {
+    return /^[aeiou]/i.test(label.trim()) ? "an" : "a";
+}
+
 function formatValue(value: unknown): string {
     if (value === null || value === undefined) return "(not set)";
     if (typeof value === "string") return value;
@@ -75,6 +97,20 @@ const TURN_PRIORITY: Record<string, number> = {
 export type NextParticipantTurnInput = {
     readonly needs: EnrollmentInformationNeeds;
     readonly progress: EnrollmentParticipantProgress;
+    /**
+     * Required attachments still outstanding, in packet order.
+     *
+     * Absent means the caller resolved no evidence, which selects exactly as before — so every
+     * existing caller and test is unchanged by the addition.
+     */
+    readonly outstandingEvidence?: readonly ParticipantEvidenceObligation[];
+    /**
+     * The D-100 policy, so traversal can tell the child's BASIC block from their later topics
+     * without a second vocabulary. Absent leaves the historical order untouched.
+     */
+    readonly requiresConfirmation?: ReadonlySet<string>;
+    /** The next person to offer, resolved from canonical parties and artifact capacity. */
+    readonly partyOffer?: PartyOffer | null;
 };
 
 /**
@@ -103,9 +139,21 @@ export function selectNextParticipantTurn(input: NextParticipantTurnInput): Part
      * Optionality decides whether a need BLOCKS completion — it drives the progress count and the
      * skip affordance — not whether it is worth asking about.
      */
-    const actionable = input.needs.needs
-        .filter((need) => need.state === "known_requires_confirmation" || need.state === "missing")
-        .sort((a, b) => (TURN_PRIORITY[a.state] ?? 9) - (TURN_PRIORITY[b.state] ?? 9));
+    /*
+     * SUBJECT FIRST, THEN TOPIC, THEN THE PROJECTION'S OWN ORDER.
+     *
+     * This used to sort on state alone, so the queue was "every confirmation anywhere, then every
+     * collection anywhere" in source-field order — which is how a conversation comes to jump from a
+     * guardian to a child's date of birth and back to the guardian again. Confirmations still come
+     * first WITHIN a subject; they no longer pull the conversation away from the person being
+     * discussed. Absent a policy the historical order stands.
+     */
+    const outstanding = input.needs.needs.filter(
+        (need) => need.state === "known_requires_confirmation" || need.state === "missing",
+    );
+    const actionable = input.requiresConfirmation
+        ? orderNeedsForTraversal(outstanding, input.requiresConfirmation, input.needs.needs)
+        : [...outstanding].sort((a, b) => (TURN_PRIORITY[a.state] ?? 9) - (TURN_PRIORITY[b.state] ?? 9));
 
     const next = actionable[0];
     if (next) {
@@ -115,6 +163,54 @@ export function selectNextParticipantTurn(input: NextParticipantTurnInput): Part
             prompt: deterministicPrompt(next),
             proposed_value: next.state === "known_requires_confirmation" ? next.current_value : null,
             resolves_occurrences: next.occurrence_count,
+        };
+    }
+
+    /*
+     * THE PEOPLE, BEFORE THE DOCUMENTS.
+     *
+     * Every shared fact about the child and the responding adult is settled, so the conversation
+     * turns to who else is involved. This is an OFFER: minimums come from configured semantic
+     * requirements and there are none today, so each is declinable and declining is settlement.
+     * One offer per role — a packet printing three emergency-contact rows asks once, because
+     * capacity is a ceiling on printing and the family decides how many people exist.
+     */
+    if (input.partyOffer) {
+        const offer = input.partyOffer;
+        return {
+            kind: "collect_party",
+            need: null,
+            prompt: offer.is_additional
+                ? `Would you like to add another ${singular(offer.role_label)}?`
+                : `Would you like to add ${article(offer.role_label)} ${singular(offer.role_label)}?`,
+            proposed_value: null,
+            resolves_occurrences: 0,
+            party: offer,
+        };
+    }
+
+    /**
+     * EVIDENCE BEFORE PREPARATION.
+     *
+     * Every shared fact is settled, so the next thing the parent owes is any REQUIRED document. It
+     * comes before the handoff for two reasons, and the second is the one that matters long term:
+     * the runtime must not say it has filled out paperwork that is waiting on an attachment, and a
+     * document that arrives after generation cannot inform what was generated. Asking here is what
+     * lets a future Health extraction populate structured dose truth and regenerate the CIS before
+     * the parent ever reads it.
+     */
+    const evidence = input.outstandingEvidence ?? [];
+    if (evidence.length > 0) {
+        return {
+            kind: "collect_evidence",
+            need: null,
+            prompt:
+                evidence.length === 1
+                    ? `Before I prepare the paperwork, please attach ${evidence[0]!.title}.`
+                    : `Before I prepare the paperwork, please attach ${evidence.length} required documents.`,
+            proposed_value: null,
+            resolves_occurrences: 0,
+            evidence,
         };
     }
 

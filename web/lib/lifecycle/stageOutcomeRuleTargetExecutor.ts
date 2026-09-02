@@ -35,6 +35,8 @@ import {
 } from "@/lib/lifecycle/stageGrainResolution";
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
+import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
+import { isReusableActiveParticipationStatus } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { emitEvent } from "@/lib/emitEvent";
 // BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
 // inside the enrolled disposition, gated by the childcare feature flag. Target decoupling is a childcare
@@ -91,6 +93,52 @@ async function resolveChildSubjectId(
         .maybeSingle();
     const id = (data as { customer_member_id?: string } | null)?.customer_member_id;
     return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
+/**
+ * Resolve the ENROLLMENT PARTICIPATION (`opportunity_customer_members.id`) a child outcome writes.
+ *
+ * This is the durable Enrollment subject, and it is resolved rather than assumed because the id an
+ * outcome is handed differs by caller:
+ *
+ *   1. the subject's own OCM id, when a caller threaded it;
+ *   2. otherwise the child's participation within the acquisition episode, when there is one;
+ *   3. otherwise the child's ACTIVE context-free participation.
+ *
+ * Step 3 is what makes a context-free enrolment work at all. It deliberately asks for a REUSABLE
+ * ACTIVE row, so an outcome can never reach past the live episode and rewrite a concluded one —
+ * enrolling a child this year must not touch the participation they enrolled through last year.
+ */
+async function resolveParticipationIdForSubject(
+    supabase: SupabaseClient,
+    orgId: string,
+    subject: StageOutcomeExecutionSubject,
+    childId: string,
+): Promise<string | null> {
+    const threaded = subject.opportunity_customer_member_id?.trim();
+    if (threaded) return threaded;
+
+    const opportunityId = (subject.opportunity_id ?? "").trim() || null;
+    const { data } = await supabase
+        .from("opportunity_customer_members")
+        .select("id, opportunity_id, outcome_status_key")
+        .eq("org_id", orgId)
+        .eq("customer_member_id", childId);
+    const rows = (data ?? []) as {
+        id: string;
+        opportunity_id: string | null;
+        outcome_status_key: string | null;
+    }[];
+    if (!rows.length) return null;
+
+    if (opportunityId) {
+        const matched = rows.find((r) => r.opportunity_id === opportunityId);
+        if (matched) return matched.id;
+    }
+    const activeContextFree = rows.find(
+        (r) => r.opportunity_id === null && isReusableActiveParticipationStatus(r.outcome_status_key),
+    );
+    return activeContextFree?.id ?? null;
 }
 
 /**
@@ -281,10 +329,20 @@ export async function applyStageOutcomeRuleTarget(
             const childId = await resolveChildSubjectId(supabase, orgId, subject);
             if (!childId) return { error: "Could not resolve child for enrollment state update" };
             // Prior state (from process_instances, not OCM) for the transition event.
+            /*
+             * The write REPORTS the row it touched, and the compensation names that row.
+             *
+             * Re-deriving it would break the undo: by then the journey is `enrolled`, which is
+             * CONCLUDED, so the live-journey predicate would no longer match it and the
+             * compensation would silently restore nothing while reporting a clean abort.
+             */
+            const journeyInstanceId = subject.process_instance_id ?? null;
+
             const prevState = await readEnrollmentInstanceState(supabase, {
                 orgId,
                 opportunityId: subject.opportunity_id,
                 customerMemberId: childId,
+                processInstanceId: journeyInstanceId,
             });
             // Authoritative writer: the child's process instance owns durable state + close reason.
             // The OCM durable enrollment-status column is NOT written — process_instances is the
@@ -296,16 +354,20 @@ export async function applyStageOutcomeRuleTarget(
                 customerMemberId: childId,
                 state: dispositionKey as EnrollmentProcessState,
                 closeReasonKey,
+                processInstanceId: journeyInstanceId,
             });
+            // The exact row the write landed on — the compensation must not re-derive it.
+            const writtenInstanceId = journeyInstanceId ?? pi.instanceId ?? null;
             if (pi.error) return { error: pi.error };
 
             const degradedEffects: string[] = [];
-            const undoChildState = async () => {
+            let undoChildState = async () => {
                 const restored = await setEnrollmentInstanceStateByScope(supabase, {
                     orgId,
                     opportunityId: subject.opportunity_id,
                     customerMemberId: childId,
                     state: (prevState ?? null) as EnrollmentProcessState,
+                    processInstanceId: writtenInstanceId,
                 });
                 if (restored.error) throw new Error(`restore child enrollment state: ${restored.error}`);
             };
@@ -330,12 +392,115 @@ export async function applyStageOutcomeRuleTarget(
                 };
             }
 
+            /*
+             * ── THE DURABLE CHILD ENROLLMENT STATE, WRITTEN WHERE IT LIVES ──
+             *
+             * There are two owners here and they are complementary, not competing:
+             *
+             *   ENROLLMENT PARTICIPATION (OCM)  durable child Enrollment state — outcome_status_key
+             *   PROCESS INSTANCE                execution/process lifecycle state
+             *
+             * The process-instance write above is the second of those. Until now it was the ONLY
+             * one, so a child who completed Enrollment kept a participation reading `enrolling`
+             * forever — the durable answer to "is this child enrolled?" never changed, and because
+             * the episode could never conclude, its context-free slot stayed pinned open and the
+             * child could never start a second enrollment.
+             *
+             * The write goes through `updateOpportunityCustomerMemberLifecycleStatus`, the canonical
+             * writer, rather than patching the column here: that module owns status validation, the
+             * lifecycle event and the waitlist placement hook, and a second writer of the child's
+             * durable state is the duplication this converges away. It emits the lifecycle event
+             * itself, so the direct emit below runs ONLY when the canonical write did not — never
+             * both, or every subscribed workflow fires twice.
+             *
+             * ── WHY `enrolled` IS STRICT AND THE OTHERS ARE NOT ──
+             *
+             * For `enrolled` the durable write IS the outcome. Reporting success without it would
+             * tell an operator a child is enrolled while the record answering that question says
+             * otherwise, so it fails the target and compensates.
+             *
+             * The other dispositions are governed flows that predate this and never depended on an
+             * OCM write — family close, waitlist, withdraw. Making their success newly conditional
+             * on resolving a participation would break closes that work today, for a consistency
+             * benefit they were not asking for. They attempt the write and DECLARE it when it does
+             * not land, which is this executor's existing contract for a downstream effect.
+             */
+            const statusChanged = prevState !== dispositionKey;
+            const enrollmentIsThePoint = dispositionKey === "enrolled";
+            let lifecycleEventEmitted = false;
+
+            if (statusChanged) {
+                const ocmId = await resolveParticipationIdForSubject(supabase, orgId, subject, childId);
+
+                if (!ocmId) {
+                    if (enrollmentIsThePoint) {
+                        return {
+                            error:
+                                "Could not resolve this child's Enrollment participation, so their "
+                                + "durable enrollment status was not updated.",
+                            undo: undoChildState,
+                        };
+                    }
+                    degradedEffects.push("child enrollment status not updated: no participation resolved");
+                } else {
+                    /*
+                     * THROWS ARE CAUGHT, not allowed to escape. The canonical writer validates the
+                     * status against the org's catalog, and that resolver reaches `createAdminClient`
+                     * — a server-only dependency on a path this executor is otherwise given an
+                     * injected client for. An exception escaping here would abandon the outcome
+                     * mid-flight with the process-instance write already committed and no
+                     * compensation offered, which is strictly worse than a reported failure.
+                     */
+                    const lifecycle = await updateOpportunityCustomerMemberLifecycleStatus({
+                        supabase,
+                        orgId,
+                        // Optional acquisition context. Null is an ordinary context-free participation.
+                        opportunityId: (subject.opportunity_id ?? "").trim() || null,
+                        opportunityCustomerMemberId: ocmId,
+                        nextStatusKey: dispositionKey,
+                        actorUserId: userId,
+                        source: "stage_operating_plan_v1",
+                        rowGrain: "child",
+                        childDisplayName: subject.participant_label ?? null,
+                    } as Parameters<typeof updateOpportunityCustomerMemberLifecycleStatus>[0]).catch(
+                        (e: unknown) => ({
+                            error: { message: e instanceof Error ? e.message : String(e) },
+                        }) as Awaited<ReturnType<typeof updateOpportunityCustomerMemberLifecycleStatus>>,
+                    );
+
+                    if (lifecycle.error) {
+                        if (enrollmentIsThePoint) {
+                            return {
+                                error: `Child enrollment status was not updated: ${lifecycle.error.message}`,
+                                undo: undoChildState,
+                            };
+                        }
+                        degradedEffects.push(`child enrollment status not updated: ${lifecycle.error.message}`);
+                    } else {
+                        lifecycleEventEmitted = lifecycle.eventEmitted;
+                        const restoredStatus = lifecycle.before.outcome_status_key;
+                        const undoProcessState = undoChildState;
+                        undoChildState = async () => {
+                            await undoProcessState();
+                            await updateOpportunityCustomerMemberLifecycleStatus({
+                                supabase,
+                                orgId,
+                                opportunityId: (subject.opportunity_id ?? "").trim() || null,
+                                opportunityCustomerMemberId: ocmId,
+                                nextStatusKey: restoredStatus,
+                                actorUserId: userId,
+                                source: "stage_operating_plan_v1_compensation",
+                                rowGrain: "child",
+                            } as Parameters<typeof updateOpportunityCustomerMemberLifecycleStatus>[0]);
+                        };
+                    }
+                }
+            }
+
             const ocmBridgeId = subject.opportunity_customer_member_id?.trim() ?? null;
-            // Child lifecycle event emitted from the process-instance transition (restored). While the
-            // OCM bridge exists the event stays keyed on the OCM id so existing workflow subscriptions
-            // (entity_type=opportunity_customer_members) keep firing; it re-keys to process_instances
-            // when OCM is dropped.
-            if (ocmBridgeId && prevState !== dispositionKey) {
+            // The event, when the canonical writer did not already emit it. Keyed on the OCM id so
+            // existing workflow subscriptions (entity_type=opportunity_customer_members) keep firing.
+            if (ocmBridgeId && statusChanged && !lifecycleEventEmitted) {
                 try {
                     await emitChildLifecycleStatusChangedEvent({
                         supabase,
@@ -358,28 +523,7 @@ export async function applyStageOutcomeRuleTarget(
                     );
                 }
             }
-            // Waitlist placement candidate — sourced from the child's process instance (no OCM required).
-            //
-            // Declared OUT of the boundary, like the lifecycle event above and the enrollment
-            // materialization below. It used to be awaited bare: a throw here escaped
-            // `applyStageOutcomeRuleTarget` entirely, so the caller received an exception INSTEAD of
-            // a result — and therefore never received the `undo` for the state write that had
-            // already succeeded. The transition was committed with no inverse, which is the one
-            // outcome the compensation contract exists to prevent. Reported, never swallowed.
-            if (dispositionKey === "waitlisted") {
-                try {
-                    await ensurePlacementCandidateForWaitlistedChildBySubject(supabase, {
-                        orgId,
-                        opportunityId: subject.opportunity_id,
-                        customerMemberId: childId,
-                    });
-                } catch (e) {
-                    console.error("[stageOutcomeRuleTargetExecutor] waitlist placement candidate", e);
-                    degradedEffects.push(
-                        `waitlist placement candidate not created: ${e instanceof Error ? e.message : String(e)}`,
-                    );
-                }
-            }
+
             // Enrollment completion → materialize durable operational truth (agreement + placement +
             // schedule assignment). The process produces the facts; it does not own them. Non-blocking
             // and idempotent — a failure here must not roll back the state transition (retryable).
@@ -612,10 +756,14 @@ export async function applyStageOutcomeRuleTarget(
                 const childId = await resolveChildSubjectId(supabase, orgId, subject);
                 if (!childId) return { error: "Child enrollment track required for move_to_stage" };
                 stageMoveChildId = childId;
+                // The move reports the row it touched; the compensation names that row rather than
+                // re-deriving it under a predicate the move itself may have changed.
+                const stageInstanceId = subject.process_instance_id ?? null;
                 const priorStage = await readEnrollmentInstanceStageKey(supabase, {
                     orgId,
                     opportunityId: subject.opportunity_id,
                     customerMemberId: childId,
+                    processInstanceId: stageInstanceId,
                 });
                 stageMovePreviousKey = priorStage;
                 const pi = await moveEnrollmentInstanceStageByScope(supabase, {
@@ -623,8 +771,10 @@ export async function applyStageOutcomeRuleTarget(
                     opportunityId: subject.opportunity_id,
                     customerMemberId: childId,
                     stageKey: targetStageKey,
+                    processInstanceId: stageInstanceId,
                 });
                 if (pi.error) return { error: pi.error };
+                const movedInstanceId = stageInstanceId ?? pi.instanceId ?? null;
                 if (priorStage != null) {
                     undoStageMove = async () => {
                         const restored = await moveEnrollmentInstanceStageByScope(supabase, {
@@ -632,6 +782,7 @@ export async function applyStageOutcomeRuleTarget(
                             opportunityId: subject.opportunity_id,
                             customerMemberId: childId,
                             stageKey: priorStage,
+                            processInstanceId: movedInstanceId,
                         });
                         if (restored.error) throw new Error(`restore child stage: ${restored.error}`);
                     };

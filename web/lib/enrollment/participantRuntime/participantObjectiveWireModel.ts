@@ -14,8 +14,26 @@
 
 import type { ParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { packageOutstandingNeeds } from "@/lib/enrollment/participantRuntime/conversationalPackage";
+import {
+    activeConfirmationGroup,
+    collectedAnswers,
+    confirmationRef,
+    groupSettledConfirmations,
+    identityFactRank,
+    type ConfirmationGroup,
+} from "@/lib/enrollment/participantRuntime/confirmationGroup";
+import {
+    semanticEditorFor,
+    type SemanticEditor,
+} from "@/lib/enrollment/participantRuntime/semanticValueEditor";
 import { turnIsEligibleForProviderInterpretation } from "@/lib/enrollment/participantRuntime/turnInterpretationEligibility";
-import { questionForNeed } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
+import {
+    displayValue,
+    naturalFieldLabel,
+    questionForNeed,
+    voiceForSubject,
+} from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
+import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import {
     projectParticipantWorkProgress,
     type ParticipantWorkProgress,
@@ -88,6 +106,80 @@ export type ParticipantObjectiveWire = {
                 readonly answer: string | null;
             }[];
         } | null;
+        /**
+         * The known facts about ONE semantic subject, confirmed together.
+         *
+         * Present only when the subject has more than one fact awaiting confirmation. Everything in
+         * it is presentation over needs the objective already resolved — the membership comes from
+         * `confirmationGroup.ts`, which reads canonical identity and never an artifact's headings,
+         * so the surface cannot draw two people as one.
+         *
+         * `facts` carries EVERY member, including the ones drawn into the heading, because "Make a
+         * change" has to expose each semantic value on its own.
+         */
+        readonly confirmation_group?: {
+            /** "Let's make sure I have Solene's details right." */
+            readonly title: string;
+            /** "Solene's details" — the noun phrase, for a compact settled record. */
+            readonly heading: string;
+            /** The composed identity line — "Solene Marchetti" — or null when nothing names them. */
+            readonly headline: string | null;
+            readonly facts: readonly {
+                /** Opaque handle. The browser addresses a fact without naming a field. */
+                readonly ref: string;
+                readonly label: string;
+                readonly value: string;
+                /** The authored control, for correcting this one fact in place. */
+                readonly input_type: string | null;
+                readonly options: readonly string[];
+                /**
+                 * The STRUCTURED editor this fact deserves, chosen server-side.
+                 *
+                 * Chosen here rather than in the browser because the choice reads the canonical
+                 * key — and the canonical key is exactly what must not cross to a participant
+                 * surface. The component receives the editor, never the fact's identity.
+                 */
+                readonly editor: SemanticEditor;
+                /** Drawn in the heading rather than as its own row. Still its own need. */
+                readonly in_headline: boolean;
+            }[];
+        } | null;
+        /**
+         * The STRUCTURED editor to open when the parent presses Change.
+         *
+         * Change used to reveal the authored control, and for a plain text field the surface
+         * renders no second text box — so a parent who had just said "let me correct this" was left
+         * facing a composer prompting them to type a message. For a whole address that is worse:
+         * the only way to fix a city was to retype the street and ZIP from memory.
+         */
+        readonly editor: SemanticEditor | null;
+        /**
+         * Required attachments this turn is asking for, before any paperwork is prepared.
+         *
+         * Field id and the school's own words for the document — nothing about storage, entity or
+         * classification, which the upload route derives server-side from the pinned schema.
+         */
+        /**
+         * A person to add, by ROLE.
+         *
+         * Never a numbered slot: the parent is asked about people, and projection decides which box
+         * each person lands in afterwards from canonical relationship priority.
+         */
+        readonly party: {
+            readonly role_label: string;
+            /** People already holding this role for this child. */
+            readonly existing: readonly string[];
+            /** Household people offerable for reuse — opaque handles, never person ids. */
+            readonly candidates: readonly { readonly ref: string; readonly name: string; readonly detail: string | null }[];
+            /** Zero means declining is always available, which is every role today. */
+            readonly minimum: number;
+        } | null;
+        readonly evidence: readonly {
+            readonly field_id: string;
+            readonly title: string;
+            readonly description: string | null;
+            readonly artifact_title: string;
+        }[];
         /** Closed option set, when the authored control has one. Empty otherwise. */
         readonly options: readonly string[];
         /** The authored Form permits leaving this unanswered — offer a real way past it. */
@@ -101,6 +193,37 @@ export type ParticipantObjectiveWire = {
          */
         readonly field_ids: readonly string[];
     };
+    /**
+     * What the parent has already settled, as a SEMANTIC RECORD rather than a button transcript.
+     *
+     * Projected from the same durable needs the conversation is made of, so it survives a reload
+     * and cannot drift from what is stored. That is what makes the Edit affordance beside each row
+     * honest: a fact is still addressable after the conversation has moved past it.
+     */
+    readonly settled: readonly {
+        readonly heading: string;
+        readonly headline: string | null;
+        readonly facts: readonly {
+            readonly ref: string;
+            readonly label: string;
+            readonly value: string;
+            readonly editor: SemanticEditor;
+        }[];
+    }[];
+    /**
+     * Answers the participant gave DURING this session.
+     *
+     * Settled and evidenced exactly like a confirmation, and NOT one — a parent who has just told
+     * the school their child's sleep routine has not verified anything. Kept separate so a
+     * confirmation card can never accumulate them, and flat rather than grouped by subject: this is
+     * conversation history that recedes, not a summary of what the platform holds about a person.
+     */
+    readonly collected: readonly {
+        readonly ref: string;
+        readonly label: string;
+        readonly value: string;
+        readonly editor: SemanticEditor;
+    }[];
     /**
      * An outstanding question the runtime raised about this need.
      *
@@ -178,6 +301,216 @@ function activeCluster(
     return { title: pkg.section_title, questions };
 }
 
+/**
+ * A card row is a NOUN; a question is a sentence.
+ *
+ * Many destinations are whole questions the school wrote — "How would you describe your child's
+ * gender?" — and `naturalFieldLabel` rightly hands those back untouched, because that is how they
+ * should be ASKED. Beside a value in a summary card the same words read as an interrogation with the
+ * answer already filled in, and they wrap to three lines on a phone.
+ *
+ * So where the authored label is a question or simply too long to sit beside a value, the row falls
+ * back to the canonical FIELD KEY, humanized through the platform's own display-label behaviour.
+ * That is not a guess: the key is what the fact IS, which is exactly what a row label wants.
+ */
+const CARD_ROW_MAX = 28;
+
+function cardRowLabel(natural: string, fieldKey: string | null): string {
+    const tidy = natural.trim();
+    const tooLong = tidy.length > CARD_ROW_MAX;
+    if (!tidy.endsWith("?") && !tooLong) return tidy;
+    const key = (fieldKey ?? "").trim();
+    if (!key) return tidy;
+    // `child_first_name` under the `child` entity is already handled above; this is for keys like
+    // `gender`, `nap_routine`, `medical_notes` whose label is the school's own question.
+    return humanizeOperatorSlug(key).toLowerCase();
+}
+
+/**
+ * One fact, as a parent reads it — shared by the active card and the settled record.
+ *
+ * Both surfaces must describe the same fact identically; composing them twice is how a value comes
+ * to be formatted one way while it is being confirmed and another way once it has been.
+ */
+function factRow(need: import("@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes").EnrollmentInformationNeed, ref: string) {
+    const occurrence = need.occurrences[0] ?? null;
+    const natural = naturalFieldLabel(occurrence?.label ?? null, need.identity.canonical_key ?? null);
+    const spoken = natural === "date of birth" ? "birthday" : cardRowLabel(natural, need.identity.field_key);
+    const options = occurrence?.options ?? [];
+    return {
+        ref,
+        label: spoken.charAt(0).toUpperCase() + spoken.slice(1),
+        value: displayValue(need.current_value),
+        input_type: occurrence?.field_type ?? null,
+        options,
+        editor: semanticEditorFor({
+            canonicalKey: need.identity.canonical_key,
+            inputType: occurrence?.field_type ?? null,
+            options,
+            value: need.current_value,
+        }),
+    };
+}
+
+/**
+ * The noun phrase for a subject — "Chidinma's details", "Your details".
+ *
+ * A settled record is a heading over values, not a question, so it must not reuse the card's
+ * sentence. Derived from the same voice, so the two can never describe different people.
+ */
+function subjectHeading(possessive: string): string {
+    const phrase = `${possessive} details`;
+    return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
+/**
+ * The voice for one confirmation group's subject.
+ *
+ * Extracted so the active card and the settled record resolve it identically.
+ */
+function groupVoice(group: ConfirmationGroup, subjectName: string | null) {
+    return voiceForSubject({
+        entityType: group.subject.entity_type,
+        scope: group.subject.kind === "child" ? "child" : "household",
+        childName: (subjectName ?? "").trim().split(/\s+/)[0] ?? "",
+    });
+}
+
+/**
+ * The answers given in this session, as rows the parent can read and still change.
+ *
+ * No heading, no subject, no "Confirmed": this is not a claim about what the platform holds, it is
+ * what the parent said. The label and value composition is shared with the confirmation card so the
+ * same fact never reads two ways.
+ */
+function collectedRecord(objective: ParticipantEnrollmentObjective): ParticipantObjectiveWire["collected"] {
+    const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
+    return collectedAnswers(objective.needs.needs).flatMap((member) => {
+        const need = byKey.get(member.need_key);
+        if (!need) return [];
+        const { ref, label, value, editor } = factRow(need, member.ref);
+        return [{ ref, label, value, editor }];
+    });
+}
+
+/**
+ * The settled semantic record.
+ *
+ * Grouped by the SAME subject rule as the active card, so a group a parent confirmed together stays
+ * together afterwards rather than dissolving into the rows it was made of.
+ */
+function settledRecord(
+    objective: ParticipantEnrollmentObjective,
+    subjectName: string | null,
+): ParticipantObjectiveWire["settled"] {
+    const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
+    return groupSettledConfirmations(objective.needs.needs).flatMap((group) => {
+        const voice = groupVoice(group, subjectName);
+        const rows = group.members.flatMap((member) => {
+            const need = byKey.get(member.need_key);
+            if (!need) return [];
+            const { ref, label, value, editor } = factRow(need, member.ref);
+            return [{ ref, label, value, editor }];
+        });
+        if (rows.length === 0) return [];
+        // The identity facts compose the heading line here too — "Chidinma Okonkwo" above the
+        // values, exactly as the card showed them before they were agreed to.
+        const identityRefs = new Set(group.members.filter((m) => m.is_identity).map((m) => m.ref));
+        const identityRows = group.members
+            .filter((m) => m.is_identity)
+            .map((m) => byKey.get(m.need_key))
+            .filter((n): n is NonNullable<typeof n> => Boolean(n))
+            .sort((a, b) => identityFactRank(a) - identityFactRank(b));
+        let headline = "";
+        for (const need of identityRows) {
+            const shown = displayValue(need.current_value).trim();
+            if (!shown || headline.toLowerCase().includes(shown.toLowerCase())) continue;
+            headline = headline ? `${headline} ${shown}` : shown;
+        }
+        return [{
+            heading: subjectHeading(voice.possessive),
+            headline: headline || null,
+            /*
+             * EVERY row, including the ones drawn into the heading.
+             *
+             * The record exists so a parent can see what they agreed to and change it. A name folded
+             * into the heading and then omitted from the rows would be the one fact they could read
+             * and not correct.
+             */
+            facts: rows,
+            _identity: identityRefs,
+        }].map(({ _identity, ...rest }) => rest);
+    });
+}
+
+/**
+ * The grouped confirmation card for the CURRENT turn, or null when this turn stands alone.
+ *
+ * Composition only. Membership was decided by `confirmationGroup.ts` from canonical identity; this
+ * turns those needs into words — the subject's own voice for the heading, the platform's own value
+ * formatter for each fact, and the authored control type so a correction is made with the control
+ * the Form itself would have used.
+ */
+function confirmationGroupCard(
+    objective: ParticipantEnrollmentObjective,
+    subjectName: string | null,
+): ParticipantObjectiveWire["next_turn"]["confirmation_group"] {
+    const turn = objective.next_turn;
+    if (turn.kind !== "confirm_known_value") return null;
+    const group = activeConfirmationGroup(objective.needs.needs, turn.need?.identity.key ?? null);
+    if (!group) return null;
+
+    const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
+    const voice = groupVoice(group, subjectName);
+
+    /*
+     * The heading, built from the facts that NAME this subject.
+     *
+     * A value already contained in what has been composed is skipped rather than repeated, so a
+     * record carrying both `first_name`/`last_name` and a `full_name` reads "Solene Marchetti" once.
+     * Every one of those needs still appears in `facts`, and is still confirmed on its own.
+     */
+    const identity = group.members
+        .filter((m) => m.is_identity)
+        .map((m) => ({ member: m, need: byKey.get(m.need_key) }))
+        .filter((row): row is { member: typeof row.member; need: NonNullable<typeof row.need> } => Boolean(row.need))
+        .sort((a, b) => identityFactRank(a.need) - identityFactRank(b.need));
+
+    const consumed = new Set<string>();
+    let headline = "";
+    for (const row of identity) {
+        const shown = displayValue(row.need.current_value).trim();
+        if (!shown) continue;
+        if (headline.toLowerCase().includes(shown.toLowerCase())) {
+            // Already said. The need is still a member; it simply adds no new words to the heading.
+            consumed.add(row.member.ref);
+            continue;
+        }
+        headline = headline ? `${headline} ${shown}` : shown;
+        consumed.add(row.member.ref);
+    }
+
+    const facts = group.members.flatMap((member) => {
+        const need = byKey.get(member.need_key);
+        if (!need) return [];
+        return [{ ...factRow(need, member.ref), in_headline: consumed.has(member.ref) }];
+    });
+
+    return {
+        /*
+         * A STRAIGHT apostrophe, matching every other sentence the runtime composes.
+         *
+         * `participantQuestion` builds its possessive as `${name}'s`, so a curly one here produced
+         * "Let’s make sure I have Solene's details right." — two apostrophes of different shapes
+         * in one sentence. Typography is a property of the voice, not of the file it is written in.
+         */
+        title: `Let's make sure I have ${voice.possessive} details right.`,
+        heading: subjectHeading(voice.possessive),
+        headline: headline || null,
+        facts,
+    };
+}
+
 export function participantObjectiveWireModel(
     objective: ParticipantEnrollmentObjective,
     context?: {
@@ -202,6 +535,13 @@ export function participantObjectiveWireModel(
      *
      * Two readers of the same situation disagreed because they asked different questions. Now the
      * turn — which is the deterministic runtime's own answer to "what next" — decides both.
+     */
+    /*
+     * `collect_evidence` is participant COLLECTION, not review.
+     *
+     * The host defers the packet Form while the phase is `shared_collection`, which is exactly what
+     * must happen while a required document is outstanding: no artifact is shown, and [Review
+     * paperwork] is not reachable, because the paperwork has not been prepared.
      */
     const phase: ParticipantPhase =
         turn.kind === "complete"
@@ -231,13 +571,48 @@ export function participantObjectiveWireModel(
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
             cluster: activeCluster(objective, subjectName),
+            party: turn.party
+                ? {
+                      role_label: turn.party.role_label,
+                      existing: turn.party.existing.map((p) => p.full_name),
+                      candidates: objective.party_candidates.map((c) => ({
+                          ref: confirmationRef(c.person_id),
+                          name: c.full_name,
+                          detail: c.phone ?? c.email ?? null,
+                      })),
+                      minimum: turn.party.minimum,
+                  }
+                : null,
+            evidence: (turn.evidence ?? []).map((e) => ({
+                field_id: e.field_id,
+                title: e.title,
+                description: e.description,
+                artifact_title: e.artifact_title,
+            })),
+            editor: turn.need
+                ? semanticEditorFor({
+                      canonicalKey: turn.need.identity.canonical_key,
+                      inputType: firstOccurrence?.field_type ?? null,
+                      options: firstOccurrence?.options ?? [],
+                      value: turn.proposed_value,
+                  })
+                : null,
+            confirmation_group: confirmationGroupCard(objective, subjectName),
             scope: turn.need?.identity.scope ?? null,
-            entity_type: turn.need?.identity.entity_type ?? null,
+            /*
+             * The EFFECTIVE subject — declared entity, else the one the packet's layout says this
+             * destination sits among. The distinction between the two is preserved on the identity
+             * server-side; a participant surface needs to know who it is talking about, not how the
+             * platform came to know.
+             */
+            entity_type: turn.need?.identity.entity_type ?? turn.need?.identity.subject_entity_type ?? null,
             canonical_key: turn.need?.identity.canonical_key ?? null,
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
             optional: turn.need?.optional === true,
             field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
+        settled: settledRecord(objective, subjectName),
+        collected: collectedRecord(objective),
         pending_clarification: context?.pendingClarificationQuestion
             ? { question: context.pendingClarificationQuestion }
             : null,

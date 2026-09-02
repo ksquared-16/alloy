@@ -39,6 +39,7 @@ import { shouldRepeatWorkAfterRetryOutcome } from "@/lib/lifecycle/stageWorkComp
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
 import { recordStageWorkContactOutcomeTrace } from "@/lib/lifecycle/recordStageWorkContactOutcomeTrace";
 import { preflightStageChangingOutcomeReadiness } from "@/lib/lifecycle/preflightStageChangingOutcomeReadiness";
+import { preflightEnrollmentCompletionSufficiency } from "@/lib/enrollment/completion/preflightEnrollmentCompletionSufficiency";
 import {
     childParticipationIdentityFromWire,
     namesAChild,
@@ -147,6 +148,27 @@ export async function completeStageWorkWithOutcome(
                     ok: false,
                     message: readiness.message ?? "Cannot move stage — requirements are incomplete.",
                 };
+            }
+            /*
+             * REQUIREMENTS SUFFICIENT — the middle of the three completion concepts.
+             *
+             * The readiness preflight above asks whether the configured TRANSITION fields are on the
+             * record. It knows nothing about the family's packet, their submissions or a governed
+             * exception. This asks the shared sufficiency question, and only for an outcome that
+             * would durably enrol the child. Both run before any write, so a refusal leaves the
+             * journey exactly where the operator found it.
+             */
+            const sufficiency = await preflightEnrollmentCompletionSufficiency({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                plan: resolved.plan,
+                outcomeKey,
+                // No attempt filter, matching the readiness preflight above: a gate must consider
+                // every rule the outcome could fire, not only the ones for the current attempt.
+                processInstanceId: input.subject.process_instance_id ?? null,
+            });
+            if (sufficiency.blocked) {
+                return { ok: false, message: sufficiency.message ?? "Enrollment cannot be completed yet." };
             }
             return { ok: true };
         },

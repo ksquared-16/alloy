@@ -55,11 +55,70 @@ describe("a cluster reads as a topic, not a card of fields", () => {
     });
 
     it("gives only the ACTIVE question an answer surface", () => {
-        // Three inputs with three buttons is the shape this slice replaced. The composer below the
-        // topic answers the one active question, so "which am I answering?" is never ambiguous.
-        const inputs = CODE.match(/<input\b/g) ?? [];
-        const textareas = CODE.match(/<textarea\b/g) ?? [];
+        /*
+         * Three inputs with three buttons is the shape this slice replaced. The composer below the
+         * topic answers the one active question, so "which am I answering?" is never ambiguous.
+         *
+         * The grouped-confirmation editor is excluded from the count and asserted separately below.
+         * It is not a competing answer surface for the same question: it is a different MODE, opened
+         * deliberately, in which the parent is correcting one named fact rather than answering the
+         * conversation. Counting its markup here would score a correct product as a regression.
+         */
+        /*
+         * The correction editor and the new-person form are excluded and asserted separately.
+         *
+         * Neither is a competing answer surface for the current question: one is a correction mode
+         * the parent opened deliberately, the other collects ONE person's identity together — name,
+         * phone and email as a single coherent act rather than three turns about fragments of the
+         * same person.
+         */
+        const conversational = CODE
+            .replace(/function StructuredFactEditor\([\s\S]*?\n\}\n/, "")
+            .replace(/function NewPartyForm\([\s\S]*?\n\}\n/, "");
+        const inputs = conversational.match(/<input\b/g) ?? [];
+        const textareas = conversational.match(/<textarea\b/g) ?? [];
         expect(inputs.length + textareas.length, "one typed control at most, for date/number").toBeLessThanOrEqual(2);
+    });
+
+    it("opens ONE fact editor at a time, wherever the parent reached it from", () => {
+        /*
+         * The same invariant across three surfaces: the active card, the settled record, and Change
+         * on a standalone confirmation. A row becomes editable only when it is THE open one, and
+         * one piece of state decides which — it holds a single ref, not a set, so two editors
+         * cannot be open at once however many places can host one.
+         */
+        expect(CODE).toMatch(/const \[editingRef, setEditingRef\] = useState<string \| null>\(null\)/);
+        // Every row-hosted editor is gated on that single ref.
+        const gated = CODE.match(/editingRef === fact\.ref/g) ?? [];
+        expect(gated.length, "each row editor is gated on the open ref").toBeGreaterThanOrEqual(2);
+        // The standalone Change editor is gated on `correcting`, which is likewise a single flag.
+        expect(CODE).toContain("correcting && turn.editor");
+        // And the dock's typed control stands down while it is open, so one question never has two
+        // answer surfaces.
+        expect(CODE).toMatch(/correcting && turn\.editor\s*\n?\s*\? null/);
+    });
+
+    it("collects one PERSON together, not one fragment per turn", () => {
+        // A person is a coherent thing: name, phone and email in one form, saved once, persisted
+        // through the canonical relationship service so they can later be reused by name.
+        expect(CODE).toContain("data-participant-party-form");
+        for (const part of ["Full name", "Phone", "Email"]) {
+            expect(CODE).toContain(`aria-label="${part}"`);
+        }
+        // And the alternative to typing someone in is choosing someone already known.
+        expect(CODE).toContain("data-participant-party-candidate");
+        expect(CODE).toContain("data-participant-party-decline");
+    });
+
+    it("gives a whole address structured parts rather than one text box", () => {
+        // The reported failure: Change on an address left the composer waiting for prose, so fixing
+        // a city meant retyping the street and ZIP from memory.
+        expect(CODE).toContain("data-participant-address-editor");
+        for (const part of ["Street", "City", "State", "ZIP"]) {
+            expect(CODE).toContain(`aria-label="${part}"`);
+        }
+        // Recomposed into ONE canonical value on save — no component becomes a fact of its own.
+        expect(CODE).toContain("composeAddress(parts)");
     });
 
     it("recedes settled questions and marks them in Bend Pine", () => {

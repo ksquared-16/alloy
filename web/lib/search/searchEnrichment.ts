@@ -20,6 +20,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { opportunityIdsForEnrollmentContexts } from "@/lib/enrollment/completion/resolveEnrollmentJourneyContext";
 
 import { globalSearchAgeLabelFromDob } from "@/lib/admin/globalSearch/globalRecordSearchAgeLabel";
 import {
@@ -131,13 +132,17 @@ export async function enrichSearchCandidates(args: {
             fetchOrgLocationLabels(supabase, orgId),
         ]);
 
+    /*
+     * Each journey's Opportunity, resolved once — see `loadSubjectContexts` for the same widening.
+     * A participation-anchored journey matched no branch here and quietly lost its Work View.
+     */
+    const opportunityIdByContextId = await opportunityIdsForEnrollmentContexts(supabase, orgId, processRows);
+
     // Wave 3 — the Work Unit that HOSTS each process context. Its id set is only
     // known once the process rows land, so this is the one genuinely sequential hop;
     // it is skipped entirely when nothing matched a process participation.
     const hostOpportunityIds = uniq(
-        processRows
-            .filter((r) => (r.context_type ?? "").trim() === "opportunity")
-            .map((r) => r.context_id)
+        processRows.map((r) => opportunityIdByContextId.get((r.context_id ?? "").trim()) ?? null)
     );
     // …and the household's own case, for the subjects that have no process of their own. Runs
     // alongside, not after: its id set (households) was known in wave 1.
@@ -145,8 +150,10 @@ export async function enrichSearchCandidates(args: {
     // (case id + stage key) are on the process rows already in hand, and it must not serialize behind
     // the family answer it is allowed to override.
     const stageWorkViewInputs = processRows
-        .filter((r) => (r.context_type ?? "").trim() === "opportunity")
-        .map((r) => ({ opportunityId: (r.context_id ?? "").trim(), stageKey: (r.stage_key ?? "").trim() }))
+        .map((r) => ({
+            opportunityId: opportunityIdByContextId.get((r.context_id ?? "").trim()) ?? "",
+            stageKey: (r.stage_key ?? "").trim(),
+        }))
         .filter((e) => e.opportunityId && e.stageKey);
 
     // …and the materialized rows a FAMILY-grain membership must be evaluated against. Family lens

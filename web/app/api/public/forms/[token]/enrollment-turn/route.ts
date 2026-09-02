@@ -35,6 +35,11 @@ import { createSupabaseTrustRepository } from "@/lib/trust/persistence/trustDeci
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import { readPendingClarification } from "@/lib/enrollment/participantRuntime/pendingClarification";
 import { resolveAuthoredFieldForTurn } from "@/lib/enrollment/participantRuntime/resolveAuthoredFieldForTurn";
+import {
+    applyConfirmationGroup,
+    applyConfirmationGroupMemberEdit,
+} from "@/lib/enrollment/participantRuntime/applyConfirmationGroup";
+import { applyPartyResponse } from "@/lib/enrollment/participantRuntime/applyPartyResponse";
 
 function plaintextToken(raw: string): string {
     try {
@@ -62,7 +67,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
     }
 
-    let body: { text?: unknown; value?: unknown } = {};
+    let body: {
+        text?: unknown;
+        value?: unknown;
+        confirm_group?: unknown;
+        edit_fact?: unknown;
+        party?: unknown;
+    } = {};
     try {
         body = (await request.json()) as typeof body;
     } catch {
@@ -94,6 +105,106 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         value: recomputeParticipantObjectiveFromContext(currentContext, resolved.context.needsContext.session),
         context: currentContext,
     };
+
+    /**
+     * A GROUPED CONFIRMATION — one gesture, N independent confirmations.
+     *
+     * The browser sends an intent and nothing else. Which facts the card held is re-derived here
+     * from the objective the platform just resolved, so a stale or tampered tab can only ever settle
+     * the card the platform is currently showing, and each member still crosses the same validator
+     * and records its own D-99 evidence.
+     */
+    if (body.confirm_group === true) {
+        const settled = await applyConfirmationGroup(supabase, {
+            orgId: access.value.orgId,
+            sessionId: access.value.sessionId,
+            nowIso: new Date().toISOString(),
+            current: { objective: current.value, context: current.context },
+        });
+        if (!settled.ok) return publicErr(settled.refusal.detail, 409, { code: settled.refusal.code });
+        const groupResponse = publicOk({
+            outcome: settled.confirmed.length > 0 ? "confirm_value" : "no_change",
+            // How many semantic facts this one gesture settled — the ask-once ratio of a group,
+            // reported honestly, including when some members did not settle.
+            confirmed_count: settled.confirmed.length,
+            skipped_count: settled.skipped.length,
+            objective: participantObjectiveWireModel(settled.objective, {
+                subjectDisplayName: canonical.subjectDisplayName,
+            }),
+        });
+        groupResponse.headers.set("Server-Timing", timing.header());
+        return groupResponse;
+    }
+
+    /**
+     * ONE fact of a group, corrected in place.
+     *
+     * `ref` is the opaque handle the card issued. It is matched against the group currently being
+     * offered — never used to look a need up directly — so the request cannot reach a fact the
+     * parent was not just shown, and it cannot name a canonical key or a field id at all.
+     */
+    const editFact = body.edit_fact;
+    if (editFact != null && typeof editFact === "object" && !Array.isArray(editFact)) {
+        const ref = String((editFact as { ref?: unknown }).ref ?? "").trim();
+        if (!ref) return publicErr("ref is required", 400);
+        const edited = await applyConfirmationGroupMemberEdit(supabase, {
+            orgId: access.value.orgId,
+            sessionId: access.value.sessionId,
+            ref,
+            value: (editFact as { value?: unknown }).value,
+            nowIso: new Date().toISOString(),
+            current: { objective: current.value, context: current.context },
+        });
+        if (!edited.ok) {
+            return publicErr(edited.refusal.detail, 409, { code: edited.refusal.code });
+        }
+        const editResponse = publicOk({
+            outcome: "write_shared_value",
+            objective: participantObjectiveWireModel(edited.objective, {
+                subjectDisplayName: canonical.subjectDisplayName,
+            }),
+        });
+        editResponse.headers.set("Server-Timing", timing.header());
+        return editResponse;
+    }
+
+    /**
+     * ADDING A PERSON — decline, reuse, or collect.
+     *
+     * The browser sends an intent; the ROLE comes from the turn the platform is offering, and a
+     * reused person is addressed by a handle matched against the candidates the server published.
+     * Everything durable is written through the canonical relationship service.
+     */
+    const partyBody = body.party;
+    if (partyBody != null && typeof partyBody === "object" && !Array.isArray(partyBody)) {
+        const applied = await applyPartyResponse(supabase, {
+            orgId: access.value.orgId,
+            sessionId: access.value.sessionId,
+            customerId: current.context.customerId ?? null,
+            customerMemberId: current.context.needsContext.subjectId ?? null,
+            objective: current.value,
+            sessionMetadata: current.context.needsContext.session?.metadata ?? {},
+            response: partyBody as never,
+            nowIso: new Date().toISOString(),
+        });
+        if (!applied.ok) return publicErr(applied.error, 409, { code: "party_refused" });
+
+        // Re-resolve: the canonical graph moved, so the platform decides what comes next.
+        const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+            canonicalValues: canonical.values,
+        });
+        if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
+        const partyResponse = publicOk({
+            outcome: applied.outcome,
+            objective: participantObjectiveWireModel(after.value, {
+                subjectDisplayName: canonical.subjectDisplayName,
+            }),
+        });
+        partyResponse.headers.set("Server-Timing", timing.header());
+        return partyResponse;
+    }
 
     const text = typeof body.text === "string" ? body.text : null;
 

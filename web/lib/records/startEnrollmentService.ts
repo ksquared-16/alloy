@@ -37,7 +37,12 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import {
+    createEnrollmentProcessInstance,
+    ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+} from "@/lib/process/processInstances";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { ENROLLING_CHILD_STATUS_KEY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { resolveLiveEnrollmentContextForHousehold } from "@/lib/records/enrollmentContextResolver";
 import { RecordCreationError } from "@/lib/records/recordCreationErrors";
 import {
@@ -62,6 +67,17 @@ export type StartEnrollmentResult = {
     customerId: string;
     /** Null = context-free, which is a legitimate journey and not a degraded one. */
     opportunityId: string | null;
+    /**
+     * The durable Enrollment subject this journey belongs to — the canonical anchor.
+     *
+     * Always present, including on the context-free path: a journey without an acquisition episode
+     * still has a participation, and it is the participation the journey is anchored to. A caller
+     * that wanted the subject previously had to re-resolve it from the process instance, which is
+     * how two callers end up disagreeing about the same enrolment.
+     */
+    enrollmentParticipationId: string;
+    /** True when this start established the participation rather than joining an existing one. */
+    participationCreated: boolean;
     contextOutcome: "joined_live_episode" | "context_free";
     /** True when an open journey already existed and was returned instead of a second one. */
     reused: boolean;
@@ -114,10 +130,48 @@ export async function startEnrollment(
         : await resolveLiveEnrollmentContextForHousehold(supabase, orgId, customerId);
     const opportunityId = resolved.context?.opportunityId ?? null;
 
+    /*
+     * THE ENROLLMENT PARTICIPATION IS ESTABLISHED HERE, NOT AT COMPLETION.
+     *
+     * `opportunity_customer_members` is the durable owner of a child's Enrollment state, and a
+     * journey needs that subject from its first moment — not conjured at the end, when the outcome
+     * would have nowhere to write. With a live episode this reuses the participation that episode
+     * already has; without one it creates a context-free participation and STILL creates no
+     * Opportunity, which is the whole point of the preceding paragraph.
+     *
+     * `enrolling` is the child track's own starting state. The ensurer is find-or-create, so an
+     * existing participation keeps whatever state it already holds — starting a journey never
+     * rewinds an episode that is further along.
+     */
+    const participation = await ensureOpportunityCustomerMemberParticipation({
+        supabase,
+        orgId,
+        opportunityId,
+        customerMemberId,
+        source: "enrollment_start",
+        outcomeStatusKey: ENROLLING_CHILD_STATUS_KEY,
+    });
+
+    /*
+     * THE JOURNEY ANCHORS TO THE PARTICIPATION, whether or not acquisition brought the family here.
+     *
+     * One context shape for Enrollment. Anchoring to the Opportunity could not describe a
+     * context-free enrolment at all, and keeping both shapes would leave every downstream consumer
+     * guessing which one a given journey used. The Opportunity is still reachable — it is on the
+     * participation — and `resolveEnrollmentJourneyContext` still reads journeys written under the
+     * older shape, so this converges without a flag day.
+     *
+     * Reuse also improves: the instance is now deduped by EPISODE rather than by acquisition
+     * episode or by bare subject, which is the grain a journey actually has.
+     */
     const created = await createEnrollmentProcessInstance(supabase, {
         orgId,
         subjectId: customerMemberId,
-        contextId: opportunityId,
+        contextId: participation.ocmId,
+        contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+        // Where the family came from — kept distinct from what the journey anchors to, so the
+        // D-96 department pin still resolves canonically.
+        acquisitionOpportunityId: opportunityId,
         // No stage: the journey's configured entry decides position. Stamping one here would be
         // this service inventing a place in a process it does not own.
         stageKey: null,
@@ -142,6 +196,9 @@ export async function startEnrollment(
         customerMemberId,
         customerId,
         opportunityId,
+        /** The durable Enrollment subject this journey belongs to. */
+        enrollmentParticipationId: participation.ocmId,
+        participationCreated: participation.created,
         contextOutcome: opportunityId ? "joined_live_episode" : "context_free",
         reused: created.reused === true,
         participantLaunch: launched.ok

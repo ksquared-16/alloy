@@ -40,10 +40,17 @@ import {
     participantProgressDisplay,
     participantQuestion,
     participantQuestionSegments,
+    participantUnreadableAnswerMessage,
     type ParticipantValueControl,
     PARTICIPANT_CLARIFICATION_MESSAGE,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
+import {
+    composeAddress,
+    type AddressParts,
+    type SemanticEditor,
+} from "@/lib/enrollment/participantRuntime/semanticValueEditor";
 import { IntakeCard, IntakeHeading } from "./ParentIntakeShell";
+import { ParticipantUploads } from "./ParticipantUploads";
 import {
     ConversationProgress,
     ConversationViewport,
@@ -152,6 +159,536 @@ function ConversationTopic({
     );
 }
 
+/**
+ * What a screen reader says about a grouped confirmation.
+ *
+ * The heading and every fact, in the order they are drawn, so the announcement carries the same
+ * information as the card rather than a summary of it.
+ */
+function groupAnnouncement(
+    group: NonNullable<ParticipantObjectiveWire["next_turn"]["confirmation_group"]>,
+): string {
+    const facts = group.facts
+        .filter((f) => !f.in_headline)
+        .map((f) => `${f.label}: ${f.value}`)
+        .join(". ");
+    return [group.title, group.headline, facts].filter(Boolean).join(" ");
+}
+
+/**
+ * One semantic subject's known facts, confirmed together.
+ *
+ * ## Why this is a card and not three questions
+ *
+ * Alloy knows these things. Asking about them one at a time is technically ask-once and still reads
+ * as a form: eight turns to establish that nothing has changed. Shown together they are what they
+ * actually are — a summary a parent scans in a second and nods at.
+ *
+ * ## What "together" does NOT mean
+ *
+ * Every row is its own semantic need with its own canonical identity, and it is confirmed, stored,
+ * validated and evidenced entirely on its own. `Make a change` exposes exactly that: the individual
+ * values, each with its own control, each saved by itself. Two facts sharing a card is a courtesy to
+ * the parent, never a merge — which is also why two PEOPLE never share one, however the source form
+ * printed them.
+ *
+ * ## Absence is never displayed as knowledge
+ *
+ * Only facts the platform holds are here. A missing middle name is not a blank row on this card; it
+ * is a question, asked afterwards, on its own.
+ */
+function ConfirmationGroupCard({
+    group,
+    changing,
+    editingRef,
+    busy,
+    onEdit,
+    onSave,
+    onCancel,
+}: {
+    group: NonNullable<ParticipantObjectiveWire["next_turn"]["confirmation_group"]>;
+    changing: boolean;
+    editingRef: string | null;
+    busy: boolean;
+    onEdit: (ref: string) => void;
+    onSave: (ref: string, value: unknown) => void;
+    onCancel: () => void;
+}) {
+    // In the summary the identity facts ARE the heading; opening the values shows every one of them.
+    const rows = changing ? group.facts : group.facts.filter((f) => !f.in_headline);
+    return (
+        <div
+            className="mb-3 rounded-2xl border border-alloy-midnight/10 bg-alloy-midnight/[0.02] px-4 py-3"
+            data-participant-confirmation-group={group.facts.length}
+            data-participant-group-mode={changing ? "individual" : "summary"}
+        >
+            {group.headline && !changing ? (
+                <p
+                    className="mb-2 text-[15px] font-semibold leading-snug text-alloy-midnight"
+                    data-participant-group-headline="true"
+                >
+                    {group.headline}
+                </p>
+            ) : null}
+            <dl className="space-y-1.5">
+                {rows.map((fact) => (
+                    <div
+                        key={fact.ref}
+                        className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"
+                        data-participant-fact={fact.ref}
+                    >
+                        <dt className="text-[12px] uppercase tracking-[0.08em] text-alloy-midnight/40">
+                            {fact.label}
+                        </dt>
+                        {editingRef === fact.ref ? (
+                            <dd className="w-full">
+                                <StructuredFactEditor
+                                    editor={fact.editor}
+                                    label={fact.label}
+                                    initial={fact.value}
+                                    busy={busy}
+                                    onSave={(value) => onSave(fact.ref, value)}
+                                    onCancel={onCancel}
+                                />
+                            </dd>
+                        ) : (
+                            <dd className="flex items-baseline gap-3 text-[14px] text-alloy-midnight/80">
+                                <span data-participant-fact-value={fact.ref}>{fact.value || "—"}</span>
+                                {changing ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onEdit(fact.ref)}
+                                        disabled={busy}
+                                        className="text-[12px] font-medium text-alloy-bend-pine underline underline-offset-2 disabled:opacity-50"
+                                    >
+                                        Change
+                                    </button>
+                                ) : null}
+                            </dd>
+                        )}
+                    </div>
+                ))}
+            </dl>
+        </div>
+    );
+}
+
+/**
+ * The editor for ONE semantic fact — street/city/state/ZIP, a date, an email, a choice.
+ *
+ * Chosen by the platform (`semanticValueEditor.ts`) and delivered on the wire, so the component
+ * never reads a canonical key to decide what kind of thing it is showing. Used in three places —
+ * the active card, the settled record, and Change on a standalone confirmation — because a parent
+ * correcting their address should meet the same four boxes wherever they reached them from.
+ */
+function StructuredFactEditor({
+    editor,
+    label,
+    initial,
+    busy,
+    onSave,
+    onCancel,
+}: {
+    editor: SemanticEditor;
+    label: string;
+    /** The value being corrected, as the parent reads it — the editor opens on it, not on blank. */
+    initial?: string;
+    busy: boolean;
+    onSave: (value: unknown) => void;
+    onCancel: () => void;
+}) {
+    const [parts, setParts] = useState<AddressParts>(() =>
+        editor.kind === "address" ? editor.parts : { street: "", city: "", state: "", postal: "" },
+    );
+    const [draft, setDraft] = useState<string>(() => {
+        const shown = (initial ?? "").trim();
+        if (editor.kind === "options") {
+            // The current choice, so a parent changing something else does not have to re-find it.
+            return editor.options.find((o) => o.toLowerCase() === shown.toLowerCase()) ?? editor.options[0] ?? "";
+        }
+        if (editor.kind === "value" && editor.inputType === "date") return isoDraft(shown);
+        return shown;
+    });
+
+    const field = "w-full min-w-0 rounded-lg border border-alloy-midnight/20 bg-white px-2.5 py-1.5 text-[14px] text-alloy-midnight";
+    const caption = "mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40";
+
+    let body: ReactNode;
+    let value: () => unknown;
+    let ready = true;
+
+    if (editor.kind === "address") {
+        // FOUR BOXES OVER ONE CANONICAL VALUE. The parts are recomposed on save; no component of an
+        // address ever becomes a fact of its own.
+        value = () => composeAddress(parts);
+        ready = parts.street.trim().length > 0 || parts.city.trim().length > 0;
+        body = (
+            <div className="grid w-full gap-2 sm:grid-cols-2" data-participant-address-editor="true">
+                <label className="sm:col-span-2">
+                    <span className={caption}>Street</span>
+                    <input className={field} value={parts.street} aria-label="Street"
+                        onChange={(e) => setParts((p) => ({ ...p, street: e.target.value }))} />
+                </label>
+                <label>
+                    <span className={caption}>City</span>
+                    <input className={field} value={parts.city} aria-label="City"
+                        onChange={(e) => setParts((p) => ({ ...p, city: e.target.value }))} />
+                </label>
+                <label>
+                    <span className={caption}>State</span>
+                    <input className={field} value={parts.state} aria-label="State" maxLength={2}
+                        onChange={(e) => setParts((p) => ({ ...p, state: e.target.value }))} />
+                </label>
+                <label>
+                    <span className={caption}>ZIP</span>
+                    <input className={field} value={parts.postal} aria-label="ZIP" inputMode="numeric"
+                        onChange={(e) => setParts((p) => ({ ...p, postal: e.target.value }))} />
+                </label>
+            </div>
+        );
+    } else if (editor.kind === "options") {
+        value = () => draft;
+        body = (
+            <select className={field} value={draft} aria-label={label} onChange={(e) => setDraft(e.target.value)}>
+                {editor.options.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                ))}
+            </select>
+        );
+    } else {
+        value = () => draft;
+        ready = draft.trim().length > 0;
+        body = (
+            <input
+                className={field}
+                type={editor.inputType}
+                aria-label={label}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+            />
+        );
+    }
+
+    return (
+        <div className="flex w-full flex-col gap-2" data-participant-fact-editor={editor.kind}>
+            {body}
+            <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    disabled={busy || !ready}
+                    onClick={() => onSave(value())}
+                    className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+                >
+                    Save
+                </button>
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    disabled={busy}
+                    className="text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
+                >
+                    Cancel
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * One coherent person, collected once.
+ *
+ * Name, phone and email together — the identity a source artifact prints — rather than three turns
+ * that each ask about a fragment of the same person. Persisted through the canonical relationship
+ * service, so the same person can later be OFFERED for reuse instead of retyped.
+ */
+function NewPartyForm({
+    roleLabel,
+    busy,
+    onSave,
+    onCancel,
+}: {
+    roleLabel: string;
+    busy: boolean;
+    onSave: (identity: { full_name: string; phone?: string; email?: string }) => void;
+    onCancel: () => void;
+}) {
+    const [name, setName] = useState("");
+    const [phone, setPhone] = useState("");
+    const [email, setEmail] = useState("");
+    const field = "w-full rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[15px] text-alloy-midnight";
+    const caption = "mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40";
+    return (
+        <div className="flex flex-col gap-3" data-participant-party-form={roleLabel}>
+            <label>
+                <span className={caption}>Full name</span>
+                <input className={field} aria-label="Full name" value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label>
+                <span className={caption}>Phone</span>
+                <input className={field} aria-label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </label>
+            <label>
+                <span className={caption}>Email</span>
+                <input className={field} aria-label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    disabled={busy || name.trim().length === 0}
+                    onClick={() => onSave({ full_name: name.trim(), phone: phone.trim(), email: email.trim() })}
+                    className="rounded-lg bg-alloy-bend-pine px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
+                >
+                    Save
+                </button>
+                <button type="button" onClick={onCancel} disabled={busy} className="text-[13px] text-alloy-midnight/50 underline underline-offset-2">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * What the parent has already settled — a semantic record, not a button transcript.
+ *
+ * The thread used to keep every exchange that produced a settled fact, so a grouped confirmation
+ * was remembered as "Let's make sure I have Chidinma's details right." / "Yes, that's right" and
+ * what was actually agreed to was gone. Worse, it lived in component state, so it was gone for good
+ * on reload — which would make any Edit affordance here a promise the surface could not keep.
+ *
+ * This renders the platform's own projection of settled needs instead. It survives a reload, it
+ * cannot drift from what is stored, and every row stays addressable: a conversation moving on is
+ * not a reason for an answer to become immutable.
+ */
+const SETTLED_ROWS_VISIBLE = 4;
+
+function SettledRecord({
+    settled,
+    busy,
+    editingRef,
+    justUpdated,
+    onEdit,
+    onCancel,
+    onSave,
+}: {
+    settled: ParticipantObjectiveWire["settled"];
+    busy: boolean;
+    editingRef: string | null;
+    justUpdated: ReadonlySet<string>;
+    onEdit: (ref: string) => void;
+    onCancel: () => void;
+    onSave: (ref: string, value: unknown) => void;
+}) {
+    if (settled.length === 0) return null;
+    return (
+        <div className="flex flex-col gap-2" data-participant-settled-record={settled.length}>
+            {settled.map((group) => (
+                <SettledGroup
+                    key={group.heading + (group.headline ?? "")}
+                    group={group}
+                    busy={busy}
+                    editingRef={editingRef}
+                    justUpdated={justUpdated}
+                    onEdit={onEdit}
+                    onCancel={onCancel}
+                    onSave={onSave}
+                />
+            ))}
+        </div>
+    );
+}
+
+/**
+ * What the parent told us in this session — collected, and never labelled Confirmed.
+ *
+ * These are settled and evidenced exactly like a confirmation, and they are not one: a parent who
+ * has just described their child's sleep routine has verified nothing. Kept out of the confirmation
+ * cards entirely, flat rather than grouped by subject, and folded by default — this is conversation
+ * history that recedes, not a summary of what the platform holds about a person.
+ */
+const COLLECTED_ROWS_VISIBLE = 3;
+
+function CollectedAnswers({
+    collected,
+    busy,
+    editingRef,
+    justUpdated,
+    onEdit,
+    onCancel,
+    onSave,
+}: {
+    collected: ParticipantObjectiveWire["collected"];
+    busy: boolean;
+    editingRef: string | null;
+    justUpdated: ReadonlySet<string>;
+    onEdit: (ref: string) => void;
+    onCancel: () => void;
+    onSave: (ref: string, value: unknown) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    if (collected.length === 0) return null;
+    const editingHere = collected.some((f) => f.ref === editingRef);
+    const rows = open || editingHere ? collected : collected.slice(0, COLLECTED_ROWS_VISIBLE);
+    const hidden = collected.length - rows.length;
+    return (
+        <section className="px-0.5" data-participant-collected={collected.length}>
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/25">
+                What you told us
+            </p>
+            <dl className="mt-1.5 space-y-1">
+                {rows.map((fact) => (
+                    <div key={fact.ref} className="flex flex-wrap items-baseline gap-x-2 gap-y-1" data-participant-collected-fact={fact.ref}>
+                        <dt className="text-[12px] text-alloy-midnight/30">{fact.label}</dt>
+                        <span aria-hidden className="text-alloy-midnight/15">·</span>
+                        {editingRef === fact.ref ? (
+                            <dd className="w-full">
+                                <StructuredFactEditor
+                                    editor={fact.editor}
+                                    label={fact.label}
+                                    initial={fact.value}
+                                    busy={busy}
+                                    onSave={(value) => onSave(fact.ref, value)}
+                                    onCancel={onCancel}
+                                />
+                            </dd>
+                        ) : (
+                            <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/50">
+                                <span data-participant-collected-value={fact.ref}>{fact.value || "—"}</span>
+                                {justUpdated.has(fact.ref) ? (
+                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
+                                        Updated
+                                    </span>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => onEdit(fact.ref)}
+                                    disabled={busy}
+                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                >
+                                    Edit
+                                </button>
+                            </dd>
+                        )}
+                    </div>
+                ))}
+            </dl>
+            {hidden > 0 ? (
+                <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="mt-1.5 text-[12px] text-alloy-midnight/35 underline underline-offset-2"
+                >
+                    Show {hidden} more
+                </button>
+            ) : null}
+        </section>
+    );
+}
+
+function SettledGroup({
+    group,
+    busy,
+    editingRef,
+    justUpdated,
+    onEdit,
+    onCancel,
+    onSave,
+}: {
+    group: ParticipantObjectiveWire["settled"][number];
+    busy: boolean;
+    editingRef: string | null;
+    justUpdated: ReadonlySet<string>;
+    onEdit: (ref: string) => void;
+    onCancel: () => void;
+    onSave: (ref: string, value: unknown) => void;
+}) {
+    /*
+     * Compact by default. A settled subject can accumulate a great many facts over a long
+     * enrolment, and a history pane that grows without bound stops being a summary. The rows are
+     * never DROPPED — the count says exactly how many are folded away, and opening is one tap.
+     */
+    const [open, setOpen] = useState(false);
+    const editingHere = group.facts.some((f) => f.ref === editingRef);
+    const rows = open || editingHere ? group.facts : group.facts.slice(0, SETTLED_ROWS_VISIBLE);
+    const hidden = group.facts.length - rows.length;
+
+    return (
+        <section
+            className="rounded-xl border border-alloy-midnight/8 bg-alloy-midnight/[0.015] px-3.5 py-2.5"
+            data-participant-settled-group={group.heading}
+        >
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-bend-pine/70">
+                {group.heading}
+            </p>
+            {group.headline ? (
+                <p className="mt-0.5 text-[13.5px] font-medium text-alloy-midnight/70" data-participant-settled-headline="true">
+                    {group.headline}
+                </p>
+            ) : null}
+            <dl className="mt-1.5 space-y-1">
+                {rows.map((fact) => (
+                    <div key={fact.ref} className="flex flex-wrap items-baseline gap-x-2 gap-y-1" data-participant-settled-fact={fact.ref}>
+                        <dt className="text-[12px] text-alloy-midnight/35">{fact.label}</dt>
+                        <span aria-hidden className="text-alloy-midnight/20">·</span>
+                        {editingRef === fact.ref ? (
+                            <dd className="w-full">
+                                <StructuredFactEditor
+                                    editor={fact.editor}
+                                    label={fact.label}
+                                    busy={busy}
+                                    onSave={(value) => onSave(fact.ref, value)}
+                                    onCancel={onCancel}
+                                />
+                            </dd>
+                        ) : (
+                            <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/60">
+                                <span data-participant-settled-value={fact.ref}>{fact.value || "—"}</span>
+                                {justUpdated.has(fact.ref) ? (
+                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
+                                        Updated
+                                    </span>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => onEdit(fact.ref)}
+                                    disabled={busy}
+                                    className="text-[12px] text-alloy-midnight/40 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                >
+                                    Edit
+                                </button>
+                            </dd>
+                        )}
+                    </div>
+                ))}
+            </dl>
+            {hidden > 0 ? (
+                <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="mt-1.5 text-[12px] text-alloy-midnight/40 underline underline-offset-2"
+                >
+                    Show {hidden} more
+                </button>
+            ) : null}
+            <p className="mt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/25">
+                Confirmed
+            </p>
+        </section>
+    );
+}
+
+/**
+ * A displayed date back into the `yyyy-mm-dd` a date input needs.
+ *
+ * The card shows "Apr 2, 2021" because that is what a parent reads; the control that edits it needs
+ * the storage grain. Anything unparseable is handed over unchanged rather than guessed at.
+ */
+function isoDraft(shown: string): string {
+    const parsed = new Date(`${shown} UTC`);
+    if (Number.isNaN(parsed.getTime())) return shown;
+    return parsed.toISOString().slice(0, 10);
+}
+
 export function EnrollmentConversationCard({
     token,
     initialObjective,
@@ -171,6 +708,81 @@ export function EnrollmentConversationCard({
     const [settled, setSettled] = useState<Exchange[]>([]);
     /** Whether the parent has asked to correct the value currently being confirmed. */
     const [correcting, setCorrecting] = useState(false);
+    /**
+     * The parent chose "Make a change" on a grouped confirmation, and which fact is open.
+     *
+     * Both are local: opening the individual values claims nothing to the platform and writes
+     * nothing. Only saving one fact is a turn — and it is a turn about THAT fact alone.
+     */
+    const [changingGroup, setChangingGroup] = useState(false);
+    const [editingRef, setEditingRef] = useState<string | null>(null);
+    /**
+     * Facts corrected in THIS sitting, so the record can say "Updated" beside them.
+     *
+     * Presentation, and deliberately local: the platform records that a value was confirmed, not
+     * that it was once something else. Claiming a durable "updated" state would mean inventing an
+     * edit history the session does not keep.
+     */
+    const [justUpdated, setJustUpdated] = useState<ReadonlySet<string>>(() => new Set());
+    /** Documents attached in this sitting, by field id — the upload row's own done-state. */
+    /** The parent chose "Someone else" and is giving a new person's details. */
+    const [addingParty, setAddingParty] = useState(false);
+    const [attachedEvidence, setAttachedEvidence] = useState<
+        Record<string, { document_id: string; filename: string } | undefined>
+    >({});
+
+    /**
+     * Re-read the objective after evidence lands.
+     *
+     * The platform decides whether the obligation is satisfied and what comes next — the surface
+     * asks, exactly as it does after a turn. Attaching a file is not a claim that the requirement
+     * is met; the recomputed objective is.
+     */
+    const refreshObjective = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-objective`);
+            const json = (await res.json()) as { ok: boolean; data?: ParticipantObjectiveWire };
+            if (json.ok && json.data) {
+                setObjective(json.data);
+                onPhaseChange?.(json.data.phase);
+                if (json.data.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
+            }
+        } catch {
+            // Left as it was; the parent can attach again or reload.
+        }
+    }, [token, onPhaseChange, onArtifactHandoff]);
+
+    /** Send one document to the token-scoped route. The server derives everything about it. */
+    const uploadEvidence = useCallback(
+        async (fieldId: string, file: File) => {
+            try {
+                const buffer = new Uint8Array(await file.arrayBuffer());
+                // Chunked, matching the review surface's own encoder: spreading a whole megabyte
+                // into `String.fromCharCode` overflows the argument limit on real photographs.
+                let binary = "";
+                for (let i = 0; i < buffer.length; i += 8192) {
+                    binary += String.fromCharCode(...buffer.subarray(i, i + 8192));
+                }
+                const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-upload`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ field_id: fieldId, filename: file.name, file_base64: btoa(binary) }),
+                });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    error?: string;
+                    data?: { document_id?: string; filename?: string };
+                };
+                if (!json.ok || !json.data?.document_id) {
+                    return { error: json.error ?? "That file could not be attached." };
+                }
+                return { document_id: json.data.document_id, filename: json.data.filename ?? file.name };
+            } catch {
+                return { error: "That file could not be attached." };
+            }
+        },
+        [token],
+    );
     /** The parent said yes to an optional question and is now telling us the detail. */
     const [elaborating, setElaborating] = useState(false);
     const [text, setText] = useState("");
@@ -202,7 +814,18 @@ export function EnrollmentConversationCard({
     const control = useMemo(() => controlForTurn(objective.next_turn), [objective]);
 
     const submit = useCallback(
-        async (payload: { text?: string; value?: unknown; settledAs?: string; decline?: boolean }) => {
+        async (payload: {
+            text?: string;
+            value?: unknown;
+            settledAs?: string;
+            decline?: boolean;
+            /** Settle every confirmation on the current card — as N independent confirmations. */
+            confirmGroup?: boolean;
+            /** Correct ONE fact of the card. `ref` is the opaque handle the server issued. */
+            editFact?: { ref: string; value: unknown };
+            /** Add a person by the role the platform is offering: decline, reuse, or collect. */
+            party?: { decline?: boolean; select_ref?: string; identity?: { full_name: string; phone?: string; email?: string } };
+        }) => {
             if (inFlight.current) return;
             inFlight.current = true;
             setBusy(true);
@@ -217,7 +840,18 @@ export function EnrollmentConversationCard({
              * optimism can never outlive the truth.
              */
             const optimistic = payload.settledAs?.trim();
-            const asked = participantQuestion(objective);
+            /*
+             * What the thread records as having been ASKED.
+             *
+             * A grouped confirmation asked one thing — "let's make sure I have Solene's details
+             * right" — so the transcript must say that, not the single-need sentence the runtime
+             * would have used had it asked them one at a time.
+             */
+            const groupCard = objective.next_turn.confirmation_group ?? null;
+            const asked =
+                groupCard && (payload.confirmGroup || payload.editFact)
+                    ? groupCard.title
+                    : participantQuestion(objective);
             setClarification(null);
             // Words need interpreting; button answers do not. The thinking state is shown only
             // while interpretation is actually running — never as decoration.
@@ -236,6 +870,17 @@ export function EnrollmentConversationCard({
             }
             setCorrecting(false);
             setElaborating(false);
+            /*
+             * CORRECTING ONE FACT LEAVES THE PARENT WHERE THEY WERE.
+             *
+             * A parent who chose "Make a change" and fixed the birthday is still looking at the
+             * card, very possibly to fix something else. Collapsing back to the summary after each
+             * save made them re-open the values every time. Only the OPEN EDITOR closes here; the
+             * mode itself ends when the turn moves on, which the objective decides.
+             */
+            if (!payload.editFact) setChangingGroup(false);
+            setAddingParty(false);
+            setEditingRef(null);
             setText("");
             try {
                 const res = await fetch(
@@ -254,6 +899,9 @@ export function EnrollmentConversationCard({
                             ...(payload.text !== undefined ? { text: payload.text } : {}),
                             ...(payload.value !== undefined ? { value: payload.value } : {}),
                             ...(payload.decline ? { decline: true } : {}),
+                            ...(payload.confirmGroup ? { confirm_group: true } : {}),
+                            ...(payload.editFact ? { edit_fact: payload.editFact } : {}),
+                            ...(payload.party ? { party: payload.party } : {}),
                         }),
                     },
                 );
@@ -266,6 +914,10 @@ export function EnrollmentConversationCard({
 
                 setObjective(json.data.objective);
                 setText("");
+                if (payload.editFact) {
+                    const ref = payload.editFact.ref;
+                    setJustUpdated((prev) => new Set([...prev, ref]));
+                }
 
                 // `refused` and `no_change` both mean the platform did not accept the answer. The
                 // participant is told plainly and the controls stay — never an internal code.
@@ -276,7 +928,16 @@ export function EnrollmentConversationCard({
                     if (json.data.clarification) {
                         setClarification(json.data.clarification);
                     } else {
-                        setNotice(PARTICIPANT_CLARIFICATION_MESSAGE);
+                        /*
+                         * NOT A DEAD END.
+                         *
+                         * "Sorry — I didn't catch that" was the whole answer, so a parent who said
+                         * "it's Bend" had no way forward but to retype an address they had not
+                         * meant to change. Where the fact has a structured editor the runtime says
+                         * what it CAN do and opens it. Nothing about what may be interpreted moves.
+                         */
+                        setNotice(participantUnreadableAnswerMessage(json.data.objective));
+                        if (json.data.objective.next_turn.editor) setCorrecting(true);
                     }
                 }
                 onPhaseChange?.(json.data.objective.phase);
@@ -297,11 +958,164 @@ export function EnrollmentConversationCard({
     );
 
     const turn = objective.next_turn;
+    /**
+     * The grouped confirmation for this turn, when the subject has more than one known fact.
+     *
+     * Composed entirely by the server from canonical identity. The component decides nothing about
+     * membership — it could not, and that is the point: a surface that grouped by what looked
+     * related would be inventing a relationship the packet never evidenced.
+     */
+    const group = turn.confirmation_group ?? null;
 
     if (control.kind === "done") {
         return (
             <IntakeCard>
                 <IntakeHeading title="Everything we need is complete." subtitle="Thank you." />
+            </IntakeCard>
+        );
+    }
+
+    if (control.kind === "party" && turn.party) {
+        /*
+         * A PERSON, BY ROLE — never "Parent #2".
+         *
+         * Known household people are offered first so a parent never retypes someone the school
+         * already has; "Someone else" collects one coherent person. Declining is always available
+         * because no configured requirement makes any of these mandatory today.
+         */
+        const party = turn.party;
+        return (
+            <IntakeCard>
+                <div className="flex flex-col gap-5">
+                    <SettledRecord
+                        settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) => void submit({ editFact: { ref, value }, settledAs: displayValue(value) })}
+                    />
+                    <ThreadTurn who="alloy" depth="current">
+                        <ThreadSaid who="alloy" depth="current">{participantQuestion(objective)}</ThreadSaid>
+                        {party.existing.length > 0 ? (
+                            <ThreadSupporting>
+                                {`Already listed: ${party.existing.join(", ")}.`}
+                            </ThreadSupporting>
+                        ) : null}
+                    </ThreadTurn>
+                    <div className="flex flex-col gap-2" data-participant-party={party.role_label}>
+                        {addingParty ? (
+                            <NewPartyForm
+                                roleLabel={party.role_label}
+                                busy={busy}
+                                onCancel={() => setAddingParty(false)}
+                                onSave={(identity) =>
+                                    void submit({ party: { identity }, settledAs: identity.full_name })
+                                }
+                            />
+                        ) : (
+                            <>
+                                {party.candidates.map((candidate) => (
+                                    <button
+                                        key={candidate.ref}
+                                        type="button"
+                                        disabled={busy}
+                                        data-participant-party-candidate={candidate.ref}
+                                        onClick={() =>
+                                            void submit({ party: { select_ref: candidate.ref }, settledAs: candidate.name })
+                                        }
+                                        className="flex items-baseline justify-between rounded-xl border border-alloy-midnight/12 px-4 py-3 text-left hover:border-alloy-bend-pine disabled:opacity-50"
+                                    >
+                                        <span className="text-[15px] font-medium text-alloy-midnight">{candidate.name}</span>
+                                        {candidate.detail ? (
+                                            <span className="text-[13px] text-alloy-midnight/45">{candidate.detail}</span>
+                                        ) : null}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    data-participant-party-new="true"
+                                    onClick={() => setAddingParty(true)}
+                                    className="rounded-xl border border-dashed border-alloy-midnight/20 px-4 py-3 text-left text-[15px] text-alloy-midnight/70 hover:border-alloy-bend-pine disabled:opacity-50"
+                                >
+                                    Someone else
+                                </button>
+                                {party.minimum === 0 ? (
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        data-participant-party-decline="true"
+                                        onClick={() => void submit({ party: { decline: true }, settledAs: "No, continue" })}
+                                        className="mt-1 self-start text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
+                                    >
+                                        No, continue
+                                    </button>
+                                ) : null}
+                            </>
+                        )}
+                    </div>
+                </div>
+            </IntakeCard>
+        );
+    }
+
+    if (control.kind === "evidence") {
+        /*
+         * REQUIRED DOCUMENTS, BEFORE THE PAPERWORK IS PREPARED.
+         *
+         * The conversation does not hand off yet and no artifact is shown — the phase is still
+         * collection, so the host keeps the packet Form deferred and [Review paperwork] is not
+         * reachable. Attaching a document creates canonical evidence; it does not tell Alloy what
+         * the document says, and nothing here fills a vaccine grid.
+         */
+        return (
+            <IntakeCard>
+                <div className="flex flex-col gap-5">
+                    <SettledRecord
+                        settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
+                    <CollectedAnswers
+                        collected={objective.collected}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
+                    <ThreadTurn who="alloy" depth="current">
+                        <ThreadSaid who="alloy" depth="current">{participantQuestion(objective)}</ThreadSaid>
+                    </ThreadTurn>
+                    <div data-participant-evidence-turn={turn.evidence.length}>
+                        <ParticipantUploads
+                            requests={turn.evidence.map((e) => ({
+                                field_id: e.field_id,
+                                title: e.title,
+                                description: e.description,
+                                required: true,
+                                docType: "",
+                            }))}
+                            attached={attachedEvidence}
+                            onAttached={(fieldId, doc) => {
+                                setAttachedEvidence((prev) => ({ ...prev, [fieldId]: doc }));
+                                void refreshObjective();
+                            }}
+                            onUpload={uploadEvidence}
+                        />
+                    </div>
+                </div>
             </IntakeCard>
         );
     }
@@ -331,13 +1145,17 @@ export function EnrollmentConversationCard({
         return (
             <IntakeCard>
                 <div className="flex flex-col gap-5" data-participant-settled="true">
-                    {settled.map((entry, i) => (
-                        <ThreadExchange
-                            key={i}
-                            exchange={entry}
-                            depth={i === settled.length - 1 ? "recent" : "history"}
-                        />
-                    ))}
+                    <SettledRecord
+                        settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
                     <ThreadTurn who="alloy" depth="current">
                         <ThreadSaid who="alloy" depth="current">
                             {participantQuestion(objective)}
@@ -387,6 +1205,30 @@ export function EnrollmentConversationCard({
             onSelect: () => void submit({ text: "yes", settledAs: "Yes" }),
         });
         suggestions.push({ label: "No, let me change it", onSelect: () => setCorrecting(true) });
+    } else if (group && !correcting) {
+        /*
+         * ONE gesture for the whole card — and, in change mode, a way back to it.
+         *
+         * "Make a change" is a local transition: it reveals the individual semantic values and
+         * claims nothing to the platform. Only saving one of them is a turn, and it is a turn about
+         * that one fact.
+         */
+        suggestionKind = "confirm_group";
+        if (changingGroup) {
+            suggestions.push({
+                label: "That's everything",
+                emphasis: true,
+                onSelect: () => void submit({ confirmGroup: true, settledAs: "Yes, that's right" }),
+            });
+            suggestions.push({ label: "Back", onSelect: () => { setChangingGroup(false); setEditingRef(null); } });
+        } else {
+            suggestions.push({
+                label: "Yes, that's right",
+                emphasis: true,
+                onSelect: () => void submit({ confirmGroup: true, settledAs: "Yes, that's right" }),
+            });
+            suggestions.push({ label: "Make a change", onSelect: () => setChangingGroup(true) });
+        }
     } else if (control.kind === "choice_or_text" && !correcting) {
         suggestionKind = "confirm";
         suggestions.push({
@@ -469,13 +1311,17 @@ export function EnrollmentConversationCard({
     /** Input types whose answer a keyboard alone cannot supply well: a picker earns its place. */
     const NEEDS_ITS_OWN_CONTROL = new Set(["date", "number"]);
     const typed: ParticipantValueControl | null =
-        typedCandidate && typedCandidate.kind === "value" && NEEDS_ITS_OWN_CONTROL.has(typedCandidate.inputType)
-            ? typedCandidate
-            : null;
+        // The structured editor above OWNS the correction once Change has been pressed. Rendering
+        // the dock's typed control beside it would put two answer surfaces on one question.
+        correcting && turn.editor
+            ? null
+            : typedCandidate && typedCandidate.kind === "value" && NEEDS_ITS_OWN_CONTROL.has(typedCandidate.inputType)
+              ? typedCandidate
+              : null;
 
     return (
         <ConversationViewport
-            followSignal={`${settled.length}:${participantQuestion(objective)}:${clarification ?? ""}`}
+            followSignal={`${settled.length}:${objective.settled.length}:${participantQuestion(objective)}:${clarification ?? ""}:${changingGroup ? "individual" : "summary"}:${editingRef ?? ""}`}
             progress={progress ? <ConversationProgress label={progress.label} percent={progress.percent} /> : null}
             thread={
                 <>
@@ -487,20 +1333,39 @@ export function EnrollmentConversationCard({
                         </ThreadTurn>
                     ) : null}
 
-                    {settled.map((entry, i) => (
-                        <ThreadExchange
-                            key={i}
-                            exchange={entry}
-                            depth={
-                                // The exchange in flight reads as the live one; otherwise the newest
-                                // settled exchange stays legible and everything older recedes.
-                                awaitingTurn && i === settled.length - 1
-                                    ? "current"
-                                    : i === settled.length - 1
-                                      ? "recent"
-                                      : "history"
-                            }
-                        />
+                    {/*
+                      * HISTORY IS A SEMANTIC RECORD, NOT A BUTTON TRANSCRIPT.
+                      *
+                      * What a parent wants to see above the current question is what they have
+                      * settled — the values — not the sequence of taps that settled them. The
+                      * mechanical exchanges are still shown, but only the one in flight: it is the
+                      * acknowledgement that their answer was received, and it stops being useful the
+                      * moment the record below it reflects the answer.
+                      */}
+                    <SettledRecord
+                        settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
+                    <CollectedAnswers
+                        collected={objective.collected}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
+                    {settled.slice(-1).map((entry, i) => (
+                        <ThreadExchange key={`live-${i}`} exchange={entry} depth={awaitingTurn ? "current" : "recent"} />
                     ))}
 
                     {/* THE CURRENT QUESTION — the largest thing on the screen, and never rendered
@@ -510,15 +1375,74 @@ export function EnrollmentConversationCard({
                             {objective.next_turn.cluster ? (
                                 <ConversationTopic cluster={objective.next_turn.cluster} />
                             ) : null}
-                            <ThreadSaid who="alloy" depth="current">
-                                {participantQuestionSegments(objective).map((segment, i) =>
-                                    segment.emphasis ? (
-                                        <strong key={i} className="font-semibold">{segment.text}</strong>
-                                    ) : (
-                                        <span key={i}>{segment.text}</span>
-                                    ),
-                                )}
-                            </ThreadSaid>
+                            {group ? (
+                                /* THE GROUPED CONFIRMATION. Alloy says one sentence about the
+                                   subject and shows what it holds; the single-need question is
+                                   deliberately not also rendered, or the parent would be asked the
+                                   same thing twice in two shapes. */
+                                <>
+                                    <ThreadSaid who="alloy" depth="current">{group.title}</ThreadSaid>
+                                    <ConfirmationGroupCard
+                                        group={group}
+                                        changing={changingGroup}
+                                        editingRef={editingRef}
+                                        busy={busy}
+                                        onEdit={setEditingRef}
+                                        onCancel={() => setEditingRef(null)}
+                                        onSave={(ref, value) =>
+                                            void submit({
+                                                editFact: { ref, value },
+                                                /*
+                                                 * What the THREAD echoes is what the parent would
+                                                 * say, not what the column stores. `2021-04-03` is
+                                                 * a database string; the parent corrected a
+                                                 * birthday to Apr 3, 2021.
+                                                 */
+                                                settledAs: displayValue(value),
+                                            })
+                                        }
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <ThreadSaid who="alloy" depth="current">
+                                        {participantQuestionSegments(objective).map((segment, i) =>
+                                            segment.emphasis ? (
+                                                <strong key={i} className="font-semibold">{segment.text}</strong>
+                                            ) : (
+                                                <span key={i}>{segment.text}</span>
+                                            ),
+                                        )}
+                                    </ThreadSaid>
+                                    {correcting && turn.editor ? (
+                                        /*
+                                         * CHANGE OPENS AN EDITOR, NOT A WAITING COMPOSER.
+                                         *
+                                         * Pressing Change used to reveal the authored control, and
+                                         * for a plain text field the surface renders no second text
+                                         * box — so the parent had just said "let me correct this"
+                                         * and was handed a prompt saying "Message Alloy…". For a
+                                         * whole address it was worse: the only way to fix a city was
+                                         * to retype the street and ZIP from memory.
+                                         *
+                                         * The composer stays available beneath for anyone who would
+                                         * rather say it in words; this is the deterministic path.
+                                         */
+                                        <div className="mt-3">
+                                            <StructuredFactEditor
+                                                editor={turn.editor}
+                                                label={turn.label ?? "Your answer"}
+                                                initial={displayValue(turn.proposed_value)}
+                                                busy={busy}
+                                                onSave={(value) =>
+                                                    void submit({ value, settledAs: displayValue(value) })
+                                                }
+                                                onCancel={() => setCorrecting(false)}
+                                            />
+                                        </div>
+                                    ) : null}
+                                </>
+                            )}
                             {objective.pending_clarification ? (
                                 /* THE PLATFORM'S OWN QUESTION — deterministic, not the provider's.
                                    It replaces nothing: the same turn and its controls stand
@@ -538,9 +1462,14 @@ export function EnrollmentConversationCard({
                             ) : null}
                             {/* The ask-once promise, said the way a specialist would say it. A
                                 parent should hear the reassurance, not the ratio. */}
-                            {turn.resolves_occurrences > 1 ? (
+                            {turn.resolves_occurrences > 1 && !group ? (
                                 <ThreadSupporting>
                                     I&rsquo;ll use it everywhere it&rsquo;s needed, so you only tell me once.
+                                </ThreadSupporting>
+                            ) : null}
+                            {group && !changingGroup ? (
+                                <ThreadSupporting>
+                                    I&rsquo;ll use these everywhere they&rsquo;re needed, so you only tell me once.
                                 </ThreadSupporting>
                             ) : null}
                             {notice ? <ThreadSupporting>{notice}</ThreadSupporting> : null}
@@ -565,7 +1494,15 @@ export function EnrollmentConversationCard({
                       * free of duplicate assistive markup.
                       */}
                     <p className="sr-only" aria-live="polite" role="status">
-                        {notice ?? clarification ?? participantQuestion(objective)}
+                        {/*
+                          * The announcement must describe the interaction ON SCREEN.
+                          *
+                          * With a grouped confirmation showing, `participantQuestion` returns the
+                          * single-need sentence the runtime would have asked — "I have Chidinma's
+                          * last name as Okonkwo. Is that still right?" — so a parent using a screen
+                          * reader was told about one fact while the card in front of them held four.
+                          */}
+                        {notice ?? clarification ?? (group ? groupAnnouncement(group) : participantQuestion(objective))}
                     </p>
                     {typed ? (
                         <TypedAnswer

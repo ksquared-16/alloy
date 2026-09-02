@@ -21,6 +21,7 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { opportunityIdsForEnrollmentContexts } from "@/lib/enrollment/completion/resolveEnrollmentJourneyContext";
 
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import {
@@ -84,18 +85,31 @@ export async function loadSubjectContexts(
         fetchLiveSchedule(supabase, orgId, subject.grain, subjectId),
     ]);
 
+
+    /*
+     * Each journey's Opportunity, resolved once.
+     *
+     * These reads used to filter on `context_type === "opportunity"` and take the context id as the
+     * Opportunity. The guard was correct and the consequence was still wrong: a journey anchored to
+     * its Enrollment Participation matched neither branch, so it silently lost its Work View and its
+     * family-grain enrichment — the row still rendered, just with less on it, which is why nothing
+     * ever surfaced as an error.
+     */
+    const opportunityIdByContextId = await opportunityIdsForEnrollmentContexts(supabase, orgId, processRows);
+
     const opportunityIds = [
         ...new Set(
             processRows
-                .filter((r) => (r.context_type ?? "").trim() === "opportunity")
-                .map((r) => (r.context_id ?? "").trim())
+                .map((r) => opportunityIdByContextId.get((r.context_id ?? "").trim()) ?? "")
                 .filter(Boolean),
         ),
     ];
 
     const stageWorkViewInputs = processRows
-        .filter((r) => (r.context_type ?? "").trim() === "opportunity")
-        .map((r) => ({ opportunityId: (r.context_id ?? "").trim(), stageKey: (r.stage_key ?? "").trim() }))
+        .map((r) => ({
+            opportunityId: opportunityIdByContextId.get((r.context_id ?? "").trim()) ?? "",
+            stageKey: (r.stage_key ?? "").trim(),
+        }))
         .filter((e) => e.opportunityId && e.stageKey);
 
     // Family-grain predicates read facts the queue attaches (`has_active_tour`, the tour wall date),

@@ -263,6 +263,32 @@ function client(db: Record<string, Row[]>) {
                 }
                 return q;
             },
+            /*
+             * Start Enrollment anchors the journey to the child's Enrollment Participation, so the
+             * process-instance write is now an upsert on `(org, process_key, subject, context_id)`
+             * rather than a bare insert. `ignoreDuplicates` returns NO ROW on conflict, which is the
+             * one behaviour worth modelling here — it is how "this journey already exists" is told
+             * apart from a failure.
+             */
+            upsert: (payload: Row | Row[], opts?: { ignoreDuplicates?: boolean }) => {
+                const list = Array.isArray(payload) ? payload : [payload];
+                const rows = rowsOf();
+                const conflict = list.some((raw) =>
+                    rows.some(
+                        (r) =>
+                            r.org_id === raw.org_id &&
+                            r.process_key === raw.process_key &&
+                            r.subject_id === raw.subject_id &&
+                            (r.context_id ?? null) === (raw.context_id ?? null),
+                    ),
+                );
+                if (conflict && opts?.ignoreDuplicates) {
+                    mode = "insert";
+                    pending = [];
+                    return q;
+                }
+                return q.insert(payload);
+            },
             update: (p: Row) => {
                 mode = "update";
                 patch = p;
@@ -754,8 +780,21 @@ describe("B1 — republishing and unrelated links are unaffected", () => {
         expect(result.opportunityId).toBeNull();
         expect(result.contextOutcome).toBe("context_free");
         expect(db.opportunities).toHaveLength(0);
-        // The instance carries no context pair at all — a context type naming nothing is a dangling label.
-        expect(db.process_instances[0].context_id ?? null).toBeNull();
+        /*
+         * NO OPPORTUNITY, AND STILL A REAL CONTEXT.
+         *
+         * The journey used to carry no context pair at all here, because the only context shape it
+         * had was an Opportunity and there wasn't one. It now anchors to the child's Enrollment
+         * Participation, which exists in both paths — so "context-free" describes the ACQUISITION,
+         * not the journey, and every consumer gets the same shape either way.
+         *
+         * The type is asserted alongside the id on purpose: an OCM id sitting under `opportunity`
+         * would satisfy a bare non-null check while being precisely the confusion this converges.
+         */
+        const instance = db.process_instances[0];
+        expect(instance.context_type).toBe("enrollment_participation");
+        expect(instance.context_id).toBe(result.enrollmentParticipationId);
+        expect(instance.context_id).not.toBeNull();
         // And the participant is still reachable.
         expect(result.participantLaunch.realized).toBe(true);
     });

@@ -64,6 +64,16 @@ export type EnrollmentNeedIdentity = {
     /** The `shared_values` key this need reads and writes. Null when it cannot participate. */
     readonly shared_value_key: string | null;
     readonly entity_type: string | null;
+    /**
+     * WHO the destination is about, when it declares no entity of its own.
+     *
+     * Deliberately separate from `entity_type`, which records what the field DECLARES. This records
+     * what the packet's LAYOUT says it is about — an unbound box sitting between child-bound boxes
+     * is about the child. Kept apart so an inference can never be mistaken for a declaration, and so
+     * it can never reach dedupe: identity, `canonical_key` and `shared_value_key` are untouched by
+     * it. Grammar and ordering read it; nothing that decides what a value IS may.
+     */
+    readonly subject_entity_type: string | null;
     readonly field_key: string | null;
     readonly basis: EnrollmentNeedDedupeBasis;
     /**
@@ -98,6 +108,8 @@ export type NeedIdentityInput = {
     readonly subjectId: string | null;
     /** From `fieldIsInsideCollectionBoundGroup`: repeats never join shared_values dedupe. */
     readonly insideCollectionBoundGroup: boolean;
+    /** The entity this destination sits among, when it declares none. Grammar only. */
+    readonly inferredEntityType?: string | null;
     /** Provenance, used only to keep artifact-specific occurrences distinct. */
     readonly formDefinitionVersionId: string;
     readonly sessionItemId: string;
@@ -198,6 +210,7 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
             // namespace, even when the field happens to carry a binding.
             shared_value_key: null,
             entity_type: parts.entity_type,
+            subject_entity_type: parts.entity_type ?? input.inferredEntityType ?? null,
             field_key: parts.field_key,
             basis: parts.basis,
             artifact_specific: true,
@@ -220,6 +233,7 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
         canonical_key: parts.canonical_key,
         shared_value_key: parts.shared_value_key,
         entity_type: parts.entity_type,
+        subject_entity_type: parts.entity_type ?? input.inferredEntityType ?? null,
         field_key: parts.field_key,
         basis: parts.basis,
         artifact_specific: false,

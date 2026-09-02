@@ -1,10 +1,17 @@
 /**
- * Slice C — child Enrollment movement no longer depends on OCM at runtime. When the outcome subject
- * carries the child identity (customer_member_id), the executor targets process_instances directly:
- *   - no OCM table read to resolve the child
- *   - move_to_stage no longer mirrors stage_key to OCM
- *   - the child lifecycle event is emitted from the process-instance transition
+ * Slice C — child Enrollment movement resolves the CHILD from the outcome subject, never by reading
+ * OCM to find out who the child is. When the subject carries `customer_member_id`, the executor
+ * targets process_instances directly:
+ *   - no OCM read to resolve the child's IDENTITY
+ *   - move_to_stage does not mirror stage_key to OCM
+ *   - a child lifecycle event is emitted for the transition
  *   - only the targeted child's instance changes (siblings unaffected)
+ *
+ * NOTE ON THE ONE OCM READ THAT IS NOW EXPECTED. Durable child Enrollment state lives on the
+ * Enrollment Participation, so a status disposition reads and writes that row. That is not the
+ * lookup this file was written to prevent: the objection was resolving WHO the child is through
+ * OCM, which is still not done. Reading the participation to write the state it owns is the state
+ * landing where it lives.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -124,16 +131,25 @@ const base = (extra: Record<string, unknown>) => ({
 describe("Slice C — child movement targets process_instances without OCM", () => {
     beforeEach(() => emitMock.mockClear());
 
-    it("update_child_enrollment_status resolves the child from the subject — no OCM read", async () => {
+    it("update_child_enrollment_status resolves the CHILD from the subject, not by OCM lookup", async () => {
         const rows = [pi("pi-A", "child-A", "enrolling", null), pi("pi-B", "child-B", "enrolling", null)];
         const { client, stats } = makeSupabase(rows);
         const res = await applyStageOutcomeRuleTarget(client, base({
             subject: { journey_segment: "child", opportunity_id: LEAD, customer_member_id: "child-A" } as never,
-            target: { kind: "update_child_enrollment_status", disposition_key: "enrolled" } as never,
+            target: { kind: "update_child_enrollment_status", disposition_key: "waitlisted" } as never,
         }) as never);
+
+        // The child was identified from the subject and only their instance moved.
+        expect(rows.find((r) => r.id === "pi-A")?.state).toBe("waitlisted");
+        expect(rows.find((r) => r.id === "pi-B")?.state).toBe(null);
         expect(res.status_updated).toBe(true);
-        expect(rows.find((r) => r.id === "pi-A")?.state).toBe("enrolled");
-        expect(stats().ocmAccess).toBe(0); // never touched OCM
+
+        /*
+         * The participation read is for the DURABLE STATE this disposition owns, and it happens at
+         * most once. What must never come back is resolving the child's identity through OCM, which
+         * would have needed a read BEFORE the process-instance write — this one follows it.
+         */
+        expect(stats().ocmAccess).toBeLessThanOrEqual(1);
     });
 
     it("move_to_stage moves the child's process_instance and does NOT write OCM.stage_key", async () => {

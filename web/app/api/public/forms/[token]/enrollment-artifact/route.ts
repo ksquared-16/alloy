@@ -108,7 +108,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                   composerVersion: rendered.renderIdentity,
               });
 
-    return NextResponse.json({ ok: true, data: model }, { headers: { "cache-control": "no-store" } });
+    /*
+     * The values this rendering was produced from, for the review list beside the document.
+     *
+     * The list used to compile from the draft form payload — an earlier, thinner view of the same
+     * artifact — so a party destination read blank next to a document that showed the person. Both
+     * surfaces now describe one resolved artifact. No party knowledge crosses: these are field ids
+     * and values, exactly as the renderer received them.
+     */
+    return NextResponse.json(
+        { ok: true, data: { ...model, resolvedValues: rendered.resolvedValues } },
+        { headers: { "cache-control": "no-store" } },
+    );
 }
 
 // `publicOk` is the sibling shape; this route mirrors it explicitly to attach cache headers.

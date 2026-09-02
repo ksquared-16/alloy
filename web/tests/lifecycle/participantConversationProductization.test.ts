@@ -269,12 +269,35 @@ describe("the participant surface is a thread with an anchored composer", () => 
         expect(THREAD).toContain("--participant-conversation-height");
     });
 
-    it("gives settled exchanges a lighter treatment than the current one", () => {
-        // Three depths, and the current Alloy line is the largest thing on the screen.
+    it("gives settled history a lighter treatment than the current turn", () => {
+        /*
+         * The depths remain; what carries settled history no longer does.
+         *
+         * History used to be a growing transcript of exchanges, receding through three depths. It is
+         * now a SEMANTIC RECORD — the values themselves — so "lighter than the current turn" is a
+         * property of that record, and the third depth has nothing left to render.
+         */
         expect(THREAD).toContain('depth === "current"');
         expect(THREAD).toContain('depth === "recent"');
-        expect(CARD).toContain('"history"');
-        expect(THREAD).toMatch(/text-\[18px\][\s\S]*text-alloy-midnight\b/);
+        expect(CARD).toContain("data-participant-settled-record");
+        // Settled values are smaller and lower-contrast than the current question, which alone is
+        // full-strength midnight.
+        expect(CARD).toMatch(/text-\[13px\] text-alloy-midnight\/60[\s\S]{0,200}?data-participant-settled-value/);
+        expect(THREAD).toMatch(/depth === "current"[\s\S]{0,200}?text-alloy-midnight\b/);
+    });
+
+    it("does not spend headline weight on the active question", () => {
+        /*
+         * The active question was 18/19px semi-bold, so every ordinary question read as a page title
+         * and the answer, the record and the controls all read as footnotes to it. Hierarchy comes
+         * from placement, spacing, the Bend Pine eyebrow and contrast instead.
+         */
+        const current = THREAD.match(/depth === "current"\s*\?\s*"([^"]+)"/g) ?? [];
+        const alloyCurrent = current.find((c) => c.includes("text-alloy-midnight"));
+        expect(alloyCurrent, "the current Alloy line is styled").toBeTruthy();
+        expect(alloyCurrent).not.toMatch(/text-\[1[789]px\]|text-\[2\dpx\]/);
+        expect(alloyCurrent).not.toContain("font-semibold");
+        expect(alloyCurrent).not.toContain("font-bold");
     });
 
     it("has one persistent composer, with Enter to send and Shift+Enter for a newline", () => {
@@ -380,8 +403,20 @@ describe("presentation changed; authority did not", () => {
          * be declined at all. That is the same authority boundary `text` and `value` sit behind,
          * which is why widening the vocabulary does not widen what the browser can claim.
          */
-        const bodyKeys = [...CARD.matchAll(/submit\(\{\s*([a-z_]+)/g)].map((m) => m[1]);
-        expect(new Set(bodyKeys)).toEqual(new Set(["text", "value", "decline"]));
+        const bodyKeys = [...CARD.matchAll(/submit\(\{\s*([a-zA-Z_]+)/g)].map((m) => m[1]);
+        expect(new Set(bodyKeys)).toEqual(
+            new Set(["text", "value", "decline", "confirmGroup", "editFact", "party"]),
+        );
+        /*
+         * `confirmGroup` is admitted on exactly the terms `decline` was: a BARE literal flag. It
+         * says "the parent agreed to the card"; WHICH facts the card held is re-derived server-side
+         * from the objective, so a stale or edited tab can only ever settle what the platform is
+         * currently showing.
+         */
+        const groupColons = (CARD.match(/\bconfirm_group:/g) ?? []).length;
+        const groupTrue = (CARD.match(/\bconfirm_group: true\b/g) ?? []).length;
+        expect(groupColons).toBeGreaterThan(0);
+        expect(groupTrue).toBe(groupColons);
         // The flag is sent as a literal true, never as a key, an id or a label. Counted rather
         // than matched with a lookahead, which backtracks past the space and passes vacuously.
         const declineColons = (CARD.match(/\bdecline:/g) ?? []).length;
