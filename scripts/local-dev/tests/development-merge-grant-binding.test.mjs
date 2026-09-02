@@ -32,6 +32,7 @@
  * does not generalize to any other PR, SHA, target or method.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 const { readMergeInputIdentity, validateMergeInputs } =
   await import("../lib/vacilando/trusted-host-merge.mjs");
@@ -180,6 +181,85 @@ test("a consumed, revoked or expired grant is still refused", () => {
   assert.equal(
     grantAuthorizesAction(grantFrom(identity, { expires_at: new Date(Date.now() - HOUR).toISOString() }), action).error,
     "grant_expired",
+  );
+});
+
+test("a Director-approved request matching the grant executes", () => {
+  // The positive case stated on its own: a grant issued from an approved
+  // request, presented with the action the executor builds from the SAME
+  // request, authorizes. This is the shape the live PR #596 merge took.
+  const identity = readMergeInputIdentity(LIVE_INPUTS);
+  const grant = grantFrom(identity, {
+    approved_by: "operator",
+    approved_at: new Date().toISOString(),
+    proposal_id: "gar_ce92d1d4237b76",
+  });
+  const out = grantAuthorizesAction(grant, actionFrom());
+  assert.equal(out.ok, true, `an approved, matching request must execute: ${out.error}`);
+});
+
+// ---------------------------------------------------------------------------
+// THE STRUCTURAL INVARIANT.
+//
+// Behavioural tests above prove the two sides agree TODAY. This proves they
+// cannot drift apart again, which is the actual defect: the executor was
+// widened to accept `pull_request` and the grant issuer was not, and nothing
+// failed until an operator-approved merge could not execute.
+// ---------------------------------------------------------------------------
+const SRC = (rel) =>
+  readFileSync(new URL(`../lib/vacilando/${rel}`, import.meta.url), "utf8");
+
+/** The body of a named top-level function, by brace matching. */
+function functionBody(source, signature) {
+  const start = source.indexOf(signature);
+  assert.notEqual(start, -1, `could not find ${signature}`);
+  let depth = 0;
+  // Start scanning AFTER the signature: a default parameter like `inputs = {}`
+  // puts braces inside the parameter list, and matching those yields an empty
+  // body that silently passes every "must contain" assertion.
+  let i = source.indexOf("{", start + signature.length);
+  const open = i;
+  for (; i < source.length; i += 1) {
+    if (source[i] === "{") depth += 1;
+    else if (source[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, i + 1);
+    }
+  }
+  throw new Error(`unbalanced braces in ${signature}`);
+}
+
+test("the grant issuer owns no alias list of its own", () => {
+  const issuer = SRC("governed-action-request.mjs");
+  assert.ok(
+    /import\s*\{[^}]*readMergeInputIdentity[^}]*\}\s*from\s*["']\.\/trusted-host-merge\.mjs["']/.test(issuer),
+    "governed-action-request must import the shared reader",
+  );
+  const body = functionBody(issuer, "function proposalForRequest(rec)");
+  assert.ok(body.includes("readMergeInputIdentity"), "proposalForRequest must use the shared reader");
+  // It must not reach into rec.inputs for any identity field itself. Those are
+  // exactly the reads that were allowed to fall out of step with the executor.
+  const ownReads = body.match(
+    /rec\.inputs\??\.\s*(pull_request_number|pullRequestNumber|pull_request|pullRequest|pr|expected_head_sha|expectedHeadSha|head_sha|merge_method|mergeMethod|target_branch|targetBranch)\b/g,
+  );
+  assert.equal(
+    ownReads,
+    null,
+    `proposalForRequest re-derives identity fields itself: ${JSON.stringify(ownReads)}`,
+  );
+});
+
+test("the alias list lives in exactly one place", () => {
+  const merge = SRC("trusted-host-merge.mjs");
+  const reader = functionBody(merge, "export function readMergeInputIdentity(inputs = {})");
+  for (const alias of ["pull_request_number", "pullRequestNumber", "pull_request", "pullRequest", "pr", "expected_head_sha", "expectedHeadSha", "head_sha"]) {
+    assert.ok(reader.includes(alias), `the shared reader must know the alias ${alias}`);
+  }
+  // And the executor's own validator goes through it rather than re-listing.
+  const validator = functionBody(merge, "export function validateMergeInputs(inputs = {})");
+  assert.ok(
+    validator.includes("readMergeInputIdentity"),
+    "validateMergeInputs must resolve identity through the shared reader",
   );
 });
 
