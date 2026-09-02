@@ -523,13 +523,25 @@ export default function FocusPanelRuntimeComposerCanvas({
         const metricsAtStart = measureCanvas();
         const cellFromPointerFrozen = (clientX: number, clientY: number) => {
             if (!metricsAtStart) return cellFromPointer(clientX, clientY);
-            const col = trackFromOffset(
-                clientX - metricsAtStart.rect.left, metricsAtStart.colEdges, metricsAtStart.colPitch,
-            );
-            const row = trackFromOffset(
-                clientY - metricsAtStart.rect.top, metricsAtStart.rowEdges, metricsAtStart.rowPitch,
-            );
-            return { col: Math.min(cols, Math.max(1, col)), row: Math.max(1, row) };
+            const live = measureCanvas();
+            const rect = live?.rect ?? metricsAtStart.rect;
+            const localX = clientX - rect.left;
+            const localY = clientY - rect.top;
+            const rawCol = trackFromOffset(localX, metricsAtStart.colEdges, metricsAtStart.colPitch);
+            const rawRow = trackFromOffset(localY, metricsAtStart.rowEdges, metricsAtStart.rowPitch);
+            const col = Math.min(cols, Math.max(1, rawCol));
+            const row = Math.max(1, rawRow);
+            traceComposerDrag("map", {
+                client: { x: Math.round(clientX), y: Math.round(clientY) },
+                rectLeft: Math.round(rect.left),
+                rectTop: Math.round(rect.top),
+                frozenLeft: Math.round(metricsAtStart.rect.left),
+                frozenTop: Math.round(metricsAtStart.rect.top),
+                local: { x: Math.round(localX), y: Math.round(localY) },
+                raw: { col: rawCol, row: rawRow },
+                clamped: { col, row },
+            });
+            return { col, row };
         };
         traceComposerDrag("pointerdown", {
             card: area.card,

@@ -1,0 +1,134 @@
+{
+  "attendance": {
+    "x": 481,
+    "y": 860,
+    "w": 474,
+    "row": "4/2"
+  },
+  "arrangedLayout": [
+    "readiness_kpi 8/3 x481",
+    "children 8/4 x965",
+    "billing_preview 11/2 x481",
+    "health_safety 13/2 x481",
+    "business_process 6/2 x481",
+    "financials 5/2 x1126",
+    "household 1/4 x965",
+    "attendance 4/2 x481"
+  ],
+  "afterLayout": [
+    "readiness_kpi 9/3 x481",
+    "children 9/4 x965",
+    "billing_preview 12/2 x481",
+    "business_process 7/2 x481",
+    "financials 7/2 x1126",
+    "household 3/4 x965",
+    "attendance 1/2 x481",
+    "health_safety 1/2 x965"
+  ],
+  "allMoves": [
+    {
+      "asked": {
+        "colStart": 6,
+        "rowStart": 4
+      },
+      "ghost": {
+        "colStart": 6,
+        "colSpan": 6,
+        "rowStart": 1,
+        "rowSpan": 2
+      },
+      "how": "insert"
+    },
+    {
+      "asked": {
+        "colStart": 6,
+        "rowStart": 4
+      },
+      "ghost": {
+        "colStart": 6,
+        "colSpan": 6,
+        "rowStart": 1,
+        "rowSpan": 2
+      },
+      "how": "insert"
+    },
+    {
+      "asked": {
+        "colStart": 6,
+        "rowStart": 4
+      },
+      "ghost": {
+        "colStart": 6,
+        "colSpan": 6,
+        "rowStart": 1,
+        "rowSpan": 2
+      },
+      "how": "insert"
+    },
+    {
+      "asked": {
+        "colStart": 7,
+        "rowStart": 4
+      },
+      "ghost": {
+        "colStart": 7,
+        "colSpan": 6,
+        "rowStart": 1,
+        "rowSpan": 2
+      },
+      "how": "insert"
+    },
+    {
+      "asked": {
+        "colStart": 7,
+        "rowStart": 4
+      },
+      "ghost": {
+        "colStart": 7,
+        "colSpan": 6,
+        "rowStart": 1,
+        "rowSpan": 2
+      },
+      "how": "insert"
+    },
+    {
+      "asked": {
+        "colStart": 7,
+        "rowStart": 4
+      },
+      "ghost": {
+        "colStart": 7,
+        "colSpan": 6,
+        "rowStart": 1,
+        "rowSpan": 2
+      },
+      "how": "insert"
+    }
+  ],
+  "requested": {
+    "colStart": 7,
+    "rowStart": 4
+  },
+  "ghost": {
+    "colStart": 7,
+    "colSpan": 6,
+    "rowStart": 1,
+    "rowSpan": 2
+  },
+  "how": "insert",
+  "health": {
+    "x": 965,
+    "y": 602,
+    "w": 474,
+    "row": "1/2"
+  },
+  "householdBefore": {
+    "x": 965,
+    "y": 602
+  },
+  "householdAfter": {
+    "x": 965,
+    "y": 1037
+  },
+  "pageErrors": []
+}

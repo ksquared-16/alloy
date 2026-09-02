@@ -19,6 +19,7 @@ export type ComposerDragTraceEntry = {
     /** Milliseconds since page load — ordering, not wall-clock. */
     at: number;
     phase:
+        | "map"
         | "pointerdown"
         | "activate"
         | "move"
