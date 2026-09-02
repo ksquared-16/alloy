@@ -188,6 +188,68 @@ async function concludeAcquisition(
     } as Parameters<typeof updateOpportunityCustomerMemberLifecycleStatus>[0]);
 }
 
+/** The household's existing child, if the fixture already made one. */
+async function findFixtureChild(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerId: string,
+): Promise<string | null> {
+    const { data } = await supabase
+        .from("customer_members")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("customer_id", customerId)
+        .eq("relationship", "child")
+        .limit(1);
+    return t(((data ?? []) as Array<{ id?: string }>)[0]?.id) || null;
+}
+
+/**
+ * Re-enter an existing fixture family without minting anything.
+ *
+ * `addChild` is find-or-create on the household, and `startEnrollment` reuses an open journey, so
+ * the only thing a re-run must avoid is Create Lead — which has no "reuse" mode and would leave a
+ * second Opportunity behind every time.
+ */
+async function resumeExistingFamily(
+    supabase: SupabaseClient,
+    orgId: string,
+    spec: (typeof CERT_FAMILIES)[CertFamilyKey],
+    customerId: string,
+): Promise<CertFamilyResult> {
+    /*
+     * FIND the child; do not re-add. `addChild` refuses a probable duplicate rather than guessing
+     * ("This child may already be in Alloy"), which is the identity gate working — a fixture that
+     * answered it would be deciding an identity question the product reserves for a human.
+     */
+    const existingChildId = await findFixtureChild(supabase, orgId, customerId);
+    const customerMemberId = existingChildId
+        ?? t(
+            (await addChild(supabase, {
+                orgId,
+                customerId,
+                firstName: spec.child.firstName,
+                lastName: spec.lastName,
+                dob: spec.child.dob,
+            })).customerMemberId,
+        );
+    if (!customerMemberId) throw new Error(`no child resolves for ${spec.child.firstName}`);
+
+    const started = await startEnrollment(supabase, { orgId, customerMemberId });
+    return {
+        key: spec.key,
+        customerId,
+        opportunityId: started.opportunityId,
+        customerMemberId,
+        enrollmentParticipationId: started.enrollmentParticipationId,
+        processInstanceId: started.processInstanceId,
+        acquisition: spec.key === "context_free" ? "concluded" : "present",
+        participantLaunch: started.participantLaunch.realized
+            ? { realized: true, detail: "participant objective realized (reused)" }
+            : { realized: false, detail: `${started.participantLaunch.code}: ${started.participantLaunch.detail}` },
+    };
+}
+
 /**
  * Build (or re-find) one certification family.
  *
@@ -201,6 +263,20 @@ async function ensureFamily(
     spec: (typeof CERT_FAMILIES)[CertFamilyKey],
     actorUserId: string | null,
 ): Promise<CertFamilyResult> {
+    /*
+     * CREATE THE LEAD ONLY IF THE HOUSEHOLD IS ABSENT.
+     *
+     * Calling it unconditionally is idempotent for PEOPLE — the canonical resolver reuses the
+     * household — but NOT for Opportunities: every call mints another one. The post-fixture census
+     * caught it, +3 Opportunities for 2 families across re-runs, which is exactly the unexplained
+     * residue that check exists to surface. The operational-cards fixture guards the same call the
+     * same way.
+     */
+    const preexisting = await findFixtureHousehold(supabase, orgId, spec.email);
+    if (preexisting.customerId) {
+        return await resumeExistingFamily(supabase, orgId, spec, preexisting.customerId);
+    }
+
     /*
      * THE REAL COMMAND. Identity is settled by the command, not by this caller.
      *
