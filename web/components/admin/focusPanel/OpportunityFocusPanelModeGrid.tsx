@@ -26,6 +26,7 @@ import {
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
+import { setFocusPanelCardParticipation } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
 import { focusPanelSummaryDefaultDocForGrain } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
@@ -541,6 +542,25 @@ export default function OpportunityFocusPanelModeGrid({
         [grid],
     );
     const gridRows = isSummary ? summaryInputs!.gridRows : legacyGridRows;
+
+    /*
+     * REPORT WHAT THIS PANEL ACTUALLY PLACES, so readiness can be measured as the operator sees it.
+     *
+     * Derived from the SAME two values `renderCell` uses — the rendered rows and the cell resolution
+     * — so participation cannot drift from what is on screen, and no second composition is computed
+     * for telemetry. Linked and hidden cards are already absent from `gridRows`, so a navigable card
+     * that occupies no initial cell correctly does not count as visible readiness.
+     */
+    const placedCardKeys = useMemo(
+        () =>
+            gridRows.flatMap((row) =>
+                row.cells.map((cell) => (cellResolution.get(cell.key)?.typeKey ?? cell.key) as FocusPanelCardKey),
+            ),
+        [gridRows, cellResolution],
+    );
+    useEffect(() => {
+        setFocusPanelCardParticipation(model.subject.id, placedCardKeys);
+    }, [model.subject.id, placedCardKeys]);
 
     const focusTargets = useMemo(() => {
         const set = new Set<FocusPanelCardKey>();

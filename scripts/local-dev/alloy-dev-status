@@ -5,6 +5,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
+# The dev-server classifier lives in agent.sh and is shared with the capacity
+# counter. Sourcing it is what keeps status and capacity from disagreeing.
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
 
 usage() {
   cat <<'EOF'
@@ -12,49 +16,16 @@ Usage: alloy-dev-status
 EOF
 }
 
+# STATUS AND CAPACITY MUST NOT ANSWER THIS DIFFERENTLY.
+#
+# THE DEFECT THIS REMOVES. This file carried its OWN copy of the dev-server
+# classifier — the same port/PID/ownership logic as `alloy_server_state_for` in
+# lib/agent.sh, duplicated. So "what does the operator see" and "what does
+# capacity count" were two implementations of one question, and fixing one left
+# the other reporting a seventeen-hour test fixture as the lane's healthy Next
+# server. Display now reads the library, and there is one classifier.
 alloy_state_for_worktree() {
-  local name="$1"
-  # Clears and reloads metadata for this name in a subshell-friendly way via globals set by caller path.
-  local path="$ALLOY_WORKTREE_PATH"
-  local port="$PORT"
-  local pid_path pid listener owner_cmd
-
-  if [[ ! -d "$path" ]]; then
-    printf 'missing-worktree'
-    return
-  fi
-
-  pid_path="$(alloy_pid_path "$name")"
-  if [[ -f "$pid_path" ]]; then
-    pid="$(alloy_read_pid_file "$pid_path" || true)"
-    if [[ -n "${pid:-}" ]] && alloy_pid_alive "$pid"; then
-      if alloy_pid_belongs_to_worktree "$pid" "$path"; then
-        printf 'running'
-        return
-      fi
-      printf 'stale'
-      return
-    fi
-  fi
-
-  if listener="$(alloy_port_listener_pid "$port" 2>/dev/null)"; then
-    if alloy_pid_belongs_to_worktree "$listener" "$path"; then
-      printf 'running'
-      return
-    fi
-    printf 'foreign-port-owner'
-    return
-  fi
-
-  if [[ -f "$pid_path" ]]; then
-    pid="$(alloy_read_pid_file "$pid_path" || true)"
-    if [[ -n "${pid:-}" ]] && ! alloy_pid_alive "$pid"; then
-      printf 'stale'
-      return
-    fi
-  fi
-
-  printf 'stopped'
+  alloy_server_state_for "$1"
 }
 
 main() {

@@ -181,9 +181,24 @@ export function isDurableLaneId(id) {
   return DURABLE_LANE_ID_RE.test(String(id || ""));
 }
 
-export function listDurableLanes(root = runtimeRoot()) {
+/**
+ * Statuses that mean "this lane is finished and is not part of the working set".
+ *
+ * A CLOSED lane has had its worktree retired by the explicit lane-close path.
+ * Its record and its whole run history stay in the store — closing a lane is
+ * not deleting its history — but it is no longer navigation, no longer
+ * dispatchable, and no longer counted as fleet capacity. Listing it kept three
+ * disposable certification lanes in front of the operator forever.
+ */
+export const RETIRED_LANE_STATUSES = Object.freeze(["ARCHIVED", "CLOSED"]);
+
+export function isRetiredLaneStatus(status) {
+  return RETIRED_LANE_STATUSES.includes(String(status || "").toUpperCase());
+}
+
+export function listDurableLanes(root = runtimeRoot(), { includeRetired = false } = {}) {
   return Object.values(readDevelopmentLaneStore(root).lanes || {})
-    .filter((l) => l && l.status !== "ARCHIVED");
+    .filter((l) => l && (includeRetired || !isRetiredLaneStatus(l.status)));
 }
 
 export function getDurableLane(laneId, root = runtimeRoot()) {
@@ -501,7 +516,16 @@ export function releaseDurableLaneRuntimeBinding(laneId, { nowMs = Date.now(), r
     branch: rec.binding?.branch || null,
     tmux_session: null,
     tmux_pane: null,
-    slot: null,
+    // THE SLOT IS LANE-LIFETIME, NOT CAPACITY-LIFETIME.
+    //
+    // This nulled it, and the worktree registration did not: the registry said
+    // Runtime Performance was slot 1 while its own lane binding said it had no
+    // slot at all. Two answers to one question, and the Gateway could read
+    // either. What a capacity release ends is the SESSION — tmux, pane,
+    // admission — not the lane's ownership of its slot and port, which end only
+    // when the lane itself closes.
+    slot: rec.binding?.slot ?? null,
+    port: rec.binding?.port ?? null,
     provider: normalizeExecutionProvider(rec.binding?.provider, "claude") || "claude",
     stale: true,
     status: "idle",
@@ -510,6 +534,7 @@ export function releaseDurableLaneRuntimeBinding(laneId, { nowMs = Date.now(), r
   rec.execution_capacity = {
     state: "IDLE",
     released_at: iso(nowMs),
+    // The CAPACITY holds no slot once released; the LANE still owns one.
     slot: null,
   };
   rec.updated_at = iso(nowMs);

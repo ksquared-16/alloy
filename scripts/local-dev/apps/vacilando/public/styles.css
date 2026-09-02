@@ -81,7 +81,15 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 /* ---------- rail ---------- */
-.rail{background:linear-gradient(180deg,var(--rail-0),var(--rail-1) 62%,var(--rail-2));color:var(--rail-text);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+/* THE NAVIGATION RAIL IS WHITE.
+   The rail was a full-height juniper gradient, so every state it needed to
+   express — hover, selected, unread, blocked — had to be a lighter or darker
+   green, and the whole surface competed with the content it navigates to.
+   Attention now belongs to the ROW, not to the rail: the ground is the same
+   card white the rest of the app uses, and states are restrained row
+   treatments in the existing tokens. No new visual language, no tinting of the
+   whole surface to say one lane needs you. */
+.rail{background:var(--card);color:var(--ink);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);}
 .brand{padding:16px 18px 12px;}
 /* The approved mark sits above the wordmark in the rail, on a deliberate cream
    plate.
@@ -92,45 +100,76 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
    readable. */
 .brand-mark{display:block;width:100%;max-width:154px;height:auto;margin:0 0 10px;
   background:var(--bg);border-radius:10px;padding:8px 9px;}
+/* The wordmark was drawn for a dark ground; on white it takes the ink tokens. */
+.rail .brand .word{color:var(--ink);}
+.rail .brand .word b{color:var(--ink-2);}
+.rail .brand .sub{color:var(--ink-3);}
 .brand .word{font-family:var(--script-face);font-size:26px;color:var(--script);line-height:1;}
 .brand .word b{font-family:var(--sans);font-weight:600;font-style:normal;color:#eaf1ec;font-size:19px;margin-left:5px;}
 .brand .sub{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--rail-text-lo);margin-top:6px;}
 .nav{padding:4px 10px;display:flex;flex-direction:column;gap:1px;}
-.nav a{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:9px;color:var(--rail-text);font-size:13px;font-weight:500;text-decoration:none;cursor:pointer;}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:9px;color:var(--ink-2);font-size:13px;font-weight:500;text-decoration:none;cursor:pointer;}
 .nav a .ico{width:15px;height:15px;opacity:.8;flex:none;}
-.nav a.active{background:var(--rail-active);color:#fff;font-weight:600;}
-.nav a:not(.active):hover{background:var(--rail-hover);}
+.nav a.active{background:var(--bg-tint);color:var(--ink);font-weight:600;}
+.nav a:not(.active):hover{background:var(--card-2);}
 .nav a .badge{margin-left:auto;background:var(--terra);color:#fff;font-size:10.5px;font-weight:700;min-width:18px;height:18px;border-radius:999px;display:grid;place-items:center;font-family:var(--mono);padding:0 5px;}
-.nav-sep{height:1px;background:var(--rail-line);margin:8px 18px;}
+.nav-sep{height:1px;background:var(--line);margin:8px 18px;}
 .rail .nav-sep{margin-top:auto;}
-.ruser{display:flex;align-items:center;gap:10px;padding:11px 15px;border-top:1px solid var(--rail-line);background:var(--rail-2);text-decoration:none;color:inherit;cursor:pointer;}
-.ruser:hover{background:var(--rail-hover);}
+.ruser{display:flex;align-items:center;gap:10px;padding:11px 15px;border-top:1px solid var(--line);background:var(--card-2);text-decoration:none;color:inherit;cursor:pointer;}
+.ruser:hover{background:var(--bg-tint);}
 .ruser .av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#c98a5e,#7a4a2e);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;}
-.ruser .nm{font-size:12.5px;color:#eef3ef;font-weight:600;} .ruser .rl{font-size:10.5px;color:var(--rail-text-lo);}
+.ruser .nm{font-size:12.5px;color:var(--ink);font-weight:600;} .ruser .rl{font-size:10.5px;color:var(--ink-3);}
 .nav-missions{display:flex;flex-direction:column;gap:4px;padding:4px 8px 8px;flex:1 1 auto;min-height:0;overflow:auto;}
-.nav-missions-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--rail-text-lo);padding:8px 8px 4px;}
+.nav-missions-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding:8px 8px 4px;}
 .mission-rail{display:flex;flex-direction:column;gap:2px;}
 .mission-rail-block{display:flex;flex-direction:column;gap:2px;margin-bottom:4px;}
-.mission-rail-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border-radius:9px;color:var(--rail-text);font-size:13px;font-weight:500;text-decoration:none;cursor:pointer;}
+/* ONE LEFT EDGE. Every lane row starts at the same x inside its repository
+   group, whatever the lane's state: no centring, and no state-dependent
+   indent. Status is carried by the mark and the badge, never by moving the
+   name. */
+/* MEASURED IN THE BROWSER, NOT ASSUMED. `.mission-rail-item` already carried
+   `align-items:flex-start`, and every lane name was still centred: `.nav a` is
+   one class PLUS one type, so its `align-items:center` outranked a bare class
+   and won. In a column flex that centres each row's text horizontally, which is
+   why the left edge moved with the length of the lane's name — 39px for
+   "Runtime Performance", 79px for "Surfaces", in the same rail. The selector
+   below outranks it, and the rail test measures the rendered edges rather than
+   reading the rule. */
+.nav a.mission-rail-item,
+.mission-rail-item{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;padding:7px 10px 7px 12px;border-radius:8px;color:var(--ink-2);font-size:13px;font-weight:500;text-decoration:none;cursor:pointer;border-left:2px solid transparent;}
 .mission-rail-item .gw-lane-attn{display:block;white-space:normal;line-height:1.3;}
-.mission-rail-item:hover{background:var(--rail-hover);}
-.mission-rail-item.active{background:var(--rail-active);color:#fff;font-weight:600;}
+.nav a.mission-rail-item:hover,
+.mission-rail-item:hover{background:var(--card-2);}
+.nav a.mission-rail-item.active,
+.mission-rail-item.active{background:var(--bg-tint);color:var(--ink);font-weight:600;border-left-color:var(--vacilando-juniper);}
+/* Attention is a quiet mark on the row, not a repaint of the rail. */
+.mission-rail-item .gw-lane-attn.is-warn{color:var(--terra);}
+.mission-rail-item .gw-lane-attn.is-bad{color:var(--terra);font-weight:600;}
 .mission-rail-item.is-free{opacity:.72;}
 .mission-rail-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.mission-rail-meta{display:block;font-size:10.5px;opacity:.7;margin-top:2px;}
+.mission-rail-meta{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px;}
 .mission-rail-item .badge{margin-left:auto;background:var(--terra);color:#fff;font-size:10.5px;font-weight:700;min-width:18px;height:18px;border-radius:999px;display:grid;place-items:center;font-family:var(--mono);padding:0 5px;}
 .mission-rail-actions{display:flex;flex-wrap:wrap;gap:4px;padding:0 8px 6px 10px;}
-.mission-rail-act{appearance:none;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--rail-text);font-size:10px;font-weight:600;padding:3px 6px;border-radius:6px;cursor:pointer;}
+.mission-rail-act{appearance:none;border:1px solid var(--line-strong);background:var(--card-2);color:var(--ink-2);font-size:10px;font-weight:600;padding:3px 6px;border-radius:6px;cursor:pointer;}
+
+/* ---------- rail: repository grouping + new lane ---------- */
+.gw-rail-add{display:flex;align-items:center;gap:7px;width:100%;margin:0 0 8px;padding:8px 10px;border:1px dashed var(--line-strong);border-radius:9px;background:var(--card);color:var(--ink-2);font-family:inherit;font-size:12.5px;font-weight:600;text-align:left;cursor:pointer;}
+.gw-rail-add:hover{background:var(--card-2);border-color:var(--ink-4);color:var(--ink);}
+.gw-rail-add-plus{font-size:14px;line-height:1;color:var(--vacilando-juniper);}
+.gw-rail-repo{display:flex;flex-direction:column;gap:1px;margin-bottom:10px;}
+.gw-rail-repo-h{display:flex;align-items:center;gap:6px;padding:6px 10px 4px 12px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);}
+.gw-rail-repo-count{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--ink-4);}
+.gw-rail-repo.is-unattributed .gw-rail-repo-h{font-style:italic;}
 .ws-state-brief{margin-top:10px;font-size:12.5px;line-height:1.45;}
 .ws-state-brief ul{margin:4px 0 0;padding-left:16px;}
 .ws-state-brief li{margin:2px 0;}
 .ws-state-brief p{margin:4px 0 0;opacity:.92;}
 .ws-state-mini dd{max-width:100%;overflow-wrap:anywhere;}
 .nav-more{margin-top:10px;padding:0 4px;}
-.nav-more summary{font-size:11px;color:var(--rail-text-lo);cursor:pointer;padding:6px 8px;list-style:none;}
+.nav-more summary{font-size:11px;color:var(--ink-3);cursor:pointer;padding:6px 8px;list-style:none;}
 .nav-more summary::-webkit-details-marker{display:none;}
-.nav-more a{display:block;padding:6px 10px;border-radius:8px;color:var(--rail-text);font-size:12.5px;text-decoration:none;}
-.nav-more a:hover{background:var(--rail-hover);}
+.nav-more a{display:block;padding:6px 10px;border-radius:8px;color:var(--ink-2);font-size:12.5px;text-decoration:none;}
+.nav-more a:hover{background:var(--card-2);}
 .nav-more .badge{margin-left:6px;display:inline-grid;}
 
 /* ---------- main + topbar ---------- */

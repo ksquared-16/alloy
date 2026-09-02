@@ -83,8 +83,18 @@ export function actionableOperatorInputForRun(run, { root } = {}) {
  * Enforce the invariant across every lane.
  *
  * A NEEDS_INPUT run with no actionable input is reconciled OUT of the
- * impossible state: to FAILED, naming the real condition, so the operator sees
- * an actionable failure instead of a control that does not exist.
+ * impossible state — an operator staring at a question with no control to
+ * answer it is worse than any other outcome.
+ *
+ * IT IS NOT REPORTED AS A FAILURE. This transitioned to FAILED and reused
+ * `run.state_reason` — the run's own NEEDS_INPUT reason — as the failure
+ * reason, so a mission that was merely waiting was reported as having failed,
+ * quoting the question it was waiting on. Measured as QUEUED -> EXECUTING ->
+ * NEEDS_INPUT -> FAILED.
+ *
+ * ABANDONED is the state the platform already has for "this run is not going to
+ * continue, and it is recoverable". It is terminal for scheduling, so the lane
+ * is freed exactly as before; it is not a claim that the work failed.
  */
 export function reconcileNeedsInputWithoutInput({ root, nowMs = Date.now() } = {}) {
   const reconciled = [];
@@ -98,13 +108,13 @@ export function reconcileNeedsInputWithoutInput({ root, nowMs = Date.now() } = {
     const input = actionableOperatorInputForRun(run, { root });
     if (input) continue;
     const why = run.state_reason || "needs_input_without_operator_input";
-    const out = transitionExecutionRun(run.run_id, "FAILED", {
-      reason: why,
+    const out = transitionExecutionRun(run.run_id, "ABANDONED", {
+      reason: "needs_input_without_operator_input",
       origin: "governor",
       nowMs,
       root,
       completion_report: {
-        summary: `Run required operator input but no actionable operator input existed. Last condition: ${why}`,
+        summary: `Run was waiting on operator input that no control could supply, so it was collected rather than left stranded. Last condition: ${why}`,
         at: new Date(nowMs).toISOString(),
       },
     });

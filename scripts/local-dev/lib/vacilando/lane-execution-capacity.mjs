@@ -135,13 +135,13 @@ async function stopSession(tmuxSession) {
   return stopPersistentAgentSession({ tmuxSession });
 }
 
-async function finishSprint(slot, acknowledgeUncommitted) {
-  if (typeof releaseImpl?.finishSprint === "function") {
-    return releaseImpl.finishSprint({ slot, acknowledgeUncommitted });
-  }
-  const { releaseSprintSlot } = await import("./alloy-dev-adapter.mjs");
-  return releaseSprintSlot({ slot, acknowledgeUncommitted });
-}
+// finishSprint() USED TO LIVE HERE, and calling it is what retired Runtime
+// Performance's worktree during a capacity release. Removing the call was not
+// enough: a retirement helper sitting in a capacity module is the next caller
+// waiting to be written. Worktree retirement now has exactly one owner,
+// lane-worktree-lifecycle.closeDurableLane, and `releaseSprintSlot` has exactly
+// one caller in the tree. The test seam below keeps `finishSprint` so a suite
+// can still assert that this path NEVER reaches it.
 
 async function reevaluateAdmission(root) {
   if (typeof releaseImpl?.evaluateAdmissionQueue === "function") {
@@ -250,7 +250,12 @@ export async function releaseLaneExecutionCapacity(laneId, {
     return { ok: false, error: "protected_worktree", command: RELEASE_COMMAND, detail: "current_sprint_slot" };
   }
 
-  const hasCapacity = rec.binding?.slot != null || Boolean(rec.binding?.tmux_session);
+  // "Is there capacity to release" is a question about the RUNTIME SESSION, not
+  // about the lane's durable slot — which a release no longer discards, because
+  // the slot belongs to the lane for its lifetime.
+  const capacityState = String(rec.execution_capacity?.state || "").toUpperCase();
+  const hasCapacity = Boolean(rec.binding?.tmux_session)
+    || (capacityState && capacityState !== "IDLE");
   if (!hasCapacity) {
     // A lane with no runtime binding cannot be provisioned. If it is ALSO
     // holding an open admission, that admission is a claim on capacity it can
@@ -357,18 +362,30 @@ export async function releaseLaneExecutionCapacity(laneId, {
     }
   }
 
-  let slotReleased = false;
-  if (Number.isInteger(Number(slot)) && Number(slot) >= 1) {
-    const finished = await finishSprint(slot, Boolean(run?.checkpoint_ready));
-    if (!finished?.ok) {
-      setDurableLaneExecutionCapacity(rec.lane_id, {
-        state: rec.execution_capacity?.state || "RUNNING",
-        error: finished.error || "sprint_finish_failed",
-      }, { nowMs, root });
-      return { ok: false, error: finished.error || "sprint_finish_failed", command: RELEASE_COMMAND };
-    }
-    slotReleased = true;
-  }
+  // ONE LANE OWNS ONE WORKTREE FOR THE LIFETIME OF THE LANE.
+  //
+  // THE DEFECT THIS REMOVES. This called alloy-sprint-finish, which "archives
+  // metadata and marks the slot available" — it retires the worktree's MANAGED
+  // REGISTRATION. That is a LANE-LIFETIME operation, and it was being run by a
+  // CAPACITY-LIFETIME one. The directory survived; its managed identity did not.
+  //
+  // MEASURED. lane_73a897409906 (Runtime Performance) released capacity at
+  // 2026-09-01T23:43:22.454Z; five seconds later wt1-work-unit-grade-a carried
+  // ALLOY_WORKER_LIFECYCLE="finished" and its metadata had moved to finished/.
+  // The lane stayed open and kept accepting instructions, so the fleet reached
+  // the state this module's own header says is impossible: an active lane whose
+  // worktree is unmanaged, unknown, slot-less and port-less. Every managed
+  // environment operation for that lane then failed — no QA identity, no
+  // browser session, no server on 3011.
+  //
+  // The header already promised "Does not delete the durable lane, worktree, or
+  // branch." That was true of the lane record and false of the registration.
+  // Releasing capacity now stops the processes and frees the RUNTIME BINDING —
+  // the session, the tmux, the admission — and leaves the lane's worktree
+  // registered, managed, known and slot-associated, because the lane is still
+  // open. Retiring the registration belongs to explicit lane closure, which is
+  // the only caller that may still reach alloy-sprint-finish.
+  const slotReleased = false;
 
   const released = releaseDurableLaneRuntimeBinding(rec.lane_id, { nowMs, root });
   if (!released.ok) return { ...released, command: RELEASE_COMMAND };

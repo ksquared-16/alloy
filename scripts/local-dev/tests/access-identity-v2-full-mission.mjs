@@ -14,7 +14,21 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "../../..");
 const BASE = process.env.VACILANDO_URL || "http://127.0.0.1:3021";
-const OUT = join(REPO, "docs/platform/planning/vacilando-os/qa/access-identity-v2");
+/**
+ * EVIDENCE GOES TO THE RUNTIME, NOT INTO THE CHECKOUT.
+ *
+ * This wrote its report into `docs/platform/planning/...` of the LIVE worktree
+ * it happens to sit inside. A validation script that mutates an unrelated
+ * working tree is indistinguishable, to whoever opens that worktree next, from
+ * someone's uncommitted work — and one Vacilando worktree was found holding
+ * exactly that: an unexplained modified planning document and an untracked
+ * a.md, on no branch, that nobody could account for.
+ *
+ * The repository is still READ for deliverable existence. Only the write moved.
+ */
+const OUT = process.env.VACILANDO_EVIDENCE_DIR
+  || join(process.env.ALLOY_RUNTIME_ROOT || join(process.env.HOME || "", ".local", "state", "alloy-dev"),
+    "evidence", "access-identity-v2");
 mkdirSync(OUT, { recursive: true });
 
 async function api(path, { method = "GET", body = null } = {}) {

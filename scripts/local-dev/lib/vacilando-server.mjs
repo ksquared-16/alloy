@@ -1378,13 +1378,22 @@ export function createVacilandoServer() {
         if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-        const extra = Object.keys(body.value || {}).filter((k) => !["instruction", "provider", "lane_id", "attachment_ids"].includes(k));
+        // `delegated_actions` is the ONLY way privileged mission authority can be
+        // granted. It is a typed field on this authenticated operator route, kept
+        // deliberately separate from `instruction` so that the prompt's prose is
+        // never an authorization input. The allowlist below still refuses every
+        // other control field.
+        const extra = Object.keys(body.value || {}).filter((k) => !["instruction", "provider", "lane_id", "attachment_ids", "delegated_actions"].includes(k));
         if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
         try {
           const instruction = body.value?.instruction;
           const out = await deliverManagedLaneInstruction(laneId, instruction, {
             provider: body.value?.provider,
             attachmentIds: body.value?.attachment_ids,
+            delegatedActions: body.value?.delegated_actions,
+            // This route is the Director-facing send. Authorship is recorded on
+            // every delegation so it can always say who granted it.
+            delegationAuthor: "operator",
           });
           const status = laneInstructionHttpStatus(out);
           return sendJson(res, status, out);
@@ -1967,13 +1976,20 @@ export function createVacilandoServer() {
         } catch { /* grouping is secondary to discovery */ }
         let unseen_count = 0;
         let unseen_by_lane = {};
+        // THE ONE ATTENTION PROJECTION. Every top-level indicator reads this:
+        // the home badge, the drawer and the lane rows. The browser used to
+        // count a pending-approvals array of its own alongside it, so a
+        // governed request with two lifecycle events, or a mission-delegated
+        // action that executed with no approval at all, made the two disagree.
+        let notification_counts = null;
         try {
           const n = await import("./vacilando/lane-notifications.mjs");
           unseen_count = n.unseenNotificationCount();
           unseen_by_lane = n.unseenCountByLane();
+          notification_counts = n.notificationCounts();
           for (const lane of lanes) lane.unseen_notifications = unseen_by_lane[lane.lane_id] || 0;
         } catch { /* indicators are secondary to discovery */ }
-        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, repositories, unseen_count, unseen_by_lane, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
+        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, repositories, unseen_count, unseen_by_lane, notification_counts, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "lane_discovery_failed", detail: String(e && e.message || e) });
       }
@@ -2034,13 +2050,22 @@ export function createVacilandoServer() {
     }
     if (path === "/api/notifications") {
       try {
-        const { listNotifications, unseenNotificationCount, unseenCountByLane } =
+        const { listNotifications, unseenNotificationCount, unseenCountByLane, notificationCounts } =
           await import("./vacilando/lane-notifications.mjs");
         const unseenOnly = url.searchParams.get("unseen") === "1";
+        const attentionOnly = url.searchParams.get("attention") === "1";
         return sendJson(res, 200, {
           ok: true,
-          notifications: listNotifications({ unseenOnly, laneId: url.searchParams.get("lane_id") || null }),
+          notifications: listNotifications({
+            unseenOnly,
+            attentionOnly,
+            laneId: url.searchParams.get("lane_id") || null,
+          }),
+          // ONE number, computed once, in the module that owns read state. The
+          // breakdown is here so a surface can EXPLAIN the badge without
+          // deriving a second answer from the list it was handed.
           unseen_count: unseenNotificationCount(),
+          counts: notificationCounts(),
           unseen_by_lane: unseenCountByLane(),
         });
       } catch (e) {

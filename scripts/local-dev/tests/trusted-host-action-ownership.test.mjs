@@ -13,7 +13,7 @@
  * caused the contamination could not isolate itself because the path was frozen at import.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -21,6 +21,8 @@ import test from "node:test";
 // Isolate BEFORE importing: the store path is read per call, so this contains every write below.
 const ISOLATED = mkdtempSync(join(tmpdir(), "tha-ownership-"));
 process.env.ALLOY_RUNTIME_ROOT = ISOLATED;
+process.env.ALLOY_WORKTREE_ROOT = join(ISOLATED, "worktrees");
+process.env.VACILANDO_DURABLE_LANES = "1";
 
 const { ACTION_TYPES } = await import("../lib/vacilando/trusted-host-action-registry.mjs");
 const {
@@ -30,7 +32,37 @@ const {
 } = await import("../lib/vacilando/trusted-host-actions.mjs");
 
 const MISSION = "repo_alloy";
-const LANE = "lane_73a897409906";
+
+// A MANAGED LANE, BECAUSE THE ACTION NOW REQUIRES ONE.
+//
+// environment.restore_qa_session resolves slot, port and QA identity from the
+// registries at execution time, so it is refused at acceptance for a lane whose
+// worktree is not registered and managed — a governed action that could never
+// execute is not created. These cases are about DEDUPE, so they seed the lane
+// the action is entitled to expect rather than asserting the old behaviour of
+// accepting one for a lane that does not exist.
+const { createDurableLane, bindDurableLane } = await import("../lib/vacilando/development-lane.mjs");
+const WT = "wt1-ownership";
+const WT_PATH = join(ISOLATED, "worktrees", WT);
+mkdirSync(WT_PATH, { recursive: true });
+mkdirSync(join(ISOLATED, "metadata"), { recursive: true });
+writeFileSync(join(ISOLATED, "metadata", `${WT}.env`), [
+    "ALLOY_WORKTREE_SLOT=1",
+    `ALLOY_WORKTREE_PATH=${WT_PATH}`,
+    "PORT=3011",
+    "ALLOY_WORKER_LIFECYCLE=active",
+    "",
+].join("\n"), "utf8");
+const seeded = createDurableLane({ name: "Ownership", root: ISOLATED });
+const LANE = seeded.lane?.lane_id || seeded.lane_id;
+bindDurableLane(LANE, {
+    type: "alloy_local",
+    worktree_path: WT_PATH,
+    worktree_name: WT,
+    branch: "agent/claude/1-ownership",
+    slot: 1,
+    provider: "claude",
+}, { root: ISOLATED });
 const RUN = "erun_89f9cbad389cc851";
 const TYPE = ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION;
 
@@ -74,8 +106,29 @@ test("a different assignment is NOT deduplicated", () => {
 });
 
 test("a different lane is NOT deduplicated", () => {
+    // A SECOND MANAGED LANE, for the same reason as the first: the action is
+    // refused for a lane that is not registered and managed, so proving that
+    // two lanes do not share a record needs two real lanes.
+    const wt = "wt2-ownership";
+    const path = join(ISOLATED, "worktrees", wt);
+    mkdirSync(path, { recursive: true });
+    writeFileSync(join(ISOLATED, "metadata", `${wt}.env`), [
+        "ALLOY_WORKTREE_SLOT=2",
+        `ALLOY_WORKTREE_PATH=${path}`,
+        "PORT=3012",
+        "ALLOY_WORKER_LIFECYCLE=active",
+        "",
+    ].join("\n"), "utf8");
+    const made = createDurableLane({ name: "Ownership Two", root: ISOLATED });
+    const otherLane = made.lane?.lane_id || made.lane_id;
+    bindDurableLane(otherLane, {
+        type: "alloy_local", worktree_path: path, worktree_name: wt,
+        branch: "agent/claude/2-ownership", slot: 2, provider: "claude",
+    }, { root: ISOLATED });
+
     const mine = req();
-    const other = req({ inputs: { laneId: "lane_faacca6079ad" } });
+    const other = req({ inputs: { laneId: otherLane } });
+    assert.equal(other.ok, true, other.error);
     assert.notEqual(other.action.id, mine.action.id, "another lane's work is not this lane's work");
 });
 

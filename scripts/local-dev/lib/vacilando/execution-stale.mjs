@@ -764,6 +764,10 @@ export function reconcileUndeliveredRuns({
       nowMs,
       root,
       completion_report: { summary },
+      // OBSERVED, not swept: this path has just established that the provider
+      // never acknowledged the instruction, which is a real delivery failure
+      // whatever state the run is parked in.
+      execution_failure: true,
     });
     // The governor reports an undelivered Cursor run; it does not re-decide
     // which provider the lane is on. Silently reverting to Claude here undid

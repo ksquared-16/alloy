@@ -32,6 +32,9 @@ import {
   sqlFromCensusArtifact,
 } from "./trusted-host-action-registry.mjs";
 import {
+  resolveActionAuthorizationIdentity,
+} from "./action-authorization-identity.mjs";
+import {
   findAuthorization,
   AUTHORIZATION_CLASSES,
   exactAuthorizationCovers,
@@ -267,6 +270,13 @@ export function requestTrustedHostAction({
   requestedBy = "director",
   actionType,
   inputs = {},
+  // CARRIED, NOT INVENTED. Only the two facts that cannot be derived from the
+  // action's own inputs travel from the governed owner: which request this is,
+  // and the fingerprint of the content that request was decided on. Scope,
+  // environment, repository, ref and SHA are resolved HERE from the normalized
+  // inputs, so a caller cannot describe an action as something milder than it
+  // is by supplying its own identity fields.
+  authorizationContext = null,
   nowMs,
 } = {}) {
   if (!missionId || !actionType) return { ok: false, error: "missing_fields" };
@@ -293,6 +303,14 @@ export function requestTrustedHostAction({
     return { ok: true, action: existing, deduped: true };
   }
 
+  const identity = resolveActionAuthorizationIdentity({
+    actionType,
+    scope: missionId,
+    inputs: validated.normalized,
+    requestId: authorizationContext?.requestId || null,
+    contentFingerprint: authorizationContext?.contentFingerprint || null,
+  });
+
   const action = {
     schema_version: "vacilando.trusted_host_action.v1",
     id: newActionId(),
@@ -304,6 +322,23 @@ export function requestTrustedHostAction({
     actionVersion: def.version,
     requestedInputs: { ...validated.normalized },
     inputs: { ...validated.normalized },
+    // The resolved identity travels WITH the action, so the executor never has
+    // to rediscover it from inputs that may not carry it. It is still
+    // re-derived and compared at the boundary — carrying it is what removes the
+    // second derivation, not the check.
+    authorizationIdentity: {
+      scope: identity.scope,
+      actionType: identity.actionType,
+      repository: identity.repository,
+      environment: identity.environment,
+      targetRef: identity.targetRef,
+      sourceSha: identity.sourceSha,
+      subjectKey: identity.subjectKey,
+      requestId: identity.requestId,
+      contentFingerprint: identity.contentFingerprint,
+      resolved: identity.ok,
+      reason: identity.reason || null,
+    },
     policyClassification: def.riskClass,
     authorizationState: "pending",
     authorizationId: null,
@@ -390,6 +425,81 @@ export function grantAuthorizesAction(grant, action, { nowMs = Date.now() } = {}
   return { ok: true };
 }
 
+/**
+ * THE AUTHORIZATION IDENTITY OF A TRUSTED HOST ACTION — THE ONLY DERIVATION.
+ *
+ * Re-derived from the action's own normalized inputs through the canonical
+ * resolver, with the two carried facts (request id, content fingerprint) taken
+ * from the identity the governed owner stamped on the action. Nothing here
+ * infers an environment, a scope, a ref or a SHA on its own; that independent
+ * inference is the defect this whole change removes.
+ */
+export function trustedHostActionIdentity(action, { requestId = null, contentFingerprint = null } = {}) {
+  const carried = action?.authorizationIdentity || {};
+  return resolveActionAuthorizationIdentity({
+    actionType: action?.actionType,
+    scope: action?.missionId,
+    inputs: action?.inputs || {},
+    requestId: requestId ?? carried.requestId ?? null,
+    contentFingerprint: contentFingerprint ?? carried.contentFingerprint ?? null,
+  });
+}
+
+/**
+ * Resolve the authorization that covers this action, exactly as execution will.
+ *
+ * THE PRE-CONSUMPTION PROOF CALLS THIS SAME FUNCTION. The previous proof called
+ * findAuthorization with a policy-side `environment` argument that the real
+ * boundary never passed, so it verified a different question than the one that
+ * gates execution: it passed, the delegation was consumed, and the boundary
+ * then refused. One path, not a simulated equivalent.
+ */
+export function resolveActionAuthorization(action, {
+  nowMs = Date.now(),
+  requestId = null,
+  contentFingerprint = null,
+} = {}) {
+  const identity = trustedHostActionIdentity(action, { requestId, contentFingerprint });
+  const authorization = findAuthorization({
+    ...identity.lookup,
+    actionRequestId: action?.id || null,
+    nowMs,
+  });
+  return { identity, authorization };
+}
+
+/**
+ * Would a governed request's action be authorized at the boundary?
+ *
+ * Normalizes the inputs through the SAME registry validator the action is built
+ * from, then asks `resolveActionAuthorization` — the function execution itself
+ * calls. Used before a delegation is consumed, so authority is only ever spent
+ * on an authorization that is provably usable.
+ */
+export function previewTrustedHostAuthorization({
+  missionId,
+  actionType,
+  inputs = {},
+  normalizedInputs = null,
+  requestId = null,
+  contentFingerprint = null,
+  nowMs = Date.now(),
+} = {}) {
+  const def = getActionDefinition(actionType);
+  if (!def) return { ok: false, error: "unknown_action_type", actionType };
+  let normalized = normalizedInputs;
+  if (!normalized) {
+    const validated = def.validateInputs(inputs);
+    if (!validated.ok) return { ok: false, error: "input_validation_failed", validation: validated };
+    normalized = validated.normalized;
+  }
+  const shape = { id: null, missionId, actionType, inputs: normalized, authorizationIdentity: null };
+  const { identity, authorization } = resolveActionAuthorization(shape, {
+    nowMs, requestId, contentFingerprint,
+  });
+  return { ok: Boolean(authorization), identity, authorization: authorization || null };
+}
+
 export function authorizeTrustedHostAction(actionId, {
   actor = "operator",
   authorizationId = null,
@@ -434,37 +544,35 @@ export function authorizeTrustedHostAction(actionId, {
     // against the action's own parameters before it counts.
     if (auth && auth.scope === AUTHORIZATION_CLASSES.EXACT_REQUEST) {
       const ctx = exactContext || {};
-      const covers = exactAuthorizationCovers(auth, {
+      // ONE DERIVATION. This block used to spell out environment, repository
+      // and sourceSha itself — a fifth independent reconstruction, and the one
+      // that read `ctx.environment ?? null` while the mint had recorded a
+      // resolved environment. Only the two carried facts come from the caller.
+      const identity = trustedHostActionIdentity(action, {
         requestId: ctx.requestId ?? null,
         contentFingerprint: ctx.contentFingerprint ?? null,
-        actionType: action.actionType,
-        environment: ctx.environment ?? null,
-        repository: ctx.repository ?? action.inputs?.repository ?? null,
-        sourceSha: ctx.sourceSha
-          ?? action.inputs?.expectedHeadSha ?? action.inputs?.expected_head_sha ?? null,
+      });
+      const covers = exactAuthorizationCovers(auth, {
+        requestId: identity.requestId,
+        contentFingerprint: identity.contentFingerprint,
+        actionType: identity.actionType,
+        environment: identity.environment,
+        repository: identity.repository,
+        sourceSha: identity.sourceSha,
+        targetRef: identity.targetRef,
       });
       const expired = auth.expires_at && Date.parse(auth.expires_at) < (nowMs ?? Date.now());
       if (!covers || auth.status !== "active" || expired || auth.used_at) auth = null;
     }
   } else {
-    auth = findAuthorization({
-      missionId: action.missionId,
-      actionType: action.actionType,
-      databaseTarget: action.inputs?.databaseTarget
-        || action.inputs?.environment
-        || action.inputs?.targetBranch
-        || action.inputs?.target_branch
-        || DEFAULT_TARGET,
-      queryHash: action.inputs?.queryHash
-        || action.inputs?.expectedHeadSha
-        || action.inputs?.expected_head_sha
-        || action.inputs?.expectedSha
-        || action.inputs?.expected_sha
-        || action.inputs?.dedupeKey
-        || null,
-      actionRequestId: action.id,
-      nowMs: nowMs ?? Date.now(),
-    });
+    // THE FOURTH INSTANCE OF THE DEFECT FAMILY WAS HERE. This block derived the
+    // lookup's target as `... || DEFAULT_TARGET`. A repository.push carries no
+    // databaseTarget, environment or targetBranch, so it fell through to
+    // `alloy_deployed_primary` — an operator-only environment that
+    // exactAuthorizationCovers refuses on its first line — while the mint had
+    // recorded the real one. No exact-request authorization for a push could
+    // ever resolve, for the delegated path or the Director path alike.
+    ({ authorization: auth } = resolveActionAuthorization(action, { nowMs: nowMs ?? Date.now() }));
   }
   if (!auth && grant) {
     // A repository-authorized action carries a single-use grant instead of a
@@ -1314,6 +1422,7 @@ export function fulfillAssignQaAccessForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1336,6 +1445,7 @@ export function fulfillProvisionQaIdentityForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1365,6 +1475,7 @@ export function fulfillRestoreQaSessionForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1523,6 +1634,7 @@ export function fulfillRetireWorktreeForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1538,6 +1650,7 @@ export function fulfillApplyReconciliationPlanForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1553,6 +1666,7 @@ export function fulfillClosePullRequestForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1568,6 +1682,7 @@ export function fulfillDeleteRemoteBranchForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1589,6 +1704,7 @@ export function fulfillRepositoryPushForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.REPOSITORY_PUSH, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1610,6 +1726,7 @@ export function fulfillPromotionOpenPrForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.PROMOTION_OPEN_PR, inputs, nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1636,6 +1753,7 @@ export function fulfillRepositoryMergeForMission(missionId, {
     actionType: ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST,
     inputs,
     nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
@@ -1668,6 +1786,7 @@ export function fulfillDatabaseMigrationForMission(missionId, {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
     inputs,
     nowMs,
+    authorizationContext: exactContext,
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import os from "node:os";
 import { listDecisions } from "./decisions.mjs";
 import { ACTION_TYPES, DEFAULT_TARGET } from "./trusted-host-action-registry.mjs";
+import { normalizeRef } from "./action-authorization-identity.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(os.homedir(), ".local", "state", "alloy-dev");
@@ -193,6 +194,11 @@ export function grantExactRequestAuthorization({
   environment,
   repository = null,
   sourceSha = null,
+  // The ref this execution writes (or, for a proposal, aims at). Derived by
+  // the canonical identity resolver, never by a caller — binding it is what
+  // keeps authority to open a PR into staging from covering one into main,
+  // now that opening a proposal is correctly repository-class authority.
+  targetRef = null,
   decisionId = null,
   decisionActor = "director",
   policyId = null,
@@ -219,13 +225,19 @@ export function grantExactRequestAuthorization({
     environment: normEnv(environment) || null,
     repository: repository || null,
     sourceSha: sourceSha ? String(sourceSha).toLowerCase() : null,
+    targetRef: normalizeRef(targetRef),
     decisionId,
     decisionActor,
     policyId,
     policyVersion,
     // Kept for the legacy matcher, which keys pushes and promotions on it.
     queryHash: sourceSha ? String(sourceSha).toLowerCase() : null,
-    databaseTarget: normEnv(environment) || DEFAULT_TARGET,
+    // NOT `|| DEFAULT_TARGET`. DEFAULT_TARGET is a DATABASE target; defaulting
+    // to it here is what let a repository authorization be described as
+    // `alloy_deployed_primary`, an operator-only environment that
+    // exactAuthorizationCovers refuses unconditionally — so an exact-request
+    // authorization for a push could never be resolved by anybody.
+    databaseTarget: normEnv(environment) || null,
     riskClass: "privileged_write",
     status: "active",
     granted_at: iso(nowMs),
@@ -250,6 +262,7 @@ export function exactAuthorizationCovers(auth, {
   environment = null,
   repository = null,
   sourceSha = null,
+  targetRef = null,
 } = {}) {
   if (!auth || auth.scope !== AUTHORIZATION_CLASSES.EXACT_REQUEST) return false;
   if (isOperatorOnlyAuthzEnvironment(auth.environment) || isOperatorOnlyAuthzEnvironment(environment)) return false;
@@ -259,6 +272,12 @@ export function exactAuthorizationCovers(auth, {
   if (auth.requestId && requestId && auth.requestId !== requestId) return false;
   if (auth.repository && repository && auth.repository !== repository) return false;
   if (auth.sourceSha && sourceSha && auth.sourceSha !== String(sourceSha).toLowerCase()) return false;
+  // STRICT, BOTH DIRECTIONS. Every caller now derives targetRef from the one
+  // identity resolver, so both sides always have it or both are null; an
+  // authorization minted before that convergence has no targetRef and fails
+  // closed here, which escalates to the operator rather than executing on an
+  // identity nobody can vouch for.
+  if (normalizeRef(auth.targetRef) !== normalizeRef(targetRef)) return false;
   return true;
 }
 
@@ -345,6 +364,7 @@ export function findAuthorization({
   contentFingerprint = null,
   environment = null,
   repository = null,
+  targetRef = null,
   nowMs = Date.now(),
 } = {}) {
   const auths = listAuthorizations(missionId)
@@ -383,8 +403,11 @@ export function findAuthorization({
       if (a.scope === AUTHORIZATION_CLASSES.EXACT_REQUEST) {
         return exactAuthorizationCovers(a, {
           requestId, contentFingerprint, actionType,
-          environment: environment ?? databaseTarget,
-          repository, sourceSha: queryHash,
+          // `?? databaseTarget` was the fallback that turned a missing
+          // environment into a database default. Callers now come from the
+          // canonical resolver and always carry one; nothing is substituted.
+          environment,
+          repository, sourceSha: queryHash, targetRef,
         });
       }
       if (a.scope === "single_action") {

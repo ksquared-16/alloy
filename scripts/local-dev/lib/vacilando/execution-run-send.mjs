@@ -487,7 +487,7 @@ async function provisionSessionForSend({ rec, run, nowMs, root, size }) {
  */
 export const RETRYABLE_DELIVERY_REFUSALS = new Set(["send_in_progress"]);
 
-function refused(laneId, error, nowMs, size, run = null) {
+function refused(laneId, error, nowMs, size, run = null, extra = null) {
   return decorate({
     ok: false,
     schema_version: "vacilando.lane.send.v1",
@@ -497,6 +497,9 @@ function refused(laneId, error, nowMs, size, run = null) {
     instruction_size: size,
     delivered_at: new Date(nowMs).toISOString(),
     audit_id: null,
+    // A lifecycle refusal says WHICH invariant failed, so the operator reads a
+    // repair instruction rather than a denial.
+    ...(extra && typeof extra === "object" ? extra : {}),
   }, run);
 }
 
@@ -633,6 +636,41 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     })));
   }
 
+  // ---------------------------------------------------------------------
+  // THE DISPATCH INVARIANT: NO INSTRUCTION ENTERS AN UNMANAGED WORKTREE.
+  //
+  // This is the guard whose absence turned one bad retirement into a day of
+  // silent failures. wt1-work-unit-grade-a kept its DIRECTORY and its tmux
+  // session after its registration was archived, so send after send was
+  // delivered into a worktree that was no longer managed, had no slot, no port
+  // and no QA environment — and every one of them looked delivered.
+  //
+  // A surviving directory is not ownership, and a stale `binding.worktree_path`
+  // is not ownership. The lane must resolve, through the canonical resolver, to
+  // a worktree that is registered, managed and slot-bound. If it does not, this
+  // fails CLOSED with a named lifecycle error instead of pasting into a pane
+  // that happens to exist.
+  //
+  // The one repair it will perform is the unambiguous one: a registration that
+  // already names THIS lane's worktree with a slot, whose binding has merely
+  // forgotten it. Dispatch never guesses ownership.
+  // ---------------------------------------------------------------------
+  try {
+    const { assertLaneDispatchable } = await import("./lane-worktree-lifecycle.mjs");
+    const guard = assertLaneDispatchable(laneId, { root, nowMs, repair: true });
+    if (!guard.ok) {
+      return refused(laneId, guard.error, nowMs, size, activeRunForLane(laneId, root), {
+        lifecycle_detail: guard.detail,
+        lane_worktree: guard.resolution || null,
+      });
+    }
+  } catch (e) {
+    // A guard that cannot run must not become a guard that passes.
+    return refused(laneId, "lane_worktree_not_managed", nowMs, size, null, {
+      lifecycle_detail: `Lane lifecycle could not be resolved: ${String(e?.message || e)}`,
+    });
+  }
+
   if (opts.provider) {
     try {
       const { setLanePreferredProvider } = await import("./development-lane.mjs");
@@ -762,6 +800,58 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   });
   if (!created.ok) {
     return refused(laneId, created.error, nowMs, size, created.run || null);
+  }
+  // TYPED DIRECTOR AUTHORITY ONLY — THE PROMPT IS NEVER PARSED.
+  //
+  // V1 read this instruction's prose and minted authority from imperatives it
+  // recognised, which could not tell a delegation from a quotation: "Example of
+  // what NOT to write: merge to staging" granted a merge. Authority now arrives
+  // as a structured value on the operator's own send path (opts.delegatedActions,
+  // from the authenticated /api/lanes/:id/instruction body) and the prompt text
+  // is not an input to it.
+  //
+  // The agent cannot reach this. It does not call the operator send endpoint, so
+  // no summary, quoted prompt, README, fixture or tool output can widen its own
+  // mission's authority — and recordMissionDelegation refuses any author that is
+  // not the Director/operator regardless.
+  const delegatedActions = Array.isArray(opts.delegatedActions) ? opts.delegatedActions : [];
+  if (delegatedActions.length) {
+    try {
+      const { captureDelegationFromInstruction } = await import("./mission-delegation.mjs");
+      const { getDurableLane } = await import("./development-lane.mjs");
+      const laneRec = getDurableLane(laneId, root);
+      const { getRepository, normalizeRemote } = await import("./repository-registry.mjs");
+      const repo = laneRec?.repository_id ? getRepository(laneRec.repository_id, root) : null;
+      captureDelegationFromInstruction({
+        laneId,
+        runId: created.run.run_id,
+        missionId: laneRec?.mission_id || null,
+        delegatedActions,
+        // The send path is the Director-facing one; anything else is refused by
+        // the author check inside recordMissionDelegation.
+        author: opts.delegationAuthor || "operator",
+        repository: repo?.remote ? normalizeRemote(repo.remote) : null,
+        // NO IMPLICIT SOURCE-BRANCH PIN.
+        //
+        // This used to pass laneRec.binding.branch, so a push delegation was
+        // silently constrained to the lane's own working branch. The Director
+        // never supplied that constraint, and Alloy's safe promotion workflow
+        // deliberately runs on a SEPARATE promote/* branch — so the pin made the
+        // correct workflow unreachable. S15 hit it: a delegated push of
+        // promote/s15-delegation-cert was refused delegation_branch_mismatch
+        // against agent/claude/5-work-unit-grade-a.
+        //
+        // A push delegation authorises this mission to push its validated
+        // promotion artifact, not one specific branch name. The concrete push is
+        // still pinned at execution by repository, exact branch, exact head SHA,
+        // worktree, protected-ref refusal and the trusted-host grant. A
+        // mission-level branch constraint is now only ever what the Director
+        // typed (source_branch on the delegated action).
+        sourceBranch: null,
+        nowMs,
+        root,
+      });
+    } catch { /* delegation capture never blocks a send */ }
   }
 
   let run = created.run;

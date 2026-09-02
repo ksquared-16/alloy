@@ -28,6 +28,7 @@
  * connection must not look like a failure.
  */
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
 import { allowlistedRepositories } from "./trusted-host-merge.mjs";
 import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
@@ -136,6 +137,65 @@ export function remoteBranchSha(normalized, { gitImpl = defaultGit } = {}) {
  * Returns `{ ok:true, idempotent:true }` when the remote already carries the
  * exact approved SHA.
  */
+/**
+ * A REFUSAL MUST NAME THE INVARIANT THAT ACTUALLY FAILED.
+ *
+ * MEASURED INCIDENT. A push proposed against an explicit promotion worktree was
+ * executed against a DIFFERENT worktree (the resolver ignored the advertised
+ * `inputs.worktreePath` and fell back to the run's own). The HEAD there was a
+ * different commit, so the drift check below fired and reported "the branch
+ * moved after this push was proposed" — for a branch that had not moved at all.
+ * The operator was told a false cause and the real one, "the requested worktree
+ * was not the one used", was invisible.
+ *
+ * The resolver is fixed at its owner. This is the second half: when the path we
+ * were given cannot serve, say so specifically instead of letting a wrong HEAD
+ * masquerade as drift. Checks are ordered cheapest-and-most-fundamental first,
+ * and each one that cannot be positively determined is skipped rather than
+ * guessed — an unreadable remote must not invent a mismatch.
+ */
+export function evaluateWorktreeForPush(normalized, { gitImpl = defaultGit } = {}) {
+  const cwd = normalized.worktreePath;
+  if (!cwd) {
+    return { ok: false, code: "worktree_path_missing", detail: "no worktree path was resolved for this push" };
+  }
+  if (!existsSync(cwd)) {
+    return {
+      ok: false,
+      code: "worktree_missing",
+      detail: `the requested worktree does not exist: ${cwd}`,
+      worktreePath: cwd,
+    };
+  }
+  const inside = gitImpl(["rev-parse", "--is-inside-work-tree"], cwd);
+  if (inside.status !== 0 || String(inside.stdout || "").trim() !== "true") {
+    return {
+      ok: false,
+      code: "worktree_not_a_git_worktree",
+      detail: `the requested path is not a git worktree: ${cwd}`,
+      worktreePath: cwd,
+    };
+  }
+  // Positive mismatch only. A remote we cannot read is not evidence of the
+  // wrong repository, and the push itself would fail on it anyway.
+  const remote = gitImpl(["remote", "get-url", normalized.remote || "origin"], cwd);
+  if (remote.status === 0) {
+    const actual = normRepo(String(remote.stdout || "").trim().replace(/^git@github\.com:/i, ""));
+    const want = normRepo(normalized.repository);
+    if (actual && want && actual !== want) {
+      return {
+        ok: false,
+        code: "worktree_repository_mismatch",
+        detail: `the requested worktree belongs to ${actual}, not ${want}`,
+        expected: want,
+        actual,
+        worktreePath: cwd,
+      };
+    }
+  }
+  return { ok: true, worktreePath: cwd };
+}
+
 export function evaluatePushReadiness(normalized, { gitImpl = defaultGit } = {}) {
   const cwd = normalized.worktreePath;
 
@@ -154,6 +214,11 @@ export function evaluatePushReadiness(normalized, { gitImpl = defaultGit } = {})
       || normalized.expectedHeadSha.startsWith(already.sha))) {
     return { ok: true, idempotent: true, code: "already_pushed", remoteSha: already.sha };
   }
+
+  // The worktree we were handed must be usable BEFORE its HEAD is allowed to
+  // mean anything. Otherwise a wrong-but-valid worktree reads as head drift.
+  const worktree = evaluateWorktreeForPush(normalized, { gitImpl });
+  if (!worktree.ok) return worktree;
 
   const head = gitImpl(["rev-parse", "HEAD"], cwd);
   if (head.status !== 0) {

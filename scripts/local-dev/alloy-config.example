@@ -91,6 +91,9 @@ ALLOY_VERIFY_ALLOWED_HOSTS=""
 ALLOY_PM="npm"
 ALLOY_WEB_DIR="web"
 ALLOY_DEV_COMMAND="npm run dev"
+# Production server for `alloy-dev-start --production`. Same trusted-env injection, different
+# command; the build is a separate operation and the server never builds implicitly.
+ALLOY_PROD_COMMAND="npm run start"
 
 # Heavy validation runs from ALLOY_WEB_DIR inside the worktree.
 # These commands are invoked BY the broker — never `npm run typecheck|build|test`

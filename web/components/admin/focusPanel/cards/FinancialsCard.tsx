@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
@@ -95,11 +95,36 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * account is small (one household's charges), the filter is presentation, and the totals below
      * are still the server's.
      */
+    /*
+     * THE ANSWER TO THE QUESTION STILL BEING ASKED.
+     *
+     * Attendance and Health each bind a returning response to the child it was requested for, and
+     * this card had no equivalent: it applied whichever response arrived LAST BY WALL CLOCK. Clearing
+     * `vm` on subject change stops the previous balance from lingering, but it cannot stop a slow
+     * earlier response from landing on top of a newer one afterwards.
+     *
+     * Reproduced in the browser by holding one in-flight request, letting a later one resolve, then
+     * releasing the first: the stale body replaced the current one.
+     *
+     * A SEQUENCE, not an account comparison. The sibling cards compare a participant id because their
+     * responses are scoped to one child. This account is the HOUSEHOLD's — the same `customer_id`
+     * legitimately serves several queue rows, so an account check would admit exactly the stale
+     * overwrite reproduced above. Comparing the request's own ordinal answers the real question —
+     * "is this still the request whose answer we are waiting for" — and covers the cross-household
+     * case as a consequence rather than as a second rule.
+     *
+     * Local to the card: a ref and a comparison. No shared coordinator, no cancellation plumbing, and
+     * a superseded response is simply dropped rather than cancelled, so nothing else changes.
+     */
+    const requestSeq = useRef(0);
     const load = useCallback(async () => {
         if (!customerId && !scopedMemberId) {
+            requestSeq.current += 1;
             setVm(null);
             return;
         }
+        const seq = (requestSeq.current += 1);
+        const current = () => seq === requestSeq.current;
         setLoading(true);
         try {
             const query = customerId
@@ -107,11 +132,14 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 : `customer_member_id=${encodeURIComponent(scopedMemberId as string)}`;
             const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
             const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
+            if (!current()) return;
             setVm(json?.ok && json.vm ? json.vm : null);
         } catch {
+            if (!current()) return;
             setVm(null);
         } finally {
-            setLoading(false);
+            // A superseded request must not clear the spinner belonging to the one that replaced it.
+            if (current()) setLoading(false);
         }
     }, [customerId, scopedMemberId]);
 

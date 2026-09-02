@@ -16,7 +16,7 @@
  */
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import { cardDefinition, cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import { cardDefinition, cardSuccessor, cardTitle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
@@ -117,22 +117,24 @@ export type FocusPanelCoordination = {
     back?: () => void;
 };
 
-/** Operator-facing label for a card (used in "← Back to {label}" affordances). */
+/**
+ * Operator-facing label for a card (used in "← Back to {label}" affordances).
+ *
+ * ── THE REGISTRY OWNS CARD NAMES ──
+ *
+ * This was a switch over five card keys: one of the central per-card lists the registry's IDENTITY
+ * concern exists to retire, and it had already drifted off the one it duplicated. It knew nothing
+ * of `business_process`, so a handoff back to the panel's largest card read "← Back to panel" while
+ * the Surface Builder, the reserved cell and the card's own header all called it Business Process —
+ * the same predecessor/successor naming drift that made the successor render under "What's Next".
+ *
+ * Reading `cardTitle` keeps ONE answer to "what is this card called". The five keys it used to
+ * name resolve to the identical strings they returned before, so no existing affordance changes;
+ * every other registered card now gets its real name instead of the generic fallback, and a card
+ * that renders its own title (no declared `title`) still falls back to "panel".
+ */
 export function focusPanelCardBackLabel(card: FocusPanelCardKey): string {
-    switch (card) {
-        case "household":
-            return "Household";
-        case "children":
-            return "Children";
-        case "communications":
-            return "Communications";
-        case "documents":
-            return "Documents";
-        case "current_work":
-            return "What's Next";
-        default:
-            return "panel";
-    }
+    return cardTitle(card) ?? "panel";
 }
 
 /** A perspective level that raises the card above the surface (depth layer). */

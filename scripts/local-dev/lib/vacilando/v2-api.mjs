@@ -380,6 +380,68 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     return { status: laneInstructionHttpStatus(out), body: out };
   }
 
+  /**
+   * CLOSING A LANE IS A PRODUCT ACTION, NOT A LIBRARY CALL.
+   *
+   * Three disposable certification lanes — Fixture Proof, Lifecycle Cert,
+   * Processing — sat in the operator's navigation with no way to remove them
+   * except editing a store by hand. `closeDurableLane` is the one path that may
+   * retire a lane's worktree; this is the supported route to it, so removal
+   * runs the same capacity gates and writes the same record as every other
+   * close. Lane history is retained: closing is not deleting.
+   */
+  /**
+   * REGISTRATION RECONCILIATION IS A PRODUCT ACTION.
+   *
+   * A registration whose worktree no longer exists had no canonical removal
+   * path: `vac worktree-retire` works from directories and cannot see one that
+   * is gone, and `vac reconcile` only offers adoptions. The only remaining move
+   * was deleting a file by hand — which is what a registry exists to prevent.
+   *
+   * GET-shaped by default: without `apply: true` this returns the plan and the
+   * classification of every registration, and changes nothing.
+   */
+  /**
+   * Bring a lane's recorded branch back in line with its worktree.
+   *
+   * Dispatch already does this for itself, so this exists for the case where an
+   * operator wants it done deliberately — or wants to see, without changing
+   * anything, which lanes have moved. Omit lane_id to reconcile every drifted
+   * lane; pass apply:false to only look.
+   */
+  if (path === "/api/v2/lanes/reconcile-branch") {
+    const { reconcileLaneBranch, auditLaneWorktrees } = await import("./lane-worktree-lifecycle.mjs");
+    const laneId = v.lane_id || v.laneId || null;
+    const drifted = laneId ? [{ lane_id: String(laneId) }] : auditLaneWorktrees({}).branch_drift;
+    if (v.apply === false) return { status: 200, body: { ok: true, applied: false, drifted } };
+    const results = drifted.map((d) => reconcileLaneBranch(d.lane_id, { actor: actorDefault }));
+    return { status: 200, body: { ok: true, applied: true, results } };
+  }
+
+  if (path === "/api/v2/registrations/reconcile") {
+    const { reconcileStaleRegistrations } = await import("./lane-worktree-lifecycle.mjs");
+    const out = reconcileStaleRegistrations({
+      apply: v.apply === true,
+      actor: actorDefault,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+
+  if (path === "/api/v2/lane/close" || path === "/api/v2/lanes/close") {
+    const { closeDurableLane } = await import("./lane-worktree-lifecycle.mjs");
+    const laneId = v.lane_id || v.laneId || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "lane_id_required" } };
+    const out = await closeDurableLane(String(laneId), {
+      actor: actorDefault,
+      reason: v.reason || null,
+      acknowledgeUncommitted: v.acknowledge_uncommitted === true,
+    });
+    return {
+      status: out.ok ? 200 : (out.error === "lane_not_found" ? 404 : 409),
+      body: out,
+    };
+  }
+
   if (path === "/api/v2/lane/run/close-stale" || path === "/api/v2/lanes/run/close-stale") {
     const id = v.lane_id || v.id;
     if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };

@@ -33,6 +33,7 @@
 import { describe, expect, it } from "vitest";
 
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
+import { cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
@@ -81,10 +82,28 @@ describe("commit-critical cards must participate, or declare their dormancy", ()
         expect(placedButStillDeclaredDormant).toEqual([]);
     });
 
-    it("the three participating commit-critical cards really are placed", () => {
+    /**
+     * PLACED IN THIS LIST IS NOT THE SAME AS RENDERED BY A CELL — the second known limit.
+     *
+     * `placed` is the RAW default composition. The runtime resolves every cell through
+     * `normalizeFocusPanelCardKey`, where supersession outranks exact match, so `current_work` is
+     * rewritten to `business_process` before a cell exists and NO composition can render it. It is
+     * named here because the composition names it, not because an operator sees it.
+     *
+     * That gap is pinned by `focusPanelSupersededCardReadiness.test.ts`, which asks the question
+     * this file cannot: does a cell resolve to this identity once the runtime has normalized it?
+     */
+    it("the three commit-critical cards are named by the default composition", () => {
         for (const key of ["current_work", "household", "children"] as const) {
             expect(COMMIT_CRITICAL_CARD_SPECS.some((spec) => spec.key === key)).toBe(true);
             expect(placed.has(key)).toBe(true);
         }
+    });
+
+    it("and of those, `current_work` is named under an identity the runtime has retired", () => {
+        // Stated explicitly so this file cannot be read as evidence that the card renders.
+        expect(cardSuccessor("current_work")).toBe("business_process");
+        expect(cardSuccessor("household")).toBeNull();
+        expect(cardSuccessor("children")).toBeNull();
     });
 });
