@@ -60,6 +60,17 @@ function DevSupabaseAuthPanel() {
             and sent a certification run chasing a defect that did not exist. */}
         Password sign-in expects: {d.authTokenUrl ? `POST ${d.authTokenUrl}` : "(set URL to see)"}
       </div>
+      {/*
+        ALWAYS SHOWN, not only on mismatch -- this line is also the build marker.
+        "Did your reload actually take?" was guessed at four times across this incident, by me and by
+        the operator, and a guess is what kept sending us back to the wrong half of the problem. If
+        this line is absent from the panel, the page is running older JavaScript, and that is now
+        readable at a glance instead of inferred from behaviour.
+      */}
+      <div className="mt-1">
+        Server says:{" "}
+        {serverOrigin === undefined ? "(asking…)" : (serverOrigin ?? "(no answer)")}
+      </div>
       {stale ? (
         <div className="mt-2 rounded border border-red-300 bg-red-50 px-2 py-1.5 font-sans text-[11px] font-semibold text-red-800">
           STALE BUNDLE — this page&rsquo;s JavaScript targets <span className="font-mono">{d.origin}</span>,

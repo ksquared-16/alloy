@@ -136,6 +136,17 @@ describe("a stale client bundle announces itself", () => {
         expect(src).toContain("d.origin !== serverOrigin");
     });
 
+    it("always shows the server's view, so the line doubles as a build marker", async () => {
+        /*
+         * "Did the reload take?" was guessed at repeatedly during this incident and the guesses kept
+         * pointing at the wrong half. An absent line is now the answer.
+         */
+        const src = await page();
+        expect(src).toContain("Server says:");
+        const marker = src.slice(src.indexOf("Server says:"));
+        expect(marker.slice(0, 200)).toContain("serverOrigin");
+    });
+
     it("says so loudly rather than letting it present as a wrong password", async () => {
         const src = await page();
         expect(src).toContain("STALE BUNDLE");
