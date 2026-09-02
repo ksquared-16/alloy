@@ -763,32 +763,42 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   if (!created.ok) {
     return refused(laneId, created.error, nowMs, size, created.run || null);
   }
-  // READ THE DIRECTOR'S DELEGATION ONCE, HERE, FROM THE PROMPT ITSELF.
+  // TYPED DIRECTOR AUTHORITY ONLY — THE PROMPT IS NEVER PARSED.
   //
-  // If this instruction explicitly authorises push / open-PR / merge-to-staging,
-  // that authority is captured now, while the words are in hand — never
-  // re-interpreted later at the moment a privileged action wants permission.
-  // Entirely additive: no explicit delegation means nothing is recorded and the
-  // ordinary approval behaviour is exactly what it was.
-  try {
-    const { captureDelegationFromInstruction } = await import("./mission-delegation.mjs");
-    const { getDurableLane } = await import("./development-lane.mjs");
-    const laneRec = getDurableLane(laneId, root);
-    const { getRepository, normalizeRemote } = await import("./repository-registry.mjs");
-    const repo = laneRec?.repository_id ? getRepository(laneRec.repository_id, root) : null;
-    captureDelegationFromInstruction({
-      laneId,
-      runId: created.run.run_id,
-      missionId: laneRec?.mission_id || null,
-      instruction: text,
-      // The registry's own normalizer owns the remote -> owner/repo shape, so
-      // this cannot drift from what the governed actions compare against.
-      repository: repo?.remote ? normalizeRemote(repo.remote) : null,
-      sourceBranch: laneRec?.binding?.branch || null,
-      nowMs,
-      root,
-    });
-  } catch { /* delegation capture never blocks a send */ }
+  // V1 read this instruction's prose and minted authority from imperatives it
+  // recognised, which could not tell a delegation from a quotation: "Example of
+  // what NOT to write: merge to staging" granted a merge. Authority now arrives
+  // as a structured value on the operator's own send path (opts.delegatedActions,
+  // from the authenticated /api/lanes/:id/instruction body) and the prompt text
+  // is not an input to it.
+  //
+  // The agent cannot reach this. It does not call the operator send endpoint, so
+  // no summary, quoted prompt, README, fixture or tool output can widen its own
+  // mission's authority — and recordMissionDelegation refuses any author that is
+  // not the Director/operator regardless.
+  const delegatedActions = Array.isArray(opts.delegatedActions) ? opts.delegatedActions : [];
+  if (delegatedActions.length) {
+    try {
+      const { captureDelegationFromInstruction } = await import("./mission-delegation.mjs");
+      const { getDurableLane } = await import("./development-lane.mjs");
+      const laneRec = getDurableLane(laneId, root);
+      const { getRepository, normalizeRemote } = await import("./repository-registry.mjs");
+      const repo = laneRec?.repository_id ? getRepository(laneRec.repository_id, root) : null;
+      captureDelegationFromInstruction({
+        laneId,
+        runId: created.run.run_id,
+        missionId: laneRec?.mission_id || null,
+        delegatedActions,
+        // The send path is the Director-facing one; anything else is refused by
+        // the author check inside recordMissionDelegation.
+        author: opts.delegationAuthor || "operator",
+        repository: repo?.remote ? normalizeRemote(repo.remote) : null,
+        sourceBranch: laneRec?.binding?.branch || null,
+        nowMs,
+        root,
+      });
+    } catch { /* delegation capture never blocks a send */ }
+  }
 
   let run = created.run;
   // Bind BEFORE the eligibility branch below. A run that queues for a session

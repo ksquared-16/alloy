@@ -43,6 +43,7 @@ SUITES=(
   "development-merge-grant-binding.test.mjs"
   "development-input-contract-convergence.test.mjs"
   "development-mission-delegation.test.mjs"
+  "development-mission-delegation-prose.test.mjs"
   "development-mission-delegation-integration.test.mjs"
   "development-run-summary-output.test.mjs"
   "development-completion-summary-last.test.mjs"

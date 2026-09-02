@@ -42,12 +42,24 @@ function test(name, fn) {
 
 const opts = { root: ROOT };
 
-function delegate(text, extra = {}) {
+/**
+ * V2: authority is TYPED. `text` is retained only so the A-J cases still read
+ * like the mission they model; it is passed as prose alongside, never parsed.
+ * FULL_ACTIONS is what actually grants anything.
+ */
+const FULL_ACTIONS = Object.freeze([
+  { action_key: PUSH },
+  { action_key: OPEN, target_branch: "staging" },
+  { action_key: MERGE, target_branch: "staging", checks_required: true },
+]);
+
+function delegate(actions = FULL_ACTIONS, extra = {}) {
   return D.recordMissionDelegation({
     missionId: MISSION,
     laneId: "lane_cert",
     repository: REPO,
-    missionText: text,
+    delegatedActions: actions,
+    author: "director",
     ...extra,
     ...opts,
   });
@@ -66,87 +78,16 @@ function cover(actionKey, ctx = {}) {
   }, opts);
 }
 
-const FULL = "validate this work, push it, open the PR, and merge it to staging when checks pass";
 
-// ------------------------------------------------------------------ grammar
-
-test("grammar: the headline mission delegates exactly the three eligible actions", () => {
-  const p = D.parseMissionDelegation(FULL);
-  const actions = p.delegations.map((d) => d.action).sort();
-  assert.deepEqual(actions, [OPEN, MERGE, PUSH].sort());
-  for (const d of p.delegations) {
-    if (d.action !== PUSH) assert.equal(d.target_branch, "staging");
-  }
-});
-
-test("grammar: vague language never delegates", () => {
-  for (const text of ["finish this", "take care of it", "get this done", "ship it", "handle it", "make it happen"]) {
-    const p = D.parseMissionDelegation(text);
-    assert.equal(p.delegations.length, 0, `"${text}" must not delegate`);
-    assert.equal(p.vague, true, `"${text}" must be reported as vague`);
-  }
-});
-
-test("grammar: prohibitions and approval-seeking never delegate", () => {
-  for (const text of [
-    "do not merge to staging",
-    "don't merge it to staging",
-    "ask me before you merge to staging",
-    "check with me before merging to staging",
-    "merge to staging only if I approve",
-    "wait for my approval, then merge to staging",
-    "never push this branch",
-  ]) {
-    const p = D.parseMissionDelegation(text);
-    assert.equal(p.delegations.length, 0, `"${text}" must not delegate`);
-  }
-});
-
-test("grammar: a refusal disarms only its own clause", () => {
-  // The mixed case: one action delegated, another explicitly withheld.
-  const p = D.parseMissionDelegation("push the branch, but ask me before merging");
-  assert.deepEqual(p.delegations.map((d) => d.action), [PUSH]);
-});
-
-test("grammar: an action with no explicit target is refused", () => {
-  const p = D.parseMissionDelegation("merge it");
-  assert.equal(p.delegations.length, 0);
-  assert.equal(p.refusals[0].reason, "no_explicit_target_branch");
-});
-
-test("grammar: production and other protected targets are refused outright", () => {
-  for (const t of ["production", "prod", "main", "master"]) {
-    const p = D.parseMissionDelegation(`merge it to ${t} when checks pass`);
-    assert.equal(p.delegations.length, 0, `${t} must not be delegable`);
-    assert.equal(p.refusals[0].reason, "operator_only_target");
-  }
-});
-
-test("grammar: a non-staging branch is not delegable in V1", () => {
-  const p = D.parseMissionDelegation("merge it to release-2026 when checks pass");
-  assert.equal(p.delegations.length, 0);
-  assert.equal(p.refusals[0].reason, "target_not_delegable_in_v1");
-});
-
-test("grammar: adversarial and malformed input never delegates", () => {
-  for (const text of [
-    "", "   ", null, undefined,
-    "merge",
-    "the mission is about merging strategy documents",
-    "we discussed merging to staging last week",
-    "MERGE TO PRODUCTION",
-    "push",
-  ]) {
-    const p = D.parseMissionDelegation(text);
-    const merges = p.delegations.filter((d) => d.action === MERGE);
-    assert.equal(merges.length, 0, `"${text}" must not delegate a merge`);
-  }
-});
+// The V1 prose-grammar tests are gone with the parser they tested. Prose can no
+// longer grant authority at all, which is proven in
+// development-mission-delegation-prose.test.mjs rather than by asserting which
+// sentences the parser happened to accept.
 
 // ----------------------------------------------------------- A-J matrix
 
 test("A: an explicit mission authorizes all three actions with no second click", () => {
-  const out = delegate(FULL);
+  const out = delegate();
   assert.equal(out.created, 3);
   for (const action of [PUSH, OPEN, MERGE]) {
     const c = cover(action, action === PUSH ? { branch: "promote/x" } : {});
@@ -159,7 +100,7 @@ test("B: a moved head cannot be merged under authority given for the old content
   // the concrete request, and the trusted-host grant pins the SHA — so a moved
   // head fails the grant, not this gate. What this asserts is the division of
   // labour: delegation does not and cannot vouch for content.
-  delegate(FULL);
+  delegate();
   const rec = D.listMissionDelegations({ scopeKey: MISSION, root: ROOT })
     .find((d) => d.action_key === MERGE);
   assert.equal(rec.expected_head_sha, undefined, "a delegation must not pin a SHA itself");
@@ -167,7 +108,7 @@ test("B: a moved head cannot be merged under authority given for the old content
 });
 
 test("C: a delegation for staging cannot authorize production", () => {
-  delegate(FULL);
+  delegate();
   for (const t of ["production", "prod", "main"]) {
     const c = cover(MERGE, { targetBranch: t });
     assert.equal(c.ok, false, `${t} must refuse`);
@@ -176,14 +117,14 @@ test("C: a delegation for staging cannot authorize production", () => {
 });
 
 test("D: authority for one repository cannot be used for another", () => {
-  delegate(FULL);
+  delegate();
   const c = cover(MERGE, { repository: "someone-else/other" });
   assert.equal(c.ok, false);
   assert.equal(c.error, "delegation_repository_mismatch");
 });
 
 test("E: a mission with no merge language keeps operator approval for merge", () => {
-  const out = delegate("validate this work and push the branch");
+  const out = delegate([{ action_key: PUSH }]);
   assert.equal(out.created, 1);
   assert.equal(cover(PUSH, { branch: "promote/x" }).ok, true);
   const c = cover(MERGE);
@@ -192,13 +133,13 @@ test("E: a mission with no merge language keeps operator approval for merge", ()
 });
 
 test("F: push delegated, merge not — push proceeds, merge still asks", () => {
-  delegate("push the branch, but ask me before merging");
+  delegate([{ action_key: PUSH }]);
   assert.equal(cover(PUSH, { branch: "promote/x" }).ok, true);
   assert.equal(cover(MERGE).ok, false);
 });
 
 test("G: failing or unknown checks refuse an auto merge", () => {
-  delegate(FULL);
+  delegate();
   assert.equal(cover(MERGE, { checksGreen: false }).error, "required_checks_not_green");
   assert.equal(cover(MERGE, { checksGreen: null }).error, "required_checks_not_green");
   // Unknown is not green. A card that has not looked must not read as fine.
@@ -206,14 +147,14 @@ test("G: failing or unknown checks refuse an auto merge", () => {
 });
 
 test("H: unrelated commits stop delegated authority", () => {
-  delegate(FULL);
+  delegate();
   const c = cover(MERGE, { unrelatedCommits: 1 });
   assert.equal(c.ok, false);
   assert.equal(c.error, "unrelated_commits_present");
 });
 
 test("I: expired or revoked delegation cannot satisfy approval", () => {
-  delegate(FULL, { ttlMs: 1 });
+  delegate(FULL_ACTIONS, { ttlMs: 1 });
   const later = Date.now() + 5000;
   const expired = D.findCoveringDelegation({
     missionId: MISSION, actionKey: MERGE, repository: REPO, targetBranch: "staging", checksGreen: true,
@@ -222,14 +163,14 @@ test("I: expired or revoked delegation cannot satisfy approval", () => {
   assert.equal(expired.error, "delegation_expired");
 
   rmSync(D.delegationStorePath(ROOT), { force: true });
-  delegate(FULL);
+  delegate();
   const rec = D.listMissionDelegations({ scopeKey: MISSION, root: ROOT }).find((d) => d.action_key === MERGE);
   D.revokeMissionDelegation(rec.delegation_id, opts);
   assert.equal(cover(MERGE).error, "delegation_revoked");
 });
 
 test("J: a consumed delegation cannot be replayed for another PR", () => {
-  delegate(FULL);
+  delegate();
   const rec = D.listMissionDelegations({ scopeKey: MISSION, root: ROOT }).find((d) => d.action_key === MERGE);
   const spent = D.consumeMissionDelegation(rec.delegation_id, { requestId: "gar_first", ...opts });
   assert.equal(spent.ok, true);
@@ -241,7 +182,7 @@ test("J: a consumed delegation cannot be replayed for another PR", () => {
 // --------------------------------------------------------------- lifecycle
 
 test("a push delegation does not license a protected-ref write", () => {
-  delegate(FULL);
+  delegate();
   for (const b of ["staging", "main", "production"]) {
     const c = cover(PUSH, { branch: b });
     assert.equal(c.ok, false, `${b} must refuse`);
@@ -250,14 +191,14 @@ test("a push delegation does not license a protected-ref write", () => {
 });
 
 test("a merge method the mission did not delegate refuses", () => {
-  delegate(FULL);
+  delegate();
   const c = cover(MERGE, { mergeMethod: "squash" });
   assert.equal(c.ok, false);
   assert.equal(c.error, "delegation_merge_method_mismatch");
 });
 
 test("only the three V1 actions are delegable at all", () => {
-  delegate(FULL);
+  delegate();
   for (const other of [
     ACTION_TYPES.DATABASE_APPLY_MIGRATION,
     ACTION_TYPES.DATABASE_READ_CENSUS,
@@ -271,9 +212,11 @@ test("only the three V1 actions are delegable at all", () => {
 });
 
 test("the record is inspectable: it carries the Director's own sentence", () => {
-  delegate(FULL);
+  delegate();
   const rec = D.listMissionDelegations({ scopeKey: MISSION, root: ROOT }).find((d) => d.action_key === MERGE);
-  assert.ok(rec.mission_clause.includes("merge"), "the delegating clause must be retained verbatim");
+  assert.equal(rec.authored_by, "director", "the record must name who granted it");
+  assert.equal(rec.authority_source, "structured_mission_delegation");
+  assert.equal(rec.mission_clause, undefined, "V2 keeps no quoted prose as authority");
   assert.equal(rec.repository, REPO);
   assert.equal(rec.target_branch, "staging");
   assert.equal(rec.checks_required, true);
@@ -298,7 +241,8 @@ test("every repository shape compares equal — the capture/compare seam", () =>
   for (const stored of shapes) {
     rmSync(D.delegationStorePath(ROOT), { force: true });
     D.recordMissionDelegation({
-      missionId: MISSION, laneId: "lane_cert", repository: stored, missionText: FULL, ...opts,
+      missionId: MISSION, laneId: "lane_cert", repository: stored,
+      delegatedActions: FULL_ACTIONS, author: "director", ...opts,
     });
     for (const asked of shapes) {
       const c = cover(MERGE, { repository: asked });
@@ -311,7 +255,7 @@ test("every repository shape compares equal — the capture/compare seam", () =>
 });
 
 test("no mission scope means no delegated authority", () => {
-  const out = D.recordMissionDelegation({ repository: REPO, missionText: FULL, ...opts });
+  const out = D.recordMissionDelegation({ repository: REPO, delegatedActions: FULL_ACTIONS, author: "director", ...opts });
   assert.equal(out.ok, false);
   assert.equal(out.error, "missing_mission_or_lane");
   const c = D.findCoveringDelegation({ actionKey: MERGE, repository: REPO }, opts);

@@ -32,7 +32,14 @@ const { repositoryStorePath } = await import("../lib/vacilando/repository-regist
 const D = await import("../lib/vacilando/mission-delegation.mjs");
 
 const SHA = "d9beb0c29508cf07f0f84ff077ece24b29b3baf4";
-const FULL = "validate this work, push it, open the PR, and merge it to staging when checks pass";
+/** V2: typed authority. The prose below is deliberately inert. */
+const FULL_ACTIONS = Object.freeze([
+  { action_key: "repository.push" },
+  { action_key: "promotion.open_pr", target_branch: "staging" },
+  { action_key: "repository.merge_pull_request", target_branch: "staging", checks_required: true },
+]);
+/** Prose that mentions every privileged action, to prove it grants nothing. */
+const INERT_PROSE = "validate this work, push it, open the PR, and merge it to staging when checks pass";
 
 writeFileSync(repositoryStorePath(ROOT), `${JSON.stringify({
   schema_version: "vacilando.repository.v1",
@@ -105,24 +112,31 @@ test("without delegation the merge waits for the operator and never executes", (
 });
 
 test("an explicit mission delegation satisfies the approval and executes unattended", () => {
+  // Prose alone grants nothing — assert that first, in the real path.
+  const proseOnly = D.recordMissionDelegation({
+    laneId, repository: "github.com/ksquared-16/alloy",
+    missionText: INERT_PROSE, author: "director", root: ROOT,
+  });
+  assert.equal(proseOnly.created, 0, "prose must never grant authority");
+
   const captured = D.recordMissionDelegation({
     laneId,
     // Deliberately the registry's remote shape, not the governed-input shape,
     // to prove the capture/compare seam holds in the real path.
     repository: "github.com/ksquared-16/alloy",
-    missionText: FULL,
+    delegatedActions: FULL_ACTIONS,
+    author: "director",
+    missionText: INERT_PROSE,
     root: ROOT,
   });
-  assert.equal(captured.created, 3, "the mission delegates push, open-PR and merge");
+  assert.equal(captured.created, 3, "the typed field delegates push, open-PR and merge");
 
   const { rec, states } = mergeRequest(701);
   assert.equal(rec.policy_decision, "mission_delegation", "the mission supplied the approval");
   assert.equal(rec.mission_delegation.authorized_by, "mission_delegation");
   assert.ok(rec.mission_delegation.delegation_id, "the authority is identified");
-  assert.ok(
-    rec.mission_delegation.mission_clause.includes("merge it to staging"),
-    "the Director's own sentence travels with the authority",
-  );
+  assert.equal(rec.mission_delegation.action_key, "repository.merge_pull_request");
+  assert.equal(rec.mission_delegation.target_branch, "staging");
   // The same primitive a Director approval mints: one exact content identity.
   assert.ok(rec.mission_delegation.authorization_id, "execution authority must be derived");
   assert.equal(rec.mission_delegation.authorization_error, undefined);
@@ -140,7 +154,8 @@ test("the delegation is spent: a second merge asks the operator again", () => {
 test("a staging delegation cannot carry a production merge", () => {
   D.recordMissionDelegation({
     laneId, repository: "github.com/ksquared-16/alloy",
-    missionText: "merge it to staging once checks pass", root: ROOT,
+    delegatedActions: [{ action_key: "repository.merge_pull_request", target_branch: "staging" }],
+    author: "director", root: ROOT,
   });
   const { rec, states } = mergeRequest(703, { target: "production" });
   assert.notEqual(rec.status, "complete");
