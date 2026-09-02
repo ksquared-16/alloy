@@ -706,3 +706,76 @@ export function reconcileStaleRegistrations({
   }
   return { ok: true, applied: true, removed, refused, actor, applied_at: iso(nowMs) };
 }
+
+/**
+ * WHICH MANAGED SLOTS ARE FREE?
+ *
+ * Slots 1-6 are the host's permanent worktree homes, on ports 3011-3016. A slot
+ * is taken when a registration names it; everything else is available.
+ */
+export const MANAGED_SLOTS = Object.freeze([1, 2, 3, 4, 5, 6]);
+
+export function freeSlots({ cfg = null, metadata = null } = {}) {
+  const conf = cfg || resolveRuntimeConfig();
+  const meta = metadata || readAllMetadata(conf);
+  const taken = new Set(meta
+    .filter((m) => norm(m.lifecycle).toLowerCase() !== "finished")
+    .map((m) => asSlot(m.slot))
+    .filter((n) => n != null));
+  return MANAGED_SLOTS.filter((n) => !taken.has(n));
+}
+
+let registerImpl = null;
+/** Test seam: registration is a toolkit subprocess in production. */
+export function setRegisterImplForTests(impl) { registerImpl = impl || null; }
+export function resetRegisterImplForTests() { registerImpl = null; }
+
+/**
+ * REGISTER A WORKTREE VACILANDO JUST CREATED.
+ *
+ * THE DEFECT THIS CLOSES. A lane created through the Vacilando wizard got a git
+ * worktree, a branch, a durable binding, a tmux session and a running Claude —
+ * and no slot and no registration, because worktree creation lives in JS and the
+ * registration writer is `alloy-worktree-adopt` in the shell. Two ways for a
+ * worktree to come into existence, only one of which registers it.
+ *
+ * Measured on the Financials lane: worktree present, branch agent/financials,
+ * pane %17 running claude.exe in the right directory, `slot: null`, no
+ * metadata/<name>.env — so every send was refused `lane_worktree_unregistered`
+ * and the operator saw a lane whose agent "never became available". The agent
+ * was fine; nothing could reach it.
+ *
+ * This calls the CANONICAL writer rather than writing metadata here. A second
+ * registration path is how the two diverged in the first place.
+ */
+export async function registerCreatedWorktree({
+  worktreeName,
+  provider = "claude",
+  slot = null,
+  toolkitDir = null,
+  root = runtimeRoot(),
+  cfg = null,
+  metadata = null,
+} = {}) {
+  const name = norm(worktreeName);
+  if (!name) return { ok: false, error: "missing_worktree_name" };
+  const chosen = asSlot(slot) ?? freeSlots({ cfg, metadata })[0] ?? null;
+  if (chosen == null) {
+    // Saying this is the point. A lane created with no slot left is a lane that
+    // cannot run, and the operator has to be told at creation rather than
+    // discovering it on the first message.
+    return { ok: false, error: "no_free_slot", detail: "All six managed slots are registered; free one before creating another lane that needs a worktree." };
+  }
+  const bin = join(toolkitDir || join(process.env.HOME || "", ".local", "share", "alloy", "toolkit", "current"), "alloy-worktree-adopt");
+  const run = registerImpl || ((cmd, args, opts) => spawnSync(cmd, args, opts));
+  const out = run(bin, [String(chosen), name, "--provider", provider], {
+    encoding: "utf8", timeout: 60_000, env: { ...process.env, ALLOY_RUNTIME_ROOT: root },
+  });
+  if (!out || out.status !== 0) {
+    return {
+      ok: false, error: "registration_failed", slot: chosen,
+      detail: String(out?.stderr || out?.error || "alloy-worktree-adopt failed").slice(0, 300),
+    };
+  }
+  return { ok: true, slot: chosen, port: 3010 + chosen, worktree: name, provider };
+}
