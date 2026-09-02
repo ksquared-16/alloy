@@ -2684,6 +2684,41 @@ export function processGovernedAction(requestId, {
         authorized_by: "mission_delegation",
         at: iso(nowMs),
       };
+      // THE DELEGATION SATISFIED THE CLICK; IT MUST NOW MINT THE SAME EXECUTION
+      // AUTHORITY A DIRECTOR APPROVAL WOULD.
+      //
+      // Without this the request executes, reaches the trusted-host boundary
+      // with no authorization for this exact content, and escalates straight
+      // back to awaiting_operator — the redundant click this feature exists to
+      // remove, simply relocated. It is the SAME primitive the Director path
+      // uses: bound to one request id, content fingerprint, action, environment,
+      // repository and source SHA, expiring, verified again at the boundary,
+      // and refused outright for operator-only environments.
+      const gInputs = rec.inputs || {};
+      const gIdentity = readMergeInputIdentity(gInputs);
+      const gGranted = grantExactRequestAuthorization({
+        missionId: rec.mission_id || rec.lane_id,
+        requestId: rec.request_id,
+        contentFingerprint: governedContentFingerprint(rec),
+        actionType: rec.action_key,
+        environment: policy.delegation_target_branch || rec.target,
+        repository: gInputs.repository || null,
+        sourceSha: gIdentity.expectedHeadSha
+          || gInputs.expectedHeadSha || gInputs.expected_head_sha || gInputs.expectedSha || null,
+        decisionActor: "mission_delegation",
+        policyId: "mission_delegation_v1",
+        nowMs: nowMs ?? Date.now(),
+      });
+      if (gGranted?.ok && gGranted.authorization) {
+        rec.mission_delegation.authorization_id = gGranted.authorization.authorizationId;
+      } else {
+        // Could not derive authority — fail CLOSED, back to the operator, with
+        // the reason recorded rather than an unexplained second ask.
+        rec.mission_delegation.authorization_error = gGranted?.error || "authorization_not_derived";
+        rec.policy_decision = "policy_default_requires_operator";
+        rec.operator_approval_required = true;
+        policy.operator_approval_required = true;
+      }
     }
   } else if (policy.delegation_declined) {
     // Say why the mission did NOT cover this, so "it asked me again" has an
