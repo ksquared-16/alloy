@@ -157,8 +157,10 @@ main() {
   sleep 1
   if ! alloy_pid_alive "$pid"; then
     rm -f "$pid_path"
+    alloy_record_server_lifecycle "start" "$name" "failed" "process did not stay alive" "" "$pid"
     alloy_die "${mode} server failed to stay alive. Inspect log: $log_path"
   fi
+  alloy_record_server_lifecycle "start" "$name" "ok" "${ALLOY_SERVER_AUDIT_REASON:-start requested}" "" "$pid"
 
   cat <<EOF
 ${mode_label} server started (toolkit-owned)
