@@ -40,6 +40,13 @@ import {
     resolveDropPlacement,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
+import {
+    armDragRecorder,
+    beginRecording,
+    dragRecorderArmed,
+    finishRecording,
+    recordFrame,
+} from "@/lib/adminV2/runtime/focusPanel/composition/composerDragRecorder";
 import { resolveColumnAwareDrop } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelColumnAwareLayout";
 import { publishComposerLayoutDump } from "@/lib/adminV2/runtime/focusPanel/composition/composerLayoutDump";
 import {
@@ -160,6 +167,7 @@ export default function FocusPanelRuntimeComposerCanvas({
      */
     const [previewGrid, setPreviewGrid] = useState<FocusPanelGridLayout | null>(null);
     const [draggingCard, setDraggingCard] = useState<FocusPanelCardKey | null>(null);
+    const [traceArmed, setTraceArmed] = useState(false);
     const renderGrid = previewGrid ?? grid;
     const [activeMode, setActiveMode] = useState<FocusPanelMode>("summary");
     const [ghost, setGhost] = useState<Ghost | null>(null);
@@ -552,6 +560,32 @@ export default function FocusPanelRuntimeComposerCanvas({
         const grabRowOffset = origin.row - area.rowStart;
         const gridAtStart = grid;
         /*
+         * ── THE REFERENCE FRAME IS FROZEN AT THE GRAB ──
+         *
+         * The boxes were re-measured on every pointermove, and by then the DOM was
+         * showing the PREVIEW produced by the previous frame. So each decision was
+         * made against geometry the previous decision had rearranged: choose a
+         * stack, the cards move, and the moved cards then keep confirming that
+         * choice. That is the stickiness — move right, then further left, and the
+         * left stack never wins back, because the frame of reference travelled with
+         * the decision.
+         *
+         * A scripted drag mostly escapes it by going straight to its destination
+         * and sampling once. A human wanders, so a human hits it every time. Both
+         * now resolve against the canvas as it was when the card was picked up, so
+         * every pointermove answers independently: given the pointer NOW, what
+         * placement is intended NOW?
+         */
+        const boxesAtStart = measureCardBoxes();
+        beginRecording({
+            card: area.card,
+            activator: describeTraceTarget(e.currentTarget as EventTarget),
+            grab: { colOffset: grabColOffset, rowOffset: grabRowOffset, cell: origin },
+            layoutBefore: gridAtStart.areas.map((a) =>
+                `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`),
+        });
+        recordFrame("down", e.nativeEvent);
+        /*
          * Frozen geometry. The preview reflows the canvas underneath the pointer, so
          * measuring live would let the preview move the tracks that decide the
          * preview — a feedback loop the operator feels as the ghost flickering
@@ -601,7 +635,7 @@ export default function FocusPanelRuntimeComposerCanvas({
                 moving: area,
                 colStart: col - grabColOffset,
                 pointerY: clientY - canvasTop,
-                boxes: measureCardBoxes(),
+                boxes: boxesAtStart,
             });
             const landed = drop.layout.areas.find((a) => a.card === area.card) ?? area;
             return {
@@ -621,6 +655,7 @@ export default function FocusPanelRuntimeComposerCanvas({
             setGhost(null);
             setPreviewGrid(null);
             setDraggingCard(null);
+            if (!dragRecorderArmed()) setTraceArmed(false);
             interacting.current = false;
             setArranging(false);
             try {
@@ -659,6 +694,13 @@ export default function FocusPanelRuntimeComposerCanvas({
                     rowSpan: placement.area.rowSpan,
                 },
             });
+            recordFrame("move", ev, {
+                pointerCell, after, overlapping,
+                landed: {
+                    colStart: placement.area.colStart, colSpan: placement.area.colSpan,
+                    rowStart: placement.area.rowStart,
+                },
+            });
             setGhost({
                 colStart: placement.area.colStart,
                 colSpan: placement.area.colSpan,
@@ -695,11 +737,22 @@ export default function FocusPanelRuntimeComposerCanvas({
                 layout: placement.grid.areas.map((a) =>
                     `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`),
             });
+            recordFrame("up", ev, {
+                committed: {
+                    colStart: placement.area.colStart, colSpan: placement.area.colSpan,
+                    rowStart: placement.area.rowStart,
+                },
+            });
+            finishRecording(placement.grid.areas.map((a) =>
+                `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`));
             applyGrid(placement.grid);
             cleanup();
         };
-        const cancel = () => {
+        const cancel = (ev: globalThis.PointerEvent) => {
             // Invalid/cancelled drop returns the card to its exact original position.
+            recordFrame("cancel", ev);
+            finishRecording(gridAtStart.areas.map((a) =>
+                `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`));
             cleanup();
         };
         window.addEventListener("pointermove", move);
@@ -897,6 +950,23 @@ export default function FocusPanelRuntimeComposerCanvas({
                 <div className="alloy-os-fp-composer__tray" data-fp-composer-tray="true" data-fp-composer-tray-position="top">
                     <Plus className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />
                     <span className="alloy-os-fp-composer__tray-label">Add card</span>
+                    {/*
+                      * Reproducing a failed drag should cost one click, not a DevTools
+                      * session: arm this, do the gesture that fails, let go. The trace
+                      * posts itself to where the lane can read it.
+                      */}
+                    <button
+                        type="button"
+                        className="alloy-os-fp-composer__chip"
+                        data-fp-composer-arm-trace="true"
+                        data-fp-composer-no-drag="true"
+                        onClick={() => {
+                            armDragRecorder("operator");
+                            setTraceArmed(true);
+                        }}
+                    >
+                        {traceArmed ? "Trace armed — drag now" : "Start drag trace"}
+                    </button>
                     {tray.map((c) => (
                         <button
                             // A variant is keyed by identity AND shape: Financials appears twice in
