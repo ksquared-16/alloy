@@ -248,5 +248,31 @@ await test("REGRESSION: the guard CLI works when invoked through a symlink", asy
   releaseGatewayHostMutation({ runId: ra.run_id, root: ROOT });
 });
 
+await test("a continuation links to its predecessor without rewriting it", async () => {
+  const { patchRunFields, getExecutionRun } = await import("../lib/vacilando/execution-run.mjs");
+  const { createHash } = await import("node:crypto");
+  resetDevelopmentLanesForTests(ROOT);
+  resetExecutionRunsForTests(ROOT);
+  const l = lane("continuation");
+  const first = createQueuedRun({ laneId: l.lane_id, instruction: "PRESERVED OPERATOR TEXT", root: ROOT }).run;
+  transitionExecutionRun(first.run_id, "EXECUTING", { reason: "d", origin: "system", root: ROOT });
+  transitionExecutionRun(first.run_id, "FAILED", { reason: "verification_failed", origin: "governor", root: ROOT });
+
+  const sha = createHash("sha256").update("PRESERVED OPERATOR TEXT", "utf8").digest("hex");
+  const next = createQueuedRun({ laneId: l.lane_id, instruction: "PRESERVED OPERATOR TEXT", root: ROOT }).run;
+  patchRunFields(next.run_id, {
+    continuation_of: { run_id: first.run_id, reason: "preserved operator instruction re-sent", instruction_sha256: sha },
+  }, { root: ROOT });
+
+  const successor = getExecutionRun(next.run_id, ROOT);
+  assert.equal(successor.continuation_of.run_id, first.run_id, "successor points at the historical run");
+  assert.equal(successor.continuation_of.instruction_sha256, sha);
+
+  const historical = getExecutionRun(first.run_id, ROOT);
+  assert.equal(historical.state, "FAILED", "the historical run stays terminal");
+  assert.equal(historical.instruction, "PRESERVED OPERATOR TEXT", "and keeps its instruction verbatim");
+  assert.equal(historical.continuation_of, undefined, "history is not rewritten");
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
