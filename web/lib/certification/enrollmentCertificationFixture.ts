@@ -288,11 +288,30 @@ async function ensureFamily(
         supabase,
         { orgId, userId: actorUserId ?? undefined },
         {
+            /*
+             * PATH B CARRIES ITS CHILD IN THE LEAD ITSELF.
+             *
+             * That is what makes an enrolment genuinely acquisition-backed. Create Lead's own
+             * household commit calls `applyCreateLeadChildParticipationFromIdentity`, which creates
+             * the Enrollment Participation UNDER the Opportunity. Adding the child afterwards with
+             * `addChild` produces a participation with no acquisition context, which is precisely
+             * how Path B came out context-free before.
+             *
+             * Path A deliberately does NOT do this: its child is added after the episode concludes,
+             * so it has no acquisition context to inherit — which is the shape being certified.
+             */
             merged: {
                 first_name: spec.parentFirstName,
                 last_name: spec.lastName,
                 email: spec.email,
                 phone: spec.phone,
+                ...(spec.key === "opportunity_backed"
+                    ? {
+                          child_first_name: spec.child.firstName,
+                          child_last_name: spec.lastName,
+                          child_date_of_birth: spec.child.dob,
+                      }
+                    : {}),
             },
             context: { surface: "enrollment_certification" },
         },
@@ -323,15 +342,23 @@ async function ensureFamily(
         throw new Error(`create_lead committed but no household resolves for ${spec.email}`);
     }
 
-    const child = await addChild(supabase, {
-        orgId,
-        customerId,
-        firstName: spec.child.firstName,
-        lastName: spec.lastName,
-        dob: spec.child.dob,
-    });
-    const customerMemberId = t(child.customerMemberId);
-    if (!customerMemberId) throw new Error(`addChild produced no customer_member for ${spec.child.firstName}`);
+    /*
+     * Path B's child already exists — Create Lead made it, under the Opportunity. Calling addChild
+     * again would trip the product's duplicate-identity gate, and answering that gate is a decision
+     * the product reserves for a human.
+     */
+    const fromLead = await findFixtureChild(supabase, orgId, customerId);
+    const customerMemberId = fromLead
+        ?? t(
+            (await addChild(supabase, {
+                orgId,
+                customerId,
+                firstName: spec.child.firstName,
+                lastName: spec.lastName,
+                dob: spec.child.dob,
+            })).customerMemberId,
+        );
+    if (!customerMemberId) throw new Error(`no child resolves for ${spec.child.firstName}`);
 
     // Path A only: conclude the acquisition episode so Start Enrollment runs context-free.
     let acquisition: "present" | "concluded" = "present";
