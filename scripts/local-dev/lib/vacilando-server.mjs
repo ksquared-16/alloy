@@ -39,6 +39,7 @@
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { attachLaneAppUrls } from "./vacilando/lane-app-url.mjs";
 import { isManagedSlot, managedSlots } from "./vacilando/managed-slots.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -1948,7 +1949,7 @@ export function createVacilandoServer() {
         try { evaluateExclusiveWindow(); } catch { /* exclusive tick must not fail discovery */ }
         try { await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" }); } catch { /* */ }
         const out = await listDevelopmentLanes();
-        const lanes = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))))));
+        const lanes = attachLaneAppUrls(attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false }))))))))));
         const development_resources = developmentResourceSnapshot();
         let execution_capacity = null;
         try {
