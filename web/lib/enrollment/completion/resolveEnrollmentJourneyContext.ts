@@ -34,7 +34,10 @@ import {
     ENROLLMENT_CONTEXT_TYPE,
     ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
 } from "@/lib/process/processInstances";
-import { TERMINAL_CHILD_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import {
+    TERMINAL_CHILD_STATUS_KEYS,
+    isReusableActiveParticipationStatus,
+} from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 
 /** The durable Enrollment subject. Named once so every query here reads the same table. */
 const PARTICIPATION_TABLE = "opportunity_customer_members" as const;
@@ -76,8 +79,31 @@ async function participationForSubject(
         const matched = active.find((r) => r.opportunity_id === opportunityId);
         if (matched) return matched;
     }
-    // No acquisition context to match: the context-free episode is the journey's subject.
-    return active.find((r) => r.opportunity_id === null) ?? active[0] ?? null;
+
+    /*
+     * ── WHY THIS ASKS A DIFFERENT QUESTION FROM START ENROLLMENT ──
+     *
+     * Start Enrollment asks "may a NEW journey reuse this participation?" and must answer no once
+     * the episode concluded, `enrolled` included. This asks "which participation is an EXISTING
+     * journey about?", and the honest answer for a journey that just enrolled is its own
+     * participation — which is now concluded.
+     *
+     * So concluded rows stay eligible here and are merely DEPRIORITIZED. Filtering them out would
+     * return null for every completed journey, and the caller reads that as "no subject": the
+     * operational handoff that runs immediately after the enrolled write resolves its facts through
+     * this function, and would have found nothing at the exact moment it had the most to do.
+     *
+     * The ordering matters now that a child can legitimately hold two context-free participations —
+     * last year's `enrolled` one and this year's active one. Preferring the reusable-active row
+     * makes that deterministic; before, it was whichever the database happened to return first.
+     */
+    const preferred =
+        active.find((r) => r.opportunity_id === null && isReusableActiveParticipationStatus(r.outcome_status_key))
+        ?? active.find((r) => r.opportunity_id === null)
+        ?? active.find((r) => isReusableActiveParticipationStatus(r.outcome_status_key))
+        ?? active[0]
+        ?? null;
+    return preferred;
 }
 
 export async function resolveEnrollmentJourneyContext(

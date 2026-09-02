@@ -20,17 +20,27 @@
  *
  * The context-free replacement is scoped to the EPISODE, because that is what a participation is —
  * 600 children in the certification tenant hold two of them and 600 hold three, each carrying its
- * own `start_date`, `stage_key` and `outcome_status_key`. So `uq_ocm_active_context_free_participation`
- * constrains one ACTIVE context-free participation per child, and a concluded episode
- * (`withdrawn` / `not_enrolling`, the child track's own `terminal` statuses) releases the slot.
- * The lookup below matches that index exactly: reusing a CONCLUDED participation would hand a new
- * journey the previous episode's outcome.
+ * own `start_date`, `stage_key` and `outcome_status_key`. So `uq_ocm_active_context_free_episode`
+ * constrains one ACTIVE context-free participation per child, and a concluded episode releases the
+ * slot. The lookup below matches that index exactly: reusing a CONCLUDED participation would hand a
+ * new journey the previous episode's outcome.
+ *
+ * ## Concluded includes ENROLLED
+ *
+ * The first version of this read "concluded" as `withdrawn` / `not_enrolling` — the statuses the
+ * vocabulary marks `terminal`. But those are the ways an episode ends WITHOUT enrolling, and the
+ * ordinary way it ends is by enrolling. While `enrolled` counted as active, a child who enrolled
+ * last year held their slot forever: this lookup returned last year's participation to this year's
+ * Start Enrollment, and the unique index made a second one impossible.
+ *
+ * Reuse therefore asks `PARTICIPATION_REUSE_CONCLUDED_STATUS_KEYS`, not the terminal set. They are
+ * different questions and only one of them is about reuse.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
-import { TERMINAL_CHILD_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import { isReusableActiveParticipationStatus } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 
 export async function ensureOpportunityCustomerMemberParticipation(params: {
     supabase: SupabaseClient;
@@ -53,7 +63,7 @@ export async function ensureOpportunityCustomerMemberParticipation(params: {
      * Matches whichever uniqueness protects this case — the constraint, or the partial index.
      *
      * The context-free branch selects and filters in code rather than composing a `not.in` filter:
-     * the terminal set has an owner (`TERMINAL_CHILD_STATUS_KEYS`) and reusing it keeps one
+     * the concluded set has an owner (`PARTICIPATION_REUSE_CONCLUDED_STATUS_KEYS`) and reusing it keeps one
      * vocabulary, where a hand-written PostgREST predicate would be a second copy of it.
      */
     async function findParticipation(): Promise<string | null> {
@@ -73,10 +83,17 @@ export async function ensureOpportunityCustomerMemberParticipation(params: {
             .eq("org_id", params.orgId)
             .eq("customer_member_id", customerMemberId);
         const rows = (data ?? []) as { id: string; opportunity_id: string | null; outcome_status_key: string | null }[];
-        // Only an ACTIVE context-free episode may be reused. A concluded one is history, and
-        // returning it would start a new journey already holding the previous episode's outcome.
+        /*
+         * Only an ACTIVE context-free episode may be reused. A concluded one is history, and
+         * returning it would start a new journey already holding the previous episode's outcome.
+         *
+         * "Concluded" includes ENROLLED. That is the whole correction: enrolling is the ordinary way
+         * an episode ends, and while `enrolled` counted as active a child who enrolled last year
+         * could never start a second episode — this lookup handed back last year's participation,
+         * and the partial unique index forbade creating another.
+         */
         const active = rows.find(
-            (r) => r.opportunity_id === null && !TERMINAL_CHILD_STATUS_KEYS.includes(String(r.outcome_status_key ?? "")),
+            (r) => r.opportunity_id === null && isReusableActiveParticipationStatus(r.outcome_status_key),
         );
         return active?.id ? String(active.id) : null;
     }

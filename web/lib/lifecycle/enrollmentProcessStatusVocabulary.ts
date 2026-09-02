@@ -62,6 +62,37 @@ export const ENROLLED_CHILD_STATUS_KEY = "enrolled" as const;
 /** Dispositions that CONCLUDE a child's enrollment episode. Mirrors `terminal` below. */
 export const TERMINAL_CHILD_STATUS_KEYS: readonly string[] = ["withdrawn", "not_enrolling"];
 
+/**
+ * Dispositions after which a context-free participation MAY NOT BE REUSED by a new Start Enrollment.
+ *
+ * This is a different question from `TERMINAL_CHILD_STATUS_KEYS`, and conflating them was the bug.
+ * That set means "the episode ended without enrolling", and it correctly excludes `enrolled` —
+ * `enrolled` is a *successful* conclusion, the vocabulary does not mark it `terminal`, and the
+ * places that ask "did this child fall out of enrollment" must keep getting `false`.
+ *
+ * But an episode that concluded by ENROLLING is still concluded. Reusing it hands a new journey the
+ * previous episode's outcome: a child enrolled last year would start this year's enrollment already
+ * holding last year's `enrolled` participation, and the partial unique index made creating a second
+ * one impossible. Episodes are per-year — 600 children in the certification tenant hold two
+ * participations and 600 hold three, each with its own `start_date` and `outcome_status_key`.
+ *
+ * So reuse asks THIS set, and it is deliberately the superset: every way an episode can be over.
+ * It mirrors `uq_ocm_active_context_free_participation` exactly; the index and this constant are one
+ * rule expressed twice and must be changed together.
+ *
+ * A NULL or empty status is ACTIVE and always has been — a participation that has not yet been
+ * dispositioned is the live one, not a concluded one.
+ */
+export const PARTICIPATION_REUSE_CONCLUDED_STATUS_KEYS: readonly string[] = [
+    ...TERMINAL_CHILD_STATUS_KEYS,
+    ENROLLED_CHILD_STATUS_KEY,
+];
+
+/** Is this participation still the child's ACTIVE episode, for reuse purposes? */
+export function isReusableActiveParticipationStatus(statusKey: string | null | undefined): boolean {
+    return !PARTICIPATION_REUSE_CONCLUDED_STATUS_KEYS.includes(String(statusKey ?? "").trim());
+}
+
 export const ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY: EnrollmentStatusVocabularyRow[] = [
     { status_key: "waitlisted", status_label: "Waitlisted", sort_order: 10, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
     { status_key: "enrolling", status_label: "Enrolling", sort_order: 20, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
