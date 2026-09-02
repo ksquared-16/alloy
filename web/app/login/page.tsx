@@ -42,6 +42,8 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const isDev = process.env.NODE_ENV === "development";
+  // Origin only — the debug helper never exposes key material.
+  const supabaseOrigin = isDev ? getPublicSupabaseAuthDebug().origin : null;
 
   useEffect(() => {
     if (!isDev) return;
@@ -169,6 +171,24 @@ function LoginForm() {
           {(error || initialError) && (
             <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
               {error || initialError}
+              {/*
+                Dev only, and only under the credential answer — the one message that is deliberately
+                ambiguous. Accounts are per-project, and an operator running a local server against a
+                hosted project will present a password that is entirely correct somewhere else and be
+                told it is incorrect. That cost a QA gate an afternoon.
+
+                It does NOT weaken W-32. This names the environment, never the account: it says the
+                same words for an address that exists here and one that does not, so it is no more an
+                existence oracle than the URL in the address bar. It is the same carve-out the message
+                module already makes for `misconfigured` and `unreachable` — true of every caller,
+                silent about all of them.
+              */}
+              {isDev && error === signInErrorMessage(null) && supabaseOrigin ? (
+                <p className="mt-2 border-t border-red-200 pt-2 text-xs text-red-700/80">
+                  Dev: this server signs in against <span className="font-mono">{supabaseOrigin}</span>.
+                  Accounts are per project — one from another environment will not work here.
+                </p>
+              ) : null}
             </div>
           )}
 
