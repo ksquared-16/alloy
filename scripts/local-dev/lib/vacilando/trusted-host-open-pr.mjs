@@ -20,7 +20,7 @@
  */
 import { spawnSync } from "node:child_process";
 
-import { allowlistedRepositories, ALLOWED_TARGET_BRANCHES } from "./trusted-host-merge.mjs";
+import { allowlistedRepositories, repositoryRefusalDetail, ALLOWED_TARGET_BRANCHES } from "./trusted-host-merge.mjs";
 import { BRANCH_RE, PROTECTED_REFS, SHA_RE } from "./trusted-host-push.mjs";
 import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
 
@@ -49,7 +49,7 @@ export function validateOpenPrInputs(inputs = {}) {
   const repository = normRepo(inputs.repository || inputs.repo);
   if (!repository) return { ok: false, code: "missing_repository", detail: "repository is required" };
   if (!allowlistedRepositories().includes(repository)) {
-    return { ok: false, code: "repository_not_allowlisted", detail: `Repository ${repository} is not allowlisted` };
+    return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
   }
 
   const base = String(inputs.base || inputs.base_branch || inputs.baseBranch || "staging").trim();

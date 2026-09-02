@@ -755,6 +755,27 @@ export function transitionExecutionRun(runId, toState, {
       root,
     });
   } catch { /* resource coordinator must not fail the run transition */ }
+
+  /*
+   * THE LANE HAS YIELDED — DELIVER WHAT IT IS OWED.
+   *
+   * A lane that files a governed action during its turn cannot be told the
+   * outcome while that turn is running: its own pane is busy, and pasting into
+   * it would corrupt the work in progress. The notification is deferred instead
+   * of discarded, and THIS is the moment it comes due — a terminal run state is
+   * the canonical "I have finished", and the only point at which the pane is
+   * expected to become pastable.
+   *
+   * Deliberately fire-and-forget: a redelivery must never fail, delay, or
+   * reorder the transition that triggered it. If this attempt still finds the
+   * pane busy the notification simply stays owed, and the conductor tick picks
+   * it up.
+   */
+  if (TERMINAL_RUN_STATES.includes(to) && packId) {
+    import("./governed-action-request.mjs")
+      .then((m) => m.drainGovernedNotificationsForLane?.(packId, { root, nowMs }))
+      .catch(() => { /* redelivery is best-effort; the tick is the safety net */ });
+  }
   return { ok: true, run: getExecutionRun(runId, root) || found, from, to, push };
 }
 

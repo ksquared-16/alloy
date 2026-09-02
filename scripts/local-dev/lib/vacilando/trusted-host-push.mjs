@@ -30,7 +30,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-import { allowlistedRepositories } from "./trusted-host-merge.mjs";
+import { allowlistedRepositories, repositoryRefusalDetail } from "./trusted-host-merge.mjs";
 import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
 
 /** Refs a branch push may never target. Promotion is a merge, not a push. */
@@ -73,7 +73,7 @@ export function validatePushInputs(inputs = {}) {
   const repository = normRepo(inputs.repository || inputs.repo);
   if (!repository) return { ok: false, code: "missing_repository", detail: "repository is required" };
   if (!allowlistedRepositories().includes(repository)) {
-    return { ok: false, code: "repository_not_allowlisted", detail: `Repository ${repository} is not allowlisted` };
+    return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
   }
 
   const branch = String(inputs.branch || inputs.head_branch || inputs.headBranch || "").trim();

@@ -2555,6 +2555,20 @@ export function createVacilandoServer() {
     if (conductorInFlight) return;
     conductorInFlight = true;
     try { conductorTick(); } catch { /* */ }
+    /*
+     * SAFETY NET FOR NOTIFICATIONS A LANE IS STILL OWED.
+     *
+     * Redelivery is normally driven by the lane's own run reaching a terminal
+     * state. A turn that ends untidily — the provider dies, the session is
+     * recovered, the run is abandoned rather than completed — never fires that
+     * signal, and the lane would wait forever for something nobody is going to
+     * send. This rides the tick this server already owns rather than adding a
+     * scheduler: no new timer, no new cadence to reason about, and the drain is
+     * a no-op on the overwhelming majority of ticks because nothing is pending.
+     */
+    import("./vacilando/governed-action-request.mjs")
+      .then((m) => m.drainGovernedNotificationsForLane?.(null, {}))
+      .catch(() => { /* best effort */ });
     // Release on next tick so a long sync loop can't stack with the next interval.
     setTimeout(() => { conductorInFlight = false; }, 0);
   };
