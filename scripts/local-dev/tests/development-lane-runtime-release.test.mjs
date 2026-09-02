@@ -135,7 +135,19 @@ await test("release keeps durable lane and worktree, frees slot", async () => {
   assert.equal(kept.binding.slot, null);
   assert.equal(kept.binding.tmux_session, null);
   assert.equal(kept.execution_capacity.state, "IDLE");
-  assert.deepEqual(calls.finish, [4]);
+  // THE WORKTREE REGISTRATION SURVIVES A CAPACITY RELEASE.
+  //
+  // This used to assert `calls.finish === [4]` — that releasing capacity ran
+  // alloy-sprint-finish, which archives the worktree's metadata and retires its
+  // managed registration. The test's own NAME says release "keeps durable lane
+  // and worktree"; the assertion said the opposite, and the assertion was what
+  // shipped. Measured consequence: lane_73a897409906 released capacity at
+  // 23:43:22.454Z and wt1-work-unit-grade-a was finished five seconds later,
+  // while the lane stayed open and kept accepting instructions.
+  //
+  // A lane owns its worktree for the LIFETIME OF THE LANE. Only explicit lane
+  // closure may retire the registration.
+  assert.deepEqual(calls.finish, [], "a capacity release must not finish the sprint");
   assert.deepEqual(calls.stop, ["alloy-disposable-cert"]);
   assert.equal(calls.checkpoint.length, 0);
 });
