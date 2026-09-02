@@ -3,7 +3,7 @@
   "query_hash": "92b0aba9605e52d96f46318c2d2ab74ec87ef6a745690d2cb07b742db7698e40",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-02T16:14:32.293Z",
+    "census_run_at": "2026-09-02T16:49:40.869Z",
     "question_ids": [
       "duplicate_active_context_free",
       "exception_baseline",
@@ -44,6 +44,13 @@
         "question_id": "journey_population",
         "row_count": null,
         "rows": [
+          {
+            "context_type": "enrollment_participation",
+            "episode_open": true,
+            "journeys": 2,
+            "children": 2,
+            "orgs": 1
+          },
           {
             "context_type": "null",
             "episode_open": false,
@@ -109,10 +116,10 @@
         "row_count": null,
         "rows": [
           {
-            "opportunities": 2,
-            "participations": 2,
-            "context_free": 0,
-            "active_context_free": 0,
+            "opportunities": 5,
+            "participations": 4,
+            "context_free": 2,
+            "active_context_free": 2,
             "enrolled": 0
           }
         ]
@@ -142,10 +149,10 @@
         "row_count": null,
         "rows": [
           {
-            "participation_anchored_journeys": 0,
+            "participation_anchored_journeys": 2,
             "opportunity_anchored_journeys": 19,
             "unanchored_journeys": 6,
-            "context_free_participations": 0
+            "context_free_participations": 2
           }
         ]
       },
@@ -225,12 +232,24 @@
         "row_count": null,
         "rows": [
           {
-            "sessions_bound_to_enrollment_journey": 21,
-            "distinct_journeys": 21
+            "sessions_bound_to_enrollment_journey": 23,
+            "distinct_journeys": 23
           }
         ]
       }
     },
-    "row_count": 27
+    "row_count": 28
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-02T16:49:40.182Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8e2bbfd0f49d6f",
+    "authorization_id": "grnt_d1da15199d404989",
+    "query_hash": "92b0aba9605e52d96f46318c2d2ab74ec87ef6a745690d2cb07b742db7698e40",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
   }
 }
