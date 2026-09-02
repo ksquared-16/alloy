@@ -636,16 +636,24 @@ export const MIGRATION_POSTCONDITIONS = {
              WHERE i.relname IN ('uq_ocm_active_context_free_participation','uq_ocm_active_context_free_episode')
           );`,
   },
-  // The backfill's only durable trace: at least one journey anchored to a participation. Checked
-  // only when there is an enrollment journey to anchor, so an empty tenant is not a false alarm.
+  /*
+   * The backfill's guarantee is NOT "some journey is anchored" -- it is "no OPEN journey is left
+   * unanchored". Real data caught the difference: this tenant has 25 enrollment journeys of which
+   * every unanchored one is already concluded, so a legitimate re-run anchors nothing. Asserting
+   * that an anchored journey EXISTS would have reported ledger_mismatch forever after a correct
+   * no-op apply -- a verifier that cries wolf is worse than none, because the next real mismatch
+   * gets waved through.
+   *
+   * Concluded journeys are deliberately excluded: the migration leaves them alone on purpose, so
+   * that a past episode is never re-filed under a current participation.
+   */
   "20260827180000": {
-    describe: "enrollment journeys are anchored to a participation (or none exist to anchor)",
-    sql: `SELECT (
-            (SELECT count(*) FROM public.process_instances
-              WHERE process_key='enrollment' AND subject_type='child') = 0
-            OR EXISTS (
-              SELECT 1 FROM public.process_instances
-               WHERE process_key='enrollment' AND context_type='enrollment_participation')
+    describe: "no OPEN enrollment journey remains unanchored",
+    sql: `SELECT NOT EXISTS (
+            SELECT 1 FROM public.process_instances
+             WHERE process_key='enrollment' AND subject_type='child'
+               AND context_id IS NULL
+               AND COALESCE(state,'') NOT IN ('enrolled','withdrawn','not_enrolling')
           );`,
   },
   // The governed requirement exception owner, with the index that makes it idempotent.
