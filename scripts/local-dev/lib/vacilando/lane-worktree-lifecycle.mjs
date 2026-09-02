@@ -82,7 +82,7 @@ const DETAIL = Object.freeze({
   lane_worktree_not_managed: "The lane's worktree registration is marked finished, so the worktree is no longer managed. Managed worktree registration is required before this operation.",
   lane_slot_unregistered: "The lane's worktree is registered without a slot, so it has no port or managed environment.",
   lane_slot_mismatch: "The registered slot points at a different worktree than the lane is bound to.",
-  lane_branch_drift: "The worktree is checked out on a different branch than the lane and its registration expect.",
+  lane_branch_drift: "The lane's recorded branch no longer matches the branch its worktree is on.",
 });
 
 export function lifecycleDetail(code) {
@@ -140,6 +140,8 @@ export function resolveLaneWorktree(laneId, { root = runtimeRoot(), cfg = null, 
     binding_slot: asSlot(binding.slot),
     branch_expected: null,
     branch_actual: null,
+    branch_created_on: null,
+    branch_drift: false,
   };
 
   if (!base.lane_open) {
@@ -202,29 +204,42 @@ export function resolveLaneWorktree(laneId, { root = runtimeRoot(), cfg = null, 
     return { ...out, ok: false, code: LANE_LIFECYCLE_ERRORS.WORKTREE_MISSING, detail: lifecycleDetail("lane_worktree_missing") };
   }
 
-  // BRANCH IDENTITY IS PART OF LANE IDENTITY.
+  // A LANE CHANGING BRANCH IS NORMAL WORK, NOT A LIFECYCLE FAILURE.
   //
-  // THE DEFECT THIS CLOSES. The Surfaces lane binding said
-  // `agent/claude/6-surfaces-faacca`, its slot registration said the same, and
-  // the worktree was checked out on `agent/claude/6-surfaces-followup`. Path,
-  // slot and lifecycle all agreed, so this resolver reported OK — it had never
-  // been told to look at the branch. Every governed push identity for that lane
-  // is derived from a branch name nobody had verified against the worktree.
+  // WHAT I GOT WRONG. I made branch drift a fail-closed refusal, and it took the
+  // Surfaces lane off the air: "Delivery refused (lane_branch_drift)". Runtime
+  // Performance went dark the same way, on `promote/runtime-performance-group2`
+  // — a promotion branch it created to do exactly what Alloy's safe promotion
+  // workflow asks for. Both lanes did the right thing and both stopped being
+  // reachable.
   //
-  // Fail closed and say which two answers disagree. This adds no new source of
-  // truth: the expectation still comes from the registration, and the fact still
-  // comes from git.
-  const expectedBranch = normalizeBranchName(out.registry.branch_expected || base.branch);
+  // This codebase had already learned this lesson one layer down. From
+  // execution-run-send: a push delegation used to be pinned to the lane's own
+  // working branch, "so the pin made the correct workflow unreachable" — S15
+  // refused a push of promote/s15-delegation-cert against the lane branch. I
+  // reproduced that mistake at the delivery layer.
+  //
+  // The recorded branch is NOT an authorization input. Governed push identity
+  // comes from the request's own inputs and is pinned at execution by
+  // repository, exact branch, exact head SHA, worktree and protected-ref
+  // refusal. What the recorded branch feeds is display and session expectation.
+  // So drift is an OBSERVATION to reconcile, never a reason to refuse delivery.
+  //
+  // Each field keeps one authority: slot and port from the registration, and the
+  // branch from git, because the worktree's HEAD is the only thing that knows
+  // what branch a lane is on. The registration's ALLOY_WORKTREE_BRANCH stays as
+  // the branch the worktree was CREATED on — an origin record worth keeping, not
+  // a live constraint.
+  const createdOn = normalizeBranchName(out.registry.branch_expected);
+  const boundBranch = normalizeBranchName(base.branch);
   const actualBranch = normalizeBranchName(actualWorktreeBranch(path, { git: gitImpl }));
-  out.branch_expected = expectedBranch;
+  out.branch_created_on = createdOn;
+  out.branch_expected = boundBranch;
   out.branch_actual = actualBranch;
-  if (expectedBranch && actualBranch && expectedBranch !== actualBranch) {
-    return {
-      ...out,
-      ok: false,
-      code: LANE_LIFECYCLE_ERRORS.BRANCH_DRIFT,
-      detail: `${lifecycleDetail("lane_branch_drift")} Expected ${expectedBranch}; the worktree is on ${actualBranch}.`,
-    };
+  out.branch = actualBranch || boundBranch;
+  out.branch_drift = Boolean(boundBranch && actualBranch && boundBranch !== actualBranch);
+  if (out.branch_drift) {
+    out.divergence.push({ field: "branch", binding: boundBranch, actual: actualBranch });
   }
 
   // ONE SLOT TRUTH: the registration decides, the binding follows.
@@ -266,19 +281,59 @@ export function actualWorktreeBranch(worktreePath, { git = null } = {}) {
  * Registry -> binding only. A projection that can write back to its own source
  * is a second truth model, which is what this mission exists to remove.
  */
-export function reconcileLaneSlotBinding(laneId, { root = runtimeRoot(), nowMs = Date.now(), cfg = null, metadata = null } = {}) {
-  const resolved = resolveLaneWorktree(laneId, { root, cfg, metadata });
+export function reconcileLaneSlotBinding(laneId, { root = runtimeRoot(), nowMs = Date.now(), cfg = null, metadata = null, gitImpl = null } = {}) {
+  const resolved = resolveLaneWorktree(laneId, { root, cfg, metadata, gitImpl });
   if (!resolved.ok) return { ok: false, error: resolved.code, detail: resolved.detail, resolution: resolved };
-  if (!resolved.divergence.length) return { ok: true, changed: false, slot: resolved.slot, port: resolved.port };
+  if (!resolved.divergence.length) {
+    return { ok: true, changed: false, slot: resolved.slot, port: resolved.port, branch: resolved.branch };
+  }
 
   const store = readDevelopmentLaneStore(root);
   const rec = store.lanes?.[resolved.lane_id];
   if (!rec) return { ok: false, error: LANE_LIFECYCLE_ERRORS.LANE_NOT_FOUND };
-  rec.binding = { ...(rec.binding || {}), slot: resolved.slot, port: resolved.port };
+  const next = { ...(rec.binding || {}), slot: resolved.slot, port: resolved.port };
+  // THE BRANCH FOLLOWS THE WORKTREE. Only ever git -> binding: a lane that
+  // checked out a new branch has told us what it is on, and the record catches
+  // up. Nothing here touches the checkout, and an unreadable git changes
+  // nothing rather than blanking a branch we still know.
+  if (resolved.branch_actual && resolved.branch_actual !== normalizeBranchName(next.branch)) {
+    next.branch = resolved.branch_actual;
+  }
+  rec.binding = next;
   rec.updated_at = iso(nowMs);
   store.lanes[resolved.lane_id] = rec;
   writeDevelopmentLaneStore(store, root);
-  return { ok: true, changed: true, slot: resolved.slot, port: resolved.port, divergence: resolved.divergence };
+  return {
+    ok: true, changed: true, slot: resolved.slot, port: resolved.port,
+    branch: next.branch, divergence: resolved.divergence,
+  };
+}
+
+/**
+ * Bring one lane's recorded branch back in line with its worktree.
+ *
+ * The supported repair for the refusal that took Surfaces off the air, and the
+ * same thing dispatch now does for itself. Reported rather than silent: the
+ * caller is told what moved.
+ */
+export function reconcileLaneBranch(laneId, { root = runtimeRoot(), nowMs = Date.now(), cfg = null, metadata = null, gitImpl = null } = {}) {
+  const resolved = resolveLaneWorktree(laneId, { root, cfg, metadata, gitImpl });
+  if (!resolved.ok) return { ok: false, error: resolved.code, detail: resolved.detail, resolution: resolved };
+  if (!resolved.branch_drift) {
+    return { ok: true, changed: false, branch: resolved.branch, lane_id: resolved.lane_id };
+  }
+  const store = readDevelopmentLaneStore(root);
+  const rec = store.lanes?.[resolved.lane_id];
+  if (!rec) return { ok: false, error: LANE_LIFECYCLE_ERRORS.LANE_NOT_FOUND };
+  const from = normalizeBranchName(rec.binding?.branch);
+  rec.binding = { ...(rec.binding || {}), branch: resolved.branch_actual };
+  rec.updated_at = iso(nowMs);
+  store.lanes[resolved.lane_id] = rec;
+  writeDevelopmentLaneStore(store, root);
+  return {
+    ok: true, changed: true, lane_id: resolved.lane_id,
+    from, to: resolved.branch_actual, branch_created_on: resolved.branch_created_on,
+  };
 }
 
 /**
@@ -295,9 +350,10 @@ export function assertLaneDispatchable(laneId, {
   metadata = null,
   repair = true,
   requireSlot = false,
+  gitImpl = null,
   nowMs = Date.now(),
 } = {}) {
-  let resolved = resolveLaneWorktree(laneId, { root, cfg, metadata });
+  let resolved = resolveLaneWorktree(laneId, { root, cfg, metadata, gitImpl });
 
   // WHAT THIS GUARD IS AND IS NOT.
   //
@@ -324,9 +380,12 @@ export function assertLaneDispatchable(laneId, {
     return { ok: true, resolution: resolved, repaired: false, slotless: true };
   }
   if (resolved.ok && resolved.divergence.length && repair) {
-    reconcileLaneSlotBinding(laneId, { root, nowMs, cfg, metadata });
-    resolved = resolveLaneWorktree(laneId, { root, cfg, metadata });
-    return { ok: true, resolution: resolved, repaired: true };
+    // A moved branch and a forgotten slot are both the record trailing the
+    // truth, and both are repaired the same way: read the fact, write it down,
+    // carry on. Delivery is never refused for either.
+    const fixed = reconcileLaneSlotBinding(laneId, { root, nowMs, cfg, metadata, gitImpl });
+    resolved = resolveLaneWorktree(laneId, { root, cfg, metadata, gitImpl });
+    return { ok: true, resolution: resolved, repaired: true, reconciled: fixed?.divergence || null };
   }
   if (resolved.ok) return { ok: true, resolution: resolved, repaired: false };
   return { ok: false, error: resolved.code, detail: resolved.detail, resolution: resolved };
@@ -479,12 +538,16 @@ export function auditLaneWorktrees({ root = runtimeRoot(), cfg = null } = {}) {
   const conf = cfg || resolveRuntimeConfig();
   const metadata = readAllMetadata(conf);
   const lanes = listDurableLanes(root).map((l) => resolveLaneWorktree(l.lane_id, { root, cfg: conf, metadata }));
+  const drifted = lanes.filter((l) => l.branch_drift).map((l) => ({
+    lane_id: l.lane_id, lane_name: l.lane_name,
+    recorded: l.branch_expected, actual: l.branch_actual, created_on: l.branch_created_on,
+  }));
   const ownedNames = new Set(lanes.map((l) => norm(l.worktree_name)).filter(Boolean));
   const orphans = metadata
     .filter((m) => norm(m.lifecycle).toLowerCase() !== "finished")
     .filter((m) => !ownedNames.has(norm(m.worktree)))
     .map((m) => ({ worktree: m.worktree, slot: asSlot(m.slot), port: asPort(m.port), path: m.path || null, lifecycle: m.lifecycle || null }));
-  return { lanes, orphans, metadata_count: metadata.length };
+  return { lanes, orphans, branch_drift: drifted, metadata_count: metadata.length };
 }
 
 /**

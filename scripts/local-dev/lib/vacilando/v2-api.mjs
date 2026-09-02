@@ -401,6 +401,23 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
    * GET-shaped by default: without `apply: true` this returns the plan and the
    * classification of every registration, and changes nothing.
    */
+  /**
+   * Bring a lane's recorded branch back in line with its worktree.
+   *
+   * Dispatch already does this for itself, so this exists for the case where an
+   * operator wants it done deliberately — or wants to see, without changing
+   * anything, which lanes have moved. Omit lane_id to reconcile every drifted
+   * lane; pass apply:false to only look.
+   */
+  if (path === "/api/v2/lanes/reconcile-branch") {
+    const { reconcileLaneBranch, auditLaneWorktrees } = await import("./lane-worktree-lifecycle.mjs");
+    const laneId = v.lane_id || v.laneId || null;
+    const drifted = laneId ? [{ lane_id: String(laneId) }] : auditLaneWorktrees({}).branch_drift;
+    if (v.apply === false) return { status: 200, body: { ok: true, applied: false, drifted } };
+    const results = drifted.map((d) => reconcileLaneBranch(d.lane_id, { actor: actorDefault }));
+    return { status: 200, body: { ok: true, applied: true, results } };
+  }
+
   if (path === "/api/v2/registrations/reconcile") {
     const { reconcileStaleRegistrations } = await import("./lane-worktree-lifecycle.mjs");
     const out = reconcileStaleRegistrations({
