@@ -135,13 +135,13 @@ async function stopSession(tmuxSession) {
   return stopPersistentAgentSession({ tmuxSession });
 }
 
-async function finishSprint(slot, acknowledgeUncommitted) {
-  if (typeof releaseImpl?.finishSprint === "function") {
-    return releaseImpl.finishSprint({ slot, acknowledgeUncommitted });
-  }
-  const { releaseSprintSlot } = await import("./alloy-dev-adapter.mjs");
-  return releaseSprintSlot({ slot, acknowledgeUncommitted });
-}
+// finishSprint() USED TO LIVE HERE, and calling it is what retired Runtime
+// Performance's worktree during a capacity release. Removing the call was not
+// enough: a retirement helper sitting in a capacity module is the next caller
+// waiting to be written. Worktree retirement now has exactly one owner,
+// lane-worktree-lifecycle.closeDurableLane, and `releaseSprintSlot` has exactly
+// one caller in the tree. The test seam below keeps `finishSprint` so a suite
+// can still assert that this path NEVER reaches it.
 
 async function reevaluateAdmission(root) {
   if (typeof releaseImpl?.evaluateAdmissionQueue === "function") {
@@ -250,7 +250,12 @@ export async function releaseLaneExecutionCapacity(laneId, {
     return { ok: false, error: "protected_worktree", command: RELEASE_COMMAND, detail: "current_sprint_slot" };
   }
 
-  const hasCapacity = rec.binding?.slot != null || Boolean(rec.binding?.tmux_session);
+  // "Is there capacity to release" is a question about the RUNTIME SESSION, not
+  // about the lane's durable slot — which a release no longer discards, because
+  // the slot belongs to the lane for its lifetime.
+  const capacityState = String(rec.execution_capacity?.state || "").toUpperCase();
+  const hasCapacity = Boolean(rec.binding?.tmux_session)
+    || (capacityState && capacityState !== "IDLE");
   if (!hasCapacity) {
     // A lane with no runtime binding cannot be provisioned. If it is ALSO
     // holding an open admission, that admission is a claim on capacity it can

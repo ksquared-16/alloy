@@ -43,6 +43,14 @@ export const RUN_STATES = Object.freeze([
 ]);
 
 export const TERMINAL_RUN_STATES = Object.freeze(["COMPLETE", "FAILED", "ABANDONED"]);
+/**
+ * Nonterminal states that mean "waiting on someone", never "failed".
+ * A run here can report a checkpoint, expose its blocker, resume when the
+ * blocker clears, and complete normally.
+ */
+export const BLOCKED_RUN_STATES = Object.freeze(["NEEDS_INPUT", "WAITING_RESOURCE"]);
+/** Origins that are background reconciliation rather than observed work. */
+export const SWEEPING_ORIGINS = Object.freeze(["system", "governor"]);
 /** Truly irreversible. ABANDONED is terminal for scheduling, but recoverable. */
 export const IRREVERSIBLE_RUN_STATES = Object.freeze(["COMPLETE", "FAILED"]);
 export const RUN_ORIGINS = Object.freeze(["operator", "agent", "governor", "system", "certification"]);
@@ -612,6 +620,9 @@ export function transitionExecutionRun(runId, toState, {
   resource_wait = null,
   fingerprint = null,
   worktreePath = null,
+  // A caller that genuinely OBSERVED the execution fail says so. See the
+  // BLOCKED_STATES guard below.
+  execution_failure = false,
 } = {}) {
   const store = readExecutionRunStore(root);
   let found = null;
@@ -643,6 +654,32 @@ export function transitionExecutionRun(runId, toState, {
   }
   if (!isLegalRunTransition(found.state, to)) {
     return { ok: false, error: "illegal_transition", from: found.state, to };
+  }
+
+  // A BLOCKED RUN IS NOT A FAILED RUN.
+  //
+  // NEEDS_INPUT and WAITING_RESOURCE mean the work is waiting on a person or on
+  // a governed decision. Measured: a run went QUEUED -> EXECUTING -> NEEDS_INPUT
+  // -> FAILED, and the FAILURE reason printed back was the run's own
+  // NEEDS_INPUT reason — the runtime reporting a mission as failed by quoting
+  // the question it was waiting to have answered.
+  //
+  // FAILED stays reachable from these states, because a worker or an operator
+  // may genuinely observe a failure while blocked. What is refused is a
+  // BACKGROUND SWEEP doing it: a governor or system caller must have observed
+  // the execution fail and say so with `execution_failure`. Declaring a
+  // governed action, a dependency, a resource wait or an environment
+  // prerequisite is none of those things.
+  if (to === "FAILED" && BLOCKED_RUN_STATES.includes(found.state)
+    && SWEEPING_ORIGINS.includes(String(origin))
+    && execution_failure !== true) {
+    return {
+      ok: false,
+      error: "blocked_run_not_failed",
+      from: found.state,
+      to,
+      detail: "A run waiting on input or a governed decision is blocked, not failed. Resolve or withdraw the blocker, or report a real execution failure.",
+    };
   }
 
   const from = found.state;

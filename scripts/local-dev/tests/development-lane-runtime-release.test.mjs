@@ -132,8 +132,15 @@ await test("release keeps durable lane and worktree, frees slot", async () => {
   assert.equal(kept.name, "Disposable Cert");
   assert.equal(kept.binding.worktree_path, seeded.path);
   assert.equal(kept.binding.branch.startsWith("agent/claude/"), true);
-  assert.equal(kept.binding.slot, null);
-  assert.equal(kept.binding.tmux_session, null);
+  // THE SLOT STAYS WITH THE LANE.
+  //
+  // This asserted `slot === null`, which is what put the durable binding and
+  // the worktree registration into disagreement: the registry said slot 1 and
+  // the lane said it had none. A capacity release ends the SESSION; the slot
+  // and port belong to the lane until the lane itself closes.
+  assert.equal(kept.binding.slot, 4, "the lane keeps the slot it owns");
+  assert.equal(kept.binding.tmux_session, null, "the session is what a release ends");
+  assert.equal(kept.execution_capacity.slot, null, "the CAPACITY holds no slot once released");
   assert.equal(kept.execution_capacity.state, "IDLE");
   // THE WORKTREE REGISTRATION SURVIVES A CAPACITY RELEASE.
   //
@@ -182,7 +189,7 @@ await test("explicit checkpoint_ready allows Level 1 checkpoint then release", a
   const out = await releaseLaneExecutionCapacity(seeded.lane.lane_id, { root: ROOT });
   assert.equal(out.ok, true, out.error);
   assert.equal(calls.checkpoint.length, 1);
-  assert.equal(getDurableLane(seeded.lane.lane_id, ROOT).binding.slot, null);
+  assert.equal(getDurableLane(seeded.lane.lane_id, ROOT).binding.slot, 6, "the lane keeps its slot");
 });
 
 await test("in-flight Execution Run blocks release", async () => {
@@ -270,12 +277,19 @@ await test("release admits the next queued lane automatically", async () => {
       mkdirSync(path, { recursive: true });
       return {
         ok: true,
-        created: { by_vacilando: true, worktree_path: path, worktree_name: "wt-processing-next", slot: 3 },
+        // A DIFFERENT SLOT, BECAUSE SLOT 3 IS STILL OWNED.
+        //
+        // This fixture handed the queued lane slot 3 — the slot the released
+        // lane had just given up. It no longer gives it up: a capacity release
+        // frees the PROVIDER SEAT and the compute, not the lane's durable home.
+        // Slots 1-6 are permanent worktree homes on ports 3011-3016; admission
+        // picks a free one.
+        created: { by_vacilando: true, worktree_path: path, worktree_name: "wt-processing-next", slot: 2 },
         pre_existing: [],
         binding: {
           worktree_path: path,
           worktree_name: "wt-processing-next",
-          slot: 3,
+          slot: 2,
           provider: "claude",
           branch: "agent/claude/3-processing-next",
           tmux_session: "alloy-processing-next",
@@ -294,7 +308,8 @@ await test("release admits the next queued lane automatically", async () => {
   const out = await releaseLaneExecutionCapacity(running.lane.lane_id, { root: ROOT });
   assert.equal(out.ok, true, out.error);
   assert.equal(getDurableLane(running.lane.lane_id, ROOT).name, "Communications Cert");
-  assert.equal(getDurableLane(running.lane.lane_id, ROOT).binding.slot, null);
+  assert.equal(getDurableLane(running.lane.lane_id, ROOT).binding.slot, 3, "the released lane keeps its slot");
+  assert.equal(getDurableLane(running.lane.lane_id, ROOT).execution_capacity.state, "IDLE");
   const next = getDurableLane(queued.body.lane.lane_id, ROOT);
   assert.equal(next.name, "Processing Cert");
   assert.equal(provisioned, 1);

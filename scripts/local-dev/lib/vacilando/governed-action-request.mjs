@@ -3203,15 +3203,30 @@ export function denyGovernedAction(requestId, {
   }
   const out = failRequest(rec, code, reason, { nowMs, root, skipResume: true });
   if (rec.run_id) {
+    // A DENIED GOVERNED ACTION IS A BLOCKER, NOT AN EXECUTION FAILURE.
+    //
+    // This transitioned the run to FAILED and reused the governed request's own
+    // reason as the failure reason — so a run went
+    // QUEUED -> EXECUTING -> NEEDS_INPUT -> FAILED and reported the mission as
+    // failed by quoting the question it was waiting on. A denial is the
+    // operator declining ONE way forward; the work is still there, and the
+    // decision can still change.
+    //
+    // The run therefore parks in NEEDS_INPUT with the blocker attached, where
+    // it can report a checkpoint, be resumed and complete normally. FAILED is
+    // reserved for genuine execution failure.
     const run = getExecutionRun(rec.run_id, root);
     if (run && !isTerminalRunState(run.state) && ["WAITING_RESOURCE", "NEEDS_INPUT", "EXECUTING"].includes(run.state)) {
-      transitionExecutionRun(rec.run_id, "FAILED", {
-        reason: rec.failure_reason,
+      const blocker = rec.failure_reason || rec.failure_code || "The governed action was not approved.";
+      transitionExecutionRun(rec.run_id, "NEEDS_INPUT", {
+        reason: blocker,
         origin: "system",
         nowMs,
         root,
-        completion_report: rec.failure_reason,
+        progress: blocker,
       });
+      patchRunFields(rec.run_id, { governed_action: publicGovernedAction(rec) }, { nowMs, root });
+      patchRunResourceWait(rec.run_id, null, root);
     }
   }
   return { ok: true, denied: true, request: out.request, error: code };
