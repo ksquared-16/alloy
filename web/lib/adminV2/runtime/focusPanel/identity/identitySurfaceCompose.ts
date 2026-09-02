@@ -129,6 +129,9 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
         return ("age" in child ? child.age : null) ?? ("dobAge" in child ? child.dobAge : null) ?? null;
     },
     "child.name": (subject) => (subject.kind === "child" ? subject.value.name : null),
+    // Offered by the builder as "Full name" and resolved by nothing — the card knows
+    // the child's name, so answer with it rather than leaving the option blank.
+    "child.full_name": (subject) => (subject.kind === "child" ? subject.value.name : null),
     "child.gender": (subject) =>
         subject.kind === "child" && "gender" in subject.value
             ? (subject.value as { gender?: string | null }).gender ?? null
@@ -167,6 +170,19 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
             : null,
     "child.room": (subject) =>
         subject.kind === "child" && "room" in subject.value ? subject.value.room ?? null : null,
+    /*
+     * THE CANONICAL REF RESOLVES, NOT ONLY ITS ALIAS.
+     *
+     * `reconcileLegacyChildEnrollmentAlias` folds `child.room` onto
+     * `inquiry_child.program_room_cohort_key`, so the builder's picker offers the
+     * canonical key — which had no resolver here. The option was therefore
+     * offered, authored, published, and then rendered blank forever. Same story
+     * for Enrollment status. Both are the enrollment grain PROJECTED onto the
+     * child row, which is exactly what `buildChildrenCardEvidence` already puts
+     * on `room` / `status`; nothing new is being sourced here.
+     */
+    "inquiry_child.program_room_cohort_key": (subject) =>
+        subject.kind === "child" && "room" in subject.value ? subject.value.room ?? null : null,
     "inquiry_child.schedule_type": (subject) =>
         subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
     "inquiry_child.desired_schedule_type": (subject) =>
@@ -195,6 +211,8 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
             : null,
     "child.status": (subject) =>
         subject.kind === "child" && "status" in subject.value ? subject.value.status ?? null : null,
+    "inquiry_child.outcome_status_key": (subject) =>
+        subject.kind === "child" && "status" in subject.value ? subject.value.status ?? null : null,
     "child.readiness_summary": (subject) =>
         subject.kind === "child" && "needsAttention" in subject.value
             ? subject.value.needsAttention
@@ -214,6 +232,33 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
             ? (subject.value as { notes?: string | null }).notes ?? null
             : null,
 };
+
+/**
+ * Child refs that are REGISTERED as providers and can never answer.
+ *
+ * Each is a placeholder: a canonical provider exists so the field platform can
+ * name it, but nothing on the child evidence model sources it, which is why the
+ * resolvers above are literally `() => null`. They stay resolvable — a published
+ * layout that already carries one keeps rendering (as blank, exactly as today) —
+ * but the builder must not offer them as NEW evidence. A field that can never
+ * answer is not evidence; it is an empty row an operator chose in good faith.
+ *
+ * `child.medical_summary` is the exception the Children card earns back: it has
+ * no value of its own, but it does have a LINK contract to Health & Safety, so
+ * it is offered as an affordance rather than as a value. See
+ * `identityFieldLinkContract`.
+ */
+export const CHILD_UNBACKED_FIELD_REFS: ReadonlySet<string> = new Set([
+    "child.medical_summary",
+    "child.documents_summary",
+    "child.pickup_summary",
+    "child.communications_summary",
+]);
+
+/** True when the Children card has a resolver for this ref at all. PURE. */
+export function childFieldRefHasResolver(ref: string): boolean {
+    return Object.prototype.hasOwnProperty.call(CHILD_RESOLVERS, ref.trim());
+}
 
 const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {
     "contact.first_name": (subject) => {
