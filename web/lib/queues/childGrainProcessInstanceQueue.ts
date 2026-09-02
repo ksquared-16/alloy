@@ -8,6 +8,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import type { OcmEnrollmentTrackQueryRow } from "@/lib/queues/ocmEnrollmentTrackQueueBuilder";
 import {
@@ -142,59 +143,86 @@ async function resolveTrackRowRefs(params: {
      * rest of this function is unchanged. Context ids that really are Opportunity ids simply find no
      * participation and pass straight through, so journeys under the older anchor keep working.
      */
+    /*
+     * SERIAL DEPTH, NOT QUERY COST, OWNED THIS LEG.
+     *
+     * Measured on a 17-row Waitlist page: process_instances 66ms, then ocm_resolve 60ms ->
+     * opportunities 58ms -> customer_members 66ms -> program_categories 58ms, all in a row for ~308ms.
+     * Only ocm_resolve -> opportunities is a real dependency: `customer_members` is keyed by
+     * `subject_id` and `location_program_categories` by `metadata.program_category_id`, and BOTH ids
+     * come straight off `piRows`, which we already hold. They were waiting on a chain they are not
+     * part of.
+     *
+     * So the OCM -> opportunity chain keeps its order and the two independent reads join it in
+     * parallel. Same queries, same org scoping, same maps, same rows — only the waiting changes.
+     */
     const opportunityIdByContextId = new Map<string, string>();
-    if (contextIds.length) {
-        const { data, error } = await params.supabase
-            .from("opportunity_customer_members")
-            .select("id, opportunity_id")
-            .eq("org_id", params.orgId)
-            .in("id", contextIds);
-        if (error) throw new Error(`process-instance participation resolve failed: ${error.message}`);
-        for (const r of data ?? []) {
-            const row = r as { id: string; opportunity_id: string | null };
-            // A context-free participation has no Opportunity. That is an ordinary answer, and it
-            // leaves the journey with nothing for an opportunity-shaped queue row to be built from.
-            if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
-        }
-    }
-    const resolvedOpportunityIds = [
-        ...new Set(contextIds.map((id) => opportunityIdByContextId.get(id) ?? id)),
-    ];
-
     const oppById = new Map<string, Record<string, unknown>>();
-    if (resolvedOpportunityIds.length) {
-        const { data, error } = await params.supabase
-            .from("opportunities")
-            .select(OPP_SELECT)
-            .eq("org_id", params.orgId)
-            .in("id", resolvedOpportunityIds);
-        if (error) throw new Error(`process-instance opportunity resolve failed: ${error.message}`);
-        for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
-    }
-
     const cmById = new Map<string, Record<string, unknown>>();
-    if (subjectIds.length) {
-        const { data, error } = await params.supabase
-            .from("customer_members")
-            .select(CM_SELECT)
-            .eq("org_id", params.orgId)
-            .in("id", subjectIds);
-        if (error) throw new Error(`process-instance customer_member resolve failed: ${error.message}`);
-        for (const c of data ?? []) cmById.set(String((c as { id: string }).id), c as Record<string, unknown>);
-    }
-
     const catById = new Map<string, { key?: string | null; label?: string | null }>();
-    if (programCatIds.length) {
-        const { data } = await params.supabase
-            .from("location_program_categories")
-            .select("id, key, label")
-            .eq("org_id", params.orgId)
-            .in("id", programCatIds);
-        for (const c of data ?? []) {
-            const rec = c as { id: string; key?: string | null; label?: string | null };
-            catById.set(String(rec.id), { key: rec.key, label: rec.label });
+
+    const contextChain = (async () => {
+        if (contextIds.length) {
+            const { data, error } = await withDbTiming("member.ocm_resolve", { n: contextIds.length }, async () =>
+                params.supabase
+                    .from("opportunity_customer_members")
+                    .select("id, opportunity_id")
+                    .eq("org_id", params.orgId)
+                    .in("id", contextIds));
+            if (error) throw new Error(`process-instance participation resolve failed: ${error.message}`);
+            for (const r of data ?? []) {
+                const row = r as { id: string; opportunity_id: string | null };
+                // A context-free participation has no Opportunity. That is an ordinary answer, and it
+                // leaves the journey with nothing for an opportunity-shaped queue row to be built from.
+                if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
+            }
         }
-    }
+        const resolvedOpportunityIds = [
+            ...new Set(contextIds.map((id) => opportunityIdByContextId.get(id) ?? id)),
+        ];
+
+        if (resolvedOpportunityIds.length) {
+            const { data, error } = await withDbTiming("member.opportunities", { n: resolvedOpportunityIds.length }, async () =>
+                params.supabase
+                    .from("opportunities")
+                    .select(OPP_SELECT)
+                    .eq("org_id", params.orgId)
+                    .in("id", resolvedOpportunityIds));
+            if (error) throw new Error(`process-instance opportunity resolve failed: ${error.message}`);
+            for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
+        }
+    })();
+
+    const cmRead = (async () => {
+        if (subjectIds.length) {
+            const { data, error } = await withDbTiming("member.customer_members", { n: subjectIds.length }, async () =>
+                params.supabase
+                    .from("customer_members")
+                    .select(CM_SELECT)
+                    .eq("org_id", params.orgId)
+                    .in("id", subjectIds));
+            if (error) throw new Error(`process-instance customer_member resolve failed: ${error.message}`);
+            for (const c of data ?? []) cmById.set(String((c as { id: string }).id), c as Record<string, unknown>);
+        }
+    })();
+
+    const catRead = (async () => {
+        if (programCatIds.length) {
+            const { data } = await withDbTiming("member.program_categories", { n: programCatIds.length }, async () =>
+                params.supabase
+                    .from("location_program_categories")
+                    .select("id, key, label")
+                    .eq("org_id", params.orgId)
+                    .in("id", programCatIds));
+            for (const c of data ?? []) {
+                const rec = c as { id: string; key?: string | null; label?: string | null };
+                catById.set(String(rec.id), { key: rec.key, label: rec.label });
+            }
+        }
+    })();
+
+    // A failure in any leg must surface exactly as it did when they ran in sequence.
+    await Promise.all([contextChain, cmRead, catRead]);
 
     return { oppById, cmById, catById, opportunityIdByContextId };
 }
@@ -241,12 +269,13 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
     // engine/metrics use. Fetch instances at this stage OR with no own stage (riding the family
     // track); the in-code filter below keeps only those whose effective stage matches this lane, so
     // a freshly-created child (null stage) surfaces in its household's stage lane (e.g. Lead).
-    const { data: piData, error: piErr } = await params.supabase
-        .from("process_instances")
-        .select(PI_SELECT)
-        .eq("org_id", params.orgId)
-        .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .or(`stage_key.eq.${stageKey},stage_key.is.null`);
+    const { data: piData, error: piErr } = await withDbTiming("member.process_instances", { stage: stageKey }, async () =>
+        params.supabase
+            .from("process_instances")
+            .select(PI_SELECT)
+            .eq("org_id", params.orgId)
+            .eq("process_key", ENROLLMENT_PROCESS_KEY)
+            .or(`stage_key.eq.${stageKey},stage_key.is.null`));
     if (piErr) throw new Error(`process_instances enrollment-track query failed: ${piErr.message}`);
     const piRows = (piData ?? []) as PiRow[];
     if (!piRows.length) return [];
