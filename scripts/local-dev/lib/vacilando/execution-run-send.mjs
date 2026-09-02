@@ -440,6 +440,19 @@ async function provisionSessionForSend({ rec, run, nowMs, root, size }) {
       rec, run, nowMs, root, size, reason: "waiting_for_executable_transport",
     }) };
   }
+  // A start that returned non-ok may still have produced a session: the
+  // admission tick and this send can race, and the loser must not label a
+  // healthy, starting provider as a failure. Only the absence of a session
+  // makes this an actual start failure.
+  try {
+    const { activeAgentSessionForLane } = await import("./agent-session.mjs");
+    if (activeAgentSessionForLane(rec.lane_id, root)) {
+      return { queued: await queueWithoutImmediateDelivery({
+        rec, run, nowMs, root, size, reason: "provider_provisioning",
+      }) };
+    }
+  } catch { /* fall through to the truthful failure below */ }
+
   // A real, named start failure. Surface it instead of resting forever.
   const { patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
   const reasonText = start?.error || "provider_start_failed";
