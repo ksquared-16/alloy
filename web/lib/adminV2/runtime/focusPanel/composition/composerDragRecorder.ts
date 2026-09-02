@@ -36,6 +36,16 @@ export type DragRecording = {
     startedAt: number;
     card: string | null;
     activator: string | null;
+    /**
+     * Did this press ever become a drag?
+     *
+     * The recorder used to start inside `startMove`, so a press that activated
+     * NOTHING recorded nothing — and "the gesture never began" is exactly the case
+     * it was built to tell apart from "the gesture went somewhere wrong". A press
+     * on a card is now recorded whether or not it picks the card up.
+     */
+    activated: boolean;
+    activatedAt: number | null;
     grab: Record<string, unknown> | null;
     frames: RecordedPointerFrame[];
     /** Layout before the gesture and after the drop, as the canvas reported them. */
@@ -95,16 +105,40 @@ export function beginRecording(args: {
     // is the difference between "did not activate" and "went to the wrong place".
     if (!s.armed && !recordingIsAutomatic()) return;
     if (!s.armed) s.label = "auto";
+    // One recording per gesture: a press starts it, activation only annotates it.
+    if (s.current) return;
     s.current = {
         label: s.label,
         startedAt: Date.now(),
         card: args.card,
         activator: args.activator,
+        activated: false,
+        activatedAt: null,
         grab: args.grab,
         frames: [],
         layoutBefore: args.layoutBefore,
         layoutAfter: null,
     };
+}
+
+/** The press became a drag. Called by the drag runtime, not by the press listener. */
+export function markActivated(args: { activator: string; grab: Record<string, unknown> }): void {
+    const s = store();
+    if (!s?.current) return;
+    s.current.activated = true;
+    s.current.activatedAt = Math.round(performance.now());
+    s.current.activator = args.activator;
+    s.current.grab = args.grab;
+}
+
+/** True while a gesture is being recorded — the press listener owns the lifecycle. */
+export function recordingInFlight(): boolean {
+    return Boolean(store()?.current);
+}
+
+/** True once the press became a drag; the drag runtime then owns the frames. */
+export function recordingActivated(): boolean {
+    return Boolean(store()?.current?.activated);
 }
 
 function describe(target: EventTarget | null): string {

@@ -42,6 +42,9 @@ import {
 import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import {
     beginRecording,
+    markActivated,
+    recordingActivated,
+    recordingIsAutomatic,
     finishRecording,
     recordFrame,
 } from "@/lib/adminV2/runtime/focusPanel/composition/composerDragRecorder";
@@ -450,6 +453,51 @@ export default function FocusPanelRuntimeComposerCanvas({
      * using when placement became column-aware. Reading the DOM keeps composer and
      * runtime on one description of the canvas.
      */
+    /*
+     * EVERY PRESS ON A CARD IS RECORDED — activated or not.
+     *
+     * The recorder used to begin inside `startMove`, so a press that picked
+     * nothing up produced no trace at all. That is the single most useful thing it
+     * could have told us: the operator reproduced the failure with recording on
+     * and the directory stayed empty, which is itself the answer — the gesture
+     * never activated. It cannot say that if it only records gestures that did.
+     */
+    useEffect(() => {
+        const container = gridContainerRef.current;
+        if (!container || !recordingIsAutomatic()) return;
+        const onDown = (ev: globalThis.PointerEvent) => {
+            const cell = (ev.target as HTMLElement | null)?.closest?.("[data-fp-composer-cell]");
+            if (!cell) return;
+            beginRecording({
+                card: cell.getAttribute("data-fp-composer-cell"),
+                activator: null,
+                grab: null,
+                layoutBefore: grid.areas.map((a) =>
+                    `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`),
+            });
+            recordFrame("down", ev);
+            // Once it is a real drag the runtime records the frames WITH decisions;
+            // this listener only covers the presses that never got that far.
+            const onMove = (m: globalThis.PointerEvent) => {
+                if (!recordingActivated()) recordFrame("move", m);
+            };
+            const onUp = (u: globalThis.PointerEvent) => {
+                recordFrame("up", u);
+                window.removeEventListener("pointermove", onMove, true);
+                window.removeEventListener("pointerup", onUp, true);
+                window.removeEventListener("pointercancel", onUp, true);
+                // The drag runtime finishes its own recording; this only closes the
+                // ones it never took over.
+                window.setTimeout(() => finishRecording(null), 0);
+            };
+            window.addEventListener("pointermove", onMove, true);
+            window.addEventListener("pointerup", onUp, true);
+            window.addEventListener("pointercancel", onUp, true);
+        };
+        container.addEventListener("pointerdown", onDown, true);
+        return () => container.removeEventListener("pointerdown", onDown, true);
+    }, [grid]);
+
     const measureCardBoxes = useCallback(() => {
         const boxes = new Map<string, { top: number; height: number }>();
         const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
@@ -574,14 +622,10 @@ export default function FocusPanelRuntimeComposerCanvas({
          * placement is intended NOW?
          */
         const boxesAtStart = measureCardBoxes();
-        beginRecording({
-            card: area.card,
+        markActivated({
             activator: describeTraceTarget(e.currentTarget as EventTarget),
             grab: { colOffset: grabColOffset, rowOffset: grabRowOffset, cell: origin },
-            layoutBefore: gridAtStart.areas.map((a) =>
-                `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`),
         });
-        recordFrame("down", e.nativeEvent);
         /*
          * Frozen geometry. The preview reflows the canvas underneath the pointer, so
          * measuring live would let the preview move the tracks that decide the
