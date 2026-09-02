@@ -28,16 +28,15 @@ import {
     clampArea,
     closeEmptyRowBands,
     COMPOSER_GRID_GAP_PX,
+    COMPOSER_GRID_ROW_UNIT_PX,
     composerGridMetrics,
     parseTrackSizes,
-    spanBounds,
     trackEdges,
     trackFromOffset,
     defaultRowSpanForCard,
     gridFromPublishedLayout,
     removeArea,
     resizeArea,
-    resolveDropPlacement,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import {
@@ -49,7 +48,12 @@ import {
     finishRecording,
     recordFrame,
 } from "@/lib/adminV2/runtime/focusPanel/composition/composerDragRecorder";
-import { resolveColumnAwareDrop, snapColumnStart } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelColumnAwareLayout";
+import {
+    applyDropCandidate,
+    enumerateDropCandidates,
+    pickDropCandidate,
+    type DropCandidate,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelDropCandidates";
 import { publishComposerLayoutDump } from "@/lib/adminV2/runtime/focusPanel/composition/composerLayoutDump";
 import {
     beginComposerDragTrace,
@@ -129,7 +133,6 @@ type Props = {
     nestedSurfaceByCard?: Partial<Record<FocusPanelCardKey, NestedSurfaceTarget>>;
 };
 
-type Ghost = { colStart: number; colSpan: number; rowStart: number; rowSpan: number };
 
 /**
  * Runtime-first Focus Panel composer canvas.
@@ -179,8 +182,19 @@ export default function FocusPanelRuntimeComposerCanvas({
     const [tracedGestures, setTracedGestures] = useState(0);
     const renderGrid = previewGrid ?? grid;
     const [activeMode, setActiveMode] = useState<FocusPanelMode>("summary");
-    const [ghost, setGhost] = useState<Ghost | null>(null);
     const [arranging, setArranging] = useState(false);
+    /*
+     * THE DESTINATIONS, ON SCREEN.
+     *
+     * A drag used to be a conversation with a solver the operator could not see:
+     * point somewhere, watch what happened, guess what it wanted. These are the
+     * legal destinations for the card in hand, drawn as targets — so "is there a
+     * left-hand destination?" is answered by looking, and selecting one is aiming
+     * rather than persuading.
+     */
+    const [dropZones, setDropZones] = useState<DropCandidate[]>([]);
+    const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
+    const [zoneOrigin, setZoneOrigin] = useState<{ left: number; top: number } | null>(null);
     const surfaceRef = useRef<HTMLDivElement>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
     const interacting = useRef(false);
@@ -532,44 +546,31 @@ export default function FocusPanelRuntimeComposerCanvas({
         [cols, measureCanvas],
     );
 
-    /*
-     * The ghost is drawn from the SAME measured tracks the drop resolves against, so
-     * the preview and the landing place cannot disagree. They used to be computed
-     * independently, which is how the ghost came to show a position the card did not
-     * take.
-     */
-    const ghostBounds = useMemo(() => {
-        if (!ghost || !gridContainerRef.current) return null;
-        const container = gridContainerRef.current;
-        const m = measureCanvas();
-        if (!m) return null;
-        const cRect = container.getBoundingClientRect();
-        const x = spanBounds(ghost.colStart, ghost.colSpan, m.colEdges, COMPOSER_GRID_GAP_PX, m.colPitch);
-        const y = spanBounds(ghost.rowStart, ghost.rowSpan, m.rowEdges, COMPOSER_GRID_GAP_PX, m.rowPitch);
-        return {
-            left: m.rect.left - cRect.left + x.offset,
-            top: m.rect.top - cRect.top + y.offset,
-            width: x.size,
-            height: y.size,
-        };
-        // `renderGrid`, not `grid`: while a drag is live the canvas shows the RESOLVED
-        // layout, and a ghost measured against the committed one is drawn in the wrong
-        // coordinate space — the exact divergence this preview exists to remove.
-    }, [ghost, measureCanvas, renderGrid]);
 
     /*
-     * The preview and the drop ask the SAME question of the SAME authority.
+     * ── EXPLICIT DESTINATIONS, ENUMERATED ONCE PER DRAG ──
      *
-     * They used to ask different ones — the ghost `snapMoveTarget`, the drop
-     * `moveArea` — and the answers differed for most of the canvas, so the card
-     * landed where the operator had not been shown. `resolveDropPlacement`
-     * returns both the landing area and the layout that lands it; the ghost
-     * draws the first and the drop commits the second.
+     * The candidates are computed from the canvas as it was when the card was
+     * picked up, and they do not change while the pointer moves. That is the whole
+     * point: the operator is choosing from a fixed, visible set, so the answer
+     * cannot depend on which frames came before it, where inside the card the
+     * press landed, or what the previous preview rearranged. Those were the three
+     * ways the old inference could give two different answers to the same pointer.
      */
-    const resolvePlacement = useCallback(
-        (source: FocusPanelGridLayout, area: FocusPanelGridArea, col: number, row: number) =>
-            resolveDropPlacement(source, area, col, row),
+    const minHeightFor = useCallback(
+        (area: { rowSpan: number }) =>
+            area.rowSpan * COMPOSER_GRID_ROW_UNIT_PX + (area.rowSpan - 1) * COMPOSER_GRID_GAP_PX,
         [],
+    );
+
+    const cardLabel = useCallback(
+        (card: string) =>
+            catalog.find((entry) => entry.key === card)?.label
+            // A card the library does not carry (a linked or variant presentation) still
+            // needs a name an operator recognises. "BELOW BILLING_PREVIEW" is a key
+            // leaking into the interface; "Below Billing Preview" is the card.
+            ?? card.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        [catalog],
     );
 
     const startMove = (e: PointerEvent, area: FocusPanelGridArea) => {
@@ -608,114 +609,55 @@ export default function FocusPanelRuntimeComposerCanvas({
             travelled
             || (travelled =
                 Math.abs(ev.clientX - pressX) + Math.abs(ev.clientY - pressY) >= 4);
-        // Preserve grab point so the card does not teleport under the cursor mid-drag.
-        const origin = cellFromPointer(e.clientX, e.clientY);
-        const grabColOffset = origin.col - area.colStart;
-        const grabRowOffset = origin.row - area.rowStart;
         const gridAtStart = grid;
-        /*
-         * ── THE REFERENCE FRAME IS FROZEN AT THE GRAB ──
-         *
-         * The boxes were re-measured on every pointermove, and by then the DOM was
-         * showing the PREVIEW produced by the previous frame. So each decision was
-         * made against geometry the previous decision had rearranged: choose a
-         * stack, the cards move, and the moved cards then keep confirming that
-         * choice. That is the stickiness — move right, then further left, and the
-         * left stack never wins back, because the frame of reference travelled with
-         * the decision.
-         *
-         * A scripted drag mostly escapes it by going straight to its destination
-         * and sampling once. A human wanders, so a human hits it every time. Both
-         * now resolve against the canvas as it was when the card was picked up, so
-         * every pointermove answers independently: given the pointer NOW, what
-         * placement is intended NOW?
-         */
         const boxesAtStart = measureCardBoxes();
+        const canvasEl = (gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid")
+            ?? gridContainerRef.current) as HTMLElement | null;
+        const containerRect = gridContainerRef.current?.getBoundingClientRect() ?? null;
+        const canvasRectAtStart = canvasEl?.getBoundingClientRect() ?? null;
+        const widthAtStart = canvasEl?.clientWidth ?? canvasRectAtStart?.width ?? 0;
+
+        const candidates = enumerateDropCandidates({
+            layout: gridAtStart,
+            moving: area,
+            boxes: boxesAtStart,
+            width: widthAtStart,
+            gapPx: COMPOSER_GRID_GAP_PX,
+            minHeightFor,
+            labelFor: cardLabel,
+        });
+
         markActivated({
             activator: describeTraceTarget(e.currentTarget as EventTarget),
-            grab: { colOffset: grabColOffset, rowOffset: grabRowOffset, cell: origin },
+            grab: { candidates: candidates.length },
         });
-        /*
-         * Frozen geometry. The preview reflows the canvas underneath the pointer, so
-         * measuring live would let the preview move the tracks that decide the
-         * preview — a feedback loop the operator feels as the ghost flickering
-         * between two rows. The mapping is the canvas the gesture began on.
-         */
-        const metricsAtStart = measureCanvas();
-        const cellFromPointerFrozen = (clientX: number, clientY: number) => {
-            if (!metricsAtStart) return cellFromPointer(clientX, clientY);
-            const live = measureCanvas();
-            const rect = live?.rect ?? metricsAtStart.rect;
-            const localX = clientX - rect.left;
-            const localY = clientY - rect.top;
-            const rawCol = trackFromOffset(localX, metricsAtStart.colEdges, metricsAtStart.colPitch);
-            const rawRow = trackFromOffset(localY, metricsAtStart.rowEdges, metricsAtStart.rowPitch);
-            const col = Math.min(cols, Math.max(1, rawCol));
-            const row = Math.max(1, rawRow);
-            traceComposerDrag("map", {
-                client: { x: Math.round(clientX), y: Math.round(clientY) },
-                rectLeft: Math.round(rect.left),
-                rectTop: Math.round(rect.top),
-                frozenLeft: Math.round(metricsAtStart.rect.left),
-                frozenTop: Math.round(metricsAtStart.rect.top),
-                local: { x: Math.round(localX), y: Math.round(localY) },
-                raw: { col: rawCol, row: rawRow },
-                clamped: { col, row },
-            });
-            return { col, row };
-        };
         traceComposerDrag("pointerdown", {
             card: area.card,
-            grab: { colOffset: grabColOffset, rowOffset: grabRowOffset, cell: origin },
             gridColumns: gridAtStart.columns,
+            candidates: candidates.map((c) =>
+                `${c.id} c${c.colStart}+${c.colSpan} y${Math.round(c.top)} after=${c.after ?? "-"}`),
             occupied: gridAtStart.areas.map((a) =>
                 `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`),
         });
-        const resolveTarget = (clientX: number, clientY: number) => {
-            const { col, row } = cellFromPointerFrozen(clientX, clientY);
-            const live = measureCanvas();
-            const canvasTop = live?.rect.top ?? metricsAtStart?.rect.top ?? 0;
-            /*
-             * The pointer is not naming a row. It is saying "this card belongs in
-             * these columns, at this height in their stack" — so the drop is
-             * resolved against the cards that actually share those columns.
-             */
-            const drop = resolveColumnAwareDrop({
-                layout: gridAtStart,
-                moving: area,
-                /*
-                 * The pointer names the destination; the grip does not. Subtracting the
-                 * grab offset here made reachable columns depend on where inside the card
-                 * the press landed — grab a 6-span card on its right and the left half
-                 * needed the cursor off-canvas to reach.
-                 */
-                colStart: snapColumnStart({
-                    pointerColumn: col,
-                    colSpan: area.colSpan,
-                    columns: gridAtStart.columns,
-                }),
-                pointerY: clientY - canvasTop,
-                boxes: boxesAtStart,
-                gapPx: COMPOSER_GRID_GAP_PX,
+
+        /*
+         * The pointer is read against the LIVE canvas rect so scrolling mid-drag does
+         * not shift every destination, while the candidate geometry stays frozen. Only
+         * the origin moves; the targets do not.
+         */
+        const chooseCandidate = (clientX: number, clientY: number) => {
+            const live = canvasEl?.getBoundingClientRect() ?? canvasRectAtStart;
+            return pickDropCandidate(candidates, {
+                x: clientX - (live?.left ?? 0),
+                y: clientY - (live?.top ?? 0),
             });
-            const landed = drop.layout.areas.find((a) => a.card === area.card) ?? area;
-            return {
-                placement: {
-                    area: landed,
-                    grid: drop.layout,
-                    reflowed: true,
-                    how: "insert" as const,
-                    asked: { colStart: landed.colStart, rowStart: landed.rowStart },
-                },
-                pointerCell: { col, row },
-                after: drop.after,
-                overlapping: drop.overlapping,
-            };
         };
+
         const cleanup = () => {
-            setGhost(null);
             setPreviewGrid(null);
             setDraggingCard(null);
+            setDropZones([]);
+            setActiveZoneId(null);
             window.setTimeout(() => setTracedGestures(recordedGestureCount()), 600);
             interacting.current = false;
             setArranging(false);
@@ -728,6 +670,7 @@ export default function FocusPanelRuntimeComposerCanvas({
             window.removeEventListener("pointerup", up);
             window.removeEventListener("pointercancel", cancel);
         };
+
         let dragging = false;
         let lastPreviewSignature = "";
         const move = (ev: globalThis.PointerEvent) => {
@@ -736,47 +679,57 @@ export default function FocusPanelRuntimeComposerCanvas({
                 dragging = true;
                 setArranging(true);
                 setDraggingCard(area.card);
+                // The destinations appear the moment the drag is real, not on the press.
+                setZoneOrigin(
+                    canvasRectAtStart && containerRect ?
+                        {
+                            left: canvasRectAtStart.left - containerRect.left,
+                            top: canvasRectAtStart.top - containerRect.top,
+                        }
+                    :   { left: 0, top: 0 },
+                );
+                setDropZones(candidates);
                 // Now it is a drag: stop the browser turning it into a text selection.
                 ev.preventDefault();
             }
-            const { placement, pointerCell, after, overlapping } = resolveTarget(ev.clientX, ev.clientY);
+            const candidate = chooseCandidate(ev.clientX, ev.clientY);
+            if (!candidate) return;
+            setActiveZoneId(candidate.id);
+            const next = applyDropCandidate({
+                layout: gridAtStart, moving: area, candidate, boxes: boxesAtStart,
+            });
             traceComposerDrag("move", {
                 card: area.card,
                 pointer: { x: Math.round(ev.clientX), y: Math.round(ev.clientY) },
-                pointerCell,
-                after,
-                overlapping,
-                asked: placement.asked,
-                how: placement.how,
-                ghost: {
-                    colStart: placement.area.colStart,
-                    colSpan: placement.area.colSpan,
-                    rowStart: placement.area.rowStart,
-                    rowSpan: placement.area.rowSpan,
+                zone: candidate.id,
+                after: candidate.after,
+                overlapping: candidate.overlapping,
+                rect: {
+                    colStart: candidate.colStart,
+                    colSpan: candidate.colSpan,
+                    top: Math.round(candidate.top),
                 },
             });
             recordFrame("move", ev, {
-                pointerCell, after, overlapping,
+                zone: candidate.id,
+                after: candidate.after,
+                overlapping: candidate.overlapping,
                 landed: {
-                    colStart: placement.area.colStart, colSpan: placement.area.colSpan,
-                    rowStart: placement.area.rowStart,
+                    colStart: candidate.colStart,
+                    colSpan: candidate.colSpan,
+                    top: Math.round(candidate.top),
                 },
             });
-            setGhost({
-                colStart: placement.area.colStart,
-                colSpan: placement.area.colSpan,
-                rowStart: placement.area.rowStart,
-                rowSpan: placement.area.rowSpan,
-            });
             // Only when the answer changes: a re-render per pointer sample is jank.
-            const signature = placement.grid.areas
+            const signature = next.areas
                 .map((a) => `${a.card}:${a.colStart}:${a.rowStart}:${a.colSpan}:${a.rowSpan}`)
                 .join("|");
             if (signature !== lastPreviewSignature) {
                 lastPreviewSignature = signature;
-                setPreviewGrid(placement.grid);
+                setPreviewGrid(next);
             }
         };
+
         const up = (ev: globalThis.PointerEvent) => {
             // A press that never travelled is a click: leave the layout untouched.
             if (!hasTravelled(ev)) {
@@ -784,31 +737,45 @@ export default function FocusPanelRuntimeComposerCanvas({
                 cleanup();
                 return;
             }
-            const { placement } = resolveTarget(ev.clientX, ev.clientY);
+            const candidate = chooseCandidate(ev.clientX, ev.clientY);
+            if (!candidate) {
+                cleanup();
+                return;
+            }
+            /*
+             * The commit is the zone. Not a re-derivation that happens to agree with
+             * it — the same `applyDropCandidate` call the highlighted zone was drawn
+             * from, on the same frozen boxes. There is no second opinion to diverge.
+             */
+            const next = applyDropCandidate({
+                layout: gridAtStart, moving: area, candidate, boxes: boxesAtStart,
+            });
             traceComposerDrag("drop", {
                 card: area.card,
-                how: placement.how,
-                asked: placement.asked,
+                zone: candidate.id,
                 committed: {
-                    colStart: placement.area.colStart,
-                    colSpan: placement.area.colSpan,
-                    rowStart: placement.area.rowStart,
-                    rowSpan: placement.area.rowSpan,
+                    colStart: candidate.colStart,
+                    colSpan: candidate.colSpan,
+                    top: Math.round(candidate.top),
+                    after: candidate.after,
                 },
-                layout: placement.grid.areas.map((a) =>
+                layout: next.areas.map((a) =>
                     `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`),
             });
             recordFrame("up", ev, {
+                zone: candidate.id,
                 committed: {
-                    colStart: placement.area.colStart, colSpan: placement.area.colSpan,
-                    rowStart: placement.area.rowStart,
+                    colStart: candidate.colStart,
+                    colSpan: candidate.colSpan,
+                    top: Math.round(candidate.top),
                 },
             });
-            finishRecording(placement.grid.areas.map((a) =>
+            finishRecording(next.areas.map((a) =>
                 `${a.card} c${a.colStart}+${a.colSpan} r${a.rowStart}+${a.rowSpan}`));
-            applyGrid(placement.grid);
+            applyGrid(next);
             cleanup();
         };
+
         const cancel = (ev: globalThis.PointerEvent) => {
             // Invalid/cancelled drop returns the card to its exact original position.
             recordFrame("cancel", ev);
@@ -835,8 +802,7 @@ export default function FocusPanelRuntimeComposerCanvas({
             const cell = cellFromPointer(ev.clientX, ev.clientY);
             const colSpan = axis === "h" ? area.colSpan : Math.max(1, cell.col - area.colStart + 1);
             const rowSpan = axis === "w" ? area.rowSpan : Math.max(1, cell.row - area.rowStart + 1);
-            const next = clampArea(grid, { ...area, colSpan, rowSpan });
-            setGhost({ colStart: next.colStart, colSpan: next.colSpan, rowStart: next.rowStart, rowSpan: next.rowSpan });
+            clampArea(grid, { ...area, colSpan, rowSpan });
         };
         const up = (ev: globalThis.PointerEvent) => {
             if (measureEl) {
@@ -845,7 +811,6 @@ export default function FocusPanelRuntimeComposerCanvas({
                 const rowSpan = axis === "w" ? area.rowSpan : Math.max(1, cell.row - area.rowStart + 1);
                 applyGrid(resizeArea(grid, area.card, colSpan, rowSpan));
             }
-            setGhost(null);
             interacting.current = false;
             setArranging(false);
             try {
@@ -1097,6 +1062,47 @@ export default function FocusPanelRuntimeComposerCanvas({
                               * destination and marks itself; there is nothing left to keep
                               * in sync because there is only one description of the layout.
                               */}
+                            {dropZones.length > 0 && zoneOrigin ?
+                                <div
+                                    className="alloy-os-fp-dropzones"
+                                    data-fp-drop-zones="true"
+                                    aria-hidden="true"
+                                    style={{ left: zoneOrigin.left, top: zoneOrigin.top }}
+                                >
+                                    {dropZones.map((zone) => {
+                                        const active = zone.id === activeZoneId;
+                                        /*
+                                         * An inactive zone shows the TERRITORY it owns, so the
+                                         * targets tile the canvas and none of them is a hairline.
+                                         * The active one snaps to the rectangle the card actually
+                                         * takes — which is where the preview has already put it,
+                                         * because both came from the same resolve.
+                                         */
+                                        const box = active ? zone.rect : zone.hit;
+                                        return (
+                                            <div
+                                                key={zone.id}
+                                                className={`alloy-os-fp-dropzone${active ? " is-active" : ""}`}
+                                                data-fp-drop-zone={zone.id}
+                                                data-fp-drop-zone-col={zone.colStart}
+                                                data-fp-drop-zone-top={Math.round(zone.top)}
+                                                data-fp-drop-zone-after={zone.after ?? ""}
+                                                data-fp-drop-zone-active={active ? "true" : undefined}
+                                                style={{
+                                                    left: box.left,
+                                                    top: box.top,
+                                                    width: box.width,
+                                                    height: active ? box.height : (
+                                                        Math.min(zone.hit.height, Math.max(zone.rect.height, 120))
+                                                    ),
+                                                }}
+                                            >
+                                                <span className="alloy-os-fp-dropzone__label">{zone.label}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            :   null}
                             <FocusPanelCardGrid
                                 rows={summaryInputs.gridRows}
                                 publishedLayout={publishedLayout}
