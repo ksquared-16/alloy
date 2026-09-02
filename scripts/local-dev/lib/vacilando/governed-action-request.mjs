@@ -494,8 +494,13 @@ export function governedProposalFor(req = {}) {
   if (req.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
   const i = req.inputs || {};
   const snap = req.proposal_snapshot || null;
-  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
-  const number = i.pull_request_number || i.pullRequestNumber || null;
+  // THE CARD THE DIRECTOR ACTUALLY READS. These two lines carried the narrow
+  // vocabulary, so a merge proposed with `pull_request` / `head_sha` produced a
+  // card with no Pull request row and no Head commit row — the two facts that
+  // identify what is being merged. Same parser as the grant and the executor.
+  const mergeId = mergeIdentityFor(req);
+  const sha = String(mergeId.expectedHeadSha || "");
+  const number = mergeId.pullRequestNumber;
 
   // CI is reported as what was OBSERVED, including "not checked" — a card that
   // silently omits the check state reads as "fine" when it means "unknown".
@@ -515,10 +520,10 @@ export function governedProposalFor(req = {}) {
     factRow("Repository", i.repository || i.repo || null),
     factRow("Pull request", number ? `#${number}` : null),
     factRow("Title", snap?.title || null),
-    factRow("Branch", snap?.headRefName ? `${snap.headRefName} → ${i.target_branch || i.targetBranch || req.target}` : null),
-    factRow("Target branch", i.target_branch || i.targetBranch || req.target || null),
+    factRow("Branch", snap?.headRefName ? `${snap.headRefName} → ${mergeId.targetBranch || req.target}` : null),
+    factRow("Target branch", mergeId.targetBranch || req.target || null),
     factRow("Head commit", sha ? sha.slice(0, 12) : null),
-    factRow("Merge method", i.merge_method || i.mergeMethod || "merge"),
+    factRow("Merge method", mergeId.mergeMethod),
     factRow("Continuous integration", ci),
     factRow("Mergeable", snap?.mergeable || null),
     factRow("Changed files", Number.isFinite(snap?.changedFiles) ? snap.changedFiles : null),
@@ -1219,9 +1224,35 @@ function resolveStoreRoot(input = {}, explicitRoot = null) {
   return runtimeRoot();
 }
 
+/**
+ * THE ONE PLACE THAT SAYS WHERE A GOVERNED ACTION RUNS.
+ *
+ * THE DEFECT THIS REMOVES. `repository.push` advertises `worktreePath` among
+ * its inputs, and the registry's own validateInputs reads
+ * `inputs.worktree_path || inputs.worktreePath`. This resolver did not: it read
+ * only the TOP-LEVEL payload and then fell through to the run's bound worktree.
+ * The request record's worktree_path therefore won, and the action was built
+ * with it — overwriting inputs.worktreePath entirely.
+ *
+ * MEASURED: gar_1e5d2e1dab9f7e supplied inputs.worktreePath = the promotion
+ * worktree at d9beb0c29, was executed against the lane's worktree at
+ * 033d76bd7c4d, and was refused `head_drift` — "the branch moved after this
+ * push was proposed" — for a branch that never moved. Re-proposing the
+ * identical push with a TOP-LEVEL worktree_path succeeded immediately against
+ * the same branch and the same SHA. The caller had followed the advertised
+ * schema and the reader could not see it.
+ *
+ * An EXPLICIT path now always beats the run-bound fallback, whichever of the
+ * two advertised locations it arrives in. The fallback is unchanged and still
+ * serves every request that supplies no path at all.
+ */
 function resolveWorktreePath(input, laneId, run, root) {
+  const inputs = input?.inputs || {};
   return input.worktree_path
     || input.worktreePath
+    // The location the registered action schema actually advertises.
+    || inputs.worktree_path
+    || inputs.worktreePath
     || run?.worktree_path
     || getDurableLane(laneId, root)?.binding?.worktree_path
     || null;
@@ -1413,7 +1444,12 @@ function actionQueryHash(rec) {
     return rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || null;
   }
   if (rec?.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
-    return rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || rec.inputs?.head_sha || null;
+    // SEMANTICS UNCHANGED, VOCABULARY SHARED. A merge authorization is still
+    // keyed on the head SHA alone, so an approval still stops applying the
+    // moment the branch moves. What changes is only that every spelling of that
+    // SHA now resolves to the same value, so `head_sha` no longer produces a
+    // different hash from `expected_head_sha` for the same commit.
+    return mergeIdentityFor(rec).expectedHeadSha;
   }
   if (rec?.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return rec.inputs?.expected_sha || rec.inputs?.expectedSha || rec.inputs?.dedupeKey || rec.inputs?.dedupe_key || null;
@@ -1501,8 +1537,11 @@ function requestTitle(rec) {
     return "Read-only database census";
   }
   if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
-    const n = rec.inputs?.pull_request_number || rec.inputs?.pullRequestNumber || "";
-    return n ? `Merge PR #${n} into staging` : "Merge pull request into staging";
+    const id = mergeIdentityFor(rec);
+    const into = id.targetBranch || rec.target || "staging";
+    return id.pullRequestNumber
+      ? `Merge PR #${id.pullRequestNumber} into ${into}`
+      : "Merge pull request into staging";
   }
   if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
     const b = rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || "";
@@ -1964,11 +2003,32 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
     return decision;
   }
 
-  const n = rec.inputs?.pull_request_number || rec.inputs?.pullRequestNumber;
+  // THE APPROVAL CARD SHOWS WHAT WILL ACTUALLY BE MERGED.
+  //
+  // This read the narrow vocabulary, so a merge proposed with `pull_request`
+  // rendered "PR: #" with nothing after it. The Director would then be asked to
+  // authorise a privileged staging merge whose PR number, the core identity of
+  // the decision, was simply missing from the card. It is the same parser the
+  // grant is pinned to, so the card and the grant cannot disagree.
+  const mergeId = mergeIdentityFor(rec);
+  const n = mergeId.pullRequestNumber;
   const versions = Array.isArray(rec.inputs?.migrations)
     ? rec.inputs.migrations.map((m) => m.version || m).join("\n")
     : "";
   const isMerge = rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST;
+  const repository = String(rec.inputs?.repository || rec.inputs?.repo || "").trim();
+  // Shown as its own lines so the operator reads the full merge identity —
+  // repository, PR, expected SHA, target branch and merge method — rather than
+  // inferring it from a title.
+  const mergeIdentityLines = isMerge
+    ? [
+      repository ? `Repository: ${repository}` : null,
+      `PR: #${n ?? "unknown"}`,
+      `Expected SHA: ${mergeId.expectedHeadSha || "unknown"}`,
+      `Target branch: ${mergeId.targetBranch || rec.target || "staging"}`,
+      `Merge method: ${mergeId.mergeMethod}`,
+    ].filter(Boolean).join("\n")
+    : "Migrations:";
   const { decision } = createDecision({
     missionId: rec.mission_id,
     title: rec.title || presentation.mission_need.replace(/^Needs approval — /, ""),
@@ -1980,8 +2040,8 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
       "Purpose:",
       rec.purpose,
       "",
-      isMerge ? `PR: #${n}` : "Migrations:",
-      isMerge ? `Expected SHA: ${rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || ""}` : versions,
+      mergeIdentityLines,
+      isMerge ? "" : versions,
       "",
       rec.reason_worker_cannot_execute,
       "",
@@ -2032,8 +2092,25 @@ function authorityScopeFor(rec) {
 }
 
 /** Everything a Director actually weighs, in the shape the grant is pinned to. */
+/**
+ * THE MERGE IDENTITY OF A REQUEST, FROM THE ONE PARSER THAT OWNS IT.
+ *
+ * Grant issuance and trusted execution were converged onto
+ * readMergeInputIdentity. Three consumers were not: actionQueryHash,
+ * requestTitle and openApprovalDecision each kept the older, narrower
+ * vocabulary. Execution was safe, but the OPERATOR CARD was not: a merge
+ * proposed with `pull_request` rendered "PR: #" — the Director could be asked
+ * to authorise a privileged merge whose core identity was blank.
+ *
+ * Every consumer now reads through here, so the approval display, the grant and
+ * the executor cannot describe different merges.
+ */
+function mergeIdentityFor(rec) {
+  return readMergeInputIdentity(rec?.inputs || {});
+}
+
 function proposalForRequest(rec) {
-  const mergeIdentity = readMergeInputIdentity(rec.inputs || {});
+  const mergeIdentity = mergeIdentityFor(rec);
   return {
     proposal_id: rec.request_id,
     action_key: rec.action_key,
@@ -2096,7 +2173,15 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
     contentFingerprint: rec.director_approval?.content_fingerprint || null,
     environment: rec.director_decision?.environment || null,
     repository: rec.inputs?.repository || null,
-    sourceSha: rec.inputs?.expectedHeadSha || rec.inputs?.expected_head_sha || rec.inputs?.expectedSha || null,
+    // A merge's SHA comes from the shared parser, which also knows `head_sha`.
+    // Without it a merge proposed that way carried a null sourceSha into the
+    // authorization context — not a security hole (a null never matches, so it
+    // escalates rather than over-authorises) but the same silent substitution:
+    // the caller supplied the SHA and the reader could not see it.
+    sourceSha: (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
+      ? mergeIdentityFor(rec).expectedHeadSha
+      : null)
+      || rec.inputs?.expectedHeadSha || rec.inputs?.expected_head_sha || rec.inputs?.expectedSha || null,
   } : null;
   // Present only on the repository-authorized path. A mission-bound request is
   // authorized exactly as before and never looks at this.
