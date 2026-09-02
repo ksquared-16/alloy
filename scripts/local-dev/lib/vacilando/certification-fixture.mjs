@@ -58,6 +58,20 @@ export const CERTIFICATION_FIXTURES = Object.freeze({
       reset: Object.freeze({ args: ["--remove"], mutating: true }),
     }),
   }),
+  enrollment_certification: Object.freeze({
+    fixture: "enrollment_certification",
+    npm_script: "dev:seed:enrollment-certification",
+    // RFC-2606 reserved, so it can never collide with a real address.
+    reserved_namespace: "enrollment-cert.alloy.invalid",
+    description:
+      "REAL ENROLLMENT V1 certification families: Certfree (context-free, acquisition concluded) "
+      + "and Certopp (Opportunity-backed), each with one child and a started Enrollment journey.",
+    operations: Object.freeze({
+      ensure: Object.freeze({ args: [], mutating: true }),
+      verify: Object.freeze({ args: ["--verify"], mutating: false }),
+      reset: Object.freeze({ args: ["--remove"], mutating: true }),
+    }),
+  }),
 });
 
 /**

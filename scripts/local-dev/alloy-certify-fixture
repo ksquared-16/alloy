@@ -59,6 +59,7 @@ done
 # reached through vac or directly.
 case "$FIXTURE" in
   operational_cards_certification) NPM_SCRIPT="dev:seed:operational-cards-certification" ;;
+  enrollment_certification) NPM_SCRIPT="dev:seed:enrollment-certification" ;;
   *) die "fixture_not_allowlisted: $FIXTURE" 3 ;;
 esac
 
