@@ -146,3 +146,71 @@ describe("column-local drop — the operator's gesture", () => {
         expect(rows).toEqual([1, 2, 3, 4, 5]);
     });
 });
+
+describe("the drop is a rectangle, and only overlapping columns are in it", () => {
+    const GAP2 = 10;
+    const layout: FocusPanelGridLayout = {
+        columns: 12,
+        areas: [
+            { card: "attendance", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 2 },
+            { card: "household", colStart: 7, colSpan: 6, rowStart: 2, rowSpan: 2 },
+            { card: "health_safety", colStart: 7, colSpan: 6, rowStart: 3, rowSpan: 2 },
+        ],
+    };
+
+    /** Household sits at a known Y; Attendance's size is varied to prove it is irrelevant. */
+    const boxesWith = (attendanceHeight: number) =>
+        new Map<string, MeasuredBox>([
+            ["attendance", { top: 0, height: attendanceHeight }],
+            ["household", { top: 0, height: 366 }],
+            ["health_safety", { top: 376, height: 369 }],
+        ]);
+
+    it("Health's destination is literally Household.bottom + one gutter", () => {
+        const moving = layout.areas.find((a) => a.card === "health_safety")!;
+        const boxes = boxesWith(425);
+        const hh = boxes.get("household")!;
+        const drop = resolveColumnAwareDrop({
+            layout, moving, colStart: 7,
+            // Pointer past Household's middle: the card belongs beneath it.
+            pointerY: hh.top + hh.height - 20,
+            boxes, gapPx: GAP2,
+        });
+        expect(drop.rect).toEqual({ colStart: 7, colSpan: 6, top: hh.top + hh.height + GAP2 });
+        expect(drop.after).toBe("household");
+    });
+
+    it("Attendance cannot change that answer, whatever size it is", () => {
+        const moving = layout.areas.find((a) => a.card === "health_safety")!;
+        const answers = [120, 425, 900, 2000].map((attendanceHeight) => {
+            const boxes = boxesWith(attendanceHeight);
+            const hh = boxes.get("household")!;
+            return resolveColumnAwareDrop({
+                layout, moving, colStart: 7,
+                pointerY: hh.top + hh.height - 20,
+                boxes, gapPx: GAP2,
+            }).rect;
+        });
+        // One answer, whatever the left column is doing.
+        expect(new Set(answers.map((r) => JSON.stringify(r))).size).toBe(1);
+        expect(answers[0]).toEqual({ colStart: 7, colSpan: 6, top: 376 });
+    });
+
+    it("does not even consult a card in disjoint columns", () => {
+        const moving = layout.areas.find((a) => a.card === "health_safety")!;
+        const drop = resolveColumnAwareDrop({
+            layout, moving, colStart: 7, pointerY: 500, boxes: boxesWith(2000), gapPx: GAP2,
+        });
+        expect(drop.overlapping).toEqual(["household"]);
+        expect(drop.overlapping).not.toContain("attendance");
+    });
+
+    it("above everything it overlaps means the top of the canvas", () => {
+        const moving = layout.areas.find((a) => a.card === "health_safety")!;
+        const drop = resolveColumnAwareDrop({
+            layout, moving, colStart: 7, pointerY: 5, boxes: boxesWith(425), gapPx: GAP2,
+        });
+        expect(drop.rect.top).toBe(0);
+        expect(drop.after).toBeNull();
+    });
+});

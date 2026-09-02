@@ -143,6 +143,8 @@ export type ColumnAwareDropInput = {
     colStart: number;
     /** Pointer Y, in the same space as the measured boxes. */
     pointerY: number;
+    /** Gutter between stacked cards. */
+    gapPx?: number;
     /** What is currently on screen — the one truth both composer and runtime render. */
     boxes: ReadonlyMap<string, MeasuredBox>;
 };
@@ -153,6 +155,8 @@ export type ColumnAwareDropResult = {
     after: string | null;
     /** The cards whose columns the dragged card shares — the only ones that constrain it. */
     overlapping: string[];
+    /** Where the card goes: these columns, this Y. */
+    rect: { colStart: number; colSpan: number; top: number };
 };
 
 /**
@@ -188,52 +192,73 @@ export type ColumnAwareDropResult = {
  * keeps its shape and gains an honest meaning.
  */
 export function resolveColumnAwareDrop(input: ColumnAwareDropInput): ColumnAwareDropResult {
-    const { layout, moving, colStart, pointerY, boxes } = input;
+    const { layout, moving, colStart, pointerY, boxes, gapPx = 10 } = input;
     const columns = Math.max(1, layout.columns);
     const colSpan = Math.max(1, Math.min(moving.colSpan, columns));
     const clampedCol = Math.min(Math.max(1, Math.round(colStart)), columns - colSpan + 1);
     const target = { ...moving, colStart: clampedCol, colSpan };
 
     const others = layout.areas.filter((a) => a.card !== moving.card);
-    // The only cards with any say in where this one sits vertically.
+
+    /*
+     * ── SOLVE THE RECTANGLE, NOT AN ORDER ──
+     *
+     * The drop's answer is a rectangle: these columns, this Y. Y is the bottom of
+     * the last card the pointer has passed among those this card overlaps
+     * HORIZONTALLY, plus one gutter — Health's destination is literally
+     * `Household.bottom + 10`. Nothing else is consulted, so Attendance cannot
+     * affect it: it does not share a column with Health, and that is the entire
+     * test.
+     *
+     * This replaces a global reading-order splice-and-renumber that produced the
+     * same answer by a longer route, and dragged every unrelated card's ordering
+     * through the computation on the way. Order is now a CONSEQUENCE of the
+     * rectangles — derived once, at the end, for serialisation — rather than the
+     * mechanism.
+     */
     const overlapping = others
         .filter((a) => columnsOverlap(a, target))
         .map((a) => ({ area: a, box: boxes.get(a.card) }))
         .filter((entry): entry is { area: FocusPanelGridArea; box: MeasuredBox } => Boolean(entry.box))
         .sort((a, b) => a.box.top - b.box.top);
 
-    /*
-     * The predecessor is the last overlapping card whose MIDDLE the pointer has
-     * passed. Using the midpoint rather than the top edge is what makes "drop it
-     * above this card" and "drop it below this card" both reachable, with the
-     * changeover in the middle of the card where an operator expects it.
-     */
+    let top = 0;
     let after: string | null = null;
     for (const entry of overlapping) {
-        if (pointerY >= entry.box.top + entry.box.height / 2) after = entry.area.card;
-        else break;
+        // Past this card's middle? Then the card belongs below it.
+        if (pointerY >= entry.box.top + entry.box.height / 2) {
+            top = entry.box.top + entry.box.height + gapPx;
+            after = entry.area.card;
+        } else break;
     }
 
-    // Rebuild the reading order with the dragged card at its requested position.
-    const ordered = packOrder(others);
-    const insertAt = after
-        ? ordered.findIndex((a) => a.card === after) + 1
-        : (() => {
-              // Above every card it overlaps: sit just before the first of them.
-              const first = overlapping[0]?.area.card;
-              const index = first ? ordered.findIndex((a) => a.card === first) : -1;
-              return index < 0 ? 0 : index;
-          })();
-
-    const next = [...ordered];
-    next.splice(insertAt, 0, target);
+    /*
+     * Serialise. Every card keeps the Y it is already drawn at; the dragged one
+     * takes the Y just solved. Sorting on that gives the reading order the
+     * persisted `rowStart` records — a consequence of the geometry rather than an
+     * input to it.
+     */
+    const positioned = [
+        ...others.map((area) => ({
+            area, top: boxes.get(area.card)?.top ?? Number.MAX_SAFE_INTEGER, moving: false,
+        })),
+        { area: target, top, moving: true },
+    ].sort((a, b) => {
+        if (a.top !== b.top) return a.top - b.top;
+        // A tie means the pointer asked for a Y a card already holds. The pointer
+        // wins and the incumbent yields — that is what "drop it above this" means.
+        if (a.moving !== b.moving) return a.moving ? -1 : 1;
+        return a.area.colStart - b.area.colStart;
+    });
 
     return {
         layout: {
             ...layout,
-            areas: next.map((area, index) => ({ ...area, rowStart: index + 1 })),
+            areas: positioned.map((entry, index) => ({ ...entry.area, rowStart: index + 1 })),
         },
         after,
         overlapping: overlapping.map((entry) => entry.area.card),
+        /** The rectangle the pointer asked for — the actual answer. */
+        rect: { colStart: clampedCol, colSpan, top },
     };
 }

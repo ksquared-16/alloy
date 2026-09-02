@@ -636,6 +636,7 @@ export default function FocusPanelRuntimeComposerCanvas({
                 colStart: col - grabColOffset,
                 pointerY: clientY - canvasTop,
                 boxes: boxesAtStart,
+                gapPx: COMPOSER_GRID_GAP_PX,
             });
             const landed = drop.layout.areas.find((a) => a.card === area.card) ?? area;
             return {
