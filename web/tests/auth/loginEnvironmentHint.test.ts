@@ -62,3 +62,37 @@ describe("the hint is development-only and names an environment, never an accoun
         expect(hint.slice(0, 240)).not.toMatch(/email|account exists|user/i);
     });
 });
+
+describe("an already-signed-in operator is not shown a login form", () => {
+    const page = () => read("../../app/login/page.tsx");
+
+    it("redirects away when a session is present", async () => {
+        const src = await page();
+        expect(src).toContain("router.replace(POST_SIGN_IN_PATH)");
+    });
+
+    it("asks the auth server, not the local cookie", async () => {
+        /*
+         * getSession() reads the cookie locally and can return a session the middleware then
+         * rejects, which sends the browser straight back here. getUser() verifies, so a redirect
+         * only fires for a session the rest of the app also accepts.
+         */
+        const src = await page();
+        expect(src).toContain("auth.getUser()");
+        expect(src).not.toContain("auth.getSession()");
+    });
+
+    it("does NOT redirect on error=unauthorized, which would loop and hide the reason", async () => {
+        const src = await page();
+        const effect = src.slice(src.indexOf("ALREADY SIGNED IN?"));
+        expect(effect).toContain('if (errorParam === "unauthorized") return;');
+    });
+
+    it("sends the operator to the same place a fresh sign-in does", async () => {
+        // One constant for both paths: a redirect that disagreed with the sign-in handler would send
+        // signed-in and just-signed-in operators to different pages.
+        const src = await page();
+        expect(src).toContain("router.push(POST_SIGN_IN_PATH)");
+        expect(src.match(/POST_SIGN_IN_PATH/g)?.length).toBeGreaterThanOrEqual(3);
+    });
+});

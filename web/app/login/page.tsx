@@ -34,6 +34,9 @@ function DevSupabaseAuthPanel() {
   );
 }
 
+/** Where a signed-in operator belongs. Named once so the two paths here cannot drift apart. */
+const POST_SIGN_IN_PATH = "/workspace";
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,6 +64,40 @@ function LoginForm() {
   }, [isDev]);
 
   const errorParam = searchParams?.get("error");
+
+  /*
+   * ALREADY SIGNED IN? Then this page is a trap, not a service.
+   *
+   * The session cookie is `domain=localhost` with NO port, so it is shared by every dev server on
+   * this machine. Signing in on one port signs you in on all of them -- but /login still rendered a
+   * form, so an already-authenticated operator arriving here sees a login screen, concludes the app
+   * has signed them out, and starts typing. That cost an afternoon: every route they actually wanted
+   * was serving them 200 the entire time.
+   *
+   * `getUser()` and not `getSession()`. getSession reads the cookie locally and will happily return a
+   * session the middleware then rejects, which sends the browser back here -- a redirect loop built
+   * out of two components that each behave reasonably. getUser asks the auth server, so a redirect
+   * only happens when the session is one the rest of the app will also accept.
+   *
+   * `error=unauthorized` is excluded for the same reason from the other direction: that state means
+   * the caller IS authenticated and lacks ACCESS. Bouncing them to the workspace would return them
+   * here immediately, and the message explaining the problem would never be readable.
+   */
+  useEffect(() => {
+    if (errorParam === "unauthorized") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await createClient().auth.getUser();
+        if (!cancelled && data.user) router.replace(POST_SIGN_IN_PATH);
+      } catch {
+        // No session, or no reachable auth service. Either way the form is the right thing to show.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [errorParam, router]);
 
   const hasClientEnvVars = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
@@ -98,7 +135,7 @@ function LoginForm() {
         return;
       }
 
-      router.push("/workspace");
+      router.push(POST_SIGN_IN_PATH);
       router.refresh();
     } catch (err: unknown) {
       setError(signInErrorMessage(err));
