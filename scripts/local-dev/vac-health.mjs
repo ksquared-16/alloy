@@ -30,6 +30,7 @@ import { attributionReport, parseProcessTable } from "./lib/vacilando/process-at
 import { classifyWorkload } from "./lib/vacilando/workload-classification.mjs";
 import { concurrentWeightedCost } from "./lib/vacilando/workload-observation.mjs";
 import { hostCapability, computeCapacityPolicy } from "./lib/vacilando/capacity-policy.mjs";
+import { capacityStatus, CAPACITY_NAMES } from "./lib/vacilando/capacity-precedence.mjs";
 import { stewardStatus } from "./lib/vacilando/host-steward-cycle.mjs";
 
 function usage(code = 2) {
@@ -397,6 +398,29 @@ const A = capacity.axes;
 w(`capacity   providers ${A.provider_capacity.current}/${A.provider_capacity.ceiling} (by ${A.provider_capacity.bounded_by}) · tokens ${A.validation_capacity.used}/${A.validation_capacity.tokens} (by ${A.validation_capacity.bounded_by}) · workers ≤${A.validation_capacity.worker_ceiling} · dev servers ${A.dev_server_capacity.current}/${A.dev_server_capacity.ceiling}\n`);
 w(`reserves   memory ${A.memory_capacity.free_gb ?? "?"} GB free / ${A.memory_capacity.reserve_gb} GB reserve · disk ${A.disk_headroom.free_gb ?? "?"} GB free / ${A.disk_headroom.reserve_gb} GB reserve · policy ${capacity.policy_version}\n`);
 if (capacity.constrained_axes.length) w(`constrained ${capacity.constrained_axes.map((c) => c.value).join(", ")}\n`);
+
+// DERIVED IS NOT ENFORCED, AND HEALTH MUST NOT CONFLATE THEM.
+//
+// The line above reports what this host could safely OFFER — 6 dev servers on
+// 48 GB. The toolkit refuses at 3, because the host config says 3. Printing only
+// the derived ceiling is how a capacity experiment came to believe it had four
+// slots of headroom it was never going to be given. Both numbers, always, and
+// the reason each one is what it is.
+const enforced = capacityStatus({ derived: capacity });
+w(`enforced   ${CAPACITY_NAMES.map((n) => {
+  const r = enforced.limits[n];
+  return `${n.replace("ALLOY_MAX_", "").toLowerCase()} ${r.value} (${r.source})`;
+}).join(" · ")}\n`);
+if (enforced.override_active) {
+  w(`override   ACTIVE ${Object.entries(enforced.override_applied).map(([k, v]) => `${k}=${v}`).join(" ")} — ${enforced.override_reason}\n`);
+}
+for (const r of enforced.override_refused) {
+  w(`override   REFUSED ${r.entry} (${r.error})\n`);
+}
+const gaps = Object.entries(enforced.derived_exceeds_enforced);
+if (gaps.length) {
+  w(`headroom   ${gaps.map(([k, g]) => `${k.replace("ALLOY_MAX_", "").toLowerCase()} enforced ${g.enforced}, host could offer ${g.derived}`).join(" · ")}\n`);
+}
 w(`checks     ${report.counts.problem} problem · ${report.counts.watch} watch · ${report.counts.healthy} healthy   (${report.duration_ms} ms)\n`);
 
 const section = (title, sev) => {

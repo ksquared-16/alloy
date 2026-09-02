@@ -1,3 +1,4 @@
+import { capacityValue } from "./capacity-precedence.mjs";
 /**
  * Provider capacity — the canonical owner of "how much computation is running".
  *
@@ -42,9 +43,12 @@ export const PARKED_RUN_STATES = Object.freeze(["NEEDS_INPUT", "WAITING_RESOURCE
 
 export const DEFAULT_MAX_ACTIVE_PROVIDERS = 3;
 
+// This read process.env only. Inside the Gateway — which never sources
+// ~/.config/alloy-dev/config — that meant the host's configured provider
+// ceiling was invisible and this always answered with the built-in default.
+// Delegated to the one resolver that knows the whole precedence chain.
 export function configuredProviderCeiling(env = process.env) {
-  const raw = Number(env.ALLOY_MAX_ACTIVE_PROVIDERS);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_MAX_ACTIVE_PROVIDERS;
+  return capacityValue("ALLOY_MAX_ACTIVE_PROVIDERS", env) || DEFAULT_MAX_ACTIVE_PROVIDERS;
 }
 
 function normalizePath(p) {

@@ -37,11 +37,14 @@ main() {
   alloy_load_config
   alloy_ensure_runtime_dirs
 
-  printf '%-28s %-8s %-40s %-6s %-18s %-8s %s\n' \
-    "NAME" "AGENT" "BRANCH" "PORT" "STATE" "PID" "PATH"
+  # READY is appended AFTER path so every existing parser of this table keeps
+  # working; a worktree that cannot start a server must say so here rather than
+  # let the reader infer readiness from a registered slot and a free port.
+  printf '%-28s %-8s %-40s %-6s %-18s %-8s %-70s %s\n' \
+    "NAME" "AGENT" "BRANCH" "PORT" "STATE" "PID" "PATH" "READY"
   printf '%s\n' "------------------------------------------------------------------------------------------------------------------------------------"
 
-  local name state pid_path pid
+  local name state pid_path pid readiness
   while IFS= read -r name; do
     [[ -n "$name" ]] || continue
     # shellcheck disable=SC1090
@@ -54,14 +57,16 @@ main() {
     elif listener="$(alloy_port_listener_pid "${PORT}" 2>/dev/null)"; then
       pid="$listener"
     fi
-    printf '%-28s %-8s %-40s %-6s %-18s %-8s %s\n' \
+    readiness="$(alloy_server_readiness_for_path "$ALLOY_WORKTREE_PATH" || true)"
+    printf '%-28s %-8s %-40s %-6s %-18s %-8s %-70s %s\n' \
       "$ALLOY_WORKTREE_NAME" \
       "$ALLOY_AGENT" \
       "$ALLOY_WORKTREE_BRANCH" \
       "$PORT" \
       "$state" \
       "$pid" \
-      "$ALLOY_WORKTREE_PATH"
+      "$ALLOY_WORKTREE_PATH" \
+      "$readiness"
   done < <(alloy_list_metadata_names | sort)
 
   echo
