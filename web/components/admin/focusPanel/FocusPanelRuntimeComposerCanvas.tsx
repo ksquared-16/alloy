@@ -40,6 +40,7 @@ import {
     resolveDropPlacement,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
+import { resolveColumnAwareDrop } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelColumnAwareLayout";
 import { publishComposerLayoutDump } from "@/lib/adminV2/runtime/focusPanel/composition/composerLayoutDump";
 import {
     beginComposerDragTrace,
@@ -438,6 +439,26 @@ export default function FocusPanelRuntimeComposerCanvas({
         };
     }, [cols]);
 
+    /*
+     * The cards as RENDERED. Vertical authoring now reasons about the same boxes
+     * the runtime draws, rather than about grid row tracks the renderer stopped
+     * using when placement became column-aware. Reading the DOM keeps composer and
+     * runtime on one description of the canvas.
+     */
+    const measureCardBoxes = useCallback(() => {
+        const boxes = new Map<string, { top: number; height: number }>();
+        const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
+        if (!canvas) return boxes;
+        const base = canvas.getBoundingClientRect();
+        for (const el of Array.from(canvas.querySelectorAll("[data-fp-grid-area]"))) {
+            const card = el.getAttribute("data-fp-grid-area");
+            if (!card) continue;
+            const r = el.getBoundingClientRect();
+            boxes.set(card, { top: r.top - base.top, height: r.height });
+        }
+        return boxes;
+    }, []);
+
     const cellFromPointer = useCallback(
         (clientX: number, clientY: number) => {
             const m = measureCanvas();
@@ -568,10 +589,33 @@ export default function FocusPanelRuntimeComposerCanvas({
         });
         const resolveTarget = (clientX: number, clientY: number) => {
             const { col, row } = cellFromPointerFrozen(clientX, clientY);
-            const placement = resolvePlacement(
-                gridAtStart, area, col - grabColOffset, row - grabRowOffset,
-            );
-            return { placement, pointerCell: { col, row } };
+            const live = measureCanvas();
+            const canvasTop = live?.rect.top ?? metricsAtStart?.rect.top ?? 0;
+            /*
+             * The pointer is not naming a row. It is saying "this card belongs in
+             * these columns, at this height in their stack" — so the drop is
+             * resolved against the cards that actually share those columns.
+             */
+            const drop = resolveColumnAwareDrop({
+                layout: gridAtStart,
+                moving: area,
+                colStart: col - grabColOffset,
+                pointerY: clientY - canvasTop,
+                boxes: measureCardBoxes(),
+            });
+            const landed = drop.layout.areas.find((a) => a.card === area.card) ?? area;
+            return {
+                placement: {
+                    area: landed,
+                    grid: drop.layout,
+                    reflowed: true,
+                    how: "insert" as const,
+                    asked: { colStart: landed.colStart, rowStart: landed.rowStart },
+                },
+                pointerCell: { col, row },
+                after: drop.after,
+                overlapping: drop.overlapping,
+            };
         };
         const cleanup = () => {
             setGhost(null);
@@ -599,11 +643,13 @@ export default function FocusPanelRuntimeComposerCanvas({
                 // Now it is a drag: stop the browser turning it into a text selection.
                 ev.preventDefault();
             }
-            const { placement, pointerCell } = resolveTarget(ev.clientX, ev.clientY);
+            const { placement, pointerCell, after, overlapping } = resolveTarget(ev.clientX, ev.clientY);
             traceComposerDrag("move", {
                 card: area.card,
                 pointer: { x: Math.round(ev.clientX), y: Math.round(ev.clientY) },
                 pointerCell,
+                after,
+                overlapping,
                 asked: placement.asked,
                 how: placement.how,
                 ghost: {

@@ -131,3 +131,109 @@ export function serializeToRows(layout: ColumnAwareLayout): Map<string, number> 
     byTop.forEach((box, index) => rows.set(box.card, index + 1));
     return rows;
 }
+
+/** A card's resolved vertical extent, as rendered. Only `top`/`height` matter here. */
+export type MeasuredBox = { top: number; height: number };
+
+export type ColumnAwareDropInput = {
+    layout: FocusPanelGridLayout;
+    /** The card being dragged, carrying its AUTHORED span. */
+    moving: FocusPanelGridArea;
+    /** Where the pointer says the card belongs horizontally. */
+    colStart: number;
+    /** Pointer Y, in the same space as the measured boxes. */
+    pointerY: number;
+    /** What is currently on screen — the one truth both composer and runtime render. */
+    boxes: ReadonlyMap<string, MeasuredBox>;
+};
+
+export type ColumnAwareDropResult = {
+    layout: FocusPanelGridLayout;
+    /** The card the dragged one now follows in its own columns, or null for the top. */
+    after: string | null;
+    /** The cards whose columns the dragged card shares — the only ones that constrain it. */
+    overlapping: string[];
+};
+
+/**
+ * AUTHORING IN THE SAME GEOMETRY THE RUNTIME RENDERS.
+ *
+ * ── THE HYBRID THIS REPLACES ──
+ *
+ * Rendering became column-aware; authoring did not. The drag still asked
+ * `gridTemplateRows` for a row index — a coordinate system the renderer had
+ * stopped using, since cards are positioned from measured geometry now. So the
+ * pointer was answering a question about rows that no longer existed, and the
+ * operator could not author what they were plainly pointing at.
+ *
+ * ── WHAT THE POINTER IS ACTUALLY SAYING ──
+ *
+ * Not "Attendance is row 7". It is saying "Attendance is in columns 1-6,
+ * immediately after Process". Vertical order is a relationship between cards
+ * that OVERLAP horizontally, and nothing else: Children and Household in columns
+ * 7-12 have no standing to push a card in columns 1-6 up or down.
+ *
+ * So the drop is resolved as a position in the stack of the columns the card will
+ * occupy: find the cards it will share columns with, see which of them the
+ * pointer is below, and insert it there.
+ *
+ * ── AND `rowStart` STILL SERIALISES IT ──
+ *
+ * The constraints form a partial order — disjoint columns are genuinely
+ * unordered — and a scalar cannot express a partial order. It does not have to:
+ * every partial order has a linear extension, and the resolver only ever stacks
+ * a card against cards it overlaps, so any linear extension consistent with the
+ * column-local constraints renders identically. `rowStart` records one such
+ * extension. That is why this needs no schema change and no migration: the field
+ * keeps its shape and gains an honest meaning.
+ */
+export function resolveColumnAwareDrop(input: ColumnAwareDropInput): ColumnAwareDropResult {
+    const { layout, moving, colStart, pointerY, boxes } = input;
+    const columns = Math.max(1, layout.columns);
+    const colSpan = Math.max(1, Math.min(moving.colSpan, columns));
+    const clampedCol = Math.min(Math.max(1, Math.round(colStart)), columns - colSpan + 1);
+    const target = { ...moving, colStart: clampedCol, colSpan };
+
+    const others = layout.areas.filter((a) => a.card !== moving.card);
+    // The only cards with any say in where this one sits vertically.
+    const overlapping = others
+        .filter((a) => columnsOverlap(a, target))
+        .map((a) => ({ area: a, box: boxes.get(a.card) }))
+        .filter((entry): entry is { area: FocusPanelGridArea; box: MeasuredBox } => Boolean(entry.box))
+        .sort((a, b) => a.box.top - b.box.top);
+
+    /*
+     * The predecessor is the last overlapping card whose MIDDLE the pointer has
+     * passed. Using the midpoint rather than the top edge is what makes "drop it
+     * above this card" and "drop it below this card" both reachable, with the
+     * changeover in the middle of the card where an operator expects it.
+     */
+    let after: string | null = null;
+    for (const entry of overlapping) {
+        if (pointerY >= entry.box.top + entry.box.height / 2) after = entry.area.card;
+        else break;
+    }
+
+    // Rebuild the reading order with the dragged card at its requested position.
+    const ordered = packOrder(others);
+    const insertAt = after
+        ? ordered.findIndex((a) => a.card === after) + 1
+        : (() => {
+              // Above every card it overlaps: sit just before the first of them.
+              const first = overlapping[0]?.area.card;
+              const index = first ? ordered.findIndex((a) => a.card === first) : -1;
+              return index < 0 ? 0 : index;
+          })();
+
+    const next = [...ordered];
+    next.splice(insertAt, 0, target);
+
+    return {
+        layout: {
+            ...layout,
+            areas: next.map((area, index) => ({ ...area, rowStart: index + 1 })),
+        },
+        after,
+        overlapping: overlapping.map((entry) => entry.area.card),
+    };
+}
