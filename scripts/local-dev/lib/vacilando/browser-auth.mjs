@@ -397,8 +397,21 @@ export function verifyBrowserAuthSync(validated, {
 function interpretVerifyOutput(validated, out) {
   const text = `${out.stdout || ""}\n${out.stderr || ""}`;
 
-  // The app is asked who it is; the storage file is never parsed for identity.
-  const m = text.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/);
+  /*
+   * The app is asked who it is; the storage file is never parsed for identity.
+   *
+   * PREFER THE NAMED FIELD. `alloy-agent-verify` now prints `identity: <email>` — the value the
+   * application itself resolved for the session. Reading that, rather than the first email-shaped
+   * token anywhere in the output, means an address that happens to appear in a console error or a
+   * failed-request URL can never be mistaken for the signed-in operator and reported as
+   * `wrong_identity`.
+   *
+   * The loose scan stays as a fallback so an older verifier that does not print the field behaves
+   * exactly as before.
+   */
+  const EMAIL = "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}";
+  const named = text.match(new RegExp(`^\\s*identity:\\s*(${EMAIL})\\s*$`, "m"));
+  const m = named || text.match(new RegExp(`\\b(${EMAIL})\\b`));
   const actualIdentity = m ? m[1] : null;
   const redirected = /\/login\b/.test(text) && /redirect|redirected/i.test(text);
 
