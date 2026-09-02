@@ -12,14 +12,18 @@ source "${SCRIPT_DIR}/lib/sprint-ops.sh"
 
 usage() {
   cat <<'EOF'
-Usage: alloy-dev-start <worktree-name>
+Usage: alloy-dev-start [--production] <worktree-name>
 
-Starts a toolkit-owned Next dev server:
+Starts a toolkit-owned Next server:
   1) loads sanitized web/.env.local.agent (agent-visible)
   2) injects trusted server vars from ALLOY_SERVER_ENV_SOURCE into the
      owned process only (never written to the worktree)
 
-Do not run npm run dev directly — that bypasses trusted injection.
+  (default)     development server  ($ALLOY_DEV_COMMAND)
+  --production  production server   ($ALLOY_PROD_COMMAND), requires an
+                existing production build in the worktree
+
+Do not run npm run dev / npm run start directly — that bypasses trusted injection.
 EOF
 }
 
@@ -28,9 +32,26 @@ main() {
     usage
     exit 0
   fi
-  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+  # ONE ENVIRONMENT OWNER, TWO SERVER MODES.
+  #
+  # Production previously had no managed path at all: `alloy-dev-start` always ran the dev command,
+  # and a hand-run `next start` inherits only the agent-safe file, so server-side auth cannot resolve
+  # a session and every route 307s to /login. Rather than grow a second trusted-env owner, this flag
+  # swaps ONLY the command. Registry resolution, slot/port ownership, the agent-safe load, the
+  # trusted overlay, the PID lifecycle and capacity accounting are the same lines for both modes.
+  local mode="dev"
+  local -a positional=()
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --production) mode="production" ;;
+      --*) usage >&2; exit 2 ;;
+      *) positional+=("$arg") ;;
+    esac
+  done
+  [[ ${#positional[@]} -eq 1 ]] || { usage >&2; exit 2; }
 
-  local name="$1"
+  local name="${positional[0]}"
   alloy_load_config
   alloy_ensure_runtime_dirs
   alloy_load_metadata "$name"
@@ -46,18 +67,31 @@ main() {
   [[ -d "$path" ]] || alloy_die "worktree path missing: $path"
   [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
 
+  # BUILD AND START ARE SEPARATE, AUDITABLE OPERATIONS. This refuses a missing artifact by name
+  # rather than silently building one: a start command that quietly builds would hide which commit
+  # is actually being served, which is precisely what a performance certification must never guess.
+  # It deliberately does NOT bypass the type gate — that is the build's business, not the server's.
+  # `${var^}` is bash 4; macOS ships bash 3.2, so the label is set explicitly rather than expanded.
+  local mode_label="Dev"
+  local server_command="$ALLOY_DEV_COMMAND"
+  if [[ "$mode" == "production" ]]; then
+    mode_label="Production"
+    server_command="${ALLOY_PROD_COMMAND:-npm run start}"
+    [[ -d "${web_dir}/.next" ]] || alloy_die "production build missing: ${web_dir}/.next — build first (production start never builds implicitly)"
+  fi
+
   if [[ -f "$pid_path" ]]; then
     existing_pid="$(alloy_read_pid_file "$pid_path" || true)"
     if [[ -n "${existing_pid:-}" ]] && alloy_pid_alive "$existing_pid"; then
       if alloy_pid_belongs_to_worktree "$existing_pid" "$path"; then
-        alloy_die "dev server already running for $name (PID $existing_pid). Refusing duplicate start."
+        alloy_die "server already running for $name (PID $existing_pid). Refusing duplicate start."
       fi
       alloy_die "PID file exists for live PID $existing_pid that does not belong to $path. Inspect: $pid_path"
     fi
     alloy_remove_dead_pid_file "$name" || true
   fi
 
-  alloy_refuse_occupied_port "$port" "dev-start for $name"
+  alloy_refuse_occupied_port "$port" "${mode}-start for $name"
   alloy_sprint_ops_defaults
   alloy_guard_server_start "$name"
 
@@ -95,14 +129,14 @@ main() {
   arch_prefix="$(alloy_native_arch_prefix)"
   [[ -n "$arch_prefix" ]] && launch_sh="/bin/bash"
   alloy_warn_node_modules_arch "$web_dir"
-  alloy_info "Starting ${arch_prefix}${ALLOY_DEV_COMMAND} in ${web_dir} on port ${port}..."
+  alloy_info "Starting ${arch_prefix}${server_command} in ${web_dir} on port ${port} (${mode})..."
   (
     cd "$web_dir"
     export PORT="$port"
     export NEXT_PUBLIC_APP_URL="$url"
     export NODE_OPTIONS
     # Inherited env includes agent-safe + trusted server vars (not on argv).
-    nohup ${arch_prefix}${launch_sh} -c "$ALLOY_DEV_COMMAND" >>"$log_path" 2>&1 &
+    nohup ${arch_prefix}${launch_sh} -c "$server_command" >>"$log_path" 2>&1 &
     echo $! >"$pid_path"
   )
 
@@ -111,12 +145,13 @@ main() {
   sleep 1
   if ! alloy_pid_alive "$pid"; then
     rm -f "$pid_path"
-    alloy_die "dev server failed to stay alive. Inspect log: $log_path"
+    alloy_die "${mode} server failed to stay alive. Inspect log: $log_path"
   fi
 
   cat <<EOF
-Dev server started (toolkit-owned)
+${mode_label} server started (toolkit-owned)
   worktree: ${name}
+  mode:     ${mode}
   url:      ${url}
   port:     ${port}
   PID:      ${pid}
@@ -129,7 +164,7 @@ Environment (two-tier):
   trusted vars:   ${trusted_count} names injected into owned process only
   not persisted:  privileged values are never written to the worktree
 
-Do not run npm run dev directly — use alloy-dev-start / devup.
+Do not run npm run dev / npm run start directly — use alloy-dev-start / devup.
 EOF
 }
 
