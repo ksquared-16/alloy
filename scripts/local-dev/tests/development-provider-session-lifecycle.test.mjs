@@ -259,7 +259,12 @@ await test("REGRESSION: provider prose alone cannot manufacture NEEDS_INPUT", as
   assert.equal(out.reconciled.length, 1, "an unresolvable operator state must be reconciled");
   const after = getExecutionRun(run.run.run_id, ROOT);
   assert.notEqual(after.state, "NEEDS_INPUT");
-  assert.equal(after.state, "FAILED", "surfaced as an actionable failure");
+  // COLLECTED, NOT FAILED. This asserted FAILED, and the failure reason printed
+  // back was the run's own NEEDS_INPUT reason — a mission reported as failed by
+  // quoting the question it was waiting on. ABANDONED already means "not going
+  // to continue, and recoverable", which is what actually happened.
+  assert.equal(after.state, "ABANDONED", "collected out of an impossible state, not reported as a failure");
+  assert.equal(after.state_reason, "needs_input_without_operator_input");
 });
 
 await test("a real worker question keeps the run in NEEDS_INPUT", async () => {

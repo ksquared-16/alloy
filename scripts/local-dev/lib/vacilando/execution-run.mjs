@@ -77,7 +77,12 @@ const LEGAL = Object.freeze({
   // recoverable, and RECOVERING is still reachable only through
   // recoverExecutionRun() with proven ownership.
   RECOVERING: ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED", "ABANDONED"],
-  NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "COMPLETE", "FAILED"],
+  // ABANDONED is reachable from NEEDS_INPUT: a run that needs input for which
+  // no operator control exists is stuck, not failed. It is collected out of the
+  // impossible state into the one the platform already has for "not going to
+  // continue, and recoverable" — rather than being reported as a failure whose
+  // reason is the question it was waiting on.
+  NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "COMPLETE", "FAILED", "ABANDONED"],
   COMPLETE: [],
   FAILED: [],
   // ABANDONED is recoverable, not dead. RECOVERING is its ONLY exit, and it is
