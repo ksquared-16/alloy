@@ -144,6 +144,11 @@ async function failUnavailable(rec, run, error, { root, nowMs, origin = "governo
   }, { root, event: "continuation_failed", extra: { error } });
   cleanupRunResources(rec.run_id, { origin, nowMs, root });
   if (run && !isTerminalRunState(run.state)) {
+    // Escalate for a human. Whether this is a resolvable question or an
+    // unresolvable failure is decided in ONE place: operator-input.mjs proves
+    // an actionable operator input exists, and reconciles the run out of
+    // NEEDS_INPUT if none does. Deciding it here as well would put the
+    // invariant in two places that can disagree.
     transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
       reason: error,
       origin,

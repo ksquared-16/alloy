@@ -558,7 +558,18 @@ await test("provider liveness uses an exported pane listing", async () => {
   const fn = src.slice(src.indexOf("async function providerIsLive"));
   assert.equal(/import\([^)]*\)[^;]*liveClaudePanes|\{\s*liveClaudePanes\s*\}/.test(fn), false,
     "liveClaudePanes must not be imported — it is not exported");
-  assert.ok(fn.includes("listTmuxPanesRaw"), "use the exported listing");
+  // The invariant is that liveness is asked through an EXPORTED listing — not
+  // that it is one particular listing. `discoverLivePanes` replaced the raw
+  // call so that "no tmux server" reads as zero panes rather than as an
+  // unreadable tmux. Assert the property, and prove the symbol it names is
+  // genuinely exported, which is what the original bug turned on.
+  const PANE_LISTINGS = ["discoverLivePanes", "listTmuxPanesRaw"];
+  const used = PANE_LISTINGS.filter((name) => fn.includes(name));
+  assert.ok(used.length > 0, "use an exported pane listing");
+  const lanes = await import("../lib/vacilando/lanes.mjs");
+  for (const name of used) {
+    assert.equal(typeof lanes[name], "function", `${name} must be exported by lanes.mjs`);
+  }
   // And prove the symbol really is absent, so this cannot regress silently.
   const adapter = await import("../lib/vacilando/alloy-dev-adapter.mjs");
   assert.equal(typeof adapter.liveClaudePanes, "undefined");

@@ -9,6 +9,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 COMMANDS=(
   alloy-worktree-create
+  alloy-worktree-adopt
   alloy-worktree-sync
   alloy-worktree-remove
   alloy-worktree-prune-merged

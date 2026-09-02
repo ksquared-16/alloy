@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# Register an EXISTING Alloy worktree into the slot registry.
+#
+# THE DEFECT THIS FIXES: a durable Vacilando restore onto a new execution node
+# carries lanes, missions and runs, and the worktrees are reconstructed by
+# hand — but the Alloy slot registry (<runtime-root>/metadata/<name>.env) is
+# host-local state that no backup carries. Every metadata-dependent command
+# (alloy-agent-prepare, alloy-dev-start, alloy-agent-login, alloy-worker-*)
+# then refuses "unknown worktree metadata" on a worktree that plainly exists,
+# and the only shipped way to produce that file was alloy-worktree-create —
+# which creates a NEW branch and worktree, i.e. a fake sprint.
+#
+# This registers reality. It creates no Git objects, no branch, no worktree, no
+# tmux session, no server, and no Development Lane. The branch is read from Git,
+# never guessed: metadata that disagrees with HEAD is what makes a lane
+# unstartable (startPersistentAgentSession refuses branch_mismatch).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-worktree-adopt <slot> <worktree-name> [--provider cursor|claude] [--force]
+
+Registers an existing worktree into the slot registry so the managed commands
+(alloy-agent-prepare, alloy-dev-start, alloy-agent-login, alloy-worker-status)
+can operate on it. Reads the branch from Git. Mutates no Git state.
+
+  --provider cursor|claude   default: ALLOY_SLOT_<n>_DEFAULT_AGENT
+  --force                    rewrite an existing metadata record for this name
+
+Refuses when: the slot is already assigned, the port is occupied, the path is
+outside ALLOY_WORKTREE_ROOT, the path is not a worktree of ALLOY_REPO, or HEAD
+is detached (a lane cannot be bound to a branch that does not exist).
+
+Example:
+  alloy-worktree-adopt 5 wt5-vacilando --provider claude
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local slot="" name="" provider="" force=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --provider) [[ $# -ge 2 ]] || alloy_die "--provider requires cursor|claude"; provider="$2"; shift 2 ;;
+      --force) force=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *)
+        if [[ -z "$slot" ]]; then slot="$1"
+        elif [[ -z "$name" ]]; then name="$1"
+        else alloy_die "unexpected argument: $1"
+        fi
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$slot" && -n "$name" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_require_cmd git
+
+  alloy_validate_slot "$slot"
+  [[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || alloy_die "invalid worktree name '$name'"
+  alloy_verify_canonical_repo
+
+  if [[ -z "$provider" ]]; then
+    local default_var="ALLOY_SLOT_${slot}_DEFAULT_AGENT"
+    provider="${!default_var:-claude}"
+  fi
+  alloy_validate_agent "$provider"
+
+  local path port
+  path="${ALLOY_WORKTREE_ROOT}/${name}"
+  port="$(alloy_slot_to_port "$slot")"
+
+  [[ -d "$path" ]] || alloy_die "worktree path does not exist: $path (this command adopts, it never creates)"
+  alloy_validate_worktree_boundary "$path"
+
+  # The path must be a worktree Git itself tracks for the canonical repository.
+  # Being a directory under the worktree root proves nothing.
+  local resolved
+  resolved="$(alloy_realpath "$path")"
+  alloy_git "$ALLOY_REPO" worktree list --porcelain \
+    | grep -Fqx "worktree ${resolved}" \
+    || alloy_die "not a registered worktree of ${ALLOY_REPO}: ${resolved}"
+
+  # Branch comes from Git. `rev-parse --abbrev-ref HEAD` prints the literal
+  # "HEAD" when detached — recording that would write a branch that no
+  # `git worktree list` will ever agree with.
+  local branch
+  branch="$(alloy_git "$path" rev-parse --abbrev-ref HEAD)"
+  [[ -n "$branch" && "$branch" != "HEAD" ]] \
+    || alloy_die "worktree HEAD is detached: $path (check out the intended branch first)"
+
+  local meta_path existing
+  meta_path="$(alloy_metadata_path "$name")"
+  if [[ -f "$meta_path" && "$force" -ne 1 ]]; then
+    alloy_die "metadata already exists for ${name} (${meta_path}) — pass --force to rewrite"
+  fi
+  if existing="$(alloy_find_metadata_by_slot "$slot" 2>/dev/null)"; then
+    [[ "$existing" == "$name" ]] \
+      || alloy_die "slot $slot is already assigned to ${existing}"
+  fi
+  # A listening port with no managed owner is the same fail-closed condition
+  # alloy-worktree-create refuses on.
+  if [[ ! -f "$meta_path" ]]; then
+    alloy_refuse_occupied_port "$port" "adopt"
+  fi
+
+  local role_var role
+  role_var="ALLOY_SLOT_${slot}_ROLE"
+  role="${!role_var:-}"
+
+  alloy_write_kv_file "$meta_path" \
+    "ALLOY_WORKTREE_NAME=\"$name\"" \
+    "ALLOY_WORKTREE_SLOT=\"$slot\"" \
+    "ALLOY_WORKTREE_PATH=\"$resolved\"" \
+    "ALLOY_WORKTREE_BRANCH=\"$branch\"" \
+    "ALLOY_AGENT=\"$provider\"" \
+    "PORT=\"$port\"" \
+    "NEXT_PUBLIC_APP_URL=\"http://localhost:${port}\"" \
+    "ALLOY_CREATED_AT=\"$(alloy_iso_now)\"" \
+    "ALLOY_AGENT_ROLE=\"$role\"" \
+    "ALLOY_AGENT_STATUS=\"active\"" \
+    "ALLOY_WORKER_LIFECYCLE=\"active\"" \
+    "ALLOY_ADOPTED_AT=\"$(alloy_iso_now)\"" \
+    "ALLOY_ADOPTED_REASON=\"existing worktree registered without creating Git state\""
+
+  cat <<EOF
+
+Adopted existing worktree into the slot registry:
+  name:      ${name}
+  slot:      ${slot}
+  provider:  ${provider}
+  branch:    ${branch}   (read from Git)
+  path:      ${resolved}
+  port:      ${port}
+  metadata:  ${meta_path}
+
+No Git state was created or modified. No server or provider was started.
+
+Next (only what the work actually needs):
+  alloy-agent-prepare ${name}       # web/.env.local.agent from the canonical source
+  alloy-dev-start ${name}           # only when a task needs localhost
+EOF
+}
+
+main "$@"

@@ -19,8 +19,57 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-// lib/vacilando → local-dev → scripts → repo root
-const REPO_ROOT = resolve(HERE, "..", "..", "..", "..");
+
+/**
+ * The repository this runtime is evaluating — never a guess from module layout.
+ *
+ * THE DEFECT THIS REPLACES: REPO_ROOT was `resolve(HERE, "..", "..", "..", "..")`,
+ * which encodes ONE layout — the source checkout, where lib/vacilando sits under
+ * scripts/local-dev. The Gateway runs from the immutable INSTALLED toolkit
+ * (~/.local/share/alloy/toolkit/<sha>/lib/vacilando), where the same four levels
+ * land on ~/.local/share/alloy: a directory that exists and is not a Git
+ * repository. Every Git call anchored to REPO_ROOT then ran against a non-repo,
+ * which is the `fatal: not a git repository` the Gateway logged continuously.
+ *
+ * The invariant: a runtime Git operation runs against an EXPLICIT repository —
+ * the configured canonical repo, or the worktree being evaluated. When the
+ * module's own layout is not a repository, it is not evidence of one, and the
+ * explicitly configured canonical repository is used instead.
+ */
+function resolveRepoRoot() {
+  // lib/vacilando -> local-dev -> scripts -> repo root, in a source checkout.
+  const byLayout = resolve(HERE, "..", "..", "..", "..");
+  // `.git` is a directory in a clone and a FILE in a linked worktree.
+  if (existsSync(join(byLayout, ".git"))) return byLayout;
+  const canonical = canonicalRepoFromConfig();
+  if (canonical && existsSync(join(canonical, ".git"))) return canonical;
+  // Neither is a repository. Return the layout value so path-containment below
+  // keeps behaving, rather than silently widening to some other directory.
+  return byLayout;
+}
+
+/**
+ * ALLOY_REPO as the operator configured it. Read directly rather than through
+ * workspace-facts so this module stays free of an import cycle.
+ */
+function canonicalRepoFromConfig() {
+  const home = process.env.HOME || os.homedir();
+  const files = [
+    process.env.ALLOY_CONFIG_FILE || join(home, ".config", "alloy-dev", "config"),
+    resolve(HERE, "..", "..", "alloy-config.example"),
+  ];
+  for (const f of files) {
+    try {
+      const m = readFileSync(f, "utf8").match(/^\s*ALLOY_REPO=\"?([^\"\n]*)\"?/m);
+      const v = m?.[1]?.trim();
+      if (v) return v.replace(/^\$HOME/, home).replace(/^~/, home);
+    } catch { /* try the next source */ }
+  }
+  const fallback = join(home, "Alloy");
+  return existsSync(fallback) ? fallback : null;
+}
+
+const REPO_ROOT = resolveRepoRoot();
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const SNAP_DIR = join(RUNTIME_ROOT, "vacilando", "knowledge", "snapshots");
 

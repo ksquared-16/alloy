@@ -175,6 +175,10 @@ export function createAgentSession({
   nowMs = Date.now(),
   root = runtimeRoot(),
   predecessorSessionId = null,
+  // Does this session own an executable provider process, or is it an attached
+  // read-only IDE transcript? The reaper needs the difference: an attachment
+  // has no pane BY DESIGN and must never be ended for lacking one.
+  executable = true,
 } = {}) {
   const lane_id = canonicalLaneStoreId(laneId, root);
   if (!lane_id) return { ok: false, error: "missing_lane_id" };
@@ -188,6 +192,7 @@ export function createAgentSession({
     provider,
     provider_session_id: providerSessionId || null,
     model: model || null,
+    executable: executable !== false,
     state: "STARTING",
     started_at: iso(nowMs),
     ended_at: null,

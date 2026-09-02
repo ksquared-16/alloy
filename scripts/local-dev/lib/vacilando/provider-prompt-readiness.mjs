@@ -76,6 +76,25 @@ const BLOCKER_SIGNATURES = Object.freeze([
     ],
   },
   {
+    // cursor-agent's own first-run wording: "contents" and "directory" where
+    // Claude says "files" and "folder", so none of the patterns above matched
+    // and a blocked Cursor start surfaced as a bare `cursor_prompt_timeout`
+    // that named nothing.
+    //
+    // SCOPED TO CURSOR ON PURPOSE. A provider switch leaves the outgoing
+    // provider's modal in the pane's scrollback, and the Gateway captures more
+    // history than the visible screen. Left shared, this box kept blocking the
+    // lane AFTER it switched to Claude — the run refused with "Claude is
+    // waiting on a folder-trust prompt" while a live Claude composer sat right
+    // there. A provider is not blocked by another provider's leftovers.
+    kind: "trust",
+    provider: "cursor",
+    patterns: [
+      /workspace trust required/i,
+      /do you trust the contents of this directory\?/i,
+    ],
+  },
+  {
     kind: "permission",
     provider: null,
     patterns: [
@@ -179,6 +198,16 @@ const COMPOSER_CARET = Object.freeze([
   new RegExp(`(^|\\n)${HSPACE}*[│|]?${HSPACE}*[>❯]${HSPACE}*(\\n|$)`),
 ]);
 
+/**
+ * cursor-agent's composer marker. Same anchoring contract as COMPOSER_CARET:
+ * start of line, then the marker followed by horizontal space (or end of line
+ * when the composer is empty), so scrollback prose cannot supply it.
+ */
+const CURSOR_COMPOSER = Object.freeze([
+  new RegExp(`(^|\\n)${HSPACE}*[│|]?${HSPACE}*\u2192${HSPACE}`),
+  new RegExp(`(^|\\n)${HSPACE}*[│|]?${HSPACE}*\u2192${HSPACE}*(\\n|$)`),
+]);
+
 const PROMPT_AFFORDANCES = Object.freeze([
   // The composer caret. Claude Code draws U+276F ("❯"); other TUIs draw ">".
   // Matching only ">" false-negatives every real Claude prompt.
@@ -192,6 +221,15 @@ const PROMPT_AFFORDANCES = Object.freeze([
   // Same NBSP correction as COMPOSER_CARET above: an empty Claude composer is
   // caret + U+00A0, which `[ \t]` does not match.
   ...COMPOSER_CARET,
+  // CURSOR'S COMPOSER. cursor-agent draws U+2192 ("→"), not ">" or "❯", and
+  // none of the Claude footer hints below appear on its pane — so a perfectly
+  // ready Cursor prompt matched NOTHING here and every Cursor send was refused
+  // as `provider_prompt_not_ready` with state "unknown". Verified against the
+  // live pane on this host: idle reads "→ Plan, search, build anything" and
+  // between turns "→ Add a follow-up".
+  ...CURSOR_COMPOSER,
+  /\bplan, search, build anything\b/i,
+  /\badd a follow-?up\b/i,
   // Footer hints. Claude Code varies this line by mode and context, so match
   // any of its stable fragments rather than one full phrasing.
   /\? for shortcuts/i,
@@ -368,6 +406,13 @@ function titleForBlocker(kind, who) {
  * @param {{provider?: string|null}} opts
  * @returns {null|{kind,provider,title,signal}}
  */
+/**
+ * Screens a provider shows once at startup and never re-asks in the same
+ * session. Their text remains on the pane after they are answered, so a match
+ * followed by a live prompt is residue rather than a live question.
+ */
+const ONE_SHOT_STARTUP_SCREENS = new Set(["trust", "onboarding", "setup", "update"]);
+
 export function detectPromptBlocker(text, { provider = null } = {}) {
   const tail = tailOf(text);
   if (!tail.trim()) return null;
@@ -377,6 +422,26 @@ export function detectPromptBlocker(text, { provider = null } = {}) {
     for (const re of sig.patterns) {
       const m = tail.match(re);
       if (!m) continue;
+      // AN ANSWERED SCREEN IS HISTORY, NOT A BLOCKER.
+      //
+      // The one-shot startup screens are answered once and then stay on the
+      // pane above whatever comes next — cursor-agent leaves the whole
+      // "Workspace Trust Required" box, including its "[a] Trust this
+      // workspace" row, sitting above a perfectly live prompt. Matching that
+      // residue blocks the lane forever on a question nobody is being asked.
+      //
+      // When a prompt affordance appears BELOW the match, the screen has been
+      // dealt with. Scoped to the startup screens: a permission or login modal
+      // is not assumed spent just because something prompt-shaped follows it.
+      if (ONE_SHOT_STARTUP_SCREENS.has(sig.kind)) {
+        const after = tail.slice((m.index ?? 0) + String(m[0]).length);
+        // Specifically Cursor's composer, not any affordance. A Claude modal
+        // draws its own selection rows with the SAME "❯" glyph as the composer
+        // caret, so "an affordance appears below" is not evidence a Claude
+        // modal was answered — it is the modal itself. cursor-agent's "→" is
+        // drawn only by the composer; its modal rows use "▶" and "[a]".
+        if (CURSOR_COMPOSER.some((re) => re.test(after))) continue;
+      }
       const resolved = sig.provider || laneProvider || null;
       const who = resolved === "cursor" ? "Cursor" : (resolved === "claude" ? "Claude" : "The agent");
       return {
@@ -581,6 +646,94 @@ export function promptReadinessSummary(assessment) {
  * rest are genuine provider-account state that Vacilando has no authority over
  * and cannot answer on anyone's behalf.
  */
+/**
+ * Benign provider onboarding that Vacilando may answer for the operator.
+ *
+ * THE DEFECT THIS FIXES: a freshly spawned Claude pane can land on "Teach auto
+ * mode about your environment?". The readiness gate accepts any "❯", and that
+ * modal draws its options with the SAME glyph, so the session looked started
+ * while a modal held the pane — and delivery then failed
+ * `undelivered_provider_prompt_block`, requiring a human to SSH in and press a
+ * key on a trusted, managed worktree.
+ *
+ * THE BOUNDARY IS DELIBERATELY NARROW. An entry qualifies only if it is a
+ * provider PREFERENCE interstitial with a safe declining answer and no side
+ * effect on the repository, the host, credentials or permissions. Everything
+ * else — permission grants, workspace trust, login, updates, destructive
+ * confirmations, governed Alloy actions — stays blocked and operator-owned.
+ * We only ever DECLINE; we never opt in to anything on the operator's behalf.
+ */
+export const BENIGN_ONBOARDING_ANSWERS = Object.freeze([
+  Object.freeze({
+    id: "claude_auto_mode_environment_onboarding",
+    provider: "claude",
+    match: /teach auto mode about your environment\?/i,
+    // The decline affordance must actually be on screen; if the layout ever
+    // changes, we refuse rather than press a key we cannot account for.
+    requires: /(^|\n)\s*[❯>\s]*2\.\s*not now/i,
+    keys: Object.freeze(["2"]),
+    answer: "Not now",
+    why: "optional preference interstitial; declining has no side effect",
+  }),
+]);
+
+/**
+ * Text that disqualifies ANY automatic answer, regardless of match. A screen
+ * that mixes an onboarding question with a permission/trust/credential request
+ * is not benign, and ambiguity resolves to the operator.
+ */
+const NEVER_AUTO_ANSWER = Object.freeze([
+  /\ballow\b[^\n]{0,40}\?/i,
+  /\bpermission\b/i,
+  /do you trust/i,
+  /workspace trust/i,
+  /\bsign in\b|\blog ?in\b|\bauthenticat/i,
+  /\bapi key\b|\btoken\b|\bpassword\b|\bcredential/i,
+  /\bdelete\b|\boverwrite\b|\breset\b|\bforce\b|\bdestroy\b/i,
+  /\bsudo\b|\badmin\b|\bprivilege/i,
+  /\bpush\b|\bmerge\b|\bdeploy\b|\bpublish\b/i,
+  /\bgoverned action\b/i,
+]);
+
+/**
+ * The safe deterministic answer for a known benign onboarding screen, or null.
+ *
+ * Callers MUST additionally prove the execution context is trusted (managed
+ * worktree, registered repository, authenticated provider). This function
+ * classifies the SCREEN only — it does not authorise anything by itself.
+ */
+export function benignOnboardingAnswer(text, { provider = null } = {}) {
+  const tail = tailOf(text);
+  if (!tail.trim()) return null;
+  const laneProvider = String(provider || "").toLowerCase() || null;
+  for (const entry of BENIGN_ONBOARDING_ANSWERS) {
+    if (entry.provider && laneProvider && entry.provider !== laneProvider) continue;
+    const m = tail.match(entry.match);
+    if (!m) continue;
+
+    // Judge the SCREEN, not the scrollback above it.
+    //
+    // Scanning the whole capture meant any word in unrelated history could veto
+    // a benign modal: on the enrollment lane the word "push" sat three lines
+    // into the transcript and refused a screen that was itself clean, so the
+    // operator was sent to a terminal anyway. The region from the question to
+    // the end of the pane IS the thing being answered.
+    const region = tail.slice(m.index ?? 0);
+    for (const re of NEVER_AUTO_ANSWER) {
+      if (re.test(region)) return null;
+    }
+    if (entry.requires && !entry.requires.test(region)) return null;
+    return {
+      id: entry.id,
+      keys: [...entry.keys],
+      answer: entry.answer,
+      why: entry.why,
+      provider: entry.provider,
+    };
+  }
+  return null;
+}
+
 export const OPERATOR_TERMINAL_BLOCKERS = Object.freeze([
   "onboarding", "setup", "trust", "update", "login", "resume_picker", "selection", "error_modal",
 ]);
