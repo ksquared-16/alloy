@@ -22,6 +22,7 @@
  * so.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 const C = await import("../lib/vacilando/capacity-cohort.mjs");
 
@@ -165,6 +166,95 @@ test("a single valid sample is never a hold", () => {
   assert.equal(w.longest_valid_run, 1);
   assert.equal(w.classifiable, false, "a hold needs more than one point");
   assert.equal(C.mayAdvance(w).ok, false);
+});
+
+// ── audit attribution: WHY did the member leave? ─────────────────────────────
+//
+// Detecting the departure was only half the job. The previous report had to say
+// "another lane's agent probably stopped it" — inference, because nothing
+// recorded lifecycle actions. Now it can name the action, and the two answers
+// must never read the same: a sanctioned stop is somebody's decision, and a
+// disappearance with no event is a defect.
+
+const LOG = [
+  JSON.stringify({ at: "2026-09-02T21:04:12Z", action: "stop", worktree: "wt1-work-unit-grade-a",
+    slot: 1, port: 3011, previous_pid: 111, actor: "lane-agent", lane_id: "lane_rp",
+    run_id: "erun_xyz", reason: "lane finished", outcome: "ok" }),
+  JSON.stringify({ at: "2026-09-02T20:50:00Z", action: "start", worktree: "wt6-surfaces-faacca",
+    slot: 6, port: 3016, new_pid: 666, actor: "toolkit", reason: "operator start", outcome: "ok" }),
+  JSON.stringify({ at: "2026-09-02T21:10:00Z", action: "stop", worktree: "wt6-surfaces-faacca",
+    slot: 6, port: 3016, previous_pid: 666, actor: "capacity-experiment",
+    reason: "restart-and-reprobe", outcome: "ok" }),
+];
+
+test("a canonical LANE-AGENT stop is named, not guessed", () => {
+  const line = C.explainProblem(
+    { port: 3011, worktree: "wt1-work-unit-grade-a", slot: 1, reason: C.INVALID_REASONS.MISSING },
+    { log: LOG });
+  assert.match(line, /cohort_member_missing/);
+  assert.match(line, /last canonical event: stop by lane-agent\/run erun_xyz at 2026-09-02T21:04:12Z/);
+  assert.match(line, /lane finished/, "the reason travels with the attribution");
+});
+
+test("a canonical TOOLKIT stop is attributed to the toolkit", () => {
+  const line = C.explainProblem(
+    { port: 3016, worktree: "wt6-surfaces-faacca", slot: 6, reason: C.INVALID_REASONS.PID_CHANGED },
+    { log: LOG });
+  assert.match(line, /by capacity-experiment/, "the most recent event wins, not the first");
+  assert.match(line, /restart-and-reprobe/);
+});
+
+test("DISAPPEARANCE WITH NO EVENT says so explicitly — it is a different problem", () => {
+  const line = C.explainProblem(
+    { port: 3014, worktree: "wt4-enrollment", slot: 4, reason: C.INVALID_REASONS.MISSING },
+    { log: LOG });
+  assert.match(line, /no canonical lifecycle event/);
+  assert.ok(!/last canonical event/.test(line), "must never borrow another worktree's event");
+});
+
+test("an UNRELATED lifecycle event is ignored", () => {
+  // Attribution is per worktree. Picking up a neighbour's stop would be worse
+  // than saying nothing, because it reads as evidence.
+  const ev = C.lastLifecycleEventFor({ worktree: "wt4-enrollment", log: LOG });
+  assert.equal(ev, null);
+});
+
+test("events AFTER the sample are not used to explain it", () => {
+  // A stop at 21:04 cannot explain a sample taken at 20:55.
+  const ev = C.lastLifecycleEventFor({
+    worktree: "wt1-work-unit-grade-a", log: LOG, before: "2026-09-02T20:55:00Z",
+  });
+  assert.equal(ev, null, "an explanation must precede the thing it explains");
+});
+
+test("a missing or unreadable audit log yields UNKNOWN, never an invented cause", () => {
+  assert.equal(C.lastLifecycleEventFor({ worktree: "w", root: "/nonexistent/path" }), null);
+  const line = C.explainProblem({ port: 3011, worktree: "w", slot: 1, reason: "x" },
+    { root: "/nonexistent/path" });
+  assert.match(line, /no canonical lifecycle event/);
+});
+
+test("explainWindow attaches an explanation to every contamination", () => {
+  // The sample must come AFTER the event that explains it — at(n) starts at
+  // 20:00, and the stop is at 21:04, so this window is anchored past it.
+  const t = (n) => Date.parse("2026-09-02T21:05:00.000Z") + n * 150_000;
+  const samples = [
+    C.assessSample(COHORT, intact, { nowMs: t(0) }),
+    C.assessSample(COHORT, intact.filter((o) => o.port !== 3011), { nowMs: t(1) }),
+  ];
+  const w = C.explainWindow(C.summariseWindow(samples, { sampleIntervalMs: 150_000 }), { log: LOG });
+  assert.equal(w.contaminations.length, 1);
+  assert.match(w.contaminations[0].explanation, /last canonical event: stop by lane-agent/);
+});
+
+test("the audit is EVIDENCE, never authority over what is running", () => {
+  const src = readFileSync(new URL("../lib/vacilando/capacity-cohort.mjs", import.meta.url), "utf8");
+  // Membership is still decided by observed listeners; the log only explains.
+  const assess = src.slice(src.indexOf("export function assessSample"));
+  const body = assess.slice(0, assess.indexOf("\n}\n"));
+  assert.ok(!/lastLifecycleEventFor|dev-server-lifecycle/.test(body),
+    "assessSample must decide validity from observation alone");
+  assert.match(src, /Reads the audit as evidence, never as authority/);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

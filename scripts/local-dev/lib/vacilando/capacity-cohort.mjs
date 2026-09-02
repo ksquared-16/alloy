@@ -33,6 +33,9 @@
  * dishonest valid one.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 export const COHORT_SCHEMA = "vacilando.capacity_cohort.v1";
 
 /** Why a sample was rejected. Each is a distinct, reportable fact. */
@@ -100,17 +103,18 @@ export function assessSample(cohort, observed = [], { nowMs = Date.now() } = {})
   for (const want of cohort.members) {
     const got = byPort.get(want.port);
     if (!got || got.pid == null) {
-      problems.push({ port: want.port, worktree: want.worktree, reason: INVALID_REASONS.MISSING });
+      problems.push({ port: want.port, worktree: want.worktree, slot: want.slot, reason: INVALID_REASONS.MISSING });
       continue;
     }
     if (got.attributable === false) {
-      problems.push({ port: want.port, worktree: want.worktree, reason: INVALID_REASONS.UNATTRIBUTABLE });
+      problems.push({ port: want.port, worktree: want.worktree, slot: want.slot, reason: INVALID_REASONS.UNATTRIBUTABLE });
       continue;
     }
     if (want.pid != null && Number(got.pid) !== Number(want.pid)) {
       problems.push({
         port: want.port,
         worktree: want.worktree,
+        slot: want.slot,
         reason: INVALID_REASONS.PID_CHANGED,
         expected_pid: want.pid,
         observed_pid: Number(got.pid),
@@ -118,7 +122,7 @@ export function assessSample(cohort, observed = [], { nowMs = Date.now() } = {})
       continue;
     }
     if (got.ready === false) {
-      problems.push({ port: want.port, worktree: want.worktree, reason: INVALID_REASONS.NOT_READY });
+      problems.push({ port: want.port, worktree: want.worktree, slot: want.slot, reason: INVALID_REASONS.NOT_READY });
       continue;
     }
     present.push(want.port);
@@ -141,6 +145,69 @@ export function assessSample(cohort, observed = [], { nowMs = Date.now() } = {})
     members_present: present,
     valid: problems.length === 0,
     problems,
+  };
+}
+
+/**
+ * WHY DID THAT SERVER LEAVE?
+ *
+ * Detecting that a cohort member vanished was only half the job. The previous
+ * report had to say "another lane's agent probably stopped it" — inference,
+ * because nothing recorded lifecycle actions. The dev-server lifecycle audit
+ * now does, so an invalidation can name the action instead of guessing at it.
+ *
+ * The two answers are different problems and must not read the same:
+ *
+ *   stop by lane-agent/run xyz at 21:04:12Z   somebody stopped it deliberately,
+ *                                             through a sanctioned path
+ *   no canonical lifecycle event              it was killed outside the
+ *                                             lifecycle, and THAT is a defect
+ *
+ * Reads the audit as evidence, never as authority: a missing or unreadable log
+ * yields "unknown", never an invented cause.
+ */
+export function lastLifecycleEventFor({ worktree, port, root, before = null, log = null } = {}) {
+  let lines = log;
+  if (lines == null) {
+    try {
+      const path = join(String(root || ""), "dev-server-lifecycle.jsonl");
+      if (!existsSync(path)) return null;
+      lines = readFileSync(path, "utf8").split("\n");
+    } catch {
+      return null;
+    }
+  }
+  const cutoff = before ? Date.parse(before) : null;
+  let best = null;
+  for (const line of lines) {
+    if (!line || !line.trim()) continue;
+    let rec;
+    try { rec = JSON.parse(line); } catch { continue; }
+    if (worktree && rec.worktree !== worktree) continue;
+    if (!worktree && port != null && Number(rec.port) !== Number(port)) continue;
+    if (cutoff && Date.parse(rec.at) > cutoff) continue;
+    if (!best || Date.parse(rec.at) >= Date.parse(best.at)) best = rec;
+  }
+  return best;
+}
+
+/** One human sentence for an invalidation, with the evidence or its absence. */
+export function explainProblem(problem, { root, log = null, at = null } = {}) {
+  const ev = lastLifecycleEventFor({ worktree: problem.worktree, port: problem.port, root, before: at, log });
+  const what = `slot ${problem.slot ?? "?"} port ${problem.port} (${problem.worktree || "unknown worktree"}) — ${problem.reason}`;
+  if (!ev) return `${what}; no canonical lifecycle event`;
+  const who = ev.actor + (ev.run_id ? `/run ${ev.run_id}` : "");
+  return `${what}; last canonical event: ${ev.action} by ${who} at ${ev.at}${ev.reason ? ` (${ev.reason})` : ""}`;
+}
+
+/** Attach explanations to every contamination in a window summary. */
+export function explainWindow(summary, { root, log = null } = {}) {
+  return {
+    ...summary,
+    contaminations: (summary.contaminations || []).map((c) => ({
+      ...c,
+      explanation: explainProblem(c, { root, log, at: c.at }),
+    })),
   };
 }
 
