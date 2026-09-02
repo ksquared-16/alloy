@@ -618,7 +618,7 @@ function workerCard(sp) {
       ${sp.status === "paused" ? `<button class="btn sm warn" data-cmd="worker.resume" data-slot="${sp.slot}">Resume</button>` : `<button class="btn sm" data-cmd="worker.pause" data-slot="${sp.slot}">Pause</button>`}
       <button class="btn sm" data-cmd="worker.doctor" data-slot="${sp.slot}">Diagnose</button>
       ${sp.server === "running" && sp.port
-        ? `<a class="btn sm" href="http://127.0.0.1:${sp.port}" target="_blank" title="Open the worker's local app on :${sp.port}" onclick="event.stopPropagation()">Open App</a>
+        ? `${sp.app_url ? `<a class="btn sm" href="${sp.app_url}" target="_blank" rel="noopener" title="Open ${esc(sp.title || sp.worktree || "this lane")} on the execution host — ${esc(sp.app_url)}" onclick="event.stopPropagation()">QA ${esc(sp.title || sp.worktree || `slot ${sp.slot}`)} ↗</a>` : `<span class="btn sm muted" title="${esc(sp.app_url_reason || "no Director-facing route")}">No QA route</span>`}
            <button class="btn sm warn" data-cmd="server.stop" data-slot="${sp.slot}" title="Stop the dev server on :${sp.port} — frees capacity for another slot">Stop server</button>`
         : (sp.server === "stale"
           ? `<button class="btn sm warn" data-cmd="server.stop" data-slot="${sp.slot}" title="Clear stale server claim">Clear server</button>
@@ -769,10 +769,10 @@ function operatingSurface() {
       <button class="btn sm backdash" data-nav="command" title="Back to Team Dashboard">← Dashboard</button>
       <span class="gl big">${glyph(sp.glyph)}</span>
       <div class="surf-t"><div class="tt">${esc(sp.title)}</div>
-        <div class="su">slot ${sp.slot} · ${esc(sp.provider)} · <span class="chip ${sp.status}">${esc(sp.status)}</span> · ${w2 ? `<span class="hpill ${w2.health}">${w2.health}</span>` : ""} · upd ${ago(sp.updated_at_ms)} ago${sp.server === "running" && sp.port ? ` · <a href="http://127.0.0.1:${sp.port}" target="_blank">Open App ↗</a>` : ""}</div></div>
+        <div class="su">slot ${sp.slot} · ${esc(sp.provider)} · <span class="chip ${sp.status}">${esc(sp.status)}</span> · ${w2 ? `<span class="hpill ${w2.health}">${w2.health}</span>` : ""} · upd ${ago(sp.updated_at_ms)} ago${sp.server === "running" && sp.port ? ` · ${sp.app_url ? `<a href="${sp.app_url}" target="_blank" rel="noopener">QA ${esc(sp.title || `slot ${sp.slot}`)} ↗</a>` : `<span class="muted" title="${esc(sp.app_url_reason || "")}">no QA route</span>`}` : ""}</div></div>
       <div class="surf-actions">
         ${sp.server === "running" && sp.port
-          ? `<a class="btn sm" href="http://127.0.0.1:${sp.port}" target="_blank" title="Open the worker's local app on :${sp.port}">Open App</a>`
+          ? `${sp.app_url ? `<a class="btn sm" href="${sp.app_url}" target="_blank" rel="noopener" title="Open ${esc(sp.title || "this lane")} on the execution host — ${esc(sp.app_url)}">QA ${esc(sp.title || `slot ${sp.slot}`)} ↗</a>` : `<span class="btn sm muted" title="${esc(sp.app_url_reason || "no Director-facing route")}">No QA route</span>`}`
           : `<button class="btn sm" data-startserver="${sp.slot}" title="App is stopped — start its dev server">Start server</button>`}
         <button class="btn sm" data-cmd="worker.doctor" data-slot="${sp.slot}">Diagnose</button>
         ${sp.status === "paused" ? `<button class="btn sm warn" data-cmd="worker.resume" data-slot="${sp.slot}">Resume</button>` : `<button class="btn sm warn" data-cmd="worker.pause" data-slot="${sp.slot}">Pause</button>`}
@@ -1418,7 +1418,7 @@ function watchServerReady(slot, port) {
     const sp = state.snap?.sprints?.find((x) => x.slot === slot);
     if (sp && sp.server === "running") {
       clearInterval(iv);
-      toast("ok", `slot ${slot} app is up`, `${port ? `listening on :${port} — ` : ""}click Open App`);
+      toast("ok", `slot ${slot} app is up`, `${port ? `listening on :${port} — ` : ""}open it with the QA link`);
     } else if (Date.now() > deadline) {
       clearInterval(iv);
       toast("err", `slot ${slot} app still not listening`, "still compiling under load, or it failed to start — try Diagnose");

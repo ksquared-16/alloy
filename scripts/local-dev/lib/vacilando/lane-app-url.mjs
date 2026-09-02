@@ -1,3 +1,6 @@
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+
 /**
  * THE DIRECTOR IS NOT SITTING AT THE MACHINE THAT RUNS THE APP.
  *
@@ -145,6 +148,46 @@ export function laneAppUrl(lane, { serveStatus = null, env = process.env } = {})
     host,
     origin: "tailscale-serve",
   };
+}
+
+/**
+ * Attach the Director-facing URL to every lane, the way the other lane
+ * enrichers do.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM THE DERIVATION. Deriving the URL correctly and
+ * never publishing it are the same defect from the operator's chair: the lanes
+ * API returned no port and no url for any lane, so the UI had nothing to render
+ * and fell back to constructing localhost itself. A derivation nobody can see is
+ * not a fix.
+ *
+ * Reads the live Serve config once per call rather than per lane — the answer is
+ * a property of the host, not of any one lane.
+ */
+export function attachLaneAppUrls(lanes = [], { serveStatus = null, env = process.env } = {}) {
+  const status = serveStatus == null ? readServeStatus() : serveStatus;
+  return (Array.isArray(lanes) ? lanes : []).map((lane) => {
+    const out = laneAppUrl(lane, { serveStatus: status, env });
+    return {
+      ...lane,
+      app_url: out.url,
+      app_port: out.port,
+      app_url_reason: out.reason,
+      app_url_origin: out.origin || null,
+    };
+  });
+}
+
+/** The host's published Serve config, or empty when Tailscale is absent. */
+export function readServeStatus() {
+  try {
+    const { execFileSync } = require("node:child_process");
+    for (const bin of ["tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"]) {
+      try {
+        return String(execFileSync(bin, ["serve", "status"], { encoding: "utf8", timeout: 5000 }));
+      } catch { /* try the next location */ }
+    }
+  } catch { /* no child_process available */ }
+  return "";
 }
 
 /**
