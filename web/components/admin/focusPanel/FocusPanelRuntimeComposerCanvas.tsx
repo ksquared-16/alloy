@@ -40,6 +40,7 @@ import {
     resolveDropPlacement,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
+import { publishComposerLayoutDump } from "@/lib/adminV2/runtime/focusPanel/composition/composerLayoutDump";
 import {
     beginComposerDragTrace,
     describeTraceTarget,
@@ -261,6 +262,21 @@ export default function FocusPanelRuntimeComposerCanvas({
     }, [desiredSpanByCard]);
 
     const publishedLayout = useMemo(() => buildPublishedLayoutFromGrid(renderGrid), [renderGrid]);
+
+    /*
+     * The canvas describes itself. Whatever is on screen — committed or previewed —
+     * can be read back in full from `window.__ALLOY_SURFACE_STATE__()`, so a failed
+     * gesture is answered from the builder's own geometry instead of from a
+     * screenshot or from the operator retyping rows and spans.
+     */
+    useEffect(() => {
+        publishComposerLayoutDump({
+            committed: grid,
+            preview: previewGrid,
+            selectedCard: selectedCard ?? null,
+            draggingCard,
+        });
+    }, [grid, previewGrid, selectedCard, draggingCard]);
 
     const workingDoc = useMemo(() => {
         const doc = buildSummaryDocFromOrder(order);
