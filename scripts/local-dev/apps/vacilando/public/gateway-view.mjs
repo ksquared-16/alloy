@@ -469,14 +469,38 @@ export function laneAgentLabel(lane) {
   return "Agent";
 }
 
+/**
+ * "Read-only" is a property of the TRANSPORT, not of Cursor.
+ *
+ * THE DEFECT THIS REPLACES: any Cursor lane without a live pane was labelled
+ * "Cursor (read-only)" — including a lane with nothing running at all, which is
+ * merely offline. Vacilando can start a writable cursor-agent session in the
+ * lane's pane (startCursorExecutableSession), so telling the operator the
+ * capability is read-only made a startable lane look permanently degraded.
+ *
+ * Read-only is true of exactly one thing: an ATTACHED Cursor IDE conversation,
+ * which is an observation-only transcript — a live session with no pane to
+ * deliver into. No session and no pane is "offline", and it is startable.
+ */
 export function laneProviderLabel(lane) {
   const kind = laneProviderKind(lane);
   if (kind === "cursor") {
-    return Boolean(lane?.tmux?.alive) ? "Cursor" : "Cursor (read-only)";
+    if (lane?.tmux?.alive) return "Cursor";
+    return cursorObservationOnly(lane) ? "Cursor (read-only)" : "Cursor (offline)";
   }
   if (kind === "claude") return "Claude";
   if (lane?.tmux?.alive) return "Session";
   return "Offline";
+}
+
+/**
+ * A Cursor session that exists but has no pane to deliver into: the attached
+ * IDE transcript. This, and only this, is read-only.
+ */
+export function cursorObservationOnly(lane) {
+  if (laneProviderKind(lane) !== "cursor") return false;
+  if (lane?.tmux?.alive) return false;
+  return LIVE_AGENT_SESSION_STATES.has(String(lane?.agent_session?.state || ""));
 }
 
 function liveAgentOnLane(lane) {
@@ -2705,7 +2729,9 @@ export function renderLaneSessionCallout(lane, extras = {}) {
   if (!bound) return "";
   const cap = extras.executionCapacity;
   const occupying = Array.isArray(cap?.running) ? cap.running.map((r) => r.name).filter(Boolean) : [];
-  const atProviderCap = who !== "Cursor"
+  // Compare the provider KIND, never the rendered label: "Cursor (offline)" is
+  // not "Cursor", and a label test sent Cursor lanes down Claude's capacity copy.
+  const atProviderCap = laneProviderKind(lane) !== "cursor"
     && cap
     && Number(cap.available) === 0
     && occupying.length > 0;
@@ -2721,7 +2747,7 @@ export function renderLaneSessionCallout(lane, extras = {}) {
   const detail = atProviderCap
     ? `Claude is at ${cap.active}/${cap.max_active}. Running: ${occupying.join(", ")}. Release one to start this session.`
     : (laneProviderKind(lane) === "cursor"
-      ? "Cursor transcript is read-only. Start a Claude session to send instructions."
+      ? "Start a writable Cursor Agent session in this worktree to send instructions."
       : "Existing worktree is connected. Start a persistent Claude session to continue queued work.");
   const btn = `<button type="button" class="btn primary" data-gw-session-start data-lane-id="${esc(lane.lane_id)}">Start Session</button>`;
   return `<aside class="gw-session-callout" data-gw-session-callout>
@@ -3220,7 +3246,48 @@ export function laneAgentIsWorking(lane) {
   return lane?.provider_activity?.activity === "working";
 }
 
+/**
+ * The canonical completion summary, if this run has filed one.
+ *
+ * `finalized` is stamped by submitAgentReport when the report matches the run's
+ * terminal disposition. It is the run's own account of itself and the last item
+ * the operator is meant to read for that run.
+ */
+export function finalizedRunReport(lane) {
+  const run = lane?.execution_run || null;
+  const report = run?.agent_report || null;
+  if (report?.finalized === true) return { report, run };
+  const prev = lane?.previous_run || null;
+  const prevReport = prev?.agent_report || null;
+  // Only fall back to the previous run when no run is currently open — a new
+  // turn's output must not be hidden behind the last turn's summary.
+  const currentOpen = run && !["COMPLETE", "FAILED", "ABANDONED"].includes(run.state);
+  if (!currentOpen && prevReport?.finalized === true) return { report: prevReport, run: prev };
+  return null;
+}
+
 export function assistantMessageSource(lane, { output = null, outputText = "", latestResponse = null } = {}) {
+  // ORDERING IS THE GOVERNANCE RULE.
+  //
+  // Once a run has filed its canonical summary, that summary is the last thing
+  // the operator sees for that run. It is checked FIRST — ahead of the live
+  // spinner, the pane transcript and the status line — because every one of
+  // those can still produce text after a run finishes: a provider that keeps
+  // rendering, a delayed worker report, a pane poll that lands late. Each of
+  // them used to be able to take the bubble back and appear below the summary,
+  // which is exactly the "summary arrived late, after other output" the
+  // operator reported.
+  const finalized = finalizedRunReport(lane);
+  if (finalized?.report?.message) {
+    return {
+      kind: "report",
+      report: finalized.report,
+      text: finalized.report.message,
+      terminal: true,
+      finalized: true,
+    };
+  }
+
   const paneWorking = laneAgentIsWorking(lane);
   const live = lane?.provider_activity?.live_progress;
   const activity = lane?.provider_activity?.activity || null;

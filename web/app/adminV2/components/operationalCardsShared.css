@@ -195,6 +195,20 @@
   white-space: nowrap;
 }
 
+/*
+ * CONFIGURED BUT NOT CURRENTLY EXECUTABLE.
+ *
+ * The platform's established unavailable grammar (`.alloy-os-currentwork__path-action:disabled`),
+ * applied to the Process card's command row. A configured command is never REMOVED for being
+ * unavailable: an operator who cannot see the command cannot learn why it cannot run, and a command
+ * that disappears at one stage and reappears at the next reads as configuration changing under them.
+ */
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action:disabled,
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .alloy-os-process__work {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);

@@ -34,11 +34,21 @@ export type ProcessCardActivityItem = {
     when: string;
 };
 
+/**
+ * One command as the published Business Process configured it, already resolved through the
+ * registered action spine. Emphasis, order and availability all arrive decided — see
+ * `projectProcessCardCommands`, which is the only sanctioned producer of this shape.
+ */
 export type ProcessCardActionInput = {
     key: string;
     label: string;
-    /** The registry's own emphasis. The card renders it; it never decides it. */
+    /** Configuration's lead command. Exactly one command carries it. */
     primary?: boolean;
+    /** Configured but not currently executable, per the action system. */
+    disabled?: boolean;
+    disabledReason?: string | null;
+    /** Executes through the shared command host. */
+    onInvoke?: () => void;
 };
 
 function childState(p: BusinessProcessParticipant): ProcessChildState {
@@ -92,9 +102,18 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
         when: a.when,
     }));
 
+    /*
+     * IDENTITY IS CARRIED, NOT REBUILT. The command's `key` is what execution and the shared
+     * workspace's intent match key on; dropping it here would leave the card matching commands by
+     * their label, which configuration is free to rename.
+     */
     const actions: ProcessAction[] = input.actions.map((a) => ({
+        key: a.key,
         label: a.label,
         primary: a.primary,
+        disabled: a.disabled,
+        disabledReason: a.disabledReason ?? null,
+        onInvoke: a.onInvoke,
     }));
 
     return {

@@ -466,12 +466,44 @@ export function providerSpawnArgv(provider, providerSessionId = null) {
   return argv;
 }
 
+/**
+ * Is the process holding this pane actually cursor-agent?
+ *
+ * THE TITLE IS NOT A NAME. A fresh Cursor pane is titled "Cursor Agent", but
+ * the TUI rewrites the title to the CONVERSATION TOPIC as soon as there is one
+ * — an observed live pane read "Cursor Transport OK". So a title test answers
+ * "what is this conversation about", not "what is running here", and a running
+ * Cursor whose title had moved on looked like no Cursor at all.
+ *
+ * The pane's argv does not drift: cursor-agent execs node but keeps its own
+ * path in argv[0] (`.../bin/cursor-agent --use-system-ca .../index.js`). One
+ * `ps` on the pane pid settles it. Failure is never fatal — an unreadable
+ * process falls back to the name/title heuristics.
+ */
+function paneProcessIsCursor(pid) {
+  const n = Number(pid);
+  if (!Number.isInteger(n) || n <= 1) return false;
+  try {
+    const out = execFileSync("ps", ["-o", "command=", "-p", String(n)], {
+      encoding: "utf8",
+      timeout: 3000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return /cursor[- ]?agent/i.test(String(out || ""));
+  } catch {
+    return false;
+  }
+}
+
 function paneHasWantedProvider(pane, provider) {
   const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   const cmd = String(pane?.command || "");
   const title = String(pane?.title || "");
   if (wanted === "cursor") {
-    return /cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title);
+    if (/cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title)) return true;
+    // The launcher has exec'd node and the title has moved on to the topic.
+    // Ask the process itself rather than respawn a live conversation.
+    return /^node(\b|$)/i.test(cmd) && paneProcessIsCursor(pane?.pid);
   }
   return inferClaudePresence(pane) === "present";
 }
@@ -528,13 +560,23 @@ function paneCwd(paneId) {
   return out.ok ? String(out.stdout || "").trim() : "";
 }
 
+/**
+ * THE TITLE IS NOT OPTIONAL FOR CURSOR.
+ *
+ * `cursor-agent` is a bash launcher that execs node, so a booted Cursor Agent
+ * reports `pane_current_command=node` — indistinguishable from any other node
+ * process. Its only durable identity is `pane_title`, which the TUI sets to
+ * "Cursor Agent". This selector omitted `#{pane_title}`, so every caller read
+ * `title: undefined` and the one signal that positively identifies Cursor was
+ * discarded before it was ever tested.
+ */
 function sessionPane(session) {
-  const out = runTmuxSync(["list-panes", "-t", session, "-F", "#{pane_id}|#{pane_current_path}|#{pane_current_command}|#{pane_pid}"]);
+  const out = runTmuxSync(["list-panes", "-t", session, "-F", "#{pane_id}|#{pane_current_path}|#{pane_current_command}|#{pane_pid}|#{pane_title}"]);
   if (!out.ok) return null;
   const line = String(out.stdout || "").trim().split("\n").find(Boolean);
   if (!line) return null;
-  const [pane_id, cwd, command, pid] = line.split("|");
-  return { pane_id, cwd, command, pid };
+  const [pane_id, cwd, command, pid, ...titleParts] = line.split("|");
+  return { pane_id, cwd, command, pid, title: titleParts.join("|") || "" };
 }
 
 function sessionExists(session) {
@@ -550,26 +592,122 @@ export async function waitForClaudePrompt(session, { timeoutMs = 20000, interval
   return waitForProviderPrompt(session, { provider: "claude", timeoutMs, intervalMs });
 }
 
-async function waitForProviderPrompt(session, { provider = "claude", timeoutMs = 20000, intervalMs = 400 } = {}) {
+/** Exported so the direct-spawn fallback holds the same readiness contract. */
+export async function waitForAgentPrompt(session, { provider = "claude", timeoutMs = 20000, intervalMs = 400 } = {}) {
+  return waitForProviderPrompt(session, { provider, timeoutMs, intervalMs });
+}
+
+/**
+ * The Cursor TUI's input marker, the counterpart of Claude's `❯`/`›`. Shown
+ * both at rest ("→ Plan, search, build anything") and between turns
+ * ("→ Add a follow-up").
+ */
+const CURSOR_PROMPT_RE = /→/;
+
+/**
+ * READINESS IS A SCREEN, NOT A PROCESS NAME.
+ *
+ * MEASURED FAILURE. `respawn-pane -k -- cursor-agent` walks the pane through
+ * three states: `cmd=bash` with the OUTGOING provider's stale title (~0-300ms),
+ * then `cmd=node` still under the stale title (~400-1100ms), and only at
+ * ~1200ms `cmd=node` + `title="Cursor Agent"` with a usable prompt.
+ *
+ * This returned as soon as `cmd === "node"` — roughly 800ms before the TUI
+ * could accept anything — because the cursor branch tested presence alone while
+ * Claude's branch also required a prompt on screen. It then blanked the title
+ * (`title: ""`), throwing away the one field that distinguishes a booted Cursor
+ * Agent from any other node process. Callers took that early "ok" as an
+ * attached transport, re-observed the lane inside the `bash` window, read
+ * presence as "unknown", and failed the send with `cursor_delivery_unavailable`
+ * while cursor-agent was in fact starting normally.
+ *
+ * Both providers now hold the same contract: the process is present AND its
+ * prompt is on screen.
+ */
+async function waitForProviderPrompt(session, {
+  provider = "claude",
+  timeoutMs = 20000,
+  intervalMs = 400,
+  // Only the verified start path sets this. It proves the execution context
+  // is trusted: a managed worktree inside a registered repository, on this
+  // node, with an authenticated provider.
+  allowOnboardingAutoAnswer = false,
+} = {}) {
   const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   const started = Date.now();
+  let lastText = "";
+  let onboarding = null;
+  const onboardingKeysSent = new Map();
+  let onboardingEvents = 0;
+  if (allowOnboardingAutoAnswer) {
+    try {
+      ({ benignOnboardingAnswer: onboarding } = await import("./provider-prompt-readiness.mjs"));
+    } catch { onboarding = null; }
+  }
   while (Date.now() - started < timeoutMs) {
     const pane = sessionPane(session);
     const cap = runTmuxSync(["capture-pane", "-p", "-t", pane?.pane_id || `${session}:0.0`]);
     const text = String(cap.stdout || "");
-    const present = paneHasWantedProvider({ command: pane?.command, title: "" }, wanted)
-      || inferAgentPresence({ command: pane?.command, title: "" }, { provider: wanted }) === "present";
+    const probe = { command: pane?.command, title: pane?.title || "" };
+    const present = paneHasWantedProvider(probe, wanted)
+      || inferAgentPresence(probe, { provider: wanted }) === "present";
+
+    // A known benign onboarding interstitial is answered here, BEFORE the pane
+    // is ever declared deliverable. The readiness test below accepts any "❯",
+    // and these modals draw their options with the same glyph — so without
+    // this the session reports started while a modal owns the pane, and the
+    // first send fails `undelivered_provider_prompt_block`.
+    //
+    // Bounded and declining only. An unknown or security-shaped screen returns
+    // null from the classifier and still blocks for the operator.
+    if (onboarding && present && onboardingEvents < 4) {
+      const safe = onboarding(text, { provider: wanted });
+      if (safe) {
+        const sent = onboardingKeysSent.get(safe.id) || 0;
+        const key = sent === 0 ? safe.keys[0] : "Enter";
+        if (sent < 2) {
+          runTmuxSync(["send-keys", "-t", pane?.pane_id || `${session}:0.0`, key]);
+          onboardingKeysSent.set(safe.id, sent + 1);
+          onboardingEvents += 1;
+          lastText = text;
+          await sleep(intervalMs);
+          continue;
+        }
+      }
+    }
+
     if (wanted === "cursor") {
-      if (present) return { ok: true, waited_ms: Date.now() - started };
+      if (present && CURSOR_PROMPT_RE.test(text)) {
+        return { ok: true, waited_ms: Date.now() - started };
+      }
     } else if (present && /[❯›]/.test(text)) {
       return { ok: true, waited_ms: Date.now() - started };
     }
+    lastText = text;
     await sleep(intervalMs);
   }
+  // A TIMEOUT IS NOT A DIAGNOSIS.
+  //
+  // The first time cursor-agent runs in a worktree it draws a "Workspace Trust
+  // Required" modal and waits for a keypress, so the prompt never arrives and
+  // this returned a bare `cursor_prompt_timeout` — which told the operator
+  // nothing about the modal actually sitting on the pane, and read as "Cursor
+  // is broken" rather than "Cursor is asking you something". The runtime
+  // already classifies these screens for exactly this purpose; say which one
+  // is up so the caller can surface it.
+  let blocker = null;
+  try {
+    const { assessPanePromptReadiness, publicPromptReadiness } =
+      await import("./provider-prompt-readiness.mjs");
+    blocker = publicPromptReadiness(assessPanePromptReadiness(lastText, { provider: wanted }));
+  } catch { /* a diagnosis is a bonus; the timeout still stands */ }
   return {
     ok: false,
     error: wanted === "cursor" ? "cursor_prompt_timeout" : "claude_prompt_timeout",
     waited_ms: Date.now() - started,
+    prompt_readiness: blocker,
+    blocking_screen: blocker?.summary || null,
+    needs_terminal_operator: blocker?.needs_terminal_operator === true,
   };
 }
 
@@ -647,7 +785,7 @@ export async function assessSessionStartCapacity({ maxProviders = null, root = n
   const { assessProviderCapacity, configuredProviderCeiling } = await import("./provider-capacity.mjs");
   const { suspendedLaneIds } = await import("./provider-suspension.mjs");
   const { listCurrentAgentSessions } = await import("./agent-session.mjs");
-  const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+  const { discoverLivePanes } = await import("./lanes.mjs");
 
   const ceiling = Number(maxProviders ?? configuredProviderCeiling());
   // Honour the adapter's own pane seam first: tests inject panes through it,
@@ -659,8 +797,14 @@ export async function assessSessionStartCapacity({ maxProviders = null, root = n
   } catch { panes = null; }
   if (!panes) {
     try {
-      const raw = await listTmuxPanesRaw();
-      if (raw?.ok) panes = parseTmuxPaneLines(raw.stdout);
+      // Zero panes on a host with no tmux server is a FACT, not an unknown.
+      // Reading the raw exit code here left `panes` null, which
+      // assessProviderCapacity correctly reports as degraded — and a degraded
+      // verdict refuses. On the Mac mini that meant `provider_capacity` with
+      // active_providers 0 of 3: capacity blocked a start because nothing was
+      // running, which is the one case that should always be allowed.
+      const seen = await discoverLivePanes();
+      if (seen.ok) panes = seen.panes;
     } catch { panes = null; }
   }
   const lanes = listDurableLanes(runtime);
@@ -839,8 +983,33 @@ export async function startPersistentAgentSession({
     startedProvider = true;
   }
 
+  // A provider that never reached its prompt is NOT a started session. This
+  // discarded the wait result, so a spawn that timed out still returned
+  // `ok: true` and the caller bound a transport that could not accept a paste.
+  // Returning the timeout lets the send queue and retry instead of failing the
+  // run outright.
+  let readiness = null;
   if (startedProvider) {
-    await waitForProviderPrompt(session, { provider: wanted });
+    // Trust is already proven above: managedWorktreePath() accepted this cwd,
+    // the repository matched when the caller named one, and the branch matched.
+    readiness = await waitForProviderPrompt(session, {
+      provider: wanted,
+      allowOnboardingAutoAnswer: true,
+    });
+    if (!readiness.ok) {
+      return {
+        ok: false,
+        error: readiness.error || "provider_prompt_timeout",
+        provider: wanted,
+        tmux_session: session,
+        pane_id: pane.pane_id,
+        waited_ms: readiness.waited_ms,
+        // The pane is alive and the binary is running; it simply has not
+        // finished booting. Retry, do not roll the tmux session back.
+        retryable: true,
+        created: { tmux: createdTmux, provider: true },
+      };
+    }
   }
 
   const after = sessionPane(session);

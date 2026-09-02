@@ -137,6 +137,10 @@ import {
   tokensEqual,
 } from "./vacilando/vacilando-api-auth.mjs";
 import { attachTailscaleListener } from "./vacilando/vacilando-tailscale-bind.mjs";
+import { homedir } from "node:os";
+const STEWARD_CADENCE_MS = 5 * 60 * 1000;
+const RUNTIME_ROOT_FOR_STEWARD = () => process.env.ALLOY_RUNTIME_ROOT?.trim()
+  || join(homedir(), ".local", "state", "alloy-dev", "gateway");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.env.HOME || "", ".local", "state", "alloy-dev");
@@ -2533,6 +2537,40 @@ export function createVacilandoServer() {
   condTimer.unref?.();
   setTimeout(runConductor, 60_000).unref?.();
 
+  /*
+   * HOST STEWARD CADENCE.
+   *
+   * Deliberately wired into the timers this server already owns rather than a
+   * second scheduler: the steward coordinates existing subsystems and should
+   * not become one more thing that needs supervising.
+   *
+   * The cycle serialises itself in its own state file, so overlapping timers
+   * across a restart cannot produce two mutating cycles. `stewardInFlight` is
+   * only the cheap in-process guard.
+   *
+   * Cadence measured, not guessed: a full cycle costs ~2.3s of mostly-idle wall
+   * time, so five minutes is well under 1% duty. Thirty seconds would not be.
+   */
+  let stewardInFlight = false;
+  const runSteward = async () => {
+    if (stewardInFlight) return;
+    stewardInFlight = true;
+    try {
+      const { runStewardCycle } = await import("./vacilando/host-steward-run.mjs");
+      const out = runStewardCycle({ root: RUNTIME_ROOT_FOR_STEWARD() });
+      // An action means look again soon rather than waiting a whole sweep.
+      if (out?.executed?.length) {
+        const { RECHECK_MS } = await import("./vacilando/host-steward-cycle.mjs");
+        setTimeout(() => { runSteward().catch(() => {}); }, RECHECK_MS).unref?.();
+      }
+    } catch { /* the steward must never take the server down */ }
+    stewardInFlight = false;
+  };
+  const stewardTimer = setInterval(() => { runSteward().catch(() => {}); }, STEWARD_CADENCE_MS);
+  stewardTimer.unref?.();
+  // First sweep after two minutes: cold open stays responsive.
+  setTimeout(() => { runSteward().catch(() => {}); }, 2 * 60_000).unref?.();
+
   /**
    * Background warm AFTER listen. Previously recover + diskSignal (sync GC dry-run
    * ≤30s) + getSnapshot + warmExpensive ran inside createVacilandoServer and
@@ -2543,6 +2581,54 @@ export function createVacilandoServer() {
     // Yield once so the first HTTP responses after listen are not starved by boot recovery.
     setImmediate(() => {
     const tWarm = Date.now();
+        // THE REPOSITORY REGISTRY IS RECONSTRUCTED, NEVER RESTORED.
+        //
+        // `managedWorktreePath()` is the containment gate every provider start
+        // must pass, and it reads repositories.json. That file holds ABSOLUTE
+        // host paths, so it is deliberately not part of a durable backup — a
+        // MacBook's roots are wrong on a Mac mini. It is meant to be rebuilt on
+        // the destination host from this host's own configuration.
+        //
+        // Nothing rebuilt it. `ensureAlloyRepository` existed, documented as
+        // "safe and cheap to run on every Gateway start", with no caller outside
+        // a test. On a fresh host the registry stayed empty, so every
+        // startPersistentAgentSession refused `worktree_not_managed`: no tmux, no
+        // provider, and an operator send parked forever on
+        // waiting_for_agent_session. Reconstruction happens here, at boot, before
+        // any provider start can be attempted.
+        //
+        // It is idempotent (an existing record is returned untouched) and it
+        // cannot be steered by request input — it registers exactly the
+        // configured canonical repository, or nothing.
+        try {
+          import("./vacilando/repository-migration.mjs")
+            .then(({ migrateLanesToAlloy }) => migrateLanesToAlloy())
+            .then((out) => {
+              if (!out?.ok) {
+                console.log(`[repositories] registry reconstruction failed: ${out?.error || "unknown"}`);
+                return;
+              }
+              if (out.repository_created || out.attributed?.length || out.refused?.length) {
+                console.log(`[repositories] registry ready (created=${Boolean(out.repository_created)} attributed=${out.attributed?.length || 0} refused=${out.refused?.length || 0})`);
+              }
+            })
+            .catch((e) => console.log(`[repositories] registry reconstruction error: ${e?.message || e}`));
+        } catch { /* a provider start still reports worktree_not_managed truthfully */ }
+        // An Agent Session asserts a running provider. A restore onto a new host
+        // carries them across still ACTIVE, describing processes on a machine
+        // this one has never seen — and createAgentSession then refuses
+        // `lane_has_active_session` forever. Reaped against observed panes, and
+        // never on ignorance: unreadable tmux ends nothing.
+        try {
+          import("./vacilando/agent-session-lifecycle.mjs")
+            .then(({ reconcileAgentSessionsWithoutRuntime }) => reconcileAgentSessionsWithoutRuntime())
+            .then((out) => {
+              if (out?.ended?.length) {
+                console.log(`[agent-sessions] ended ${out.ended.length} session(s) with no runtime on this node`);
+              }
+            })
+            .catch(() => {});
+        } catch { /* a start still refuses truthfully */ }
         try { resumePendingOutputWatches(); } catch { /* */ }
         try {
           reconcileExclusiveWindow();

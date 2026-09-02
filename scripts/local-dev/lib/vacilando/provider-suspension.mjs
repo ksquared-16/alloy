@@ -413,10 +413,14 @@ async function providerIsLive(lane, { root = undefined } = {}) {
     // threw straight into the catch below, so this helper answered "not live"
     // for every lane and the revive pass could never fire. Use the exported
     // pane listing instead.
-    const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
-    const raw = await listTmuxPanesRaw();
-    if (!raw?.ok) return false;
-    const panes = parseTmuxPaneLines(raw.stdout) || [];
+    const { discoverLivePanes } = await import("./lanes.mjs");
+    // `discoverLivePanes` is the canonical boundary: it distinguishes "no tmux
+    // server" (zero panes — a fact) from "tmux could not answer" (unknown).
+    // Reading the raw exit code here treated a fresh host with no server as
+    // unknown, which degrades capacity to a refusal and blocks every start.
+    const seen = await discoverLivePanes();
+    if (!seen.ok) return false;
+    const panes = seen.panes || [];
     return panes.some((p) => (session && p.session === session)
       || (path && (p.cwd === path || String(p.cwd || "").startsWith(`${path}/`))));
   } catch {

@@ -41,6 +41,46 @@ function shaEquals(a, b) {
   return n >= 7 && x.slice(0, n) === y.slice(0, n);
 }
 
+/**
+ * THE ONE PLACE THAT SAYS HOW A MERGE REQUEST'S INPUTS ARE SPELLED.
+ *
+ * THE DEFECT THIS REMOVES. There were two independent spelling lists for the
+ * same four fields: this executor's, and `proposalForRequest`'s in
+ * governed-action-request, which pins the grant. The executor had already been
+ * widened to accept `pull_request` after a lane proposed `{"pull_request": 522}`
+ * (see the note in validateMergeInputs); the grant issuer never was. So a lane
+ * that spelled it `pull_request` / `head_sha` — which the executor resolves
+ * perfectly well — produced a grant with `pull_request_number: null` and
+ * `expected_head_sha: null`.
+ *
+ * At execution the grant check computes `Number(null)` = 0 against a real 596
+ * and refuses with `grant_pull_request_mismatch`: an operator-approved merge
+ * that could never execute, and whose error named the PR number rather than the
+ * field name that was actually missing. Measured on this host: grants
+ * grnt_bce311bfb0a54567 (gar_71a81af3495a4a) and grnt_e1172652d4774162
+ * (gar_6fc51ddcdb9f1d), both ACTIVE, both pinned to null, both for PR 596.
+ *
+ * Both sides now read through here, so they cannot disagree again. This
+ * function only READS a spelling; every validation rule stays in
+ * validateMergeInputs, and an unreadable field yields null rather than a guess.
+ */
+export function readMergeInputIdentity(inputs = {}) {
+  const rawPullRequest = inputs.pull_request_number
+    ?? inputs.pullRequestNumber
+    ?? inputs.pull_request
+    ?? inputs.pullRequest
+    ?? inputs.pr;
+  const n = Number(rawPullRequest);
+  const sha = normSha(inputs.expected_head_sha || inputs.expectedHeadSha || inputs.head_sha);
+  const target = inputs.target_branch ?? inputs.targetBranch ?? null;
+  return {
+    pullRequestNumber: Number.isInteger(n) && n > 0 ? n : null,
+    expectedHeadSha: /^[a-f0-9]{7,40}$/.test(sha) ? sha : null,
+    targetBranch: target == null ? null : String(target).trim(),
+    mergeMethod: String(inputs.merge_method || inputs.mergeMethod || "merge").trim(),
+  };
+}
+
 export function validateMergeInputs(inputs = {}) {
   if (inputs.sql || inputs.statement || inputs.command || inputs.argv || inputs.shell) {
     return {
@@ -64,7 +104,8 @@ export function validateMergeInputs(inputs = {}) {
     ?? inputs.pull_request
     ?? inputs.pullRequest
     ?? inputs.pr;
-  const pullRequestNumber = Number(rawPullRequest);
+  const identity = readMergeInputIdentity(inputs);
+  const pullRequestNumber = identity.pullRequestNumber ?? Number(rawPullRequest);
   if (!Number.isInteger(pullRequestNumber) || pullRequestNumber < 1) {
     return {
       ok: false,
@@ -75,18 +116,19 @@ export function validateMergeInputs(inputs = {}) {
         : `pull_request_number must be a positive integer; received ${JSON.stringify(rawPullRequest)}`,
     };
   }
-  const targetBranch = String(inputs.target_branch || inputs.targetBranch || "staging").trim();
+  const targetBranch = identity.targetBranch || "staging";
   if (BLOCKED_TARGET_BRANCHES.includes(targetBranch) || targetBranch === "production") {
     return { ok: false, code: "production_target_rejected", detail: "Production and default-branch merges are not registered." };
   }
   if (!ALLOWED_TARGET_BRANCHES.includes(targetBranch)) {
     return { ok: false, code: "target_branch_not_allowed", detail: `target_branch must be one of: ${ALLOWED_TARGET_BRANCHES.join(", ")}` };
   }
-  const expectedHeadSha = normSha(inputs.expected_head_sha || inputs.expectedHeadSha || inputs.head_sha);
+  const expectedHeadSha = identity.expectedHeadSha
+    || normSha(inputs.expected_head_sha || inputs.expectedHeadSha || inputs.head_sha);
   if (!/^[a-f0-9]{7,40}$/.test(expectedHeadSha)) {
     return { ok: false, code: "missing_expected_head_sha", detail: "expected_head_sha is required" };
   }
-  const mergeMethod = String(inputs.merge_method || inputs.mergeMethod || "merge").trim();
+  const mergeMethod = identity.mergeMethod;
   if (!ALLOWED_MERGE_METHODS.includes(mergeMethod)) {
     return { ok: false, code: "merge_method_not_allowed", detail: "merge_method must be merge, squash, or rebase" };
   }

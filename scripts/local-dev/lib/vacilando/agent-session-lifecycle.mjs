@@ -55,6 +55,7 @@ import {
   validateRuntimeBinding,
 } from "./development-lane.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
+import { localNodeId } from "./execution-node.mjs";
 
 export const ROTATION_POLICY = Object.freeze({
   auto_mode: "on",
@@ -1331,6 +1332,17 @@ function bindCursorExecutable(rec, extra, { nowMs, root }) {
   return out;
 }
 
+/**
+ * The direct fallback spawn. It returned the instant `respawn-pane` exited —
+ * which is roughly a second before `cursor-agent` (a bash launcher that execs
+ * node) has a prompt. The caller took that as an attached transport, the very
+ * next `cursorExecutableTransport` read landed while the pane still said `bash`
+ * under the outgoing provider's title, and the send failed with
+ * `cursor_delivery_unavailable` while Cursor was booting normally.
+ *
+ * Spawning is not attaching. This now waits for the same prompt contract
+ * `startPersistentAgentSession` uses before it claims success.
+ */
 async function spawnCursorInPane({ lane }) {
   const argv = ["cursor-agent"];
   const forbidden = assertSafeSpawnArgv(argv);
@@ -1338,16 +1350,28 @@ async function spawnCursorInPane({ lane }) {
   if (spawnImpl) return spawnImpl({ lane, argv, provider: "cursor" });
   const pane = lane?.tmux?.pane_id;
   const cwd = lane?.worktree?.path;
+  const session = lane?.tmux?.session;
   if (!pane || !cwd) return { ok: false, error: "missing_pane" };
   try {
     execFileSync("tmux", [
       "respawn-pane", "-k", "-c", cwd, "-t", pane, "--",
       ...argv,
     ], { encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "pipe"] });
-    return { ok: true, argv, provider: "cursor" };
   } catch (e) {
     return { ok: false, error: "spawn_failed", detail: String(e.stderr || e.message || e).slice(0, 300) };
   }
+  if (!session) return { ok: true, argv, provider: "cursor", readiness: null };
+  const { waitForAgentPrompt } = await import("./alloy-dev-adapter.mjs");
+  const readiness = await waitForAgentPrompt(session, { provider: "cursor" });
+  if (!readiness.ok) {
+    return {
+      ok: false,
+      error: readiness.error || "cursor_prompt_timeout",
+      waited_ms: readiness.waited_ms,
+      retryable: true,
+    };
+  }
+  return { ok: true, argv, provider: "cursor", readiness };
 }
 
 function endActiveSessionForProviderSwitch(laneId, { nowMs, root, reason }) {
@@ -1361,6 +1385,23 @@ function endActiveSessionForProviderSwitch(laneId, { nowMs, root, reason }) {
 async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root, origin }) {
   const transport = cursorExecutableTransport(found);
   if (transport.ok) {
+    // A SESSION THAT IS NOT BOUND IS NOT CONNECTED TO DELIVERY.
+    //
+    // This branch adopts a pane that is ALREADY running cursor-agent and used
+    // to return without binding it. The Agent Session was created and reported
+    // ACTIVE while the durable binding still said `provider: "claude"` and
+    // still pointed at the pane id the lane had before the switch — so the very
+    // next send resolved the provider as Claude, assessed a Cursor pane against
+    // Claude's prompt contract, and refused with provider_prompt_not_ready.
+    // Observed exactly this on lane_73a897409906: session ACTIVE on cursor,
+    // binding.provider=claude, tmux_pane=%2 while the live Cursor pane was %9.
+    //
+    // Adoption binds for the same reason a fresh start does.
+    bindCursorExecutable(rec, {
+      tmux_session: found.tmux?.session || rec.binding?.tmux_session,
+      tmux_pane: found.tmux?.pane_id || rec.binding?.tmux_pane,
+      worktree_path: boundPath,
+    }, { nowMs, root });
     const existing = activeAgentSessionForLane(found.lane_id, root);
     if (existing && ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) {
       if (existing.state !== "ACTIVE") {
@@ -1518,6 +1559,38 @@ async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root
     }
   }
 
+  // CLOSE THE LOOP BEFORE CLAIMING A TRANSPORT.
+  //
+  // Everything above only STARTS cursor-agent. Whether a writable transport is
+  // actually attached is decided by `cursorExecutableTransport` reading the
+  // live pane — the same predicate the send path uses. Binding and returning
+  // `ok` without re-reading it is what let a still-booting pane be recorded as
+  // an attached Cursor session, so the send that followed refused with
+  // `cursor_delivery_unavailable`.
+  //
+  // A pane that has not converged yet is retryable, not a failure: the lane
+  // queues and the next attempt finds it up.
+  // Only a LIVE pane can contradict a successful start. When discovery shows no
+  // live pane yet it has simply not caught up with the session that was just
+  // created, and the start's own result is the better evidence — refusing there
+  // would fail a Cursor lane that is coming up exactly as intended. When a live
+  // pane IS visible and it is not a Cursor transport, the start did not converge
+  // and the lane must wait rather than have a send refused against it.
+  const attached = await observeLane(found.lane_id);
+  if (attached?.tmux?.alive) {
+    const verified = cursorExecutableTransport(attached);
+    if (!verified.ok) {
+      return {
+        ok: false,
+        error: CURSOR_DELIVERY_UNAVAILABLE,
+        detail: verified.detail || "transport_not_attached",
+        start_session_implemented: true,
+        retryable: true,
+        tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
+      };
+    }
+  }
+
   bindCursorExecutable(rec, {
     tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
     tmux_pane: createdRuntime?.pane_id || found.tmux?.pane_id,
@@ -1619,6 +1692,27 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
   }
 
   supersedeObservationOnlyCursorSession(found, rec, { nowMs, root });
+
+  // SWITCHING BACK IS ALSO A SWITCH.
+  //
+  // The Cursor path ends a session belonging to the other provider before
+  // creating its own (endActiveSessionForProviderSwitch); the Claude path did
+  // not. Going Cursor → Claude therefore respawned the pane to Claude and THEN
+  // failed with `lane_has_active_session`, because the Cursor session was still
+  // ACTIVE — leaving the lane holding a Claude pane under a Cursor Agent
+  // Session. Observed exactly this on lane_73a897409906 while certifying the
+  // switch back.
+  //
+  // Only a session for a DIFFERENT provider is ended here. A live Claude
+  // session still returns `agent_already_running` below, unchanged.
+  const crossProvider = activeAgentSessionForLane(found.lane_id, root);
+  if (crossProvider && crossProvider.provider && crossProvider.provider !== "claude") {
+    endActiveSessionForProviderSwitch(found.lane_id, {
+      nowMs,
+      root,
+      reason: "provider_switched",
+    });
+  }
 
   if (laneClaudePresent(found)) {
     if (countClaudeOnLane(found) > 1) {
@@ -1850,6 +1944,125 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     tmux_session: createdRuntime?.tmux_session || lane.tmux?.session || rec.binding?.tmux_session,
     start_session_implemented: true,
   };
+}
+
+/**
+ * States a session can be reaped from. SUSPENDED is deliberately absent: a
+ * suspended session is the thing the operator will resume — the computation
+ * stopped, the session did not.
+ */
+const REAPABLE_SESSION_STATES = Object.freeze([
+  "STARTING", "ACTIVE", "ROTATION_PENDING", "HANDOFF", "RESTARTING", "VERIFYING",
+]);
+
+/**
+ * An Agent Session is a live provider process, not a record.
+ *
+ * THE DEFECT THIS REPLACES: a durable restore carries agent sessions across as
+ * AUTHORITATIVE history — correctly, they are the lane's record — but a session
+ * in a non-terminal state also ASSERTS a running provider on the node it was
+ * created on. Restoring the MacBook's state onto the Mac mini left
+ * agsess_77d709d8-cce ACTIVE, describing a Claude process on a machine this
+ * host has never seen. `createAgentSession` refuses `lane_has_active_session`,
+ * so the lane could never start a provider again: the third distinct reason a
+ * fresh operator send stayed on waiting_for_agent_session.
+ *
+ * Restore invalidated lane BINDINGS for exactly this reason. A session is the
+ * other half of that binding and needed the same treatment.
+ *
+ * Runs at boot, against observed panes. Never reaps on ignorance: if pane
+ * discovery is unavailable the sessions are left exactly as they are — only a
+ * positive observation of "no live pane for this lane" ends anything. Claude
+ * only: a Claude session always requires a live pane, whereas a Cursor session
+ * may legitimately be an observation-only IDE attachment with no pane at all.
+ */
+export async function reconcileAgentSessionsWithoutRuntime({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+  panes = null,
+  discover = null,
+} = {}) {
+  const { discoverLivePanes, inferAgentPresence } = await import("./lanes.mjs");
+  let live = panes;
+  if (!Array.isArray(live)) {
+    const seen = await (discover || discoverLivePanes)();
+    // Unknown is not absent. A tmux that could not answer ends nothing.
+    if (!seen?.ok) return { ok: true, ended: [], skipped: "pane_discovery_unavailable" };
+    live = seen.panes;
+  }
+  const ended = [];
+  const skipped = [];
+  const localNode = localExecutionNodeId(root);
+  for (const session of listCurrentAgentSessions(root)) {
+    if (!REAPABLE_SESSION_STATES.includes(session.state)) continue;
+    const rec = getDurableLane(session.lane_id, root);
+
+    // A session this node cannot see because it belongs to ANOTHER node is not
+    // absent, it is elsewhere. Reaping it here would end a live session on a
+    // different machine on the strength of local ignorance.
+    const boundNode = rec?.binding?.node_id || null;
+    if (localNode && boundNode && boundNode !== localNode) {
+      skipped.push({ agent_session_id: session.agent_session_id, why: "session_on_other_node" });
+      continue;
+    }
+
+    // An attached read-only transcript has no executable pane BY DESIGN. Its
+    // missing pane is its normal condition, not proof of death.
+    if (!sessionIsExecutable(session, rec)) {
+      skipped.push({ agent_session_id: session.agent_session_id, why: "non_executable_attachment" });
+      continue;
+    }
+
+    const boundSession = rec?.binding?.tmux_session || null;
+    const boundPath = rec?.binding?.worktree_path || null;
+    // Presence is judged for the session's OWN provider. The Claude-only test
+    // this replaces read every Cursor pane as "not Claude, therefore skip",
+    // which let a dead Cursor session stay ACTIVE forever and block every
+    // replacement with `lane_has_active_session`.
+    const providerPanes = live.filter(
+      (pane) => inferAgentPresence(pane, { provider: session.provider }) === "present",
+    );
+    const alive = providerPanes.some((pane) =>
+      (boundSession && pane.session === boundSession)
+      || (boundPath && (pane.cwd === boundPath || pane.cwd?.startsWith(`${boundPath}/`))));
+    if (alive) continue;
+
+    // Positive proof of absence requires that we could actually observe panes
+    // for this provider at all. If tmux answered but reported no pane of ANY
+    // kind, that is still an answer; if the discovery itself was degraded we
+    // returned above without ending anything.
+    endAgentSession(session.agent_session_id, { reason: "runtime_absent_on_this_node", nowMs, root });
+    ended.push({
+      lane_id: session.lane_id,
+      agent_session_id: session.agent_session_id,
+      provider: session.provider,
+      was_state: session.state,
+    });
+  }
+  return { ok: true, ended, skipped };
+}
+
+/**
+ * Is this Agent Session backed by an executable provider process?
+ *
+ * Explicit marker first. Legacy records predate the marker: an ATTACHED IDE
+ * conversation is recorded with a provider session id and no tmux session on
+ * the binding to deliver into, which is exactly the read-only transcript case.
+ */
+export function sessionIsExecutable(session, rec) {
+  if (!session) return false;
+  if (session.executable === false) return false;
+  if (session.executable === true) return true;
+  if (session.provider_session_id && !rec?.binding?.tmux_session) return false;
+  return true;
+}
+
+function localExecutionNodeId(root) {
+  try {
+    return localNodeId(root);
+  } catch {
+    return null;
+  }
 }
 
 export function observeOrCreateAgentSession(lane, { root = runtimeRoot(), nowMs = Date.now(), telemetry = null } = {}) {

@@ -40,7 +40,10 @@ SUITES=(
   "development-screen-answer.test.mjs"
   "development-lane-activity.test.mjs"
   "development-governed-approval.test.mjs"
+  "development-merge-grant-binding.test.mjs"
   "development-run-summary-output.test.mjs"
+  "development-completion-summary-last.test.mjs"
+  "development-cursor-transport-readiness.test.mjs"
   "development-checkpoint-safety.test.mjs"
   "development-governed-promotion-chain.test.mjs"
   "development-certification-fixture.test.mjs"
@@ -72,6 +75,9 @@ SUITES=(
   "development-worktree-retirement.test.mjs"
   "development-certification-sha-reachability.test.mjs"
   "development-host-steward.test.mjs"
+  "development-host-steward-automation.test.mjs"
+  "development-decision-delivery.test.mjs"
+  "development-provider-governed-bridge.test.mjs"
 )
 
 PASS=0

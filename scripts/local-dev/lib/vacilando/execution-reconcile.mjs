@@ -70,6 +70,34 @@ export async function reconcileGovernor({
     depth,
   };
 
+  // Proof of runtime absence must be acted on CONTINUOUSLY, not only at boot.
+  //
+  // THE DEFECT THIS FIXES: the session reaper ran once, in the Gateway's boot
+  // path. A provider pane closed while the Gateway kept running therefore left
+  // its Agent Session ACTIVE indefinitely, and every later operator send was
+  // refused `lane_has_active_session` — a healthy bound lane made unusable by
+  // closing a pane, recoverable only by restarting the Gateway.
+  try {
+    const { reconcileAgentSessionsWithoutRuntime } = await import("./agent-session-lifecycle.mjs");
+    const out = await reconcileAgentSessionsWithoutRuntime({ root, nowMs });
+    if (out?.ended?.length) {
+      summary.repaired += out.ended.length;
+      summary.actions.push("agent_session_runtime_absent");
+    }
+  } catch { /* never block the tick */ }
+
+  // NEEDS_INPUT must always be backed by something the operator can act on.
+  // A run parked there with no modeled input is an impossible operator state:
+  // the state is protective, so nothing else will ever close it.
+  try {
+    const { reconcileNeedsInputWithoutInput } = await import("./operator-input.mjs");
+    const out = reconcileNeedsInputWithoutInput({ root, nowMs });
+    if (out?.reconciled?.length) {
+      summary.repaired += out.reconciled.length;
+      summary.actions.push("needs_input_without_operator_input");
+    }
+  } catch { /* never block the tick */ }
+
   const store = readResourceRequestStore(root);
   const requests = store.requests || [];
 
