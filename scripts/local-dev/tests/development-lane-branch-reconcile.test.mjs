@@ -142,6 +142,26 @@ test("an unreadable git changes nothing and blocks nothing", () => {
     "an unreadable git must never blank a branch");
 });
 
+test("a DETACHED head is not a branch called HEAD", () => {
+  // MEASURED, AND I CAUSED IT. Runtime Performance's worktree was detached at a
+  // staging commit; `rev-parse --abbrev-ref HEAD` answers the literal "HEAD",
+  // and a repair I ran wrote that string into the lane's binding as its branch
+  // before I caught it and restored the real one. A detached worktree is on no
+  // branch — unknown, not moved.
+  const s = seed("Detached", { branch: "agent/claude/5-work-unit-grade-a" });
+  const git = gitSaying("HEAD");
+  const r = L.resolveLaneWorktree(s.laneId, { root: ROOT, gitImpl: git });
+  assert.equal(r.ok, true);
+  assert.equal(r.branch_actual, null, "detached reads as unknown, never as a branch");
+  assert.equal(r.branch_drift, false);
+  assert.equal(r.branch, "agent/claude/5-work-unit-grade-a", "the branch on file is kept");
+  L.reconcileLaneBranch(s.laneId, { root: ROOT, gitImpl: git });
+  assert.equal(getDurableLane(s.laneId, ROOT).binding.branch, "agent/claude/5-work-unit-grade-a",
+    "a detached worktree must never overwrite the record with \"HEAD\"");
+  assert.equal(L.assertLaneDispatchable(s.laneId, { root: ROOT, gitImpl: git }).ok, true,
+    "and a detached worktree must not block delivery either");
+});
+
 test("real lifecycle failures still fail closed", () => {
   // The guard that mattered is untouched: an unmanaged worktree is still refused.
   const s = seed("Unmanaged", { branch: "agent/claude/12-x" });

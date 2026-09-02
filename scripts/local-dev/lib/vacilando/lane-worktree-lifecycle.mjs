@@ -272,7 +272,17 @@ export function actualWorktreeBranch(worktreePath, { git = null } = {}) {
   const out = run(["rev-parse", "--abbrev-ref", "HEAD"]);
   if (!out || out.status !== 0) return null;
   const b = String(out.stdout || "").trim();
-  return b || null;
+  // A DETACHED HEAD IS NOT A BRANCH CALLED "HEAD".
+  //
+  // `rev-parse --abbrev-ref HEAD` answers the literal string "HEAD" when the
+  // worktree is detached, and I wrote that string into a lane's binding as its
+  // branch before catching it. Runtime Performance's worktree was detached at a
+  // staging commit and its record briefly read `branch: "HEAD"`. A detached
+  // worktree is on no branch, which is unknown rather than moved — so it reads
+  // like an unreadable git: nothing is recorded, nothing is blocked, and the
+  // branch already on file is kept.
+  if (!b || b === "HEAD") return null;
+  return b;
 }
 
 /**
