@@ -1699,15 +1699,15 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 }
 .gw-aside-body{flex:0 0 auto;min-height:0;overflow:visible;display:flex;flex-direction:column;gap:8px;padding-right:2px;}
 
-.gw-localhost{
+.gw-qalink{
   flex:0 0 auto;
   display:flex;flex-direction:column;gap:2px;
   padding:6px 10px;
   background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
 }
-.gw-localhost-h{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);}
-.gw-localhost-url{font-size:13px;font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);word-break:break-all;}
-.gw-localhost-note{font-size:11px;color:var(--ink-2);}
+.gw-qalink-h{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);}
+.gw-qalink-url{font-size:13px;font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);word-break:break-all;}
+.gw-qalink-note{font-size:11px;color:var(--ink-2);}
 
 .gw-health{
   flex:0 0 auto;

@@ -422,12 +422,25 @@ export function lanePort(lane) {
 }
 
 /**
- * The lane's assigned localhost. This is the permanent slot port, not a probe:
- * it says where this lane's server belongs, never that one is currently up.
+ * WHERE THE DIRECTOR SHOULD OPEN THIS LANE.
+ *
+ * THE DEFECT. This used to return `http://localhost:<slot port>`, derived here in
+ * the client. Execution is on the Mac mini and the Director drives Vacilando
+ * from a MacBook, so that URL named the MacBook — nothing is listening there, and
+ * the lane looked dead. It was a SECOND derivation of an answer the server
+ * already owns, which is why fixing the server alone changed nothing on screen.
+ *
+ * The server now sends app_url. The client renders what it is given and derives
+ * nothing: if there is no route, that is a fact to display, not a gap to fill in
+ * with a guess.
  */
-export function laneLocalhostUrl(lane) {
-  const port = lanePort(lane);
-  return port ? `http://localhost:${port}` : null;
+export function laneAppUrl(lane) {
+  return lane?.app_url || null;
+}
+
+/** Why there is no link, in the server's words. */
+export function laneAppUrlReason(lane) {
+  return lane?.app_url_reason || null;
 }
 
 /**
@@ -448,13 +461,32 @@ export function renderProviderHealth(health) {
   </aside>`;
 }
 
+/**
+ * The QA affordance. One primitive, used by every lane surface.
+ *
+ * A missing route is stated, never hidden: "no route" and "the app is down" are
+ * different problems, and an operator who cannot tell them apart debugs the
+ * wrong one. The old version returned "" when it had no URL, so a lane with a
+ * running server and no route looked identical to a lane with nothing at all.
+ */
 export function renderLaneLocalhost(lane) {
-  const url = laneLocalhostUrl(lane);
-  if (!url) return "";
-  return `<div class="gw-localhost" data-gw-localhost>
-    <span class="gw-localhost-h">Localhost</span>
-    <a class="gw-localhost-url" href="${esc(url)}" target="_blank" rel="noreferrer noopener">${esc(url)}</a>
-    <span class="gw-localhost-note">Assigned port for this slot</span>
+  const url = laneAppUrl(lane);
+  const name = lane?.name || lane?.label || `slot ${lanePort(lane) ? lanePort(lane) - 3010 : "?"}`;
+  if (!url) {
+    const reason = laneAppUrlReason(lane);
+    if (!reason) return "";
+    return `<div class="gw-qalink" data-gw-qalink data-gw-no-route>
+      <span class="gw-qalink-h">QA</span>
+      <span class="gw-qalink-url gw-qalink-none" title="${esc(reason)}">No QA route</span>
+      <span class="gw-qalink-note">${esc(reason === "no_serve_mapping_for_port" ? "server not running" : reason)}</span>
+    </div>`;
+  }
+  return `<div class="gw-qalink" data-gw-qalink>
+    <span class="gw-qalink-h">QA</span>
+    <a class="gw-qalink-url" href="${esc(url)}" target="_blank" rel="noreferrer noopener"
+       title="Open ${esc(name)} on the execution host — ${esc(url)}"
+       aria-label="Open QA for ${esc(name)} at ${esc(url)}">QA ${esc(name)} ↗</a>
+    <span class="gw-qalink-note">${esc(url)}</span>
   </div>`;
 }
 

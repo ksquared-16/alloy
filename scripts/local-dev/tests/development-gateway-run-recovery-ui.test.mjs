@@ -13,7 +13,7 @@ import {
   abandonedRecoveryNotice,
   claudeRunStatus,
   laneAgentLabel,
-  laneLocalhostUrl,
+  laneAppUrl,
   lanePort,
   outputPanelHeading,
   outputReviewHint,
@@ -127,22 +127,34 @@ test("ABANDONED is distinct from FAILED and COMPLETE", () => {
   assert.match(failed, /data-run-state="FAILED"/);
 });
 
-test("the lane's assigned localhost is listed on the right rail", () => {
+test("the QA link is the SERVER's url, never one the client derived", () => {
+  // This test used to assert `http://localhost:3011`. That was the defect: the
+  // Director drives Vacilando from a MacBook while the apps run on the Mac mini,
+  // so a client-derived localhost URL named the MacBook and the lane looked dead.
+  // The client now renders what the server sends and derives nothing.
   assert.equal(lanePort(cursorLane), 3011);
-  assert.equal(lanePort(claudeLane), 3013);
-  assert.equal(laneLocalhostUrl(cursorLane), "http://localhost:3011");
-  const html = renderLaneLocalhost(cursorLane);
-  assert.match(html, /data-gw-localhost/);
-  assert.match(html, /http:\/\/localhost:3011/);
-  // Honest: this is the assigned port, not a claim that a server is up.
-  assert.match(html, /Assigned port/);
+  assert.equal(laneAppUrl(cursorLane), null, "no app_url from the server means no link");
+  const routed = { ...cursorLane, name: "Trust Runtime", app_url: "https://mini.ts.net:3014" };
+  assert.equal(laneAppUrl(routed), "https://mini.ts.net:3014");
+  const html = renderLaneLocalhost(routed);
+  assert.match(html, /data-gw-qalink/);
+  assert.match(html, /https:\/\/mini\.ts\.net:3014/);
+  assert.match(html, /QA Trust Runtime/, "the link names the lane");
+  assert.ok(!/localhost/.test(html), "no localhost may reach a remote Director");
 });
 
-test("a lane with no slot claims no localhost", () => {
+test("a lane with no route SAYS SO rather than rendering nothing", () => {
+  // Returning "" made a running server with no route look identical to a lane
+  // with nothing at all, and the operator debugged the wrong problem.
+  const noRoute = { lane_id: "lane_y", name: "Financials", app_url: null,
+    app_url_reason: "no_serve_mapping_for_port" };
+  const html = renderLaneLocalhost(noRoute);
+  assert.match(html, /No QA route/);
+  assert.match(html, /data-gw-no-route/);
+  assert.match(html, /server not running/, "the reason is stated in plain words");
+  // Nothing known at all still renders nothing.
+  assert.equal(renderLaneLocalhost({ lane_id: "lane_z" }), "");
   assert.equal(lanePort({ lane_id: "lane_y" }), null);
-  assert.equal(laneLocalhostUrl({ lane_id: "lane_y" }), null);
-  assert.equal(renderLaneLocalhost({ lane_id: "lane_y" }), "");
-  assert.equal(lanePort({ slot: 9 }), null, "ports outside 3011-3016 are never invented");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
