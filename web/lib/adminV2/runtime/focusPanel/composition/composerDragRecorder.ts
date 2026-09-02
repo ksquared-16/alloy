@@ -41,6 +41,8 @@ export type DragRecording = {
     /** Layout before the gesture and after the drop, as the canvas reported them. */
     layoutBefore: unknown;
     layoutAfter: unknown;
+    /** The dragged card's rendered rect, sampled after the drop until things settle. */
+    settle?: Array<{ at: number; rect: { x: number; y: number; w: number; h: number } | null }>;
 };
 
 type RecorderWindow = typeof globalThis & {
@@ -59,7 +61,11 @@ function store(): RecorderWindow["__ALLOY_DRAG_RECORDER__"] {
     return w.__ALLOY_DRAG_RECORDER__;
 }
 
-/** Arm the recorder for the NEXT gesture. Called by the builder's control. */
+/**
+ * Arm the recorder. Kept for the explicit control, but recording is AUTOMATIC in
+ * development now: asking the operator to press a button before reproducing a
+ * failure means the first reproduction is always the one that got away.
+ */
 export function armDragRecorder(label = "operator"): void {
     const s = store();
     if (!s) return;
@@ -72,6 +78,11 @@ export function dragRecorderArmed(): boolean {
     return Boolean(store()?.armed);
 }
 
+/** Every gesture records itself where this is on — local development only. */
+export function recordingIsAutomatic(): boolean {
+    return process.env.NODE_ENV !== "production";
+}
+
 export function beginRecording(args: {
     card: string | null;
     activator: string | null;
@@ -79,7 +90,11 @@ export function beginRecording(args: {
     layoutBefore: unknown;
 }): void {
     const s = store();
-    if (!s?.armed) return;
+    if (!s) return;
+    // Automatic in dev: a press that never becomes a drag is evidence too, and it
+    // is the difference between "did not activate" and "went to the wrong place".
+    if (!s.armed && !recordingIsAutomatic()) return;
+    if (!s.armed) s.label = "auto";
     s.current = {
         label: s.label,
         startedAt: Date.now(),
@@ -131,15 +146,50 @@ export function recordFrame(
     });
 }
 
-/** Close the recording, keep it on the window, and post it where the lane can read it. */
+/**
+ * Close the recording — but not before watching what happens NEXT.
+ *
+ * "Preview equals commit" has been checked against the authored model, which
+ * cannot see a later effect moving the card: a normalization, a reconciliation,
+ * a ResizeObserver pass. So the dragged card's rendered rectangle is sampled for
+ * half a second after the drop, and the real invariant is
+ *
+ *     preview == immediate commit == final rendered position
+ *
+ * If the card lands correctly and is moved afterwards, this is where it shows.
+ */
 export function finishRecording(layoutAfter: unknown): void {
     const s = store();
     if (!s?.current) return;
     s.current.layoutAfter = layoutAfter;
-    s.last = s.current;
-    const payload = s.current;
+    const recording = s.current;
+    const card = recording.card;
+    const rectOf = () => {
+        if (!card) return null;
+        const el = document.querySelector(`[data-fp-grid-area="${card}"]`);
+        if (!el) return null;
+        const b = el.getBoundingClientRect();
+        const canvas = document.querySelector(".alloy-os-fp-canvas--grid")?.getBoundingClientRect();
+        return {
+            x: Math.round(b.x - (canvas?.x ?? 0)),
+            y: Math.round(b.y - (canvas?.y ?? 0)),
+            w: Math.round(b.width),
+            h: Math.round(b.height),
+        };
+    };
+    recording.settle = [{ at: 0, rect: rectOf() }];
+    for (const delay of [50, 100, 200, 350, 500]) {
+        window.setTimeout(() => {
+            recording.settle?.push({ at: delay, rect: rectOf() });
+            if (delay === 500) post(recording);
+        }, delay);
+    }
+    s.last = recording;
     s.current = null;
     s.armed = false;
+}
+
+function post(payload: DragRecording): void {
     try {
         void fetch("/api/dev/surface-drag-trace", {
             method: "POST",

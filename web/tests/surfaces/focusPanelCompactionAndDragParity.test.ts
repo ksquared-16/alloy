@@ -128,14 +128,15 @@ describe("drag activation is the same on every card", () => {
         expect(canvas).toContain("const renderGrid = previewGrid ?? grid;");
     });
 
-    it("routes every press through the one composer shell", () => {
-        expect(canvas).toContain("onPointerDown={onStartMove ? bodyPointerDown : undefined}");
+    it("routes every drag through the one grip on the one composer shell", () => {
+        expect(canvas).toContain('className="alloy-os-fp-composer-cell__grip"');
         // One shell renders every card in the composer — no per-card drag wrapper.
         expect(canvas.match(/function ComposerCellShell/g)?.length).toBe(1);
     });
 
-    it("keeps composer chrome clickable", () => {
-        expect(canvas).toContain('target?.closest("button, a, input, textarea, select, [data-fp-composer-no-drag]")');
+    it("keeps composer chrome clickable, and gives the grip a real target", () => {
         expect(css).toContain(".alloy-os-fp-composer-cell__chrome");
+        // 44x44: the platform's minimum comfortable target, identical on every card.
+        expect(css).toContain("width: 44px; height: 44px;");
     });
 });

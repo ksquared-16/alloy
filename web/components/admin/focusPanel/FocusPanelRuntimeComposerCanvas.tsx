@@ -41,9 +41,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import { defaultColumnsForCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import {
-    armDragRecorder,
     beginRecording,
-    dragRecorderArmed,
     finishRecording,
     recordFrame,
 } from "@/lib/adminV2/runtime/focusPanel/composition/composerDragRecorder";
@@ -167,7 +165,6 @@ export default function FocusPanelRuntimeComposerCanvas({
      */
     const [previewGrid, setPreviewGrid] = useState<FocusPanelGridLayout | null>(null);
     const [draggingCard, setDraggingCard] = useState<FocusPanelCardKey | null>(null);
-    const [traceArmed, setTraceArmed] = useState(false);
     const renderGrid = previewGrid ?? grid;
     const [activeMode, setActiveMode] = useState<FocusPanelMode>("summary");
     const [ghost, setGhost] = useState<Ghost | null>(null);
@@ -666,7 +663,6 @@ export default function FocusPanelRuntimeComposerCanvas({
             setGhost(null);
             setPreviewGrid(null);
             setDraggingCard(null);
-            if (!dragRecorderArmed()) setTraceArmed(false);
             interacting.current = false;
             setArranging(false);
             try {
@@ -961,23 +957,6 @@ export default function FocusPanelRuntimeComposerCanvas({
                 <div className="alloy-os-fp-composer__tray" data-fp-composer-tray="true" data-fp-composer-tray-position="top">
                     <Plus className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />
                     <span className="alloy-os-fp-composer__tray-label">Add card</span>
-                    {/*
-                      * Reproducing a failed drag should cost one click, not a DevTools
-                      * session: arm this, do the gesture that fails, let go. The trace
-                      * posts itself to where the lane can read it.
-                      */}
-                    <button
-                        type="button"
-                        className="alloy-os-fp-composer__chip"
-                        data-fp-composer-arm-trace="true"
-                        data-fp-composer-no-drag="true"
-                        onClick={() => {
-                            armDragRecorder("operator");
-                            setTraceArmed(true);
-                        }}
-                    >
-                        {traceArmed ? "Trace armed — drag now" : "Start drag trace"}
-                    </button>
                     {tray.map((c) => (
                         <button
                             // A variant is keyed by identity AND shape: Financials appears twice in
@@ -1150,34 +1129,16 @@ function ComposerCellShell({
      * The visible drag bar stays. It is now an affordance that shows where to
      * grab rather than the only place that works.
      */
-    const bodyPointerDown = (e: PointerEvent) => {
-        if (!onStartMove || e.button !== 0) return;
-        const target = e.target as HTMLElement | null;
-        const blocker = target?.closest("button, a, input, textarea, select, [data-fp-composer-no-drag]");
-        if (blocker) {
-            // The single most useful line in the trace: the gesture was refused, and by what.
-            traceComposerDrag("declined", {
-                card: cardKey,
-                reason: "interactive_child",
-                pressTarget: describeTraceTarget(target),
-                blockedBy: describeTraceTarget(blocker),
-            });
-            return;
-        }
-
-        /*
-         * SYNCHRONOUSLY, because a React event is only alive during its dispatch.
-         *
-         * This deferred the call until the pointer had moved 4px and handed
-         * `onStartMove` the original event. By then React had cleared
-         * `currentTarget`, so `setPointerCapture` threw on null, the handler died,
-         * and no ghost was ever drawn — the drag looked dead in the browser while
-         * every unit test passed. The threshold that keeps a click a click now
-         * lives inside `startMove`, where it can be applied without holding a
-         * stale event.
-         */
-        onStartMove(e);
-    };
+    /*
+     * ONE HANDLE, AND IT IS THE GRIP.
+     *
+     * The body and the top bar both used to start drags, which made activation
+     * depend on what the card happened to render under the press and on how close
+     * to Configure the operator landed. Their own report showed a grab near
+     * Configure that never activated at all. A single 44x44 grip removes the
+     * variable: Configure, Remove, resize and card content are all just controls
+     * again, and there is exactly one thing that picks a card up.
+     */
 
     return (
         <div
@@ -1189,18 +1150,10 @@ function ComposerCellShell({
             ].join(" ")}
             data-fp-composer-cell={cardKey}
             data-fp-composer-dragging={dragging ? "true" : undefined}
-            onPointerDown={onStartMove ? bodyPointerDown : undefined}
         >
             {children}
             {onStartMove ?
-                <div
-                    className="alloy-os-fp-composer-cell__drag-bar"
-                    aria-hidden
-                    onPointerDown={(e) => {
-                        e.stopPropagation();
-                        onStartMove(e);
-                    }}
-                />
+                <div className="alloy-os-fp-composer-cell__drag-bar" aria-hidden />
             :   null}
             <div className="alloy-os-fp-composer-cell__chrome" aria-hidden={!selected}>
                 {onStartMove ?

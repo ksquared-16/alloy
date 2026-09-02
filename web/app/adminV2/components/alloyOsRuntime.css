@@ -5846,10 +5846,28 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   border-color: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 45%, transparent);
   box-shadow: 0 2px 6px color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 18%, transparent);
 }
+/*
+ * THE CANONICAL DRAG HANDLE — 44x44, the platform's minimum comfortable target,
+ * identical on every card. It is the only thing that starts a drag, so it has to
+ * be findable without hunting: visible at rest rather than on hover.
+ */
 .alloy-os-fp-composer-cell__grip {
-  position: absolute; top: 6px; left: 6px; width: 28px; z-index: 12;
-  cursor: grab; touch-action: none; opacity: 0;
+  position: absolute; top: 4px; left: 4px;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 12;
+  cursor: grab; touch-action: none;
+  opacity: 0.45;
+  border-radius: 10px;
+  transition: opacity 120ms, background 120ms;
 }
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__grip,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__grip,
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__grip {
+  opacity: 1;
+  background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 12%, transparent);
+}
+.alloy-os-fp-composer-cell__grip:active { cursor: grabbing; }
 .alloy-os-fp-composer-cell__remove {
   position: relative; width: 28px; cursor: pointer; opacity: 0;
 }

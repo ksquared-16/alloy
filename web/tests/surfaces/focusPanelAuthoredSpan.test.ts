@@ -59,8 +59,14 @@ describe("the gesture can start — the defects upstream of any placement maths"
         expect(canvas).not.toMatch(/for \(const key of toAdd\) next = addCardToGrid\(next, key\);/);
     });
 
-    it("lets the whole card body start a drag, not a 34px strip along its top edge", () => {
-        expect(canvas).toContain("onPointerDown={onStartMove ? bodyPointerDown : undefined}");
+    it("starts a drag from one grip and nothing else", () => {
+        /*
+         * The body and the top bar both used to start drags, so activation depended
+         * on what the card rendered under the press and on how near Configure it
+         * landed. One 44x44 grip removes the variable entirely.
+         */
+        expect(canvas).not.toContain("bodyPointerDown");
+        expect(canvas).toContain('className="alloy-os-fp-composer-cell__grip"');
         /*
          * A press is a click until the pointer travels: the threshold lives in
          * `startMove`, and `preventDefault` is deferred to the first qualifying move.
@@ -70,7 +76,5 @@ describe("the gesture can start — the defects upstream of any placement maths"
          */
         expect(canvas).toContain(">= 4)");
         expect(canvas).toContain('reason: "no_travel"');
-        // Chrome inside the card keeps its own press.
-        expect(canvas).toContain('target?.closest("button, a, input, textarea, select, [data-fp-composer-no-drag]")');
     });
 });
