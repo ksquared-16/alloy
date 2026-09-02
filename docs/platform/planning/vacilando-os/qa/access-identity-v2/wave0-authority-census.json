@@ -181,8 +181,14 @@
     "resolved_by": "run 3 (tha_67f9c69f628d1a), assignment asg_86eb0e4a95142e",
     "summary": "For the first time in three runs, the census output identifies the database it hit. The improvement recorded at target.improvement_for_next_run on 2026-07-31 — and carried unadopted through run 2 — has executed and returned data.",
     "returned": {
-      "org_ids": ["7803388d-cdee-4afb-89cf-23a137f39423", "93667019-bd28-49b5-a688-acc9bb1e0a19"],
-      "org_slugs": ["alloy-bend", "demo-childcare-co-c144769f"],
+      "org_ids": [
+        "7803388d-cdee-4afb-89cf-23a137f39423",
+        "93667019-bd28-49b5-a688-acc9bb1e0a19"
+      ],
+      "org_slugs": [
+        "alloy-bend",
+        "demo-childcare-co-c144769f"
+      ],
       "org_fingerprint": "ab7e5dde2e229d5c46e251456e4d9534",
       "server_addr": "2600:1f13:838:6e21:288f:4aa6:65bf:f446/128",
       "server_version": "17.6",
@@ -1047,5 +1053,71 @@
     "runs_1_2_remain_verifiable": "Runs 1 and 2 stay fully verifiable, against a STRONGER anchor than a duplicated copy in this file. Their exact query bytes — together with their `results` block — are immutable in git at blob f95f89302bbd92f3e24e8c4a93dbb0231f0a664e, this file's content at commit 7dc06920a (the last commit before this edit). Recover and re-verify with: `git cat-file blob f95f89302bbd92f3e24e8c4a93dbb0231f0a664e`. That blob's `combined_query` is the text whose sha256 is the 743cd63b… recorded above, and it is the text runs 1 and 2 actually executed. A transcribed second copy inside this file would have been weaker: it could be mistyped, and a mistyped copy would silently fail to hash to 743cd63b… while looking authoritative.",
     "what_the_directors_merge_back_will_do": "On a successful run 3 the Director rewrites this file (trusted-host-actions.mjs:385-406) with `{...prior, status, query_hash, execution, results}`. Two consequences to expect rather than be surprised by: (1) a top-level `query_hash` REAPPEARS, holding run 3's hash — correct, and it must not be confused with the 743cd63b… above; (2) `results` is OVERWRITTEN, so run 2's raw result object is replaced in place. Run 2's counts survive in queries[].result and drift_since_previous_run, and its full raw block survives in the git blob named above. Every other key in this file, including these provenance keys, survives the spread untouched."
   },
-  "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42"
+  "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+  "pre_run_4_readiness_audit": {
+    "audited_at": "2026-09-02",
+    "audited_by": "claude — mission msn_9a033f1abe4641f2bb v1, assignment asg_2350142a4e8d18, content hash 5cc8a895477c55b065075f22faef3cbe",
+    "worktree": "wt-operator-ux",
+    "branch": "promote/vacilando-operator-ux",
+    "root_class": "managed-worktree — SANCTIONED (alloy-root), canonical /Users/Kelly/Alloy, base origin/staging @ 473ca175f",
+    "run_4_executed": false,
+    "purpose": "W-0 was re-issued a fifth time. This audit records everything that could be established WITHOUT the operator authorization, so that the authorization — if granted — is spent on evidence rather than on discovering a broken query. It stands on its own whichever way the run-4 decision goes.",
+    "counts_age": {
+      "last_execution": "2026-08-07T17:24:16.951Z (run 3, tha_67f9c69f628d1a)",
+      "audited_at": "2026-09-02",
+      "age_days": 26,
+      "note": "Runs 1-3 were 2026-07-31, 2026-08-04, 2026-08-07 — all zero drift. The committed counts are now 26 days old, which is materially older than any prior gap between runs (4 days, then 3)."
+    },
+    "query_executability": {
+      "verdict": "STILL EXECUTABLE — no amendment required",
+      "query_of_record": "combined_query, hash a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42 (the run-3 amended form carrying target_identity)",
+      "method": "Every table and column combined_query reads was re-checked against the current migration tree: public.orgs (id, slug), public.user_roles (user_id, org_id, role), public.role_definitions (org_id, role_key, id, is_active), public.user_access_profiles (user_id, org_id, id, department_scope, site_scope), public.user_profiles (id, role), public.app_users (id, auth_user_id, org_id, role), plus pg_trigger/pg_proc/pg_namespace.",
+      "destructive_ddl_scan": "Scanned all 202608* migrations for DROP COLUMN / RENAME COLUMN / RENAME TO / DROP TABLE. Three hits, none on a census table: action_link_token.token (20260818230000_s3_action_link_token_drop_plaintext.sql:52) and two drops of the temp table _anon_rev_execute_baseline (20260804180000_platform_anon_privilege_revocation.sql:121,320).",
+      "why_this_check_matters": "Run 1 caught a first-contact failure in Q1 (pg_trigger.tgenabled is type \"char\", not text) that would have wasted the run. Assignment asg_f34761f0f418ee later found two further plumbing defects that would have wasted the authorization when it arrived. This audit is the same discipline applied to run 4: the schema moved 65 migrations under a query that has not changed since 2026-08-07."
+    },
+    "base_drift_since_run_3": {
+      "migration_tree": "302 files at run 2's base -> 367 files now (+65)",
+      "material_finding": "Unlike runs 2 and 3, run 4 has real drift to detect. Four migrations that directly target the census's OWN findings have entered the tree since run 3, each aimed at a count this census measures.",
+      "migrations_targeting_census_findings": [
+        {
+          "file": "supabase/migrations/20260807140000_backfill_membership_access_profiles.sql",
+          "workstream": "W-6 / M1",
+          "census_count_targeted": "q4_pairs_without_profile",
+          "effect_if_applied": "Empties the L1 remediation population. Q4 would move 2 -> 0 for the first time in the programme. Its own post-condition (2) raises unless pairs_without_profile_after = 0.",
+          "in_repo_apply_evidence": "None. The migration carries no not-applied caveat, and w6-m1-preflight.json records preflight true with no apply record."
+        },
+        {
+          "file": "supabase/migrations/20260818190000_w16_user_roles_role_foreign_key.sql",
+          "workstream": "W-16 / M9",
+          "census_count_targeted": "q3_undefined_membership_rows",
+          "effect_if_applied": "user_roles.role stops being unconstrained text and becomes an FK onto role_definitions (org_id, role_key), ON DELETE RESTRICT.",
+          "in_repo_apply_evidence": "Header states explicitly: 'NOT APPLIED BY THIS COMMIT. Authored only; the apply channel is OD-1 and remains the operator's.'"
+        },
+        {
+          "file": "supabase/migrations/20260818170000_w13_collapse_portal_eligible_fifth_layer_grants.sql",
+          "workstream": "W-13",
+          "census_count_targeted": "q5_* (portal.access / role_definitions grants)",
+          "effect_if_applied": "Collapses the portal_eligible fifth layer into enumerated grants.",
+          "in_repo_apply_evidence": "Not determinable from the repository."
+        },
+        {
+          "file": "supabase/migrations/20260807170000_w12_seed_default_rbac_enumerated_grants.sql",
+          "workstream": "W-12",
+          "census_count_targeted": "role_definitions / role_permission_grants population underlying Q3 and Q5",
+          "effect_if_applied": "Seeds default RBAC enumerated grants.",
+          "in_repo_apply_evidence": "Not determinable from the repository."
+        }
+      ],
+      "apply_status_is_unknowable_in_repo": true,
+      "consequence": "The repository cannot answer whether the deployed target has these applied — a migration file in the tree is authored, not necessarily applied, and M9 says so in its own header. A live census is the only instrument that distinguishes the two. This inverts the value of the run: runs 2 and 3 CONFIRMED zero drift against an unchanged world; run 4 would DETECT whether the remediation has actually landed on the target."
+    },
+    "why_this_re_issue_is_not_redundant": "Section 4's standing rule is that the counts are a snapshot and every consumer re-runs rather than cites. Mission 2's re-issue (2026-08-04) was judged redundant-but-executed; the reopen's fourth issuance was spent on preparation rather than a fourth identical run. This fifth issuance is different in kind: it is the first census since the migrations that target Q3, Q4 and Q5 entered the tree, and run 3's own closing note names the decaying rule — 'Rule 5 — immediacy — is the one that expires: these are a preflight only if the apply follows closely, and an aged preflight is not a preflight. If time has passed, the correct move is another census.' Twenty-six days have passed.",
+    "execution_blocker": {
+      "worker_can_execute": false,
+      "reason": "The census executes host-side through the Vacilando trusted host action database.read_census, which requires an explicit operator authorization decision (scripts/local-dev/lib/vacilando/trusted-host-actions.mjs:936 — 'Authorize read-only database census for this mission'). No privileged credential reaches the worker, by design: DATABASE_URL is on the toolkit denylist twice, as a secret-like substring and as a named privileged variable. This is the refusal working as intended, not an obstacle to route around.",
+      "what_is_needed": "One operator authorization. Nothing else — the query is committed, promoted into combined_query, and verified executable by this audit.",
+      "artifact_path_is_not_choosable": "fulfillDatabaseCensusForMission declares queryArtifactPath as a default parameter and no call site overrides it, so the run will read THIS file's combined_query. That is already the correct amended query."
+    },
+    "post_run_obligation": "The Director's merge-back rewrites only status, query_hash, execution and results, spreading all other keys through untouched — it does NOT append to run_history. If run 4 executes, its run_history entry must be written by hand afterwards, exactly as run 3's was. This audit key will survive the merge-back."
+  }
 }
