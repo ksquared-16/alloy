@@ -1,6 +1,12 @@
 # Enrollment — hands-on QA
 
-**Where:** http://localhost:3014 — sign in with your own account, as you normally would.
+**Where:** http://localhost:3014
+
+**Sign in as `kelly.kurzman@gmail.com`** — not your work address. This server authenticates against
+the hosted certification project, and in that project your account is the gmail one; it already holds
+admin on the certification org. Your work address has no account there at all, which is why a correct
+password was rejected: the sign-in page answers "Email or password is incorrect" for an address it has
+never seen, deliberately, so that it cannot be used to discover which addresses exist.
 
 Nothing here needs a terminal, a script, or a database. Two families have been set up for you to
 work with. They are test families in a reserved namespace; nothing you do to them touches a real
