@@ -11,7 +11,12 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
-import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import {
+    ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+    createEnrollmentProcessInstance,
+} from "@/lib/process/processInstances";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { upsertCustomerMemberConfigFieldValues } from "@/lib/admin/customerMemberPatch";
 
 export type PortContext = {
@@ -328,10 +333,36 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async createProcessParticipation(ctx, input) {
+            /*
+             * THE JOURNEY ANCHORS TO THE ENROLLMENT PARTICIPATION, not to the lead.
+             *
+             * This is the INGEST-mode Create Lead seam, and it was the third place the Completion
+             * Anchor convergence had not reached — Start Enrollment was converged, the household
+             * commit path was converged, and this one still wrote `contextId: input.lead_id` with no
+             * context type, which defaults to the Opportunity shape.
+             *
+             * Live certification found it rather than review: a child arriving through acquisition
+             * ended up with a journey anchored to the Opportunity, so the canonical anchor never
+             * existed for them and Start Enrollment later reused that legacy-shaped journey.
+             *
+             * The participation is established through the canonical find-or-create the rest of
+             * Enrollment uses, so this creates exactly one, carries the acquisition Opportunity on
+             * it, and stays idempotent under a repeated ingest.
+             */
+            const participation = await ensureOpportunityCustomerMemberParticipation({
+                supabase: ctx.supabase,
+                orgId: ctx.orgId,
+                opportunityId: input.lead_id,
+                customerMemberId: input.child_id,
+                source: "create_lead_ingest",
+                outcomeStatusKey: NEW_LEAD_STATUS_KEY,
+            });
             return createEnrollmentProcessInstance(ctx.supabase, {
                 orgId: ctx.orgId,
                 subjectId: input.child_id,
-                contextId: input.lead_id,
+                contextId: participation.ocmId,
+                contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+                acquisitionOpportunityId: input.lead_id,
                 stageKey: input.stage_key,
                 state: (input.state as never) ?? null,
                 participation: input.participation,
