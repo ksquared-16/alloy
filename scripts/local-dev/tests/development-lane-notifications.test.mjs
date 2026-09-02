@@ -56,8 +56,16 @@ test("NEEDS_INPUT then COMPLETE is ONE notification, not two", () => {
   assert.equal(later.created, false);
   assert.equal(later.duplicate, true);
   assert.equal(N.unseenNotificationCount(), 1);
-  // The record keeps the condition it first reported, not the last one seen.
-  assert.equal(N.notificationForRun("erun_2").state, "NEEDS_INPUT");
+  // ONE notification — unchanged, and the point of this test.
+  assert.equal(N.listNotifications().length, 1);
+  // The record now CONVERGES on the run's current condition instead of freezing
+  // at the first one. Freezing meant a question that had since been answered
+  // kept an actionable notification forever, so the badge went on saying the
+  // operator was needed after the run had completed. Still one record; it just
+  // stops demanding attention when the prompt stops needing it.
+  assert.equal(N.notificationForRun("erun_2").state, "COMPLETE");
+  assert.equal(N.notificationForRun("erun_2").attention_class, "informational");
+  assert.equal(N.actionableNotificationCount(), 0);
 });
 
 test("replayed and repeated qualifying events never duplicate", () => {

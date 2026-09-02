@@ -114,6 +114,44 @@ export function bound(text, max = NOTIFICATION_SUMMARY_MAX) {
 }
 
 /** The state a run must be in to be worth telling the operator about. */
+/**
+ * THE ATTENTION CLASSES. One canonical vocabulary, so every surface answers the
+ * same question the same way.
+ *
+ *   actionable    — the operator must do something. Approvals, needs-input.
+ *   informational — worth reading once; nothing is required. Completions.
+ *   resolved      — read, or the underlying question is answered. Not counted.
+ *   superseded    — a later record owns this subject, or the request was
+ *                   withdrawn/duplicated. Never counted, never shown as live.
+ */
+export const NOTIFICATION_CLASSES = Object.freeze(["actionable", "informational", "resolved", "superseded"]);
+
+/** Run states map to a class; NEEDS_INPUT is the only one that asks for a hand. */
+export function classForRunState(state) {
+  const s = String(state || "").toUpperCase();
+  if (s === "NEEDS_INPUT") return "actionable";
+  if (s === "COMPLETE" || s === "FAILED" || s === "ABANDONED") return "informational";
+  return null;
+}
+
+/**
+ * Governed-action status -> class.
+ *
+ * `awaiting_operator` is the only status that needs a click. An action the
+ * Director has already approved and that is executing is INFORMATIONAL — it
+ * must not raise an approval badge. A failed one is actionable again, because
+ * somebody has to decide what happens next.
+ */
+export function classForGovernedStatus(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "awaiting_operator") return "actionable";
+  if (s === "failed") return "actionable";
+  if (s === "requested" || s === "executing" || s === "approved") return "informational";
+  if (s === "complete") return "informational";
+  if (s === "superseded" || s === "withdrawn" || s === "denied") return "superseded";
+  return null;
+}
+
 export function isNotifyingState(state) {
   return NOTIFY_STATES.includes(String(state || "").toUpperCase());
 }
@@ -187,8 +225,15 @@ export function publicNotification(rec) {
     summary: rec.summary || "",
     path: rec.path,
     created_at: rec.created_at,
+    updated_at: rec.updated_at || rec.created_at,
     seen_at: rec.seen_at || null,
     seen: Boolean(rec.seen_at),
+    // The class is what the UI renders from, so a surface never re-derives
+    // "does this need me" from the event type.
+    subject_key: rec.subject_key || (rec.run_id ? `run:${rec.run_id}` : null),
+    request_id: rec.request_id || null,
+    attention_class: rec.attention_class || "informational",
+    counts_for_attention: countsForAttention(rec),
     delivery: rec.delivery || null,
   };
 }
@@ -216,31 +261,31 @@ export function recordRunNotification(run, {
   if (!isNotifyingState(state)) {
     return { ok: true, created: false, skipped: "not_operator_relevant" };
   }
-  const store = readNotificationStore(root);
-  const existing = store.notifications.find((n) => n.run_id === run.run_id);
-  if (existing) {
-    // The prompt already asked for attention once. A later COMPLETE after a
-    // NEEDS_INPUT is the SAME question being resolved, not a new one.
-    return { ok: true, created: false, duplicate: true, record: existing };
-  }
   const laneId = String(run.lane_id || "");
-  const rec = {
-    schema_version: NOTIFICATION_STORE_SCHEMA,
-    notification_id: `ntf_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
-    run_id: run.run_id,
-    lane_id: laneId || null,
-    lane_name: bound(laneName || laneId, 80),
+  // ONE SUBJECT PER PROMPT, AND IT IS ALLOWED TO CHANGE CLASS.
+  //
+  // The old behaviour returned early on any existing record, so a run that went
+  // NEEDS_INPUT and then COMPLETE kept an ACTIONABLE notification forever: the
+  // question had been answered and the badge still said the operator was
+  // needed. It is still one notification per prompt — it now stops demanding
+  // attention when the prompt stops needing it.
+  const out = upsertNotification({
+    subjectKey: `run:${run.run_id}`,
+    runId: run.run_id,
+    laneId: laneId || null,
+    laneName,
+    eventType: eventTypeForState(state),
     state,
-    event_type: eventTypeForState(state),
+    attentionClass: classForRunState(state) || "informational",
     summary: summaryForRun(run, state),
     path: laneId ? `/#/lanes/${encodeURIComponent(laneId)}` : "/#/lanes",
-    created_at: iso(nowMs),
-    seen_at: null,
-    delivery: { attempted: false, sent: 0, error: null, at: null },
-  };
-  store.notifications.push(rec);
-  writeStore(store, root);
-  return { ok: true, created: true, record: rec };
+    nowMs,
+    root,
+  });
+  if (!out.ok) return { ok: false, error: out.error, created: false };
+  // `created:false` keeps the historical contract: callers use it to decide
+  // whether to attempt an external push, and a transition is not a new page.
+  return { ok: true, created: out.created, duplicate: !out.created, record: out.record };
 }
 
 /**
@@ -269,28 +314,159 @@ export function recordNotificationDelivery(notificationId, {
   return { ok: true, record: rec };
 }
 
-export function listNotifications({ laneId = null, unseenOnly = false, limit = 100, root = runtimeRoot() } = {}) {
+export function listNotifications({
+  laneId = null,
+  unseenOnly = false,
+  attentionOnly = false,
+  includeSuperseded = true,
+  limit = 100,
+  root = runtimeRoot(),
+} = {}) {
   const wanted = laneId ? String(laneId) : null;
   return readNotificationStore(root).notifications
-    .filter((n) => (!wanted || n.lane_id === wanted) && (!unseenOnly || !n.seen_at))
+    .filter((n) => (!wanted || n.lane_id === wanted)
+      && (!unseenOnly || !n.seen_at)
+      // The drawer may show history; these two let a caller ask for exactly
+      // the set the badge counts instead of re-filtering it itself.
+      && (!attentionOnly || countsForAttention(n))
+      && (includeSuperseded || n.attention_class !== "superseded"))
     .sort((a, b) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0))
     .slice(0, Math.max(0, limit))
     .map(publicNotification);
 }
 
-/** The single number the app badge shows. */
-export function unseenNotificationCount(root = runtimeRoot()) {
-  return readNotificationStore(root).notifications.filter((n) => !n.seen_at).length;
+/**
+ * DOES THIS RECORD STILL WANT THE OPERATOR'S ATTENTION?
+ *
+ * The one rule every surface uses: an item counts while it is actionable, or
+ * while it is informational and unread. Resolved and superseded never count,
+ * and a record that has been seen stops counting even if it was actionable —
+ * the operator has looked at it.
+ */
+export function countsForAttention(rec) {
+  if (!rec) return false;
+  const cls = rec.attention_class || "informational";
+  if (cls === "resolved" || cls === "superseded") return false;
+  if (rec.seen_at) return false;
+  return cls === "actionable" || cls === "informational";
 }
 
-/** Unseen count per lane, for the lane list indicators. */
+/** How many items are actionable and still unattended. */
+export function actionableNotificationCount(root = runtimeRoot()) {
+  return readNotificationStore(root).notifications
+    .filter((n) => countsForAttention(n) && n.attention_class === "actionable").length;
+}
+
+/**
+ * THE ONE NUMBER. Home badge, drawer, lane indicators and the installed-app
+ * tile all read this, so they cannot disagree.
+ *
+ * Historically the badge counted "records without seen_at", which made it a
+ * count of unread HISTORY: a NEEDS_INPUT that had since completed still counted,
+ * and a governed action that had been approved and executed still counted as
+ * though it needed a click.
+ */
+export function canonicalNotificationCount(root = runtimeRoot()) {
+  return readNotificationStore(root).notifications.filter(countsForAttention).length;
+}
+
+/** Retained name; delegates so no caller can compute a second answer. */
+export function unseenNotificationCount(root = runtimeRoot()) {
+  return canonicalNotificationCount(root);
+}
+
+/** Per-lane counts for the lane list indicators, same rule as the badge. */
 export function unseenCountByLane(root = runtimeRoot()) {
   const out = {};
   for (const n of readNotificationStore(root).notifications) {
-    if (n.seen_at || !n.lane_id) continue;
+    if (!countsForAttention(n) || !n.lane_id) continue;
     out[n.lane_id] = (out[n.lane_id] || 0) + 1;
   }
   return out;
+}
+
+/** The count broken out by class, for surfaces that want to explain the badge. */
+export function notificationCounts(root = runtimeRoot()) {
+  const all = readNotificationStore(root).notifications;
+  const live = all.filter(countsForAttention);
+  return {
+    total: live.length,
+    actionable: live.filter((n) => n.attention_class === "actionable").length,
+    informational: live.filter((n) => n.attention_class !== "actionable").length,
+    resolved: all.filter((n) => n.attention_class === "resolved" || n.seen_at).length,
+    superseded: all.filter((n) => n.attention_class === "superseded").length,
+  };
+}
+
+/**
+ * ONE SUBJECT, ONE CURRENT NOTIFICATION.
+ *
+ * A governed action moves requested -> approved -> executing -> complete. Each
+ * step used to append its own event to a separate JSONL log, so one decision
+ * produced four unrelated notifications, none of which had a read state and
+ * none of which the badge could reconcile. The subject key is the DECISION
+ * (`governed:<request_id>`, `run:<run_id>`), so a later step mutates the record
+ * the operator is already looking at.
+ *
+ * Re-classifying to informational or resolved clears `seen_at` only when the
+ * item becomes actionable again — an approval that failed must come back.
+ */
+export function upsertNotification({
+  subjectKey,
+  laneId = null,
+  laneName = null,
+  runId = null,
+  requestId = null,
+  eventType,
+  state = null,
+  attentionClass = "informational",
+  summary = "",
+  path = null,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const key = String(subjectKey || "");
+  if (!key) return { ok: false, error: "missing_subject_key" };
+  if (!NOTIFICATION_CLASSES.includes(attentionClass)) {
+    return { ok: false, error: "invalid_attention_class" };
+  }
+  const store = readNotificationStore(root);
+  const existing = store.notifications.find((n) => n.subject_key === key);
+  if (existing) {
+    const wasActionable = existing.attention_class === "actionable";
+    existing.attention_class = attentionClass;
+    existing.event_type = eventType || existing.event_type;
+    if (state) existing.state = state;
+    if (summary) existing.summary = bound(summary);
+    if (path) existing.path = path;
+    existing.updated_at = iso(nowMs);
+    // Becoming actionable again is a NEW demand on the operator, so it returns
+    // to unread. Every other transition leaves an acknowledged item acknowledged.
+    if (!wasActionable && attentionClass === "actionable") existing.seen_at = null;
+    writeStore(store, root);
+    return { ok: true, created: false, updated: true, record: existing };
+  }
+  const rec = {
+    schema_version: NOTIFICATION_STORE_SCHEMA,
+    notification_id: `ntf_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
+    subject_key: key,
+    run_id: runId || null,
+    request_id: requestId || null,
+    lane_id: laneId || null,
+    lane_name: bound(laneName || laneId || "", 80),
+    state,
+    event_type: eventType,
+    attention_class: attentionClass,
+    summary: bound(summary),
+    path: path || (laneId ? `/#/lanes/${encodeURIComponent(laneId)}` : "/#/lanes"),
+    created_at: iso(nowMs),
+    updated_at: iso(nowMs),
+    seen_at: null,
+    delivery: { attempted: false, sent: 0, error: null, at: null },
+  };
+  store.notifications.push(rec);
+  writeStore(store, root);
+  return { ok: true, created: true, record: rec };
 }
 
 export function markNotificationSeen(notificationId, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
