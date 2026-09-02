@@ -92,7 +92,8 @@ describe("vertical compaction — an empty row index is not free space", () => {
 
     it("compacts at the one seam every committed layout passes through", () => {
         const canvas = source("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
-        expect(canvas).toContain("const packed = compactGridRows(next);");
+        // Bands, not gravity: committing through gravity undid the operator's placement.
+        expect(canvas).toContain("const packed = closeEmptyRowBands(next);");
     });
 });
 

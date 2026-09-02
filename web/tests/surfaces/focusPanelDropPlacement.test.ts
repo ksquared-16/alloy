@@ -138,10 +138,21 @@ describe("resolveDropPlacement — the drop the operator was shown", () => {
             const placement = resolveDropPlacement(grid, at(grid, "financials"), anchorSpan + 1, 1);
             const landed = at(placement.grid, "financials");
             const fits = anchorSpan + movingSpan <= 12;
-            // Room on row 1 → same row beside the anchor. No room → below it, never on top of it.
-            expect(landed.rowStart).toBe(fits ? 1 : 3);
-            if (fits) expect(landed.colStart).toBe(anchorSpan + 1);
-            expect(at(placement.grid, "business_process").rowStart).toBe(1);
+            if (fits) {
+                // Room beside the anchor: both share row 1, anchor untouched.
+                expect(landed.rowStart).toBe(1);
+                expect(landed.colStart).toBe(anchorSpan + 1);
+                expect(at(placement.grid, "business_process").rowStart).toBe(1);
+            } else {
+                /*
+                 * No room on that row. The pointer still wins: the dragged card takes
+                 * the cell it was aimed at and the anchor is pushed down by the
+                 * minimum. Sending the DRAGGED card away instead is the rigidity the
+                 * operator kept hitting — a visible cell that could not be reached.
+                 */
+                expect(landed.rowStart).toBe(1);
+                expect(at(placement.grid, "business_process").rowStart).toBeGreaterThan(1);
+            }
             expect(gridOverlaps(placement.grid)).toEqual([]);
         }
     });

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import FocusPanelRuntimeComposerCanvas from "@/components/admin/focusPanel/FocusPanelRuntimeComposerCanvas";
 import FocusPanelVisibilityZones from "@/components/adminV2/settings/surfaces/FocusPanelVisibilityZones";
-import { compactGridRows, gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
+import { closeEmptyRowBands, gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import {
     readFocusPanelPublishedLayout,
     type FocusPanelPublishedLayout,
@@ -580,7 +580,7 @@ export default function FocusPanelSummarySurfaceEditor({ onBack: _onBack, onOpen
      * so a published composition keeps its widths and its reading order.
      */
     const builderInitialGrid = useMemo(
-        () => compactGridRows(gridFromPublishedLayout(builderInitial)),
+        () => closeEmptyRowBands(gridFromPublishedLayout(builderInitial)),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [loaded],
     );

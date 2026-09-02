@@ -26,7 +26,7 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
-    compactGridRows,
+    closeEmptyRowBands,
     COMPOSER_GRID_GAP_PX,
     composerGridMetrics,
     parseTrackSizes,
@@ -185,7 +185,16 @@ export default function FocusPanelRuntimeComposerCanvas({
      */
     const applyGrid = useCallback(
         (next: FocusPanelGridLayout) => {
-            const packed = compactGridRows(next);
+            /*
+             * BANDS, NOT GRAVITY.
+             *
+             * `compactGridRows` re-decides every card's row, so committing through it
+             * undid the very placement the operator had just been shown: the anchored
+             * card fell back to the earliest row it fitted. Closing empty bands does
+             * the one thing compaction owes the canvas — no phantom rows — and leaves
+             * every decided position alone.
+             */
+            const packed = closeEmptyRowBands(next);
             setGrid(packed);
             onLayoutChange?.(buildPublishedLayoutFromGrid(packed));
         },
