@@ -399,7 +399,21 @@ await test("package scripts, permits, caps, and generalized recovery stay unchan
   assert.equal(diff("scripts/local-dev/alloy-compute"), "");
   assert.equal(diff("scripts/local-dev/lib/sprint-ops.sh"), "");
   assert.equal(diff("scripts/local-dev/lib/browser-cert-lease.mjs"), "");
-  assert.equal(diff("scripts/local-dev/lib/lock.sh"), "");
+  // `lib/lock.sh` LEAVES THIS FREEZE, DELIBERATELY.
+  //
+  // Validation-lock heartbeat integrity is this change's owning slice, and the
+  // measured defect lived in exactly this file: alloy-validate moved to the S5
+  // broker and stopped taking the validate mutex, while a heartbeat loop from
+  // the old mutex model survived it — writing every fifteen seconds into a lock
+  // directory that is never created, printing a shell error into the middle of
+  // real validation output, and still exiting 0.
+  //
+  // As the guard in development-execution-run already records, this compares the
+  // working tree to HEAD and so only catches UNCOMMITTED edits; committing turns
+  // it green on its own. Removing the entry deliberately is the honest form. The
+  // replacement is stronger: tests/test-validation-heartbeat.sh asserts the live
+  // lease, the abandoned lease, the expired heartbeat and the foreign refresher
+  // by name.
   assert.equal(diff("scripts/local-dev/vac-run"), "");
   const pkg = JSON.parse(readFileSync(join(REPO, "web/package.json"), "utf8"));
   assert.match(String(pkg.scripts.typecheck), /tsc/);

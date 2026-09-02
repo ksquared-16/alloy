@@ -207,14 +207,30 @@ run_validate() {
     alloy_info "governed by S5: ${ALLOY_S5_CLASS} · weight ${ALLOY_S5_WEIGHT} · workers <= ${ALLOY_S5_WORKER_CEILING} · claim ${ALLOY_S5_CLAIM_ID}"
   fi
 
+  # THE HEARTBEAT BELONGS TO THE LEASE, AND THIS COMMAND NO LONGER TAKES ONE.
+  #
+  # S5 is the capacity authority here; the validate mutex is not acquired, so
+  # its lock directory does not exist and there is nothing to keep alive. This
+  # loop wrote into that missing directory every fifteen seconds and the shell
+  # printed the failure into the middle of real validation output.
+  #
+  # It now runs ONLY while this process genuinely holds the lease, and a failed
+  # write is reported rather than swallowed — a heartbeat that cannot be written
+  # is a liveness signal that has stopped, which is exactly what the reclaimer
+  # is supposed to see.
   local hb_pid=""
-  (
-    while true; do
-      alloy_validate_write_heartbeat
-      sleep 15
-    done
-  ) &
-  hb_pid=$!
+  if alloy_validate_lock_held_by_self; then
+    (
+      while true; do
+        if ! alloy_validate_write_heartbeat; then
+          alloy_warn "validation heartbeat write failed; the lease can no longer prove liveness"
+          exit 1
+        fi
+        sleep 15
+      done
+    ) &
+    hb_pid=$!
+  fi
 
   # Machine-bounded browser certification: capacity-1 lease on top of the
   # host-wide validate lock so two Chromium fleets cannot start even when

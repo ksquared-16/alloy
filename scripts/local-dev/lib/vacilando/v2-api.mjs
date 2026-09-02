@@ -390,6 +390,26 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
    * runs the same capacity gates and writes the same record as every other
    * close. Lane history is retained: closing is not deleting.
    */
+  /**
+   * REGISTRATION RECONCILIATION IS A PRODUCT ACTION.
+   *
+   * A registration whose worktree no longer exists had no canonical removal
+   * path: `vac worktree-retire` works from directories and cannot see one that
+   * is gone, and `vac reconcile` only offers adoptions. The only remaining move
+   * was deleting a file by hand — which is what a registry exists to prevent.
+   *
+   * GET-shaped by default: without `apply: true` this returns the plan and the
+   * classification of every registration, and changes nothing.
+   */
+  if (path === "/api/v2/registrations/reconcile") {
+    const { reconcileStaleRegistrations } = await import("./lane-worktree-lifecycle.mjs");
+    const out = reconcileStaleRegistrations({
+      apply: v.apply === true,
+      actor: actorDefault,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+
   if (path === "/api/v2/lane/close" || path === "/api/v2/lanes/close") {
     const { closeDurableLane } = await import("./lane-worktree-lifecycle.mjs");
     const laneId = v.lane_id || v.laneId || v.id;
