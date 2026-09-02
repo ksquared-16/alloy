@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
     resolveDropPlacement,
     gridOverlaps,
+    buildPublishedLayoutFromGrid,
+    gridFromPublishedLayout,
     type FocusPanelGridLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 
@@ -140,5 +142,19 @@ describe("resolveDropPlacement — the drop the operator was shown", () => {
             colStart: placement.area.colStart,
             rowStart: placement.area.rowStart,
         });
+    });
+});
+
+describe("the top row survives publish and reload", () => {
+    it("round-trips Process 2/3 + Financials 1/3 through the published layout", () => {
+        const grid = processAndFinancials();
+        const placed = resolveDropPlacement(grid, at(grid, "financials"), 9, 1).grid;
+
+        const published = buildPublishedLayoutFromGrid(placed);
+        const rehydrated = gridFromPublishedLayout(published, 12);
+
+        expect(at(rehydrated, "business_process")).toMatchObject({ colStart: 1, colSpan: 8, rowStart: 1 });
+        expect(at(rehydrated, "financials")).toMatchObject({ colStart: 9, colSpan: 4, rowStart: 1 });
+        expect(gridOverlaps(rehydrated)).toEqual([]);
     });
 });
