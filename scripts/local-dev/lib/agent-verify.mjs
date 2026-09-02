@@ -62,6 +62,43 @@ page.on("requestfailed", (req) => {
 let route = "/workspace";
 let ok = true;
 let observed = "";
+let identity = null;
+
+/**
+ * WHO does the application say is signed in?
+ *
+ * Not reporting this was the whole defect. `browser-auth` consumes this command as the one
+ * definition of "authenticated" on the machine, and its `classifyVerification` needs an IDENTITY so
+ * that another slot's QA account reads as `wrong_identity` rather than "close enough". This command
+ * only ever answered "the route did not bounce to /login", so the consumer scraped its output for an
+ * email that was never printed and every restore verified as
+ * "no authenticated identity was reported" — while the session was in fact valid.
+ *
+ * The APP is asked, never the storage file and never a token: `userEmail` is the value the server
+ * resolved from the session and handed to the admin auth context, so it is the application's own
+ * answer to the question. The session's `email` claim is a fallback for a surface that has not
+ * mounted that context. Escaping varies with how the payload is serialised, hence `\\*`.
+ *
+ * A page that renders no identity returns null, which the consumer already treats as unverified —
+ * this can only ever ADD an observation, never manufacture one.
+ */
+async function readAuthenticatedIdentity(p) {
+    const EMAIL = "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}";
+    let html = "";
+    try {
+        html = await p.content();
+    } catch {
+        return null;
+    }
+    for (const source of [
+        new RegExp(`userEmail\\\\*"\\s*:\\s*\\\\*"(${EMAIL})`),
+        new RegExp(`"aud\\\\*"\\s*:\\s*\\\\*"authenticated[\\s\\S]{0,400}?email\\\\*"\\s*:\\s*\\\\*"(${EMAIL})`),
+    ]) {
+        const m = source.exec(html);
+        if (m) return m[1];
+    }
+    return null;
+}
 
 try {
   if (target === "authenticated-home") {
@@ -83,6 +120,7 @@ try {
   if (pathname === "/login" || pathname.startsWith("/unauthorized")) {
     ok = false;
   }
+  if (ok) identity = await readAuthenticatedIdentity(page);
 } catch (err) {
   ok = false;
   observed = String(err?.message || "navigation failed");
@@ -100,6 +138,7 @@ const summary = {
   baseUrl,
   ok,
   observed,
+  identity,
   consoleErrors,
   failedRequests,
   screenshot: screenshotPath || null,
@@ -111,6 +150,8 @@ await writeFile(summaryPath, JSON.stringify(summary, null, 2), { mode: 0o600 });
 await browser.close();
 
 console.log(`summary: ${summaryPath}`);
+// Printed so `browser-auth` can read the identity from a NAMED field rather than inferring one.
+if (identity) console.log(`identity: ${identity}`);
 if (screenshotPath) console.log(`screenshot: ${screenshotPath}`);
 console.log(`result: ${ok ? "PASS" : "FAIL"}`);
 process.exit(ok ? 0 : 1);
