@@ -239,6 +239,59 @@ alloy_metadata_path() {
   printf '%s/%s.env' "$ALLOY_METADATA_DIR" "$name"
 }
 
+# --- Dev-server lifecycle audit ---
+#
+# THE GAP THIS CLOSES. During capacity certification the server on slot 1
+# disappeared from the measurement cohort twice, and there was NO WAY TO SAY WHO
+# STOPPED IT. The report had to read "another lane's agent probably stopped it",
+# which is inference, not evidence. Every canonical path that starts or stops a
+# dev server ran without leaving a durable trace, so the only record of a
+# lifecycle action was the side effect: a pid file that had vanished.
+#
+# This is an AUDIT LOG over the canonical operations, not a second registry. The
+# pid files and metadata remain the authority on what IS; this records what
+# HAPPENED, so a future cohort invalidation can name the action instead of
+# guessing at it.
+#
+# The distinction that matters most is the one it makes possible: a server that
+# stopped WITH a matching event was stopped by someone through a sanctioned
+# path, and a server that vanished with NO event was killed outside the
+# lifecycle. Those are different problems and they were previously identical.
+alloy_server_audit_path() {
+  printf '%s/dev-server-lifecycle.jsonl' "${ALLOY_RUNTIME_ROOT}"
+}
+
+# Who is doing this? Derived, never guessed: an explicit actor wins, then the
+# lane/run this shell is executing for, then the toolkit itself.
+alloy_server_audit_actor() {
+  if [[ -n "${ALLOY_SERVER_AUDIT_ACTOR:-}" ]]; then printf '%s' "$ALLOY_SERVER_AUDIT_ACTOR"; return; fi
+  if [[ -n "${VACILANDO_RUN_ID:-}" || -n "${VACILANDO_LANE_ID:-}" ]]; then printf 'lane-agent'; return; fi
+  if [[ -n "${ALLOY_CAPACITY_OVERRIDE:-}" ]]; then printf 'capacity-experiment'; return; fi
+  printf 'toolkit'
+}
+
+# One line per canonical lifecycle action. Best effort by construction: an audit
+# write must never be able to fail a dev-server operation, because a lost log
+# line is a smaller problem than a server that would not stop.
+alloy_record_server_lifecycle() {
+  local action="$1" name="$2" outcome="$3" reason="${4:-}" prev_pid="${5:-}" new_pid="${6:-}"
+  local path ts
+  path="$(alloy_server_audit_path)" || return 0
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  mkdir -p "$(dirname "$path")" 2>/dev/null || return 0
+  printf '{"at":"%s","action":"%s","worktree":"%s","slot":%s,"port":%s,"previous_pid":%s,"new_pid":%s,"actor":"%s","lane_id":%s,"run_id":%s,"reason":"%s","outcome":"%s","toolkit":"%s"}\n' \
+    "$ts" "$action" "$name" \
+    "${ALLOY_WORKTREE_SLOT:-null}" "${PORT:-null}" \
+    "${prev_pid:-null}" "${new_pid:-null}" \
+    "$(alloy_server_audit_actor)" \
+    "$([[ -n "${VACILANDO_LANE_ID:-}" ]] && printf '"%s"' "$VACILANDO_LANE_ID" || printf 'null')" \
+    "$([[ -n "${VACILANDO_RUN_ID:-}" ]] && printf '"%s"' "$VACILANDO_RUN_ID" || printf 'null')" \
+    "${reason//\"/}" "$outcome" \
+    "$(basename "$(dirname "${ALLOY_LOCAL_DEV_ROOT:-/unknown}")" 2>/dev/null)" \
+    >>"$path" 2>/dev/null || true
+  return 0
+}
+
 alloy_pid_path() {
   local name="$1"
   printf '%s/%s.pid' "$ALLOY_PIDS_DIR" "$name"
