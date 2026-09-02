@@ -1,9 +1,10 @@
 /**
- * Slot missions rail — every managed slot (1–6) appears in Vacilando whether the
+ * Slot missions rail — every managed slot appears in Vacilando whether the
  * work started via Claude, Cursor, or the Vacilando app. Free slots show as free;
  * occupied slots show sprint name + provider + controls.
  */
 import { execFileSync } from "node:child_process";
+import { isManagedSlot, managedSlots } from "../managed-slots.mjs";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { TOOLKIT_DIR } from "../sources.mjs";
@@ -54,8 +55,8 @@ function listActiveSlotMetadata() {
     if (!f.endsWith(".env") || !/^wt[1-6]-/.test(f)) continue;
     const meta = parseEnvFile(join(metaDir, f));
     if (!meta) continue;
-    const slot = Number(meta.ALLOY_WORKTREE_SLOT || f.match(/^wt([1-6])-/)?.[1]);
-    if (!slot || slot < 1 || slot > 6) continue;
+    const slot = Number(meta.ALLOY_WORKTREE_SLOT || f.match(/^wt(\d+)-/)?.[1]);
+    if (!slot || !isManagedSlot(slot)) continue;
     const worktree = meta.ALLOY_WORKTREE_NAME || f.replace(/\.env$/, "");
     bySlot.set(slot, {
       slot,
@@ -95,7 +96,7 @@ export function slotMissionRailVm({ limit = 24 } = {}) {
   const items = [];
   const seenMissionIds = new Set();
 
-  for (let slot = 1; slot <= 6; slot++) {
+  for (const slot of managedSlots()) {
     const meta = slots.get(slot) || null;
     const identity = resolveSlotIdentity(slot);
     const mission = missionForSlot(slot);
@@ -195,7 +196,7 @@ export function slotMissionRailVm({ limit = 24 } = {}) {
     kind: "slot_mission_rail",
     label: "Missions",
     slotsOccupied: [...slots.keys()].length,
-    slotsTotal: 6,
+    slotsTotal: managedSlots().length,
     missions: items.slice(0, limit),
   };
 }

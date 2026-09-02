@@ -1,3 +1,4 @@
+import { isManagedSlot, managedSlots } from "./managed-slots.mjs";
 /**
  * Vacilando Runtime — Scheduler (V1, deterministic, no AI).
  *
@@ -35,7 +36,7 @@ export function schedule(snapshot, resources, queue = []) {
   const pressure = o.slots?.pressure || "ok";
   const sprints = snapshot?.sprints || [];
   const occupied = new Set(sprints.map((s) => s.slot));
-  const freeSlots = [1, 2, 3, 4, 5, 6].filter((n) => !occupied.has(n));
+  const freeSlots = managedSlots().filter((n) => !occupied.has(n));
 
   const states = sprints.map((sp) => ({ slot: sp.slot, title: sp.title, state: workerState(sp, (resources?.workers || []).find((w) => w.slot === sp.slot)) }));
   const idle = states.filter((s) => s.state === "idle");

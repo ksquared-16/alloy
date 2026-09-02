@@ -1,3 +1,4 @@
+import { managedSlotCount } from "./managed-slots.mjs";
 /**
  * S4 — the canonical capacity-policy owner.
  *
@@ -56,7 +57,10 @@ export const CAPACITY_POLICY_V1 = Object.freeze({
   worker_floor: 1,
   worker_memory_gb_each: 2,
 
-  // Dev servers: bounded by managed slots AND RAM.
+  // Dev servers: bounded by managed slots AND RAM. `dev_server_slots` is the
+  // FALLBACK for an injected policy; the live number comes from managed-slots,
+  // the one owner of how many slots exist. It was the literal 6 here, which is
+  // how the control plane could disagree with the shell about topology.
   dev_server_slots: 6,
   dev_server_memory_gb_each: 8,
 
@@ -219,11 +223,15 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
   }
 
   // ── dev servers: managed slots AND RAM ─────────────────────────────────────
-  const devByMemory = memGb ? Math.floor(memGb / policy.dev_server_memory_gb_each) : policy.dev_server_slots;
-  const devServerCeiling = Math.max(1, Math.min(policy.dev_server_slots, devByMemory));
-  if (devByMemory < policy.dev_server_slots) {
+  // The slot bound comes from the topology owner when the default policy is in
+  // force, so raising ALLOY_MAX_AGENTS for an experiment moves this too rather
+  // than leaving capacity policy insisting on six.
+  const slotBound = policy === CAPACITY_POLICY_V1 ? managedSlotCount() : policy.dev_server_slots;
+  const devByMemory = memGb ? Math.floor(memGb / policy.dev_server_memory_gb_each) : slotBound;
+  const devServerCeiling = Math.max(1, Math.min(slotBound, devByMemory));
+  if (devByMemory < slotBound) {
     constrained.push(gate("dev_server_capacity", devServerCeiling,
-      `RAM allows ${devByMemory} servers at ${policy.dev_server_memory_gb_each} GB each; ${policy.dev_server_slots} managed slots exist`));
+      `RAM allows ${devByMemory} servers at ${policy.dev_server_memory_gb_each} GB each; ${slotBound} managed slots exist`));
   }
 
   // ── reserves ───────────────────────────────────────────────────────────────
@@ -324,8 +332,8 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
       dev_server_capacity: {
         ceiling: devServerCeiling, current: cap?.dev_servers ?? 0,
         remaining: Math.max(0, devServerCeiling - (cap?.dev_servers ?? 0)),
-        bounded_by: devByMemory < policy.dev_server_slots ? "memory" : "slots",
-        by_slots: policy.dev_server_slots, by_memory: devByMemory,
+        bounded_by: devByMemory < slotBound ? "memory" : "slots",
+        by_slots: slotBound, by_memory: devByMemory,
       },
       disk_headroom: {
         total_gb: diskTotal || null, free_gb: diskFree || null,

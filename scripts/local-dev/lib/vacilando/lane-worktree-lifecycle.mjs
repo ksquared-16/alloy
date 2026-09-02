@@ -37,6 +37,7 @@
  * registry -> binding, never the reverse.
  */
 import { spawnSync } from "node:child_process";
+import { isManagedSlot, managedSlots } from "./managed-slots.mjs";
 import { existsSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -727,7 +728,17 @@ export function reconcileStaleRegistrations({
  * Slots 1-6 are the host's permanent worktree homes, on ports 3011-3016. A slot
  * is taken when a registration names it; everything else is available.
  */
-export const MANAGED_SLOTS = Object.freeze([1, 2, 3, 4, 5, 6]);
+/**
+ * The managed slots, from the one owner. This was a literal [1,2,3,4,5,6].
+ *
+ * A FUNCTION, not a constant, deliberately. A `const` snapshot is evaluated once
+ * at import and would go stale the moment topology changed — which is the same
+ * "second source of truth" this convergence exists to remove, just with a longer
+ * fuse. Callers ask when they need to know.
+ */
+export function managedSlotSet() {
+  return managedSlots();
+}
 
 export function freeSlots({ cfg = null, metadata = null } = {}) {
   const conf = cfg || resolveRuntimeConfig();
@@ -736,7 +747,7 @@ export function freeSlots({ cfg = null, metadata = null } = {}) {
     .filter((m) => norm(m.lifecycle).toLowerCase() !== "finished")
     .map((m) => asSlot(m.slot))
     .filter((n) => n != null));
-  return MANAGED_SLOTS.filter((n) => !taken.has(n));
+  return managedSlots().filter((n) => !taken.has(n));
 }
 
 let registerImpl = null;
