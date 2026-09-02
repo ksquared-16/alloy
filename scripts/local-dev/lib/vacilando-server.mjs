@@ -2043,13 +2043,22 @@ export function createVacilandoServer() {
     }
     if (path === "/api/notifications") {
       try {
-        const { listNotifications, unseenNotificationCount, unseenCountByLane } =
+        const { listNotifications, unseenNotificationCount, unseenCountByLane, notificationCounts } =
           await import("./vacilando/lane-notifications.mjs");
         const unseenOnly = url.searchParams.get("unseen") === "1";
+        const attentionOnly = url.searchParams.get("attention") === "1";
         return sendJson(res, 200, {
           ok: true,
-          notifications: listNotifications({ unseenOnly, laneId: url.searchParams.get("lane_id") || null }),
+          notifications: listNotifications({
+            unseenOnly,
+            attentionOnly,
+            laneId: url.searchParams.get("lane_id") || null,
+          }),
+          // ONE number, computed once, in the module that owns read state. The
+          // breakdown is here so a surface can EXPLAIN the badge without
+          // deriving a second answer from the list it was handed.
           unseen_count: unseenNotificationCount(),
+          counts: notificationCounts(),
           unseen_by_lane: unseenCountByLane(),
         });
       } catch (e) {

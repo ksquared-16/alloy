@@ -90,6 +90,7 @@ import {
   releaseMissionDelegation,
   reserveMissionDelegation,
 } from "./mission-delegation.mjs";
+import { classForGovernedStatus, upsertNotification } from "./lane-notifications.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -1046,6 +1047,33 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
     mkdirSync(dirname(notifyPath(root)), { recursive: true });
     appendFileSync(notifyPath(root), `${JSON.stringify(event)}\n`);
   } catch { /* notify best-effort */ }
+  // THE CANONICAL RECORD, NOT A FIFTH EVENT.
+  //
+  // The JSONL above stays as the delivery/history log. What the operator counts
+  // now lives in the one notification store, keyed on the DECISION rather than
+  // the step, so requested -> approved -> executing -> complete mutate a single
+  // record instead of appending four unrelated ones with no read state. The
+  // class is derived from the request's own durable status, which is the same
+  // status the UI will render — so a notification cannot claim an outcome the
+  // state has not reached.
+  try {
+    const cls = classForGovernedStatus(rec.status);
+    if (cls) {
+      upsertNotification({
+        subjectKey: `governed:${rec.request_id}`,
+        requestId: rec.request_id,
+        laneId: rec.lane_id || null,
+        eventType: type,
+        state: rec.status || null,
+        attentionClass: cls,
+        summary: title || rec.title || rec.action_key,
+        path: rec.mission_id
+          ? `/#/missions/${encodeURIComponent(rec.mission_id)}`
+          : (rec.lane_id ? `/#/lanes/${encodeURIComponent(rec.lane_id)}` : "/#/lanes"),
+        root,
+      });
+    }
+  } catch { /* the canonical record is best-effort too; never break the action */ }
   return event;
 }
 
