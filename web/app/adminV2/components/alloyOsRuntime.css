@@ -5124,6 +5124,14 @@ html[data-alloy-os-runtime-split="true"]
  * regions). Each area cell fills its column span (width) and stretches to its row span
  * (height) so a card beside a taller stack reads as one tall region. Builder and runtime
  * share this exact grid. */
+/*
+ * The grid canvas positions its cards itself now (column-aware vertical model),
+ * so it is a positioning context. Columns still come from the twelve-column
+ * track list; rows no longer decide anyone's Y.
+ */
+.alloy-os-fp-canvas--grid[data-fp-vertical-model="column-aware"] {
+  position: relative;
+}
 .alloy-os-fp-canvas--grid {
   display: grid;
   grid-template-columns: repeat(var(--fp-grid-cols, 12), minmax(0, 1fr));
