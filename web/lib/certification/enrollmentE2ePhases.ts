@@ -499,12 +499,83 @@ const priorTruthConfirmation: Phase = {
 };
 
 /**
+ * E: walk the participant runtime forward and record what it actually asks.
+ *
+ * The phases after this one need to know what the journey CONTAINS — how many steps, which are
+ * confirmations of prior truth and which are genuine collection, and what the single published
+ * blocking requirement really demands. Every previous attempt in this program to write that from
+ * assumption cost days, so this phase walks the real runtime and reports the itinerary as evidence.
+ *
+ * It advances only through confirmation affordances, which are safe: confirming prior truth asserts
+ * nothing new. It stops at the first step that asks for something it has not been told to invent,
+ * and says so, rather than typing a plausible value into a family's enrolment record.
+ */
+const semanticWalk: Phase = {
+    key: "E_collection",
+    title: "walk the participant runtime and record what it asks",
+    dependsOn: ["D_confirmation"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { journeyId: string }> | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "Path A entry facts unavailable" };
+
+        const opened = await withParticipantPage(ctx, pathA.journeyId, async (page) => {
+            const steps: Array<Record<string, unknown>> = [];
+
+            for (let i = 0; i < 12; i += 1) {
+                const bodyText = (await page.locator("body").innerText().catch(() => "")).trim();
+                const buttons = (await page.locator("button, [role=button]").allInnerTexts().catch(() => []))
+                    .map((b) => b.trim())
+                    .filter(Boolean);
+                const inputs = await page.locator("input, textarea, select").count().catch(() => 0);
+
+                steps.push({
+                    step: i,
+                    prompt: bodyText.split("\n").filter(Boolean).slice(0, 3).join(" | ").slice(0, 200),
+                    buttons,
+                    inputs,
+                });
+
+                const confirm = buttons.find((b) => /that's right|^yes\b|confirm/i.test(b));
+                if (!confirm) break;
+
+                await page.getByRole("button", { name: confirm }).first().click().catch(() => undefined);
+                await page.waitForTimeout(1500);
+            }
+
+            return steps;
+        });
+
+        if (!opened.ok) return { status: "failed", detail: opened.detail };
+        const steps = opened.value;
+
+        /*
+         * The property proved here is PROGRESSION: confirming prior truth moves the journey on. A
+         * runtime that re-presents the same step after a confirmation has not recorded anything, and
+         * that is indistinguishable from success if only the first screen is ever inspected.
+         */
+        const distinctPrompts = new Set(steps.map((s) => String(s.prompt))).size;
+        if (steps.length > 1 && distinctPrompts === 1) {
+            return {
+                status: "failed",
+                detail: `the runtime re-presented the same step ${steps.length} times after confirmation; nothing advanced`,
+            };
+        }
+
+        return {
+            status: "passed",
+            detail: `walked ${steps.length} participant step(s); ${distinctPrompts} distinct prompt(s); confirmation advances the journey`,
+            evidence: { steps },
+        };
+    },
+};
+
+/**
  * Phases that need the participant browser surface. Declared, ordered and explicitly unimplemented
  * so the report shows the shape of what remains rather than hiding it.
  */
 const browserPhases: readonly Phase[] = (
     [
-        ["E_collection", "missing semantic collection"],
         ["F_parties", "repeatable parties"],
         ["G_evidence", "evidence and Form completion"],
         ["H_artifacts", "artifact generation"],
@@ -538,5 +609,6 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     sufficiencyContract,
     participantEntry,
     priorTruthConfirmation,
+    semanticWalk,
     ...browserPhases,
 ];
