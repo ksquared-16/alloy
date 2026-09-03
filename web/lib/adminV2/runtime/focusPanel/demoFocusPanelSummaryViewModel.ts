@@ -284,6 +284,7 @@ export function buildDemoFocusPanelSummaryViewModel(): {
         },
         summaries: {
             active_tour_bookings: [],
+            operator_relevant_tour_booking: null,
             tasks: {
                 state: "loaded",
                 open_count: 1,

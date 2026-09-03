@@ -177,7 +177,9 @@ export type OperationalTourSignal = {
      */
     statusLabel: string | null;
     /**
-     * The canonical durable `tour_bookings.status_key` of the booking this signal describes.
+     * The canonical durable `tour_bookings.status_key` of the booking the Tour concept speaks
+     * for — `canceled`, `completed` and `no_show` included, so a concluded tour never reads as
+     * a tour that never happened.
      *
      * Presentation and eligibility branch on THIS, never on `statusLabel` and never on a
      * rendered string: identifying state by display text is the same class of defect as

@@ -232,7 +232,23 @@ function buildOperationalContextSignals(
     const openCount = items.filter((i) => i.state === "open").length;
     const overdueCount = items.filter((i) => i.urgency === "overdue").length;
 
-    const nextBooking = tourBookings[0] as TourBookingRow | undefined;
+    /*
+     * TWO QUESTIONS, TWO ANSWERS.
+     *
+     * `scheduled` has always meant "an appointment still stands", and its readers depend on
+     * that — `alignTourSupportingActionsForBookingState` hides Schedule Tour on it. So it keeps
+     * reading the ACTIVE list.
+     *
+     * The STATE, though, must survive a tour ending. `active_tour_bookings` excludes
+     * `canceled` / `completed` / `no_show`, so a finished tour used to arrive here as "no tour"
+     * and the card offered Schedule Tour as though nothing had happened. `operator_relevant_tour_booking`
+     * is the booking the Tour concept speaks for, terminal states included, chosen by
+     * `resolveOperatorRelevantTourBooking` — a standing appointment outranks history, and a
+     * superseded pre-reschedule row never wins.
+     */
+    const relevantBooking =
+        (subjectVm.summaries.operator_relevant_tour_booking as TourBookingRow | null | undefined) ?? null;
+    const nextBooking = (tourBookings[0] as TourBookingRow | undefined) ?? relevantBooking ?? undefined;
     const attendance = nextBooking ? readAttendanceConfirmation(nextBooking.metadata) : null;
     const confirmedBy = attendance?.confirmed_by_person_id
         ? truthScalarName(truth)
@@ -266,7 +282,10 @@ function buildOperationalContextSignals(
             statusLabel: trimOrNull(nextBooking?.status_key),
             // The same value, under a name that says what it is. Command presentation and
             // eligibility read `statusKey`; `statusLabel` stays for its existing readers.
-            statusKey: (trimOrNull(nextBooking?.status_key) as TourBookingStatusKey | null) ?? null,
+            // From the operator-relevant booking, so a concluded tour still states what it was.
+            statusKey:
+                (trimOrNull(relevantBooking?.status_key ?? nextBooking?.status_key) as TourBookingStatusKey | null)
+                ?? null,
             bookingId: trimOrNull(nextBooking?.id),
             parentConfirmationLabel,
         },

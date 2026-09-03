@@ -116,16 +116,41 @@ describe("the label states the durable booking state", () => {
     });
 });
 
-describe("terminal states are honestly out of reach today", () => {
-    it.each(["canceled", "completed", "no_show"] as TourBookingStatusKey[])(
-        "%s cannot reach presentation, so no state is claimed",
-        (statusKey) => {
-            // `loadOpportunityActiveTourBookingsForViewModel` filters the booking list to the
-            // non-terminal keys before the Operational Context sees it, so a terminal booking
-            // arrives as scheduled:false with no status. Inventing a label here would state
-            // something the runtime cannot currently know.
-            const out = resolveTourCommandPresentation(TOUR_SET, signal({ scheduled: false, statusKey }));
-            expect(out.label).toBe("Tour");
-        },
-    );
+describe("a concluded tour still says what it was", () => {
+    // The whole point of widening the projection: `active_tour_bookings` excludes these, so a
+    // completed tour used to arrive as "no tour" and the card offered Schedule Tour again.
+    const cases: Array<[TourBookingStatusKey, string]> = [
+        ["canceled", "Tour canceled"],
+        ["completed", "Tour completed"],
+        ["no_show", "Tour no-show"],
+    ];
+
+    it.each(cases)("%s → %s, with scheduled already false", (statusKey, expected) => {
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: false, statusKey, startAt: "2026-03-01T10:00:00Z" }),
+            { timeZone: "UTC" },
+        );
+        expect(out.grouped).toBe(true);
+        expect(out.label).toBe(expected);
+        expect(out.statusKey).toBe(statusKey);
+    });
+
+    it("does not pin a date to a concluded tour", () => {
+        // "Tour completed · Mar 1, 10:00 AM" reads like an appointment. The state is the fact.
+        for (const statusKey of ["canceled", "completed", "no_show"] as TourBookingStatusKey[]) {
+            const out = resolveTourCommandPresentation(
+                TOUR_SET, signal({ scheduled: false, statusKey, startAt: "2026-03-01T10:00:00Z" }), { timeZone: "UTC" },
+            );
+            expect(out.label).not.toMatch(/·/);
+        }
+    });
+
+    it("is still distinguishable from a family that never had a tour", () => {
+        const never = resolveTourCommandPresentation(TOUR_SET, signal({ scheduled: false, statusKey: null }));
+        const done = resolveTourCommandPresentation(TOUR_SET, signal({ scheduled: false, statusKey: "completed" }));
+        expect(never.label).toBe("Tour");
+        expect(done.label).toBe("Tour completed");
+        expect(never.label).not.toBe(done.label);
+    });
 });

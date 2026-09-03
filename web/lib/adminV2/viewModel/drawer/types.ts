@@ -206,6 +206,16 @@ export type OpportunityDrawerViewModel = {
         tasks: InquirySummaryTaskPreviewPayload;
         /** Active tour_bookings rows from first-paint compose (tour block + lifecycle bar). */
             active_tour_bookings: TourBookingRow[];
+            /**
+             * The single booking the Tour concept speaks for, terminal states INCLUDED.
+             *
+             * `active_tour_bookings` deliberately excludes `canceled` / `completed` / `no_show`,
+             * which is right for "may the family still attend this" and wrong for "what is the
+             * Tour state" — a finished tour presented as though none had happened. Selected by
+             * `resolveOperatorRelevantTourBooking`, which prefers a standing appointment over
+             * history and never a superseded pre-reschedule row.
+             */
+            operator_relevant_tour_booking: TourBookingRow | null;
         reminders: RemindersSummaryVm;
         bos: BosSummaryVm | null;
         attention: AttentionSummaryVm | null;

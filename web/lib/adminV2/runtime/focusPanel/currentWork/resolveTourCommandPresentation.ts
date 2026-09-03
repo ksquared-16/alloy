@@ -48,21 +48,35 @@ export type TourCommandPresentation = {
 /**
  * The operator-facing stem per durable booking state.
  *
- * Only the states an ACTIVE booking can hold appear here. Terminal states (`canceled`,
- * `completed`, `no_show`) never reach presentation today: the drawer VM's
- * `loadOpportunityActiveTourBookingsForViewModel` filters the booking list to
- * `TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS` before the Operational Context ever sees it,
- * so `signals.tour` reports `scheduled: false` and carries no status. Presenting a completed
- * tour as completed therefore needs that projection widened first — it is a data-availability
- * change, not a labelling one, and inventing a label here would state something the runtime
- * cannot currently know.
+ * Terminal states are here now. They used to be unreachable: the drawer VM filtered bookings
+ * to the non-terminal keys before the Operational Context saw them, so a completed tour
+ * arrived as "no tour" and the card offered Schedule Tour as though the family had never
+ * visited. `operator_relevant_tour_booking` carries the concluded booking through, and these
+ * say what it was.
  */
-const ACTIVE_STATE_STEM: Partial<Record<TourBookingStatusKey, string>> = {
+const STATE_STEM: Partial<Record<TourBookingStatusKey, string>> = {
     requested: "Tour requested",
     pending_approval: "Tour pending approval",
     confirmed: "Tour scheduled",
     rescheduled: "Tour rescheduled",
+    canceled: "Tour canceled",
+    completed: "Tour completed",
+    no_show: "Tour no-show",
 };
+
+/**
+ * Whether the state's own time is worth printing beside it.
+ *
+ * A standing appointment is a time the operator is working toward, so it leads with one. A
+ * concluded tour's instant is history: "Tour completed" is the operative fact, and pinning a
+ * date to it invites reading a past tour as an upcoming one.
+ */
+const STATE_CARRIES_TIME = new Set<TourBookingStatusKey>([
+    "requested",
+    "pending_approval",
+    "confirmed",
+    "rescheduled",
+]);
 
 /** "Sep 8, 10:00 AM" in the viewer's zone. Null when there is no usable instant. */
 export function formatTourControlWhen(
@@ -107,14 +121,17 @@ export function resolveTourCommandPresentation<T extends { key: string; handlerK
     }
 
     const statusKey = tour?.statusKey ?? null;
-    const stem = tour?.scheduled && statusKey ? ACTIVE_STATE_STEM[statusKey] ?? "Tour scheduled" : null;
+    const stem = statusKey ? STATE_STEM[statusKey] ?? null : null;
 
-    // No active booking: the group is still worth collapsing, but it has no state to announce.
+    // The family has never had a tour: the group is still worth collapsing, but there is no
+    // state to announce and Schedule Tour inside it is the honest primary operation.
     if (!stem) {
         return { grouped: true, label: "Tour", statusKey, tour: tourActions, rest };
     }
 
-    const when = formatTourControlWhen(tour?.startAt ?? null, opts?.timeZone ?? null);
+    const when = STATE_CARRIES_TIME.has(statusKey!)
+        ? formatTourControlWhen(tour?.startAt ?? null, opts?.timeZone ?? null)
+        : null;
     return {
         grouped: true,
         label: when ? `${stem} · ${when}` : stem,
