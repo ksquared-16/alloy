@@ -34,8 +34,26 @@ async function main(): Promise<void> {
         orgId = (data[0] as { id: string }).id;
     }
 
+    /*
+     * A REAL actor, resolved from the org's own membership.
+     *
+     * Bootstrap now BUILDS the fixture, so it writes an audit trail, and an earlier version of this
+     * program put the literal "unknown" into a uuid column doing exactly this. The attribution should
+     * name someone who genuinely holds the org.
+     */
+    const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id, role")
+        .eq("org_id", orgId)
+        .in("role", ["owner", "admin"])
+        .limit(1);
+    const actorUserId =
+        (((roles ?? []) as Array<{ user_id?: string }>)[0]?.user_id ?? "").trim()
+        || process.env.ALLOY_CERT_ACTOR_USER_ID?.trim()
+        || null;
+
     const result = await runEnrollmentCertification(
-        { supabase, orgId, actorUserId: null, facts: {} },
+        { supabase, orgId, actorUserId, facts: {} },
         REAL_ENROLLMENT_V1_PHASES,
     );
 

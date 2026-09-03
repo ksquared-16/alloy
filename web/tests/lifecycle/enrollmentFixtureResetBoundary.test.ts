@@ -20,18 +20,24 @@ import { describe, expect, it } from "vitest";
 
 import { CERT_FAMILIES } from "@/lib/certification/enrollmentCertificationFixture";
 
+/*
+ * The reset moved from the seed script into the fixture library so the certification driver can call
+ * the SAME bounded implementation rather than growing a second one. Two implementations of a
+ * destructive boundary is the shape that produced the leak this file exists to prevent, so the test
+ * follows the code rather than the code being kept where the test happened to look.
+ */
 const resetSource = () =>
     import("node:fs/promises").then((fs) =>
-        fs.readFile(new URL("../../scripts/seedEnrollmentCertification.ts", import.meta.url), "utf8"),
+        fs.readFile(new URL("../../lib/certification/enrollmentCertificationFixture.ts", import.meta.url), "utf8"),
     );
 
 /** The body of removeFixture, which is the only function permitted to delete anything. */
 async function removeFixtureBody(): Promise<string> {
     const src = await resetSource();
-    const start = src.indexOf("async function removeFixture");
+    const start = src.indexOf("export async function removeEnrollmentCertificationFixture");
     expect(start).toBeGreaterThan(-1);
     // Ends at the next top-level function declaration.
-    const end = src.indexOf("\nasync function resolveActorUserId", start);
+    const end = src.length;
     return src.slice(start, end > start ? end : undefined);
 }
 

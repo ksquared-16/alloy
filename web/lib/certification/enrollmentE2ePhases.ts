@@ -24,19 +24,99 @@ import { ENROLLMENT_PARTICIPATION_CONTEXT_TYPE } from "@/lib/process/processInst
 
 type Row = Record<string, unknown>;
 
-/** A: the starting state exists and is exactly what the fixture claims. */
+/**
+ * A: the suite OWNS its starting state.
+ *
+ * ## Why this resets
+ *
+ * The phases after this one are deliberately sequential and deliberately mutating: confirmation
+ * advances the journey, collection advances it further, and so on. That is what makes it an
+ * end-to-end proof rather than a set of disconnected assertions.
+ *
+ * It also means the suite consumes its own preconditions. The previous version inherited whatever
+ * journey the last invocation left behind, so a second run began after the confirmation steps and
+ * reported that the product had stopped offering confirmation. It had not. A certification artifact
+ * that manufactures false product failures on its second run is worse than no artifact, because the
+ * one thing it exists to settle is exactly what it starts getting wrong.
+ *
+ * So: reset once, here, at the top of every invocation. Never between phases — that would stop being
+ * end to end.
+ *
+ * ## Why resetting here does not widen the blast radius
+ *
+ * It calls the same bounded reset the CLI calls, which is pinned by
+ * `enrollmentFixtureResetBoundary.test.ts` and deletes only records reachable from the fixture's own
+ * households. The suite gains the authority to invoke that boundary, not a larger one.
+ */
 const bootstrap: Phase = {
     key: "A_bootstrap",
-    title: "fixture bootstrap",
+    title: "reset, rebuild and prove a pristine starting state",
     async run(ctx) {
-        const result = await verifyEnrollmentCertification(ctx.supabase, ctx.orgId);
-        if (!result.ok) {
-            return { status: "failed", detail: `fixture is not verifiable: ${result.findings.join("; ")}` };
+        const { removeEnrollmentCertificationFixture, ensureEnrollmentCertification } = await import(
+            "@/lib/certification/enrollmentCertificationFixture"
+        );
+
+        const removed = await removeEnrollmentCertificationFixture(ctx.supabase, ctx.orgId);
+
+        /*
+         * Prove the reset actually emptied the namespace before rebuilding into it. Rebuilding over
+         * residue is how a "fresh" fixture quietly inherits a previous run's state.
+         */
+        const afterReset = await verifyEnrollmentCertification(ctx.supabase, ctx.orgId);
+        const residue = afterReset.families.filter((f) => f.customerMemberId || f.processInstanceId);
+        if (residue.length) {
+            return {
+                status: "failed",
+                detail: `reset left ${residue.length} fixture family record(s) behind; refusing to rebuild over residue`,
+            };
         }
+
+        const actorUserId = ctx.actorUserId;
+        const built = await ensureEnrollmentCertification(ctx.supabase, ctx.orgId, { actorUserId });
+        if (!built.ok) {
+            return { status: "failed", detail: `fixture rebuild failed: ${JSON.stringify(built).slice(0, 300)}` };
+        }
+
+        // Verify twice: once to check, once to prove the check itself is stable.
+        const first = await verifyEnrollmentCertification(ctx.supabase, ctx.orgId);
+        const second = await verifyEnrollmentCertification(ctx.supabase, ctx.orgId);
+        if (!first.ok || !second.ok) {
+            return {
+                status: "failed",
+                detail: `fixture not verifiable after rebuild: ${[...first.findings, ...second.findings].join("; ")}`,
+            };
+        }
+        const idsStable =
+            JSON.stringify(first.families.map((f) => f.processInstanceId))
+            === JSON.stringify(second.families.map((f) => f.processInstanceId));
+        if (!idsStable) {
+            return { status: "failed", detail: "two consecutive verifies disagreed on journey ids; fixture is not idempotent" };
+        }
+
+        /*
+         * STARTING-STATE INVARIANTS. Asserted here so a stale fixture is discovered by the phase whose
+         * job that is, rather than surfacing three phases later as a mystery product failure.
+         */
+        const problems: string[] = [];
+        for (const f of first.families) {
+            if (!f.processInstanceId) problems.push(`${f.key}: no journey`);
+            if (!f.enrollmentParticipationId) problems.push(`${f.key}: no participation`);
+        }
+        if (problems.length) return { status: "failed", detail: problems.join("; ") };
+
         return {
             status: "passed",
-            detail: `both certification families verify with no findings`,
-            evidence: { families: result.families },
+            detail:
+                `reset removed ${JSON.stringify(removed)}; rebuilt and verified twice with stable ids`,
+            evidence: {
+                removed,
+                families: first.families.map((f) => ({
+                    key: f.key,
+                    journeyId: f.processInstanceId,
+                    participationId: f.enrollmentParticipationId,
+                    opportunityId: f.opportunityId,
+                })),
+            },
         };
     },
 };
