@@ -39,7 +39,6 @@ import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 
 function layout(over: Partial<EntityLayoutRecord> & { id: string }): EntityLayoutRecord {
     return {
-        id: over.id,
         entityType: "opportunities",
         surface: "drawer",
         layoutKey: FOCUS_PANEL_SUMMARY_LAYOUT_KEY,
@@ -47,7 +46,7 @@ function layout(over: Partial<EntityLayoutRecord> & { id: string }): EntityLayou
         status: "published",
         version: 1,
         metadata: {},
-        doc: { entityType: "opportunities", surface: "drawer", sections: [], metadata: {} },
+        doc: { formatVersion: 1, entityType: "opportunities", surface: "drawer", sections: [], metadata: {} },
         ...over,
     } as EntityLayoutRecord;
 }
@@ -87,7 +86,10 @@ describe("a Focus Panel Summary is never offered as a drawer assignment", () => 
     it("leaves the queue slot alone", () => {
         const queueRow = layout({
             id: "q1", surface: "queue", layoutKey: "default", name: "Queue",
-            doc: { entityType: "opportunities", surface: "queue", sections: [], metadata: { queue_record_layout: {} } },
+            doc: {
+                formatVersion: 1, entityType: "opportunities", surface: "queue",
+                sections: [], metadata: { queue_record_layout: {} },
+            },
         });
         expect(publishedLayoutOptionsForAssignmentSlot([queueRow], "queue_record").map((r) => r.id)).toEqual(["q1"]);
     });
