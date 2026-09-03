@@ -281,7 +281,7 @@ function WaitlistPlacementAdjustPopover({
             </div>
             <div className="px-3 pb-2 pt-2">
                 <label className="block text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/60">
-                    Position
+                    {model.scopedToGroup ? "Group position" : "Position"}
                     {positionField}
                 </label>
                 {custom && model.options.length > 0 ? (
