@@ -135,7 +135,20 @@ export function formatDriverReport(result: DriverRunResult): string {
         skipped: "SKIP",
         not_implemented: "TODO",
     };
-    const lines = result.phases.map((p) => `  ${mark[p.status]}  ${p.key}  ${p.title} — ${p.detail}`);
+    /*
+     * Evidence is printed, not just collected. A certification report that states verdicts without
+     * showing what they were read from asks to be trusted rather than checked, and this program has
+     * had enough of claims that outran their evidence.
+     */
+    const lines = result.phases.flatMap((p) => {
+        const head = `  ${mark[p.status]}  ${p.key}  ${p.title} — ${p.detail}`;
+        if (!p.evidence) return [head];
+        const body = Object.entries(p.evidence).map(([k, v]) => {
+            const rendered = typeof v === "string" ? v : JSON.stringify(v);
+            return `        ${k}: ${(rendered ?? "").slice(0, 400)}`;
+        });
+        return [head, ...body];
+    });
     const counts = result.phases.reduce<Record<string, number>>((acc, p) => {
         acc[p.status] = (acc[p.status] ?? 0) + 1;
         return acc;

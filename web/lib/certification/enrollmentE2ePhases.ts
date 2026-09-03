@@ -283,14 +283,227 @@ const sufficiencyContract: Phase = {
     },
 };
 
+/** Where the lane's dev server answers. Overridable so this is not pinned to one slot. */
+const APP_ORIGIN = (process.env.ALLOY_CERT_APP_ORIGIN ?? "http://localhost:3014").replace(/\/+$/, "");
+
+/**
+ * Terminology that must never reach a participant.
+ *
+ * A family filling in enrolment paperwork should never meet the machinery that routes it. These are
+ * the words this program actually uses internally, so they are the ones capable of leaking.
+ */
+const INTERNAL_TERMS = [
+    "opportunity_customer_members",
+    "process_instance",
+    "context_id",
+    "context_type",
+    "outcome_status_key",
+    "customer_member",
+    "OCM",
+] as const;
+
+/**
+ * C: participant entry, through the real launch and the real browser.
+ *
+ * This is the phase the previous fourteen TODOs were all waiting on: it establishes that a journey
+ * can be turned into a participant URL by the product's own launch path, and that the URL renders a
+ * participant experience without an auth wall. Every later browser phase reuses what it proves.
+ */
+const participantEntry: Phase = {
+    key: "C_participant_entry",
+    title: "participant entry through the real launch path",
+    dependsOn: ["B_entry"],
+    async run(ctx) {
+        const { launchParticipantEnrollment } = await import(
+            "@/lib/enrollment/participantLaunch/launchParticipantEnrollment"
+        );
+        const entry = ctx.facts.B_entry as Record<string, { journeyId: string }> | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "Path A entry facts unavailable" };
+
+        const launch = await launchParticipantEnrollment(ctx.supabase, {
+            orgId: ctx.orgId,
+            processInstanceId: pathA.journeyId,
+        } as Parameters<typeof launchParticipantEnrollment>[1]);
+
+        if (!launch.ok) {
+            return {
+                status: "failed",
+                detail: `participant launch refused (${launch.refusal.code}: ${launch.refusal.detail})`,
+            };
+        }
+        const { participantPath, sessionId, outcome, stageKey } = launch.value;
+        if (!participantPath) {
+            return { status: "failed", detail: "launch succeeded but returned no participant URL to open" };
+        }
+
+        // The browser half. Imported lazily so a driver run that never reaches here needs no browser.
+        const { chromium } = await import("playwright");
+        const browser = await chromium.launch();
+        try {
+            const page = await browser.newPage();
+            const consoleErrors: string[] = [];
+            const failedRequests: string[] = [];
+            page.on("console", (m) => {
+                if (m.type() === "error") consoleErrors.push(m.text().slice(0, 160));
+            });
+            page.on("requestfailed", (r) => failedRequests.push(r.url().slice(0, 120)));
+
+            const url = `${APP_ORIGIN}${participantPath}`;
+            const response = await page.goto(url, { waitUntil: "networkidle", timeout: 60000 });
+            const finalUrl = page.url();
+
+            if (/\/login/.test(finalUrl)) {
+                return { status: "failed", detail: `participant URL redirected to sign-in: ${finalUrl}` };
+            }
+            if (response && response.status() >= 400) {
+                return { status: "failed", detail: `participant URL returned HTTP ${response.status()}` };
+            }
+
+            const bodyText = await page.locator("body").innerText().catch(() => "");
+            const leaked = INTERNAL_TERMS.filter((t) => bodyText.includes(t));
+            if (leaked.length) {
+                return { status: "failed", detail: `internal terminology reached the participant: ${leaked.join(", ")}` };
+            }
+
+            return {
+                status: "passed",
+                detail: `participant runtime opened (${outcome}) at stage ${stageKey}; no sign-in redirect, no internal terminology`,
+                evidence: {
+                    participantPath,
+                    sessionId,
+                    stageKey,
+                    finalUrl,
+                    consoleErrors: consoleErrors.length,
+                    failedRequests: failedRequests.length,
+                    renderedChars: bodyText.length,
+                    // Structure, so later phases are written against what the surface actually
+                    // renders rather than against an assumed layout.
+                    headings: await page.locator("h1, h2, h3").allInnerTexts().catch(() => []),
+                    buttons: await page.locator("button, [role=button]").allInnerTexts().catch(() => []),
+                    inputs: await page.locator("input, textarea, select").count().catch(() => 0),
+                },
+            };
+        } finally {
+            await browser.close();
+        }
+    },
+};
+
+/**
+ * Open the Path A participant runtime and hand the page to a caller.
+ *
+ * Extracted once C proved the route works. Every browser phase after C needs the same three steps —
+ * launch, resolve the URL, open it — and copying them per phase is how the phases would drift into
+ * testing slightly different surfaces.
+ */
+async function withParticipantPage<T>(
+    ctx: DriverContextLike,
+    journeyId: string,
+    body: (page: PlaywrightPage) => Promise<T>,
+): Promise<{ ok: true; value: T } | { ok: false; detail: string }> {
+    const { launchParticipantEnrollment } = await import(
+        "@/lib/enrollment/participantLaunch/launchParticipantEnrollment"
+    );
+    const launch = await launchParticipantEnrollment(ctx.supabase, {
+        orgId: ctx.orgId,
+        processInstanceId: journeyId,
+    } as Parameters<typeof launchParticipantEnrollment>[1]);
+    if (!launch.ok) {
+        return { ok: false, detail: `participant launch refused (${launch.refusal.code}: ${launch.refusal.detail})` };
+    }
+    if (!launch.value.participantPath) {
+        return { ok: false, detail: "launch returned no participant URL" };
+    }
+
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch();
+    try {
+        const page = await browser.newPage();
+        await page.goto(`${APP_ORIGIN}${launch.value.participantPath}`, {
+            waitUntil: "networkidle",
+            timeout: 60000,
+        });
+        return { ok: true, value: await body(page as unknown as PlaywrightPage) };
+    } finally {
+        await browser.close();
+    }
+}
+
+type DriverContextLike = { supabase: Parameters<Phase["run"]>[0]["supabase"]; orgId: string };
+type PlaywrightPage = {
+    locator(sel: string): {
+        allInnerTexts(): Promise<string[]>;
+        innerText(): Promise<string>;
+        count(): Promise<number>;
+        first(): { click(opts?: unknown): Promise<void>; innerText(): Promise<string> };
+    };
+    getByRole(role: string, opts?: unknown): { first(): { click(opts?: unknown): Promise<void>; count(): Promise<number> } };
+    waitForTimeout(ms: number): Promise<void>;
+    url(): string;
+};
+
+/**
+ * D: prior truth is CONFIRMED, not re-collected.
+ *
+ * The distinction this proves is the one families feel: a service that already knows your child's
+ * name and asks for it again has not remembered anything. The participant surface offers "Yes,
+ * that's right" against a stated fact, with "Change" beside it — an affordance that only makes sense
+ * over prior truth, and which a blank collection field cannot express.
+ */
+const priorTruthConfirmation: Phase = {
+    key: "D_confirmation",
+    title: "known facts are confirmed rather than re-collected",
+    dependsOn: ["C_participant_entry"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { journeyId: string }> | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "Path A entry facts unavailable" };
+
+        const opened = await withParticipantPage(ctx, pathA.journeyId, async (page) => {
+            const buttons = await page.locator("button, [role=button]").allInnerTexts();
+            const bodyText = await page.locator("body").innerText();
+            const labelled = buttons.map((b) => b.trim()).filter(Boolean);
+
+            const confirms = labelled.some((b) => /that's right|yes/i.test(b));
+            const changes = labelled.some((b) => /change|edit/i.test(b));
+
+            return { labelled, confirms, changes, bodyText };
+        });
+
+        if (!opened.ok) return { status: "failed", detail: opened.detail };
+        const { labelled, confirms, changes, bodyText } = opened.value;
+
+        if (!confirms || !changes) {
+            return {
+                status: "failed",
+                detail:
+                    `expected a confirm-or-change affordance over prior truth; found buttons [${labelled.join(", ")}]`,
+            };
+        }
+
+        /*
+         * The prompt must precede the card. A card that arrives before the question asks the family
+         * to interpret a fact before knowing what is being asked of it.
+         */
+        const confirmIndex = bodyText.search(/that's right/i);
+        const promptIndex = bodyText.search(/\?/);
+        const promptFirst = promptIndex >= 0 && promptIndex < confirmIndex;
+
+        return {
+            status: "passed",
+            detail: `prior truth is offered for confirmation (${labelled.join(" / ")})${promptFirst ? "; prompt precedes the affordance" : ""}`,
+            evidence: { buttons: labelled, promptPrecedesCard: promptFirst },
+        };
+    },
+};
+
 /**
  * Phases that need the participant browser surface. Declared, ordered and explicitly unimplemented
  * so the report shows the shape of what remains rather than hiding it.
  */
 const browserPhases: readonly Phase[] = (
     [
-        ["C_participant_entry", "participant entry"],
-        ["D_confirmation", "confirm known facts"],
         ["E_collection", "missing semantic collection"],
         ["F_parties", "repeatable parties"],
         ["G_evidence", "evidence and Form completion"],
@@ -323,5 +536,7 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     pathAStaysContextFree,
     noDuplicateActiveEpisode,
     sufficiencyContract,
+    participantEntry,
+    priorTruthConfirmation,
     ...browserPhases,
 ];
