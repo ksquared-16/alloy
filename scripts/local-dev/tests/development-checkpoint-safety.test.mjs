@@ -504,5 +504,113 @@ await test("POSITIVE CONTROL: the former behaviour is caught by these guards", a
   assert.ok(landed.includes("web/next-env.d.ts"));
 });
 
+// ------------------------------------------------- adoption: the narrow exception
+//
+// THE DEFECT THIS CLOSES. A run that dies mid-turn leaves its authored, tested
+// work dirty. Every successor run inherits those paths in its own baseline, so
+// FOREIGN_PATH refuses them — permanently. Valid mission-owned work becomes
+// uncommittable through the sanctioned path, and the only escapes were a blanket
+// --allow-foreign or going around governance entirely.
+//
+// Adoption is deliberately narrower than the blanket flag: the claim is bound to
+// the exact bytes. Everything below asserts a refusal, because the refusals are
+// what keep this from becoming --allow-foreign with extra words.
+
+const SHA_OF = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
+
+await test("adoption claims a pre-dirty path by its exact content", async () => {
+  const dir = makeRepo({ preexisting: ["orphaned.txt"] });
+  const { runId } = await runFor(dir);
+  const before = snapshot(dir);
+  const out = await createCheckpoint({
+    runId, expectedHead: before.head, message: "fix: adopt the orphaned change",
+    paths: ["orphaned.txt"],
+    adopt: [`orphaned.txt=${SHA_OF(join(dir, "orphaned.txt"))}`],
+    adoptFrom: "erun_dead", adoptReason: "authoring run died mid-turn",
+    root: STATE_ROOT,
+  });
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual(out.adopted, ["orphaned.txt"]);
+  const landed = execFileSync("git", ["show", "--name-only", "--pretty=format:", "HEAD"], { cwd: dir, encoding: "utf8" })
+    .split("\n").map((l) => l.trim()).filter(Boolean);
+  assert.deepEqual(landed, ["orphaned.txt"], "adoption must carry nothing else");
+});
+
+await test("adoption refuses content that changed after the fingerprint", async () => {
+  const dir = makeRepo({ preexisting: ["orphaned.txt"] });
+  const { runId } = await runFor(dir);
+  const stale = SHA_OF(join(dir, "orphaned.txt"));
+  writeFileSync(join(dir, "orphaned.txt"), "something else entirely\n");
+  const before = snapshot(dir);
+  const out = await createCheckpoint({
+    runId, expectedHead: before.head, message: "fix: adopt", paths: ["orphaned.txt"],
+    adopt: [`orphaned.txt=${stale}`], adoptFrom: "erun_dead", adoptReason: "r", root: STATE_ROOT,
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, CHECKPOINT_REFUSALS.ADOPTION_FINGERPRINT);
+  assertNoGitMutation(before, snapshot(dir), "stale fingerprint");
+});
+
+await test("adoption requires an originating run and a reason", async () => {
+  const dir = makeRepo({ preexisting: ["orphaned.txt"] });
+  const { runId } = await runFor(dir);
+  const before = snapshot(dir);
+  const sha = SHA_OF(join(dir, "orphaned.txt"));
+  for (const extra of [{}, { adoptFrom: "erun_dead" }, { adoptReason: "r" }]) {
+    const out = await createCheckpoint({
+      runId, expectedHead: before.head, message: "fix: adopt", paths: ["orphaned.txt"],
+      adopt: [`orphaned.txt=${sha}`], ...extra, root: STATE_ROOT,
+    });
+    assert.equal(out.ok, false);
+    assert.equal(out.error, CHECKPOINT_REFUSALS.ADOPTION_UNDECLARED, JSON.stringify(extra));
+  }
+  assertNoGitMutation(before, snapshot(dir), "undeclared adoption");
+});
+
+await test("an unadopted foreign path is still refused alongside an adopted one", async () => {
+  const dir = makeRepo({ preexisting: ["orphaned.txt", "someone-elses.txt"] });
+  const { runId } = await runFor(dir);
+  const before = snapshot(dir);
+  const out = await createCheckpoint({
+    runId, expectedHead: before.head, message: "fix: adopt one, sweep the other",
+    paths: ["orphaned.txt", "someone-elses.txt"],
+    adopt: [`orphaned.txt=${SHA_OF(join(dir, "orphaned.txt"))}`],
+    adoptFrom: "erun_dead", adoptReason: "r", root: STATE_ROOT,
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, CHECKPOINT_REFUSALS.FOREIGN_PATH);
+  assert.deepEqual(out.paths, ["someone-elses.txt"], "only the unadopted path is foreign");
+  assertNoGitMutation(before, snapshot(dir), "partial adoption");
+});
+
+await test("adoption cannot launder work the run dirtied itself", async () => {
+  // The ordinary route already commits this. Allowing it through the exception
+  // would make "adopted" meaningless as an audit signal.
+  const dir = makeRepo({ toolkitDirt: false });
+  const { runId } = await runFor(dir);
+  writeFileSync(join(dir, "mine.txt"), "authored by this run\n");
+  const before = snapshot(dir);
+  const out = await createCheckpoint({
+    runId, expectedHead: before.head, message: "fix: x", paths: ["mine.txt"],
+    adopt: [`mine.txt=${SHA_OF(join(dir, "mine.txt"))}`],
+    adoptFrom: "erun_dead", adoptReason: "r", root: STATE_ROOT,
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, CHECKPOINT_REFUSALS.ADOPTION_UNNECESSARY);
+  assertNoGitMutation(before, snapshot(dir), "self-authored adoption");
+});
+
+await test("the default is unchanged: no adoption, no foreign path", async () => {
+  const dir = makeRepo({ preexisting: ["orphaned.txt"] });
+  const { runId } = await runFor(dir);
+  const before = snapshot(dir);
+  const out = await createCheckpoint({
+    runId, expectedHead: before.head, message: "fix: x", paths: ["orphaned.txt"], root: STATE_ROOT,
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, CHECKPOINT_REFUSALS.FOREIGN_PATH, "fail-closed must survive the new feature");
+  assertNoGitMutation(before, snapshot(dir), "default still fail-closed");
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

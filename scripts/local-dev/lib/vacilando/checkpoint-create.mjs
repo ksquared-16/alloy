@@ -26,8 +26,10 @@
  * reset, clean, branch creation, ref rewriting. Foreign dirty files are left
  * exactly as they were, in the working tree and in the index.
  */
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import { readWorktreeGitState, snapshotPathSet } from "./git-worktree-state.mjs";
@@ -47,12 +49,63 @@ export const CHECKPOINT_REFUSALS = Object.freeze({
   WORKTREE_MISMATCH: "worktree_mismatch",
   HEAD_MOVED: "expected_head_mismatch",
   FOREIGN_PATH: "path_dirty_before_run",
+  ADOPTION_FINGERPRINT: "adopted_path_fingerprint_mismatch",
+  ADOPTION_UNNECESSARY: "adopted_path_was_not_dirty_before_run",
+  ADOPTION_UNDECLARED: "adoption_requires_origin_and_reason",
   UNEXPECTED_STAGED: "unexpected_staged_files",
   NOTHING_TO_COMMIT: "nothing_to_commit",
   BAD_MESSAGE: "invalid_message",
   VERIFY_FAILED: "commit_contents_unexpected",
   CONFLICT: "worktree_conflict",
 });
+
+/** sha256 of a file's bytes, or null when it cannot be read. */
+export function fileFingerprint(absPath) {
+  try {
+    return createHash("sha256").update(readFileSync(absPath)).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+/** `{path: sha256}`, a Map, or `["path=sha256"]` -> Map. Anything else is empty. */
+export function normalizeAdoptions(adopt) {
+  const out = new Map();
+  if (!adopt) return out;
+  const put = (k, v) => {
+    const path = String(k || "").trim();
+    const sha = String(v || "").trim().toLowerCase();
+    if (path && /^[0-9a-f]{64}$/.test(sha)) out.set(path, sha);
+  };
+  if (adopt instanceof Map) { for (const [k, v] of adopt) put(k, v); return out; }
+  if (Array.isArray(adopt)) {
+    for (const entry of adopt) {
+      const str = String(entry || "");
+      const at = str.lastIndexOf("=");
+      if (at > 0) put(str.slice(0, at), str.slice(at + 1));
+    }
+    return out;
+  }
+  if (typeof adopt === "object") { for (const [k, v] of Object.entries(adopt)) put(k, v); }
+  return out;
+}
+
+/**
+ * Adoption is a governance event, so it is written down whether or not anyone
+ * asks. An adoption that left no record would afterwards be indistinguishable
+ * from work this run authored itself — which is the very thing being guarded.
+ */
+export function recordAdoption(entry, root) {
+  try {
+    const base = root || join(process.env.HOME || "", ".local", "state", "alloy-dev", "gateway");
+    const path = join(base, "vacilando", "checkpoint-adoptions.jsonl");
+    mkdirSync(dirname(path), { recursive: true });
+    appendFileSync(path, `${JSON.stringify(entry)}\n`);
+    return path;
+  } catch {
+    return null;
+  }
+}
 
 async function git(args, cwd, { timeout = 30_000 } = {}) {
   try {
@@ -117,6 +170,9 @@ export async function createCheckpoint({
   messageFile = null,
   paths = [],
   allowForeign = false,
+  adopt = null,
+  adoptFrom = null,
+  adoptReason = null,
   origin = "operator",
   nowMs = Date.now(),
   root = undefined,
@@ -201,7 +257,53 @@ export async function createCheckpoint({
   }
 
   // ---- foreign paths ----------------------------------------------------
+  //
+  // THE GAP ADOPTION CLOSES. A run that dies mid-turn leaves its authored,
+  // tested work dirty in the worktree. Every successor run then inherits those
+  // paths in its own baseline, so `path_dirty_before_run` refuses them — and
+  // keeps refusing them forever. The work is valid and mission-owned, but
+  // unreachable through the sanctioned path; the only escapes were a blanket
+  // --allow-foreign or committing outside governance entirely. One drops the
+  // protection, the other leaves no record.
+  //
+  // ADOPTION IS THE NARROW EXCEPTION. A successor run may claim a pre-dirty path
+  // only by naming it AND the exact sha256 of the content it claims. If the file
+  // changed after it was reviewed the fingerprint no longer matches and the
+  // adoption is refused, so this stays content-bound in the way the blanket flag
+  // never was. The default stays fail-closed: a path nobody adopted is still
+  // foreign, and one unadopted foreign path still refuses the whole manifest.
   const before = run.git_baseline ? snapshotPathSet(run.git_baseline) : null;
+  const adoptions = normalizeAdoptions(adopt);
+  if (adoptions.size) {
+    if (!String(adoptFrom || "").trim() || !String(adoptReason || "").trim()) {
+      return {
+        ok: false,
+        error: CHECKPOINT_REFUSALS.ADOPTION_UNDECLARED,
+        detail: "adoption must name the originating run and why this run owns the change",
+      };
+    }
+    for (const [rel, declared] of adoptions) {
+      if (!manifestSet.has(rel)) {
+        return {
+          ok: false, error: CHECKPOINT_REFUSALS.PATH_REFUSED, paths: [rel],
+          detail: "an adopted path must also be named in the manifest",
+        };
+      }
+      if (before && !before.has(rel)) {
+        // Adopting a path this run dirtied itself would launder ordinary work
+        // through the exception; the normal route already covers that case.
+        return { ok: false, error: CHECKPOINT_REFUSALS.ADOPTION_UNNECESSARY, paths: [rel] };
+      }
+      const actual = fileFingerprint(join(worktreePath, rel));
+      if (actual !== declared) {
+        return {
+          ok: false, error: CHECKPOINT_REFUSALS.ADOPTION_FINGERPRINT, paths: [rel],
+          expected: declared, actual,
+          detail: "the file changed after its fingerprint was taken; re-read it and adopt the content actually reviewed",
+        };
+      }
+    }
+  }
   if (!allowForeign) {
     if (!before) {
       return {
@@ -210,7 +312,7 @@ export async function createCheckpoint({
         detail: "this run has no recorded starting state, so no path can be shown to belong to it",
       };
     }
-    const foreign = manifest.filter((p) => before.has(p));
+    const foreign = manifest.filter((p) => before.has(p) && !adoptions.has(p));
     if (foreign.length) {
       return { ok: false, error: CHECKPOINT_REFUSALS.FOREIGN_PATH, paths: foreign.slice(0, 20), count: foreign.length };
     }
@@ -295,6 +397,20 @@ export async function createCheckpoint({
     patchRunFields(runId, { checkpoint_ready: false }, { nowMs, root });
   } catch { /* the commit stands regardless of the flag */ }
 
+  let adoptionRecord = null;
+  if (adoptions.size) {
+    adoptionRecord = recordAdoption({
+      at: new Date(nowMs).toISOString(),
+      adopting_run: runId,
+      originating_run: String(adoptFrom).trim(),
+      reason: String(adoptReason).trim().slice(0, 1000),
+      worktree: worktreePath,
+      commit: sha,
+      paths: [...adoptions.keys()].sort(),
+      fingerprints: Object.fromEntries([...adoptions.entries()].sort()),
+    }, root);
+  }
+
   return {
     ok: true,
     sha,
@@ -303,5 +419,7 @@ export async function createCheckpoint({
     diffstat: diff.ok ? String(diff.stdout).trim().slice(0, 4000) : null,
     origin,
     pushed: false,
+    adopted: adoptions.size ? [...adoptions.keys()].sort() : null,
+    adoption_audit: adoptionRecord,
   };
 }

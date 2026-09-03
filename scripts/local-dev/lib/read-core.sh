@@ -385,6 +385,34 @@ alloy_rc_port_known_free() {
   [[ "$(alloy_rc_port_owner "$1")" == "free" ]]
 }
 
+# How many CPUs does this host have? Read-only, and the ONE shell-side answer —
+# capacity bounds that are genuinely CPU-shaped (providers, heavy jobs) must not
+# each grow their own `sysctl` call with a different fallback.
+#
+# sysctl lives in /usr/sbin, which is missing from several PATHs this toolkit
+# runs under; resolving it by bare name is the same defect that made a serving
+# port report itself free.
+alloy_rc_cpu_count() {
+  local candidate
+  for candidate in sysctl /usr/sbin/sysctl /sbin/sysctl; do
+    if command -v "$candidate" >/dev/null 2>&1 || [[ -x "$candidate" ]]; then
+      local n
+      n="$("$candidate" -n hw.ncpu 2>/dev/null)"
+      if [[ "$n" =~ ^[0-9]+$ ]] && (( n >= 1 )); then
+        printf '%s' "$n"
+        return 0
+      fi
+    fi
+  done
+  # Linux fallback, then refusal. Refusing beats inventing a core count.
+  if [[ -r /proc/cpuinfo ]]; then
+    local n
+    n="$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)"
+    [[ "$n" =~ ^[0-9]+$ ]] && (( n >= 1 )) && { printf '%s' "$n"; return 0; }
+  fi
+  return 1
+}
+
 alloy_rc_pid_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
 
 # ===========================================================================

@@ -48,10 +48,44 @@ source "$(dirname "${BASH_SOURCE[0]}")/git-durability.sh"
 ALLOY_CAPACITY_NAMES="ALLOY_MAX_RUNNING_SERVERS ALLOY_MAX_ACTIVE_PROVIDERS ALLOY_MAX_CONCURRENT_INSTALLS ALLOY_MAX_CONCURRENT_HEAVY_JOBS"
 
 # An override may move a ceiling, never remove it. Servers and providers are
-# bounded by the six managed slots; there is no seventh place to put one.
+# bounded by the MANAGED SLOTS: there is no seventh place to put one when there
+# are six slots, and no thirteenth when there are twelve.
+#
+# THE SECOND OWNER THIS REMOVES. The bound was the literal 6, while
+# capacity-policy.mjs had already been converged onto `managedSlotCount()`. So
+# raising ALLOY_MAX_AGENTS moved the derived Node-side ceiling and left the shell
+# guard pinned at six — the two owners of "how many slots exist" silently
+# disagreed, and the shell one is the guard that actually refuses a start. The
+# topology owner is ALLOY_MAX_AGENTS in both runtimes now.
+#
+# The floor of 1 is deliberate: an unset or nonsense topology must not silently
+# become "no capacity at all", which would refuse every start on this host.
+# PROVIDERS ARE NOT SERVERS. The old function grouped them behind one literal,
+# which made it easy to "parameterize" both onto the slot count and quietly
+# invent a coupling that was never measured. A dev server is bound by ports:
+# there is no seventh place to put one when there are six slots. A provider is
+# bound by the machine — cores and RAM — and capacity-policy.mjs is the owner of
+# that operating ceiling (cores/3 floored at 3, versus RAM). What follows is only
+# the OVERRIDE bound: how far an operator may move a ceiling, never the ceiling
+# a healthy host actually runs at.
 alloy_capacity_hard_ceiling() {
+  local slots cores
+  slots="${ALLOY_MAX_AGENTS:-${ALLOY_RC_DEFAULT_MAX_AGENTS:-6}}"
+  [[ "$slots" =~ ^[0-9]+$ ]] && (( slots >= 1 )) || slots=6
   case "$1" in
-    ALLOY_MAX_RUNNING_SERVERS|ALLOY_MAX_ACTIVE_PROVIDERS) printf '6' ;;
+    # Servers: one per managed port, so the topology owner bounds them.
+    ALLOY_MAX_RUNNING_SERVERS) printf '%s' "$slots" ;;
+    # Providers: bounded by the host, not by how many slots were configured.
+    # A twelve-slot topology on a four-core machine does not gain provider
+    # headroom. The floor keeps a small or unreadable host usable.
+    ALLOY_MAX_ACTIVE_PROVIDERS)
+      cores="$(alloy_rc_cpu_count 2>/dev/null || printf '')"
+      [[ "$cores" =~ ^[0-9]+$ ]] && (( cores >= 1 )) || cores=6
+      (( cores < 3 )) && cores=3
+      printf '%s' "$cores"
+      ;;
+    # Installs and heavy jobs are bounded by CPU too: a host with twelve slots
+    # does not gain cores to compile with.
     ALLOY_MAX_CONCURRENT_INSTALLS|ALLOY_MAX_CONCURRENT_HEAVY_JOBS) printf '4' ;;
     *) printf '0' ;;
   esac

@@ -20,6 +20,15 @@ function usage(code = 2) {
 Commits ONLY the named paths. Refuses a path that was already dirty when the run
 started, refuses staged content outside the manifest, and refuses if HEAD has
 moved from --expected-head.
+
+Adopting work from a run that died mid-turn:
+  --adopt <rel>=<sha256>   claim one pre-dirty path by its exact content
+  --adopt-from <run_id>    the run that authored it
+  --adopt-reason <text>    why this run owns the change
+
+Adoption is content-bound: if the file changed after the fingerprint was taken
+the claim is refused. Paths nobody adopts are still refused as foreign, and each
+adoption is written to vacilando/checkpoint-adoptions.jsonl.
 `);
   process.exit(code);
 }
@@ -35,7 +44,10 @@ let message = null;
 let messageFile = null;
 let allowForeign = false;
 let json = false;
+let adoptFrom = null;
+let adoptReason = null;
 const paths = [];
+const adopt = [];
 while (args.length) {
   const a = args.shift();
   if (a === "--expected-head") expectedHead = args.shift() || "";
@@ -47,6 +59,12 @@ while (args.length) {
   else if (a === "--path") paths.push(args.shift() || "");
   else if (a.startsWith("--path=")) paths.push(a.slice(7));
   else if (a === "--allow-foreign") allowForeign = true;
+  else if (a === "--adopt") adopt.push(args.shift() || "");
+  else if (a.startsWith("--adopt=")) adopt.push(a.slice(8));
+  else if (a === "--adopt-from") adoptFrom = args.shift() || "";
+  else if (a.startsWith("--adopt-from=")) adoptFrom = a.slice(13);
+  else if (a === "--adopt-reason") adoptReason = args.shift() || "";
+  else if (a.startsWith("--adopt-reason=")) adoptReason = a.slice(15);
   else if (a === "--json") json = true;
   else usage();
 }
@@ -58,6 +76,9 @@ const out = await createCheckpoint({
   messageFile,
   paths,
   allowForeign,
+  adopt,
+  adoptFrom,
+  adoptReason,
   origin: "operator",
   cwd: resolve(process.cwd()),
 });
