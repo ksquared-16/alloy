@@ -26,10 +26,12 @@
  * ── AND THE PERSISTED CONTRACT IS UNCHANGED ──
  *
  * `rowStart` stops being a global row index and becomes what it always was in
- * practice: the ORDER a card takes within the columns it occupies. `rowSpan`
- * becomes a minimum height rather than a hard vertical extent. Both round-trip
- * through the existing fields, so published layouts keep rendering — the only
- * difference is that gaps they never intended disappear.
+ * practice: the ORDER a card takes within the columns it occupies. `rowSpan` stops
+ * prescribing height at all — it is authoring metadata, and the only thing that
+ * decides how tall a card is on screen is the content rendered into it for the
+ * current subject. Both round-trip through the existing fields, so published layouts
+ * keep rendering — the difference is that gaps they never intended disappear, and a
+ * card holding two rows of data no longer stands as tall as one holding seventeen.
  */
 
 import type { FocusPanelGridArea, FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
@@ -68,13 +70,24 @@ export function packOrder(areas: readonly FocusPanelGridArea[]): FocusPanelGridA
 
 export type ColumnAwareInput = {
     layout: FocusPanelGridLayout;
-    /** Measured natural height per card; falls back to `minHeightFor` when absent. */
+    /**
+     * Measured content height per card. THE authority on how tall a card is.
+     *
+     * A card absent from this map has not been measured yet (first paint, before the
+     * observer reports); only then does `unmeasuredHeightFor` speak.
+     */
     heights: ReadonlyMap<string, number>;
     /** Canvas content width in px. */
     width: number;
     gapPx: number;
-    /** The floor a card's own span asks for, when nothing has been measured yet. */
-    minHeightFor: (area: FocusPanelGridArea) => number;
+    /**
+     * A placeholder height for a card NOT YET MEASURED, so first paint reserves something
+     * card-shaped instead of collapsing to zero.
+     *
+     * It is not a floor. Once a card has been measured, its measured height wins outright,
+     * however much smaller it is — see the note on `resolveColumnAwareLayout`.
+     */
+    unmeasuredHeightFor: (area: FocusPanelGridArea) => number;
 };
 
 /**
@@ -84,9 +97,22 @@ export type ColumnAwareInput = {
  * columns it overlaps — so a tall card pushes down only what sits beneath IT, and
  * a card in disjoint columns starts at the top regardless of how tall its
  * neighbour is.
+ *
+ * ── FLOW IS FORWARD ONLY ──
+ *
+ * Cards are placed in pack order, and a card can only ever read the bottom edges of
+ * cards ALREADY placed. Nothing a later card does can move an earlier one: a Children
+ * card that grows from two rows to seventeen pushes down what sits beneath it and
+ * cannot push Financials — placed before it — backward or upward. That is a property
+ * of the loop, not a rule applied afterwards.
+ *
+ * ── AND HEIGHT COMES FROM CONTENT ──
+ *
+ * The only heights this reads are measured ones. Nothing here consults an authored
+ * row span, a card archetype, or a sibling column's height.
  */
 export function resolveColumnAwareLayout(input: ColumnAwareInput): ColumnAwareLayout {
-    const { layout, heights, width, gapPx, minHeightFor } = input;
+    const { layout, heights, width, gapPx, unmeasuredHeightFor } = input;
     const columns = Math.max(1, layout.columns);
     const track = Math.max(0, (width - (columns - 1) * gapPx) / columns);
     const xOf = (colStart: number) => (colStart - 1) * (track + gapPx);
@@ -94,7 +120,19 @@ export function resolveColumnAwareLayout(input: ColumnAwareInput): ColumnAwareLa
 
     const placed: ColumnAwareBox[] = [];
     packOrder(layout.areas).forEach((area, index) => {
-        const height = Math.max(heights.get(area.card) ?? 0, minHeightFor(area));
+        /*
+         * WIDTH IS AUTHORED; HEIGHT IS THE CONTENT'S.
+         *
+         * This was `Math.max(measured, minHeightFor(area))`, and `minHeightFor` derived a
+         * floor from the authored `rowSpan` — 76px per row plus gutters. That made the
+         * authored span prescribe a vertical extent, which is exactly what it must not do:
+         * a Children card holding two children was held open to the height of a card
+         * holding seventeen, and every card beneath it inherited whitespace nobody
+         * authored. A card whose content shrinks could never shrink back.
+         *
+         * So the measured height WINS OUTRIGHT once it exists. `??`, not `Math.max`.
+         */
+        const height = heights.get(area.card) ?? unmeasuredHeightFor(area);
         // The floor this card must clear: only cards sharing at least one column.
         let top = 0;
         for (const prior of placed) {

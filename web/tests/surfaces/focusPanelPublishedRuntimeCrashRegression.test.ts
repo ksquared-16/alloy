@@ -191,7 +191,7 @@ describe("published Focus Panel Surface → Work Unit runtime", () => {
                                             heights: new Map(),
                                             width: canvas,
                                             gapPx: 12,
-                                            minHeightFor: (a) => a.rowSpan * 76 + (a.rowSpan - 1) * 12,
+                                            unmeasuredHeightFor: (a) => a.rowSpan * 76 + (a.rowSpan - 1) * 12,
                                         });
                                         serializeToRows(resolved);
                                     }
@@ -257,7 +257,7 @@ describe("published Focus Panel Surface → Work Unit runtime", () => {
                 heights: new Map([["business_process" as string, TALL]]),
                 width: 1200,
                 gapPx: 12,
-                minHeightFor: (a) => a.rowSpan * 76 + (a.rowSpan - 1) * 12,
+                unmeasuredHeightFor: (a) => a.rowSpan * 76 + (a.rowSpan - 1) * 12,
             });
             const box = (card: string) => resolved.boxes.find((b) => b.card === card)!;
             // First in reading order, so it starts at the top.

@@ -80,7 +80,7 @@ export type DropCandidateInput = {
     width: number;
     gapPx: number;
     /** Minimum height a card's own span asks for, when nothing is measured. */
-    minHeightFor: (area: FocusPanelGridArea) => number;
+    unmeasuredHeightFor: (area: FocusPanelGridArea) => number;
     /** Operator-facing card names, for zone labels. */
     labelFor?: (card: string) => string;
 };
@@ -163,7 +163,7 @@ export function layoutWithCandidate(args: {
  * offered one target there, not two stacked on the same pixels.
  */
 export function enumerateDropCandidates(input: DropCandidateInput): DropCandidate[] {
-    const { layout, moving, boxes, width, gapPx, minHeightFor, labelFor } = input;
+    const { layout, moving, boxes, width, gapPx, unmeasuredHeightFor, labelFor } = input;
     const columns = Math.max(1, layout.columns);
     const colSpan = Math.max(1, Math.min(moving.colSpan, columns));
     const track = Math.max(0, (width - (columns - 1) * gapPx) / columns);
@@ -172,7 +172,7 @@ export function enumerateDropCandidates(input: DropCandidateInput): DropCandidat
     const name = (card: string) => labelFor?.(card) ?? card;
 
     const others = layout.areas.filter((a) => a.card !== moving.card);
-    const movingHeight = Math.max(boxes.get(moving.card)?.height ?? 0, minHeightFor(moving));
+    const movingHeight = Math.max(boxes.get(moving.card)?.height ?? 0, unmeasuredHeightFor(moving));
 
     const candidates: DropCandidate[] = [];
 
@@ -195,7 +195,7 @@ export function enumerateDropCandidates(input: DropCandidateInput): DropCandidat
                 heights: new Map([...boxes].map(([card, box]) => [card, box.height])),
                 width,
                 gapPx,
-                minHeightFor,
+                unmeasuredHeightFor,
             });
             const landed = resolved.boxes.find((b) => b.card === moving.card);
             if (!landed) continue;

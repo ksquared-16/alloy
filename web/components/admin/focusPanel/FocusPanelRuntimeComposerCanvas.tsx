@@ -494,7 +494,7 @@ export default function FocusPanelRuntimeComposerCanvas({
      * press landed, or what the previous preview rearranged. Those were the three
      * ways the old inference could give two different answers to the same pointer.
      */
-    const minHeightFor = useCallback(
+    const unmeasuredHeightFor = useCallback(
         (area: { rowSpan: number }) =>
             area.rowSpan * COMPOSER_GRID_ROW_UNIT_PX + (area.rowSpan - 1) * COMPOSER_GRID_GAP_PX,
         [],
@@ -560,7 +560,7 @@ export default function FocusPanelRuntimeComposerCanvas({
             boxes: boxesAtStart,
             width: widthAtStart,
             gapPx: COMPOSER_GRID_GAP_PX,
-            minHeightFor,
+            unmeasuredHeightFor,
             labelFor: cardLabel,
         });
 

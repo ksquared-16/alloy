@@ -15,7 +15,7 @@ import type { FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/comp
 const GAP = 10;
 /** The operator's real canvas, measured from the live builder. */
 const WIDTH = 957;
-const minHeightFor = (a: { rowSpan: number }) => a.rowSpan * 76 + (a.rowSpan - 1) * GAP;
+const unmeasuredHeightFor = (a: { rowSpan: number }) => a.rowSpan * 76 + (a.rowSpan - 1) * GAP;
 
 /** The operator's surface: Process full width, then two independent stacks. */
 function operatorLayout(): FocusPanelGridLayout {
@@ -39,7 +39,7 @@ const heights: Record<string, number> = {
 
 const resolve = (layout: FocusPanelGridLayout) =>
     resolveColumnAwareLayout({
-        layout, heights: new Map(Object.entries(heights)), width: WIDTH, gapPx: GAP, minHeightFor,
+        layout, heights: new Map(Object.entries(heights)), width: WIDTH, gapPx: GAP, unmeasuredHeightFor,
     });
 
 const measured = (layout: FocusPanelGridLayout): Map<string, MeasuredBox> => {
@@ -58,7 +58,7 @@ const candidatesFor = (layout: FocusPanelGridLayout, card: string): DropCandidat
         boxes: measured(layout),
         width: WIDTH,
         gapPx: GAP,
-        minHeightFor,
+        unmeasuredHeightFor,
     });
 
 describe("legal horizontal starts", () => {
