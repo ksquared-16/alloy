@@ -20,11 +20,9 @@ async function openPanel(page: Page) {
 /**
  * The commands the Process card region is actually presenting.
  *
- * Read by rendered control rather than by a single component's data attribute: on a subject
- * whose published stage inputs do not resolve, `projectProcessCardCommands` returns nothing
- * and the command row comes from the Current Work path inside the same card. Both paths now
- * share `resolveTourCommandPresentation`, so the operator-visible contract is the same either
- * way — and that contract is what this asserts.
+ * Read by rendered control. `data-process-action` / `data-process-action-group` mark each one
+ * as having come from `projectProcessCardCommands`, so provenance is checkable from the DOM
+ * rather than asserted — see `processCommandProvenance` below.
  */
 async function processCommandLabels(page: Page): Promise<string[]> {
     return page.$$eval(
@@ -35,6 +33,41 @@ async function processCommandLabels(page: Page): Promise<string[]> {
                 .filter((t) => t.length > 0 && !/^Recent activity/i.test(t)),
     );
 }
+
+/** The projected commands, with the attribute that says where each one came from. */
+async function processCommandProvenance(page: Page) {
+    return page.$$eval(
+        '[data-fp-grid-area="business_process"] .alloy-os-process__work-actions button',
+        (nodes) =>
+            nodes.map((n) => ({
+                label: (n.textContent ?? "").trim(),
+                action: n.getAttribute("data-process-action"),
+                group: n.getAttribute("data-process-action-group"),
+                haspopup: n.getAttribute("aria-haspopup"),
+            })),
+    );
+}
+
+test("the visible commands are the Process card's projected commands", async ({ page }) => {
+    await openPanel(page);
+    const rows = await processCommandProvenance(page);
+    console.log("PROCESS COMMAND PROVENANCE:", JSON.stringify(rows));
+    test.skip(rows.length === 0, "this subject's process card presents no commands");
+
+    // Every control on the process card's action row is a projected command, not a
+    // neighbouring surface's button that happens to render beside them.
+    for (const row of rows) {
+        expect(
+            row.action ?? row.group,
+            `no projected-command identity on "${row.label}"`,
+        ).toBeTruthy();
+    }
+
+    // The Tour control is the GROUP, and it declares itself a menu trigger.
+    const tour = rows.find((r) => r.group === "tour");
+    expect(tour, `no grouped Tour control in ${JSON.stringify(rows)}`).toBeTruthy();
+    expect(tour!.haspopup, "the Tour control must be a real menu trigger").toBe("menu");
+});
 
 test("the Process card presents Tour as one state-bearing control", async ({ page }) => {
     await openPanel(page);
@@ -60,15 +93,18 @@ test("the Process card presents Tour as one state-bearing control", async ({ pag
 });
 
 /*
- * NOT COVERED HERE, AND DELIBERATELY NOT FAKED: opening the Tour menu and invoking
- * "Send invitation".
+ * NOT COVERED HERE: opening the Tour menu and invoking "Send invitation".
  *
- * The control is a Radix `DropdownMenu`, and under Playwright neither `.click()` nor a
- * forced click opened it — `getByRole("menuitem")` stayed empty in both cases, so the
- * menu contents and the resulting `send_tour_invitation` / `mode: "prepare"` execute
- * cannot be observed from here. That is a harness limitation, not evidence about the
- * product, and asserting around it would be worse than leaving the gap visible.
+ * The trigger is real now — it carries `aria-haspopup="menu"` and Radix's handlers, which the
+ * test above asserts — and pressing Enter on it DOES open the menu. What follows is a
+ * pre-existing defect: mounting any Radix overlay inside a Focus Panel card throws
+ * "Maximum update depth exceeded", and the card drops to its render boundary.
  *
- * The identity contract those clicks would demonstrate is covered at the layer where it
- * actually lives, in `tests/surfaces/processCardCommandIdentity.test.ts`.
+ * It is not this branch's. The same loop reproduces on `Recent activity ▾` in this very card
+ * and on `Manage ▾` outside the Focus Panel entirely — both unchanged in `staging`, both
+ * untouched here. A control that could never open was hiding it.
+ *
+ * Asserting around that would certify a crash as a pass, so the gap stays visible. The identity
+ * contract those clicks would demonstrate is covered where it lives, in
+ * `tests/surfaces/processCardCommandIdentity.test.ts`.
  */
