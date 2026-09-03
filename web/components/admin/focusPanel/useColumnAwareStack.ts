@@ -77,19 +77,45 @@ export function useColumnAwareStack(args: {
         if (node) measure();
     }, [ensureObserver, measure]);
 
-    const registerCard = useCallback((card: string) => (node: HTMLElement | null) => {
-        const ro = ensureObserver();
-        const existing = cardEls.current.get(card);
-        if (existing && ro) ro.unobserve(existing);
-        if (node) {
-            cardEls.current.set(card, node);
-            // Observe the CONTENT, whose height we do not control.
-            const target = (node.firstElementChild as HTMLElement | null) ?? node;
-            if (ro) ro.observe(target);
-        } else {
-            cardEls.current.delete(card);
-        }
-        measure();
+    /*
+     * ONE REF CALLBACK PER CARD, FOR THE LIFE OF THE HOOK.
+     *
+     * This used to return a fresh closure on every call — `registerCard(card)` inline in
+     * JSX — and React detaches a ref whose IDENTITY changed: it calls the old callback
+     * with `null`, then the new one with the node. Both call `measure()`, which deletes
+     * the card's height and then puts it straight back, producing a NEW `heights` Map
+     * with identical contents. A new object is a state change, so the component
+     * re-rendered, which made another fresh closure, which detached the ref again.
+     *
+     * That is an unbounded render loop, and React ends it by throwing "Maximum update
+     * depth exceeded" — a client-side exception that took the whole Work Unit down. It
+     * only fired on the `grid` strategy, because that is the only path that mounts these
+     * refs, which is why it appeared the moment an operator published a composition whose
+     * columns overlap (the shape `planLanesFromGrid` cannot flatten into lanes).
+     *
+     * Caching by card key makes the identity stable, so React attaches each ref once and
+     * detaches it only when the card genuinely leaves the layout.
+     */
+    const cardRefs = useRef(new Map<string, (node: HTMLElement | null) => void>());
+    const registerCard = useCallback((card: string) => {
+        const cached = cardRefs.current.get(card);
+        if (cached) return cached;
+        const ref = (node: HTMLElement | null) => {
+            const ro = ensureObserver();
+            const existing = cardEls.current.get(card);
+            if (existing && ro) ro.unobserve(existing);
+            if (node) {
+                cardEls.current.set(card, node);
+                // Observe the CONTENT, whose height we do not control.
+                const target = (node.firstElementChild as HTMLElement | null) ?? node;
+                if (ro) ro.observe(target);
+            } else {
+                cardEls.current.delete(card);
+            }
+            measure();
+        };
+        cardRefs.current.set(card, ref);
+        return ref;
     }, [ensureObserver, measure]);
 
     useLayoutEffect(() => {

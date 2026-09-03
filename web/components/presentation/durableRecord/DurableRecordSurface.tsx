@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 
+import FocusPanelRenderErrorBoundary from "@/components/admin/focusPanel/FocusPanelRenderErrorBoundary";
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import DurableRecordContextStrip from "@/components/presentation/durableRecord/DurableRecordContextStrip";
 import { dispatchAdminV2CloseWorkspaceModals } from "@/lib/adminV2/workspaceModalEvents";
@@ -466,15 +467,19 @@ export default function DurableRecordSurface({
                   * record genuinely IS the destination.
                   */}
                 {presentation === "full" ? (
-                    <OpportunityFocusPanelModeGrid
-                        model={state.model}
-                        // Drill tabs belong to the queue-hosted panel's drawer-era cards; a durable
-                        // record composes none of them, so there is nothing to select.
-                        onSelectTab={() => {}}
-                        requestedCardFocus={
-                            cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
-                        }
-                    />
+                    // Same floor as the queue-hosted panel: one bad published composition
+                    // degrades this grid, never the whole durable record.
+                    <FocusPanelRenderErrorBoundary scope="surface" label="durable-record">
+                        <OpportunityFocusPanelModeGrid
+                            model={state.model}
+                            // Drill tabs belong to the queue-hosted panel's drawer-era cards; a durable
+                            // record composes none of them, so there is nothing to select.
+                            onSelectTab={() => {}}
+                            requestedCardFocus={
+                                cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
+                            }
+                        />
+                    </FocusPanelRenderErrorBoundary>
                 ) : null}
 
                 {/*

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 
+import FocusPanelRenderErrorBoundary from "@/components/admin/focusPanel/FocusPanelRenderErrorBoundary";
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
@@ -298,13 +299,21 @@ export default function OpportunityFocusPanelBody({
                 {absence.message}
             </p>
         : null}
-        <OpportunityFocusPanelModeGrid
-            model={model}
-            requestedCardFocus={requestedCardFocus}
-            onSelectTab={onSelectTab}
-            onHeaderAction={onHeaderAction}
-            onModeChange={onModeChange}
-        />
+        {/*
+          * The composition is built inside the grid (published layout → plan → cards), so a
+          * malformed published Surface throws BEFORE any card renders and a per-card boundary
+          * never sees it. This is the outer floor: the panel reports it could not compose, and
+          * the Work Unit around it — header, queue, actions — keeps working.
+          */}
+        <FocusPanelRenderErrorBoundary scope="surface" label="focus-panel">
+            <OpportunityFocusPanelModeGrid
+                model={model}
+                requestedCardFocus={requestedCardFocus}
+                onSelectTab={onSelectTab}
+                onHeaderAction={onHeaderAction}
+                onModeChange={onModeChange}
+            />
+        </FocusPanelRenderErrorBoundary>
         </>
     );
 }
