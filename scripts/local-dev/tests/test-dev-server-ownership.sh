@@ -304,5 +304,67 @@ else
   bad "34. helper cannot see a port that is definitely listening"
 fi
 
+# ── loopback-scoped ownership: two owners, one port number ───────────────────
+#
+# Tailscale Serve publishes each lane port on the tailnet addresses and proxies
+# it to 127.0.0.1, so tailscaled holds 100.71.206.63:<port> and fd7a:...:<port>
+# permanently — including while no dev server runs. The port-global question
+# then answers "unknown" (root-owned, lsof blind) and a correct fail-closed
+# guard refuses a bind that would have succeeded. MEASURED on 3016: every
+# overlapping bind (0.0.0.0, ::, 100.71.206.63) returned EADDRINUSE while
+# 127.0.0.1 bound cleanly, and Surfaces could not be restarted at all.
+#
+# These drive the helper through a stub netstat so the three cases are exact
+# rather than dependent on whatever the host happens to be running.
+FAKE_NS="$(mktemp -d)/netstat"
+cat > "$FAKE_NS" <<'STUB'
+#!/bin/bash
+cat <<'ROWS'
+tcp4       0      0  100.71.206.63.3099     *.*                    LISTEN
+tcp6       0      0  fd7a:115c:a1e0::.3099  *.*                    LISTEN
+ROWS
+STUB
+chmod +x "$FAKE_NS"
+
+if [[ "$(ALLOY_RC_NETSTAT_BIN="$FAKE_NS" alloy_rc_loopback_port_owner 3099)" == "free" ]]; then
+  ok "35. tailnet-only listeners leave loopback free (Serve is not a lane server)"
+else
+  bad "35. a Tailscale-owned tailnet address wrongly occupies loopback"
+fi
+
+cat > "$FAKE_NS" <<'STUB'
+#!/bin/bash
+cat <<'ROWS'
+tcp46      0      0  *.3099                 *.*                    LISTEN
+ROWS
+STUB
+chmod +x "$FAKE_NS"
+if [[ "$(ALLOY_RC_NETSTAT_BIN="$FAKE_NS" alloy_rc_loopback_port_owner 3099)" != "free" ]]; then
+  ok "36. a wildcard listener DOES occupy loopback"
+else
+  bad "36. a wildcard listener was treated as leaving loopback free"
+fi
+
+cat > "$FAKE_NS" <<'STUB'
+#!/bin/bash
+cat <<'ROWS'
+tcp4       0      0  127.0.0.1.3099         *.*                    LISTEN
+ROWS
+STUB
+chmod +x "$FAKE_NS"
+if [[ "$(ALLOY_RC_NETSTAT_BIN="$FAKE_NS" alloy_rc_loopback_port_owner 3099)" != "free" ]]; then
+  ok "37. a real loopback listener occupies loopback"
+else
+  bad "37. a loopback listener was reported free"
+fi
+
+grep -q 'ALLOY_DEV_BIND_HOST' "$ROOT/alloy-dev-start" \
+  && ok "38. the dev server binds one address, and it is configurable" \
+  || bad "38. dev-server bind host is not owned in one place"
+
+grep -q 'alloy_refuse_occupied_port "$port" "${mode}-start for $name" loopback' "$ROOT/alloy-dev-start" \
+  && ok "39. dev-start asks the loopback question, not the port-global one" \
+  || bad "39. dev-start still asks the port-global question"
+
 printf '\n==== dev-server-ownership: %s passed, %s failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

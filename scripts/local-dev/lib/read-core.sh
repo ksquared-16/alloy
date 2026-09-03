@@ -403,6 +403,55 @@ alloy_rc_port_has_foreign_listener() {
   return 1
 }
 
+# ── loopback-scoped ownership ────────────────────────────────────────────────
+#
+# "Is this port free?" is the wrong question once two owners share a port
+# number by design. Tailscale Serve publishes lane ports on the tailnet
+# addresses and proxies them to 127.0.0.1, so tailscaled legitimately holds
+# 100.71.206.63:<port> and fd7a:...:<port> forever, including while no dev
+# server is running. Asking the port-global question there returns 'unknown'
+# (root-owned, lsof cannot see it) and a correct fail-closed guard then refuses
+# a bind that would have succeeded: MEASURED on 3016, where 127.0.0.1:3016 was
+# provably bindable while the guard refused the start.
+#
+# The question a loopback-bound dev server actually needs is whether the
+# LOOPBACK address is free. A wildcard listener still counts, because it
+# occupies loopback too; a tailnet-address listener does not.
+alloy_rc_loopback_port_owner() {
+  local port="$1" netstat_bin="" rows="" lsof_bin="" pid=""
+  for netstat_bin in "${ALLOY_RC_NETSTAT_BIN:-}" /usr/sbin/netstat /usr/bin/netstat "$(command -v netstat 2>/dev/null)"; do
+    [[ -n "$netstat_bin" && -x "$netstat_bin" ]] || continue
+    break
+  done
+  # Without netstat there is no way to separate addresses, so fall back to the
+  # port-global answer rather than inventing a narrower one.
+  if [[ -z "$netstat_bin" || ! -x "$netstat_bin" ]]; then
+    alloy_rc_port_owner "$port"
+    return 0
+  fi
+  rows="$("$netstat_bin" -an 2>/dev/null | awk -v p="$port" '
+    $1 ~ /^tcp/ && $NF == "LISTEN" {
+      a = $4
+      if (a !~ ("[.:]" p "$")) next
+      # Strip the trailing .<port> to leave the bound address.
+      sub("[.]" p "$", "", a)
+      if (a == "127.0.0.1" || a == "::1" || a == "*") print a
+    }')"
+  if [[ -z "$rows" ]]; then
+    printf 'free'
+    return 0
+  fi
+  if lsof_bin="$(alloy_rc_lsof_bin)"; then
+    pid="$("$lsof_bin" -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $2}')"
+  fi
+  if [[ -n "$pid" ]]; then
+    printf 'owned %s' "$pid"
+    return 0
+  fi
+  # Occupied by someone we cannot name. Still not free.
+  printf 'unknown'
+}
+
 # Back-compatible: prints the PID and returns 0 when a listener is proven,
 # returns 1 otherwise. Callers that must distinguish "free" from "could not
 # tell" have to use alloy_rc_port_owner — this one cannot express the

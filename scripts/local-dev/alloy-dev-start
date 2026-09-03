@@ -86,6 +86,29 @@ main() {
   # `${var^}` is bash 4; macOS ships bash 3.2, so the label is set explicitly rather than expanded.
   local mode_label="Dev"
   local server_command="$ALLOY_DEV_COMMAND"
+  # ONE OWNER PER ADDRESS.
+  #
+  # Next bound every interface, and Tailscale Serve publishes the same lane port
+  # on the tailnet addresses and proxies it to 127.0.0.1. Both therefore wanted
+  # 100.71.206.63:<port>. While a dev server is up the two coexist, but once it
+  # dies tailscaled still holds the tailnet addresses and the wildcard bind can
+  # never be retaken: MEASURED on 3016, where 0.0.0.0, :: and 100.71.206.63 all
+  # returned EADDRINUSE while 127.0.0.1 bound cleanly, and Surfaces could not be
+  # restarted at all.
+  #
+  # Loopback is the only address the dev server actually needs, because Serve
+  # proxies to 127.0.0.1. Giving it loopback and leaving the tailnet addresses
+  # to Tailscale means neither can collide with the other, in any order, and the
+  # Director-facing HTTPS origin is unchanged. Next 16 takes this as a CLI flag
+  # only — it reads no HOSTNAME env var — so it has to be appended to the
+  # command rather than exported beside it.
+  local bind_host="${ALLOY_DEV_BIND_HOST:-127.0.0.1}"
+  if [[ -n "$bind_host" && "$server_command" != *" -H "* && "$server_command" != *"--hostname"* ]]; then
+    case "$server_command" in
+      npm\ run\ *) server_command="${server_command} -- -H ${bind_host}" ;;
+      *next\ dev*)  server_command="${server_command} -H ${bind_host}" ;;
+    esac
+  fi
   if [[ "$mode" == "production" ]]; then
     mode_label="Production"
     server_command="${ALLOY_PROD_COMMAND:-npm run start}"
@@ -103,7 +126,9 @@ main() {
     alloy_remove_dead_pid_file "$name" || true
   fi
 
-  alloy_refuse_occupied_port "$port" "${mode}-start for $name"
+  # Loopback scope: the dev server binds 127.0.0.1, so Tailscale Serve's
+  # permanent tailnet-address listeners are not a reason to refuse the start.
+  alloy_refuse_occupied_port "$port" "${mode}-start for $name" loopback
   alloy_sprint_ops_defaults
   alloy_guard_server_start "$name"
 
