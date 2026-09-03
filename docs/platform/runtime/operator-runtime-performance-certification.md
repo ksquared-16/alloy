@@ -1061,3 +1061,85 @@ arrives on its own schedule.
 composition and are NOT on the measured surface: this tenant publishes a doc, and a published doc
 overrides a default wholesale. Participation in code stays *necessary and not sufficient* — the
 lesson `scheduling` taught, unchanged.
+
+### 19.10 Focus Panel second wave — the census, and why it closes
+
+Three cards still arrive with the drawer VM: Business Process, Household, Children. This section is
+the field-level census that answers whether that is a projection gap or a real dependency. It changed
+no runtime code, because the census says the remaining lateness is real.
+
+**Read the grain first.** The earlier measurements were all child-grain (`enrolled-children`). On the
+family grain (`all`, `new`) the picture is already different, and reporting one as the other is how a
+non-existent gap gets optimized:
+
+| card | family grain (`all`) | child grain (`enrolled-children`) |
+|---|---|---|
+| Household | **mounts at commit, meaningful at commit** (202 chars of content) | settlement |
+| Children | settlement | settlement |
+| Business Process | settlement | settlement |
+
+Household is therefore NOT a second-wave card on the family grain. It reserves on the child grain for
+a different reason (below).
+
+#### Field census
+
+| card | field for first meaningful render | canonical owner | classification |
+|---|---|---|---|
+| Business Process | configured stage rail + per-stage dates | `composeOpportunityDrawerViewModel.workspace.lifecycle_rail` | **GENUINELY UNKNOWN UNTIL DRAWER VM** |
+| Business Process | current stage key/label, purpose | provisioning `currentBusinessState` | AVAILABLE AT COMMIT |
+| Business Process | participant markers | `buildChildrenCardEvidence` ← `_inquiry_children` | DRAWER-VM ENRICHMENT ONLY (see Children) |
+| Household | household name, primary contact name/phone/email | `subjectIdentityTruth` `person.*` | AVAILABLE AT COMMIT (family grain — already projected) |
+| Household | children / emergency-contact / pickup counts | drawer VM | DRAWER-VM ENRICHMENT ONLY (enriches in place) |
+| Household (child grain) | the same `person.*` | family opportunity row | AVAILABLE AT COMMIT BUT NOT PROJECTED — **needs a new read**, see cost |
+| Children | child identities (id, display_name, dob) | `_household_children` from `enrichOpportunityRowsWithChildrenForCompactQueue` | AVAILABLE AT COMMIT BUT NOT PROJECTED |
+| Children | per-child `outcome_status_key` / program / schedule | drawer VM | **GENUINELY UNKNOWN UNTIL DRAWER VM** |
+
+#### Why Children is not promoted, though its roster is sitting right there
+
+`enrichOperationalProjectionRows` computes `_household_children` and `_crm_compact_children` and then
+ends with `projectQueuePreviewRowContexts`, whose `QUEUE_REVEAL_DEAD_FLAT_FIELDS` deletes both — and
+the provisioning composer reads that stripped output while its own comment names those exact fields as
+its authoritative roster source. Measured directly, one row before and after the strip:
+
+```
+before strip: _household_children: 1  _crm_compact_children: 1
+composer sees: undefined, undefined  ->  _inquiry_children null  ->  children card reserves
+```
+
+That is a real, zero-cost-to-recover defect (the composer's row mapper carries no flat field to the
+wire, so nothing is being saved on this path). It is nonetheless NOT the licence to promote Children,
+because the recovered row is **recognition-grade**:
+
+```
+{ id, customer_member_id, person_id, display_name, first_name, last_name, dob, linked_on_inquiry }
+```
+
+There is no `outcome_status_key`, no program, no gender. The settled card's first meaningful claim is
+`Needs info · 1 child · 1 enrolled · Pathb Certopp needs program & schedule`. Built from the roster
+above it would instead claim `1 child enrolling · Pathb — In progress`, and `active` filters on
+`outcome_status_key !== "declined"` — a key that is absent, so a declined child would be counted as
+enrolling. The card would change its ANSWER, not gain detail. That is the defect
+`mergeSubjectIdentityTruthOntoSettled` already records ("blanked Program/Gender and falsely flipped
+Children → Needs info"), and the richness guard there exists precisely because a thin seed was tried
+once. **Identity available ≠ first meaningful content available.**
+
+#### Why Business Process is not promoted
+
+Its first meaningful element is the rail, and the rail is a drawer-VM projection
+(`workspace.lifecycle_rail`) that the provisioning composer does not build. Reproducing it would mean
+either running that projection inside the composer or writing a second rail projection — a second
+model owner for one card. The current stage and its label ARE commit-available, but a Business Process
+card rendered without its rail and then given one is a presentation morph, not enrichment. Left alone,
+deliberately.
+
+#### Cost bound for the child-grain Household gap (not spent)
+
+On a child lens `baseRows` is empty — the family opportunity is parked on another work unit (the same
+condition `resolveTrackRowRefs` documents), so `enriched` is `[]` and no `person.*` binding is produced.
+Closing it needs one additional `enrichOperationalProjectionRows` call over a one-row family page: a new
+serial round trip on the composer's critical path, which gates EVERY card including the retained first
+wave. Spending it would move one card while risking the ~2.5 s already won. Declined on that trade,
+recorded here so the trade does not have to be rediscovered.
+
+**Verdict: HEALTHY WITH GENUINE DRAWER-VM DEPENDENCIES.** The remaining three cards are late because
+their first meaningful truth does not exist earlier — not because it exists and is withheld.
