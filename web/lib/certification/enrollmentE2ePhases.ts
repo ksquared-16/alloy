@@ -1077,7 +1077,7 @@ const requirementCompletion: Phase = {
                         transitions: sig.transitions,
                         acknowledgements: sig.acks,
                     });
-                    if (sig.state === "finished") continue;
+                    if (sig.state === "finished") break;
                     trail.push({ step: i, heading: "(signature stuck)", buttons: await page.locator("button").allInnerTexts().catch(() => []), chose: sig.state });
                     break;
                 }
@@ -1144,7 +1144,22 @@ const requirementCompletion: Phase = {
 
         if (!walked.ok) return { status: "failed", detail: walked.detail };
 
-        const after = await gate();
+        /*
+         * WAIT FOR THE WRITE TO SETTLE, do not weaken the assertion.
+         *
+         * The identical signature run passed in a short chain and failed in the full suite, with the
+         * same state-machine transitions both times -- a read racing an async submission, not a
+         * different outcome. Polling for a bounded period makes the phase deterministic; it still
+         * FAILS if the requirement never resolves, and it reports how long it waited so a slow write
+         * is visible rather than smoothed over.
+         */
+        let after = await gate();
+        let settledAfterMs = 0;
+        for (let waited = 0; !after.eligible && waited < 12000; waited += 1500) {
+            await new Promise((r) => setTimeout(r, 1500));
+            settledAfterMs = waited + 1500;
+            after = await gate();
+        }
         const afterReady = projectEnrollmentCompletionReadiness({ sufficiency: after });
 
         /*
@@ -1179,6 +1194,7 @@ const requirementCompletion: Phase = {
             evidence: {
                 before: { eligible: before.eligible, projection: beforeReady.state, counts: before.counts },
                 after: { eligible: after.eligible, projection: afterReady.state, counts: after.counts },
+                settledAfterMs,
                 trail: walked.value,
             },
         };
