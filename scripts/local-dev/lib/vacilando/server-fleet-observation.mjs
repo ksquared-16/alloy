@@ -25,7 +25,25 @@ import { join } from "node:path";
 import { managedSlots, portForSlot } from "./managed-slots.mjs";
 import { observeMember } from "./dev-server-ownership.mjs";
 
-export const FLEET_OBSERVATION_SCHEMA = "vacilando.server_fleet_observation.v1";
+export const FLEET_OBSERVATION_SCHEMA = "vacilando.server_fleet_observation.v2";
+
+/**
+ * Canonical reasons a server is not a recycle candidate.
+ *
+ * Named codes rather than prose because arbitration must be able to tell "we
+ * looked and it is busy" apart from "we cannot see whether it is busy". Those
+ * are opposite facts and a sentence blurs them.
+ */
+export const RECYCLE_BLOCKED = Object.freeze({
+  NOT_RUNNING: "not_running",
+  NOT_LARGE_ENOUGH: "not_large_enough",
+  DESIRED_STATE_UNKNOWN: "desired_state_unknown",
+  DESIRED_STATE_NOT_RUNNING: "desired_state_not_running",
+  ACTIVE_RUN: "active_run",
+  RECOVERING: "recovering",
+  RESTART_EXHAUSTED: "restart_exhausted",
+  IDLENESS_NOT_OBSERVABLE: "idleness_not_observable",
+});
 
 const RUNTIME_ROOT = () =>
   process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local/state/alloy-dev/gateway");
@@ -101,6 +119,40 @@ function recoveryStateFor(name, root) {
 }
 
 /**
+ * Runs the platform currently considers live, indexed by worktree path.
+ *
+ * THIS IS THE EXCLUSION THAT MATTERS MOST. Measured on this host while writing
+ * it: slot 6 was a 6.2 GB server, six hours old, the single most attractive
+ * thing on the machine to reclaim — and it was executing a run. Age and size
+ * are exactly the signals that would have chosen it, and both would have been
+ * wrong. An active run is positive evidence of use, and it is the only such
+ * evidence the platform currently has.
+ */
+function activeRunsByWorktree(root) {
+  const out = new Map();
+  let doc = null;
+  try {
+    doc = JSON.parse(readFileSync(join(root, "vacilando", "execution-runs", "runs.json"), "utf8"));
+  } catch { return out; }
+  const lanes = doc?.lanes;
+  if (!lanes || typeof lanes !== "object") return out;
+  for (const [laneId, v] of Object.entries(lanes)) {
+    const runs = Array.isArray(v) ? v : (Array.isArray(v?.runs) ? v.runs : []);
+    for (const r of runs) {
+      // Terminal states are listed rather than inferred: an unrecognised state
+      // must read as ACTIVE, because treating an unknown state as finished is
+      // how a busy server becomes a recycle candidate.
+      const state = String(r?.state || "");
+      if (["COMPLETE", "FAILED", "CANCELLED", "ABANDONED"].includes(state)) continue;
+      const wt = r?.worktree_path ? String(r.worktree_path).replace(/\/+$/, "") : null;
+      if (!wt) continue;
+      if (!out.has(wt)) out.set(wt, { run_id: r?.run_id ?? null, state, lane_id: r?.lane_id ?? laneId });
+    }
+  }
+  return out;
+}
+
+/**
  * Observe every managed slot at once.
  *
  * `reclaimable` is deliberately conservative and is only ever a RECOMMENDATION:
@@ -114,6 +166,7 @@ export function observeServerFleet({
   largeServerMb = 3000,
 } = {}) {
   const tree = processTree();
+  const active = activeRunsByWorktree(root);
   const rows = [];
   for (const slot of managedSlots()) {
     const port = portForSlot(slot);
@@ -128,13 +181,23 @@ export function observeServerFleet({
     const desired = name ? desiredStateFor(name, root) : "UNKNOWN";
     const observed = pid ? "RUNNING" : "DOWN";
     const large = rssMb >= largeServerMb;
+    const worktreePath = name ? join(worktreesRoot, name) : null;
+    const worktreeExists = worktreePath ? existsSync(worktreePath) : false;
+    const activeRun = worktreePath ? (active.get(worktreePath) ?? null) : null;
+    const recovery = name ? recoveryStateFor(name, root) : null;
     rows.push({
       lane_worktree: name, slot, port, pid,
       rss_mb: rssMb, age,
       desired_state: desired,
       observed_state: observed,
       ownership_state: member?.state ?? "unknown",
-      recovery_state: name ? recoveryStateFor(name, root) : null,
+      recovery_state: recovery,
+      worktree_path: worktreePath,
+      // A registered slot whose worktree is gone is an orphan: positive
+      // evidence of invalidity, not absence of evidence about use.
+      worktree_exists: worktreeExists,
+      orphaned_registration: Boolean(pid && name && !worktreeExists),
+      active_run: activeRun,
       large,
       // RECYCLING IS NOT "STOP THE BIG ONE".
       //
@@ -150,10 +213,18 @@ export function observeServerFleet({
       // of the rule. Idleness is not yet observable here, so nothing is eligible
       // and the missing evidence is named instead of assumed.
       recycle_eligible: false,
-      recycle_blocked_reason: !pid ? "not running"
-        : !large ? "working set is not material"
-        : desired !== "RUNNING" ? `desired state is ${desired}; stop it rather than recycle it`
-        : "no idleness signal yet — active-run and connection observation is not implemented",
+      recycle_blocked_reason: !pid ? RECYCLE_BLOCKED.NOT_RUNNING
+        : activeRun ? RECYCLE_BLOCKED.ACTIVE_RUN
+        : recovery === "RECOVERING" ? RECYCLE_BLOCKED.RECOVERING
+        : recovery === "RESTART_EXHAUSTED" ? RECYCLE_BLOCKED.RESTART_EXHAUSTED
+        : !large ? RECYCLE_BLOCKED.NOT_LARGE_ENOUGH
+        : desired === "UNKNOWN" ? RECYCLE_BLOCKED.DESIRED_STATE_UNKNOWN
+        : desired !== "RUNNING" ? RECYCLE_BLOCKED.DESIRED_STATE_NOT_RUNNING
+        // Everything checkable checks out, and it is STILL not eligible: no
+        // active run is not the same as idle. Browser and connection evidence
+        // does not exist yet, so the honest answer is that idleness cannot be
+        // observed — not that it has been observed and found true.
+        : RECYCLE_BLOCKED.IDLENESS_NOT_OBSERVABLE,
       // Running while the operator asked for it to be stopped. That is a
       // reconcile, not a capacity decision.
       reclaimable: Boolean(pid && desired === "STOPPED"),
@@ -168,6 +239,8 @@ export function observeServerFleet({
       running: running.length,
       total_rss_mb: running.reduce((a, r) => a + r.rss_mb, 0),
       large: running.filter((r) => r.large).length,
+      with_active_run: running.filter((r) => r.active_run).length,
+      orphaned_registration: running.filter((r) => r.orphaned_registration).length,
       recycle_eligible: rows.filter((r) => r.recycle_eligible).length,
       restart_exhausted: rows.filter((r) => r.recovery_state === "RESTART_EXHAUSTED").length,
     },
