@@ -21,6 +21,7 @@ import {
     type OperationalGrain,
 } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
+import { participantScopeFromChildSubjectTruth } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
 import { MOUNTABLE_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
 import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
@@ -92,6 +93,22 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
         perspective: input.perspective
             ? { missionLabel: input.perspective.defaultMission ?? input.perspective.label ?? null }
             : null,
+        /*
+         * THE PARTICIPANT, STATED AT COMMIT INSTEAD OF RE-DISCOVERED AFTER SETTLEMENT.
+         *
+         * `participantScope` was only ever built by the settled context, so a participant-keyed card
+         * could mount at commit and STILL not fetch: it resolves its read against this scope, not
+         * against raw truth. Measured: the card mounted at ~1350ms and its request did not leave until
+         * ~3313ms, waiting for a scope the answer already had the identity to state.
+         *
+         * This invents nothing. `participantScopeFromChildSubjectTruth` is the existing resolver for
+         * exactly this case and refuses unless BOTH `child.customer_member_id` and
+         * `child.process_instance_id` are present — a scope that cannot be identified is not returned.
+         * On any other grain it yields null and the card reserves exactly as before.
+         */
+        participantScope: participantScopeFromChildSubjectTruth({
+            ...(input.subjectIdentityTruth ?? {}),
+        }),
         truth: {
             id: input.subjectId,
             ...(input.statusKey ? { status_key: input.statusKey } : {}),
