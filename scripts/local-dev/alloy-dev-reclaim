@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+# Reclaim a slot's port from a PROVEN foreign dev server — and refuse everything else.
+#
+# THE INCIDENT THIS EXISTS FOR. Financials started Next on Runtime Performance's
+# port 3011. Runtime Performance's QA URL served Financials; Financials held its
+# own .next/dev lock and could not start on 3012; and canonical stop could not
+# reclaim the port because the process did not belong to the worktree that owned
+# it. The only route back was a hand-run kill, which is exactly the tool nobody
+# should have.
+#
+# THIS IS NOT kill-port. It reclaims a port only when the evidence names, all at
+# once: an exact live PID, a dev-server process shape, a cwd inside a DIFFERENT
+# known worktree, and a canonical owner for the port that is not that worktree.
+# Anything less — an unreadable probe, a process it cannot attribute, a listener
+# that is not a dev server, or the canonical owner itself — is refused, and the
+# refusal is the feature.
+#
+# Preview is the default. --apply performs the stop and records lifecycle audit.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-dev-reclaim <worktree-name> [--apply]
+
+Observes the canonical port for <worktree-name>, classifies who holds it, and
+prints the evidence. Without --apply nothing is stopped.
+
+Classifications:
+  stopped               nothing is listening (proven)
+  unattributable        the listener probe could not run — never treated as free
+  owned_running         the canonical worktree holds its own port
+  foreign_port_owner    another worktree's dev server holds this port  [reclaimable]
+  unmanaged_listener    a listener that is not an attributable dev server
+EOF
+}
+
+# Which worktree, if any, does this PID live in? Answers with a path or nothing.
+# Never guesses: a cwd outside every known worktree yields no answer at all.
+reclaim_worktree_of_pid() {
+  local pid="$1" cwd resolved root
+  cwd="$(alloy_process_cwd "$pid" 2>/dev/null || true)"
+  [[ -n "$cwd" ]] || return 1
+  resolved="$(alloy_realpath "$cwd")"
+  root="$(alloy_realpath "$(dirname "$ALLOY_WORKTREE_PATH")")"
+  case "$resolved" in
+    "$root"/*) ;;
+    *) return 1 ;;
+  esac
+  # <root>/<worktree>/...  -> <root>/<worktree>
+  printf '%s/%s' "$root" "$(printf '%s' "${resolved#"$root"/}" | cut -d/ -f1)"
+}
+
+# Is this process actually a dev server? Command shape OR a Next dev ancestor.
+# "Some node process" is deliberately not enough.
+reclaim_is_dev_server() {
+  local pid="$1" cmd ppid pcmd
+  cmd="$(alloy_process_command "$pid" 2>/dev/null || true)"
+  case "$cmd" in
+    *next-server*|*"next dev"*|*"npm run dev"*) return 0 ;;
+  esac
+  ppid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  [[ -n "$ppid" ]] || return 1
+  pcmd="$(alloy_process_command "$ppid" 2>/dev/null || true)"
+  case "$pcmd" in
+    *next-server*|*"next dev"*|*"npm run dev"*) return 0 ;;
+  esac
+  return 1
+}
+
+main() {
+  local apply=0 name=""
+  while (($#)); do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --apply) apply=1 ;;
+      -*) usage >&2; exit 2 ;;
+      *) [[ -z "$name" ]] || { usage >&2; exit 2; }; name="$1" ;;
+    esac
+    shift
+  done
+  [[ -n "$name" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_load_metadata "$name"
+
+  local canonical_path="$ALLOY_WORKTREE_PATH"
+  local port="${PORT:-}"
+  [[ -n "$port" ]] || alloy_die "no canonical port for $name"
+
+  # ---- observe -------------------------------------------------------------
+  local owner pid
+  owner="$(alloy_port_owner "$port")"
+  printf 'worktree      %s\n' "$name"
+  printf 'canonical     %s\n' "$canonical_path"
+  printf 'port          %s\n' "$port"
+  printf 'observation   %s\n' "$owner"
+
+  case "$owner" in
+    free)
+      printf 'class         stopped\n'
+      printf 'action        none — nothing is listening on :%s\n' "$port"
+      return 0
+      ;;
+    unknown)
+      printf 'class         unattributable\n'
+      printf 'action        REFUSED — the listener probe could not run, so ownership is unknown.\n'
+      printf '              Unknown is not free, and it is certainly not proof to stop something.\n'
+      return 3
+      ;;
+  esac
+  pid="${owner#owned }"
+
+  # ---- classify ------------------------------------------------------------
+  local holder_wt="" is_dev=0
+  holder_wt="$(reclaim_worktree_of_pid "$pid" 2>/dev/null || true)"
+  reclaim_is_dev_server "$pid" && is_dev=1
+
+  printf 'listener pid  %s\n' "$pid"
+  printf 'process       %s\n' "$(alloy_process_command "$pid" 2>/dev/null || printf '<unreadable>')"
+  printf 'listener cwd  %s\n' "$(alloy_process_cwd "$pid" 2>/dev/null || printf '<unreadable>')"
+  printf 'holder wt     %s\n' "${holder_wt:-<not inside any known worktree>}"
+  printf 'dev server    %s\n' "$([[ "$is_dev" -eq 1 ]] && printf 'yes' || printf 'no')"
+
+  if alloy_pid_belongs_to_worktree "$pid" "$canonical_path"; then
+    printf 'class         owned_running\n'
+    printf 'action        none — this is the canonical owner. Use alloy-dev-stop.\n'
+    return 0
+  fi
+  if [[ -z "$holder_wt" || "$is_dev" -ne 1 ]]; then
+    printf 'class         unmanaged_listener\n'
+    printf 'action        REFUSED — ownership is not provable as a foreign dev server.\n'
+    printf '              This command reclaims a proven collision, it does not free ports.\n'
+    return 3
+  fi
+
+  # ---- preview -------------------------------------------------------------
+  printf 'class         foreign_port_owner\n'
+  printf 'conflict      %s is serving :%s, which belongs to %s\n' \
+    "$(basename "$holder_wt")" "$port" "$name"
+  if [[ "$apply" -ne 1 ]]; then
+    printf 'action        PREVIEW ONLY — re-run with --apply to reclaim exactly PID %s\n' "$pid"
+    return 0
+  fi
+
+  # ---- governed reclaim ----------------------------------------------------
+  printf 'action        reclaiming PID %s (tree) ...\n' "$pid"
+  alloy_stop_pid_tree "$pid"
+  alloy_record_server_lifecycle "reclaim" "$name" "ok" \
+    "foreign_port_owner $(basename "$holder_wt") on :$port" "$pid" ""
+
+  # ---- re-observe ----------------------------------------------------------
+  local after
+  after="$(alloy_port_owner "$port")"
+  printf 're-observed   %s\n' "$after"
+  case "$after" in
+    free) printf 'result        reclaimed — :%s is free for %s\n' "$port" "$name"; return 0 ;;
+    unknown)
+      alloy_record_server_lifecycle "reclaim" "$name" "unverified" "probe unavailable after stop" "$pid" ""
+      alloy_die "stopped PID $pid but could not re-observe :$port — not claiming the port is free."
+      ;;
+    *)
+      alloy_record_server_lifecycle "reclaim" "$name" "failed" "listener survived" "$pid" "${after#owned }"
+      alloy_die ":$port is still held by PID ${after#owned } after the stop."
+      ;;
+  esac
+}
+
+main "$@"

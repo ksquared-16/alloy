@@ -36,6 +36,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+/*
+ * WHERE `observed` COMES FROM. `assessSample` judges an observation; it does not
+ * make one, and it must never learn how. The single producer is
+ * `observeManagedPorts` in ./dev-server-ownership.mjs, which reads the one
+ * listener primitive in lib/read-core.sh. Building an `observed` array any other
+ * way — parsing lsof here, trusting a PID file, inferring from HTTP 200 — is a
+ * second discovery path, and the last one of those reported a port serving
+ * traffic as free.
+ */
+
 export const COHORT_SCHEMA = "vacilando.capacity_cohort.v1";
 
 /** Why a sample was rejected. Each is a distinct, reportable fact. */
@@ -43,6 +53,12 @@ export const INVALID_REASONS = Object.freeze({
   MISSING: "cohort_member_missing",
   PID_CHANGED: "cohort_member_restarted",
   FOREIGN: "foreign_server_present",
+  // An EXPECTED port held by the wrong worktree. Distinct from FOREIGN, which is
+  // a server on a port nobody expected: this one occupies a cohort slot, so the
+  // level still counts N listeners while one of them is serving someone else's
+  // lane. That is the Financials-on-3011 collision, and a sample taken during it
+  // measures a fleet that does not exist.
+  FOREIGN_OWNER: "cohort_member_foreign_owner",
   UNATTRIBUTABLE: "cohort_member_unattributable",
   NOT_READY: "cohort_member_not_ready",
 });
@@ -108,6 +124,21 @@ export function assessSample(cohort, observed = [], { nowMs = Date.now() } = {})
     }
     if (got.attributable === false) {
       problems.push({ port: want.port, worktree: want.worktree, slot: want.slot, reason: INVALID_REASONS.UNATTRIBUTABLE });
+      continue;
+    }
+    // Ownership is checked BEFORE the PID comparison. A foreign owner that
+    // happens to arrive on a fresh PID would otherwise be reported as a restart
+    // of our own server — the same invalidation, but the wrong reason, and the
+    // operator would go looking for a crash instead of a collision.
+    if (want.worktree && got.worktree && norm(got.worktree) !== norm(want.worktree)) {
+      problems.push({
+        port: want.port,
+        worktree: want.worktree,
+        slot: want.slot,
+        reason: INVALID_REASONS.FOREIGN_OWNER,
+        observed_worktree: norm(got.worktree),
+        observed_pid: Number(got.pid),
+      });
       continue;
     }
     if (want.pid != null && Number(got.pid) !== Number(want.pid)) {
