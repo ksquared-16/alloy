@@ -92,6 +92,48 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         await supabase.from("opportunities").delete().eq("org_id", orgId).in("id", orphanIds);
     }
 
+    /*
+     * ORPHANED JOURNEYS, swept before anything else.
+     *
+     * Twelve Enrollment journeys survived earlier resets: the child and household were deleted and
+     * the journey was not, after which it fell outside the namespace join and became invisible to
+     * every later cleanup. Same shape as the Opportunity leak -- ownership was discovered through
+     * identity, and the identity was destroyed before all the owned records had been collected.
+     *
+     * The selector needs no namespace and no timestamp, which is what makes it safe: a journey whose
+     * subject child NO LONGER EXISTS is unreachable product state by construction. It cannot point at
+     * a live child, because there is no row for it to point at. All twelve were proven against the
+     * live database first -- child absent, household absent, zero participations, zero agreements,
+     * zero placements -- before this was written.
+     *
+     * Sessions go first: they reference the journey, so removing the journey underneath them would
+     * either fail on the constraint or leave a second generation of orphans.
+     */
+    const { data: liveChildren } = await supabase
+        .from("customer_members")
+        .select("id")
+        .eq("org_id", orgId);
+    const liveChildIds = new Set(((liveChildren ?? []) as Array<{ id: string }>).map((r) => r.id));
+
+    const { data: allJourneys } = await supabase
+        .from("process_instances")
+        .select("id, subject_id")
+        .eq("org_id", orgId)
+        .eq("process_key", "enrollment");
+    const orphanJourneyIds = ((allJourneys ?? []) as Array<{ id: string; subject_id: string }>)
+        .filter((r) => !liveChildIds.has(r.subject_id))
+        .map((r) => r.id);
+
+    const orphanedJourneys = orphanJourneyIds.length;
+    if (orphanJourneyIds.length) {
+        await supabase
+            .from("form_packet_sessions")
+            .delete()
+            .eq("org_id", orgId)
+            .in("process_instance_id", orphanJourneyIds);
+        await supabase.from("process_instances").delete().eq("org_id", orgId).in("id", orphanJourneyIds);
+    }
+
     // Reach households through the canonical person → customer link; `customers` carries no e-mail.
     const { data: persons } = await supabase
         .from("persons")
@@ -100,7 +142,7 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         .ilike("email", `%@${ENROLLMENT_CERT_DOMAIN}`);
     const personIds = ((persons ?? []) as Array<{ id: string }>).map((r) => r.id);
     if (!personIds.length) {
-        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities };
+        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities, orphaned_journeys: orphanedJourneys };
     }
     const { data: links } = await supabase
         .from("customer_persons")
@@ -109,7 +151,7 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         .in("person_id", personIds);
     const customerIds = [...new Set(((links ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id))];
     if (!customerIds.length) {
-        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities };
+        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities, orphaned_journeys: orphanedJourneys };
     }
 
     const { data: members } = await supabase
@@ -123,6 +165,7 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         households: customerIds.length,
         children: memberIds.length,
         orphaned_opportunities: orphanedOpportunities,
+        orphaned_journeys: orphanedJourneys,
     };
 
     /*
