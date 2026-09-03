@@ -6,6 +6,20 @@ last_reviewed: 2026-07-22
 
 # Vacilando UI — Product Realization (density + operational surfaces)
 
+> **SUPERSEDED IN PART BY UI V2 (September 2026).** The corrections below are
+> still the record of why the Command Center board looks the way it does, and the
+> legacy board at `#/command` still reflects them. The *primary* operator surface
+> is now the Vacilando Gateway SPA, whose information architecture, visual system,
+> data-maturity rules and desktop/mobile certification are owned by
+> [`ui-v2/`](ui-v2/README.md). Where this document and the UI V2 contract appear
+> to differ about the primary surface, **UI V2 wins**.
+>
+> Specifically superseded here: the surface list in "Surfaces" (Home, Lanes,
+> Activity and System are now the canonical top-level destinations); item 3's
+> removal of progress bars (a governed provider progress *estimate* now exists —
+> see [the progress contract](ui-v2/PROVIDER-PROGRESS-CONTRACT.md)); and item 7's
+> navigation model.
+
 **Role:** Lead Engineer · **Slot 6** · branch `agent/claude/6-vacilando-os-product-def`
 Corrects the visible product so Kelly can inspect, continue, manage, and resolve sprint work in one
 place. Runtime/command foundation unchanged; this is presentation + navigation only.

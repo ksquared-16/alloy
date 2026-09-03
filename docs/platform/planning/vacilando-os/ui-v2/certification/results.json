@@ -1,0 +1,270 @@
+{
+  "captured_at": "2026-09-03T23:22:22.217Z",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 950
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844
+    },
+    "narrow": {
+      "width": 320,
+      "height": 568
+    },
+    "keyboard": {
+      "width": 390,
+      "height": 380
+    }
+  },
+  "passed": 49,
+  "failed": 0,
+  "results": [
+    {
+      "name": "desktop Home renders the five blocks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home uses the width in two columns",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Needs You lists the genuine blocker",
+      "ok": true,
+      "detail": "Read-only database census"
+    },
+    {
+      "name": "Home shows no invented effectiveness number",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "primary navigation carries the Needs You count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "primary navigation carries no diagnostics",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "lane header shows breadcrumb, state and identity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "lane tabs are present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "progress reads as a provider estimate",
+      "ok": true,
+      "detail": "Provider estimate: ~62% complete"
+    },
+    {
+      "name": "no ETA is shown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "current work precedes the agent output",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the inspector is quiet by default",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the inspector is a permanent desktop column, not a drawer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the inspector RUN block answers the six questions",
+      "ok": true,
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 4:03 PM Stop lane RUNTIME Executing"
+    },
+    {
+      "name": "a folded section opens on request",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the needs-you tray sits immediately above the composer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the tray is one line, not a card in the narrative",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "an unbuilt tab renders the shell and names its owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "placeholder mode announces itself on the page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "every placeholder value is individually flagged",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "placeholder values are auditable in the DOM",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 · /home does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 · /lanes does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 · /lanes/lane_trustruntime01 does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 · /activity does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 · /system does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 bottom navigation is present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 bottom nav tap targets clear 44px",
+      "ok": true,
+      "detail": "[56,56,56,56]"
+    },
+    {
+      "name": "mobile 390 stacks Home in one column",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 keeps the same Home hierarchy",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 lane keeps the composer on screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 lane shows progress and state",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 hides diagnostics from the primary lane screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Lane details opens the inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 · /home does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 · /lanes does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 · /lanes/lane_trustruntime01 does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 · /activity does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 · /system does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 bottom navigation is present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 bottom nav tap targets clear 44px",
+      "ok": true,
+      "detail": "[56,56,56,56]"
+    },
+    {
+      "name": "mobile 320 stacks Home in one column",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 keeps the same Home hierarchy",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 lane keeps the composer on screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 lane shows progress and state",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 hides diagnostics from the primary lane screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Lane details opens the inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the composer stays reachable with the keyboard open",
+      "ok": true,
+      "detail": "{\"cBottom\":363,\"sBottom\":352,\"vh\":380}"
+    },
+    {
+      "name": "no sideways scroll with the keyboard open",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}
