@@ -27,6 +27,7 @@ import {
     PUBLISHED_LAYOUT_MIN_PX,
     type FocusPanelPublishedLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import FocusPanelRenderErrorBoundary from "@/components/admin/focusPanel/FocusPanelRenderErrorBoundary";
 import { useColumnAwareStack } from "@/components/admin/focusPanel/useColumnAwareStack";
 import {
     COMPOSER_GRID_GAP_PX,
@@ -338,7 +339,15 @@ export default function FocusPanelCardGrid({
                 data-fp-elevated={elevated ? "true" : undefined}
                 style={{ ...extra.style, minHeight: reserved ? `${reserved}px` : extra.style?.minHeight }}
             >
-                {renderCell(key)}
+                {/*
+                 * One card's render failure stays one card's. The cell — and therefore the
+                 * authored placement, width and reserved height around it — is OUTSIDE the
+                 * boundary, so a failing card holds its geometry and the surface keeps the
+                 * shape the operator published instead of reflowing around a hole.
+                 */}
+                <FocusPanelRenderErrorBoundary scope="card" label={key}>
+                    {renderCell(key)}
+                </FocusPanelRenderErrorBoundary>
             </div>
         );
     };

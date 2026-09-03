@@ -1223,16 +1223,6 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
 /* A PERSON subject shows its identity avatar instead of the household tile. The avatar carries
  * its own round shape and tone, so the tile drops its frame and becomes a plain slot — one avatar
  * model, no second identity presentation. */
-.alloy-os-fp-header-compact__subject-tile--avatar {
-  width: 34px;
-  height: 34px;
-  margin-top: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-  border-radius: 999px;
-}
-
 .alloy-os-fp-header-compact__subject-tile {
   display: inline-flex;
   align-items: center;
@@ -1252,6 +1242,24 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 1px 2px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+}
+
+/* WHEN THE AVATAR IS THERE, THE TILE IS NOT.
+ *
+ * The avatar variant carries the same single class as the base tile, so specificity
+ * cannot separate them — only SOURCE ORDER can, and this block used to sit ABOVE the
+ * base rule. Its resets lost every one of them, and the case tile's bordered gradient
+ * kept painting behind the round avatar: two identity marks stacked in one slot.
+ *
+ * A person's avatar IS the identity mark. Keep this after the base rule. */
+.alloy-os-fp-header-compact__subject-tile--avatar {
+  width: 34px;
+  height: 34px;
+  margin-top: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 999px;
 }
 
 .alloy-os-fp-header-compact__subject-tile-icon {
@@ -10205,4 +10213,35 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     opacity: 1;
     color: #ffffff;
     background: var(--alloy-accent, #6366f1);
+}
+
+/* ── Bounded render failure ──────────────────────────────────────────────────
+ *
+ * What a card or a surface looks like when it could not render. Quiet and
+ * legible rather than alarming: the operator's job is unblocked (every other
+ * card still works), and nothing here suggests the published configuration was
+ * changed — because it was not. See FocusPanelRenderErrorBoundary. */
+.alloy-os-fp-render-failure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  width: 100%;
+  min-height: 96px;
+  padding: 16px 18px;
+  border: 1px dashed var(--alloy-os-border, rgba(15, 23, 42, 0.18));
+  border-radius: 12px;
+  background: var(--alloy-os-surface-muted, rgba(15, 23, 42, 0.03));
+}
+.alloy-os-fp-render-failure__headline {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--alloy-os-text, rgb(15, 23, 42));
+}
+.alloy-os-fp-render-failure__detail {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--alloy-os-text-muted, rgba(15, 23, 42, 0.62));
 }
