@@ -284,11 +284,23 @@ export function deliveryNotice(result) {
     // agent, and the operator has to be told which one they are looking at —
     // one needs them at the terminal, the other needs nothing at all.
     if (result.needs_terminal_operator === true || result.prompt_readiness?.needs_terminal_operator === true) {
+      // ONLY screens with nothing selectable reach this — a login URL, a free-text
+      // field, a spinner. An ordinary permission prompt offers numbered choices and
+      // is answered in Vacilando; saying "go to the terminal" for those was the
+      // dead end this contract replaced.
       return {
         kind: "err",
         text: `Your instruction was not sent. ${why || "The agent's terminal is showing a prompt."} `
-          + "This prompt has to be answered in the agent's terminal — Vacilando cannot answer it for you. "
-          + "Answer it there, then send again.",
+          + "This screen offers nothing to pick, so it has to be handled in the agent's terminal. "
+          + "Handle it there, then send again.",
+      };
+    }
+    // A blocked pane whose prompt DOES offer choices is answerable right here.
+    if (result.prompt_readiness?.blocker_kind && result.prompt_readiness?.needs_terminal_operator === false) {
+      return {
+        kind: "ok",
+        text: `Not sent yet — ${why ? `${why.charAt(0).toLowerCase()}${why.slice(1)}` : "the agent is waiting on a prompt."} `
+          + "Answer it above and your instruction continues on its own — you do not need to send it again.",
       };
     }
     if (result.status === "queued" || result.admission_queued) {
@@ -333,9 +345,9 @@ export function deliveryErrorText(error) {
     case "cursor_delivery_unavailable":
       return "Cursor could not start. Connect Cursor in Settings, then send again — or use Claude.";
     case "provider_prompt_not_ready":
-      return "The agent is not at a prompt right now, so nothing was sent. It may be mid-turn or waiting on a dialog — open Details to see the terminal.";
+      return "The agent is not at a prompt right now, so nothing was sent. It may be mid-turn, or waiting on a dialog you can answer in this lane.";
     case "undelivered_provider_prompt_block":
-      return "Not sent. The agent's terminal is showing a permission prompt, which has to be answered in the terminal — it cannot be answered from here.";
+      return "Not sent — the agent is waiting on a permission prompt. Answer it in this lane and the instruction continues on its own.";
     default:
       return error ? `Delivery refused (${error}).` : "Delivery failed.";
   }
