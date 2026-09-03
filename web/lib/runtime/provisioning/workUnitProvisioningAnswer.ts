@@ -1753,6 +1753,8 @@ export async function composeWorkUnitProvisioningAnswer(
            || null)
         : chosen.entityId;
     const householdCustomerId =
+        // FAMILY GRAIN — the case row itself, enriched or base. Both carry `customer_id` from the
+        // population select; enrichment is additive and never strips it.
         strOrNull((chosenEnrichedRow as Record<string, unknown>).customer_id)
         ?? (householdOpportunityId
             ? strOrNull(
@@ -1760,7 +1762,16 @@ export async function composeWorkUnitProvisioningAnswer(
                       (o) => String(o.id) === householdOpportunityId,
                   )?.customer_id,
               )
-            : null);
+            : null)
+        /*
+         * CHILD GRAIN — the family case is not in `baseRows` at all (a child lens pages participations,
+         * so `baseRows` is empty and `enriched` with it). The child row's OWN provider already read that
+         * opportunity in full to resolve the effective stage, and the column was being dropped at the
+         * normalizer. Reading it back is a declaration, not a lookup: measured `baseRowsLen: 0` with the
+         * family opportunity id known all along.
+         */
+        ?? childComposition?.family?.customerId?.trim()
+        ?? null;
     const subjectIdentityTruthBindings: SubjectIdentityTruth = {
         ...(householdCustomerId ? { "customer.id": householdCustomerId } : {}),
         ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
