@@ -76,13 +76,26 @@ main() {
   for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
     ports+=("$((ALLOY_FIRST_AGENT_PORT + i - 1))")
   done
+  # NEVER print (free) for a port whose ownership was not actually established.
+  # A port that is serving traffic while the status table calls it free is worse
+  # than no table at all: it is what let a second dev server be started onto a
+  # port another slot was already answering on.
+  local owner
   for p in "${ports[@]}"; do
-    if listener="$(alloy_port_listener_pid "$p" 2>/dev/null)"; then
-      cmd="$(alloy_process_command "$listener")"
-      printf '  port %-5s PID %-8s %s\n' "$p" "$listener" "$cmd"
-    else
-      printf '  port %-5s (free)\n' "$p"
-    fi
+    owner="$(alloy_port_owner "$p")"
+    case "$owner" in
+      owned\ *)
+        listener="${owner#owned }"
+        cmd="$(alloy_process_command "$listener")"
+        printf '  port %-5s PID %-8s %s\n' "$p" "$listener" "$cmd"
+        ;;
+      free)
+        printf '  port %-5s (free)\n' "$p"
+        ;;
+      *)
+        printf '  port %-5s (unattributable — listener probe unavailable)\n' "$p"
+        ;;
+    esac
   done
 }
 

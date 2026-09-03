@@ -639,9 +639,12 @@ alloy_refuse_unhealthy_slot_assignment() {
   local port path_guess
   port="$(alloy_slot_to_port "$slot")"
   if alloy_port_in_use "$port"; then
-    local pid
-    pid="$(alloy_port_listener_pid "$port" 2>/dev/null || echo "?")"
-    alloy_die "port ownership conflict: slot $slot port $port is in use by PID $pid (no managed metadata). Fail closed."
+    local owner
+    owner="$(alloy_port_owner "$port")"
+    if [[ "$owner" == "unknown" ]]; then
+      alloy_die "slot $slot port $port could not be proven free (listener probe unavailable). Fail closed."
+    fi
+    alloy_die "port ownership conflict: slot $slot port $port is in use by PID ${owner#owned } (no managed metadata). Fail closed."
   fi
 }
 

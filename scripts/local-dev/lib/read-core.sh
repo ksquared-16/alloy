@@ -303,12 +303,86 @@ alloy_rc_root_sanctioned() {   # 0 (true) iff class is sanctioned for work
 # ===========================================================================
 # Process / port inspection (read-only).
 # ===========================================================================
+# `lsof` lives in /usr/sbin on macOS, which is NOT on every PATH this toolkit
+# runs under — launchd agents and hook shells routinely have neither /usr/sbin
+# nor /sbin. Resolving it by bare name alone is how a port that was serving
+# traffic came back as unowned. ONE resolver: lib/common.sh delegates here.
+alloy_rc_lsof_bin() {
+  local candidate
+  if command -v lsof >/dev/null 2>&1; then
+    printf 'lsof'
+    return 0
+  fi
+  for candidate in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# WHO IS LISTENING ON THIS PORT, AND DID WE ACTUALLY GET TO LOOK?
+#
+# THE DEFECT THIS REPLACES. `alloy_rc_port_pid` resolved `lsof` by bare name with
+# no /usr/sbin fallback, and then returned 1 for THREE different facts: the probe
+# tool was missing, the probe failed, and the port has no listener. Every caller
+# reads `return 1` as "free". Measured on the Mac mini: ports 3014/3015/3016 were
+# answering HTTP 200 from real next-server processes while `alloy-dev-status`
+# printed `(free)` for all three, because the shell it ran under had no
+# /usr/sbin on PATH. The same conflation disarms `alloy_refuse_occupied_port`,
+# which is the guard that is supposed to stop one worktree starting a server on
+# another slot's port — the exact historical Financials-on-3011 collision.
+#
+# UNKNOWN IS NOT FREE. This prints a status word and, when there is one, a PID:
+#
+#   owned <pid>   a listener exists and the probe read its PID
+#   free          the probe ran and found no listener
+#   unknown       the probe could not run, or ran and failed
+#
+# Callers that decide whether it is safe to BIND a port must treat `unknown` as
+# occupied. Callers that report state must show `unknown` as unattributable, and
+# never as free.
+alloy_rc_port_owner() {
+  local port="$1" lsof_bin="" out="" pid="" rc=0
+  if ! lsof_bin="$(alloy_rc_lsof_bin)"; then
+    printf 'unknown'
+    return 0
+  fi
+  # lsof exits 1 both for "no match" and for several failures, so the exit code
+  # alone cannot separate them; an empty read with a clean exit is the only
+  # combination that actually means "nothing is listening".
+  out="$("$lsof_bin" -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null)"
+  rc=$?
+  pid="$(printf '%s\n' "$out" | awk 'NR==2 {print $2}')"
+  if [[ -n "$pid" ]]; then
+    printf 'owned %s' "$pid"
+    return 0
+  fi
+  if (( rc <= 1 )); then
+    printf 'free'
+    return 0
+  fi
+  printf 'unknown'
+}
+
+# Back-compatible: prints the PID and returns 0 when a listener is proven,
+# returns 1 otherwise. Callers that must distinguish "free" from "could not
+# tell" have to use alloy_rc_port_owner — this one cannot express the
+# difference, which is why it must never be the basis of a bind decision.
 alloy_rc_port_pid() {
-  local port="$1" pid=""
-  command -v lsof >/dev/null 2>&1 || return 1
-  pid="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $2}' || true)"
-  [[ -n "$pid" ]] || return 1
-  printf '%s' "$pid"
+  local owner
+  owner="$(alloy_rc_port_owner "$1")"
+  case "$owner" in
+    owned\ *) printf '%s' "${owner#owned }" ;;
+    *) return 1 ;;
+  esac
+}
+
+# True when the port is known to be free. `unknown` is NOT free, so this is
+# false there — a bind guard built on it fails closed.
+alloy_rc_port_known_free() {
+  [[ "$(alloy_rc_port_owner "$1")" == "free" ]]
 }
 
 alloy_rc_pid_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
