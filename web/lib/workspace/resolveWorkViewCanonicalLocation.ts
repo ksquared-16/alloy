@@ -49,6 +49,12 @@ export type WorkViewCanonicalLocationWorkUnitRow = {
     is_active?: boolean | null;
     sort_order?: number | null;
     queue_definition?: unknown;
+    /**
+     * The unit's own config layer. Carried so a caller that resolved a view's CANONICAL HOST can read
+     * that host's configuration instead of the surface unit's — see the placement layer in the
+     * provisioning answer.
+     */
+    metadata?: unknown;
 };
 
 export type WorkViewCanonicalLocation = {
