@@ -62,7 +62,26 @@ export const CAPACITY_POLICY_V1 = Object.freeze({
   // the one owner of how many slots exist. It was the literal 6 here, which is
   // how the control plane could disagree with the shell about topology.
   dev_server_slots: 6,
-  dev_server_memory_gb_each: 8,
+
+  // MEASURED, 2026-09-03, on the 48 GB / 12-core Mac mini. The old value here
+  // was 8 GB per server, which is what a heavily exercised UI server can reach
+  // after hours — not what a server costs. On 48 GB that assumption capped the
+  // policy at six servers while the host demonstrably ran eight under
+  // authenticated compilation, a brokered typecheck and two browser
+  // certifications with ZERO swap. Cost follows AGE and USE, not existence:
+  // freshly started servers measured 390-440 MB, and eight under real load
+  // totalled 11-14 GB, so ~2 GB is the honest steady-state working set.
+  dev_server_memory_gb_each: 2,
+
+  // The staircase found the envelope directly, so these are observations rather
+  // than formulas. 8, 9 and 10 all held ZERO swap. Eleven is where swap first
+  // appeared and then grew within the hold (0 -> 240 MB -> 729 MB). Twelve
+  // accelerated to ~2.3 GB while macOS expanded the swapfile 1 -> 2 -> 3 GB.
+  // CPU was never the limit: loadavg settled to 2.9-5.5 between compile bursts
+  // and Gateway latency stayed at 1-3 ms at every level, including twelve.
+  dev_server_normal_ceiling: 8,
+  dev_server_burst_ceiling: 10,
+  dev_server_measured_knee: 11,
 
   memory_reserve_fraction: 0.10,
   disk_reserve_fraction: 0.08,
@@ -228,7 +247,19 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
   // than leaving capacity policy insisting on six.
   const slotBound = policy === CAPACITY_POLICY_V1 ? managedSlotCount() : policy.dev_server_slots;
   const devByMemory = memGb ? Math.floor(memGb / policy.dev_server_memory_gb_each) : slotBound;
-  const devServerCeiling = Math.max(1, Math.min(slotBound, devByMemory));
+
+  // NORMAL is what routine work targets. BURST is controlled headroom above it,
+  // offered only while the host is healthy. Both are clamped by the same two
+  // axes as before — slots and RAM — so a smaller machine still gets a smaller
+  // number and this does not become a way to overcommit a laptop.
+  //
+  // The measured knee is carried through deliberately. A consumer that only
+  // learns the ceilings cannot explain WHY it stops, and the next person to
+  // raise a number should have to argue with the evidence rather than rediscover
+  // it. Nothing admits at the knee: burst stops one below it.
+  const devNormalCeiling = Math.max(1, Math.min(slotBound, devByMemory, policy.dev_server_normal_ceiling ?? slotBound));
+  const devBurstCeiling = Math.max(devNormalCeiling, Math.min(slotBound, devByMemory, policy.dev_server_burst_ceiling ?? devNormalCeiling));
+  const devServerCeiling = devNormalCeiling;
   if (devByMemory < slotBound) {
     constrained.push(gate("dev_server_capacity", devServerCeiling,
       `RAM allows ${devByMemory} servers at ${policy.dev_server_memory_gb_each} GB each; ${slotBound} managed slots exist`));
@@ -334,6 +365,14 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
         remaining: Math.max(0, devServerCeiling - (cap?.dev_servers ?? 0)),
         bounded_by: devByMemory < slotBound ? "memory" : "slots",
         by_slots: slotBound, by_memory: devByMemory,
+        // Normal vs burst, from the one owner, so health and admission can show
+        // "6 / 8" or "9 / 10 - burst" without recomputing anything.
+        normal_ceiling: devNormalCeiling,
+        burst_ceiling: devBurstCeiling,
+        measured_knee: policy.dev_server_measured_knee ?? null,
+        normal_remaining: Math.max(0, devNormalCeiling - (cap?.dev_servers ?? 0)),
+        burst_remaining: Math.max(0, devBurstCeiling - (cap?.dev_servers ?? 0)),
+        using_burst: (cap?.dev_servers ?? 0) > devNormalCeiling,
       },
       disk_headroom: {
         total_gb: diskTotal || null, free_gb: diskFree || null,
