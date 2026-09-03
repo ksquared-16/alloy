@@ -24,6 +24,7 @@
 
 import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
     ALLOY_MENU_SURFACE,
     ALLOY_MENU_TRIGGER,
@@ -56,6 +57,17 @@ export function WaitlistPlacementAdjustControl({
     const [open, setOpen] = useState(false);
     const titleId = useId();
     const triggerRef = useRef<HTMLButtonElement | null>(null);
+    /*
+     * The ANCHOR, as an element rather than a layout parent.
+     *
+     * The popover used to be laid out INSIDE this row (`absolute` under a `relative` span), which made
+     * its geometry the row's business. Measured with real pointer input: `pointerdown` landed on the
+     * menu trigger and `pointerup` landed on the row's own secondary span behind it, so the browser
+     * synthesised the click on their common ancestor and the trigger's handler never ran — the control
+     * simply did not respond to a mouse. Keeping it as state (not a ref) is what lets the portal
+     * re-position when the anchor first mounts.
+     */
+    const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
 
     // Focus returns to the trigger on close, so keyboard operators are never dropped at the top of
     // the queue after adjusting a row deep in it.
@@ -67,7 +79,10 @@ export function WaitlistPlacementAdjustControl({
     return (
         <span className="relative inline-flex" data-waitlist-adjust-anchor>
             <button
-                ref={triggerRef}
+                ref={(el) => {
+                    triggerRef.current = el;
+                    setAnchorEl(el);
+                }}
                 type="button"
                 aria-haspopup="dialog"
                 aria-expanded={open ? true : undefined}
@@ -84,8 +99,9 @@ export function WaitlistPlacementAdjustControl({
             >
                 Adjust
             </button>
-            {open ? (
+            {open && anchorEl ? (
                 <WaitlistPlacementAdjustPopover
+                    anchorEl={anchorEl}
                     titleId={titleId}
                     placementCandidateId={placementCandidateId}
                     currentPositionLabel={currentPositionLabel}
@@ -99,6 +115,7 @@ export function WaitlistPlacementAdjustControl({
 }
 
 function WaitlistPlacementAdjustPopover({
+    anchorEl,
     titleId,
     placementCandidateId,
     currentPositionLabel,
@@ -106,6 +123,7 @@ function WaitlistPlacementAdjustPopover({
     precedenceReason,
     onClose,
 }: {
+    anchorEl: HTMLElement;
     titleId: string;
     placementCandidateId: string;
     currentPositionLabel?: string | null;
@@ -126,6 +144,43 @@ function WaitlistPlacementAdjustPopover({
     const [mounted, setMounted] = useState(false);
 
     const panelRef = useRef<HTMLDivElement | null>(null);
+
+    /*
+     * ANCHORED, NOT NESTED — the same doctrine `QueueRecordAttentionPopover` already uses for a
+     * queue-row widget: portal to the body, position `fixed` from the anchor's rect, and recompute on
+     * resize and on CAPTURE-phase scroll so a scrolling row moves the panel with it instead of
+     * dragging it out of alignment or clipping it. This is not a new overlay framework; it is the
+     * existing one, applied to a control that had been left laid out inside the row.
+     */
+    const PANEL_WIDTH = 236;
+    const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+    useEffect(() => {
+        const update = () => {
+            const rect = anchorEl.getBoundingClientRect();
+            // Right-aligned to the trigger, as before, then clamped into the viewport so a row near
+            // the edge cannot push the panel off-screen.
+            const left = Math.min(
+                Math.max(12, rect.right - PANEL_WIDTH),
+                Math.max(12, window.innerWidth - PANEL_WIDTH - 12),
+            );
+            // Flip above the trigger when there is not room below.
+            const below = rect.bottom + 6;
+            const estimatedHeight = panelRef.current?.getBoundingClientRect().height ?? 220;
+            const top =
+                below + estimatedHeight > window.innerHeight - 12 && rect.top - estimatedHeight - 6 > 12
+                    ? rect.top - estimatedHeight - 6
+                    : below;
+            setPos({ top, left });
+        };
+        update();
+        window.addEventListener("resize", update);
+        window.addEventListener("scroll", update, true);
+        return () => {
+            window.removeEventListener("resize", update);
+            window.removeEventListener("scroll", update, true);
+        };
+    }, [anchorEl]);
+
     useEffect(() => {
         setMounted(true);
         const onKey = (e: KeyboardEvent) => {
@@ -135,7 +190,11 @@ function WaitlistPlacementAdjustPopover({
         // queue stays live and clickable while the popover is open.
         const onDown = (e: PointerEvent) => {
             const el = panelRef.current;
-            if (el && e.target instanceof Node && !el.contains(e.target)) onClose();
+            if (!(e.target instanceof Node)) return;
+            // The anchor counts as inside: the panel is portaled now, so the trigger is no longer a
+            // DOM ancestor of it and would otherwise read as an outside press.
+            if (anchorEl.contains(e.target)) return;
+            if (el && !el.contains(e.target)) onClose();
         };
         window.addEventListener("keydown", onKey);
         window.addEventListener("pointerdown", onDown, true);
@@ -143,7 +202,7 @@ function WaitlistPlacementAdjustPopover({
             window.removeEventListener("keydown", onKey);
             window.removeEventListener("pointerdown", onDown, true);
         };
-    }, [onClose]);
+    }, [onClose, anchorEl]);
 
     /*
      * CONVERGE, NEVER RELOAD.
@@ -254,16 +313,20 @@ function WaitlistPlacementAdjustPopover({
         />
     );
 
-    return (
+    if (!pos) return null;
+
+    return createPortal(
         <div
             ref={panelRef}
             role="dialog"
             aria-labelledby={titleId}
             data-waitlist-placement-adjust-popover
-            className="absolute right-0 top-full z-50 mt-1 w-[236px] text-left"
+            className="fixed z-[120] w-[236px] text-left"
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             style={{
+                top: pos.top,
+                left: pos.left,
                 border: "1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 30%, #dde3eb))",
                 borderRadius: "var(--alloy-os-fp-card-radius, 12px)",
                 boxShadow: "var(--alloy-os-fp-card-shadow, 0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -12px rgba(15,23,42,0.12))",
@@ -361,7 +424,8 @@ function WaitlistPlacementAdjustPopover({
                     </button>
                 </span>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
 
