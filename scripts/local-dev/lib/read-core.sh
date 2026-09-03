@@ -303,12 +303,200 @@ alloy_rc_root_sanctioned() {   # 0 (true) iff class is sanctioned for work
 # ===========================================================================
 # Process / port inspection (read-only).
 # ===========================================================================
+# `lsof` lives in /usr/sbin on macOS, which is NOT on every PATH this toolkit
+# runs under — launchd agents and hook shells routinely have neither /usr/sbin
+# nor /sbin. Resolving it by bare name alone is how a port that was serving
+# traffic came back as unowned. ONE resolver: lib/common.sh delegates here.
+alloy_rc_lsof_bin() {
+  local candidate
+  if command -v lsof >/dev/null 2>&1; then
+    printf 'lsof'
+    return 0
+  fi
+  for candidate in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# WHO IS LISTENING ON THIS PORT, AND DID WE ACTUALLY GET TO LOOK?
+#
+# THE DEFECT THIS REPLACES. `alloy_rc_port_pid` resolved `lsof` by bare name with
+# no /usr/sbin fallback, and then returned 1 for THREE different facts: the probe
+# tool was missing, the probe failed, and the port has no listener. Every caller
+# reads `return 1` as "free". Measured on the Mac mini: ports 3014/3015/3016 were
+# answering HTTP 200 from real next-server processes while `alloy-dev-status`
+# printed `(free)` for all three, because the shell it ran under had no
+# /usr/sbin on PATH. The same conflation disarms `alloy_refuse_occupied_port`,
+# which is the guard that is supposed to stop one worktree starting a server on
+# another slot's port — the exact historical Financials-on-3011 collision.
+#
+# UNKNOWN IS NOT FREE. This prints a status word and, when there is one, a PID:
+#
+#   owned <pid>   a listener exists and the probe read its PID
+#   free          the probe ran and found no listener
+#   unknown       the probe could not run, or ran and failed
+#
+# Callers that decide whether it is safe to BIND a port must treat `unknown` as
+# occupied. Callers that report state must show `unknown` as unattributable, and
+# never as free.
+alloy_rc_port_owner() {
+  local port="$1" lsof_bin="" out="" pid="" rc=0
+  if ! lsof_bin="$(alloy_rc_lsof_bin)"; then
+    printf 'unknown'
+    return 0
+  fi
+  # lsof exits 1 both for "no match" and for several failures, so the exit code
+  # alone cannot separate them; an empty read with a clean exit is the only
+  # combination that actually means "nothing is listening".
+  out="$("$lsof_bin" -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null)"
+  rc=$?
+  pid="$(printf '%s\n' "$out" | awk 'NR==2 {print $2}')"
+  if [[ -n "$pid" ]]; then
+    printf 'owned %s' "$pid"
+    return 0
+  fi
+  if (( rc <= 1 )); then
+    # LSOF SEEING NOTHING IS NOT THE SAME AS NOTHING BEING THERE.
+    #
+    # Unprivileged lsof cannot see another user's sockets. tailscaled runs as
+    # root and holds per-port tailnet listeners, so for a port whose only owner
+    # is Tailscale Serve, lsof exits clean with no rows and this returned
+    # 'free'. MEASURED on port 3016: lsof -iTCP:3016 empty and this function
+    # said 'free', while netstat showed LISTEN on 100.71.206.63.3016 and
+    # fd7a:115c:a1e0::.3016, and a real bind of both 0.0.0.0:3016 and :::3016
+    # failed EADDRINUSE. alloy-dev-start believed the port was free and the
+    # server then died on a bind it was told would succeed.
+    #
+    # netstat reports every user's sockets, so it is the cross-check that makes
+    # 'free' mean free. A listener it can see but lsof cannot has no PID we are
+    # entitled to, so the honest answer is 'unknown' — never 'free'. Callers
+    # already fail closed on unknown, which is the safe direction for a bind.
+    if alloy_rc_port_has_foreign_listener "$port"; then
+      printf 'unknown'
+      return 0
+    fi
+    printf 'free'
+    return 0
+  fi
+  printf 'unknown'
+}
+
+# True when something is LISTENing on the port that lsof did not attribute to
+# us. Absence of netstat is not evidence of absence, so a missing or failing
+# netstat reports no foreign listener and leaves the lsof verdict standing.
+alloy_rc_port_has_foreign_listener() {
+  local port="$1" netstat_bin=""
+  # Overridable so the missing-netstat path is testable; a host with no netstat
+  # must degrade to the lsof verdict, not to "every port is unknown".
+  for netstat_bin in "${ALLOY_RC_NETSTAT_BIN:-}" /usr/sbin/netstat /usr/bin/netstat "$(command -v netstat 2>/dev/null)"; do
+    [[ -n "$netstat_bin" && -x "$netstat_bin" ]] || continue
+    "$netstat_bin" -an 2>/dev/null | awk -v p="$port" '
+      $1 ~ /^tcp/ && $NF == "LISTEN" && $4 ~ ("[.:]" p "$") { found = 1 }
+      END { exit found ? 0 : 1 }
+    ' && return 0
+    return 1
+  done
+  return 1
+}
+
+# ── loopback-scoped ownership ────────────────────────────────────────────────
+#
+# "Is this port free?" is the wrong question once two owners share a port
+# number by design. Tailscale Serve publishes lane ports on the tailnet
+# addresses and proxies them to 127.0.0.1, so tailscaled legitimately holds
+# 100.71.206.63:<port> and fd7a:...:<port> forever, including while no dev
+# server is running. Asking the port-global question there returns 'unknown'
+# (root-owned, lsof cannot see it) and a correct fail-closed guard then refuses
+# a bind that would have succeeded: MEASURED on 3016, where 127.0.0.1:3016 was
+# provably bindable while the guard refused the start.
+#
+# The question a loopback-bound dev server actually needs is whether the
+# LOOPBACK address is free. A wildcard listener still counts, because it
+# occupies loopback too; a tailnet-address listener does not.
+alloy_rc_loopback_port_owner() {
+  local port="$1" netstat_bin="" rows="" lsof_bin="" pid=""
+  for netstat_bin in "${ALLOY_RC_NETSTAT_BIN:-}" /usr/sbin/netstat /usr/bin/netstat "$(command -v netstat 2>/dev/null)"; do
+    [[ -n "$netstat_bin" && -x "$netstat_bin" ]] || continue
+    break
+  done
+  # Without netstat there is no way to separate addresses, so fall back to the
+  # port-global answer rather than inventing a narrower one.
+  if [[ -z "$netstat_bin" || ! -x "$netstat_bin" ]]; then
+    alloy_rc_port_owner "$port"
+    return 0
+  fi
+  rows="$("$netstat_bin" -an 2>/dev/null | awk -v p="$port" '
+    $1 ~ /^tcp/ && $NF == "LISTEN" {
+      a = $4
+      if (a !~ ("[.:]" p "$")) next
+      # Strip the trailing .<port> to leave the bound address.
+      sub("[.]" p "$", "", a)
+      if (a == "127.0.0.1" || a == "::1" || a == "*") print a
+    }')"
+  if [[ -z "$rows" ]]; then
+    printf 'free'
+    return 0
+  fi
+  if lsof_bin="$(alloy_rc_lsof_bin)"; then
+    pid="$("$lsof_bin" -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $2}')"
+  fi
+  if [[ -n "$pid" ]]; then
+    printf 'owned %s' "$pid"
+    return 0
+  fi
+  # Occupied by someone we cannot name. Still not free.
+  printf 'unknown'
+}
+
+# Back-compatible: prints the PID and returns 0 when a listener is proven,
+# returns 1 otherwise. Callers that must distinguish "free" from "could not
+# tell" have to use alloy_rc_port_owner — this one cannot express the
+# difference, which is why it must never be the basis of a bind decision.
 alloy_rc_port_pid() {
-  local port="$1" pid=""
-  command -v lsof >/dev/null 2>&1 || return 1
-  pid="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $2}' || true)"
-  [[ -n "$pid" ]] || return 1
-  printf '%s' "$pid"
+  local owner
+  owner="$(alloy_rc_port_owner "$1")"
+  case "$owner" in
+    owned\ *) printf '%s' "${owner#owned }" ;;
+    *) return 1 ;;
+  esac
+}
+
+# True when the port is known to be free. `unknown` is NOT free, so this is
+# false there — a bind guard built on it fails closed.
+alloy_rc_port_known_free() {
+  [[ "$(alloy_rc_port_owner "$1")" == "free" ]]
+}
+
+# How many CPUs does this host have? Read-only, and the ONE shell-side answer —
+# capacity bounds that are genuinely CPU-shaped (providers, heavy jobs) must not
+# each grow their own `sysctl` call with a different fallback.
+#
+# sysctl lives in /usr/sbin, which is missing from several PATHs this toolkit
+# runs under; resolving it by bare name is the same defect that made a serving
+# port report itself free.
+alloy_rc_cpu_count() {
+  local candidate
+  for candidate in sysctl /usr/sbin/sysctl /sbin/sysctl; do
+    if command -v "$candidate" >/dev/null 2>&1 || [[ -x "$candidate" ]]; then
+      local n
+      n="$("$candidate" -n hw.ncpu 2>/dev/null)"
+      if [[ "$n" =~ ^[0-9]+$ ]] && (( n >= 1 )); then
+        printf '%s' "$n"
+        return 0
+      fi
+    fi
+  done
+  # Linux fallback, then refusal. Refusing beats inventing a core count.
+  if [[ -r /proc/cpuinfo ]]; then
+    local n
+    n="$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)"
+    [[ "$n" =~ ^[0-9]+$ ]] && (( n >= 1 )) && { printf '%s' "$n"; return 0; }
+  fi
+  return 1
 }
 
 alloy_rc_pid_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }

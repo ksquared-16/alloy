@@ -209,19 +209,37 @@ await test("a genuine NEEDS_INPUT question still continues the same run", async 
 
 // ------------------------------------- law 4: the operator is told the truth --
 
-await test("the notice says the prompt must be answered in the terminal", () => {
+await test("the notice tells the operator where the answer actually lives", () => {
   const blocked = deliveryNotice({
     ok: false, error: PROMPT_NOT_READY_ERROR, status: "failed", needs_terminal_operator: true,
     prompt_readiness: { summary: 'Claude is waiting on a permission prompt: "Do you want to proceed?"', needs_terminal_operator: true },
   });
   assert.equal(blocked.kind, "err");
   assert.match(blocked.text, /was not sent/i);
-  // The phrase survives ONLY for blockers Vacilando genuinely cannot answer —
-  // onboarding, login, trust. It must never appear for a permission prompt,
-  // which is what this whole slice removes from the operator's path.
-  assert.match(blocked.text, /answered in the agent's terminal/i);
-  assert.match(blocked.text, /cannot answer it for you/i);
+  // Terminal guidance survives ONLY for a screen with nothing selectable — a login
+  // URL, a free-text field. It says WHY, so the operator is not sent to a terminal
+  // to hunt for a choice that does not exist there either.
+  assert.match(blocked.text, /nothing to pick/i);
+  assert.match(blocked.text, /agent's terminal/i);
   assert.equal(blocked.text.includes("provider_prompt_not_ready"), false);
+  // And it must NOT claim Vacilando is incapable of answering prompts as a class —
+  // that sentence is what sent the Director to a terminal for an ordinary permission
+  // prompt, which is the dead end this slice removes.
+  assert.equal(/cannot answer it for you/i.test(blocked.text), false);
+
+  // A blocked pane whose prompt DOES offer choices is answerable in the lane, and
+  // the already-queued instruction continues itself once it is answered.
+  const answerable = deliveryNotice({
+    ok: false, error: PROMPT_NOT_READY_ERROR,
+    prompt_readiness: {
+      summary: 'Claude is waiting on a permission prompt: "Do you want to proceed?"',
+      blocker_kind: "permission",
+      needs_terminal_operator: false,
+    },
+  });
+  assert.match(answerable.text, /Answer it above/i);
+  assert.match(answerable.text, /do not need to send it again/i);
+  assert.equal(/terminal/i.test(answerable.text), false, "an answerable prompt must never mention a terminal");
 
   const queued = deliveryNotice({
     ok: false, error: PROMPT_NOT_READY_ERROR, status: "queued", admission_queued: true,
@@ -230,7 +248,8 @@ await test("the notice says the prompt must be answered in the terminal", () => 
   assert.match(queued.text, /Queued/);
   assert.match(queued.text, /delivered when the agent is ready/);
 
-  assert.match(deliveryErrorText(UNDELIVERED_PROMPT_BLOCK), /answered in the terminal/i);
+  assert.match(deliveryErrorText(UNDELIVERED_PROMPT_BLOCK), /answer it in this lane/i);
+  assert.equal(/answered in the terminal/i.test(deliveryErrorText(UNDELIVERED_PROMPT_BLOCK)), false);
   assert.equal(deliveryErrorText(UNDELIVERED_PROMPT_BLOCK).includes(UNDELIVERED_PROMPT_BLOCK), false);
 });
 

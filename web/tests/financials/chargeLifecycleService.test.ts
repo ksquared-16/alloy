@@ -73,6 +73,64 @@ describe("chargeLifecycleService — preview", () => {
     });
 });
 
+/*
+ * A HOUSEHOLD charge is a real charge, so it gets real idempotency.
+ *
+ * The dedupe lookup was hardcoded to `enrollment_agreement` and only ran when the caller had an
+ * agreement, and the resolution key fell back to the literal `"org"` for anything else. Two
+ * submissions of one family's registration fee therefore wrote two drafts — and two DIFFERENT
+ * families' fees shared a key. Both are duplicate-money defects; neither is visible from the
+ * enrolment path.
+ */
+describe("chargeLifecycleService — a household (customer) source is deduped like any other", () => {
+    const HOUSEHOLD = { type: "customer" as const, id: "cust-1" };
+
+    it("scopes the resolution key to the billable source, not to the literal 'org'", async () => {
+        const { supabase } = setup();
+        const r = await previewTemplateCharge(supabase, ORG_ID, {
+            templateId: TEMPLATE_ID,
+            billableSource: HOUSEHOLD,
+            today: TODAY,
+        });
+        expect(r.intent.resolutionKey).toBe(`tpl:registration_fee:${TODAY}:cust-1`);
+        expect(r.wouldWrite).toBe("create");
+    });
+
+    it("writes ONE draft for a repeated household submission", async () => {
+        const { store, supabase } = setup();
+        const first = await writeTemplateDraftCharge(supabase, ORG_ID, {
+            templateId: TEMPLATE_ID,
+            billableSource: HOUSEHOLD,
+            today: TODAY,
+        });
+        const second = await writeTemplateDraftCharge(supabase, ORG_ID, {
+            templateId: TEMPLATE_ID,
+            billableSource: HOUSEHOLD,
+            today: TODAY,
+        });
+        expect(first.status).toBe("created");
+        expect(second.status).toBe("unchanged");
+        expect((store.charges as Array<Record<string, unknown>>).length).toBe(1);
+        expect((store.charges as Array<Record<string, unknown>>)[0]!.billable_source_type).toBe("customer");
+    });
+
+    it("does not collide two households on the same template and day", async () => {
+        const { store, supabase } = setup();
+        await writeTemplateDraftCharge(supabase, ORG_ID, {
+            templateId: TEMPLATE_ID,
+            billableSource: HOUSEHOLD,
+            today: TODAY,
+        });
+        const other = await writeTemplateDraftCharge(supabase, ORG_ID, {
+            templateId: TEMPLATE_ID,
+            billableSource: { type: "customer", id: "cust-2" },
+            today: TODAY,
+        });
+        expect(other.status).toBe("created");
+        expect((store.charges as Array<Record<string, unknown>>).length).toBe(2);
+    });
+});
+
 describe("chargeLifecycleService — idempotent draft write", () => {
     it("creates a draft once, is unchanged on re-run, links template + occurs/billable", async () => {
         const { store, supabase } = setup();

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    useCallback,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -26,6 +27,12 @@ import {
     PUBLISHED_LAYOUT_MIN_PX,
     type FocusPanelPublishedLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import FocusPanelRenderErrorBoundary from "@/components/admin/focusPanel/FocusPanelRenderErrorBoundary";
+import { useColumnAwareStack } from "@/components/admin/focusPanel/useColumnAwareStack";
+import {
+    COMPOSER_GRID_GAP_PX,
+    COMPOSER_GRID_ROW_UNIT_PX,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import type { CardCompositionPreference } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
@@ -205,6 +212,67 @@ export default function FocusPanelCardGrid({
         return planPublishedLayout(publishedLayout, measuredWidth, { preferLanesFromGrid });
     }, [publishedLayout, measuredWidth, preferLanesFromGrid]);
 
+    /*
+     * COLUMN-AWARE VERTICAL PLACEMENT — one engine for builder and runtime.
+     *
+     * CSS Grid sizes rows across the whole canvas, so a card's Y was decided by
+     * every other column's content. Measured live: Household ended at 1448 and
+     * Health, directly beneath it in the same columns, began at 1716 — 268px owned
+     * by rows that were occupied only in the OPPOSITE columns. Cards now fall
+     * against the columns they actually overlap, and nothing else.
+     */
+    const stackLayout = useMemo(
+        () => (publishedPlan?.strategy === "grid"
+            ? {
+                  columns: publishedPlan.gridColumns,
+                  areas: publishedPlan.areas.map((a) => ({
+                      card: a.card,
+                      colStart: a.colStart, colSpan: a.colSpan,
+                      rowStart: a.rowStart, rowSpan: a.rowSpan,
+                  })),
+              }
+            : { columns: 12, areas: [] }),
+        [publishedPlan],
+    );
+    /*
+     * FIRST PAINT ONLY — the space a card reserves before anything has been measured.
+     *
+     * The authored span is the least-bad guess available in that one frame, and it stops
+     * the canvas collapsing to nothing before the observer reports. It is NOT a floor:
+     * `resolveColumnAwareLayout` drops it the moment a real measurement exists.
+     */
+    const unmeasuredHeightFor = useCallback(
+        (area: { rowSpan: number }) =>
+            area.rowSpan * COMPOSER_GRID_ROW_UNIT_PX + (area.rowSpan - 1) * COMPOSER_GRID_GAP_PX,
+        [],
+    );
+    /*
+     * The height each card had in the last layout resolved WHILE NOTHING WAS RAISED.
+     *
+     * Recorded from the resolved boxes rather than from a live measurement, so it cannot
+     * catch the inflated wrapper that elevation briefly produces.
+     */
+    const restingHeights = useRef<Map<string, number>>(new Map());
+    const stack = useColumnAwareStack({
+        layout: stackLayout as never,
+        gapPx: COMPOSER_GRID_GAP_PX,
+        unmeasuredHeightFor,
+        // Whatever is raised into the depth layer keeps the slot it left, so opening and
+        // closing a command or a detail never moves the cards underneath it.
+        holdCard: elevatedCellKey ?? null,
+        holdHeight: elevatedCellKey ? restingHeights.current.get(elevatedCellKey) ?? null : null,
+    });
+    // Record the resting geometry only while NOTHING is raised, so the value handed back as
+    // `holdHeight` on the next elevation is the height the card actually sat at.
+    if (!elevatedCellKey && stack.resolved) {
+        for (const b of stack.resolved.boxes) restingHeights.current.set(b.card, b.height);
+    }
+    const stackBoxes = useMemo(() => {
+        const map = new Map<string, { left: number; width: number; top: number; height: number }>();
+        for (const b of stack.resolved?.boxes ?? []) map.set(b.card, b);
+        return map;
+    }, [stack.resolved]);
+
     const composition = useMemo(() => {
         if (publishedLayout || !composed) return null;
         return composeFocusPanelSurface({
@@ -294,7 +362,15 @@ export default function FocusPanelCardGrid({
                 data-fp-elevated={elevated ? "true" : undefined}
                 style={{ ...extra.style, minHeight: reserved ? `${reserved}px` : extra.style?.minHeight }}
             >
-                {renderCell(key)}
+                {/*
+                 * One card's render failure stays one card's. The cell — and therefore the
+                 * authored placement, width and reserved height around it — is OUTSIDE the
+                 * boundary, so a failing card holds its geometry and the surface keeps the
+                 * shape the operator published instead of reflowing around a hole.
+                 */}
+                <FocusPanelRenderErrorBoundary scope="card" label={key}>
+                    {renderCell(key)}
+                </FocusPanelRenderErrorBoundary>
             </div>
         );
     };
@@ -339,26 +415,85 @@ export default function FocusPanelCardGrid({
                     // V5 responsive CSS Grid: each region places at colStart/rowStart and
                     // spans columns/rows (vertical + horizontal spans, independent regions).
                     <div
+                        ref={stack.containerRef as never}
                         className="alloy-os-fp-canvas alloy-os-fp-canvas--grid"
                         data-fp-strategy="published-grid"
-                        style={{ ["--fp-grid-cols" as string]: publishedPlan.gridColumns }}
+                        data-fp-vertical-model="column-aware"
+                        style={{
+                            ["--fp-grid-cols" as string]: publishedPlan.gridColumns,
+                            // The canvas is as tall as the tallest column, not as tall as
+                            // the sum of shared rows nobody in this column occupies.
+                            height: stack.resolved ? `${stack.resolved.contentHeight}px` : undefined,
+                        }}
                     >
-                        {publishedPlan.areas.map((area) => (
-                            <div
-                                key={area.card}
-                                className="alloy-os-fp-grid-area"
-                                data-fp-grid-area={area.card}
-                                data-fp-grid-col={`${area.colStart}/${area.colSpan}`}
-                                data-fp-grid-row={`${area.rowStart}/${area.rowSpan}`}
-                                style={{
-                                    gridColumn: `${area.colStart} / span ${area.colSpan}`,
-                                    gridRow: `${area.rowStart} / span ${area.rowSpan}`,
-                                    minHeight: area.minHeightPx ? `${area.minHeightPx}px` : undefined,
-                                }}
-                            >
-                                {renderCellBox(area.card, { dataWidthUnits: area.colSpan })}
-                            </div>
-                        ))}
+                        {publishedPlan.areas.map((area) => {
+                            const boxOf = stackBoxes.get(area.card);
+                            /*
+                             * AN EXPANDED DETAIL IS NOT A CARD, AND MUST NOT WEAR THE CARD'S COLUMN.
+                             *
+                             * The elevated card centres itself with `left:0; right:0; margin-inline:auto`
+                             * and sizes itself `min(<modal width>, calc(100% - 32px))` — and both resolve
+                             * against the nearest POSITIONED ancestor. In the lanes and rows strategies
+                             * that is the canvas, which is what the depth CSS says it intends ("the card
+                             * must anchor to the grid, not the narrow cell").
+                             *
+                             * In this strategy the wrapper is absolutely positioned, so the wrapper became
+                             * that ancestor and `100%` meant the CARD'S COLUMN. Financials is authored four
+                             * columns wide, so Add charge — a 560px command — was capped near 360px and
+                             * centred over the right-hand column, and Details, a 1180px workstation, was
+                             * squeezed into the same slot. That is why an expanded detail looked like a
+                             * card expansion: it was being measured against the card.
+                             *
+                             * While a card is elevated its wrapper therefore takes the CANVAS's box. The
+                             * wrapper is out of flow either way, so nothing beneath it moves — opening and
+                             * closing a command reflows nothing — and every card gets this, not Financials.
+                             */
+                            const elevatedHere = elevatedCellKey != null && elevatedCellKey === area.card;
+                            return (
+                                <div
+                                    key={area.card}
+                                    ref={stack.registerCard(area.card) as never}
+                                    className="alloy-os-fp-grid-area"
+                                    data-fp-grid-area={area.card}
+                                    data-fp-grid-col={`${area.colStart}/${area.colSpan}`}
+                                    data-fp-grid-row={`${area.rowStart}/${area.rowSpan}`}
+                                    data-fp-grid-area-elevated={elevatedHere ? "true" : undefined}
+                                    style={
+                                        elevatedHere
+                                            ? {
+                                                  // The canvas's own box, so the depth layer centres on
+                                                  // the Focus Panel rather than on one authored column.
+                                                  position: "absolute",
+                                                  left: 0,
+                                                  top: 0,
+                                                  width: "100%",
+                                              }
+                                        : boxOf
+                                            ? {
+                                                  // Placement only. NO height of any kind:
+                                                  // the authored span owns where a card sits
+                                                  // and how wide it is, and the content owns
+                                                  // how tall it is. A `min-height` here would
+                                                  // be read straight back by the measurement
+                                                  // on the next frame and become the card's
+                                                  // height forever.
+                                                  position: "absolute",
+                                                  left: `${boxOf.left}px`,
+                                                  width: `${boxOf.width}px`,
+                                                  top: `${boxOf.top}px`,
+                                              }
+                                            : {
+                                                  // First paint, before measurement: keep the
+                                                  // authored columns so nothing jumps sideways.
+                                                  gridColumn: `${area.colStart} / span ${area.colSpan}`,
+                                                  minHeight: area.minHeightPx ? `${area.minHeightPx}px` : undefined,
+                                              }
+                                    }
+                                >
+                                    {renderCellBox(area.card, { dataWidthUnits: area.colSpan })}
+                                </div>
+                            );
+                        })}
                     </div>
                 ) : publishedPlan.strategy === "lanes" ? (
                     // Column-major: each authored column flows as one continuous lane that

@@ -169,13 +169,32 @@ alloy_runtime_is_fixture() {
 alloy_refuse_occupied_port() {
   local port="$1"
   local context="${2:-}"
-  local pid
-  if pid="$(alloy_port_listener_pid "$port" 2>/dev/null)"; then
-    if [[ -n "$context" ]]; then
-      alloy_die "port $port is already in use by PID $pid ($context). Refusing to choose a different port."
-    fi
-    alloy_die "port $port is already in use by PID $pid. Refusing to choose a different port."
+  # Scope: "loopback" asks only whether 127.0.0.1/::1 (or a wildcard covering
+  # them) is taken. That is the right question for a dev server that binds
+  # loopback only, and it stops Tailscale Serve's permanent tailnet-address
+  # listeners from reading as "this port is occupied".
+  local scope="${3:-global}"
+  local owner
+  if [[ "$scope" == "loopback" ]]; then
+    owner="$(alloy_rc_loopback_port_owner "$port")"
+  else
+    owner="$(alloy_rc_port_owner "$port")"
   fi
+  case "$owner" in
+    owned\ *)
+      local pid="${owner#owned }"
+      if [[ -n "$context" ]]; then
+        alloy_die "port $port is already in use by PID $pid ($context). Refusing to choose a different port."
+      fi
+      alloy_die "port $port is already in use by PID $pid. Refusing to choose a different port."
+      ;;
+    unknown)
+      # Refusing here is the point. The alternative — proceeding because the
+      # probe failed — is how a second server lands on a port that is already
+      # serving another slot, and that collision is only visible afterwards.
+      alloy_die "port $port ownership could not be determined (listener probe unavailable)${context:+ ($context)}. Refusing to bind a port that cannot be proven free."
+      ;;
+  esac
 }
 
 alloy_confirm() {
@@ -237,6 +256,106 @@ alloy_branch_name() {
 alloy_metadata_path() {
   local name="$1"
   printf '%s/%s.env' "$ALLOY_METADATA_DIR" "$name"
+}
+
+# --- Director-facing route for a lane's app ---
+#
+# WHY THIS IS PART OF STARTING A SERVER. Execution is on the Mac mini; the
+# Director drives Vacilando from a MacBook. A dev server that is running but not
+# routed is invisible to the operator, and the obvious link — localhost:PORT —
+# means the MacBook when clicked there. Routing is therefore not a separate
+# setup step somebody remembers; it is part of what "the server is available"
+# means, so every lane inherits it and no lane needs a hand-written config.
+#
+# Per-port HTTPS on the tailnet hostname Tailscale Serve already publishes. Not
+# a path mount: the app stays at the root so absolute /_next asset paths and the
+# HMR socket keep working. Not the raw tailnet IP: plain HTTP on an IP literal
+# breaks Secure cookies and cannot appear in an OAuth redirect allowlist, and
+# the human sign-in ceremony has to live on this origin.
+#
+# Best effort by construction. A missing or unconfigured Tailscale must never
+# stop a dev server from starting — the server is still correct locally, it is
+# only the remote route that is absent, and lane-app-url reports that honestly
+# as `no_serve_mapping_for_port` rather than emitting a URL that cannot connect.
+alloy_tailscale_bin() {
+  if command -v tailscale >/dev/null 2>&1; then command -v tailscale; return 0; fi
+  [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]] \
+    && printf '/Applications/Tailscale.app/Contents/MacOS/Tailscale' && return 0
+  return 1
+}
+
+alloy_ensure_director_route() {
+  local port="$1" ts
+  [[ -n "$port" ]] || return 0
+  [[ "${ALLOY_DIRECTOR_ROUTE:-1}" == "1" ]] || return 0
+  ts="$(alloy_tailscale_bin)" || return 0
+  # Idempotent: if the mapping is already published, adding it again is a no-op
+  # but we avoid the call so a normal restart is quiet.
+  if "$ts" serve status 2>/dev/null | grep -q ":${port}\b"; then return 0; fi
+  "$ts" serve --bg "--https=${port}" "http://127.0.0.1:${port}" >/dev/null 2>&1 || return 0
+  return 0
+}
+
+alloy_remove_director_route() {
+  local port="$1" ts
+  [[ -n "$port" ]] || return 0
+  [[ "${ALLOY_DIRECTOR_ROUTE:-1}" == "1" ]] || return 0
+  ts="$(alloy_tailscale_bin)" || return 0
+  "$ts" serve "--https=${port}" off >/dev/null 2>&1 || return 0
+  return 0
+}
+
+# --- Dev-server lifecycle audit ---
+#
+# THE GAP THIS CLOSES. During capacity certification the server on slot 1
+# disappeared from the measurement cohort twice, and there was NO WAY TO SAY WHO
+# STOPPED IT. The report had to read "another lane's agent probably stopped it",
+# which is inference, not evidence. Every canonical path that starts or stops a
+# dev server ran without leaving a durable trace, so the only record of a
+# lifecycle action was the side effect: a pid file that had vanished.
+#
+# This is an AUDIT LOG over the canonical operations, not a second registry. The
+# pid files and metadata remain the authority on what IS; this records what
+# HAPPENED, so a future cohort invalidation can name the action instead of
+# guessing at it.
+#
+# The distinction that matters most is the one it makes possible: a server that
+# stopped WITH a matching event was stopped by someone through a sanctioned
+# path, and a server that vanished with NO event was killed outside the
+# lifecycle. Those are different problems and they were previously identical.
+alloy_server_audit_path() {
+  printf '%s/dev-server-lifecycle.jsonl' "${ALLOY_RUNTIME_ROOT}"
+}
+
+# Who is doing this? Derived, never guessed: an explicit actor wins, then the
+# lane/run this shell is executing for, then the toolkit itself.
+alloy_server_audit_actor() {
+  if [[ -n "${ALLOY_SERVER_AUDIT_ACTOR:-}" ]]; then printf '%s' "$ALLOY_SERVER_AUDIT_ACTOR"; return; fi
+  if [[ -n "${VACILANDO_RUN_ID:-}" || -n "${VACILANDO_LANE_ID:-}" ]]; then printf 'lane-agent'; return; fi
+  if [[ -n "${ALLOY_CAPACITY_OVERRIDE:-}" ]]; then printf 'capacity-experiment'; return; fi
+  printf 'toolkit'
+}
+
+# One line per canonical lifecycle action. Best effort by construction: an audit
+# write must never be able to fail a dev-server operation, because a lost log
+# line is a smaller problem than a server that would not stop.
+alloy_record_server_lifecycle() {
+  local action="$1" name="$2" outcome="$3" reason="${4:-}" prev_pid="${5:-}" new_pid="${6:-}"
+  local path ts
+  path="$(alloy_server_audit_path)" || return 0
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  mkdir -p "$(dirname "$path")" 2>/dev/null || return 0
+  printf '{"at":"%s","action":"%s","worktree":"%s","slot":%s,"port":%s,"previous_pid":%s,"new_pid":%s,"actor":"%s","lane_id":%s,"run_id":%s,"reason":"%s","outcome":"%s","toolkit":"%s"}\n' \
+    "$ts" "$action" "$name" \
+    "${ALLOY_WORKTREE_SLOT:-null}" "${PORT:-null}" \
+    "${prev_pid:-null}" "${new_pid:-null}" \
+    "$(alloy_server_audit_actor)" \
+    "$([[ -n "${VACILANDO_LANE_ID:-}" ]] && printf '"%s"' "$VACILANDO_LANE_ID" || printf 'null')" \
+    "$([[ -n "${VACILANDO_RUN_ID:-}" ]] && printf '"%s"' "$VACILANDO_RUN_ID" || printf 'null')" \
+    "${reason//\"/}" "$outcome" \
+    "$(basename "$(dirname "${ALLOY_LOCAL_DEV_ROOT:-/unknown}")" 2>/dev/null)" \
+    >>"$path" 2>/dev/null || true
+  return 0
 }
 
 alloy_pid_path() {
@@ -443,9 +562,38 @@ alloy_port_listener_pid() {
   alloy_rc_port_pid "$1"
 }
 
+# FAILS CLOSED. "I could not look" must answer the same as "occupied" here: the
+# only action this gates is binding a port, and binding one that is already
+# serving another slot is the collision this guard exists to prevent. A false
+# "free" is unrecoverable in the way a false "busy" is not.
 alloy_port_in_use() {
   local port="$1"
-  alloy_port_listener_pid "$port" >/dev/null 2>&1
+  ! alloy_rc_port_known_free "$port"
+}
+
+# For callers that need the distinction rather than the decision.
+alloy_port_owner() {
+  alloy_rc_port_owner "$1"
+}
+
+# Gracefully terminate a PID and its immediate children; return 0 once it is gone,
+# 1 if it survives the grace period (caller decides; we never auto-SIGKILL).
+#
+# Lives here rather than inside alloy-dev-stop because it now has a second
+# legitimate caller: alloy-dev-reclaim, which stops a PROVEN foreign dev server.
+# Copying it would have been a second owner of "how Alloy ends a server", and the
+# `-P` scoping is exactly the part nobody should re-derive.
+alloy_stop_pid_tree() {
+  local target="$1" i
+  if alloy_have_cmd pkill; then
+    pkill -TERM -P "$target" 2>/dev/null || true
+  fi
+  kill -TERM "$target" 2>/dev/null || true
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    alloy_pid_alive "$target" || return 0
+    sleep 0.5
+  done
+  return 1
 }
 
 alloy_pid_alive() {
@@ -465,19 +613,12 @@ alloy_process_command() {
 # contain. A managed production server was therefore classified `stale` while serving correctly, and
 # `browser-auth verify` refuses a server it cannot call toolkit-owned. Dev only escaped this by the
 # accident of its own command string.
+# ONE resolver, in the shared read core. This was a second copy, and the copy in
+# read-core.sh — the one the port probe uses — was the one that lacked the
+# fallback, so hardening this half fixed cwd lookups while port ownership stayed
+# broken. Delegating is the whole point.
 alloy_lsof_bin() {
-  if alloy_have_cmd lsof; then
-    printf 'lsof'
-    return 0
-  fi
-  local candidate
-  for candidate in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof; do
-    if [[ -x "$candidate" ]]; then
-      printf '%s' "$candidate"
-      return 0
-    fi
-  done
-  return 1
+  alloy_rc_lsof_bin
 }
 
 alloy_process_cwd() {
@@ -755,6 +896,72 @@ alloy_warn_node_modules_arch() {
 alloy_web_dir_for() {
   local worktree_path="$1"
   printf '%s/%s' "$worktree_path" "$ALLOY_WEB_DIR"
+}
+
+# --- Server readiness: registered is not runnable ---
+#
+# THE DEFECT THIS CLOSES. wt3-communications-inbound-sms held slot 3 and port
+# 3013 as a fully registered, server-capable worktree, and could not start a
+# server at all — its web/ has no node_modules, so `next dev` died with
+# `sh: next: command not found` in a log nobody was reading. The capacity
+# experiment counted it as one of the host's server slots and only discovered
+# otherwise by trying. A 17-hour `s.end("ok")` stub had been left listening on
+# that same port, which is what a fake server is FOR: it makes an unrunnable
+# slot look ready.
+#
+# The cause is that a worktree can be registered two ways and only one of them
+# provisions dependencies. alloy-sprint-start installs them; alloy-worktree-adopt
+# is deliberately a "registers reality" tool that creates nothing — no Git state,
+# no server, and no node_modules. Every worktree that entered the fleet by
+# adoption (the Mac mini migration batch, and now every lane created through the
+# Vacilando wizard) was registered as server-capable while being unable to start.
+#
+# So server capability is MEASURED, never assumed, and the answer is a reason
+# rather than a boolean, because "no" without "why" is what sent a capacity
+# experiment looking at the wrong thing.
+#
+#   ready                the dev command can actually start
+#   no_worktree          the registered directory is gone
+#   no_web_dir           no web/ under it
+#   no_manifest          no web/package.json
+#   dependencies_missing web/node_modules absent — install, do not stub
+#   dev_binary_missing   dependencies are installed but the binary the dev
+#                        command actually needs is not among them
+#
+# The binary check is derived from the dev script, never hardcoded to Next.
+# ALLOY_DEV_COMMAND is configurable, and a worktree whose dev command is not Next
+# must not be declared unrunnable because a Next binary is absent — that would be
+# the same mistake in the other direction.
+alloy_server_readiness_for_path() {
+  local path="$1"
+  local web_dir dev_script
+  [[ -n "$path" && -d "$path" ]] || { printf 'no_worktree'; return 1; }
+  web_dir="$(alloy_web_dir_for "$path")"
+  [[ -d "$web_dir" ]] || { printf 'no_web_dir'; return 1; }
+  [[ -f "${web_dir}/package.json" ]] || { printf 'no_manifest'; return 1; }
+  # An empty node_modules is not installed dependencies. A partially removed tree
+  # reads as present to `-d` and fails at `next dev` exactly like an absent one.
+  if [[ ! -d "${web_dir}/node_modules" ]] || [[ -z "$(ls -A "${web_dir}/node_modules" 2>/dev/null)" ]]; then
+    printf 'dependencies_missing'; return 1
+  fi
+  dev_script="$(sed -n 's/.*"dev"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${web_dir}/package.json" 2>/dev/null | head -1)"
+  if [[ "$dev_script" == *next* ]] && [[ ! -x "${web_dir}/node_modules/.bin/next" ]]; then
+    printf 'dev_binary_missing'; return 1
+  fi
+  printf 'ready'
+  return 0
+}
+
+# The remediation that belongs with each reason. An operator reading a refusal
+# should not have to go and look this up.
+alloy_server_readiness_remedy() {
+  case "$1" in
+    dependencies_missing|dev_binary_missing)
+      printf 'run: alloy-worktree-provision %s — the guarded installer (one install slot, no symlinked node_modules)' "$2" ;;
+    no_worktree)   printf 'the registered worktree directory is gone — reconcile the registration' ;;
+    no_web_dir|no_manifest) printf 'this worktree has no web app; it is not server-capable' ;;
+    *) printf '' ;;
+  esac
 }
 
 # True when a process command line is an active Playwright *test runner*

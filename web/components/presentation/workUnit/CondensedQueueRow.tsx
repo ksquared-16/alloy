@@ -349,6 +349,7 @@ export function CondensedQueueRow({
                                                 ?? context.waitlist_context?.position_label
                                             }
                                             childDisplayName={displayName}
+                                            precedenceReason={context.waitlist_context?.precedence_reason}
                                         />
                                     ) : null}
                                 </span>

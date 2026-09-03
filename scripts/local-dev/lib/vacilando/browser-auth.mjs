@@ -28,6 +28,7 @@
  * status display actually needs.
  */
 import { execFile, spawnSync } from "node:child_process";
+import { laneAppUrl, readServeStatus } from "./lane-app-url.mjs";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -562,6 +563,26 @@ export function redactAuthText(text) {
 }
 
 /** The durable record. Metadata only — this is written down and kept. */
+
+/**
+ * The address a human should open for this slot, on their own device.
+ *
+ * Returns null rather than guessing when no Director-facing origin is
+ * published — "open it on your laptop" with no working URL is worse than
+ * saying the route is missing.
+ */
+export function directorSignInUrl(validated, { serveStatus = null, env = process.env } = {}) {
+  try {
+    const out = laneAppUrl({ binding: { slot: validated?.slot } }, {
+      serveStatus: serveStatus == null ? readServeStatus() : serveStatus,
+      env,
+    });
+    return out.url ? `${out.url}/login` : null;
+  } catch {
+    return null;
+  }
+}
+
 export function publicAuthOutcome({ validated, state, status = null, detail = null, nowMs = Date.now() }) {
   return {
     schema_version: "vacilando.browser_auth.v1",
@@ -573,6 +594,21 @@ export function publicAuthOutcome({ validated, state, status = null, detail = nu
     slot: validated.slot,
     port: validated.port,
     base_url: validated.base_url,
+    /*
+     * WHERE A HUMAN SHOULD OPEN THIS.
+     *
+     * `base_url` is and stays loopback: the automated driver may only drive a
+     * loopback base, which is a safety property, not an oversight. But the
+     * Director is on a MacBook (and sometimes a phone), and telling them to open
+     * 127.0.0.1 is telling them to open their own device — which is exactly why
+     * a human sign-in ended up being performed on the execution host's GUI.
+     *
+     * So the human gets a SEPARATE address: the same app on the Director-facing
+     * HTTPS origin, reachable from any device on the tailnet. Nothing about the
+     * automated path changes, and no credential or session crosses machines —
+     * this is a URL, and the human signs in on their own browser.
+     */
+    director_url: directorSignInUrl(validated),
     worktree_path: validated.worktree_path,
     expected_identity: validated.expected_identity,
     verified_at: state === BROWSER_AUTH_STATES.RESTORED ? new Date(nowMs).toISOString() : null,
@@ -620,10 +656,47 @@ export function blocksExecution(state) {
  *
  * Metadata only, and cheap: a stat and a JSON parse per lane with a slot. A lane
  * with no slot has no browser session to recover and gets nothing.
+ *
+ * THE ADDRESS ON THIS CARD IS THE DIRECTOR'S, NOT THE DRIVER'S.
+ *
+ * THE DEFECT. This block published `base_url` — `http://127.0.0.1:<port>` — and
+ * the recovery card rendered it as "Address". Execution is on the Mac mini and
+ * the Director drives Vacilando from a MacBook, so the only address on the card
+ * named the MacBook. Following it reaches nothing, which reads as "the lane is
+ * down" at exactly the moment the Director is being asked to go and sign in.
+ * `publicAuthOutcome` had computed a Director-facing address since the sign-in
+ * ceremony was written; this path, which is the one the card renders, never did.
+ *
+ * `base_url` is neither wrong nor removed: the automated driver may only drive a
+ * loopback base, and that is a safety property rather than an oversight. It is
+ * simply not an address a human can open, so a Director-facing address is now
+ * published beside it and the card can label each for what it is.
+ *
+ * ONE OWNER, READ ONCE. `lane.app_url` is preferred whenever the lane already
+ * carries it, so the lane poll reads the Serve config once for the whole list
+ * instead of once per lane. The fallback asks `laneAppUrl()`. Neither branch
+ * constructs a URL here — a second construction is precisely how a loopback
+ * address reached this card in the first place.
  */
-export function attachLaneBrowserAuth(lanes, { root = stateRoot(), qaIdentityFor = null } = {}) {
+export function attachLaneBrowserAuth(lanes, {
+  root = stateRoot(), qaIdentityFor = null, serveStatus = null, env = process.env,
+} = {}) {
   const list = Array.isArray(lanes) ? lanes : [];
   if (!list.length) return list;
+  let serve = serveStatus;
+  const serveOnce = () => {
+    if (serve == null) { try { serve = readServeStatus(); } catch { serve = ""; } }
+    return serve;
+  };
+  /** The Director-facing address for this lane, or the reason there is none. */
+  const directorFacing = (lane, slot) => {
+    const carried = lane && Object.prototype.hasOwnProperty.call(lane, "app_url");
+    if (carried) return { url: lane.app_url || null, reason: lane.app_url ? null : (lane.app_url_reason || null) };
+    try {
+      const out = laneAppUrl({ binding: { slot } }, { serveStatus: serveOnce(), env });
+      return { url: out.url || null, reason: out.url ? null : (out.reason || null) };
+    } catch { return { url: null, reason: null }; }
+  };
   return list.map((lane) => {
     const slot = laneSlot(lane);
     if (!slot) return lane;
@@ -639,6 +712,7 @@ export function attachLaneBrowserAuth(lanes, { root = stateRoot(), qaIdentityFor
     const effective = verdict && blocksExecution(verdict.state) && !blocksExecution(status.state)
       ? verdict.state
       : status.state;
+    const app = directorFacing(lane, slot);
     return {
       ...lane,
       browser_auth: {
@@ -651,6 +725,12 @@ export function attachLaneBrowserAuth(lanes, { root = stateRoot(), qaIdentityFor
         slot,
         port: SLOT_PORTS[slot] || null,
         base_url: SLOT_PORTS[slot] ? `http://127.0.0.1:${SLOT_PORTS[slot]}` : null,
+        // WHERE A HUMAN OPENS THIS, from whatever device they are actually on.
+        // Null with a stated reason rather than a guess: "there is no route" and
+        // "the app is down" are different problems, and an operator who cannot
+        // tell them apart debugs the wrong one.
+        director_url: app.url,
+        director_url_reason: app.reason,
         expected_identity: identity,
         storage_captured_at: status.captured_at || null,
         earliest_expiry: status.earliest_expiry || null,

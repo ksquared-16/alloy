@@ -101,18 +101,26 @@ async function resolveReviewPolicy(
     return r.resolved ? r.policy.value.required === true : false;
 }
 
+/**
+ * The existing charge for this resolution key, searched IN THE SCOPE THE CHARGE WOULD BE WRITTEN.
+ *
+ * This used to be hardcoded to `enrollment_agreement`, and was only called when the caller had an
+ * agreement. A household charge therefore had no idempotency at all: two submissions of the same
+ * waitlist fee wrote two drafts, and the family owed it twice. The dedupe scope has to be the same
+ * pair the insert uses, or it is not dedupe.
+ */
 async function findExistingByResolutionKey(
     supabase: SupabaseClient,
     orgId: string,
-    agreementId: string,
+    source: { type: "enrollment_agreement" | "customer"; id: string },
     resolutionKey: string,
 ): Promise<ChargeLifecycleRow | null> {
     const { data, error } = await supabase
         .from(TABLE)
         .select("id, status, amount_cents, occurs_on, billable_on, charge_template_id, metadata")
         .eq("org_id", orgId)
-        .eq("billable_source_type", ENROLLMENT)
-        .eq("billable_source_id", agreementId);
+        .eq("billable_source_type", source.type)
+        .eq("billable_source_id", source.id);
     if (error) fail("db_error", error.message);
     const rows = (data ?? []) as ChargeLifecycleRow[];
     return rows.find((c) => (c.metadata as { resolution_key?: string } | null)?.resolution_key === resolutionKey) ?? null;
@@ -131,6 +139,7 @@ export async function previewTemplateCharge(
 ): Promise<ChargePreviewResult> {
     const template = await loadTemplate(supabase, orgId, args.templateId);
     const reviewByPolicy = await resolveReviewPolicy(supabase, orgId, template.service_id, args.today);
+    const source = billableSourceFor(args);
     const intent = resolveChargeFromTemplate(template, {
         today: args.today,
         eventDate: args.eventDate,
@@ -139,16 +148,24 @@ export async function previewTemplateCharge(
         quantity: args.quantity,
         unitAmountCents: args.unitAmountCents,
         reviewRequiredByPolicy: reviewByPolicy,
-        scopeKey: args.agreementId ?? "org",
+        /*
+         * THE SCOPE IS THE BILLABLE SOURCE, not the agreement.
+         *
+         * `tpl:<key>:<occurs_on>:<scopeKey>` was scoped to the agreement id, falling back to the
+         * literal `"org"`. For a household charge that fallback made the key ORG-WIDE: two different
+         * families' registration fees resolved to the same key on the same day. Scoping to the
+         * source id makes the key mean what it says — this template, this date, this payer.
+         */
+        scopeKey: source?.id ?? "org",
     });
 
     let existing: ChargeLifecycleRow | null = null;
-    if (intent.eligible && args.agreementId) {
-        existing = await findExistingByResolutionKey(supabase, orgId, args.agreementId, intent.resolutionKey);
+    if (intent.eligible && source) {
+        existing = await findExistingByResolutionKey(supabase, orgId, source, intent.resolutionKey);
     }
 
     let wouldWrite: DraftWriteIntent;
-    if (!isWritable(intent) || !billableSourceFor(args)) {
+    if (!isWritable(intent) || !source) {
         wouldWrite = "not_writable";
     } else if (!existing) {
         wouldWrite = "create";
@@ -266,6 +283,10 @@ export async function writeTemplateDraftCharge(
             service_id: intent.serviceId,
             description: intent.templateKey,
             metadata,
+            // Actor attribution. The recalculate path above already wrote `updated_by`; the create
+            // path did not, so a charge's original author was unrecoverable.
+            created_by: args.actorUserId ?? null,
+            updated_by: args.actorUserId ?? null,
         })
         .select("id")
         .single();

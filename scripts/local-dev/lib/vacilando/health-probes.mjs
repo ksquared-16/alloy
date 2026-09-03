@@ -14,6 +14,7 @@ import { execFile } from "node:child_process";
 import { statfsSync } from "node:fs";
 
 /** Run a command with a hard time budget. Never throws; never hangs. */
+import { gatewayPort } from "./managed-slots.mjs";
 import { memorySnapshot } from "./memory-capacity.mjs";
 
 export function boundedExec(cmd, args, { timeoutMs = 2000, maxBuffer = 32 * 1024 * 1024 } = {}) {
@@ -163,7 +164,10 @@ export function probeDisk({ mount = "/System/Volumes/Data" } = {}) {
  * attempted — because a 3s timeout once reported an outage for a Gateway that
  * was serving in 10.3s. Down is asserted only when both fail.
  */
-export async function probeGateway({ url = "http://127.0.0.1:3020/", firstMs = 3000, retryMs = 15000, exec = boundedExec } = {}) {
+export async function probeGateway({ url = null, firstMs = 3000, retryMs = 15000, exec = boundedExec } = {}) {
+  // Derived from the one owner: a health probe pinned to a literal port reports
+  // the control plane down the moment the control plane legitimately moves.
+  url = url || `http://127.0.0.1:${gatewayPort()}/`;
   const hit = async (budget) => {
     const t0 = Date.now();
     const out = await exec("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", String(Math.ceil(budget / 1000)), url], { timeoutMs: budget + 500 });

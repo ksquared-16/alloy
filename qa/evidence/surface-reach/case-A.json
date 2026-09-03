@@ -1,0 +1,20 @@
+{
+  "topBottom": 841,
+  "children": {
+    "card": "children",
+    "row": "3/4",
+    "x": 481,
+    "y": 851,
+    "w": 474,
+    "h": 386
+  },
+  "rowsAbove": [
+    "business_process",
+    "financials"
+  ],
+  "band": 10,
+  "overlaps": 0,
+  "activated": true,
+  "previewMatchesCommit": true,
+  "pageErrors": []
+}

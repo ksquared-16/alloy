@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-21
+last_reviewed: 2026-09-02
 supersedes: []
 ---
 
@@ -844,3 +844,164 @@ comment-stripper cannot hide a real reload.
   an explicit stale-draft recovery. Operator-initiated rather than random, so it is Priority 6
   ("convergence after save") rather than Priority 1.
 - `/legacy-admin/*` reloads are out of the canonical operator contract and were not touched.
+
+---
+
+## 19. Work Unit document entry — the composition runtime
+
+Sections 1–18 certify the *prepared journey*. This section owns the other class for Work Units:
+**document entry** (deep link, reload, new tab), where the cost is server composition rather than
+anything the client reveals.
+
+### 19.1 What actually owns the time
+
+`app/adminV2/workspace/work-unit/[workUnitSlug]/page.tsx` awaits
+`composeProvisioningAnswerForRoute()` — and therefore `composeWorkUnitProvisioningAnswer()` — in full
+before it renders. Nothing streams ahead of it.
+
+Measured on a production build across four work views, the consequence is exact:
+
+```
+shell visible == rows visible == document responseEnd + ~45-60 ms
+```
+
+Rows arrive **with** the document in every view. There is no window in which queue truth exists but
+is withheld, so **there is no client reveal boundary to exploit** — an RSC/Suspense split buys ~0 ms
+and would cost the seeded answer (`ProvisioningAnswerSeed`), pushing the same work onto K2's own
+fetch. Document-entry latency *is* composition latency; optimize the composer or nothing.
+
+### 19.2 One runtime, stressed differently
+
+Waitlist is not a slower page; it is the same runtime carrying more required truth. Every child-grain
+view uses the same member resolver, and every placement-bearing view uses the same candidate load.
+The measured difference is which concerns are engaged:
+
+| view | rows | composition | engaged concerns |
+|---|---|---|---|
+| `enrolled` | 0 | ~0 ms (empty answer) | none |
+| `all` / `new` | 4 / 2 | ~340-480 ms | opportunity grain |
+| `waitlist` | 17 | ~800-860 ms | child grain + placement + household + inquiry |
+
+Fixing Waitlist therefore means fixing shared owners. **A Waitlist-specific composer, queue owner or
+client path would be a regression in architecture even if it were faster**, because the next
+stressed view would start the same work again.
+
+### 19.3 Serial independent reads — the recurring defect
+
+The dominant cost was never a slow query. On this tenant no single read exceeded ~70 ms except
+household facts. The cost was **serial depth over reads whose dependency graph was already known**:
+
+| owner | before | after | why it was safe |
+|---|---|---|---|
+| `resolveTrackRowRefs` (member references) | ~308 ms | ~184 ms | `customer_members` (keyed by `subject_id`) and `location_program_categories` (keyed by `metadata.program_category_id`) never depended on the `ocm → opportunity` chain |
+| `bulkLoadPlacementCandidatesByOpportunity` | ~143 ms | ~69 ms | link groups and overrides share one `candidateIds` set and neither reads the other |
+| `bulkLoadHouseholdPlacementFactContext` | ~188 ms | ~89 ms | three reads of one `customerIds` set, assembled afterwards |
+
+**Doctrine.** Independent reads on a composition path are issued together and joined before use.
+Parallelism must be *dependency-proven*, never speculative: two reads run together only when neither
+consumes the other's result. Result-processing keeps its original order so the assembled state is
+what the serial version produced.
+
+Genuine dependencies were left alone and are not defects:
+
+- `ocm_resolve → opportunities` — a `context_id` may be an OCM id or an opportunity id, and only the
+  first read can say which. **Do not collapse this by assuming one id type globally.**
+- `household_facts` lawfully consumes `candidatesByOpportunityId`.
+- `attachChildGrainInquiryProgramFallback` lawfully consumes `placementWaitlistRow` — it exists to
+  fill fallbacks for rows that *lack* a placement candidate.
+- the placement ensure/write step measures below the 30 ms `[db-timing]` threshold and already reuses
+  the rows it read.
+
+### 19.4 Measurement pitfalls proven here (read before quoting a number)
+
+1. **A span that brackets concurrent work is not a cost.** `child_grain_avatar` (~523 ms) and
+   `waitlist.location_categories` (~333 ms) are started early and joined late, so they *contain* the
+   legs that run inside them. Both have ~0 marginal cost. Twice in this programme the largest number
+   on the board was the thing it would have been useless to optimize. Check where a timer starts
+   before believing it.
+2. **`presentation_ms` and `composition_ms` are wall-to-join, not stage cost.** Their timers are taken
+   at kickoff and read after the join, so they overlap and sum past `total_ms`. Only `spans` and
+   `[db-timing]` labels measure work.
+3. **Absolute totals are not comparable across host windows.** On this host `all` moved 341 → 479 ms
+   on *unchanged* code between two sessions under load. Compare legs, or normalise against an
+   unchanged view in the same run.
+4. **An in-session Work View switch is a different operation from document entry** — it filters rows
+   inside the already-loaded work unit (~50 ms, no queue fetch) and keeps that unit's presentation.
+   Never quote it as "entering Waitlist".
+
+### 19.5 Performance change policy
+
+A change touching Work Unit composition, queue ownership, Focus Panel readiness, card registration,
+placement, workspace navigation or a shared RSC boundary answers these before merge:
+
+1. Which operator path — document entry, Work View switch, row switch, Focus Panel initial truth, or
+   settlement?
+2. What is the current measured baseline for that path?
+3. Is the change on the critical path?
+4. Does it add a serial dependency, a DB round trip, or an API request?
+5. Does it create a second data/runtime owner (queue, cache, store, composer)?
+6. Which guards apply (see §17 and §19.6)?
+7. What before/after evidence justifies retention?
+
+Scale the evidence to the surface, not the diff size: a card-body change needs its card's contract
+tests; a change inside the composer or a shared read owner needs a leg-level before/after on the same
+build and host window. **No feature PR needs the full harness.**
+
+### 19.6 Guard added by this pass
+
+| invariant | owner | guard | status |
+|---|---|---|---|
+| independent composition reads are issued together | `resolveTrackRowRefs`, `bulkLoadHouseholdPlacementFactContext` | `tests/perf/independentReadsAreConcurrent.test.ts` (2) | **guarded** |
+
+It is behavioural rather than textual: a recording Supabase double captures which queries have been
+issued at the moment the first one settles, a boundary a serial chain cannot cross however it is
+spelled. Positive-controlled — reverting either fix fails it.
+
+### 19.7 Current certification evidence (not permanent law)
+
+Production build, admitted host, same staging base, `[db-timing]` legs p50, 17-row Waitlist:
+
+```
+child_grain_members      288 ms -> 184 ms
+waitlist.bulk_candidates 143 ms ->  69 ms
+waitlist.household_facts 188 ms ->  89 ms
+composer wall A/B       1141 ms -> 918 ms   (members + candidates pass, same session)
+waitlist : all ratio     2.10   -> 1.80     (load-normalised, household pass)
+```
+
+Truth preserved throughout: 17 rows, `1/12…12/12` ascending, deterministic order, 629 candidate
+references, org scoping and active/paused semantics unchanged.
+
+**Record these as evidence of a certification, not as a budget.** The remaining Waitlist floor
+(~184 ms members + ~281 ms placement + ~140 ms inquiry) is required serial truth on this tenant;
+reducing it further needs query/index work inside those owners, not more concurrency.
+
+### 19.8 Deliberate design — do not "simplify" these away
+
+Each of these looks like something a future reader could tidy. Each is load-bearing, and the reason
+is recorded so the argument does not have to be rediscovered.
+
+- **One Work Unit runtime, one composer, one queue owner, one selection model, one Focus Panel
+  runtime.** View-specific truth plugs into shared owners. Every optimization in this document
+  landed in a shared owner and therefore benefits every view that engages that concern. A
+  per-view fast path would have made the next stressed view start over.
+- **`ProvisioningAnswerSeed` — exactly one compose.** The segment composes and seeds; the layout does
+  not. Removing the seed does not remove the work, it relocates it to a client fetch and produces a
+  second answer identity.
+- **Speculative provisioning prefetch**, keyed by canonical `DestinationId`. Proven for Grade-A row
+  switching. On document entry it fires *after* drawer-body and gates nothing — it is not on the
+  entry critical path and must not be "fixed" on the basis of where it appears in a waterfall.
+- **Avatar resolution started early and joined late.** Its span looks enormous precisely *because* it
+  is already concurrent. Serialising it behind placement would buy nothing and cost a round trip.
+- **Card registry + concern contracts, and supersession outranking exact match.** Keeps the shared
+  runtime card-agnostic; producers own truth and surface placement never contaminates a producer.
+- **Honest pending over false ready.** Telemetry marks correspond to DOM readiness, so a card that
+  cannot answer says so rather than rendering an empty shape that reads as settled.
+- **Latest-intent guards on async card reads.** A slow first response may never overwrite a newer
+  one; this is a correctness rule that happens to look like a performance detail.
+- **`[db-timing]` labels and `ProvisioningTimings.spans`.** The member leg had no instrumentation,
+  which is exactly why its serial depth survived several performance passes. Keep labels on shared
+  read owners; they cost nothing under threshold.
+- **Deterministic placement truth.** Display position is section-scoped and pin ordinal is
+  cohort-scoped; they may legitimately differ, and `pin_scoped_to_cohort` explains it. No client-side
+  ranking may be introduced to make them agree.

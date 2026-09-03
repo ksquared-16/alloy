@@ -391,6 +391,10 @@ assert_ok "runtime isolation focused tests" bash "$ROOT/tests/test-runtime-isola
 echo "== Product Runtime V1 =="
 assert_ok "product runtime focused tests" bash "$ROOT/tests/test-product-runtime.sh"
 
+echo "== Capacity override precedence + server readiness =="
+assert_ok "capacity override tests" bash "$ROOT/tests/test-capacity-override.sh"
+assert_ok "dev-server lifecycle audit" bash "$ROOT/tests/test-dev-server-lifecycle-audit.sh"
+
 echo
 echo "== Fail-closed promotion suite (TM-5) =="
 set +e

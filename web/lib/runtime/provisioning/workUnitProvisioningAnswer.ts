@@ -52,6 +52,7 @@ import { resolveTargetedWorkViewMember } from "@/lib/runtime/provisioning/target
 import type { ContextualFocusAnswer } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import {
     loadSettlementLocators,
+    resolveActiveWorkViewConfigLayer,
     resolveProvisioningPopulationWorkUnitId,
     SETTLEMENT_LOCATORS_UNAVAILABLE,
     type SettlementLocators,
@@ -724,7 +725,7 @@ export async function composeWorkUnitProvisioningAnswer(
             req.supabase.from("departments").select("id, metadata").eq("id", wuRow.department_id).maybeSingle(),
             req.supabase
                 .from("work_units")
-                .select("id, key, name, department_id, is_active, sort_order, queue_definition")
+                .select("id, key, name, department_id, is_active, sort_order, queue_definition, metadata")
                 .eq("org_id", req.orgId)
                 .eq("department_id", wuRow.department_id),
         ]);
@@ -879,6 +880,29 @@ export async function composeWorkUnitProvisioningAnswer(
         surfaceWorkUnitId: workUnit.id,
         settlement,
     });
+    /*
+     * PRESENTATION FOLLOWS THE ACTIVE WORK VIEW, NOT THE ROUTE.
+     *
+     * Membership already follows the active lens's canonical host (`populationWorkUnitId` above). The
+     * lens's CONFIGURATION did not: the placement layer was read from the surface unit's metadata, so
+     * selecting Waitlist while standing on All produced the right 17 rows with All's affordances —
+     * correct membership, wrong presentation. Placement is configured on the unit that HOSTS the lens
+     * (measured on this tenant: exactly one unit carries `placement_priority_v1`), so reading the
+     * surface unit's layer asked the wrong object and fail-open silently dropped Adjust, the rank
+     * cluster and the precedence copy.
+     *
+     * This resolves the host unit's own row and hands its configuration to the concerns below. It
+     * names no lens and inspects no row contents: any Work View whose host enables a profile gets its
+     * affordances, on whatever route the operator happens to be standing.
+     */
+    const activeViewConfigLayer = resolveActiveWorkViewConfigLayer({
+        surfaceWorkUnitId: workUnit.id,
+        populationWorkUnitId,
+        surfaceMetadata: (wuRow as { metadata?: unknown }).metadata ?? null,
+        deptWorkUnits,
+    });
+    const populationWorkUnitMetadata = activeViewConfigLayer.metadata;
+
     // ── U-P7: resolve the operational presentation composition server-side, into THIS answer. ──
     // An identifier would be the round-trip U-P7 exists to remove; resolving here means the first
     // visible frame is already in final layout and nothing re-lays out after commit.
@@ -1357,8 +1381,8 @@ export async function composeWorkUnitProvisioningAnswer(
         childRows = await attachChildGrainWaitlistPlacement({
             supabase: req.supabase,
             orgId: req.orgId,
-            workUnitId: workUnit.id,
-            workUnitMetadata: (wuRow as { metadata?: unknown }).metadata ?? null,
+            workUnitId: populationWorkUnitId,
+            workUnitMetadata: populationWorkUnitMetadata,
             departmentMetadata: deptRow?.metadata ?? null,
             placementQueueKeys: ["waitlisted", "waitlist", activeView.id],
             childRows,

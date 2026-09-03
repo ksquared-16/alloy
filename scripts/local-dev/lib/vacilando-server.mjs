@@ -39,7 +39,9 @@
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { attachLaneAppUrls, laneAppUrl, readServeStatus } from "./vacilando/lane-app-url.mjs";
+import { gatewayPort, isManagedSlot, managedSlots } from "./vacilando/managed-slots.mjs";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { createConnection } from "node:net";
@@ -146,12 +148,20 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.env.HOME || "", ".local", "state", "alloy-dev");
 export const LOOPBACK_HOST = "127.0.0.1";
 const PUBLIC_DIR = resolve(HERE, "..", "apps", "vacilando", "public");
-const DEFAULT_PORT = 3020;
+// Derived, never re-declared. The Gateway port had been a literal in six
+// production places; one of them, the topology resolver, did not know about it
+// at all and would have handed slot 10 the port this server listens on.
+const DEFAULT_PORT = gatewayPort();
 // Board projection: Node workspace snapshot + cached git facts. Serve from a
 // single-flight cache aligned with SOURCE_RAW_TTL so polls never re-fan-out.
 // SSE tick is human-visible Director cadence — not sub-second filesystem scan.
 const TICK_MS = 20000;
 const MEMORY_TICK_MS = 45000; // memory measure + idle-server auto-reclaim cadence
+// Dev-server supervision cadence. Slower than the conductor tick because each
+// pass reads the listener for every registered worktree, and a lane that lost
+// its server can wait a minute for recovery far more comfortably than the host
+// can afford a process census every twenty seconds.
+const SUPERVISE_TICK_MS = 60000;
 const RESOURCES_TTL_MS = 60000;
 const WORKTREE_DISK_TICK_MS = 15 * 60 * 1000;
 
@@ -394,8 +404,17 @@ function resilientBoard(snap) {
     : enrichedCount === 0 ? "projection_unavailable"
     : enrichedCount < merged.length ? "partial"
     : "live";
+  // The Director drives this from a MacBook while the apps run here. Give every
+  // slot the Director-facing URL so the UI never has to construct one — the UI
+  // constructing `http://127.0.0.1:${port}` is precisely why "Open App" opened
+  // the operator's own laptop and appeared to be a dead lane.
+  const serveStatus = readServeStatus();
+  const withUrls = merged.map((sp) => {
+    const derived = laneAppUrl({ binding: { slot: sp.slot } }, { serveStatus });
+    return { ...sp, app_url: derived.url, app_url_reason: derived.reason };
+  });
   return {
-    ...snap, sprints: merged,
+    ...snap, sprints: withUrls,
     board_source: enrichedCount === merged.length ? "live" : enrichedCount === 0 ? "registry" : "mixed",
     board_state,
     board_note: board_state === "projection_unavailable" ? "Live projection unavailable (host under load) — showing registered workers from the slot registry."
@@ -526,7 +545,7 @@ function resolveRunSlot(requested) {
   // in conflict (wrong branch, missing worktree). Only a slot with no worktree at
   // all is free. (listSlotIdentities already returns only slots that have one.)
   const withWorktree = new Set(listSlotIdentities().map((i) => i.slot));
-  const freeSlots = [1, 2, 3, 4, 5, 6].filter((n) => !withWorktree.has(n));
+  const freeSlots = managedSlots().filter((n) => !withWorktree.has(n));
   const req = (typeof requested === "string" && /^-?\d+$/.test(requested)) ? Number(requested) : requested;
   if (Number.isInteger(req)) {
     if (req < 1 || req > 6) return { error: "bad_slot", detail: `slot ${req} out of range`, available: freeSlots };
@@ -698,7 +717,7 @@ function conductorTick() {
             target: { kind: "host", label: "heavy-validation" },
             outcome: "succeeded",
             preview_summary: `terminated ${term.killed.length} unbrokered heavy validator(s)`,
-          });
+          }, Date.now());
         } catch { /* audit best-effort */ }
         // Escalation if still alive next tick
         setTimeout(() => {
@@ -1093,6 +1112,16 @@ export function createVacilandoServer() {
             choice: body.value?.choice,
             expectedQuestion: body.value?.question || null,
           });
+          if (out.ok) {
+            // The instruction that was blocked is already queued with its attachments.
+            // Answering the prompt is what unblocks it, so the queue continues itself
+            // rather than asking the operator to resend what they already wrote. Detached
+            // on purpose: the choice is delivered, and the continuation must not hold the
+            // response open while Claude redraws.
+            const { resumeLaneAfterAnswer } = await import("./vacilando/provider-screen-answer.mjs");
+            out.continuation = { scheduled: true };
+            void resumeLaneAfterAnswer(laneId).catch(() => {});
+          }
           const status = out.ok ? 200
             : (out.error === "lane_not_found" ? 404
               : (out.error === "screen_changed" || out.error === "choice_not_on_screen" ? 409 : 400));
@@ -1680,7 +1709,7 @@ export function createVacilandoServer() {
       const body = await readJsonBody(req);
       if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
       const { slot, instruction, request_type = "worker-instruction", retry_of = null } = body.value || {};
-      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { ok: false, error: "bad_slot" });
+      if (!isManagedSlot(slot)) return sendJson(res, 400, { ok: false, error: "bad_slot" });
       if (typeof instruction !== "string" || !instruction.trim()) return sendJson(res, 400, { ok: false, error: "empty_instruction" });
       if (instruction.length > 24000) return sendJson(res, 400, { ok: false, error: "too_long", detail: `${instruction.length} chars exceeds 24000` });
       // Metadata resolve is instant (no compose) — the send must not wait on a
@@ -1933,12 +1962,12 @@ export function createVacilandoServer() {
     }
     if (path === "/api/director") {
       const slot = Number(url.searchParams.get("slot"));
-      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+      if (!isManagedSlot(slot)) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, log: readDirectorLog(slot) });
     }
     if (path === "/api/director/requests") {
       const slot = url.searchParams.get("slot") != null ? Number(url.searchParams.get("slot")) : null;
-      if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
+      if (slot != null && (!isManagedSlot(slot))) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, requests: readRequests(slot) });
     }
     // ---- Single source of truth: who is this slot, and where does this runtime live? ----
@@ -1947,7 +1976,17 @@ export function createVacilandoServer() {
         try { evaluateExclusiveWindow(); } catch { /* exclusive tick must not fail discovery */ }
         try { await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" }); } catch { /* */ }
         const out = await listDevelopmentLanes();
-        const lanes = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))))));
+        /*
+         * APP URLS ARE ATTACHED FIRST, NOT LAST.
+         *
+         * They used to wrap the whole chain, which meant every attacher inside
+         * it — the browser-session card among them — ran without the one
+         * Director-facing address the server had already derived, and had to
+         * either do without or construct its own. Innermost, the Serve config is
+         * still read exactly once for the list, and everything downstream can
+         * simply carry `app_url` rather than re-deriving it.
+         */
+        const lanes = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(attachLaneAppUrls(out.lanes || [])), undefined, { includeInstruction: false })))))))));
         const development_resources = developmentResourceSnapshot();
         let execution_capacity = null;
         try {
@@ -2239,7 +2278,14 @@ export function createVacilandoServer() {
           const out = await getDevelopmentLane(laneId);
           if (out.lane) {
             try { await maybeAdvanceSessionRotation(out.lane); } catch { /* planned rotation advance must not fail inspect */ }
-            out.lane = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions([out.lane]), undefined, { includeInstruction: true })))))))))[0];
+            /*
+             * THE LANE PANE IS WHERE THE DIRECTOR ACTUALLY LOOKS, and this
+             * endpoint never attached app URLs at all — only the list did. So
+             * the one surface that shows a lane on its own had no
+             * Director-facing address to render, and every card on it fell back
+             * to a loopback the Director cannot open.
+             */
+            out.lane = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(attachLaneAppUrls([out.lane])), undefined, { includeInstruction: true })))))))))[0];
             try {
               const { attachLaneProviderActivity } = await import("./vacilando/lane-provider-activity.mjs");
               const [withActivity] = await attachLaneProviderActivity([out.lane]);
@@ -2260,7 +2306,7 @@ export function createVacilandoServer() {
       const reg = hostRegistration();
       if (slotParam != null) {
         const slot = Number(slotParam);
-        if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+        if (!isManagedSlot(slot)) return sendJson(res, 400, { error: "bad_slot" });
         return sendJson(res, 200, { identity: resolveSlotIdentity(slot), host, host_registered: reg.registered, host_slot: reg.slot });
       }
       const slots = [];
@@ -2352,7 +2398,7 @@ export function createVacilandoServer() {
 
     if (path === "/api/missions") {
       const slot = url.searchParams.get("slot") != null ? Number(url.searchParams.get("slot")) : null;
-      if (slot != null && (!Number.isInteger(slot) || slot < 1 || slot > 6)) return sendJson(res, 400, { error: "bad_slot" });
+      if (slot != null && (!isManagedSlot(slot))) return sendJson(res, 400, { error: "bad_slot" });
       return sendJson(res, 200, { slot, missions: readMissions(slot) });
     }
     // Director Conversations — the mission re-told as a living dialogue.
@@ -2446,7 +2492,7 @@ export function createVacilandoServer() {
     }
     if (path === "/api/closeout") {
       const slot = Number(url.searchParams.get("slot"));
-      if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { error: "bad_slot" });
+      if (!isManagedSlot(slot)) return sendJson(res, 400, { error: "bad_slot" });
       // SINGLE SOURCE OF TRUTH: closeout describes the slot's AUTHORITATIVE
       // worktree, and says which one — never an inferred or stale name.
       const identity = resolveSlotIdentity(slot);
@@ -2517,6 +2563,32 @@ export function createVacilandoServer() {
   // Memory Manager tick: measure reclaimable memory and auto-reclaim idle dev
   // servers when the host is thrashing. Slower cadence than the SSE tick.
   const memTimer = setInterval(() => { refreshMemory({ act: true }).catch(() => {}); }, MEMORY_TICK_MS);
+
+  // A CERTIFIED RECOVERY NOBODY RUNS IS NOT RECOVERY.
+  //
+  // alloy-dev-supervise restores a dev server that vanished without a canonical
+  // stop, and it was proven against fault injection — but nothing invoked it, so
+  // recovery only happened when a human typed the command. Four servers had
+  // already died on this host and stayed dead precisely because no layer was
+  // asking the question on a schedule.
+  //
+  // The Gateway is the control plane, so it is where the asking belongs. It
+  // SPAWNS the canonical command rather than reimplementing the decision: the
+  // desired-state derivation, the restart bound and the refusals all stay in one
+  // place, and this timer only decides WHEN to ask. Best effort by construction —
+  // a supervision pass must never be able to take the Gateway down with it.
+  const superviseTimer = setInterval(() => {
+    try {
+      const bin = join(HERE, "..", "alloy-dev-supervise");
+      if (!existsSync(bin)) return;
+      // ASYNC on purpose. A pass that has to restart a server waits on the
+      // canonical start path, which is seconds — the existing execFileSync
+      // pattern in this file is fine for a quick reap but would stall the
+      // control plane here. The timeout bounds a pass that wedges so passes
+      // cannot stack up behind each other.
+      execFile(bin, [], { timeout: 45000, killSignal: "SIGTERM" }, () => { /* best effort */ });
+    } catch { /* never break the control plane on supervision */ }
+  }, SUPERVISE_TICK_MS);
   memTimer.unref?.();
   // Disk hygiene changes slowly — measure + (opt-in) reactively reclaim every 10 min.
   const diskTimer = setInterval(() => { refreshDisk({ act: true }).catch(() => {}); }, 10 * 60 * 1000);
@@ -2555,6 +2627,20 @@ export function createVacilandoServer() {
     if (conductorInFlight) return;
     conductorInFlight = true;
     try { conductorTick(); } catch { /* */ }
+    /*
+     * SAFETY NET FOR NOTIFICATIONS A LANE IS STILL OWED.
+     *
+     * Redelivery is normally driven by the lane's own run reaching a terminal
+     * state. A turn that ends untidily — the provider dies, the session is
+     * recovered, the run is abandoned rather than completed — never fires that
+     * signal, and the lane would wait forever for something nobody is going to
+     * send. This rides the tick this server already owns rather than adding a
+     * scheduler: no new timer, no new cadence to reason about, and the drain is
+     * a no-op on the overwhelming majority of ticks because nothing is pending.
+     */
+    import("./vacilando/governed-action-request.mjs")
+      .then((m) => m.drainGovernedNotificationsForLane?.(null, {}))
+      .catch(() => { /* best effort */ });
     // Release on next tick so a long sync loop can't stack with the next interval.
     setTimeout(() => { conductorInFlight = false; }, 0);
   };
@@ -2748,6 +2834,7 @@ export function createVacilandoServer() {
     close: () => {
       clearInterval(timer);
       clearInterval(memTimer);
+      clearInterval(superviseTimer);
       clearInterval(diskTimer);
       clearInterval(worktreeDiskTimer);
       clearInterval(engHealthTimer);

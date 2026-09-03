@@ -37,6 +37,7 @@
  * registry -> binding, never the reverse.
  */
 import { spawnSync } from "node:child_process";
+import { isManagedSlot, managedSlots } from "./managed-slots.mjs";
 import { existsSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -576,12 +577,20 @@ export function devServerCensus({ toolkitDir = null, root = runtimeRoot(), spawn
   if (!out || out.status !== 0) return { ok: false, error: "dev_status_unavailable", servers: [] };
   const servers = [];
   for (const line of String(out.stdout || "").split("\n")) {
-    const m = line.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)/);
+    const m = line.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(\S+))?/);
     if (!m) continue;
-    const [, worktree, agent, branch, port, state, pid, path] = m;
+    const [, worktree, agent, branch, port, state, pid, path, readiness] = m;
+    // READY is optional so a census taken against an older toolkit still parses;
+    // when it is absent capability is UNKNOWN, never assumed true. A slot that
+    // cannot start a server is not a server slot, and the capacity experiment
+    // that counted slot 3 as one learned that by trying.
+    const ready = readiness || null;
     servers.push({
       worktree, agent, branch, port: Number(port), state,
       pid: pid === "-" ? null : Number(pid), path,
+      readiness: ready,
+      server_capable: ready == null ? null : ready === "ready",
+      not_server_capable_reason: ready && ready !== "ready" ? ready : null,
       counts_toward_capacity: state === "running",
       reclaimable: state === "unattributable-owner" || state === "stale",
     });
@@ -591,6 +600,12 @@ export function devServerCensus({ toolkitDir = null, root = runtimeRoot(), spawn
     servers,
     running: servers.filter((x) => x.counts_toward_capacity).length,
     reclaimable: servers.filter((x) => x.reclaimable),
+    // How many slots could actually serve, which is the number a capacity
+    // experiment needs and is not the same as how many are registered.
+    server_capable: servers.filter((x) => x.server_capable === true).length,
+    not_server_capable: servers
+      .filter((x) => x.server_capable === false)
+      .map((x) => ({ worktree: x.worktree, reason: x.not_server_capable_reason })),
   };
 }
 
@@ -705,4 +720,87 @@ export function reconcileStaleRegistrations({
     catch (e) { refused.push({ ...step, refused: String(e?.message || e) }); }
   }
   return { ok: true, applied: true, removed, refused, actor, applied_at: iso(nowMs) };
+}
+
+/**
+ * WHICH MANAGED SLOTS ARE FREE?
+ *
+ * Slots 1-6 are the host's permanent worktree homes, on ports 3011-3016. A slot
+ * is taken when a registration names it; everything else is available.
+ */
+/**
+ * The managed slots, from the one owner. This was a literal [1,2,3,4,5,6].
+ *
+ * A FUNCTION, not a constant, deliberately. A `const` snapshot is evaluated once
+ * at import and would go stale the moment topology changed — which is the same
+ * "second source of truth" this convergence exists to remove, just with a longer
+ * fuse. Callers ask when they need to know.
+ */
+export function managedSlotSet() {
+  return managedSlots();
+}
+
+export function freeSlots({ cfg = null, metadata = null } = {}) {
+  const conf = cfg || resolveRuntimeConfig();
+  const meta = metadata || readAllMetadata(conf);
+  const taken = new Set(meta
+    .filter((m) => norm(m.lifecycle).toLowerCase() !== "finished")
+    .map((m) => asSlot(m.slot))
+    .filter((n) => n != null));
+  return managedSlots().filter((n) => !taken.has(n));
+}
+
+let registerImpl = null;
+/** Test seam: registration is a toolkit subprocess in production. */
+export function setRegisterImplForTests(impl) { registerImpl = impl || null; }
+export function resetRegisterImplForTests() { registerImpl = null; }
+
+/**
+ * REGISTER A WORKTREE VACILANDO JUST CREATED.
+ *
+ * THE DEFECT THIS CLOSES. A lane created through the Vacilando wizard got a git
+ * worktree, a branch, a durable binding, a tmux session and a running Claude —
+ * and no slot and no registration, because worktree creation lives in JS and the
+ * registration writer is `alloy-worktree-adopt` in the shell. Two ways for a
+ * worktree to come into existence, only one of which registers it.
+ *
+ * Measured on the Financials lane: worktree present, branch agent/financials,
+ * pane %17 running claude.exe in the right directory, `slot: null`, no
+ * metadata/<name>.env — so every send was refused `lane_worktree_unregistered`
+ * and the operator saw a lane whose agent "never became available". The agent
+ * was fine; nothing could reach it.
+ *
+ * This calls the CANONICAL writer rather than writing metadata here. A second
+ * registration path is how the two diverged in the first place.
+ */
+export async function registerCreatedWorktree({
+  worktreeName,
+  provider = "claude",
+  slot = null,
+  toolkitDir = null,
+  root = runtimeRoot(),
+  cfg = null,
+  metadata = null,
+} = {}) {
+  const name = norm(worktreeName);
+  if (!name) return { ok: false, error: "missing_worktree_name" };
+  const chosen = asSlot(slot) ?? freeSlots({ cfg, metadata })[0] ?? null;
+  if (chosen == null) {
+    // Saying this is the point. A lane created with no slot left is a lane that
+    // cannot run, and the operator has to be told at creation rather than
+    // discovering it on the first message.
+    return { ok: false, error: "no_free_slot", detail: "All six managed slots are registered; free one before creating another lane that needs a worktree." };
+  }
+  const bin = join(toolkitDir || join(process.env.HOME || "", ".local", "share", "alloy", "toolkit", "current"), "alloy-worktree-adopt");
+  const run = registerImpl || ((cmd, args, opts) => spawnSync(cmd, args, opts));
+  const out = run(bin, [String(chosen), name, "--provider", provider], {
+    encoding: "utf8", timeout: 60_000, env: { ...process.env, ALLOY_RUNTIME_ROOT: root },
+  });
+  if (!out || out.status !== 0) {
+    return {
+      ok: false, error: "registration_failed", slot: chosen,
+      detail: String(out?.stderr || out?.error || "alloy-worktree-adopt failed").slice(0, 300),
+    };
+  }
+  return { ok: true, slot: chosen, port: 3010 + chosen, worktree: name, provider };
 }

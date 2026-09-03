@@ -183,6 +183,18 @@ export type FocusPanelGridLayout = {
  */
 export type FocusPanelPublishedLayout = { rows: FocusPanelLayoutRow[]; grid?: FocusPanelGridLayout };
 
+/**
+ * The layout AS STORED, which is not the layout as consumed.
+ *
+ * `rows` is a projection of the grid (see `deriveRowsFromGrid`), so a doc that carries only
+ * a `grid` is a legal published layout — `isFocusPanelPublishedLayout` has always said so in
+ * as many words. Every consumer downstream of the reader, however, was written against
+ * `FocusPanelPublishedLayout`, where `rows` is present. Naming the stored shape separately is
+ * what stops those two truths from being held by the same type: the validator accepts this,
+ * and `readFocusPanelPublishedLayout` returns the other, having filled in what it can derive.
+ */
+export type StoredFocusPanelPublishedLayout = { rows?: FocusPanelLayoutRow[]; grid?: FocusPanelGridLayout };
+
 /** A planned cell the renderer paints (width resolved to grid units). */
 export type PublishedLayoutCellPlan = { widthUnits: number; cards: FocusPanelCardKey[]; minHeightPx?: number };
 export type PublishedLayoutRowPlan = { cells: PublishedLayoutCellPlan[] };
@@ -250,12 +262,12 @@ export function isFocusPanelGridLayout(value: unknown): value is FocusPanelGridL
 }
 
 /** Validate a value is a well-formed published layout (defensive for stored docs). */
-export function isFocusPanelPublishedLayout(value: unknown): value is FocusPanelPublishedLayout {
+export function isFocusPanelPublishedLayout(value: unknown): value is StoredFocusPanelPublishedLayout {
     if (!value || typeof value !== "object") return false;
     // A V5 grid is sufficient on its own; `rows` may be a thin reading-order fallback.
-    const grid = (value as FocusPanelPublishedLayout).grid;
+    const grid = (value as StoredFocusPanelPublishedLayout).grid;
     if (grid !== undefined && !isFocusPanelGridLayout(grid)) return false;
-    const rows = (value as FocusPanelPublishedLayout).rows;
+    const rows = (value as StoredFocusPanelPublishedLayout).rows;
     const rowsOk =
         Array.isArray(rows) &&
         rows.length > 0 &&
@@ -291,7 +303,9 @@ export const FOCUS_PANEL_PUBLISHED_LAYOUT_META_KEY = "focusPanelLayout" as const
  * two readers of one document disagreeing about which card is placed, which is how a card ends up
  * both present and absent in the same render.
  */
-function normalizePublishedLayoutCardKeys(layout: FocusPanelPublishedLayout): FocusPanelPublishedLayout {
+function normalizePublishedLayoutCardKeys(
+    layout: StoredFocusPanelPublishedLayout,
+): FocusPanelPublishedLayout {
     const normalizeKey = (card: FocusPanelCardKey): FocusPanelCardKey =>
         normalizeFocusPanelCardKey(card) ?? card;
     return {
@@ -304,23 +318,59 @@ function normalizePublishedLayoutCardKeys(layout: FocusPanelPublishedLayout): Fo
                   },
               }
             : {}),
-        rows: layout.rows.map((row) => ({
+        rows: (layout.rows ?? []).map((row) => ({
             ...row,
             cells: row.cells.map((cell) => ({ ...cell, cards: cell.cards.map(normalizeKey) })),
         })),
     };
 }
 
+/**
+ * Read + validate the published layout from a Summary LayoutDoc's metadata, or null.
+ *
+ * THE READER OWNS THE INVARIANT ITS CONSUMERS WERE WRITTEN AGAINST. A stored layout may
+ * legally carry only a `grid`; `planPublishedLayout` and every other consumer read `rows`
+ * unconditionally. That gap crashed the Work Unit — the validator said yes and the very
+ * next line dereferenced `rows`. Deriving the projection here means there is one place
+ * that knows `rows` can be absent, instead of a dozen that must remember it.
+ */
 export function readFocusPanelPublishedLayout(
     doc: { metadata?: Record<string, unknown> | null } | null | undefined,
 ): FocusPanelPublishedLayout | null {
     const raw = doc?.metadata?.[FOCUS_PANEL_PUBLISHED_LAYOUT_META_KEY];
-    return isFocusPanelPublishedLayout(raw) ? normalizePublishedLayoutCardKeys(raw) : null;
+    if (!isFocusPanelPublishedLayout(raw)) return null;
+    return withDerivedRows(normalizePublishedLayoutCardKeys(raw));
+}
+
+/**
+ * Guarantee the `rows` projection, deriving it from the grid when the stored layout did
+ * not carry one. A grid-only layout is complete; a rows-less one handed to a consumer is not.
+ */
+export function withDerivedRows(layout: FocusPanelPublishedLayout): FocusPanelPublishedLayout {
+    if (layout.rows.length > 0 || !layout.grid) return layout;
+    return { ...layout, rows: deriveRowsFromGrid(layout.grid) };
 }
 
 /** Areas top→bottom, then left→right — the grid's natural reading order. */
 export function gridAreasInReadingOrder(grid: FocusPanelGridLayout): FocusPanelGridArea[] {
     return [...grid.areas].sort((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart);
+}
+
+/**
+ * The reading-order `rows` fallback a grid implies — one full-width cell per card,
+ * top→bottom/left→right.
+ *
+ * THIS IS WHAT MAKES `rows` DERIVABLE RATHER THAN REQUIRED. The grid is the composition
+ * source of truth; `rows` is a projection of it that older consumers and the responsive
+ * collapse read. Because it is a projection, a stored layout that carries only a grid is
+ * not incomplete — it is missing something the runtime can compute — and the reader
+ * computes it rather than handing a half-built layout to consumers that documented `rows`
+ * as always present.
+ */
+export function deriveRowsFromGrid(grid: FocusPanelGridLayout): FocusPanelLayoutRow[] {
+    return gridAreasInReadingOrder(grid).map((a) => ({
+        cells: [{ width: "full" as const, cards: [a.card], height: a.height }],
+    }));
 }
 
 /**

@@ -17,14 +17,12 @@ import {
     clampArea,
     COMPOSER_GRID_GAP_PX,
     COMPOSER_GRID_ROW_UNIT_PX,
-    composerGhostBounds,
     defaultRowSpanForCard,
     emptyGridLayout,
     gridFromPublishedLayout,
     moveArea,
     removeArea,
     resizeArea,
-    snapMoveTarget,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 
 // The three validation layouts from the EB V5 brief, in 12-column grid placement.
@@ -231,21 +229,6 @@ describe("focusPanelGridLayoutOps", () => {
         });
     });
 
-    it("does not shrink a full-width card when the pointer drifts toward the right half", () => {
-        const grid: FocusPanelGridLayout = {
-            columns: 12,
-            areas: [
-                { card: "household", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 3 },
-                { card: "children", colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 4 },
-            ],
-        };
-        const moving = grid.areas.find((a) => a.card === "children")!;
-        // Pointer near right half must not collapse Children to a 6-col tile.
-        const snapped = snapMoveTarget(grid, moving, 8, 1);
-        expect(snapped.colSpan).toBe(12);
-        expect(snapped.rowStart).toBe(1);
-    });
-
     it("moveArea places Children above Household in a full-width stack", () => {
         let grid: FocusPanelGridLayout = {
             columns: 12,
@@ -260,39 +243,6 @@ describe("focusPanelGridLayoutOps", () => {
         expect(children.rowStart).toBe(1);
         expect(children.colSpan).toBe(12);
         expect(household.rowStart).toBeGreaterThanOrEqual(children.rowStart + children.rowSpan);
-    });
-
-    it("snapMoveTarget inserts above a same-column neighbor when dropping on its top edge", () => {
-        const grid: FocusPanelGridLayout = {
-            columns: 12,
-            areas: [
-                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
-                { card: "household", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 2 },
-                { card: "children", colStart: 7, colSpan: 6, rowStart: 3, rowSpan: 2 },
-            ],
-        };
-        const moving = grid.areas.find((a) => a.card === "children")!;
-        // Drop on Household's top edge → insert above (not forced under it).
-        const snapped = snapMoveTarget(grid, moving, 7, 1);
-        expect(snapped.rowStart).toBe(1);
-        expect(snapped.colStart).toBe(7);
-    });
-
-    it("snapMoveTarget stacks immediately beneath a tall neighbor without teleporting to top", () => {
-        const grid: FocusPanelGridLayout = {
-            columns: 12,
-            areas: [
-                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
-                { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 4 },
-                { card: "household", colStart: 7, colSpan: 6, rowStart: 5, rowSpan: 3 },
-            ],
-        };
-        const moving = grid.areas.find((a) => a.card === "household")!;
-        // Drop one track into the lower half of Children — must land at Children bottom (5),
-        // not yank to row 1 via left-column alignTop.
-        const snapped = snapMoveTarget(grid, moving, 7, 3);
-        expect(snapped.rowStart).toBe(5);
-        expect(snapped.colStart).toBe(7);
     });
 
     it("after a card snaps to top, another card can reclaim the top slot", () => {
@@ -374,46 +324,4 @@ describe("focusPanelGridLayoutOps", () => {
         });
     });
 
-    it("snapMoveTarget stacks below when dropping in the lower half of a neighbor", () => {
-        const grid: FocusPanelGridLayout = {
-            columns: 12,
-            areas: [
-                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
-                { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
-                { card: "household", colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 2 },
-            ],
-        };
-        const moving = grid.areas.find((a) => a.card === "household")!;
-        // Drop toward bottom of Children (row 3 is in lower half of Children rows 1–3).
-        const snapped = snapMoveTarget(grid, moving, 7, 3);
-        expect(snapped.rowStart).toBe(4);
-        expect(snapped.colStart).toBe(7);
-    });
-
-    it("composerGhostBounds maps grid placement to pixel coordinates", () => {
-        const bounds = composerGhostBounds({
-            colStart: 7,
-            colSpan: 6,
-            rowStart: 1,
-            rowSpan: 2,
-            columns: 12,
-            surfaceWidthPx: 1200,
-            paddingX: 10,
-            paddingY: 10,
-        });
-        /*
-         * A column is NOT surfaceWidth / columns. The browser subtracts the 11 gaps it
-         * inserts between 12 tracks first, then divides; a column's start advances by
-         * track + gap. Dividing by 12 alone drifts further right with every column, which
-         * is what made the ghost and the drop disagree toward the right of the canvas.
-         */
-        const track = (1200 - 11 * COMPOSER_GRID_GAP_PX) / 12;
-        expect(bounds.left).toBe(10 + 6 * (track + COMPOSER_GRID_GAP_PX));
-        expect(bounds.top).toBe(10);
-        // A span covers its own tracks plus the gaps between them, and no trailing gap.
-        expect(bounds.width).toBeCloseTo(6 * track + 5 * COMPOSER_GRID_GAP_PX);
-        expect(bounds.height).toBe(
-            2 * COMPOSER_GRID_ROW_UNIT_PX + (2 - 1) * COMPOSER_GRID_GAP_PX,
-        );
-    });
 });

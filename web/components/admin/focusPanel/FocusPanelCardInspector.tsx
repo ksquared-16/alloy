@@ -68,7 +68,9 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCatalog";
 import {
     currentPlacementVariant,
+    defaultColumnsForCard,
     placementVariantsFor,
+    SURFACE_SPAN_CHOICES,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
 import type { FocusPanelCardDensity } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -169,6 +171,10 @@ type Props = {
      * choice rendered at Summary width is not a choice.
      */
     onPresentationChange?: (card: FocusPanelCardKey, variantLabel: string) => void;
+    /** The span this SURFACE authored for the card, when it is placed on the canvas. */
+    authoredColumns?: number | null;
+    /** Change the span for this surface only — never the card's own default. */
+    onSpanChange?: (card: FocusPanelCardKey, columns: number) => void;
 };
 
 const FIELD = "config-runtime-input";
@@ -186,6 +192,8 @@ export default function FocusPanelCardInspector({
     history,
     metadataOnly = false,
     onPresentationChange,
+    authoredColumns = null,
+    onSpanChange,
 }: Props) {
     const visibleTabs = useMemo(
         () =>
@@ -205,6 +213,15 @@ export default function FocusPanelCardInspector({
     const appearance = config.appearance ?? {};
     const effectiveTitle = appearance.titleOverride?.trim() || baseModel.title;
     const placementVariants = useMemo(() => placementVariantsFor(baseModel.key), [baseModel.key]);
+    /*
+     * WIDTH IS THIS SURFACE'S ANSWER, NOT THE CARD'S.
+     *
+     * The card states a recommended default; the composition decides. Precedence
+     * is surface-authored → card default → platform fallback, and the authored
+     * value is read from the grid area this surface persisted, so a published
+     * layout keeps exactly the width it was saved with.
+     */
+    const effectiveColumns = authoredColumns ?? defaultColumnsForCard(baseModel.key);
     const currentVariant = currentPlacementVariant(baseModel.key, appearance.density ?? baseModel.density);
 
     // Edit against a config that always carries explicit evidence groups: when a card
@@ -506,6 +523,22 @@ export default function FocusPanelCardInspector({
                           * cards they can actually see. The span travels with the choice — it is
                           * how the platform places the card, not what is being chosen.
                           */}
+                        {onSpanChange ?
+                            <Labeled label="Width">
+                                <select
+                                    data-testid="inspector-span"
+                                    className={FIELD}
+                                    value={String(effectiveColumns)}
+                                    onChange={(e) => onSpanChange(baseModel.key, Number(e.target.value))}
+                                >
+                                    {SURFACE_SPAN_CHOICES.map((choice) => (
+                                        <option key={choice.columns} value={String(choice.columns)}>
+                                            {choice.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Labeled>
+                        :   null}
                         {placementVariants.length > 1 ?
                             <Labeled label="Presentation">
                                 <select

@@ -11,6 +11,7 @@
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
+    deriveRowsFromGrid,
     FOCUS_PANEL_GRID_COLUMNS,
     gridAreasInReadingOrder,
     resolveRowUnits,
@@ -292,81 +293,49 @@ export const COMPOSER_GRID_ROW_UNIT_PX = 76;
 export const COMPOSER_GRID_GAP_PX = 10;
 
 /**
- * Snap a drag target so cards align/stack predictably on the composer grid. PURE.
+ * Close empty row bands, and change nothing else. PURE.
  *
- * Insertion rule (same column): pointer in the upper third of a neighbor → insert above;
- * otherwise overlapping / lower → stack immediately beneath. Full-width cards keep their
- * span — never shrink to half during drag. Half-width cards only magnet to L/R when near
- * a column edge.
+ * ── WHY NOT GRAVITY ──
+ *
+ * Per-card gravity (`packGridInReadingOrder`) re-decides every card's row from
+ * scratch: each falls to the earliest row it fits. That is why a requested row
+ * was never authoritative. An exhaustive sweep of both reference layouts found
+ * 30 visible vacancies where the card landed ABOVE the cell the pointer asked
+ * for — "c7r4: landed row 3", "c1r8: landed row 6" — the column honoured every
+ * time and the row overridden every time. Which is precisely the operator's
+ * report: Children could not be put in the open row under the top row, and cards
+ * felt flaky around particular destinations.
+ *
+ * Removing empty BANDS does the one thing compaction is actually for — no
+ * phantom rows — without touching relative geometry. Every card keeps its column
+ * and its row order; the canvas just stops reserving rows nothing occupies.
  */
-export function snapMoveTarget(
-    grid: FocusPanelGridLayout,
-    moving: FocusPanelGridArea,
-    colStart: number,
-    rowStart: number,
-): FocusPanelGridArea {
-    let next = clampArea(grid, { ...moving, colStart, rowStart });
-    const rightHalfStart = Math.floor(grid.columns / 2) + 1;
-    const halfSpan = Math.max(1, Math.floor(grid.columns / 2));
-    const isApproximatelyHalfWidth =
-        next.colSpan >= halfSpan - 1 && next.colSpan <= halfSpan + 1;
-
-    // Magnet half-width cards into left/right columns when near an edge.
-    // Never shrink a wider/full-width card — that feels rigid and fights free placement.
-    if (isApproximatelyHalfWidth) {
-        const nearRight = next.colStart >= rightHalfStart - 1;
-        const nearLeft = next.colStart <= 2;
-        if (nearRight) {
-            next = clampArea(grid, { ...next, colStart: rightHalfStart, colSpan: halfSpan });
-        } else if (nearLeft) {
-            next = clampArea(grid, { ...next, colStart: 1, colSpan: halfSpan });
-        }
+export function closeEmptyRowBands(grid: FocusPanelGridLayout): FocusPanelGridLayout {
+    if (!grid.areas.length) return grid;
+    const occupied = new Set<number>();
+    for (const a of grid.areas) {
+        for (let r = a.rowStart; r < a.rowStart + a.rowSpan; r += 1) occupied.add(r);
     }
-
-    // Same-column neighbors: upper third → insert above (push neighbor down via placeArea
-    // normalize). Lower two-thirds / past bottom → stack immediately below.
-    const neighbors = grid.areas
-        .filter((area) => area.card !== moving.card && sameStackColumn(area, next))
-        .sort((a, b) => a.rowStart - b.rowStart);
-
-    let stackedBelow = false;
-    for (const neighbor of neighbors) {
-        const stackBelow = neighbor.rowStart + neighbor.rowSpan;
-        const nextEnd = next.rowStart + next.rowSpan;
-        const overlaps = next.rowStart < stackBelow && nextEnd > neighbor.rowStart;
-        const insertAboveBand = neighbor.rowStart + Math.max(1, neighbor.rowSpan / 3);
-        const insertAbove =
-            next.rowStart < neighbor.rowStart
-            || (overlaps && next.rowStart < insertAboveBand)
-            || (!overlaps && next.rowStart === neighbor.rowStart);
-
-        if (insertAbove) {
-            next = { ...next, rowStart: neighbor.rowStart };
-            stackedBelow = false;
-            break;
-        }
-        if (overlaps || (next.rowStart >= insertAboveBand && next.rowStart <= stackBelow)) {
-            next = { ...next, rowStart: stackBelow };
-            stackedBelow = true;
-            // Keep scanning — may still overlap a card further down after stacking.
-        }
+    const lastRow = Math.max(...grid.areas.map((a) => a.rowStart + a.rowSpan - 1));
+    // How many empty rows sit strictly above each row — the distance it may rise.
+    const rise: number[] = [];
+    let empties = 0;
+    for (let r = 1; r <= lastRow; r += 1) {
+        rise[r] = empties;
+        if (!occupied.has(r)) empties += 1;
     }
+    return {
+        ...grid,
+        areas: grid.areas.map((a) => ({ ...a, rowStart: a.rowStart - (rise[a.rowStart] ?? 0) })),
+    };
+}
 
-    // Soft align: only nudge a half-width right-column card to the left column's top
-    // when already within half a track — never yank full-width reorder intent.
-    if (!stackedBelow && isApproximatelyHalfWidth && next.colStart >= rightHalfStart) {
-        const leftAnchors = grid.areas
-            .filter((area) => area.card !== moving.card && area.colStart < rightHalfStart)
-            .map((area) => area.rowStart);
-        if (leftAnchors.length > 0) {
-            const alignTop = Math.min(...leftAnchors);
-            if (Math.abs(next.rowStart - alignTop) < 1) {
-                next = { ...next, rowStart: alignTop };
-            }
-        }
-    }
-
-    return clampArea(grid, next);
+/** Free = no placed card shares a cell with this rectangle. PURE. */
+function rectangleIsFree(
+    others: readonly FocusPanelGridArea[],
+    candidate: FocusPanelGridArea,
+): boolean {
+    return !others.some((other) => regionsCollide(other, candidate));
 }
 
 /**
@@ -429,26 +398,6 @@ export function trackFromOffset(offset: number, edges: readonly number[], fallba
     return edges.length - 1 + Math.max(0, Math.floor((offset - last) / pitch)) + 1;
 }
 
-/** Pixel span of `[start, start+span)` over measured edges. PURE. */
-export function spanBounds(
-    start: number,
-    span: number,
-    edges: readonly number[],
-    gapPx: number,
-    fallbackPitch: number,
-): { offset: number; size: number } {
-    const at = (index: number) => {
-        if (index < edges.length) return edges[index]!;
-        const last = edges[edges.length - 1] ?? 0;
-        const pitch = fallbackPitch > 0 ? fallbackPitch : COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
-        return last + (index - (edges.length - 1)) * pitch;
-    };
-    const offset = at(Math.max(0, start - 1));
-    const end = at(Math.max(0, start - 1 + Math.max(1, span)));
-    // The trailing gap belongs to the next track, not to this span.
-    return { offset, size: Math.max(0, end - offset - gapPx) };
-}
-
 /**
  * THE ONE OWNER OF COMPOSER GRID GEOMETRY.
  *
@@ -483,45 +432,6 @@ export function composerGridMetrics(surfaceWidthPx: number, columns: number) {
     };
 }
 
-/** Pointer offset (relative to the grid's own box) → 1-based cell. PURE. */
-export function composerCellFromOffset(args: {
-    offsetX: number;
-    offsetY: number;
-    surfaceWidthPx: number;
-    columns: number;
-}): { col: number; row: number } {
-    const m = composerGridMetrics(args.surfaceWidthPx, args.columns);
-    const col = m.columnPitch > 0 ? Math.floor(args.offsetX / m.columnPitch) + 1 : 1;
-    const row = Math.floor(args.offsetY / m.rowPitch) + 1;
-    return {
-        col: Math.min(m.columns, Math.max(1, col)),
-        row: Math.max(1, row),
-    };
-}
-
-/** Pixel bounds for a composer ghost overlay (matches fixed 76px authoring tracks). */
-export function composerGhostBounds(args: {
-    colStart: number;
-    colSpan: number;
-    rowStart: number;
-    rowSpan: number;
-    columns: number;
-    surfaceWidthPx: number;
-    paddingX?: number;
-    paddingY?: number;
-}): { left: number; top: number; width: number; height: number } {
-    const paddingX = args.paddingX ?? 0;
-    const paddingY = args.paddingY ?? 0;
-    const m = composerGridMetrics(args.surfaceWidthPx, args.columns);
-    return {
-        left: paddingX + (args.colStart - 1) * m.columnPitch,
-        top: paddingY + (args.rowStart - 1) * m.rowPitch,
-        // A span covers its own tracks PLUS the gaps between them — and no trailing gap.
-        width: args.colSpan * m.trackWidth + (args.colSpan - 1) * COMPOSER_GRID_GAP_PX,
-        height: args.rowSpan * m.rowHeight + (args.rowSpan - 1) * COMPOSER_GRID_GAP_PX,
-    };
-}
-
 /** Remove a card's region. PURE. */
 export function removeArea(grid: FocusPanelGridLayout, card: FocusPanelCardKey): FocusPanelGridLayout {
     return { ...grid, areas: grid.areas.filter((a) => a.card !== card) };
@@ -530,12 +440,13 @@ export function removeArea(grid: FocusPanelGridLayout, card: FocusPanelCardKey):
 /**
  * Derive the reading-order `rows` fallback from a grid (one full-width cell per card,
  * top→bottom/left→right) so legacy consumers + responsive collapse keep working.
+ *
+ * Re-exported from the published-layout model, which is where the reader also needs it:
+ * a grid-only stored layout has its `rows` projection filled in on the way out, and the
+ * builder writes the same projection on the way in. Two implementations of one projection
+ * is how the two sides drift.
  */
-export function deriveRowsFromGrid(grid: FocusPanelGridLayout): FocusPanelPublishedLayout["rows"] {
-    return gridAreasInReadingOrder(grid).map((a) => ({
-        cells: [{ width: "full" as const, cards: [a.card], height: a.height }],
-    }));
-}
+export { deriveRowsFromGrid };
 
 /**
  * Convert an existing row/lane/stack published layout into grid placement (so the grid

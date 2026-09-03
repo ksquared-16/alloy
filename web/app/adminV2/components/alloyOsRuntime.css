@@ -1223,16 +1223,6 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
 /* A PERSON subject shows its identity avatar instead of the household tile. The avatar carries
  * its own round shape and tone, so the tile drops its frame and becomes a plain slot — one avatar
  * model, no second identity presentation. */
-.alloy-os-fp-header-compact__subject-tile--avatar {
-  width: 34px;
-  height: 34px;
-  margin-top: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-  border-radius: 999px;
-}
-
 .alloy-os-fp-header-compact__subject-tile {
   display: inline-flex;
   align-items: center;
@@ -1252,6 +1242,24 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 1px 2px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+}
+
+/* WHEN THE AVATAR IS THERE, THE TILE IS NOT.
+ *
+ * The avatar variant carries the same single class as the base tile, so specificity
+ * cannot separate them — only SOURCE ORDER can, and this block used to sit ABOVE the
+ * base rule. Its resets lost every one of them, and the case tile's bordered gradient
+ * kept painting behind the round avatar: two identity marks stacked in one slot.
+ *
+ * A person's avatar IS the identity mark. Keep this after the base rule. */
+.alloy-os-fp-header-compact__subject-tile--avatar {
+  width: 34px;
+  height: 34px;
+  margin-top: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 999px;
 }
 
 .alloy-os-fp-header-compact__subject-tile-icon {
@@ -5124,6 +5132,14 @@ html[data-alloy-os-runtime-split="true"]
  * regions). Each area cell fills its column span (width) and stretches to its row span
  * (height) so a card beside a taller stack reads as one tall region. Builder and runtime
  * share this exact grid. */
+/*
+ * The grid canvas positions its cards itself now (column-aware vertical model),
+ * so it is a positioning context. Columns still come from the twelve-column
+ * track list; rows no longer decide anyone's Y.
+ */
+.alloy-os-fp-canvas--grid[data-fp-vertical-model="column-aware"] {
+  position: relative;
+}
 .alloy-os-fp-canvas--grid {
   display: grid;
   grid-template-columns: repeat(var(--fp-grid-cols, 12), minmax(0, 1fr));
@@ -5135,6 +5151,10 @@ html[data-alloy-os-runtime-split="true"]
 }
 .alloy-os-fp-grid-area {
   display: flex;
+  /* The card must not stretch to its wrapper: the wrapper's height IS the card's, and a
+   * stretched child would make any height we ever set read back as the measured content
+   * height. Height flows content -> wrapper -> layout, never the other way. */
+  align-items: flex-start;
   min-width: 0;
   min-height: 0;
 }
@@ -5718,7 +5738,24 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-fp-composer__chip:hover { border-color: var(--alloy-os-accent, #2f6f4f); color: var(--alloy-os-accent, #2f6f4f); }
 
 .alloy-os-fp-composer-cell { position: relative; }
-.alloy-os-fp-composer-cell.is-arranging > :first-child {
+/*
+ * THE COMPOSER OWNS EVERY PRESS, ON EVERY CARD.
+ *
+ * The rendered card was inert only while ALREADY arranging, so before a drag
+ * began the press landed on whatever the card happened to draw there. On a
+ * text-heavy card (Process, Financials) that is the card, and the drag started.
+ * On a control-heavy one (Attendance, with a control under most of its surface)
+ * it was a button, the composer never saw the press, and the card "would not
+ * drag" — the same gesture, two behaviours, decided by what a card renders.
+ *
+ * The canvas is an authoring preview, so nothing inside a card should be
+ * operable here. Making the content inert at rest — not only mid-drag — is what
+ * makes the gesture card-agnostic by construction rather than by each card
+ * agreeing to behave. The composer's own chrome sits above this and re-enables
+ * its own pointer events, so Configure, Remove and the resize handles are
+ * unaffected.
+ */
+.alloy-os-fp-composer-cell:not(.is-selected) > :first-child {
   pointer-events: none;
   user-select: none;
 }
@@ -5734,9 +5771,23 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
    * now, so every card keeps a real grab target, and the Configure toolbar keeps
    * clear space on the cards wide enough to have one.
    */
-  left: min(34px, 10%);
-  right: clamp(44px, 34%, 156px);
-  height: 34px;
+  /*
+   * A GENEROUS, PREDICTABLE HANDLE.
+   *
+   * The bar is the one affordance that works in every mode — including while a
+   * card is selected and its content is live for configuration. It runs the full
+   * width of the card apart from the toolbar's corner, and it is tall enough to
+   * hit without aiming.
+   */
+  /*
+   * The bar stops short of the toolbar's corner. A hit test across the card's top
+   * strip: 30%/50%/70% land on this bar, 5% lands on the grip (which starts the
+   * drag through its own handler), and 80%/90% land on the Configure button —
+   * which is deliberate, and is NOT a dead strip.
+   */
+  left: 0;
+  right: 96px;
+  height: 44px;
   z-index: 6;
   cursor: grab;
   touch-action: none;
@@ -5807,10 +5858,28 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   border-color: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 45%, transparent);
   box-shadow: 0 2px 6px color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 18%, transparent);
 }
+/*
+ * THE CANONICAL DRAG HANDLE — 44x44, the platform's minimum comfortable target,
+ * identical on every card. It is the only thing that starts a drag, so it has to
+ * be findable without hunting: visible at rest rather than on hover.
+ */
 .alloy-os-fp-composer-cell__grip {
-  position: absolute; top: 6px; left: 6px; width: 28px; z-index: 12;
-  cursor: grab; touch-action: none; opacity: 0;
+  position: absolute; top: 4px; left: 4px;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 12;
+  cursor: grab; touch-action: none;
+  opacity: 0.45;
+  border-radius: 10px;
+  transition: opacity 120ms, background 120ms;
 }
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__grip,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__grip,
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__grip {
+  opacity: 1;
+  background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 12%, transparent);
+}
+.alloy-os-fp-composer-cell__grip:active { cursor: grabbing; }
 .alloy-os-fp-composer-cell__remove {
   position: relative; width: 28px; cursor: pointer; opacity: 0;
 }
@@ -9843,7 +9912,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 .alloy-os-financials__row {
   display: grid;
-  grid-template-columns: 82px 76px 92px minmax(90px, 1fr) 72px 78px 68px 84px;
+  /* Eight columns of ledger + the row's own lifecycle transition. */
+  grid-template-columns: 82px 76px 92px minmax(90px, 1fr) 72px 78px 68px 84px 62px;
   gap: 8px;
   padding: 3px 0;
   font-size: 11.5px;
@@ -9865,6 +9935,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-financials__cell--source,
 .alloy-os-financials__cell--desc {
   color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* The row's transition sits at the end of the row, quiet until there is one to offer. */
+.alloy-os-financials__cell--row-action {
+  overflow: visible;
+  text-align: right;
 }
 /* The expanded view's shallow top: one line, so the ledger keeps the surface. */
 .alloy-os-financials__shallow {
@@ -10055,4 +10130,122 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   margin: 7px 0 0;
   font-size: 11.5px;
   color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/*
+ * THE DRAGGED CARD IS ITS OWN PREVIEW.
+ *
+ * While a drag is live the canvas renders the resolved layout, so this card is
+ * already standing where it will land. It marks itself rather than being traced
+ * by a floating rectangle in a second coordinate system — the arrangement the
+ * operator sees IS the arrangement that commits.
+ */
+.alloy-os-fp-composer-cell.is-dragging {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 12px;
+  opacity: 0.92;
+}
+
+/*
+ * ── DROP ZONES ──
+ *
+ * The composer stopped inferring a destination from the pointer and started
+ * offering them. These are those offers: one rectangle per legal placement of the
+ * card in hand, tiling the columns it can occupy, so the operator aims at a target
+ * instead of negotiating with a solver.
+ *
+ * `pointer-events: none` throughout — the zones are a picture of the decision, not
+ * the mechanism. Selection is resolved from pointer coordinates against the same
+ * geometry these are drawn from, so a zone can never be visible-but-unclickable,
+ * and a card being dragged over one cannot swallow the hit.
+ */
+.alloy-os-fp-dropzones {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 40;
+}
+
+.alloy-os-fp-dropzone {
+    position: absolute;
+    display: flex;
+    /*
+     * The label sits on the INSERTION LINE — the top edge of the band, which is
+     * where the card's top actually goes. Centred, it floated over whatever card
+     * the band happens to cover and read as a caption for that card instead of a
+     * target for this one.
+     */
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 6px;
+    border-radius: 12px;
+    border: 1.5px dashed color-mix(in srgb, var(--alloy-accent, #6366f1) 45%, transparent);
+    background: color-mix(in srgb, var(--alloy-accent, #6366f1) 6%, transparent);
+    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.alloy-os-fp-dropzone__label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--alloy-accent, #6366f1) 85%, #0f172a);
+    opacity: 0.75;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, #ffffff 78%, transparent);
+    white-space: nowrap;
+}
+
+/*
+ * The chosen one is not merely brighter — it is drawn at the rectangle the card
+ * takes, so the highlight and the preview are the same rectangle. There is nothing
+ * for the operator to reconcile between "where it says it will go" and "where it
+ * goes".
+ */
+.alloy-os-fp-dropzone.is-active {
+    border-style: solid;
+    border-color: var(--alloy-accent, #6366f1);
+    background: color-mix(in srgb, var(--alloy-accent, #6366f1) 14%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-accent, #6366f1) 22%, transparent);
+    z-index: 1;
+}
+
+.alloy-os-fp-dropzone.is-active .alloy-os-fp-dropzone__label {
+    opacity: 1;
+    color: #ffffff;
+    background: var(--alloy-accent, #6366f1);
+}
+
+/* ── Bounded render failure ──────────────────────────────────────────────────
+ *
+ * What a card or a surface looks like when it could not render. Quiet and
+ * legible rather than alarming: the operator's job is unblocked (every other
+ * card still works), and nothing here suggests the published configuration was
+ * changed — because it was not. See FocusPanelRenderErrorBoundary. */
+.alloy-os-fp-render-failure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  width: 100%;
+  min-height: 96px;
+  padding: 16px 18px;
+  border: 1px dashed var(--alloy-os-border, rgba(15, 23, 42, 0.18));
+  border-radius: 12px;
+  background: var(--alloy-os-surface-muted, rgba(15, 23, 42, 0.03));
+}
+.alloy-os-fp-render-failure__headline {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--alloy-os-text, rgb(15, 23, 42));
+}
+.alloy-os-fp-render-failure__detail {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--alloy-os-text-muted, rgba(15, 23, 42, 0.62));
 }

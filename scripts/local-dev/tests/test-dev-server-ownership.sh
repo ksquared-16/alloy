@@ -123,5 +123,248 @@ else
   ok "13. bounded walk terminates and refuses"
 fi
 
+
+# ---------------------------------------------------------------------------
+# LISTENER OWNERSHIP: UNKNOWN IS NOT FREE
+#
+# THE DEFECT THESE ENCODE. `alloy_rc_port_pid` resolved `lsof` by bare name with
+# no /usr/sbin fallback and returned 1 for three different facts — tool missing,
+# probe failed, nothing listening. Callers read `return 1` as "free". Measured on
+# the Mac mini: 3014/3015/3016 were answering HTTP 200 from real next-server
+# processes while `alloy-dev-status` printed `(free)` for every one of them, and
+# `alloy_refuse_occupied_port` — the guard against starting a server on another
+# slot's port — was disarmed by the same conflation.
+# ---------------------------------------------------------------------------
+
+FIXTURE_PORT=3917
+/usr/bin/python3 -c "
+import socket, time
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', $FIXTURE_PORT)); s.listen(1); time.sleep(25)
+" >/dev/null 2>&1 &
+LISTENER_PID=$!
+disown "$LISTENER_PID" 2>/dev/null || true   # keep job-control chatter out of the suite output
+sleep 1
+
+owner="$(alloy_rc_port_owner "$FIXTURE_PORT")"
+case "$owner" in
+  owned\ *) ok "14. a live listener is reported owned with a PID ($owner)" ;;
+  *) bad "14. live listener reported '$owner', expected owned <pid>" ;;
+esac
+
+# The exact shell context that produced the defect: /usr/sbin absent from PATH.
+owner_nopath="$(PATH=/usr/bin:/bin bash -c '
+  ALLOY_LOCAL_DEV_ROOT="'"$ROOT"'"; source "'"$ROOT"'/lib/read-core.sh"
+  alloy_rc_port_owner '"$FIXTURE_PORT"'')"
+case "$owner_nopath" in
+  owned\ *) ok "15. ownership survives a PATH without /usr/sbin (no false free)" ;;
+  *) bad "15. PATH without /usr/sbin reported '$owner_nopath' — the original defect" ;;
+esac
+
+# And when the probe genuinely cannot run, the answer is unknown — never free.
+owner_noprobe="$(bash -c '
+  ALLOY_LOCAL_DEV_ROOT="'"$ROOT"'"; source "'"$ROOT"'/lib/read-core.sh"
+  alloy_rc_lsof_bin() { return 1; }
+  alloy_rc_port_owner '"$FIXTURE_PORT"'')"
+if [[ "$owner_noprobe" == "unknown" ]]; then
+  ok "16. an unavailable probe reports unknown, not free"
+else
+  bad "16. unavailable probe reported '$owner_noprobe'"
+fi
+
+# Fail closed: unknown must not satisfy "known free", and must count as in use.
+if bash -c '
+  ALLOY_LOCAL_DEV_ROOT="'"$ROOT"'"; source "'"$ROOT"'/lib/read-core.sh"
+  alloy_rc_lsof_bin() { return 1; }
+  alloy_rc_port_known_free '"$FIXTURE_PORT"''; then
+  bad "17. unknown was treated as known-free"
+else
+  ok "17. unknown is not known-free (bind guard fails closed)"
+fi
+
+# Kill only the fixture listener, and never this shell: an empty or self PID here
+# terminated the suite before its summary line the first time round.
+if [[ -n "${LISTENER_PID:-}" && "$LISTENER_PID" != "$$" ]]; then
+  kill -TERM "$LISTENER_PID" >/dev/null 2>&1 || true
+fi
+
+# A port with nothing on it is still allowed to be free — this must not become
+# a probe that can only ever say "unknown".
+if [[ "$(alloy_rc_port_owner 3918)" == "free" ]]; then
+  ok "18. an genuinely empty port is still reported free"
+else
+  bad "18. empty port was not reported free"
+fi
+
+# Source-level invariants: no second lsof resolver, and no (free) on the
+# unproven branch of the status table.
+if grep -q 'alloy_rc_lsof_bin' "$ROOT/lib/common.sh"; then
+  ok "19. common.sh delegates to the one lsof resolver in the read core"
+else
+  bad "19. common.sh carries a second lsof resolver"
+fi
+
+if grep -q 'unattributable' "$ROOT/alloy-dev-status"; then
+  ok "20. alloy-dev-status reports unattributable rather than free"
+else
+  bad "20. alloy-dev-status can still print (free) for an unproven port"
+fi
+
+if grep -q 'Refusing to bind a port that cannot be proven free' "$ROOT/lib/common.sh"; then
+  ok "21. alloy_refuse_occupied_port refuses an unprovable port"
+else
+  bad "21. the bind guard still proceeds when ownership is unknown"
+fi
+
+
+# ---------------------------------------------------------------------------
+# GOVERNED FOREIGN-OWNER RECLAIM — the refusals are the feature.
+#
+# The incident: Financials started Next on Runtime Performance's port 3011, and
+# the only way back was a hand-run kill. This command reclaims that case and
+# nothing else. Everything below asserts a thing it must NOT do.
+# ---------------------------------------------------------------------------
+
+[[ -x "$ROOT/alloy-dev-reclaim" ]] \
+  && ok "22. alloy-dev-reclaim exists and is executable" \
+  || bad "22. alloy-dev-reclaim missing"
+
+grep -q 'PREVIEW ONLY' "$ROOT/alloy-dev-reclaim" \
+  && ok "23. preview is the default; --apply is required to stop anything" \
+  || bad "23. reclaim has no preview mode"
+
+if grep -E 'pkill[[:space:]]+(-f[[:space:]]+)?(node|next)|kill -9|kill -KILL' "$ROOT/alloy-dev-reclaim" >/dev/null; then
+  bad "24. reclaim contains a broad kill — it must never become kill-port"
+else
+  ok "24. reclaim never broad-kills and never auto-SIGKILLs"
+fi
+
+grep -q 'class         unattributable' "$ROOT/alloy-dev-reclaim" \
+  && ok "25. an unreadable probe is refused, not treated as an empty port" \
+  || bad "25. reclaim does not refuse on unknown ownership"
+
+grep -q 'class         unmanaged_listener' "$ROOT/alloy-dev-reclaim" \
+  && ok "26. a listener that is not a provable foreign dev server is refused" \
+  || bad "26. reclaim does not refuse unprovable listeners"
+
+grep -q 'this is the canonical owner' "$ROOT/alloy-dev-reclaim" \
+  && ok "27. the canonical owner of a port is never reclaimed from itself" \
+  || bad "27. reclaim can target the canonical owner"
+
+grep -q 'alloy_record_server_lifecycle "reclaim"' "$ROOT/alloy-dev-reclaim" \
+  && ok "28. reclaim records a lifecycle audit entry" \
+  || bad "28. reclaim is not audited"
+
+grep -q 're-observed' "$ROOT/alloy-dev-reclaim" \
+  && ok "29. reclaim re-observes the port and never assumes the stop worked" \
+  || bad "29. reclaim does not re-observe"
+
+grep -q 'alloy_stop_pid_tree()' "$ROOT/lib/common.sh" \
+  && ok "30. one owner for stopping a server tree, shared by stop and reclaim" \
+  || bad "30. alloy_stop_pid_tree is not shared"
+
+# ── a port lsof cannot see is not a free port ────────────────────────────────
+#
+# Unprivileged lsof cannot see another user's sockets. tailscaled runs as root
+# and holds per-port tailnet listeners, so for a port whose only listener is
+# Tailscale Serve, lsof exits clean with no rows. alloy_rc_port_owner used to
+# read that as 'free'. MEASURED on port 3016: lsof empty, owner said 'free',
+# netstat showed LISTEN on 100.71.206.63.3016 and fd7a:115c:a1e0::.3016, and a
+# real bind of 0.0.0.0:3016 AND :::3016 failed EADDRINUSE. alloy-dev-start was
+# told the port was free and the dev server died on the bind.
+
+grep -q 'alloy_rc_port_has_foreign_listener' "$ROOT/lib/read-core.sh" \
+  && ok "31. free is cross-checked against every user's listeners, not just ours" \
+  || bad "31. no foreign-listener cross-check — lsof blindness still reads as free"
+
+# The cross-check must not simply make everything unknown. A genuinely unused
+# port has to stay usable, or the fix trades a false free for a false busy and
+# no server can ever start.
+if [[ "$(alloy_rc_port_owner 3918)" == "free" ]]; then
+  ok "32. a genuinely unused port is still free (the fix is not a blanket refusal)"
+else
+  bad "32. an unused port no longer reports free"
+fi
+
+# Absence of netstat is not evidence of absence: with no netstat on PATH the
+# helper must report no foreign listener and leave the lsof verdict standing,
+# rather than declaring every port unknown on a host that lacks the tool.
+if ALLOY_RC_NETSTAT_BIN=/nonexistent/netstat alloy_rc_port_has_foreign_listener "$FIXTURE_PORT"; then
+  bad "33. a missing netstat invents a foreign listener"
+else
+  ok "33. a missing netstat leaves the lsof verdict standing"
+fi
+
+# And the positive control for THAT: with a working netstat the same live port
+# a real listener is bound to must be seen, or test 33 would pass simply
+# because the helper never detects anything.
+if alloy_rc_port_has_foreign_listener 3015; then
+  ok "34. a real listener IS detected — 33 is not passing vacuously"
+else
+  bad "34. helper cannot see a port that is definitely listening"
+fi
+
+# ── loopback-scoped ownership: two owners, one port number ───────────────────
+#
+# Tailscale Serve publishes each lane port on the tailnet addresses and proxies
+# it to 127.0.0.1, so tailscaled holds 100.71.206.63:<port> and fd7a:...:<port>
+# permanently — including while no dev server runs. The port-global question
+# then answers "unknown" (root-owned, lsof blind) and a correct fail-closed
+# guard refuses a bind that would have succeeded. MEASURED on 3016: every
+# overlapping bind (0.0.0.0, ::, 100.71.206.63) returned EADDRINUSE while
+# 127.0.0.1 bound cleanly, and Surfaces could not be restarted at all.
+#
+# These drive the helper through a stub netstat so the three cases are exact
+# rather than dependent on whatever the host happens to be running.
+FAKE_NS="$(mktemp -d)/netstat"
+cat > "$FAKE_NS" <<'STUB'
+#!/bin/bash
+cat <<'ROWS'
+tcp4       0      0  100.71.206.63.3099     *.*                    LISTEN
+tcp6       0      0  fd7a:115c:a1e0::.3099  *.*                    LISTEN
+ROWS
+STUB
+chmod +x "$FAKE_NS"
+
+if [[ "$(ALLOY_RC_NETSTAT_BIN="$FAKE_NS" alloy_rc_loopback_port_owner 3099)" == "free" ]]; then
+  ok "35. tailnet-only listeners leave loopback free (Serve is not a lane server)"
+else
+  bad "35. a Tailscale-owned tailnet address wrongly occupies loopback"
+fi
+
+cat > "$FAKE_NS" <<'STUB'
+#!/bin/bash
+cat <<'ROWS'
+tcp46      0      0  *.3099                 *.*                    LISTEN
+ROWS
+STUB
+chmod +x "$FAKE_NS"
+if [[ "$(ALLOY_RC_NETSTAT_BIN="$FAKE_NS" alloy_rc_loopback_port_owner 3099)" != "free" ]]; then
+  ok "36. a wildcard listener DOES occupy loopback"
+else
+  bad "36. a wildcard listener was treated as leaving loopback free"
+fi
+
+cat > "$FAKE_NS" <<'STUB'
+#!/bin/bash
+cat <<'ROWS'
+tcp4       0      0  127.0.0.1.3099         *.*                    LISTEN
+ROWS
+STUB
+chmod +x "$FAKE_NS"
+if [[ "$(ALLOY_RC_NETSTAT_BIN="$FAKE_NS" alloy_rc_loopback_port_owner 3099)" != "free" ]]; then
+  ok "37. a real loopback listener occupies loopback"
+else
+  bad "37. a loopback listener was reported free"
+fi
+
+grep -q 'ALLOY_DEV_BIND_HOST' "$ROOT/alloy-dev-start" \
+  && ok "38. the dev server binds one address, and it is configurable" \
+  || bad "38. dev-server bind host is not owned in one place"
+
+grep -q 'alloy_refuse_occupied_port "$port" "${mode}-start for $name" loopback' "$ROOT/alloy-dev-start" \
+  && ok "39. dev-start asks the loopback question, not the port-global one" \
+  || bad "39. dev-start still asks the port-global question"
+
 printf '\n==== dev-server-ownership: %s passed, %s failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

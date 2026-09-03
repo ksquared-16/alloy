@@ -28,7 +28,7 @@ describe("workViewEditorSummaries", () => {
 
     it("formats presentation summary with surface defaults", () => {
         expect(formatWorkViewPresentationSummary(undefined, undefined, [])).toBe(
-            "Queue: Surface default · Focus Panel: Surface default",
+            "Queue: Surface default · Drawer body: Surface default",
         );
     });
 

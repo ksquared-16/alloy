@@ -19,6 +19,8 @@
  * (declared unsupported with a reason) — the toolkit prints but never runs them.
  */
 import { execFileSync } from "node:child_process";
+import { isManagedSlot, managedSlots } from "../managed-slots.mjs";
+import { capacityValue } from "../capacity-precedence.mjs";
 import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
@@ -134,15 +136,11 @@ export const DIRECTOR_MESSAGE_MAX = 24000;
 // (ALLOY_MAX_RUNNING_SERVERS, default 3). Starting one at capacity is blocked —
 // an operator must stop another first (surfaced in the Start-server dialog).
 const runningServerCount = (snap) => (snap?.sprints || []).filter((s) => s.server === "running").length;
+// This used to scrape the config file here with its own regex and ignore the
+// environment, while sprint-ops ignored the environment a different way. One
+// resolver now owns the precedence chain for every caller.
 function maxRunningServers() {
-  try {
-    const p = join(os.homedir(), ".config", "alloy-dev", "config");
-    if (existsSync(p)) {
-      const m = readFileSync(p, "utf8").match(/^ALLOY_MAX_RUNNING_SERVERS=["']?(\d+)/m);
-      if (m) return Number(m[1]);
-    }
-  } catch { /* fall through to default */ }
-  return 3;
+  return capacityValue("ALLOY_MAX_RUNNING_SERVERS");
 }
 
 // --------------------------------------------------------------------------
@@ -679,7 +677,7 @@ const COMMANDS = {
     resolveTarget: (v) => target("slot", v.slot ? `slot ${v.slot}` : "auto slot", { slot: v.slot ?? null }),
     eligibility: (t, snap, v) => {
       const occupied = new Set((snap.sprints || []).map((s) => s.slot));
-      const free = [1, 2, 3, 4, 5, 6].filter((n) => !occupied.has(n));
+      const free = managedSlots().filter((n) => !occupied.has(n));
       if (v.slot && occupied.has(v.slot)) return { eligible: false, reason: `slot ${v.slot} is occupied` };
       if (!free.length) return { eligible: false, reason: "all six slots are occupied — end a worker to free capacity" };
       return { eligible: true };

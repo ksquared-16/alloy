@@ -58,7 +58,12 @@ import {
     buildIdentityInlineChildSavePatch,
     isIdentityFieldInlineSaveSupported,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
-import { navigateIdentityFieldLink } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
+import {
+    navigateIdentityFieldLink,
+    resolveConfiguredOrDefaultIdentityFieldLink,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
+import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
+import { useRuntimeKernelOptional } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { fieldLinkTargetForNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     createEmptyFocusPanelCardLinkNavState,
@@ -309,6 +314,7 @@ export default function ChildrenCard({
     const opportunityStartDate =
         context.truth.start_date != null ? String(context.truth.start_date).slice(0, 10) : null;
 
+    const kernel = useRuntimeKernelOptional();
     const [cardLinkNav, setCardLinkNav] = useState<FocusPanelCardLinkNavState>(() =>
         createEmptyFocusPanelCardLinkNavState(),
     );
@@ -465,6 +471,42 @@ export default function ChildrenCard({
                     ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "placement", fieldRef)
                     ?? fieldLinkTargetForNestedGroup(childrenSurfaceConfig, "roster", fieldRef)
                 : null;
+        /*
+         * THE CLICKED CHILD BECOMES THE SUBJECT, NOT JUST THE FOCUS ID.
+         *
+         * A link that only raises the destination card hands it a focus string and
+         * nothing else. Cards that answer about a participant — Health & Safety,
+         * Attendance, Financials — read `context.participantScope`, which the panel
+         * resolves from the Record of Attention. So on a family with two children,
+         * raising Health from Riley's row would show Avery's card, or refuse to show
+         * one at all. Health & Safety refusing is the safe half of that; showing the
+         * wrong sibling's allergies under the right sibling's name is the harm the
+         * whole vertical exists to prevent.
+         *
+         * Moving attention is how this platform says "the subject is now this child".
+         * `resolveParticipantScope` then matches the id against THIS case's children
+         * and refuses anything stale, so nothing here can launder a foreign id into a
+         * plausible child. This is context, not duplication: no health data is copied
+         * onto the Children card.
+         */
+        const link = resolveConfiguredOrDefaultIdentityFieldLink({
+            links: null,
+            fromCard: "children",
+            fieldRef,
+            itemId: scheduleSubjectId,
+            authoredTarget,
+        });
+        if (kernel && link && (link.destinationSubject ?? "this_child") === "this_child") {
+            const subject = child?.customerMemberId?.trim() || child?.id?.trim() || null;
+            if (subject) {
+                kernel.attention.move({
+                    scope: ATTENTION_SCOPE.SUBJECT,
+                    subject,
+                    source: "subject_selection",
+                });
+            }
+        }
+
         const result = navigateIdentityFieldLink({
             coordination,
             fromCard: "children",

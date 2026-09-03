@@ -1,0 +1,405 @@
+{
+  "model": "column-aware",
+  "attendance": {
+    "grid": {
+      "x": 481,
+      "y": 602,
+      "w": 957,
+      "h": 1687
+    },
+    "model": "column-aware",
+    "areas": [
+      {
+        "card": "readiness_kpi",
+        "row": "3/3",
+        "x": 481,
+        "y": 851,
+        "w": 312,
+        "h": 248
+      },
+      {
+        "card": "children",
+        "row": "3/4",
+        "x": 965,
+        "y": 851,
+        "w": 474,
+        "h": 386
+      },
+      {
+        "card": "billing_preview",
+        "row": "6/2",
+        "x": 481,
+        "y": 1109,
+        "w": 474,
+        "h": 366
+      },
+      {
+        "card": "household",
+        "row": "7/4",
+        "x": 965,
+        "y": 1247,
+        "w": 474,
+        "h": 366
+      },
+      {
+        "card": "health_safety",
+        "row": "10/2",
+        "x": 481,
+        "y": 1920,
+        "w": 474,
+        "h": 369
+      },
+      {
+        "card": "business_process",
+        "row": "1/2",
+        "x": 481,
+        "y": 602,
+        "w": 635,
+        "h": 239
+      },
+      {
+        "card": "financials",
+        "row": "1/2",
+        "x": 1126,
+        "y": 602,
+        "w": 312,
+        "h": 239
+      },
+      {
+        "card": "attendance",
+        "row": "8/2",
+        "x": 481,
+        "y": 1485,
+        "w": 474,
+        "h": 425
+      }
+    ]
+  },
+  "health": {
+    "grid": {
+      "x": 481,
+      "y": 602,
+      "w": 957,
+      "h": 1390
+    },
+    "model": "column-aware",
+    "areas": [
+      {
+        "card": "readiness_kpi",
+        "row": "3/3",
+        "x": 481,
+        "y": 851,
+        "w": 312,
+        "h": 248
+      },
+      {
+        "card": "children",
+        "row": "3/4",
+        "x": 965,
+        "y": 851,
+        "w": 474,
+        "h": 386
+      },
+      {
+        "card": "billing_preview",
+        "row": "6/2",
+        "x": 481,
+        "y": 1109,
+        "w": 474,
+        "h": 366
+      },
+      {
+        "card": "household",
+        "row": "12/4",
+        "x": 965,
+        "y": 1626,
+        "w": 474,
+        "h": 366
+      },
+      {
+        "card": "business_process",
+        "row": "1/2",
+        "x": 481,
+        "y": 602,
+        "w": 635,
+        "h": 239
+      },
+      {
+        "card": "financials",
+        "row": "1/2",
+        "x": 1126,
+        "y": 602,
+        "w": 312,
+        "h": 239
+      },
+      {
+        "card": "attendance",
+        "row": "8/2",
+        "x": 481,
+        "y": 1485,
+        "w": 474,
+        "h": 425
+      },
+      {
+        "card": "health_safety",
+        "row": "10/2",
+        "x": 965,
+        "y": 1247,
+        "w": 474,
+        "h": 369
+      }
+    ]
+  },
+  "dump": {
+    "canvas": {
+      "x": 481,
+      "y": 602,
+      "w": 957,
+      "h": 1390
+    },
+    "scroll": {
+      "x": 0,
+      "y": 0
+    },
+    "columns": 12,
+    "gapPx": 10,
+    "rowUnitPx": 76,
+    "rowTracks": [],
+    "colTracks": [
+      71,
+      71,
+      71,
+      71,
+      71,
+      71,
+      71,
+      71,
+      71,
+      71,
+      71,
+      71
+    ],
+    "previewActive": false,
+    "cards": [
+      {
+        "card": "readiness_kpi",
+        "grid": {
+          "colStart": 1,
+          "colSpan": 4,
+          "rowStart": 3,
+          "rowSpan": 3
+        },
+        "persisted": {
+          "colStart": 1,
+          "colSpan": 4,
+          "rowStart": 3,
+          "rowSpan": 3
+        },
+        "rendered": {
+          "x": 481,
+          "y": 851,
+          "w": 312,
+          "h": 248
+        },
+        "declaredMinHeight": 248,
+        "trackHeight": null,
+        "overflowPx": null,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "card": "children",
+        "grid": {
+          "colStart": 7,
+          "colSpan": 6,
+          "rowStart": 3,
+          "rowSpan": 4
+        },
+        "persisted": {
+          "colStart": 7,
+          "colSpan": 6,
+          "rowStart": 3,
+          "rowSpan": 4
+        },
+        "rendered": {
+          "x": 965,
+          "y": 851,
+          "w": 474,
+          "h": 386
+        },
+        "declaredMinHeight": 334,
+        "trackHeight": null,
+        "overflowPx": null,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "card": "billing_preview",
+        "grid": {
+          "colStart": 1,
+          "colSpan": 6,
+          "rowStart": 6,
+          "rowSpan": 2
+        },
+        "persisted": {
+          "colStart": 1,
+          "colSpan": 6,
+          "rowStart": 6,
+          "rowSpan": 2
+        },
+        "rendered": {
+          "x": 481,
+          "y": 1109,
+          "w": 474,
+          "h": 366
+        },
+        "declaredMinHeight": 162,
+        "trackHeight": null,
+        "overflowPx": null,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "card": "household",
+        "grid": {
+          "colStart": 7,
+          "colSpan": 6,
+          "rowStart": 12,
+          "rowSpan": 4
+        },
+        "persisted": {
+          "colStart": 7,
+          "colSpan": 6,
+          "rowStart": 12,
+          "rowSpan": 4
+        },
+        "rendered": {
+          "x": 965,
+          "y": 1626,
+          "w": 474,
+          "h": 366
+        },
+        "declaredMinHeight": 334,
+        "trackHeight": null,
+        "overflowPx": null,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "card": "business_process",
+        "grid": {
+          "colStart": 1,
+          "colSpan": 8,
+          "rowStart": 1,
+          "rowSpan": 2
+        },
+        "persisted": {
+          "colStart": 1,
+          "colSpan": 8,
+          "rowStart": 1,
+          "rowSpan": 2
+        },
+        "rendered": {
+          "x": 481,
+          "y": 602,
+          "w": 635,
+          "h": 239
+        },
+        "declaredMinHeight": 162,
+        "trackHeight": null,
+        "overflowPx": null,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "card": "financials",
+        "grid": {
+          "colStart": 9,
+          "colSpan": 4,
+          "rowStart": 1,
+          "rowSpan": 2
+        },
+        "persisted": {
+          "colStart": 9,
+          "colSpan": 4,
+          "rowStart": 1,
+          "rowSpan": 2
+        },
+        "rendered": {
+          "x": 1126,
+          "y": 602,
+          "w": 312,
+          "h": 239
+        },
+        "declaredMinHeight": 162,
+        "trackHeight": null,
+        "overflowPx": null,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "card": "attendance",
+        "grid": {
+          "colStart": 1,
+          "colSpan": 6,
+          "rowStart": 8,
+          "rowSpan": 2
+        },
+        "persisted": {
+          "colStart": 1,
+          "colSpan": 6,
+          "rowStart": 8,
+          "rowSpan": 2
+        },
+        "rendered": {
+          "x": 481,
+          "y": 1485,
+          "w": 474,
+          "h": 425
+        },
+        "declaredMinHeight": 162,
+        "trackHeight": null,
+        "overflowPx": null,
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "card": "health_safety",
+        "grid": {
+          "colStart": 7,
+          "colSpan": 6,
+          "rowStart": 10,
+          "rowSpan": 2
+        },
+        "persisted": {
+          "colStart": 7,
+          "colSpan": 6,
+          "rowStart": 10,
+          "rowSpan": 2
+        },
+        "rendered": {
+          "x": 965,
+          "y": 1247,
+          "w": 474,
+          "h": 369
+        },
+        "declaredMinHeight": 162,
+        "trackHeight": null,
+        "overflowPx": null,
+        "selected": false,
+        "dragging": false
+      }
+    ],
+    "occupancy": [
+      "attendance c1-6 r8-9",
+      "billing_preview c1-6 r6-7",
+      "business_process c1-8 r1-2",
+      "children c7-12 r3-6",
+      "financials c9-12 r1-2",
+      "health_safety c7-12 r10-11",
+      "household c7-12 r12-15",
+      "readiness_kpi c1-4 r3-5"
+    ]
+  },
+  "errs": []
+}

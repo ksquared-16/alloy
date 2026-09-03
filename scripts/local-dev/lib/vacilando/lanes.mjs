@@ -13,6 +13,7 @@
  * a browser tmux target. Browser supplies lane_id (+ instruction for send).
  */
 import { createHash } from "node:crypto";
+import { isManagedSlot, managedSlots } from "./managed-slots.mjs";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -249,7 +250,7 @@ function slotForWorktree(metadata, { name, path }) {
   if (!Array.isArray(metadata)) return null;
   for (const m of metadata) {
     const slot = Number(m.slot);
-    if (!Number.isInteger(slot) || slot < 1 || slot > 6) continue;
+    if (!isManagedSlot(slot)) continue;
     if (path && m.path && m.path === path) return slot;
     if (name && m.worktree === name) return slot;
   }

@@ -500,13 +500,23 @@ await test("resource-governance files stay frozen outside their owning slice", (
   // asserts by name that neither budget can come back, and that every semantic
   // alloy-validate legitimately owns survived.
   //
+  // Capacity override precedence is the OWNING SLICE for `lib/sprint-ops.sh`.
+  // That file is where three of the four ALLOY_MAX_* ceilings are enforced, and
+  // where the documented override was silently ineffective: alloy_load_config
+  // sources two config files that assign those names unconditionally, so
+  // `${VAR:-3}` could only ever see the config value. Fixing that means editing
+  // this file, exactly as validation path convergence meant editing lock.sh. It
+  // leaves the frozen set for the same reason, and what replaces the freeze is
+  // stronger: tests/test-capacity-override.sh asserts the precedence contract
+  // end to end, and the precedence suite asserts by name that sprint-ops honours
+  // the one override resolver and can report an active override.
+  //
   // Worth stating plainly: this guard compares the working tree to HEAD, so it
   // only ever catches UNCOMMITTED edits. Committing would have turned it green
   // on its own. Removing the entry deliberately is the honest form of the change.
   const files = [
     "web/package.json",
     "scripts/local-dev/alloy-compute",
-    "scripts/local-dev/lib/sprint-ops.sh",
     "scripts/local-dev/lib/browser-cert-lease.sh",
     "scripts/local-dev/lib/browser-cert-lease.mjs",
     "scripts/local-dev/lib/machine-capacity.sh",

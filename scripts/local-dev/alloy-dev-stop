@@ -70,38 +70,54 @@ main() {
 
   # (3) Verify against the SAME truth dev-status uses. Never claim stopped while a
   # listener still holds the port.
-  if [[ -n "$port" ]] && alloy_port_in_use "$port"; then
-    local rem; rem="$(alloy_port_listener_pid "$port" 2>/dev/null || true)"
-    cat >&2 <<EOF
+  #
+  # LOOPBACK SCOPE, for the same reason the start path uses it. Tailscale Serve
+  # holds each lane's tailnet addresses permanently, so the port-global question
+  # answers "unknown" for every lane port once a Serve route exists. With the
+  # probe failing closed on unknown, this block began refusing to confirm release
+  # for ports that were provably free: measured on :3017, where the port was
+  # empty, alloy-dev-stop still exited 1, and — because the refusal returns
+  # before the audit write — NO stop was recorded. The last stop in the whole
+  # lifecycle audit was 14:12:10 while stops kept being issued for hours.
+  #
+  # That silence is not cosmetic. Desired state is derived from this audit, so
+  # an unrecorded stop reads as "should still be running", which is exactly how
+  # a supervisor would resurrect a server an operator deliberately stopped.
+  local stop_owner
+  stop_owner="$(alloy_rc_loopback_port_owner "$port" 2>/dev/null || printf 'unknown')"
+  if [[ -n "$port" && "$stop_owner" != "free" ]]; then
+    local owner="$stop_owner"
+    if [[ "$owner" == "unknown" ]]; then
+      # Say which of the two it is. "Still listening (PID ?)" reads as a
+      # measurement; this was never measured, and an operator told to force-kill
+      # a PID nobody read is being sent to guess.
+      cat >&2 <<EOF
+error: cannot confirm :$port was released — the listener probe is unavailable, so
+ownership of this port could not be read either way. Not claiming it is stopped.
+Check the probe (lsof) before retrying; do not force-kill an unread PID.
+EOF
+    else
+      local rem="${owner#owned }"
+      cat >&2 <<EOF
 error: a dev server is still listening on :$port (PID ${rem:-?}) after SIGTERM.
 alloy-dev-stop does not send SIGKILL automatically.
 Manual force-kill (only if you have verified ownership):
   kill -KILL ${rem:-<pid>}
 EOF
+    fi
     exit 1
   fi
 
+  alloy_remove_director_route "${PORT:-}"
+  alloy_record_server_lifecycle "stop" "$name" \
+    "$([[ "$stopped_any" == 1 ]] && printf 'ok' || printf 'nothing_to_stop')" \
+    "${ALLOY_SERVER_AUDIT_REASON:-stop requested}" "${pid:-}" ""
   if [[ "$stopped_any" == 1 ]]; then
     alloy_info "stopped $name"
   else
     alloy_info "no running dev server for $name (nothing to stop)"
   fi
   exit 0
-}
-
-# Gracefully terminate a PID and its immediate children; return 0 once it is gone,
-# 1 if it survives the grace period (caller decides; we never auto-SIGKILL).
-alloy_stop_pid_tree() {
-  local target="$1" i
-  if alloy_have_cmd pkill; then
-    pkill -TERM -P "$target" 2>/dev/null || true
-  fi
-  kill -TERM "$target" 2>/dev/null || true
-  for i in 1 2 3 4 5 6 7 8 9 10; do
-    alloy_pid_alive "$target" || return 0
-    sleep 0.5
-  done
-  return 1
 }
 
 main "$@"

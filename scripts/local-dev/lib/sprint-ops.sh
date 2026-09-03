@@ -9,17 +9,200 @@
 # shellcheck source=lib/git-durability.sh
 source "$(dirname "${BASH_SOURCE[0]}")/git-durability.sh"
 
+# --- Capacity precedence: one question, one answer ---
+#
+# THE DEFECT THIS CLOSES. The documented way to raise a ceiling for an
+# experiment was to export ALLOY_MAX_RUNNING_SERVERS. It never worked. Both
+# alloy-config.example and ~/.config/alloy-dev/config assign these names
+# UNCONDITIONALLY, and alloy_load_config sources both — so an exported value is
+# overwritten before the `${VAR:-3}` defaults below are ever consulted, and the
+# `:-` can only ever see the config file's value. A capacity experiment could
+# set the variable, watch it read back as 3, and conclude the host was refusing
+# on merits. alloy_load_config already knows about this hazard: it rescues
+# ALLOY_RUNTIME_ROOT and ALLOY_FIRST_AGENT_PORT across the same sourcing, with a
+# comment saying the example "otherwise hard-assigns the production default".
+# The capacity ceilings were simply never given that treatment.
+#
+# The fix is NOT to make a bare ALLOY_MAX_* export win. That would turn every
+# stray shell export and every inherited environment into a silent production
+# ceiling change, which is worse than an override that does nothing. An override
+# should be hard to do by accident and impossible to do anonymously.
+#
+# So precedence is explicit, and the override lives in its own namespace that no
+# config file assigns — which is also why it survives config sourcing without
+# needing a rescue:
+#
+#   canonical default   built into alloy-config.example
+#   host config         ~/.config/alloy-dev/config
+#   scoped override     ALLOY_CAPACITY_OVERRIDE, this process only
+#
+# Shape:
+#   ALLOY_CAPACITY_OVERRIDE="ALLOY_MAX_RUNNING_SERVERS=5,ALLOY_MAX_ACTIVE_PROVIDERS=4"
+#   ALLOY_CAPACITY_OVERRIDE_REASON="capacity certification phase 2"
+#
+# A reason is required: a raised ceiling with no recorded why cannot be audited
+# after the fact, and every one of these is raised during an incident or an
+# experiment — exactly when nobody remembers. Nothing is persisted, so an
+# override cannot outlive the process that set it.
+
+ALLOY_CAPACITY_NAMES="ALLOY_MAX_RUNNING_SERVERS ALLOY_MAX_ACTIVE_PROVIDERS ALLOY_MAX_CONCURRENT_INSTALLS ALLOY_MAX_CONCURRENT_HEAVY_JOBS"
+
+# An override may move a ceiling, never remove it. Servers and providers are
+# bounded by the MANAGED SLOTS: there is no seventh place to put one when there
+# are six slots, and no thirteenth when there are twelve.
+#
+# THE SECOND OWNER THIS REMOVES. The bound was the literal 6, while
+# capacity-policy.mjs had already been converged onto `managedSlotCount()`. So
+# raising ALLOY_MAX_AGENTS moved the derived Node-side ceiling and left the shell
+# guard pinned at six — the two owners of "how many slots exist" silently
+# disagreed, and the shell one is the guard that actually refuses a start. The
+# topology owner is ALLOY_MAX_AGENTS in both runtimes now.
+#
+# The floor of 1 is deliberate: an unset or nonsense topology must not silently
+# become "no capacity at all", which would refuse every start on this host.
+# PROVIDERS ARE NOT SERVERS. The old function grouped them behind one literal,
+# which made it easy to "parameterize" both onto the slot count and quietly
+# invent a coupling that was never measured. A dev server is bound by ports:
+# there is no seventh place to put one when there are six slots. A provider is
+# bound by the machine — cores and RAM — and capacity-policy.mjs is the owner of
+# that operating ceiling (cores/3 floored at 3, versus RAM). What follows is only
+# the OVERRIDE bound: how far an operator may move a ceiling, never the ceiling
+# a healthy host actually runs at.
+alloy_capacity_hard_ceiling() {
+  local slots cores
+  slots="${ALLOY_MAX_AGENTS:-${ALLOY_RC_DEFAULT_MAX_AGENTS:-6}}"
+  [[ "$slots" =~ ^[0-9]+$ ]] && (( slots >= 1 )) || slots=6
+  case "$1" in
+    # Servers: one per managed port, so the topology owner bounds them.
+    ALLOY_MAX_RUNNING_SERVERS) printf '%s' "$slots" ;;
+    # Providers: bounded by the host, not by how many slots were configured.
+    # A twelve-slot topology on a four-core machine does not gain provider
+    # headroom. The floor keeps a small or unreadable host usable.
+    ALLOY_MAX_ACTIVE_PROVIDERS)
+      cores="$(alloy_rc_cpu_count 2>/dev/null || printf '')"
+      [[ "$cores" =~ ^[0-9]+$ ]] && (( cores >= 1 )) || cores=6
+      (( cores < 3 )) && cores=3
+      printf '%s' "$cores"
+      ;;
+    # Installs and heavy jobs are bounded by CPU too: a host with twelve slots
+    # does not gain cores to compile with.
+    ALLOY_MAX_CONCURRENT_INSTALLS|ALLOY_MAX_CONCURRENT_HEAVY_JOBS) printf '4' ;;
+    *) printf '0' ;;
+  esac
+}
+
+alloy_capacity_is_name() {
+  case " ${ALLOY_CAPACITY_NAMES} " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
+# Where did this value come from? Recorded so health can say so out loud.
+alloy_capacity_source_var() {
+  printf 'ALLOY_CAPACITY_SOURCE_%s' "${1#ALLOY_MAX_}"
+}
+
+# Refuse and explain, keeping the canonical value. A malformed override must
+# never raise a ceiling, and must never take the host down either: the safe
+# direction is always the lower number that was already in force.
+alloy_capacity_refuse_override() {
+  alloy_warn "capacity override ignored ($2): ${1} — keeping the configured value"
+  ALLOY_CAPACITY_OVERRIDE_REFUSALS="${ALLOY_CAPACITY_OVERRIDE_REFUSALS}${ALLOY_CAPACITY_OVERRIDE_REFUSALS:+; }${1} ($2)"
+}
+
+alloy_apply_capacity_overrides() {
+  ALLOY_CAPACITY_OVERRIDE_ACTIVE=0
+  ALLOY_CAPACITY_OVERRIDE_APPLIED=""
+  ALLOY_CAPACITY_OVERRIDE_REFUSALS=""
+  local spec="${ALLOY_CAPACITY_OVERRIDE:-}"
+  [[ -n "$spec" ]] || return 0
+  if [[ -z "${ALLOY_CAPACITY_OVERRIDE_REASON:-}" ]]; then
+    alloy_capacity_refuse_override "$spec" "ALLOY_CAPACITY_OVERRIDE_REASON is required"
+    return 0
+  fi
+  local entry name value ceiling
+  local IFS=','
+  for entry in $spec; do
+    entry="${entry#"${entry%%[![:space:]]*}"}"
+    entry="${entry%"${entry##*[![:space:]]}"}"
+    [[ -n "$entry" ]] || continue
+    if [[ "$entry" != *=* ]]; then
+      alloy_capacity_refuse_override "$entry" "expected NAME=VALUE"
+      continue
+    fi
+    name="${entry%%=*}"
+    value="${entry#*=}"
+    if ! alloy_capacity_is_name "$name"; then
+      alloy_capacity_refuse_override "$entry" "not a capacity name"
+      continue
+    fi
+    if [[ ! "$value" =~ ^[0-9]+$ ]] || (( value < 1 )); then
+      alloy_capacity_refuse_override "$entry" "value must be a positive integer"
+      continue
+    fi
+    ceiling="$(alloy_capacity_hard_ceiling "$name")"
+    if (( value > ceiling )); then
+      alloy_capacity_refuse_override "$entry" "above the hard ceiling of ${ceiling}"
+      continue
+    fi
+    printf -v "$name" '%s' "$value"
+    printf -v "$(alloy_capacity_source_var "$name")" '%s' "override"
+    export "${name?}" "$(alloy_capacity_source_var "$name")"
+    ALLOY_CAPACITY_OVERRIDE_ACTIVE=1
+    ALLOY_CAPACITY_OVERRIDE_APPLIED="${ALLOY_CAPACITY_OVERRIDE_APPLIED}${ALLOY_CAPACITY_OVERRIDE_APPLIED:+ }${name}=${value}"
+  done
+  export ALLOY_CAPACITY_OVERRIDE_ACTIVE ALLOY_CAPACITY_OVERRIDE_APPLIED ALLOY_CAPACITY_OVERRIDE_REFUSALS
+  return 0
+}
+
+# Does the host config assign this name? Distinguishes "the operator chose 3"
+# from "nobody chose anything and the built-in default is 3" — the two read the
+# same by the time the config has been sourced.
+alloy_capacity_host_config_assigns() {
+  local f="${ALLOY_CONFIG_FILE:-$HOME/.config/alloy-dev/config}"
+  [[ -f "$f" ]] || return 1
+  grep -Eq "^[[:space:]]*${1}=" "$f"
+}
+
+# What is in force, and who said so. Read-only; safe to call from health.
+alloy_capacity_status() {
+  alloy_sprint_ops_defaults
+  local name src
+  for name in $ALLOY_CAPACITY_NAMES; do
+    src="$(eval "printf '%s' \"\${$(alloy_capacity_source_var "$name")}\"")"
+    printf '%s=%s source=%s\n' "$name" "$(eval "printf '%s' \"\${$name}\"")" "${src:-default}"
+  done
+  if [[ "${ALLOY_CAPACITY_OVERRIDE_ACTIVE:-0}" == "1" ]]; then
+    printf 'override=active applied=%s reason=%s\n' \
+      "${ALLOY_CAPACITY_OVERRIDE_APPLIED}" "${ALLOY_CAPACITY_OVERRIDE_REASON:-}"
+  else
+    printf 'override=none\n'
+  fi
+  [[ -n "${ALLOY_CAPACITY_OVERRIDE_REFUSALS:-}" ]] && \
+    printf 'override_refused=%s\n' "$ALLOY_CAPACITY_OVERRIDE_REFUSALS"
+  return 0
+}
+
 alloy_sprint_ops_defaults() {
   ALLOY_MAX_ACTIVE_PROVIDERS="${ALLOY_MAX_ACTIVE_PROVIDERS:-3}"
   ALLOY_MAX_RUNNING_SERVERS="${ALLOY_MAX_RUNNING_SERVERS:-3}"
   ALLOY_MAX_CONCURRENT_INSTALLS="${ALLOY_MAX_CONCURRENT_INSTALLS:-1}"
   ALLOY_MAX_CONCURRENT_HEAVY_JOBS="${ALLOY_MAX_CONCURRENT_HEAVY_JOBS:-1}"
+  local _cap_name
+  for _cap_name in $ALLOY_CAPACITY_NAMES; do
+    if alloy_capacity_host_config_assigns "$_cap_name"; then
+      printf -v "$(alloy_capacity_source_var "$_cap_name")" '%s' "host-config"
+    else
+      printf -v "$(alloy_capacity_source_var "$_cap_name")" '%s' "default"
+    fi
+    export "$(alloy_capacity_source_var "$_cap_name")"
+  done
+  alloy_apply_capacity_overrides
   ALLOY_MEMORY_PRESSURE_THRESHOLD="${ALLOY_MEMORY_PRESSURE_THRESHOLD:-warn}"
   ALLOY_PAUSE_STATE_DIR="${ALLOY_RUNTIME_ROOT}/pause-state"
   ALLOY_FINISHED_META_DIR="${ALLOY_RUNTIME_ROOT}/finished"
   ALLOY_RESOURCE_LOCKS_DIR="${ALLOY_LOCKS_DIR}/resources"
   export ALLOY_MAX_ACTIVE_PROVIDERS ALLOY_MAX_RUNNING_SERVERS \
     ALLOY_MAX_CONCURRENT_INSTALLS ALLOY_MAX_CONCURRENT_HEAVY_JOBS \
+    ALLOY_CAPACITY_NAMES \
     ALLOY_MEMORY_PRESSURE_THRESHOLD ALLOY_PAUSE_STATE_DIR \
     ALLOY_FINISHED_META_DIR ALLOY_RESOURCE_LOCKS_DIR
 }
@@ -490,9 +673,12 @@ alloy_refuse_unhealthy_slot_assignment() {
   local port path_guess
   port="$(alloy_slot_to_port "$slot")"
   if alloy_port_in_use "$port"; then
-    local pid
-    pid="$(alloy_port_listener_pid "$port" 2>/dev/null || echo "?")"
-    alloy_die "port ownership conflict: slot $slot port $port is in use by PID $pid (no managed metadata). Fail closed."
+    local owner
+    owner="$(alloy_port_owner "$port")"
+    if [[ "$owner" == "unknown" ]]; then
+      alloy_die "slot $slot port $port could not be proven free (listener probe unavailable). Fail closed."
+    fi
+    alloy_die "port ownership conflict: slot $slot port $port is in use by PID ${owner#owned } (no managed metadata). Fail closed."
   fi
 }
 

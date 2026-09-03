@@ -23,7 +23,11 @@ import { useMemo } from "react";
 
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
-import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
+import {
+    focusPanelSummaryUsesPublishedDoc,
+    resolveFocusPanelSummaryActiveDoc,
+} from "@/lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryActiveDoc";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import { usePublishedFocusPanelSummaryDocState } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 
@@ -53,7 +57,26 @@ function ReservedSettlementRegion() {
     );
 }
 
-export default function FocusPanelSummarySkeleton({ mode }: { mode: FocusPanelMode }) {
+export default function FocusPanelSummarySkeleton({
+    mode,
+    subjectGrain = "opportunity",
+    familySettlement = true,
+}: {
+    mode: FocusPanelMode;
+    /**
+     * The grain the resolved body will compose for, when the host already knows it.
+     *
+     * The host knows this BEFORE the record payload lands — it comes from the committed
+     * Operational Subject / queue seed, which is what selected this subject in the first
+     * place. Without it the skeleton assumed the case grain and drew the org's published
+     * enrollment layout over every child subject, then swapped to the child composition on
+     * settle. Defaulting to `opportunity` keeps the long-standing behaviour for hosts that
+     * genuinely cannot say.
+     */
+    subjectGrain?: OperationalSubjectType;
+    /** Whether a settled family opportunity stands behind the subject (child grain only). */
+    familySettlement?: boolean;
+}) {
     const isSummary = mode === "summary";
     // Mounting this hook triggers the module-cached published-doc load EARLY, so by the
     // time the record payload resolves the doc is already warm. We gate the composed grid on
@@ -62,7 +85,18 @@ export default function FocusPanelSummarySkeleton({ mode }: { mode: FocusPanelMo
     // are removing). The record VM always resolves AFTER the doc, so once the resolved body
     // can render, the doc is settled — the skeleton and resolved surface pick the same grid.
     const { doc: publishedDoc, loaded: docLoaded } = usePublishedFocusPanelSummaryDocState(isSummary);
-    const activeDoc = isSummary && docLoaded ? publishedDoc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC : null;
+    // Only the case grain composes from the publication, so only the case grain has to WAIT
+    // for it. A child subject's composition is code-owned and known immediately.
+    const needsPublication = focusPanelSummaryUsesPublishedDoc(subjectGrain, { familySettlement });
+    const activeDoc =
+        !isSummary || (needsPublication && !docLoaded)
+            ? null
+            : resolveFocusPanelSummaryActiveDoc({
+                  isSummary,
+                  grain: subjectGrain,
+                  publishedDoc,
+                  context: { familySettlement },
+              });
 
     // Record-free inputs (NO cards) → all published cells present. Same strategy the
     // resolved body derives with the same doc, so the pending → resolved layout is stable.
@@ -97,10 +131,12 @@ export default function FocusPanelSummarySkeleton({ mode }: { mode: FocusPanelMo
             <FocusPanelCardGrid
                 rows={inputs.gridRows}
                 publishedLayout={inputs.publishedLayout}
-                // MUST match the resolved body (`OpportunityFocusPanelModeGrid`). Without this the
-                // pending surface plans `published-grid` while the body plans `published-lanes` —
-                // a strategy swap (different DOM + geometry) on settle, the exact reflow this
-                // component exists to prevent.
+                // MUST agree with the resolved body (`OpportunityFocusPanelModeGrid`). A
+                // disagreement here is a STRATEGY SWAP on settle — different DOM, different
+                // geometry — which is the exact reflow this component exists to prevent.
+                // The body writes `Boolean(grid) || mode === "work"`; this branch is reached
+                // only when the mode IS summary, so the work term cannot contribute and
+                // TypeScript rejects writing it (the narrowed type makes it unreachable).
                 preferLanesFromGrid={Boolean(inputs.publishedLayout?.grid)}
                 composeCards={inputs.composeCards}
                 compositionOverrides={inputs.compositionOverrides}
