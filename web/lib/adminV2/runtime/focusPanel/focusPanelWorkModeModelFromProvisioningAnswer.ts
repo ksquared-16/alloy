@@ -126,7 +126,7 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
             work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel },
             // Settlement-owned signals — honest empty (reserved), never fabricated.
             attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-            tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+            tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
             communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
             billing: NULL_BILLING_SIGNAL,
         },

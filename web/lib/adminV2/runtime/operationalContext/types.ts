@@ -1,4 +1,5 @@
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import type { TourBookingStatusKey } from "@/lib/tours/bookings/types";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 import type { RecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
@@ -160,9 +161,29 @@ export type OperationalAttentionSignal = {
 };
 
 export type OperationalTourSignal = {
+    /**
+     * An ACTIVE booking exists — one of `requested`, `pending_approval`, `confirmed`,
+     * `rescheduled`. Terminal bookings (`canceled`, `completed`, `no_show`) are filtered out
+     * upstream by `loadOpportunityActiveTourBookingsForViewModel`, so this is false for them.
+     */
     scheduled: boolean;
     startAt: string | null;
+    /**
+     * MISNAMED, AND LOAD-BEARING. This has always carried the raw `tour_bookings.status_key`,
+     * not an operator-facing label — see the note where it is projected. Kept under this name
+     * because existing readers (What's Next context facts) match on it; `statusKey` below is the
+     * same value under a name that says what it is, and is what new command/presentation seams
+     * should read.
+     */
     statusLabel: string | null;
+    /**
+     * The canonical durable `tour_bookings.status_key` of the booking this signal describes.
+     *
+     * Presentation and eligibility branch on THIS, never on `statusLabel` and never on a
+     * rendered string: identifying state by display text is the same class of defect as
+     * identifying an executable action by its label.
+     */
+    statusKey: TourBookingStatusKey | null;
     /** ID of the active tour_bookings row — present when scheduled=true, null otherwise. */
     bookingId: string | null;
     /** Operator-facing parent attendance confirmation label when composed. */
@@ -291,7 +312,7 @@ export type OperationalGrain = "case" | "child" | "candidate" | "person";
 export const NOT_APPLICABLE_CASE_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+    tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
     communications: {
         scheduledSendCount: 0,
         nextFollowUpAt: null,

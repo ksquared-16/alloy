@@ -38,7 +38,7 @@ import {
     type OperationalWorkItem,
     type OperationalWorkUrgency,
 } from "@/lib/adminV2/runtime/operationalContext/types";
-import type { TourBookingRow } from "@/lib/tours/bookings/types";
+import type { TourBookingRow, TourBookingStatusKey } from "@/lib/tours/bookings/types";
 import {
     attendanceStatusLabel,
     readAttendanceConfirmation,
@@ -264,6 +264,9 @@ function buildOperationalContextSignals(
             // Keep raw booking status_key for command/eligibility seams — What's Next must not
             // render this under Primary contact (see buildWhatsNextContextFacts).
             statusLabel: trimOrNull(nextBooking?.status_key),
+            // The same value, under a name that says what it is. Command presentation and
+            // eligibility read `statusKey`; `statusLabel` stays for its existing readers.
+            statusKey: (trimOrNull(nextBooking?.status_key) as TourBookingStatusKey | null) ?? null,
             bookingId: trimOrNull(nextBooking?.id),
             parentConfirmationLabel,
         },

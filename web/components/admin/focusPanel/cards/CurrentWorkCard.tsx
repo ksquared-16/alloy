@@ -28,6 +28,7 @@ import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
+import { resolveTourCommandPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveTourCommandPresentation";
 import CurrentWorkContextStrip from "@/components/admin/focusPanel/cards/CurrentWorkContextStrip";
 import CurrentWorkProgressSummary from "@/components/admin/focusPanel/cards/CurrentWorkProgressSummary";
 import { buildWhatsNextCardPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildWhatsNextCardPresentation";
@@ -785,6 +786,10 @@ function SummaryBody({
                             <div className="alloy-os-currentwork__helpful-row" data-work-helpful-row="true">
                                 <CurrentWorkTourGroupedActions
                                     actions={helpful}
+                                    // One resolver names the state for both surfaces.
+                                    label={
+                                        resolveTourCommandPresentation(helpful, context.signals.tour).label
+                                    }
                                     onAction={onAction}
                                     onWarm={onWarm}
                                     variant="summary"

@@ -183,17 +183,50 @@ export default function ProcessCard({
                                 whether each one can run. The card renders both verdicts and owns
                                 neither — there is no filtering, no re-ordering and no emphasis
                                 rule here. */}
-                            {evidence.actions.map((a) => (
-                                <Action
-                                    key={a.key ?? a.label}
-                                    primary={a.primary}
-                                    disabled={a.disabled}
-                                    title={a.disabledReason ?? undefined}
-                                    onClick={a.onInvoke}
-                                >
-                                    {a.label}
-                                </Action>
-                            ))}
+                            {evidence.actions.map((a) =>
+                                a.menu?.length ? (
+                                    /* ONE OPERATIONAL CONCEPT, ONE CONTROL. The runtime decided
+                                       these belong together and what this control is called; the
+                                       card only draws it. Secondary operations execute exactly as
+                                       top-level ones do. */
+                                    <DropdownMenu key={a.key ?? a.label}>
+                                        <DropdownMenuTrigger asChild>
+                                            <Action
+                                                primary={a.primary}
+                                                disabled={a.disabled}
+                                                title={a.disabledReason ?? undefined}
+                                                data-process-action-group={a.key ?? undefined}
+                                            >
+                                                {a.label} ▾
+                                            </Action>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start">
+                                            {a.menu.map((m) => (
+                                                <DropdownMenuItem
+                                                    key={m.key ?? m.label}
+                                                    disabled={m.disabled}
+                                                    title={m.disabledReason ?? undefined}
+                                                    onSelect={() => m.onInvoke?.()}
+                                                    data-process-action={m.key ?? undefined}
+                                                >
+                                                    {m.label}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                ) : (
+                                    <Action
+                                        key={a.key ?? a.label}
+                                        primary={a.primary}
+                                        disabled={a.disabled}
+                                        title={a.disabledReason ?? undefined}
+                                        onClick={a.onInvoke}
+                                        data-process-action={a.key ?? undefined}
+                                    >
+                                        {a.label}
+                                    </Action>
+                                ),
+                            )}
                         </ActionRow>
                     </div>
                 </div>

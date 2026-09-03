@@ -420,6 +420,17 @@ export type ProcessAction = {
     disabledReason?: string | null;
     /** Executes through the shared command host. Absent in the lab. */
     onInvoke?: () => void;
+    /**
+     * Secondary operations on the SAME operational concept, presented behind this control.
+     *
+     * Present only when the command runtime has already decided these belong together — the
+     * card never groups on its own. Tour is the reference case: one state-bearing control
+     * ("Tour scheduled · Sep 8, 10:00 AM") with reschedule / cancel / send invitation behind
+     * it, instead of four unrelated buttons from which the operator has to infer the state.
+     *
+     * Each entry is an ordinary action and executes exactly as a top-level one does.
+     */
+    menu?: ProcessAction[];
 };
 
 /**
