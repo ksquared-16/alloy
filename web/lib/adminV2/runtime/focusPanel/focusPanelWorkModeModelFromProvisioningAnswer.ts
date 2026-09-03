@@ -21,7 +21,9 @@ import {
     type OperationalGrain,
 } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
+import { participantScopeFromChildSubjectTruth } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
+import { MOUNTABLE_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
 import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -91,6 +93,22 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
         perspective: input.perspective
             ? { missionLabel: input.perspective.defaultMission ?? input.perspective.label ?? null }
             : null,
+        /*
+         * THE PARTICIPANT, STATED AT COMMIT INSTEAD OF RE-DISCOVERED AFTER SETTLEMENT.
+         *
+         * `participantScope` was only ever built by the settled context, so a participant-keyed card
+         * could mount at commit and STILL not fetch: it resolves its read against this scope, not
+         * against raw truth. Measured: the card mounted at ~1350ms and its request did not leave until
+         * ~3313ms, waiting for a scope the answer already had the identity to state.
+         *
+         * This invents nothing. `participantScopeFromChildSubjectTruth` is the existing resolver for
+         * exactly this case and refuses unless BOTH `child.customer_member_id` and
+         * `child.process_instance_id` are present — a scope that cannot be identified is not returned.
+         * On any other grain it yields null and the card reserves exactly as before.
+         */
+        participantScope: participantScopeFromChildSubjectTruth({
+            ...(input.subjectIdentityTruth ?? {}),
+        }),
         truth: {
             id: input.subjectId,
             ...(input.statusKey ? { status_key: input.statusKey } : {}),
@@ -138,6 +156,24 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
         if (!spec.isKnowable(context)) continue;
         cardModels.set(spec.key, spec.build(context));
         cardReadiness.set(spec.key, "ready");
+    }
+
+    /*
+     * B — MOUNTABILITY, asked separately from content and only after it.
+     *
+     * A card whose content is knowable is already `ready` above and is left alone. What remains are
+     * cards that fetch their own data: their content can never be commit-knowable, but their IDENTITY
+     * can be, and that is all they need to start asking. Admitting them as `self_loading` mounts the
+     * real card in its own truthful loading state instead of a blank reserve, so its request begins at
+     * commit rather than after Settlement hands back an id the answer already carried.
+     *
+     * Never upgrades an existing entry: content readiness wins, and this can only fill a gap.
+     */
+    for (const spec of MOUNTABLE_CARD_SPECS) {
+        if (cardReadiness.has(spec.key)) continue;
+        if (!spec.identityKnowable(context)) continue;
+        cardModels.set(spec.key, spec.build(context));
+        cardReadiness.set(spec.key, "self_loading");
     }
 
     // Commit-critical commands: the truthful primary action (U-O5) as one resolved command. The

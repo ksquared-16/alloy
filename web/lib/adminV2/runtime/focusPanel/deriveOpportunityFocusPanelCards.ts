@@ -425,6 +425,24 @@ function healthInsight(displayVm: OpportunityDrawerViewModel): {
  * the commit-critical producer supplies the same household keys the answer carries, so this is READY
  * at commit — never a blank reserved rectangle.
  */
+/**
+ * The shell of a card that fetches its own content.
+ *
+ * Attendance and Health & Safety already build with `insight: ""` below — the case record knows
+ * nothing about a scoped child's day or their critical facts, so the card fills that in from its own
+ * read. Their commit model is therefore content-free by construction, which is precisely why it can
+ * exist before any enrichment: there is no truth to wait for, only an identity to address the read.
+ *
+ * Built through the same `card()` construction as the enriched shape, so a shell built here and the
+ * card Settlement builds are the same object — it does not change shape when the data lands.
+ */
+export function buildSelfFetchingCardShell(
+    key: FocusPanelCardKey,
+    title: string,
+): FocusPanelCardModel {
+    return card({ key, title, insight: "", tier: "work", span: 2, density: "compact" });
+}
+
 export function buildHouseholdCardModel(record: Record<string, unknown>, title: string): FocusPanelCardModel {
     return card({
         key: "household",
