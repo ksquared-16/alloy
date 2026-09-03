@@ -475,10 +475,27 @@ const priorTruthConfirmation: Phase = {
         const { labelled, confirms, changes, bodyText } = opened.value;
 
         if (!confirms || !changes) {
+            /*
+             * NAME THE LIKELY CAUSE RATHER THAN JUST THE SYMPTOM.
+             *
+             * This phase failed exactly once for a reason worth encoding: a LATER phase walked the
+             * journey forward by confirming, so on the next run the confirmation steps were already
+             * behind it and this read "the product stopped offering confirmation". It had not. The
+             * driver had consumed its own precondition.
+             *
+             * That is a defect in the harness, not the product, and the two are easy to confuse at
+             * 2am. A journey showing review/completion affordances is past confirmation, not missing
+             * it, so the message says so.
+             */
+            const pastConfirmation = labelled.some((b) => /review|paperwork|sign|submit|done/i.test(b));
             return {
                 status: "failed",
-                detail:
-                    `expected a confirm-or-change affordance over prior truth; found buttons [${labelled.join(", ")}]`,
+                detail: pastConfirmation
+                    ? `this journey is PAST the confirmation steps — found [${labelled.join(", ")}]. `
+                      + "The driver advances the journey, so this phase only reproduces against a journey that has not "
+                      + "yet been walked. Reseed the participant journey before re-running the suite; the product is not "
+                      + "necessarily at fault."
+                    : `expected a confirm-or-change affordance over prior truth; found buttons [${labelled.join(", ")}]`,
             };
         }
 
