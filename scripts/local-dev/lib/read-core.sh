@@ -360,10 +360,47 @@ alloy_rc_port_owner() {
     return 0
   fi
   if (( rc <= 1 )); then
+    # LSOF SEEING NOTHING IS NOT THE SAME AS NOTHING BEING THERE.
+    #
+    # Unprivileged lsof cannot see another user's sockets. tailscaled runs as
+    # root and holds per-port tailnet listeners, so for a port whose only owner
+    # is Tailscale Serve, lsof exits clean with no rows and this returned
+    # 'free'. MEASURED on port 3016: lsof -iTCP:3016 empty and this function
+    # said 'free', while netstat showed LISTEN on 100.71.206.63.3016 and
+    # fd7a:115c:a1e0::.3016, and a real bind of both 0.0.0.0:3016 and :::3016
+    # failed EADDRINUSE. alloy-dev-start believed the port was free and the
+    # server then died on a bind it was told would succeed.
+    #
+    # netstat reports every user's sockets, so it is the cross-check that makes
+    # 'free' mean free. A listener it can see but lsof cannot has no PID we are
+    # entitled to, so the honest answer is 'unknown' — never 'free'. Callers
+    # already fail closed on unknown, which is the safe direction for a bind.
+    if alloy_rc_port_has_foreign_listener "$port"; then
+      printf 'unknown'
+      return 0
+    fi
     printf 'free'
     return 0
   fi
   printf 'unknown'
+}
+
+# True when something is LISTENing on the port that lsof did not attribute to
+# us. Absence of netstat is not evidence of absence, so a missing or failing
+# netstat reports no foreign listener and leaves the lsof verdict standing.
+alloy_rc_port_has_foreign_listener() {
+  local port="$1" netstat_bin=""
+  # Overridable so the missing-netstat path is testable; a host with no netstat
+  # must degrade to the lsof verdict, not to "every port is unknown".
+  for netstat_bin in "${ALLOY_RC_NETSTAT_BIN:-}" /usr/sbin/netstat /usr/bin/netstat "$(command -v netstat 2>/dev/null)"; do
+    [[ -n "$netstat_bin" && -x "$netstat_bin" ]] || continue
+    "$netstat_bin" -an 2>/dev/null | awk -v p="$port" '
+      $1 ~ /^tcp/ && $NF == "LISTEN" && $4 ~ ("[.:]" p "$") { found = 1 }
+      END { exit found ? 0 : 1 }
+    ' && return 0
+    return 1
+  done
+  return 1
 }
 
 # Back-compatible: prints the PID and returns 0 when a listener is proven,

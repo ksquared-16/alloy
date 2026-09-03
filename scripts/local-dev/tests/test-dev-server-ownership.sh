@@ -263,5 +263,46 @@ grep -q 'alloy_stop_pid_tree()' "$ROOT/lib/common.sh" \
   && ok "30. one owner for stopping a server tree, shared by stop and reclaim" \
   || bad "30. alloy_stop_pid_tree is not shared"
 
+# ── a port lsof cannot see is not a free port ────────────────────────────────
+#
+# Unprivileged lsof cannot see another user's sockets. tailscaled runs as root
+# and holds per-port tailnet listeners, so for a port whose only listener is
+# Tailscale Serve, lsof exits clean with no rows. alloy_rc_port_owner used to
+# read that as 'free'. MEASURED on port 3016: lsof empty, owner said 'free',
+# netstat showed LISTEN on 100.71.206.63.3016 and fd7a:115c:a1e0::.3016, and a
+# real bind of 0.0.0.0:3016 AND :::3016 failed EADDRINUSE. alloy-dev-start was
+# told the port was free and the dev server died on the bind.
+
+grep -q 'alloy_rc_port_has_foreign_listener' "$ROOT/lib/read-core.sh" \
+  && ok "31. free is cross-checked against every user's listeners, not just ours" \
+  || bad "31. no foreign-listener cross-check — lsof blindness still reads as free"
+
+# The cross-check must not simply make everything unknown. A genuinely unused
+# port has to stay usable, or the fix trades a false free for a false busy and
+# no server can ever start.
+if [[ "$(alloy_rc_port_owner 3918)" == "free" ]]; then
+  ok "32. a genuinely unused port is still free (the fix is not a blanket refusal)"
+else
+  bad "32. an unused port no longer reports free"
+fi
+
+# Absence of netstat is not evidence of absence: with no netstat on PATH the
+# helper must report no foreign listener and leave the lsof verdict standing,
+# rather than declaring every port unknown on a host that lacks the tool.
+if ALLOY_RC_NETSTAT_BIN=/nonexistent/netstat alloy_rc_port_has_foreign_listener "$FIXTURE_PORT"; then
+  bad "33. a missing netstat invents a foreign listener"
+else
+  ok "33. a missing netstat leaves the lsof verdict standing"
+fi
+
+# And the positive control for THAT: with a working netstat the same live port
+# a real listener is bound to must be seen, or test 33 would pass simply
+# because the helper never detects anything.
+if alloy_rc_port_has_foreign_listener 3015; then
+  ok "34. a real listener IS detected — 33 is not passing vacuously"
+else
+  bad "34. helper cannot see a port that is definitely listening"
+fi
+
 printf '\n==== dev-server-ownership: %s passed, %s failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
