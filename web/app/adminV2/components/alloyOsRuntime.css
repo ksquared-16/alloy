@@ -5151,6 +5151,10 @@ html[data-alloy-os-runtime-split="true"]
 }
 .alloy-os-fp-grid-area {
   display: flex;
+  /* The card must not stretch to its wrapper: the wrapper's height IS the card's, and a
+   * stretched child would make any height we ever set read back as the measured content
+   * height. Height flows content -> wrapper -> layout, never the other way. */
+  align-items: flex-start;
   min-width: 0;
   min-height: 0;
 }

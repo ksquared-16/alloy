@@ -33,7 +33,7 @@ import type { FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/comp
 const GAP = COMPOSER_GRID_GAP_PX;
 /** The operator's canvas, measured from the live lane server. */
 const WIDTH = 957;
-const minHeightFor = (a: { rowSpan: number }) => a.rowSpan * 76 + (a.rowSpan - 1) * GAP;
+const unmeasuredHeightFor = (a: { rowSpan: number }) => a.rowSpan * 76 + (a.rowSpan - 1) * GAP;
 
 /** The lane's actual surface, with the heights the browser reported for it. */
 const heights: Record<string, number> = {
@@ -60,7 +60,7 @@ function laneSurface(): FocusPanelGridLayout {
 
 const resolve = (layout: FocusPanelGridLayout) =>
     resolveColumnAwareLayout({
-        layout, heights: new Map(Object.entries(heights)), width: WIDTH, gapPx: GAP, minHeightFor,
+        layout, heights: new Map(Object.entries(heights)), width: WIDTH, gapPx: GAP, unmeasuredHeightFor,
     });
 
 const measured = (layout: FocusPanelGridLayout): Map<string, MeasuredBox> =>
@@ -88,7 +88,7 @@ describe("published runtime parity", () => {
 
         // Author it the way the operator does: take the offered "below Household".
         const zone = enumerateDropCandidates({
-            layout: authored, moving, boxes, width: WIDTH, gapPx: GAP, minHeightFor,
+            layout: authored, moving, boxes, width: WIDTH, gapPx: GAP, unmeasuredHeightFor,
         }).find((c) => c.after === "household");
         expect(zone, "the below-Household destination is offered").toBeTruthy();
 

@@ -9,11 +9,11 @@ import type { FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/comp
 
 const WIDTH = 1440;
 const GAP = 10;
-const minHeightFor = (a: { rowSpan: number }) => a.rowSpan * 76 + (a.rowSpan - 1) * GAP;
+const unmeasuredHeightFor = (a: { rowSpan: number }) => a.rowSpan * 76 + (a.rowSpan - 1) * GAP;
 
 const resolve = (layout: FocusPanelGridLayout, heights: Record<string, number>) =>
     resolveColumnAwareLayout({
-        layout, heights: new Map(Object.entries(heights)), width: WIDTH, gapPx: GAP, minHeightFor,
+        layout, heights: new Map(Object.entries(heights)), width: WIDTH, gapPx: GAP, unmeasuredHeightFor,
     });
 const box = (r: { boxes: ColumnAwareBox[] }, card: string) => r.boxes.find((b) => b.card === card)!;
 
