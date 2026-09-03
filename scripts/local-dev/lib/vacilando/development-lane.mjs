@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 
 import { localNodeId } from "./execution-node.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
+import { isManagedSlot } from "./managed-slots.mjs";
 
 export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
 export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
@@ -132,10 +133,23 @@ export function validateLaneName(raw) {
   return { ok: true, name };
 }
 
+/**
+ * A slot on a durable binding, bounded by the TOPOLOGY OWNER.
+ *
+ * This carried the same literal `n <= 6` that produced the asSlot defect, and
+ * here it is worse: asSlot corrupted a computation, while this corrupts
+ * PERSISTED state. A lane legitimately placed on slots 7-12 had its binding
+ * silently written as null.
+ *
+ * Measured live: `payments` owns slot 7 and its durable binding read null.
+ *
+ * Found by the standing slot-bound guard rather than by another outage, which
+ * is what the guard is for.
+ */
 function coerceSlot(value, fallback = null) {
   if (value == null || value === "") return fallback;
   const n = Number(value);
-  return Number.isInteger(n) && n >= 1 && n <= 6 ? n : fallback;
+  return Number.isInteger(n) && isManagedSlot(n) ? n : fallback;
 }
 
 export function coerceWorkClass(value, fallback = WORK_CLASS_PRODUCT) {
