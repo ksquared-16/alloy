@@ -294,6 +294,52 @@ const noDuplicateActiveEpisode: Phase = {
 };
 
 /**
+ * A durable fingerprint of the fixture's Enrollment graph.
+ *
+ * "Read-only" is a claim about intent, not about behaviour. Phase bisection showed that adding
+ * L_sufficiency -- a phase whose whole job is to read a verdict -- flips a later phase from pass to
+ * fail, so its actual effect has to be MEASURED. This captures what a phase can be held to before and
+ * after it runs.
+ */
+async function durableFingerprint(
+    supabase: Parameters<Phase["run"]>[0]["supabase"],
+    orgId: string,
+    journeyId: string,
+): Promise<Record<string, unknown>> {
+    const sessions = await supabase
+        .from("form_packet_sessions")
+        .select("id, status, packet_instance_id")
+        .eq("org_id", orgId)
+        .eq("process_instance_id", journeyId);
+    const rows = ((sessions.data ?? []) as Row[]);
+
+    /*
+     * Sessions alone were too narrow. The first fingerprint showed L touching nothing and the
+     * failure persisted, which only rules out one of the candidates in §7 -- a signature written to
+     * one submission while sufficiency reads another needs SUBMISSIONS and DEFINITIONS in view too.
+     */
+    const defs = await supabase
+        .from("form_packet_definitions")
+        .select("id, key")
+        .eq("org_id", orgId);
+    const subs = await supabase
+        .from("form_submissions")
+        .select("id, status")
+        .eq("org_id", orgId);
+    const defRows = ((defs.data ?? []) as Row[]);
+    const subRows = ((subs.data ?? []) as Row[]);
+
+    return {
+        packetSessions: rows.length,
+        sessionIds: rows.map((r) => String(r.id).slice(0, 8)).sort(),
+        sessionStatuses: rows.map((r) => String(r.status)).sort(),
+        packetDefinitions: defRows.length,
+        formSubmissions: subRows.length,
+        submissionStatuses: subRows.map((r) => String(r.status)).sort().slice(0, 12),
+    };
+}
+
+/**
  * L: the shared requirement-sufficiency verdict, read from the ACTIVE published configuration.
  *
  * This is the contract the operator surface and the completion gate both consult, so it is asserted
@@ -319,6 +365,15 @@ const sufficiencyContract: Phase = {
 
         const observed: Record<string, unknown> = {};
         const problems: string[] = [];
+
+        /*
+         * MEASURE THIS PHASE'S OWN FOOTPRINT. Bisection identified it as the trigger for a later
+         * failure, so it must prove it changes nothing rather than be described as observational.
+         */
+        const pathAJourney = (entry.context_free as { journeyId: string } | undefined)?.journeyId ?? "";
+        const fingerprintBefore = pathAJourney
+            ? await durableFingerprint(ctx.supabase, ctx.orgId, pathAJourney)
+            : null;
 
         for (const [family, f] of Object.entries(entry)) {
             const res = await resolveEnrollmentCompletionSufficiency(ctx.supabase, {
@@ -353,12 +408,19 @@ const sufficiencyContract: Phase = {
             };
         }
 
+        const fingerprintAfter = pathAJourney
+            ? await durableFingerprint(ctx.supabase, ctx.orgId, pathAJourney)
+            : null;
+        const mutated = JSON.stringify(fingerprintBefore) !== JSON.stringify(fingerprintAfter);
+
         return problems.length
             ? { status: "failed", detail: problems.join("; ") }
             : {
                   status: "passed",
-                  detail: `gate and operator projection agree for both paths: ${JSON.stringify(observed)}`,
-                  evidence: observed,
+                  detail:
+                      `gate and operator projection agree for both paths`
+                      + (mutated ? " — WARNING: this phase MUTATED durable state (see fingerprints)" : ""),
+                  evidence: { observed, fingerprintBefore, fingerprintAfter, mutated },
               };
     },
 };
@@ -907,6 +969,22 @@ async function driveSignature(
     if (has(btns, /^sign and finish$/i)) {
         await click("Sign and finish");
         transitions.push("sign and finish");
+        /*
+         * WAIT FOR THE SUBMISSION TO LAND, not for a fixed interval.
+         *
+         * The fingerprints showed the packet session reaching `completed` while its submission stayed
+         * draft and the requirement stayed blocking -- a write that partially landed. Adding a
+         * read-only phase earlier in the chain flipped it, which is the signature of a race, not of
+         * state: the browser was being closed while the finish request was still in flight, and
+         * whether it survived depended on timing.
+         *
+         * So the harness now waits for the network to go idle before it lets go of the page. That is
+         * the harness taking responsibility for when it is finished, rather than sleeping longer and
+         * hoping -- a longer sleep would have hidden this rather than fixed it.
+         */
+        await (page as unknown as {
+            waitForLoadState(state: string, opts?: unknown): Promise<void>;
+        }).waitForLoadState("networkidle", { timeout: 20000 }).catch(() => undefined);
         await page.waitForTimeout(1500);
         const after = await buttons();
         if (!has(after, /^sign and finish$/i)) {
@@ -970,6 +1048,8 @@ const requirementCompletion: Phase = {
                 detail: "the gate was already eligible before this phase ran; there is nothing for it to prove",
             };
         }
+
+        const fpBeforeWalk = await durableFingerprint(ctx.supabase, ctx.orgId, pathA.journeyId);
 
         const walked = await withParticipantPage(ctx, pathA.journeyId, async (page) => {
             const trail: Array<Record<string, unknown>> = [];
@@ -1174,15 +1254,46 @@ const requirementCompletion: Phase = {
         }
 
         if (!after.eligible) {
+            /*
+             * NAME THE FIRST BROKEN INVARIANT, not the last observed symptom.
+             *
+             * "G_evidence failed" sent me chasing the projection when the write was the problem. The
+             * boundaries are checked in the order they must hold, and the first one that fails is the
+             * one reported -- so a future reader starts where the truth stops rather than where the
+             * assertion happened to sit.
+             */
+            const fpAfter = await durableFingerprint(ctx.supabase, ctx.orgId, pathA.journeyId);
+            const sigState = (walked.value.find((t) => String(t.chose ?? "").startsWith("state machine")) ?? {}) as {
+                chose?: string;
+            };
+            const sessionCompleted = JSON.stringify(fpAfter.sessionStatuses ?? []).includes("completed");
+            const signatureFinished = String(sigState.chose ?? "").includes("finished");
+
+            const code = !signatureFinished
+                ? "SIGNATURE_UI_NOT_FINISHED"
+                : !sessionCompleted
+                  ? "SIGNATURE_NOT_PERSISTED"
+                  : "REQUIREMENT_NOT_SATISFIED";
+
             return {
                 status: "failed",
                 detail:
-                    `the requirement is still outstanding after walking the participant surface. `
-                    + `Blocking: ${after.blocking.map((b) => b.requirement_id).join(", ")}. `
-                    + "This walker deliberately never invents data, so a requirement needing a typed value or an "
-                    + "uploaded document cannot be satisfied by it — that is a real boundary of this phase, not a "
-                    + "product defect.",
-                evidence: { trail: walked.value, blocking: after.blocking.map((b) => b.requirement_id) },
+                    `${code}: `
+                    + (code === "REQUIREMENT_NOT_SATISFIED"
+                        ? "the signature finished in the browser AND the packet session reached `completed`, but the "
+                          + "requirement still reads blocking. The write partially landed, so this is a "
+                          + "requirement-evidence join question, not a projection one."
+                        : code === "SIGNATURE_NOT_PERSISTED"
+                          ? "the browser finished the signature but no completed packet session followed."
+                          : "the signature never completed in the browser.")
+                    + ` Blocking: ${after.blocking.map((b) => b.requirement_id).join(", ")}.`,
+                evidence: {
+                    trail: walked.value,
+                    blocking: after.blocking.map((b) => b.requirement_id),
+                    fpBeforeWalk,
+                    fpAfterSignature: fpAfter,
+                    firstBrokenInvariant: code,
+                },
             };
         }
 
