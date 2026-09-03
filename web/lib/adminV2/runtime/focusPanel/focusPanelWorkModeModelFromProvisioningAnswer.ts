@@ -22,6 +22,7 @@ import {
 } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
+import { MOUNTABLE_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
 import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -138,6 +139,24 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
         if (!spec.isKnowable(context)) continue;
         cardModels.set(spec.key, spec.build(context));
         cardReadiness.set(spec.key, "ready");
+    }
+
+    /*
+     * B — MOUNTABILITY, asked separately from content and only after it.
+     *
+     * A card whose content is knowable is already `ready` above and is left alone. What remains are
+     * cards that fetch their own data: their content can never be commit-knowable, but their IDENTITY
+     * can be, and that is all they need to start asking. Admitting them as `self_loading` mounts the
+     * real card in its own truthful loading state instead of a blank reserve, so its request begins at
+     * commit rather than after Settlement hands back an id the answer already carried.
+     *
+     * Never upgrades an existing entry: content readiness wins, and this can only fill a gap.
+     */
+    for (const spec of MOUNTABLE_CARD_SPECS) {
+        if (cardReadiness.has(spec.key)) continue;
+        if (!spec.identityKnowable(context)) continue;
+        cardModels.set(spec.key, spec.build(context));
+        cardReadiness.set(spec.key, "self_loading");
     }
 
     // Commit-critical commands: the truthful primary action (U-O5) as one resolved command. The
