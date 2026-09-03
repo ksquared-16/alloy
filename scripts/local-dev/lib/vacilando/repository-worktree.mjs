@@ -58,6 +58,33 @@ export function worktreeNameFor(laneName, { suffix = "" } = {}) {
 }
 
 /**
+ * Is this a branch or ref name Git will actually accept?
+ *
+ * BRANCH_RE alone admits `agent/../evil` \u2014 legal characters in an illegal
+ * shape. Git refuses that at ref-format time, which would have surfaced as a
+ * generic worktree_add_failed long after the lane record already existed.
+ */
+export function validBranchName(name) {
+  const s = String(name || "");
+  if (!BRANCH_RE.test(s)) return false;
+  if (s.includes("..") || s.includes("//") || s.endsWith("/") || s.endsWith(".")) return false;
+  return s.split("/").every((seg) => seg && !seg.startsWith(".") && !seg.endsWith(".lock"));
+}
+
+/**
+ * The directory name a branch implies: its last segment, when that can be one.
+ *
+ * The wizard previews `<worktree parent>/<leaf>` beside the branch it derived
+ * it from, so a branch the operator named must decide the directory too.
+ * Naming the directory after the lane instead produced a worktree at
+ * `.../ui` under a review screen that read `.../vui`.
+ */
+export function worktreeNameFromBranch(branch) {
+  const leaf = String(branch || "").split("/").filter(Boolean).pop() || "";
+  return WORKTREE_NAME_RE.test(leaf) ? leaf : null;
+}
+
+/**
  * A branch name that follows the repository's policy.
  *
  * The Alloy profile prefixes `agent/`; the generic profile does not impose one,
@@ -65,12 +92,12 @@ export function worktreeNameFor(laneName, { suffix = "" } = {}) {
  * the Alloy-specific assumption this work removes.
  */
 export function branchNameFor(repository, laneName, { explicit = null } = {}) {
-  if (explicit) return BRANCH_RE.test(explicit) ? explicit : null;
+  if (explicit) return validBranchName(explicit) ? explicit : null;
   const policy = repository?.branch_policy || profileFor(repository?.profile).branch_policy;
   const slug = worktreeNameFor(laneName);
   if (!slug) return null;
   const name = `${policy?.prefix || ""}${slug}`;
-  return BRANCH_RE.test(name) ? name : null;
+  return validBranchName(name) ? name : null;
 }
 
 /** Is the repository in a state where `git worktree add` is safe right now? */
@@ -122,7 +149,9 @@ export async function createRepositoryWorktree({
   const ready = await repositoryReadyForWorktree(repo, { gitImpl });
   if (!ready.ok) return ready;
 
-  const name = worktreeName ? (WORKTREE_NAME_RE.test(worktreeName) ? worktreeName : null) : worktreeNameFor(laneName);
+  const name = worktreeName
+    ? (WORKTREE_NAME_RE.test(worktreeName) ? worktreeName : null)
+    : (worktreeNameFromBranch(branch) || worktreeNameFor(laneName));
   if (!name) return { ok: false, error: "invalid_worktree_name" };
 
   const branchName = branchNameFor(repo, laneName, { explicit: branch });

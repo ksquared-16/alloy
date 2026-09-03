@@ -29,6 +29,41 @@ function pathLikeFields(body = {}) {
   return keys.filter((k) => body[k] != null && String(body[k]).trim() !== "");
 }
 
+/**
+ * Fields the create endpoint refuses in every mode.
+ *
+ * These name execution substrate the Gateway owns — a slot, a tmux session, a
+ * port, an argv, a bare filesystem path. An operator who could set them could
+ * point a new lane at anything on the machine.
+ */
+const CREATE_SUBSTRATE_FIELDS = Object.freeze([
+  "path", "cwd", "filesystem_path", "dir", "directory",
+  "slot", "tmux", "tmux_session", "port", "command", "argv", "worktree",
+]);
+
+/**
+ * Which fields must this create request be refused for?
+ *
+ * `branch`, `base_ref` and `worktree_path` are NOT substrate — they are the
+ * workspace the Add lane sheet asks for, and the HTTP route already accepts
+ * them by name. Refusing them here refused every new-worktree lane the wizard
+ * could create: the operator confirmed a review screen reading "New branch
+ * agent/vui" and got back "That path contains characters Vacilando will not
+ * open" about a path they had never typed.
+ *
+ * They are accepted only in the mode that consumes them, so a planning lane
+ * still cannot smuggle in a branch and a new-worktree lane cannot smuggle in a
+ * path — which is what the original blanket refusal was protecting.
+ */
+function refusedCreateFields(body = {}) {
+  const given = (k) => body[k] != null && String(body[k]).trim() !== "";
+  const mode = String(body.workspace_mode || "");
+  const refused = CREATE_SUBSTRATE_FIELDS.filter(given);
+  if (mode !== "new_worktree") refused.push(...["branch", "base_ref"].filter(given));
+  if (mode !== "connect_existing") refused.push(...["worktree_path"].filter(given));
+  return refused;
+}
+
 export function publicCandidate(c) {
   if (!c) return null;
   const git = c.git_state && typeof c.git_state === "object"
@@ -184,7 +219,7 @@ export function renameLaneRequest(laneId, body = {}, { actor = "operator", nowMs
 }
 
 export async function createNewLaneRequest(body = {}, { actor = "operator", nowMs = Date.now() } = {}) {
-  const extra = pathLikeFields(body);
+  const extra = refusedCreateFields(body);
   if (extra.length) return { status: 400, body: { ok: false, error: "path_refused", fields: extra } };
   const instructionText = body.instruction != null ? String(body.instruction) : "";
   // A name is no longer required to start. If the operator did not give one,
@@ -232,6 +267,32 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
   //   planning          — no worktree, no provider, no capacity consumed
   const workspaceMode = ["new_worktree", "connect_existing", "planning"]
     .includes(String(body.workspace_mode || "")) ? String(body.workspace_mode) : null;
+
+  // The workspace inputs are accepted, so they are checked HERE and not only
+  // where they are used. A lane created first and provisioned second would
+  // otherwise exist with no workspace over a value that was never usable.
+  const { validBranchName } = await import("./repository-worktree.mjs");
+  const requestedBranch = String(body.branch ?? "").trim() || null;
+  const requestedBaseRef = String(body.base_ref ?? "").trim() || null;
+  const requestedWorktreePath = String(body.worktree_path ?? "").trim() || null;
+  if (workspaceMode === "new_worktree") {
+    if (requestedBranch && !validBranchName(requestedBranch)) {
+      return { status: 400, body: { ok: false, error: "invalid_branch_name" } };
+    }
+    if (requestedBaseRef && !validBranchName(requestedBaseRef)) {
+      return { status: 400, body: { ok: false, error: "invalid_base_ref" } };
+    }
+  }
+  if (workspaceMode === "connect_existing" && requestedWorktreePath) {
+    // containPath() decides which roots are open; this only refuses the shapes
+    // no path may have, before a lane record exists to be half-provisioned.
+    if (!requestedWorktreePath.startsWith("/")
+      || requestedWorktreePath.includes("..")
+      || /[;|&]/.test(requestedWorktreePath)
+      || /[\u0000-\u001f]/.test(requestedWorktreePath)) {
+      return { status: 400, body: { ok: false, error: "path_refused", fields: ["worktree_path"] } };
+    }
+  }
 
   const instruction = instructionText;
   const created = createDurableLane({
@@ -295,8 +356,8 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
     const made = await createRepositoryWorktree({
       repositoryId,
       laneName: named.name,
-      branch: body.branch || null,
-      baseRef: body.base_ref || null,
+      branch: requestedBranch,
+      baseRef: requestedBaseRef,
     });
     if (!made.ok) {
       // The lane exists but has no workspace. Say so rather than pretending it
@@ -338,11 +399,11 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
           : { registered: false, error: registered.error, detail: registered.detail || null }),
       };
     }
-  } else if (workspaceMode === "connect_existing" && repositoryId && body.worktree_path) {
+  } else if (workspaceMode === "connect_existing" && repositoryId && requestedWorktreePath) {
     const { connectRepositoryWorktree } = await import("./repository-worktree.mjs");
     const { listDurableLanes, bindDurableLane } = await import("./development-lane.mjs");
     const boundPaths = listDurableLanes().map((l) => l.binding?.worktree_path).filter(Boolean);
-    const conn = await connectRepositoryWorktree({ repositoryId, path: body.worktree_path, boundPaths });
+    const conn = await connectRepositoryWorktree({ repositoryId, path: requestedWorktreePath, boundPaths });
     if (!conn.ok) {
       workspace = { mode: workspaceMode, provisioned: false, error: conn.error, detail: conn.actual || null };
     } else {
