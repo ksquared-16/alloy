@@ -668,6 +668,152 @@ const semanticWalk: Phase = {
 };
 
 /**
+ * M: the governed requirement exception, end to end.
+ *
+ * Four properties, and the order matters because each only means something given the one before:
+ * the requirement blocks; an authorised actor can except it and the exception records WHO, WHY and
+ * WHEN against the exact requirement identity; an unauthorised actor cannot; and revoking restores
+ * the block.
+ *
+ * The property most worth protecting is the third-from-last: an excepted requirement must read as
+ * EXCEPTED, never as satisfied. An exception is a decision someone is accountable for, and a system
+ * that launders it into "satisfied" destroys the only record that a judgement was made.
+ */
+const governedException: Phase = {
+    key: "M_exception",
+    title: "governed requirement exception: block, except, refuse, revoke",
+    dependsOn: ["L_sufficiency"],
+    async run(ctx) {
+        const { grantRequirementException, revokeRequirementException } = await import(
+            "@/lib/enrollment/completion/requirementExceptionService"
+        );
+        const { REQUIREMENT_EXCEPTION_MANAGE_PERMISSION } = await import(
+            "@/lib/enrollment/completion/requirementException"
+        );
+        const { resolveEnrollmentCompletionSufficiency } = await import(
+            "@/lib/enrollment/completion/enrollmentCompletionSufficiency"
+        );
+
+        const entry = ctx.facts.B_entry as
+            | Record<string, { journeyId: string; participationId: string; stageKey: string | null }>
+            | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "Path A entry facts unavailable" };
+
+        const readGate = async () => {
+            const r = await resolveEnrollmentCompletionSufficiency(ctx.supabase, {
+                orgId: ctx.orgId,
+                processInstanceId: pathA.journeyId,
+            });
+            if (!r.ok) throw new Error(`sufficiency refused: ${r.refusal.code}`);
+            return r.sufficiency;
+        };
+
+        // A. OUTSTANDING — the requirement blocks before anything is excepted.
+        const before = await readGate();
+        const blocking = before.requirements.filter((r) => r.disposition === "blocking");
+        if (!blocking.length) {
+            return {
+                status: "failed",
+                detail: "no blocking requirement to except; this phase needs an outstanding requirement to be meaningful",
+            };
+        }
+        const target = blocking[0]!;
+        /*
+         * THE EFFECTIVE STAGE, from the resolver the product itself uses.
+         *
+         * My first attempt read `stage_key` off the sufficiency result, which does not carry one, so
+         * it was undefined and the exception was refused as missing_subject. Path A's journey holds a
+         * NULL stage by design -- the entry stage is DECLARED in configuration, not stamped on the row
+         * -- so the effective stage has to be resolved rather than read off the record. Same lesson as
+         * the column names and the constant import: ask the thing that knows.
+         */
+        const { resolveEnrollmentParticipantProgress } = await import(
+            "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress"
+        );
+        const progress = await resolveEnrollmentParticipantProgress(ctx.supabase, {
+            orgId: ctx.orgId,
+            processInstanceId: pathA.journeyId,
+        });
+        if (!progress.ok) {
+            return { status: "failed", detail: `participant progress refused: ${progress.refusal.code}` };
+        }
+        const effectiveStageKey = progress.value.stage_key ?? "";
+        if (!effectiveStageKey) {
+            return { status: "failed", detail: "no effective stage resolved for this journey" };
+        }
+
+        const identity = {
+            orgId: ctx.orgId,
+            participationId: pathA.participationId,
+            stageKey: effectiveStageKey,
+            requirementId: target.requirement_id,
+        };
+
+        // C (run early, while the requirement is still outstanding) — UNAUTHORISED must be refused.
+        const unauthorised = await grantRequirementException(ctx.supabase, {
+            actor: { permissionKeys: [], userId: ctx.actorUserId },
+            identity,
+            reason: "certification: unauthorised attempt, must be refused",
+        });
+        if (unauthorised.ok) {
+            return { status: "failed", detail: "an actor with no permissions was allowed to except a requirement" };
+        }
+
+        // B. AUTHORISED exception.
+        const reason = "certification: exercising the governed exception path";
+        const granted = await grantRequirementException(ctx.supabase, {
+            actor: { permissionKeys: [REQUIREMENT_EXCEPTION_MANAGE_PERMISSION], userId: ctx.actorUserId },
+            identity,
+            reason,
+        });
+        if (!granted.ok) {
+            return { status: "failed", detail: `authorised exception refused: ${granted.refusal.code}: ${granted.refusal.detail}` };
+        }
+
+        const afterGrant = await readGate();
+        const excepted = afterGrant.requirements.find((r) => r.requirement_id === target.requirement_id);
+        if (excepted?.disposition !== "excepted") {
+            return {
+                status: "failed",
+                detail: `after the exception the requirement reads "${excepted?.disposition}"; it must read "excepted" and never "satisfied"`,
+            };
+        }
+
+        // D. REVOKE — the block returns.
+        const revoked = await revokeRequirementException(ctx.supabase, {
+            actor: { permissionKeys: [REQUIREMENT_EXCEPTION_MANAGE_PERMISSION], userId: ctx.actorUserId },
+            identity,
+        } as Parameters<typeof revokeRequirementException>[1]);
+        if (!revoked.ok) {
+            return { status: "failed", detail: `revoke refused: ${revoked.refusal.code}: ${revoked.refusal.detail}` };
+        }
+
+        const afterRevoke = await readGate();
+        const reblocked = afterRevoke.requirements.find((r) => r.requirement_id === target.requirement_id);
+        if (reblocked?.disposition !== "blocking") {
+            return {
+                status: "failed",
+                detail: `after revoke the requirement reads "${reblocked?.disposition}"; revoking must restore the block`,
+            };
+        }
+
+        return {
+            status: "passed",
+            detail:
+                "outstanding blocks; authorised exception reads EXCEPTED (never satisfied); unauthorised refused; revoke re-blocks",
+            evidence: {
+                requirementId: target.requirement_id,
+                stageKey: identity.stageKey,
+                unauthorisedRefusal: unauthorised.refusal.code,
+                eligibleWhileExcepted: afterGrant.eligible,
+                eligibleAfterRevoke: afterRevoke.eligible,
+            },
+        };
+    },
+};
+
+/**
  * Phases that need the participant browser surface. Declared, ordered and explicitly unimplemented
  * so the report shows the shape of what remains rather than hiding it.
  */
@@ -679,7 +825,6 @@ const browserPhases: readonly Phase[] = (
         ["I_correction", "review and correction"],
         ["J_signature", "signatures"],
         ["K_participant_complete", "participant completion"],
-        ["M_exception", "governed exception"],
         ["N_complete_enrollment", "Complete Enrollment"],
         ["P_handoff", "operational handoff"],
         ["Q_next_episode", "next episode"],
@@ -707,5 +852,6 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     participantEntry,
     priorTruthConfirmation,
     semanticWalk,
+    governedException,
     ...browserPhases,
 ];
