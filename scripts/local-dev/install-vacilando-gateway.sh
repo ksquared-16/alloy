@@ -18,7 +18,9 @@ LOG_DIR="${RUNTIME_ROOT}/logs"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 HOST_JS="${HERE}/lib/vacilando-gateway-host.mjs"
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
-PORT="${VACILANDO_PORT:-3020}"
+# Default read from the ONE owner (lib/vacilando/managed-slots.mjs) so the
+# installer cannot pin a port the topology resolver has since reserved.
+PORT="${VACILANDO_PORT:-$("${NODE_BIN}" -e 'import("./lib/vacilando/managed-slots.mjs").then(m=>process.stdout.write(String(m.gatewayPort())))' --input-type=module 2>/dev/null || echo 3030)}"
 
 # ---------------------------------------------------------------------------
 # Shared-host mutation guard. Two lanes each ran this installer and silently

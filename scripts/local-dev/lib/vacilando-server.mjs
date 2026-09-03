@@ -40,7 +40,7 @@
  */
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { attachLaneAppUrls, laneAppUrl, readServeStatus } from "./vacilando/lane-app-url.mjs";
-import { isManagedSlot, managedSlots } from "./vacilando/managed-slots.mjs";
+import { gatewayPort, isManagedSlot, managedSlots } from "./vacilando/managed-slots.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
@@ -148,7 +148,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.env.HOME || "", ".local", "state", "alloy-dev");
 export const LOOPBACK_HOST = "127.0.0.1";
 const PUBLIC_DIR = resolve(HERE, "..", "apps", "vacilando", "public");
-const DEFAULT_PORT = 3020;
+// Derived, never re-declared. The Gateway port had been a literal in six
+// production places; one of them, the topology resolver, did not know about it
+// at all and would have handed slot 10 the port this server listens on.
+const DEFAULT_PORT = gatewayPort();
 // Board projection: Node workspace snapshot + cached git facts. Serve from a
 // single-flight cache aligned with SOURCE_RAW_TTL so polls never re-fan-out.
 // SSE tick is human-visible Director cadence — not sub-second filesystem scan.

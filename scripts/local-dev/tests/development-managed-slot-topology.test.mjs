@@ -136,7 +136,12 @@ test("capacity POLICY derives its slot bound from the topology", () => {
   // At 48 GB and 8 GB per server, memory allows 6 — so six is slot-bounded and
   // twelve becomes memory-bounded. The point is that the SLOT term moved.
   const prev = process.env.ALLOY_MAX_AGENTS;
+  // Isolate the Gateway port as well: this test drives the real process.env, and
+  // an ambient VACILANDO_PORT inside the agent range would legitimately shrink
+  // the topology out from under the assertion.
+  const prevPort = process.env.VACILANDO_PORT;
   process.env.ALLOY_MAX_AGENTS = "12";
+  process.env.VACILANDO_PORT = "3030";
   try {
     const twelve = P.computeCapacityPolicy(cap);
     assert.equal(twelve.axes.dev_server_capacity.by_slots, 12, "the slot bound must follow topology");
@@ -144,6 +149,7 @@ test("capacity POLICY derives its slot bound from the topology", () => {
       "at twelve slots the binding constraint becomes RAM, which is the honest answer");
   } finally {
     if (prev == null) delete process.env.ALLOY_MAX_AGENTS; else process.env.ALLOY_MAX_AGENTS = prev;
+    if (prevPort == null) delete process.env.VACILANDO_PORT; else process.env.VACILANDO_PORT = prevPort;
   }
 });
 
@@ -211,6 +217,61 @@ test("the shell and the control plane read the SAME value", () => {
   assert.match(common, /ALLOY_FIRST_AGENT_PORT \+ slot - 1/, "port derivation stays the shell's rule");
   // No second registry, no second config key.
   assert.ok(!/MANAGED_SLOT_COUNT=/.test(src), "must not invent a parallel config key");
+});
+
+// ── the control plane must not sit inside the agent range ───────────────────
+//
+// THE DEFECT THESE ENCODE. MANAGED_SLOT_HARD_MAX's own comment argued that
+// twelve slots reach 3022, "comfortably clear of the canonical app port and of
+// the 3911+ certification fixture range" — and never mentioned the Gateway,
+// which was listening on 3020. Slot 10 of a twelve-slot topology IS 3020. The
+// resolver would have handed a lane the control plane's port; the first symptom
+// would have been a dev server failing to bind, or worse, winning the race.
+// The clearance argument was right in form and incomplete in fact, so the
+// reserved set is now modelled rather than reasoned about in prose.
+
+test("the old defective configuration is detected, not tolerated", () => {
+  const r = T.resolveManagedSlotCount({ ALLOY_MAX_AGENTS: "12", VACILANDO_PORT: "3020" });
+  assert.equal(r.source, "reserved_port_conflict");
+  assert.deepEqual(r.conflicts, [{ slot: 10, port: 3020 }]);
+  // Fails CLOSED: it yields the largest topology owning no reserved port,
+  // never the requested one.
+  assert.equal(r.count, 9);
+});
+
+test("the new configuration is valid through slot 16", () => {
+  for (const n of [6, 12, 16]) {
+    const r = T.resolveManagedSlotCount({ ALLOY_MAX_AGENTS: String(n), VACILANDO_PORT: "3030" });
+    assert.equal(r.count, n, `${n} slots must resolve intact`);
+    assert.equal(r.source, "environment");
+  }
+  // 3011..3026 never reaches 3030.
+  assert.deepEqual(T.topologyPortConflicts(16, { VACILANDO_PORT: "3030" }), []);
+});
+
+test("a future configuration that crosses the Gateway is refused before allocation", () => {
+  // Not a special case for slot 10: move the Gateway anywhere into the range and
+  // the slot that lands on it is the one reported.
+  const r = T.resolveManagedSlotCount({ ALLOY_MAX_AGENTS: "6", VACILANDO_PORT: "3014" });
+  assert.equal(r.source, "reserved_port_conflict");
+  assert.deepEqual(r.conflicts, [{ slot: 4, port: 3014 }]);
+  assert.equal(r.count, 3);
+});
+
+test("the reserved set is derived, and covers the canonical app port too", () => {
+  const reserved = T.reservedControlPlanePorts({ VACILANDO_PORT: "3030" });
+  assert.equal(reserved.has(3030), true, "the Gateway reserves its own port");
+  assert.equal(reserved.has(3000), true, "a lane must not shadow the canonical app port");
+  assert.equal(reserved.has(3015), false, "a real lane port is not reserved");
+  assert.equal(T.gatewayPort({ VACILANDO_PORT: "3030" }), 3030);
+  assert.equal(T.gatewayPort({}), T.DEFAULT_GATEWAY_PORT);
+});
+
+test("slot 10 becomes legitimately allocatable once the Gateway moves", () => {
+  const env = { ALLOY_MAX_AGENTS: "12", VACILANDO_PORT: "3030" };
+  assert.equal(T.isManagedSlot(10, env), true);
+  assert.equal(T.portForSlot(10, env), 3020);
+  assert.equal(T.topologyPortConflicts(12, env).length, 0);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

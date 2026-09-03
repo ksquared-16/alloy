@@ -17,11 +17,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const { gatewayPort } = await import("./vacilando/managed-slots.mjs");
 const SERVER = join(HERE, "vacilando-server.mjs");
 const HOME = process.env.HOME || homedir();
 const runtimeRoot = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(HOME, ".local", "state", "alloy-dev", "gateway");
-const port = process.env.VACILANDO_PORT?.trim() || "3020";
+// The launcher default follows the one owner; VACILANDO_PORT still wins so the
+// launchd agent and an operator override keep working unchanged.
+const port = process.env.VACILANDO_PORT?.trim() || String(gatewayPort());
 const DIRECTOR_REFRESH_EXIT = 78;
 
 const env = {
