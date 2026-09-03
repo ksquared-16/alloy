@@ -49,6 +49,8 @@ export type ProcessCardActionInput = {
     disabledReason?: string | null;
     /** Executes through the shared command host. */
     onInvoke?: () => void;
+    /** Secondary operations on the same operational concept (see `ProcessAction.menu`). */
+    menu?: ProcessCardActionInput[];
 };
 
 function childState(p: BusinessProcessParticipant): ProcessChildState {
@@ -114,6 +116,18 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
         disabled: a.disabled,
         disabledReason: a.disabledReason ?? null,
         onInvoke: a.onInvoke,
+        ...(a.menu?.length
+            ? {
+                  menu: a.menu.map((m) => ({
+                      key: m.key,
+                      label: m.label,
+                      primary: m.primary,
+                      disabled: m.disabled,
+                      disabledReason: m.disabledReason ?? null,
+                      onInvoke: m.onInvoke,
+                  })),
+              }
+            : {}),
     }));
 
     return {

@@ -32,6 +32,7 @@ describe("System 5A Universal Card Archetypes", () => {
                 ],
             },
             active_tour_bookings: [],
+            operator_relevant_tour_booking: null,
             reminders: {
                 state: "empty",
                 next_follow_up_iso: null,

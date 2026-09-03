@@ -212,6 +212,7 @@ export async function composeOpportunityDrawerViewModel(
         summaries: {
             tasks: tasksSummary,
             active_tour_bookings: initial.summaries.active_tour_bookings,
+            operator_relevant_tour_booking: initial.summaries.operator_relevant_tour_booking ?? null,
             reminders: initial.summaries.reminders,
             bos: initial.summaries.bos,
             attention: initial.summaries.attention,

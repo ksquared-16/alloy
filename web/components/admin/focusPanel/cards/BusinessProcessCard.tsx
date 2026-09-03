@@ -11,11 +11,15 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { buildBusinessProcessCardEvidence } from "@/lib/adminV2/runtime/focusPanel/businessProcess/buildBusinessProcessCardEvidence";
-import { adaptBusinessProcessEvidenceToProcessCard } from "@/lib/adminV2/runtime/focusPanel/businessProcess/adaptBusinessProcessEvidenceToProcessCard";
+import {
+    adaptBusinessProcessEvidenceToProcessCard,
+    type ProcessCardActionInput,
+} from "@/lib/adminV2/runtime/focusPanel/businessProcess/adaptBusinessProcessEvidenceToProcessCard";
 import {
     projectProcessCardCommands,
     type ProcessCardCommand,
 } from "@/lib/adminV2/runtime/focusPanel/businessProcess/projectProcessCardCommands";
+import { resolveTourCommandPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveTourCommandPresentation";
 import {
     logProcessCardCommandDrift,
     logProcessCardCommandWithheld,
@@ -158,11 +162,36 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
                 case "record_outcome":
                     coordination?.openCurrentWorkWorkspace?.({ kind: "record_outcome" });
                     return;
-                case "communications_composer": {
-                    const composer = coordination?.resolveCommunicationsComposerAction?.() ?? null;
-                    if (composer) coordination?.invokeHeaderAction?.(composer);
+                case "communications_composer":
+                    /*
+                     * LAUNCHER SELECTION MAY CHANGE HOW A COMMAND IS PRESENTED. IT MUST NEVER
+                     * CHANGE WHICH COMMAND IS INVOKED.
+                     *
+                     * This branch used to drop the configured command and call
+                     * `resolveCommunicationsComposerAction()`, which returns the FIRST
+                     * record-header action whose key, label or description matches a broad
+                     * outreach regex. So a configured `send_tour_invitation` was executed as
+                     * whatever generic outreach action happened to match first — normally
+                     * `quick_message` — and the operator landed in a blank Compose New with the
+                     * tour, the invitation and the prepared draft all thrown away.
+                     *
+                     * Nothing was missing underneath. Carrying the identity into the shared
+                     * command workspace reaches the canonical path Current Work already uses:
+                     * the workspace matches the action by `key` / `actionRef` / `handlerKey`,
+                     * `CurrentWorkActionPanel` hosts the composer for THAT action, and
+                     * `applyRegistryResolvedActionClient` runs it with `mode: "prepare"` —
+                     * minting and rendering the invitation without sending — before opening the
+                     * contextual composer with opportunity, recipient, subject, body and
+                     * invitation id.
+                     *
+                     * This is deliberately the same call the `default` branch makes. Every other
+                     * branch already carried `command.key` or `plan.action`; this was the one
+                     * that did not, and identifying an executable action by its label is exactly
+                     * what `resolveCurrentWorkActionSurface` and `projectProcessCardCommands`
+                     * both say must never happen.
+                     */
+                    coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
                     return;
-                }
                 case "header_delegate": {
                     const resolved = plan.action.resolved;
                     if (resolved) {
@@ -180,18 +209,67 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
         [coordination],
     );
 
-    const actions = useMemo(
+    /*
+     * ONE TOUR CONCEPT INSTEAD OF FOUR LOOSE COMMANDS.
+     *
+     * The configured Tour capabilities were rendered as unrelated buttons, so a scheduled tour
+     * still offered "Schedule Tour" next to "Cancel Tour" and the operator had to infer the state
+     * from which buttons happened to be present. Current Work already grouped them through
+     * `partitionTourGroupedActions`; the Process card simply never asked.
+     *
+     * It asks now, through the SAME partition — no second notion of which commands are Tour
+     * commands — and `resolveTourCommandPresentation` supplies the one thing neither surface had:
+     * a label carrying the current state, branched on the canonical `statusKey` rather than on
+     * any rendered string.
+     *
+     * Grouping is presentation only. Nothing here adds, removes, reorders or enables a command:
+     * the set and its order are still exactly what `projectProcessCardCommands` returned, and the
+     * primary command keeps its emphasis whether or not it sits inside the group.
+     */
+    const tourPresentation = useMemo(
         () =>
-            projection.commands.map((command) => ({
-                key: command.key,
-                label: command.label,
-                primary: command.prominence === "primary",
-                disabled: command.status !== "executable",
-                disabledReason: command.unavailableReason,
-                onInvoke: () => invoke(command),
-            })),
-        [projection.commands, invoke],
+            resolveTourCommandPresentation(projection.commands, context.signals.tour, {
+                timeZone: viewerTimeZone,
+            }),
+        [projection.commands, context.signals.tour, viewerTimeZone],
     );
+
+    const actions = useMemo<ProcessCardActionInput[]>(() => {
+        const toInput = (command: ProcessCardCommand): ProcessCardActionInput => ({
+            key: command.key,
+            label: command.label,
+            primary: command.prominence === "primary",
+            disabled: command.status !== "executable",
+            disabledReason: command.unavailableReason,
+            onInvoke: () => invoke(command),
+        });
+
+        if (!tourPresentation.grouped) return projection.commands.map(toInput);
+
+        // The group takes the position of the first Tour command, so configuration's ordering
+        // survives collapsing: a Tour concept configured second stays second.
+        const firstTourIndex = projection.commands.findIndex((c) => tourPresentation.tour.includes(c));
+        const grouped: ProcessCardActionInput = {
+            key: "tour",
+            label: tourPresentation.label ?? "Tour",
+            // The control leads only if configuration gave one of its members the lead.
+            primary: tourPresentation.tour.some((c) => c.prominence === "primary"),
+            // Executable when any member is; the members carry their own verdicts.
+            disabled: tourPresentation.tour.every((c) => c.status !== "executable"),
+            disabledReason: null,
+            menu: tourPresentation.tour.map(toInput),
+        };
+
+        const out: ProcessCardActionInput[] = [];
+        projection.commands.forEach((command, index) => {
+            if (tourPresentation.tour.includes(command)) {
+                if (index === firstTourIndex) out.push(grouped);
+                return;
+            }
+            out.push(toInput(command));
+        });
+        return out;
+    }, [projection.commands, invoke, tourPresentation]);
 
     /*
      * DRIFT IS REPORTED, NEVER RENDERED. A configured command whose action is no longer registered

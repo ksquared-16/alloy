@@ -31,7 +31,7 @@ import type {
 const NULL_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+    tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
     communications: {
         scheduledSendCount: 0,
         nextFollowUpAt: null,
@@ -249,7 +249,7 @@ describe("Process card command fidelity", () => {
                 tour: {
                     scheduled: true,
                     startAt: "2026-09-01T17:00:00Z",
-                    statusLabel: "Scheduled",
+                    statusLabel: "Scheduled", statusKey: "confirmed",
                     bookingId: "booking-1",
                 },
             },

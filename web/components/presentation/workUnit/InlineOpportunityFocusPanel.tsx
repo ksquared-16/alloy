@@ -529,6 +529,71 @@ export function InlineOpportunityFocusPanel() {
         });
     }, [bodySource, operationalSubjectId]);
 
+    /*
+     * BOTH OF THESE ARE MEMOISED BECAUSE THE BODY MEMOISES ON THEM.
+     *
+     * They used to be object literals written inline in the JSX below, so each one was a new
+     * reference on every render of this component. `OpportunityFocusPanelBody` derives its whole
+     * focus model with a `useMemo` keyed on them, which meant the model was rebuilt every render
+     * and its identity was never stable for a single frame.
+     *
+     * That is one half of a closed loop. The body reports the settled participant scope back up to
+     * `setSubjectScope` when the model changes; storing it re-renders this component; re-rendering
+     * rebuilt these two props; rebuilding them produced a new model; the new model reported again.
+     * The body now compares the scope by value, which breaks the circuit on its own — but leaving
+     * these unstable would keep rebuilding the model and every card composition under it on every
+     * render for no reason, which is the cost that made the loop expensive rather than merely
+     * present.
+     *
+     * Contents are unchanged. Only the identity is now allowed to survive a render.
+     */
+    const enriched = useMemo(
+        () => (visible ? { displayVm: visible.displayVm, record: visible.record } : null),
+        [visible],
+    );
+    const commitCritical = useMemo(
+        () =>
+            // Always keep commit-critical while operationally resolved — including after
+            // Settlement — so child Attention can overlay the child's stage mission onto the
+            // family Settlement VM (never replace with Lead work).
+            operationallyResolved
+                ? {
+                      subjectId: operationalSubjectId ?? "",
+                      statusKey: drawer.opportunityQueuePreviewSeed?.statusKey ?? null,
+                      stageWorkRuntime: operational.stageWorkRuntime,
+                      publishedStageInputs: operational.publishedStageInputs,
+                      situation: operational.situation
+                          ? {
+                                stageKey: operational.situation.stageKey,
+                                stageLabel: operational.situation.stageLabel,
+                                purpose: operational.situation.purpose,
+                            }
+                          : null,
+                      primaryAction: operational.action,
+                      // Carried so the panel can SAY there is no configured action, instead of
+                      // leaving the operator to guess whether the surface is deliberately empty
+                      // or still settling.
+                      actionAbsence: operational.actionAbsence,
+                      subjectIdentityTruth: operational.subjectIdentityTruth,
+                      // R2 — the answer's resolved grain, carried by the single subject owner.
+                      // The panel forwards it; it never decides it.
+                      subjectGrain: operational.subjectGrain,
+                  }
+                : null,
+        [
+            operationallyResolved,
+            operationalSubjectId,
+            drawer.opportunityQueuePreviewSeed?.statusKey,
+            operational.stageWorkRuntime,
+            operational.publishedStageInputs,
+            operational.situation,
+            operational.action,
+            operational.actionAbsence,
+            operational.subjectIdentityTruth,
+            operational.subjectGrain,
+        ],
+    );
+
     return (
         <FocusPanelSummaryDocProvider
             enabled
@@ -678,36 +743,8 @@ export function InlineOpportunityFocusPanel() {
                             title={headerTitle || (visible ? drawerTitle : seedTitle)}
                             statusLabel={statusLabel}
                             canMutate={statusCanMutate}
-                            enriched={visible ? { displayVm: visible.displayVm, record: visible.record } : null}
-                            commitCritical={
-                                // Always keep commit-critical while operationally resolved — including
-                                // after Settlement — so child Attention can overlay the child's stage
-                                // mission onto the family Settlement VM (never replace with Lead work).
-                                operationallyResolved
-                                    ? {
-                                          subjectId: operationalSubjectId ?? "",
-                                          statusKey: drawer.opportunityQueuePreviewSeed?.statusKey ?? null,
-                                          stageWorkRuntime: operational.stageWorkRuntime,
-                                          publishedStageInputs: operational.publishedStageInputs,
-                                          situation: operational.situation
-                                              ? {
-                                                    stageKey: operational.situation.stageKey,
-                                                    stageLabel: operational.situation.stageLabel,
-                                                    purpose: operational.situation.purpose,
-                                                }
-                                              : null,
-                                          primaryAction: operational.action,
-                                          // Carried so the panel can SAY there is no configured action,
-                                          // instead of leaving the operator to guess whether the surface
-                                          // is deliberately empty or still settling.
-                                          actionAbsence: operational.actionAbsence,
-                                          subjectIdentityTruth: operational.subjectIdentityTruth,
-                                          // R2 — the answer's resolved grain, carried by the single
-                                          // subject owner. The panel forwards it; it never decides it.
-                                          subjectGrain: operational.subjectGrain,
-                                      }
-                                    : null
-                            }
+                            enriched={enriched}
+                            commitCritical={commitCritical}
                             onSelectTab={selectFromDrawerTab}
                             onHeaderAction={onActionSelect}
                             onModeChange={setFocusPanelMode}
