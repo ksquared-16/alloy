@@ -216,5 +216,52 @@ else
   bad "21. the bind guard still proceeds when ownership is unknown"
 fi
 
+
+# ---------------------------------------------------------------------------
+# GOVERNED FOREIGN-OWNER RECLAIM — the refusals are the feature.
+#
+# The incident: Financials started Next on Runtime Performance's port 3011, and
+# the only way back was a hand-run kill. This command reclaims that case and
+# nothing else. Everything below asserts a thing it must NOT do.
+# ---------------------------------------------------------------------------
+
+[[ -x "$ROOT/alloy-dev-reclaim" ]] \
+  && ok "22. alloy-dev-reclaim exists and is executable" \
+  || bad "22. alloy-dev-reclaim missing"
+
+grep -q 'PREVIEW ONLY' "$ROOT/alloy-dev-reclaim" \
+  && ok "23. preview is the default; --apply is required to stop anything" \
+  || bad "23. reclaim has no preview mode"
+
+if grep -E 'pkill[[:space:]]+(-f[[:space:]]+)?(node|next)|kill -9|kill -KILL' "$ROOT/alloy-dev-reclaim" >/dev/null; then
+  bad "24. reclaim contains a broad kill — it must never become kill-port"
+else
+  ok "24. reclaim never broad-kills and never auto-SIGKILLs"
+fi
+
+grep -q 'class         unattributable' "$ROOT/alloy-dev-reclaim" \
+  && ok "25. an unreadable probe is refused, not treated as an empty port" \
+  || bad "25. reclaim does not refuse on unknown ownership"
+
+grep -q 'class         unmanaged_listener' "$ROOT/alloy-dev-reclaim" \
+  && ok "26. a listener that is not a provable foreign dev server is refused" \
+  || bad "26. reclaim does not refuse unprovable listeners"
+
+grep -q 'this is the canonical owner' "$ROOT/alloy-dev-reclaim" \
+  && ok "27. the canonical owner of a port is never reclaimed from itself" \
+  || bad "27. reclaim can target the canonical owner"
+
+grep -q 'alloy_record_server_lifecycle "reclaim"' "$ROOT/alloy-dev-reclaim" \
+  && ok "28. reclaim records a lifecycle audit entry" \
+  || bad "28. reclaim is not audited"
+
+grep -q 're-observed' "$ROOT/alloy-dev-reclaim" \
+  && ok "29. reclaim re-observes the port and never assumes the stop worked" \
+  || bad "29. reclaim does not re-observe"
+
+grep -q 'alloy_stop_pid_tree()' "$ROOT/lib/common.sh" \
+  && ok "30. one owner for stopping a server tree, shared by stop and reclaim" \
+  || bad "30. alloy_stop_pid_tree is not shared"
+
 printf '\n==== dev-server-ownership: %s passed, %s failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

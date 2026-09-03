@@ -567,6 +567,26 @@ alloy_port_owner() {
   alloy_rc_port_owner "$1"
 }
 
+# Gracefully terminate a PID and its immediate children; return 0 once it is gone,
+# 1 if it survives the grace period (caller decides; we never auto-SIGKILL).
+#
+# Lives here rather than inside alloy-dev-stop because it now has a second
+# legitimate caller: alloy-dev-reclaim, which stops a PROVEN foreign dev server.
+# Copying it would have been a second owner of "how Alloy ends a server", and the
+# `-P` scoping is exactly the part nobody should re-derive.
+alloy_stop_pid_tree() {
+  local target="$1" i
+  if alloy_have_cmd pkill; then
+    pkill -TERM -P "$target" 2>/dev/null || true
+  fi
+  kill -TERM "$target" 2>/dev/null || true
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    alloy_pid_alive "$target" || return 0
+    sleep 0.5
+  done
+  return 1
+}
+
 alloy_pid_alive() {
   local pid="$1"
   [[ -n "$pid" ]] || return 1

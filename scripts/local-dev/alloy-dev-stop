@@ -105,19 +105,4 @@ EOF
   exit 0
 }
 
-# Gracefully terminate a PID and its immediate children; return 0 once it is gone,
-# 1 if it survives the grace period (caller decides; we never auto-SIGKILL).
-alloy_stop_pid_tree() {
-  local target="$1" i
-  if alloy_have_cmd pkill; then
-    pkill -TERM -P "$target" 2>/dev/null || true
-  fi
-  kill -TERM "$target" 2>/dev/null || true
-  for i in 1 2 3 4 5 6 7 8 9 10; do
-    alloy_pid_alive "$target" || return 0
-    sleep 0.5
-  done
-  return 1
-}
-
 main "$@"
