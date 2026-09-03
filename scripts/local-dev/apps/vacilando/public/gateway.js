@@ -2852,7 +2852,14 @@ async function wizardCreate() {
       repository_id: d.repository_id,
       workspace_mode: d.workspace_mode,
     };
-    if (d.workspace_mode === "new_worktree" && d.branch_suffix) body.branch = d.branch_suffix;
+    // Send the branch the review screen SHOWED, prefix and all. Sending the
+    // bare suffix asked for a branch called `vui` under a review that promised
+    // `agent/vui`, because the server treats `branch` as the whole name.
+    if (d.workspace_mode === "new_worktree") {
+      const repo = (G.repositories || []).find((x) => x.repository_id === d.repository_id);
+      const branch = View.previewBranch(repo, d.name, d.branch_suffix);
+      if (branch) body.branch = branch;
+    }
     if (d.workspace_mode === "connect_existing") body.worktree_path = d.worktree_path;
     const r = await gwFetch("/api/lanes/create", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
@@ -2860,7 +2867,19 @@ async function wizardCreate() {
     const j = await r.json();
     if (!j.ok) {
       w.error = j.error;
-      w.errorText = View.repositoryErrorText(j.error, j);
+      w.errorText = View.laneCreateErrorText(j.error, j);
+      w.submitting = false;
+      paint();
+      return;
+    }
+    // A lane whose workspace did not materialise is not a created lane. Landing
+    // in its chat would hand the operator a lane that cannot run and no reason
+    // why — the Financials failure, one screen earlier.
+    const ws = j.workspace || null;
+    if (ws && ws.mode !== "planning" && ws.provisioned === false) {
+      w.error = ws.error || "workspace_not_provisioned";
+      w.errorText = View.workspaceFailureText(ws);
+      w.createdLaneId = j.lane?.lane_id || null;
       w.submitting = false;
       paint();
       return;

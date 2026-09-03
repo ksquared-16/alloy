@@ -219,6 +219,63 @@ export function repositoryErrorText(error, detail = {}) {
   }
 }
 
+/**
+ * Operator-facing text for a refused Add lane.
+ *
+ * The wizard read every refusal through repositoryErrorText, so a create the
+ * server refused reported "That path contains characters Vacilando will not
+ * open" about a branch name — no path was involved, and no path could be
+ * corrected to fix it.
+ */
+export function laneCreateErrorText(error, detail = {}) {
+  switch (error) {
+    case "path_refused": {
+      const fields = (detail.fields || []).join(", ");
+      return fields
+        ? `Vacilando does not accept ${fields} on a new lane.`
+        : "Execution substrate fields are not accepted.";
+    }
+    case "invalid_branch_name": return "That branch name cannot be used.";
+    case "invalid_base_ref": return "That base branch name cannot be used.";
+    case "unexpected_control_field":
+      return `The form sent a field the Gateway does not accept: ${(detail.fields || []).join(", ")}.`;
+    case "repository_not_found":
+    case "repository_not_active":
+    case "cross_repository_binding_refused":
+      return repositoryErrorText(error, detail);
+    default: return createErrorText(error);
+  }
+}
+
+/**
+ * What to say when the lane exists but its workspace does not.
+ *
+ * The lane is real, so the operator must not create it again; the workspace is
+ * not, so they must not be told the lane is ready either.
+ */
+export function workspaceFailureText(workspace = {}) {
+  const w = workspace || {};
+  const reason = {
+    branch_exists: `the branch ${w.branch || "it needs"} already exists`,
+    destination_exists: "a directory of that name is already there",
+    base_ref_not_found: `the base branch ${w.ref || w.base_ref || "it was given"} does not exist here`,
+    repository_mid_merge: "that repository is mid-merge or mid-rebase",
+    repository_root_missing: "that repository's folder is missing",
+    invalid_branch_name: "that branch name cannot be used",
+    invalid_worktree_name: "that name does not make a usable folder name",
+    worktree_add_failed: "Git refused to create the worktree",
+    worktree_identity_mismatch: "the new worktree did not belong to that repository",
+    cross_repository_binding_refused: "that worktree belongs to a different repository",
+    worktree_already_bound: "another lane is already bound to that worktree",
+    no_free_slot: "all six managed slots are taken, so it could not be registered",
+    registration_failed: "the fleet could not register it, so nothing could reach its agent",
+  }[w.error] || (w.registered === false
+    ? "the fleet could not register it"
+    : `it failed (${w.error || "reason unknown"})`);
+  return `The lane was created, but its workspace was not: ${reason}. `
+    + "Open the lane and fix it there \u2014 creating another lane would duplicate this one.";
+}
+
 /** Operator-facing text for every attachment refusal the server can return. */
 export function attachmentErrorText(error, detail = {}) {
   const mb = (n) => `${Math.round((Number(n) || 0) / (1024 * 1024))} MB`;
@@ -4538,7 +4595,11 @@ export function renderLaneWizard(state = {}) {
 
   const isLast = step === "review";
   const canNext = isLast ? true : laneStepReady(nextLaneStep(step, draft), draft);
-  const actions = `${step === "repository" ? "" : `<button type="button" class="btn" data-gw-wiz-back>Back</button>`}
+  // Once the lane exists, Create must be gone. The workspace can still have
+  // failed, and pressing Create again would answer that with a second lane.
+  const actions = state.createdLaneId
+    ? `<a class="btn primary" href="${laneDetailHash(state.createdLaneId)}">Open lane</a>`
+    : `${step === "repository" ? "" : `<button type="button" class="btn" data-gw-wiz-back>Back</button>`}
     <button type="button" class="btn primary" ${isLast ? "data-gw-wiz-create" : "data-gw-wiz-next"}
       ${(!canNext || state.submitting) ? "disabled" : ""}>
       ${state.submitting ? "Creating\u2026" : (isLast ? "Create lane" : "Next")}</button>`;

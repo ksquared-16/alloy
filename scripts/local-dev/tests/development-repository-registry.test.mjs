@@ -199,6 +199,29 @@ test("a colliding branch or destination is refused, not adopted", async () => {
   assert.ok(["destination_exists", "branch_exists"].includes(again.error), again.error);
 });
 
+test("a named branch names the worktree directory too", async () => {
+  // The wizard previews `<worktree parent>/<branch leaf>` next to the branch it
+  // derived it from; naming the directory after the lane instead created
+  // `.../ui` under a review screen that read `.../vui`.
+  const reg = R.listRepositories({}).find((r) => r.name === "Prov");
+  const made = await W.createRepositoryWorktree({
+    repositoryId: reg.repository_id, laneName: "ui", branch: "agent/vui",
+  });
+  assert.equal(made.ok, true, made.error);
+  assert.equal(made.branch, "agent/vui");
+  assert.equal(made.worktree_name, "vui");
+  assert.equal(made.worktree_path, `${reg.worktree_parent}/vui`);
+});
+
+test("a branch Git would reject is refused before the worktree is built", () => {
+  const reg = R.listRepositories({}).find((r) => r.name === "Prov");
+  assert.equal(W.validBranchName("agent/vui"), true);
+  assert.equal(W.validBranchName("agent/../evil"), false);
+  assert.equal(W.validBranchName("agent//evil"), false);
+  assert.equal(W.validBranchName("agent/.hidden"), false);
+  assert.equal(W.branchNameFor(reg, "L", { explicit: "agent/../evil" }), null);
+});
+
 test("a missing base ref fails closed instead of guessing", async () => {
   const reg = R.listRepositories({}).find((r) => r.name === "Prov");
   const out = await W.createRepositoryWorktree({
