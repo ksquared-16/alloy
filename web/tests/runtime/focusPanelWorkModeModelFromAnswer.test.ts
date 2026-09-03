@@ -8,6 +8,7 @@ import {
     buildCurrentWorkCardModel,
     buildReadinessCardModel,
 } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { MOUNTABLE_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 
 const stageWork = {
@@ -108,5 +109,69 @@ describe("focusPanelWorkModeModelFromProvisioningAnswer (A — commit-critical p
         expect(ctx.stageWorkRuntime).toBeNull();
         expect(ctx.stageWorkPending).toBe(false);
         expect(ctx.truth._stage_work_runtime).toBeUndefined();
+    });
+});
+
+/**
+ * MOUNTABILITY, AT THE PRODUCER — one declaration per identity SHAPE, asserted generically.
+ *
+ * The registry now carries two shapes: a card that addresses a PARTICIPANT and a card that addresses
+ * an ACCOUNT. These read the specs rather than naming cards, so a third shape added later is tested
+ * by this file the day it is declared.
+ */
+describe("mountability at the commit producer", () => {
+    const identityFor = (spec: { identityTruthKeys: readonly string[] }, value: string) =>
+        Object.fromEntries(spec.identityTruthKeys.map((key) => [key, value]));
+
+    it("a spec whose declared identity the answer carries resolves to self_loading — never ready", () => {
+        for (const spec of MOUNTABLE_CARD_SPECS) {
+            const model = focusPanelWorkModeModelFromProvisioningAnswer(
+                input({ subjectIdentityTruth: identityFor(spec, "id_1") }),
+            );
+            expect(model.cardReadiness.get(spec.key), `${spec.key} should mount`).toBe("self_loading");
+            expect(model.cardReadiness.get(spec.key)).not.toBe("ready");
+            // A mounted card asserts NO content — that is what keeps `ready` honest.
+            expect(model.cardModels.get(spec.key)?.insight).toBe("");
+        }
+    });
+
+    it("a spec whose identity the answer does NOT carry stays absent, so its cell reserves", () => {
+        const model = focusPanelWorkModeModelFromProvisioningAnswer(input({ subjectIdentityTruth: null }));
+        for (const spec of MOUNTABLE_CARD_SPECS) {
+            expect(model.cardReadiness.get(spec.key), `${spec.key} must not mount`).toBeUndefined();
+        }
+    });
+
+    it("identity shapes are INDEPENDENT — one card's identity never mounts another's", () => {
+        // The account-scoped card must not ride in on a participant binding, nor the reverse. With one
+        // shared predicate this test would be impossible to fail; with per-card predicates it is the
+        // thing that proves each is read for itself.
+        for (const spec of MOUNTABLE_CARD_SPECS) {
+            const model = focusPanelWorkModeModelFromProvisioningAnswer(
+                input({ subjectIdentityTruth: identityFor(spec, "id_1") }),
+            );
+            for (const other of MOUNTABLE_CARD_SPECS) {
+                const sharesAKey = other.identityTruthKeys.some((k) => spec.identityTruthKeys.includes(k));
+                if (sharesAKey) continue;
+                expect(
+                    model.cardReadiness.get(other.key),
+                    `${other.key} mounted on ${spec.key}'s identity`,
+                ).toBeUndefined();
+            }
+        }
+    });
+
+    it("the participant SCOPE a mounted card resolves its read against is stated at commit too", () => {
+        // Mounting without a scope is the measured failure this pairs with: the card mounted at ~1350ms
+        // and still did not fetch until ~3313ms, because it addresses `participantScope`, not raw truth.
+        const ctx = buildCommitCriticalOperationalContext(
+            input({
+                subjectIdentityTruth: {
+                    "child.customer_member_id": "cm_1",
+                    "child.process_instance_id": "pi_1",
+                },
+            }),
+        );
+        expect(ctx.participantScope?.customerMemberId).toBe("cm_1");
     });
 });

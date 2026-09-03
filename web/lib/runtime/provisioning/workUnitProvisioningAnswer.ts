@@ -1732,7 +1732,37 @@ export async function composeWorkUnitProvisioningAnswer(
         ?? (Array.isArray(householdChildren) && householdChildren.length ? householdChildren : null)
         ?? subjectMetadata?.inquiry_children
         ?? null;
+    /*
+     * ── THE HOUSEHOLD, STATED AT COMMIT BECAUSE THE ANSWER ALREADY HOLDS IT ──
+     *
+     * An account-scoped card (Financials) addresses `customers.id`, and that id was reaching the panel
+     * only after Settlement — not because the composer had to go and find it, but because nobody had
+     * said it. `opportunities.customer_id` is in the population select (`workUnitProcessPopulation`),
+     * survives enrichment untouched, and is already in memory here. This is a DECLARATION, not a read:
+     * no query is added, no promise is awaited, and the answer's timing is unchanged.
+     *
+     * ONE OWNER, BOTH GRAINS. The household of a case is the case's customer; the household of a child
+     * is their FAMILY case's customer — the same column on the same table, reached through the family
+     * opportunity the child participation already names. There is no second resolver, and no id is
+     * synthesised: a participation with no family case yields nothing and Financials reserves, which
+     * is the truthful answer for a child whose account is genuinely unknown here.
+     */
+    const householdOpportunityId = childComposition
+        ? (childComposition.family?.opportunityId?.trim()
+           || childComposition.identity.contextId?.trim()
+           || null)
+        : chosen.entityId;
+    const householdCustomerId =
+        strOrNull((chosenEnrichedRow as Record<string, unknown>).customer_id)
+        ?? (householdOpportunityId
+            ? strOrNull(
+                  ((baseRows ?? []) as Array<Record<string, unknown>>).find(
+                      (o) => String(o.id) === householdOpportunityId,
+                  )?.customer_id,
+              )
+            : null);
     const subjectIdentityTruthBindings: SubjectIdentityTruth = {
+        ...(householdCustomerId ? { "customer.id": householdCustomerId } : {}),
         ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
