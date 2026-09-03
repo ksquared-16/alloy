@@ -59,7 +59,10 @@ export function formatWorkViewPresentationSummary(
 ): string {
     const queue = layoutDisplayName(queueLayoutId, layouts);
     const focus = layoutDisplayName(focusPanelLayoutId, layouts);
-    return `Queue: ${queue} · Focus Panel: ${focus}`;
+    // "Drawer body", not "Focus Panel": this id drives the legacy opportunity-drawer-body
+    // runtime. The Focus Panel resolves its own surface by published variant and never reads
+    // an assigned layout id, so naming it here claimed an effect the assignment does not have.
+    return `Queue: ${queue} · Drawer body: ${focus}`;
 }
 
 export function formatWorkViewVisibilitySummary(view: Pick<WorkViewConfigV1Stored, "visible_in_runtime" | "display_order">): string {
