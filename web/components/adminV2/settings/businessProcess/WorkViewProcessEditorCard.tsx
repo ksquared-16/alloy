@@ -34,6 +34,7 @@ import type { WorkViewCompatQueueLane } from "@/lib/lifecycle/workViewsRuntimeCo
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { isWorkViewCatchAll } from "@/lib/lifecycle/workViewsConfigV1";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
+import { isLayoutRuntimeOpportunityDrawerBodyEnabledClient } from "@/lib/layout/featureFlag";
 import { publishedLayoutOptionsForAssignmentSlot } from "@/lib/layout/layoutAssignmentLayoutOptions";
 import { GRAIN_LABELS, resolveWorkViewStageGrains, stageKeysReferencedByWorkView, validateWorkViewGrainConsistency } from "@/lib/lifecycle/stageGrainV1";
 import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
@@ -263,6 +264,7 @@ export default function WorkViewProcessEditorCard({
     onChange: (patch: Partial<WorkViewConfigV1Stored>) => void;
     onDelete?: () => void;
 }) {
+    const legacyDrawerBodyEnabled = isLayoutRuntimeOpportunityDrawerBodyEnabledClient();
     const queueOptions = publishedLayoutOptionsForAssignmentSlot(layouts, "queue_record");
     const drawerOptions = publishedLayoutOptionsForAssignmentSlot(layouts, "opportunity_drawer");
     const queueRecord = view.queue_layout_id ? layouts.find((l) => l.id === view.queue_layout_id) ?? null : null;
@@ -422,18 +424,36 @@ export default function WorkViewProcessEditorCard({
                             onChange={(queue_layout_id) => onChange({ queue_layout_id: queue_layout_id || undefined })}
                             testIdPrefix={`process-work-view-queue-${view.id}`}
                         />
-                        <LayoutAssignmentCard
-                            title="Focus Panel Surface"
-                            subtitle="Selected record presentation for this view."
-                            selectedId={view.focus_panel_layout_id ?? ""}
-                            assignedRecord={drawerRecord}
-                            options={drawerOptions}
-                            allLayouts={layouts}
-                            onChange={(focus_panel_layout_id) =>
-                                onChange({ focus_panel_layout_id: focus_panel_layout_id || undefined })
-                            }
-                            testIdPrefix={`process-work-view-focus-${view.id}`}
-                        />
+                        {/*
+                          * THIS SLOT DRIVES THE LEGACY DRAWER BODY, NOT THE FOCUS PANEL.
+                          *
+                          * It writes `focus_panel_layout_id`, and the only runtime that reads
+                          * that is `/api/admin/layout-runtime/opportunity-drawer-body` — gated
+                          * off by default. The Focus Panel resolves its own surface by published
+                          * variant and never consults an assigned id, so titling this "Focus
+                          * Panel Surface" promised an effect it could not have: two Work Views
+                          * were left pointing at focus_panel_summary v10 and v132 while the
+                          * runtime served v143.
+                          *
+                          * So it appears only when its consumer is switched on, and it says which
+                          * runtime it drives. To scope a Focus Panel to a Work View, publish a
+                          * variant declaring that Work View — the resolver already ranks that
+                          * above an unscoped one.
+                          */}
+                        {legacyDrawerBodyEnabled ? (
+                            <LayoutAssignmentCard
+                                title="Opportunity Drawer Body (legacy runtime)"
+                                subtitle="Record body for the legacy drawer. The Focus Panel resolves its own surface by published variant."
+                                selectedId={view.focus_panel_layout_id ?? ""}
+                                assignedRecord={drawerRecord}
+                                options={drawerOptions}
+                                allLayouts={layouts}
+                                onChange={(focus_panel_layout_id) =>
+                                    onChange({ focus_panel_layout_id: focus_panel_layout_id || undefined })
+                                }
+                                testIdPrefix={`process-work-view-focus-${view.id}`}
+                            />
+                        ) : null}
                     </div>
                 </WorkViewEditorSection>
 
