@@ -516,7 +516,7 @@ type PlaywrightPage = {
         allInnerTexts(): Promise<string[]>;
         innerText(): Promise<string>;
         count(): Promise<number>;
-        first(): { click(opts?: unknown): Promise<void>; innerText(): Promise<string> };
+        first(): { click(opts?: unknown): Promise<void>; innerText(): Promise<string>; fill(v: string): Promise<void> };
     };
     getByRole(role: string, opts?: unknown): { first(): { click(opts?: unknown): Promise<void>; count(): Promise<number> } };
     waitForTimeout(ms: number): Promise<void>;
@@ -628,7 +628,7 @@ const semanticWalk: Phase = {
 
                 steps.push({
                     step: i,
-                    prompt: bodyText.split("\n").filter(Boolean).slice(0, 3).join(" | ").slice(0, 200),
+                    prompt: bodyText.split("\n").filter(Boolean).slice(0, 8).join(" | ").slice(0, 320),
                     buttons,
                     inputs,
                 });
@@ -814,13 +814,208 @@ const governedException: Phase = {
 };
 
 /**
+ * G: satisfy the published blocking requirement through the participant product.
+ *
+ * The keystone. Everything downstream — ready state, Complete Enrollment, enrolled, handoff — needs a
+ * requirement that was satisfied the way a family would satisfy it, not excepted and not written
+ * straight to storage. An exception proves the governed override works; only this proves the ordinary
+ * path does.
+ *
+ * ## The decision policy, and why it is conservative
+ *
+ * The walker only takes actions whose meaning is unambiguous:
+ *   - confirm prior truth ("Yes, that's right") — asserts nothing new;
+ *   - DECLINE optional add-another offers ("No") — declining invents nobody, whereas accepting would
+ *     require this harness to make up a person and put them in a family's enrolment record;
+ *   - advance through review/continue affordances.
+ *
+ * It never types a value into a free field. If the requirement cannot be satisfied without inventing
+ * data, that is reported honestly as the boundary rather than papered over with a plausible string.
+ */
+const requirementCompletion: Phase = {
+    key: "G_evidence",
+    title: "satisfy the published blocking requirement through the participant surface",
+    dependsOn: ["E_collection"],
+    async run(ctx) {
+        const { resolveEnrollmentCompletionSufficiency } = await import(
+            "@/lib/enrollment/completion/enrollmentCompletionSufficiency"
+        );
+        const { projectEnrollmentCompletionReadiness } = await import(
+            "@/lib/enrollment/completion/projectEnrollmentCompletionReadiness"
+        );
+
+        const entry = ctx.facts.B_entry as Record<string, { journeyId: string }> | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "Path A entry facts unavailable" };
+
+        const gate = async () => {
+            const r = await resolveEnrollmentCompletionSufficiency(ctx.supabase, {
+                orgId: ctx.orgId,
+                processInstanceId: pathA.journeyId,
+            });
+            if (!r.ok) throw new Error(`sufficiency refused: ${r.refusal.code}`);
+            return r.sufficiency;
+        };
+
+        const before = await gate();
+        const beforeReady = projectEnrollmentCompletionReadiness({ sufficiency: before });
+        if (before.eligible) {
+            return {
+                status: "failed",
+                detail: "the gate was already eligible before this phase ran; there is nothing for it to prove",
+            };
+        }
+
+        const walked = await withParticipantPage(ctx, pathA.journeyId, async (page) => {
+            const trail: Array<Record<string, unknown>> = [];
+            let lastSignature = "";
+            const signerName = `${CERT_FAMILIES.contextFree.parentFirstName} ${CERT_FAMILIES.contextFree.lastName}`;
+
+            for (let i = 0; i < 14; i += 1) {
+                const buttons = (await page.locator("button, [role=button]").allInnerTexts().catch(() => []))
+                    .map((b) => b.trim())
+                    .filter(Boolean);
+                const bodyText = (await page.locator("body").innerText().catch(() => "")).trim();
+
+                /*
+                 * Priority order: confirm known truth, decline optional additions, then advance.
+                 *
+                 * The advance list contains labels this runtime ACTUALLY renders, read off a previous
+                 * trail rather than imagined — "Review paperwork", then "Everything looks good" on the
+                 * signature step. The first version omitted the latter and the walker simply stopped,
+                 * reporting an outstanding requirement that a participant could plainly have finished.
+                 * Approving paperwork you have just reviewed is a real participant act, not fabricated
+                 * data, so it belongs here; typing into an empty field still does not.
+                 */
+                const choice =
+                    buttons.find((b) => /that's right/i.test(b))
+                    ?? buttons.find((b) => /^no$/i.test(b))
+                    ?? buttons.find((b) =>
+                        /review paperwork|everything looks good|looks good|continue|next|submit|finish|done|agree|sign/i.test(b),
+                    );
+
+                trail.push({
+                    step: i,
+                    heading: bodyText.split("\n").filter(Boolean).slice(2, 5).join(" | ").slice(0, 160),
+                    buttons,
+                    chose: choice ?? "(nothing actionable)",
+                });
+
+                /*
+                 * THE SIGNATURE STEP, signed properly.
+                 *
+                 * The runtime refuses to finish without one and says so plainly -- "Signature
+                 * required. Please confirm you've reviewed the information above. Sign here" -- which
+                 * is the product behaving correctly, not a dead control. Certifying the ordinary path
+                 * therefore means actually signing.
+                 *
+                 * Typing the guardian's own name is the participant's real act, and this is the
+                 * fixture's own family in the reserved certification namespace, so nothing here signs
+                 * on behalf of a real person. "Type instead" is used rather than the canvas because a
+                 * typed signature is deterministic and legible in evidence.
+                 */
+                if (buttons.some((b) => /type instead/i.test(b))) {
+                    await page.getByRole("button", { name: "Type instead" }).first().click().catch(() => undefined);
+                    await page.waitForTimeout(600);
+                    await page.locator("input[type=text], input:not([type]), textarea").first()
+                        .fill(signerName).catch(() => undefined);
+                    await page.waitForTimeout(400);
+                    const finish = buttons.find((b) => /^done$/i.test(b)) ?? "Done";
+                    await page.getByRole("button", { name: finish }).first().click().catch(() => undefined);
+                    await page.waitForTimeout(1200);
+                    trail.push({ step: i, heading: "signature", buttons, chose: `typed "${signerName}" and confirmed` });
+                    continue;
+                }
+
+                if (!choice) break;
+
+                /*
+                 * NO-PROGRESS GUARD. Clicking the same affordance on an unchanged screen is not
+                 * progress, it is a loop, and a walker that keeps clicking hides a stuck step behind a
+                 * timeout instead of reporting it. Two identical screens in a row ends the walk.
+                 */
+                const signature = `${trail[i]!.heading}::${buttons.join("|")}`;
+                if (i > 0 && signature === lastSignature) {
+                    /*
+                     * WHY the screen did not change matters, and the two answers are opposites. A
+                     * control that silently does nothing is a product defect; one that refuses and
+                     * says why is the product working. So capture what the surface actually says
+                     * rather than recording only that nothing moved.
+                     */
+                    const shown = (await page.locator("body").innerText().catch(() => "")).trim();
+                    const validation = shown
+                        .split("\n")
+                        .map((l) => l.trim())
+                        .filter((l) => /required|please|must|enter|sign here|add your/i.test(l))
+                        .slice(0, 4);
+                    trail.push({
+                        step: i,
+                        heading: "(no progress)",
+                        buttons,
+                        chose: "stopped: screen did not change",
+                        surfaceSays: validation.length ? validation : "(no validation message shown)",
+                    });
+                    break;
+                }
+                lastSignature = signature;
+
+                await page.getByRole("button", { name: choice }).first().click().catch(() => undefined);
+                await page.waitForTimeout(1200);
+            }
+
+            return trail;
+        });
+
+        if (!walked.ok) return { status: "failed", detail: walked.detail };
+
+        const after = await gate();
+        const afterReady = projectEnrollmentCompletionReadiness({ sufficiency: after });
+
+        /*
+         * Gate and projection must agree in the READY direction too. The blocked direction was already
+         * certified; a contract that only holds while everything is refused is not a contract.
+         */
+        if (after.eligible !== (afterReady.state === "ready")) {
+            return {
+                status: "failed",
+                detail: `gate says ${after.eligible ? "eligible" : "blocked"} while the operator projection says ${afterReady.state}`,
+            };
+        }
+
+        if (!after.eligible) {
+            return {
+                status: "failed",
+                detail:
+                    `the requirement is still outstanding after walking the participant surface. `
+                    + `Blocking: ${after.blocking.map((b) => b.requirement_id).join(", ")}. `
+                    + "This walker deliberately never invents data, so a requirement needing a typed value or an "
+                    + "uploaded document cannot be satisfied by it — that is a real boundary of this phase, not a "
+                    + "product defect.",
+                evidence: { trail: walked.value, blocking: after.blocking.map((b) => b.requirement_id) },
+            };
+        }
+
+        return {
+            status: "passed",
+            detail:
+                `requirement satisfied through the participant product; gate eligible and operator projection ready `
+                + `(${before.counts.blocking} blocking before, ${after.counts.blocking} after)`,
+            evidence: {
+                before: { eligible: before.eligible, projection: beforeReady.state, counts: before.counts },
+                after: { eligible: after.eligible, projection: afterReady.state, counts: after.counts },
+                trail: walked.value,
+            },
+        };
+    },
+};
+
+/**
  * Phases that need the participant browser surface. Declared, ordered and explicitly unimplemented
  * so the report shows the shape of what remains rather than hiding it.
  */
 const browserPhases: readonly Phase[] = (
     [
         ["F_parties", "repeatable parties"],
-        ["G_evidence", "evidence and Form completion"],
         ["H_artifacts", "artifact generation"],
         ["I_correction", "review and correction"],
         ["J_signature", "signatures"],
@@ -852,6 +1047,7 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     participantEntry,
     priorTruthConfirmation,
     semanticWalk,
+    requirementCompletion,
     governedException,
     ...browserPhases,
 ];

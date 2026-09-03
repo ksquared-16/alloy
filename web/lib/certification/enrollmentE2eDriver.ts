@@ -145,7 +145,11 @@ export function formatDriverReport(result: DriverRunResult): string {
         if (!p.evidence) return [head];
         const body = Object.entries(p.evidence).map(([k, v]) => {
             const rendered = typeof v === "string" ? v : JSON.stringify(v);
-            return `        ${k}: ${(rendered ?? "").slice(0, 400)}`;
+            /*
+             * 400 characters truncated the one field that answered the question the phase was asked --
+             * a report that clips its own decisive evidence is a report you cannot act on.
+             */
+            return `        ${k}: ${(rendered ?? "").slice(0, 1600)}`;
         });
         return [head, ...body];
     });
