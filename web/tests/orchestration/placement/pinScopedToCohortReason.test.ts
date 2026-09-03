@@ -49,7 +49,7 @@ describe("R12 — pin_scoped_to_cohort", () => {
         expect(proj(rows[1]!).runtime_position).toBe(2);
         expect(reasonOf(rows[1]!)).toBe("pin_scoped_to_cohort");
         expect(waitlistPrecedenceReasonCopy(reasonOf(rows[1]!) as string)).toBe(
-            "Pinned within this group. Groups are ordered separately.",
+            "Position applies within this group. Groups are listed separately.",
         );
     });
 

@@ -9,9 +9,11 @@
 import type { WaitlistRuntimePrecedenceReason } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 
 const COPY: Record<WaitlistRuntimePrecedenceReason, string> = {
-    // Says three things an operator needs: the pin is accepted, it IS working, and its scope is the
-    // group. It names no other row, no score, and no protected fact.
-    pin_scoped_to_cohort: "Pinned within this group. Groups are ordered separately.",
+    // Says the two things an operator needs: the adjustment IS in force, and its scope is the group —
+    // which is why the row can read 2/12 after being moved to first. It names no other row, no score,
+    // and no protected fact. OPERATOR LANGUAGE ONLY: the canonical reason code still says "pin", but
+    // that word is internal and never reaches the surface.
+    pin_scoped_to_cohort: "Position applies within this group. Groups are listed separately.",
 };
 
 /** Concise operator-facing copy for a typed precedence reason, or null when there is nothing to say. */
