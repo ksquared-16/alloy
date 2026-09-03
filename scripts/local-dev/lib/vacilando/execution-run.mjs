@@ -62,7 +62,22 @@ const LEGAL = Object.freeze({
   QUEUED: ["EXECUTING", "NEEDS_INPUT", "FAILED", "ABANDONED"],
   EXECUTING: ["WAITING_RESOURCE", "VALIDATING", "NEEDS_INPUT", "RECOVERING", "COMPLETE", "FAILED", "ABANDONED"],
   WAITING_RESOURCE: ["EXECUTING", "VALIDATING", "NEEDS_INPUT", "FAILED"],
-  VALIDATING: ["EXECUTING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT", "COMPLETE", "FAILED"],
+  // ABANDONED is reachable from VALIDATING for exactly the reason spelled out
+  // for RECOVERING below, and its absence was the same ONE-WAY TRAP.
+  //
+  // MEASURED. The Payments run sat in VALIDATING for three hours after a
+  // finished turn. Nothing was validating: no heavy process in its worktree and
+  // zero broker claims on the host. The classifier had been corrected to stop
+  // protecting it, and idle-turn completion correctly declined to file a
+  // completion whose summary the transcript did not corroborate — so the
+  // governor's only remaining conclusion was to abandon it, and abandon was
+  // ILLEGAL from here. The run could not leave VALIDATING by any path, and even
+  // the operator's Close stale run returned illegal_transition.
+  //
+  // As with RECOVERING, this does not make ABANDONED cheap. It stays terminal
+  // for scheduling and recoverable, and it is still reached only with positive
+  // evidence — the classifier must first find no claim and no live signals.
+  VALIDATING: ["EXECUTING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT", "COMPLETE", "FAILED", "ABANDONED"],
   // COMPLETE is reachable from RECOVERING: work that finished must never be
   // impossible to close merely because Vacilando abandoned the run mid-sprint.
   //
