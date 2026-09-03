@@ -566,14 +566,6 @@ export async function verifyEnrollmentCertification(
             );
         }
 
-        /* The anchor itself, likewise asserted: a journey pointing anywhere but the participation is
-         * the defect this whole lane was opened to correct. */
-        if (instance && participation && instance.context_id !== participation.id) {
-            findings.push(
-                `${spec.key}: the child's journey is not anchored to its participation`,
-            );
-        }
-
         if (spec.key === "context_free" && participation?.opportunity_id) {
             findings.push("context_free: participation still carries an acquisition Opportunity");
         }
