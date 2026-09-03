@@ -39,6 +39,7 @@ const {
   presentationForGovernedAction,
   governedActionStorePath,
   resetGovernedActionsForTests,
+  executeGovernedAction,
   setGovernedActionExecuteImplForTests,
   setGovernedActionResumeImplForTests,
   tickGovernedActions,
@@ -897,6 +898,58 @@ await test("a mission-authorized approval mints the execution grant too", async 
   assert.ok(grant.fingerprint, "must be bound to this proposal's fingerprint");
   assert.ok(grant.expires_at, "must expire");
   assert.equal(grant.status, "CONSUMED", "single use, so a replay needs a fresh decision");
+});
+
+await test("an AUTO-EXECUTED mission action mints a grant with no approval step", async () => {
+  // THE HALF THE APPROVAL FIX COULD NOT REACH. When policy decides no operator
+  // approval is required, requestGovernedAction calls executeGovernedAction
+  // directly, so approveGovernedAction — the only place the mint lived — never
+  // runs. MEASURED: gar_8976f7ca4bc9c5 (environment.restore_qa_session,
+  // authority.kind "mission") has an audit trail of requested -> executing ->
+  // failed with NO `approved` event, grant_id null, refused `grant_missing`.
+  // Approving it was never possible; it was never up for approval.
+  const laneId = laneIn("repo_alloy");
+  bindLaneMission(laneId, "msn_example00000004", { root: ROOT });
+  const made = requestGovernedAction(mergeRequest(laneId), { root: ROOT, processNow: false });
+  assert.equal(made.request.authority.kind, "mission", "fixture must exercise the mission path");
+  assert.ok(!getGovernedAction(made.request.request_id, ROOT).grant_id,
+    "precondition: nothing is minted before execution");
+
+  setGovernedActionExecuteImplForTests(() => ({
+    ok: true,
+    action: { id: "tha_auto", state: "completed", actionType: "repository.merge_pull_request", inputs: {}, result: { mergeSha: "def", evidencePath: join(ROOT, "e.json") } },
+  }));
+  // The path under test: straight to execution, no approval.
+  await executeGovernedAction(made.request.request_id, { actor: "kelly", root: ROOT });
+  const rec = getGovernedAction(made.request.request_id, ROOT);
+
+  // Mission authority is untouched — the boundary mints capability, not authority.
+  assert.equal(rec.authority.kind, "mission", "authority must not be rewritten by the mint");
+  assert.equal(rec.mission_id, "msn_example00000004", "mission provenance must survive");
+
+  assert.ok(rec.grant_id, "the executor's artifact must exist on the auto-execute path too");
+  assert.equal(rec.grant_minted_at_execution, true, "and it must be attributable to the boundary");
+  const grant = getGrant(rec.grant_id, ROOT);
+  assert.ok(grant.fingerprint, "proposal-pinned");
+  assert.ok(grant.expires_at, "expiring");
+  assert.equal(grant.action_key, "repository.merge_pull_request");
+});
+
+await test("the boundary never re-mints over a grant approval already made", async () => {
+  // Otherwise every approved action would carry two grants and the single-use
+  // guarantee would quietly become double-use.
+  const laneId = laneIn("repo_alloy");
+  bindLaneMission(laneId, "msn_example00000005", { root: ROOT });
+  const made = requestGovernedAction(mergeRequest(laneId), { root: ROOT, processNow: true });
+  setGovernedActionExecuteImplForTests(() => ({
+    ok: true,
+    action: { id: "tha_once", state: "completed", actionType: "repository.merge_pull_request", inputs: {}, result: { mergeSha: "ghi", evidencePath: join(ROOT, "e.json") } },
+  }));
+  await approveGovernedAction(made.request.request_id, { actor: "kelly", root: ROOT });
+  const rec = getGovernedAction(made.request.request_id, ROOT);
+  assert.ok(rec.grant_id, "approval minted one");
+  assert.notEqual(rec.grant_minted_at_execution, true,
+    "the approval's grant must be the one used, not a second one from the boundary");
 });
 
 await test("a mission grant is pinned to its proposal, not reusable mission-wide", () => {

@@ -3004,6 +3004,45 @@ export function executeGovernedAction(requestId, {
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
+
+  // THE OTHER HALF: A GRANT HAS TO EXIST ON EVERY PATH TO THE EXECUTOR.
+  //
+  // Minting the capability artifact inside approveGovernedAction fixed only the
+  // path that goes through an operator approval. When policy decides no operator
+  // approval is required — a mission whose director authorization already
+  // carries the authority — requestGovernedAction calls executeGovernedAction
+  // DIRECTLY, so approveGovernedAction never runs and nothing is minted.
+  //
+  // MEASURED: gar_8976f7ca4bc9c5, environment.restore_qa_session, authority.kind
+  // "mission", audit trail requested -> executing -> failed with NO `approved`
+  // event at all, grant_id null, refused `grant_missing` by prepareRestore. The
+  // approval-path fix could not have helped it, because it was never approved.
+  //
+  // The mint belongs at the execution boundary, which every path crosses.
+  // Authority is still decided upstream and is not created here: this only
+  // materialises the narrow artifact the executor consumes — the same
+  // proposal-pinned, fingerprint-bound, expiring, single-use grant, never a
+  // reusable mission-wide one.
+  //
+  // A mint failure does not block: executors that validate a grant still refuse
+  // `grant_missing` on their own, and executors that never needed one must not
+  // start failing because of a mint. The error is recorded rather than thrown.
+  if (!rec.grant_id) {
+    const boundaryGrant = mintGrant({
+      proposal: proposalForRequest(rec),
+      approvedBy: actor,
+      nowMs,
+      root,
+    });
+    if (boundaryGrant.ok) {
+      rec.grant_id = boundaryGrant.grant.grant_id;
+      rec.grant_expires_at = boundaryGrant.grant.expires_at;
+      rec.grant_minted_at_execution = true;
+    } else {
+      rec.grant_mint_error = boundaryGrant.error;
+    }
+  }
+
   rec.status = "executing";
   rec.execution_started_at = rec.execution_started_at || iso(nowMs);
   rec.updated_at = iso(nowMs);
