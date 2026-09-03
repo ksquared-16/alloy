@@ -1005,3 +1005,59 @@ is recorded so the argument does not have to be rediscovered.
 - **Deterministic placement truth.** Display position is section-scoped and pin ordinal is
   cohort-scoped; they may legitimately differ, and `pin_scoped_to_cohort` explains it. No client-side
   ranking may be introduced to make them agree.
+
+### 19.9 Focus Panel first wave — participation is a family, not a constant
+
+The mountability contract (`self_loading`: identity known, content honestly pending) admitted one
+card. Two more were held out, for two different reasons, and both reasons were wrong in an
+instructive way.
+
+**Health & Safety — the guard was asking one grain's question.** The platform owns a FAMILY of
+default compositions, one per subject grain, resolved through `focusPanelDefaultCompositionForGrain`.
+`FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION` is the `opportunity` member of it. Two runtime guards read
+that member and called it "the default composition", so a card placed only at child grain read as
+placed **nowhere**. The case surface omits Health & Safety deliberately — a panel covering several
+children has no single health subject — and the child-with-family composition places it deliberately.
+Both are true; the guard could only see one.
+
+The correction is ownership, not an exception: the participation set is DERIVED by enumerating every
+grain in both settlement contexts, so it cannot drift from what renders and a new grain is picked up
+with no edit. The card then inherits mountability with **no new mechanism** — it reads
+`participantScope.customerMemberId`, the identical binding Attendance already mounts on.
+
+**Financials — the account was one discarded field away.** Its canonical key is `customers.id`,
+reached as `opportunities.customer_id`. On the family grain the case row carries it from the
+population select. On the child grain `baseRows` is empty (a child lens pages participations, so
+`enriched` is empty with it) — but the child-grain provider's own `OPP_SELECT` already reads the
+context opportunity in full to resolve the effective stage, and `normalizeChildRow` dropped the
+column. **No query was added, no promise awaited**; the composer states what it already held.
+
+Measured on document entry (`enrolled-children`, warm dev, medians normalised against the drawer-VM
+handoff, which this change does not touch):
+
+```
+                        BASE            AFTER          gain
+health_safety  mount    at settlement   -2529 ms       2529 ms earlier
+health_safety  content  +848 ms         -1978 ms       2826 ms earlier
+financials     mount    at settlement   -2529 ms       2529 ms earlier
+financials     content  +1999 ms        -1110 ms       3109 ms earlier
+attendance     content  -1338 ms        -1547 ms       unchanged (retained)
+row selection  card request  1288 ms    350 ms         938 ms earlier
+```
+
+**Not a second performance mechanism, and not a budget.** Both cards travel the promoted path:
+declared identity → `self_loading` → the card's own existing request → drawer VM concurrent. Neither
+is counted `ready`; the runtime and telemetry still test `=== "ready"`, and the settled model still
+arrives on its own schedule.
+
+| invariant | owner | guard | status |
+|---|---|---|---|
+| participation is asked of every grain, never one constant | `focusPanelSummaryDefaultComposition` | `focusPanelCompositionParticipationOwnership.test.ts` | **guarded** |
+| a published composition stays inside the declared catalog | card catalog | same file | **guarded** |
+| the shared commit producer names no card in code | `focusPanelWorkModeModelFromProvisioningAnswer` | same file | **guarded** |
+| identity shapes are independent (account ≠ participant) | `focusPanelMountableCards` | `focusPanelWorkModeModelFromAnswer.test.ts` | **guarded** |
+
+**Still true after this pass.** `scheduling` and `billing_preview` are named by the child-with-family
+composition and are NOT on the measured surface: this tenant publishes a doc, and a published doc
+overrides a default wholesale. Participation in code stays *necessary and not sufficient* — the
+lesson `scheduling` taught, unchanged.
