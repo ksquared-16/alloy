@@ -1104,6 +1104,16 @@ export function createVacilandoServer() {
             choice: body.value?.choice,
             expectedQuestion: body.value?.question || null,
           });
+          if (out.ok) {
+            // The instruction that was blocked is already queued with its attachments.
+            // Answering the prompt is what unblocks it, so the queue continues itself
+            // rather than asking the operator to resend what they already wrote. Detached
+            // on purpose: the choice is delivered, and the continuation must not hold the
+            // response open while Claude redraws.
+            const { resumeLaneAfterAnswer } = await import("./vacilando/provider-screen-answer.mjs");
+            out.continuation = { scheduled: true };
+            void resumeLaneAfterAnswer(laneId).catch(() => {});
+          }
           const status = out.ok ? 200
             : (out.error === "lane_not_found" ? 404
               : (out.error === "screen_changed" || out.error === "choice_not_on_screen" ? 409 : 400));
