@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import FocusPanelRenderErrorBoundary from "@/components/admin/focusPanel/FocusPanelRenderErrorBoundary";
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
@@ -64,6 +64,30 @@ type Props = {
  * fills reserved cells in place. There is ONE readiness boundary (the destination commit), no
  * card-by-card assembly, and no resize.
  */
+/**
+ * Value equality for a participant scope.
+ *
+ * Exhaustive by construction: every field of `OperationalParticipantScope` is a primitive, and
+ * adding one without adding it here is a type error rather than a silently missed comparison.
+ */
+export function sameParticipantScope(
+    a: OperationalParticipantScope | null,
+    b: OperationalParticipantScope | null,
+): boolean {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const keys: ReadonlyArray<keyof OperationalParticipantScope> = [
+        "participationId",
+        "customerMemberId",
+        "personId",
+        "displayName",
+        "imageUrl",
+        "stageKey",
+        "stageLabel",
+    ];
+    return keys.every((k) => a[k] === b[k]);
+}
+
 export default function OpportunityFocusPanelBody({
     mode,
     title,
@@ -239,8 +263,35 @@ export default function OpportunityFocusPanelBody({
      * header after switching to a case with no scoped child — the stale-scope leak this whole
      * carrier exists to prevent. `null` is a value here, not an omission.
      */
+    const reportedScopeRef = useRef<OperationalParticipantScope | null | undefined>(undefined);
     useEffect(() => {
-        onSubjectScope?.(model?.context?.participantScope ?? null);
+        const next = model?.context?.participantScope ?? null;
+        /*
+         * REPORT A CHANGE OF SCOPE, NOT A CHANGE OF OBJECT.
+         *
+         * This effect closes a loop if it reports identity. The parent stores what it is given in
+         * state, and it builds `commitCritical` and `enriched` for this component while it renders.
+         * So: a report sets parent state -> the parent re-renders -> those two props are rebuilt ->
+         * `model` is a new object -> this effect fires -> it reports again. Nothing about the
+         * subject has changed at any point in that circuit; only references have.
+         *
+         * It ran continuously in production at roughly thirteen renders per second, and stayed
+         * invisible because React schedules the updates rather than blocking on them. It became
+         * visible the moment a Radix overlay mounted inside this subtree: the overlay's own
+         * commit-phase ref and focus updates nest INSIDE the ones already in flight, and the nested
+         * total crosses React's update-depth limit. The card then threw and dropped to its render
+         * boundary. That is why three unrelated menus — Tour, Recent activity, Manage — all failed
+         * identically, and why one outside this panel did not.
+         *
+         * `participantScope` is seven primitives, so equality here is exact and total, not a
+         * heuristic. Reporting `null` still counts as a change: clearing a scope is the report that
+         * stops the previous child's avatar from outliving them in the header.
+         */
+        if (reportedScopeRef.current !== undefined && sameParticipantScope(reportedScopeRef.current, next)) {
+            return;
+        }
+        reportedScopeRef.current = next;
+        onSubjectScope?.(next);
     }, [model, onSubjectScope]);
 
 

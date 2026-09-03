@@ -92,19 +92,52 @@ test("the Process card presents Tour as one state-bearing control", async ({ pag
     }
 });
 
+test("the Tour menu opens and carries the configured operations", async ({ page }) => {
+    await openPanel(page);
+    const trigger = page.locator('[data-fp-grid-area="business_process"] [data-process-action-group="tour"]');
+    await expect(trigger, "no grouped Tour control").toHaveCount(1);
+
+    // Keyboard, because the BOS rail overlay sits over the panel and intercepts positional
+    // clicks. Radix opens on Enter through the same handlers a pointer would use.
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('[role="menuitem"]').first()).toBeVisible();
+
+    const items = await page.$$eval('[role="menuitem"]', (ns) =>
+        ns.map((n) => ({
+            label: (n.textContent ?? "").trim(),
+            action: n.getAttribute("data-process-action"),
+        })),
+    );
+    console.log("TOUR MENU:", JSON.stringify(items));
+
+    // Every operation in the group is a projected command and says which one it is.
+    for (const item of items) {
+        expect(item.action, `menu item "${item.label}" carries no command identity`).toBeTruthy();
+    }
+
+    // State-aware: a booking exists, so the group offers to move it, never to create a second one.
+    const actions = items.map((i) => i.action);
+    expect(actions).toContain("send_tour_invitation");
+    expect(actions).toContain("reschedule_tour");
+    expect(actions, "a scheduled tour must not offer to schedule another").not.toContain("schedule_tour");
+    // `cancel_tour` is executable but was never selected by configuration; the projection
+    // withholds it, and collapsing into a group must not smuggle it back in.
+    expect(actions, "an unconfigured companion must not appear in the group").not.toContain("cancel_tour");
+
+    // The card survives the overlay. Before the shared update-loop repair, opening this menu
+    // threw "Maximum update depth exceeded" and the card fell to its render boundary.
+    await expect(page.locator('[data-fp-grid-area="business_process"]')).not.toContainText(
+        "This card could not be displayed",
+    );
+});
+
 /*
- * NOT COVERED HERE: opening the Tour menu and invoking "Send invitation".
+ * NOT COVERED HERE: invoking "Send invitation" and asserting the resulting request.
  *
- * The trigger is real now — it carries `aria-haspopup="menu"` and Radix's handlers, which the
- * test above asserts — and pressing Enter on it DOES open the menu. What follows is a
- * pre-existing defect: mounting any Radix overlay inside a Focus Panel card throws
- * "Maximum update depth exceeded", and the card drops to its render boundary.
- *
- * It is not this branch's. The same loop reproduces on `Recent activity ▾` in this very card
- * and on `Manage ▾` outside the Focus Panel entirely — both unchanged in `staging`, both
- * untouched here. A control that could never open was hiding it.
- *
- * Asserting around that would certify a crash as a pass, so the gap stays visible. The identity
- * contract those clicks would demonstrate is covered where it lives, in
- * `tests/surfaces/processCardCommandIdentity.test.ts`.
+ * The menu opens and its contents are asserted above. The invocation itself is certified against
+ * the running app rather than in this spec, because the assertion that matters is the REQUEST
+ * (`action_key: send_tour_invitation`, `payload.mode: "prepare"`, and no second send call), and
+ * pinning a network contract here would duplicate what
+ * `tests/surfaces/processCardCommandIdentity.test.ts` owns at the layer where it lives.
  */
