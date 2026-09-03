@@ -34,6 +34,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import {
     billingPeriodForDate,
@@ -392,6 +393,13 @@ async function readAccountPayments(
                 + "processor, received_at, posted_at, reference_number, notes",
             )
             .eq("org_id", orgId)
+            /*
+             * The TYPE as well as the id. A billable source id is only unique within its kind, and
+             * an account read that matched on the id alone would claim a job payment that happened
+             * to share a uuid. The applications read below is what picks up a job-era payment
+             * legitimately applied to one of this account's charges.
+             */
+            .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
             .in("billable_source_id", sourceIds)
             .order("received_at", { ascending: false }),
     ]);

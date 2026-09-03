@@ -29,6 +29,11 @@
 #   P15 a household (customer) source is protected exactly as an enrolment source is
 #   P16 job billing is untouched by every rule above
 #
+# The read-model half is certified where it lives, because "the database holds the rule" and "the
+# card reports what the database holds" are different claims:
+#   read model — web/tests/financials/live/paymentApplication.live.test.ts
+#   operator   — certification/playwright/financials-payment-lifecycle.cert.spec.ts
+#
 # Usage:  certification/financials/payment-application.cert.sh
 # Requires: the shared cert stack up (certification/alloy-certify up) and psql on PATH.
 # =============================================================================
