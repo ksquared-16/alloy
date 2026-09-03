@@ -44,6 +44,8 @@ import { join } from "node:path";
 
 import { getDurableLane, listDurableLanes, readDevelopmentLaneStore, writeDevelopmentLaneStore } from "./development-lane.mjs";
 import { readAllMetadata, resolveRuntimeConfig } from "./workspace-facts.mjs";
+import { listExecutionRunsForLane, transitionExecutionRun, TERMINAL_RUN_STATES } from "./execution-run.mjs";
+import { ADMISSION_OPEN, admissionForLane, transitionAdmission } from "./execution-admission.mjs";
 
 const iso = (ms) => new Date(ms ?? Date.now()).toISOString();
 
@@ -553,9 +555,19 @@ export async function closeDurableLane(laneId, {
   store.lanes[lane.lane_id] = rec;
   writeDevelopmentLaneStore(store, root);
 
+  // A CLOSED lane must hold no runtime DEMAND either.
+  //
+  // Closing released the lane's running resources but left its queued work
+  // untouched, so four retired certification lanes each kept a QUEUED run that
+  // could never legitimately execute. Queued demand on a closed lane is worse
+  // than untidy: it is counted by admission, it competes with live lanes, and
+  // nothing will ever resolve it, because the lane it belongs to is gone.
+  const demand = reconcileClosedLaneDemand(lane.lane_id, { root, nowMs, actor });
+
   return {
     ok: true,
     command: LANE_CLOSE_COMMAND,
+    demand_reconciled: demand,
     lane_id: lane.lane_id,
     name: lane.name || null,
     status: LANE_CLOSED,
@@ -566,6 +578,57 @@ export async function closeDurableLane(laneId, {
     retirement,
     capacity_release: released || null,
   };
+}
+
+/**
+ * Terminalise demand a closed lane can never satisfy.
+ *
+ * ONLY queued work. A run that is EXECUTING or VALIDATING is not touched here:
+ * closing already ran the ordinary capacity release above, which refuses on
+ * unsafe in-flight state, so anything still running at this point is either
+ * genuinely live or a lifecycle problem of its own — and terminating live work
+ * from a cleanup path is exactly the mistake this file exists to avoid.
+ *
+ * IDEMPOTENT by construction. It filters on nonterminal state and on open
+ * admissions, so closing an already-clean lane is a no-op and re-running
+ * produces no second terminal event, no second cancellation and no resurrected
+ * demand.
+ */
+export function reconcileClosedLaneDemand(laneId, { root = runtimeRoot(), nowMs = Date.now(), actor = "operator" } = {}) {
+  const out = { runs_abandoned: [], admissions_cancelled: [], skipped_in_flight: [] };
+  let runs = [];
+  try { runs = listExecutionRunsForLane(laneId, root) || []; } catch { return out; }
+  for (const run of runs) {
+    const state = String(run?.state || "");
+    if (TERMINAL_RUN_STATES.includes(state) || state === "CANCELLED") continue;
+    if (state !== "QUEUED") {
+      // Recorded rather than acted on, so a lane that closed over live work is
+      // visible instead of silently mopped up.
+      out.skipped_in_flight.push({ run_id: run.run_id, state });
+      continue;
+    }
+    try {
+      // The canonical governor transition, the same one the stale closer uses.
+      // reportRunState deliberately refuses ABANDONED — that is an agent-facing
+      // API and a worker may not abandon its own run.
+      const moved = transitionExecutionRun(run.run_id, "ABANDONED", {
+        origin: "governor",
+        reason: `lane closed by ${actor}; queued work can never be admitted`,
+        nowMs, root,
+      });
+      if (moved?.ok !== false) out.runs_abandoned.push(run.run_id);
+    } catch { /* a run that refuses the transition is left for the governor */ }
+  }
+  try {
+    const adm = admissionForLane(laneId, root);
+    if (adm && ADMISSION_OPEN.has(String(adm.state))) {
+      transitionAdmission(adm.admission_id, "CANCELLED", {
+        nowMs, root, reason: "lane_closed",
+      });
+      out.admissions_cancelled.push(adm.admission_id);
+    }
+  } catch { /* an unreadable admission store must not fail the close */ }
+  return out;
 }
 
 /** Fleet view: every lane, with its canonical resolution. For audit and cleanup. */

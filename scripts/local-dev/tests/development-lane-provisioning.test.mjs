@@ -24,6 +24,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { managedSlots } from "../lib/vacilando/managed-slots.mjs";
 
 const ROOT = mkdtempSync(join(tmpdir(), "vac-provision-"));
 process.env.ALLOY_RUNTIME_ROOT = ROOT;
@@ -55,13 +56,18 @@ function clearRegistry() {
 }
 
 await test("free slots are the managed slots no live registration holds", () => {
+  // Asserted against the TOPOLOGY OWNER, not a literal list. This read
+  // [1,2,3,4,5,6] and passed only because asSlot capped slots at six — the
+  // defect that made freeSlots offer slot 7 while Payments held it. Pinning the
+  // number here would simply restate the bug in the test suite.
+  const ALL = managedSlots();
   clearRegistry();
-  assert.deepEqual(L.freeSlots({}), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(L.freeSlots({}), ALL);
   register("a", 1); register("b", 3); register("c", 6);
-  assert.deepEqual(L.freeSlots({}), [2, 4, 5]);
+  assert.deepEqual(L.freeSlots({}), ALL.filter((n) => ![1, 3, 6].includes(n)));
   // A finished registration is not holding its slot.
   register("d", 4, "finished");
-  assert.deepEqual(L.freeSlots({}), [2, 4, 5]);
+  assert.deepEqual(L.freeSlots({}), ALL.filter((n) => ![1, 3, 6].includes(n)));
 });
 
 await test("a created worktree is registered through the CANONICAL writer", async () => {
@@ -89,7 +95,8 @@ await test("an explicit slot is honoured", async () => {
 
 await test("no free slot is REPORTED, not silently skipped", async () => {
   clearRegistry();
-  for (const s of [1, 2, 3, 4, 5, 6]) register(`w${s}`, s);
+  // Fill every slot the topology actually has, whatever that number is.
+  for (const s of managedSlots()) register(`w${s}`, s);
   let called = false;
   L.setRegisterImplForTests(() => { called = true; return { status: 0, stdout: "" }; });
   const out = await L.registerCreatedWorktree({ worktreeName: "seventh" });
