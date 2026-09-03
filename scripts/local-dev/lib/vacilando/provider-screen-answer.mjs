@@ -23,6 +23,14 @@ import { detectPromptBlocker, OPERATOR_TERMINAL_BLOCKERS } from "./provider-prom
 export const SCREEN_ANSWER_MAX_OPTIONS = 9;
 
 /**
+ * A wrapped option's continuation line is indented past its own number. Four columns clears
+ * `   2. ` without admitting the prose that sits one or two columns in above the dialog.
+ */
+export const OPTION_CONTINUATION_MIN_INDENT = 4;
+/** Enough for a wrapped path; not enough to swallow a paragraph. */
+export const OPTION_CONTINUATION_MAX_LINES = 3;
+
+/**
  * Pull the question and its numbered options off the pane.
  *
  * Claude Code draws these as a title line, optional prose, then `❯ 1. Yes` for
@@ -37,15 +45,47 @@ export function parseBlockingScreen(text) {
 
   // Options are the numbered rows. Take the LAST contiguous run of them: an
   // earlier transcript may quote a numbered list that is not a live dialog.
+  //
+  // AN OPTION MAY WRAP. Claude writes the permission prompt's second choice as
+  //
+  //     2. Yes, and don't ask again for:
+  //        /Users/…/alloy-dev-status *
+  //
+  // and the continuation line is not numbered. Ending the run at the first
+  // non-numbered line — scanning upward, that line sits between `3.` and `2.` —
+  // left ONE option, which fails the `< 2` guard below. The screen then reported
+  // `no_selectable_options` and the operator was sent to a terminal to answer an
+  // ordinary permission prompt. That was the whole deadlock.
+  //
+  // So an indented, non-empty line inside the run is held and attached to the
+  // option it belongs to. It is DETAIL, never a choice: it cannot become an
+  // index, so nothing new can be selected because a path happened to wrap.
   const numbered = [];
+  let pendingDetail = [];
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const m = lines[i].match(/^[ \t\u00a0]*[│|]?[ \t\u00a0]*(?:[>❯][ \t\u00a0]*)?(\d)\.[ \t\u00a0]+(\S.*?)[ \t\u00a0]*[│|]?[ \t\u00a0]*$/);
     if (m) {
-      numbered.unshift({ index: Number(m[1]), label: m[2].trim().slice(0, 120), line: i, selected: /[>❯]/.test(lines[i]) });
+      numbered.unshift({
+        index: Number(m[1]),
+        label: m[2].trim().slice(0, 120),
+        detail: pendingDetail.length ? pendingDetail.join(" ").slice(0, 200) : null,
+        line: i,
+        selected: /[>❯]/.test(lines[i]),
+      });
+      pendingDetail = [];
       continue;
     }
-    if (numbered.length) break;   // the run ended; everything above is context
+    if (!numbered.length) continue;   // chrome below the dialog — the run has not started
+    const bare = lines[i].replace(/[│|]/g, "").trim();
+    const indent = (lines[i].match(/^[ \t\u00a0]*/) || [""])[0].length;
+    const isRule = /^[─━=_.\-]{6,}$/.test(bare);
+    if (bare && !isRule && indent >= OPTION_CONTINUATION_MIN_INDENT && pendingDetail.length < OPTION_CONTINUATION_MAX_LINES) {
+      pendingDetail.unshift(bare.slice(0, 200));
+      continue;
+    }
+    break;   // the run ended; everything above is context
   }
+  pendingDetail = [];
   if (numbered.length < 2) return null;
   // They must be consecutive from 1, or this is prose that happens to be numbered.
   for (let k = 0; k < numbered.length; k += 1) {
@@ -76,7 +116,7 @@ export function parseBlockingScreen(text) {
   return {
     question,
     detail,
-    options: numbered.map((o) => ({ index: o.index, label: o.label, selected: o.selected })),
+    options: numbered.map((o) => ({ index: o.index, label: o.label, detail: o.detail ?? null, selected: o.selected })),
     confirm_hint: lines.slice(numbered[numbered.length - 1].line + 1, numbered[numbered.length - 1].line + 3)
       .map((l) => l.trim()).find((l) => /enter to confirm/i.test(l)) || null,
   };
@@ -198,3 +238,49 @@ export async function answerBlockingScreen(laneId, {
     kind: screen.kind,
   };
 }
+
+/**
+ * Continue the instruction that was already waiting when the prompt appeared.
+ *
+ * The operator wrote the instruction, Vacilando queued it because the pane was
+ * blocked, and answering the prompt is what unblocks it. Making them go back and
+ * resend the same text would be asking a person to do the queue's job — and the
+ * queue already holds the exact prompt, attachments included.
+ *
+ * Claude needs a beat to consume the keypress and return to its composer, so this
+ * waits and retries rather than firing once into a pane that is still redrawing.
+ * It NEVER fails the answer: the choice has already been delivered by the time
+ * this runs, and a continuation that could not be sent is reported, not thrown.
+ */
+export async function resumeLaneAfterAnswer(laneId, {
+  root = undefined,
+  attempts = 6,
+  delayMs = 1200,
+  deliver = null,
+  activeRun = null,
+  sleep = null,
+} = {}) {
+  const getRun = activeRun || (await import("./execution-run.mjs")).activeRunForLane;
+  let run = null;
+  try {
+    run = getRun(laneId, root);
+  } catch (err) {
+    return { ok: false, resumed: false, error: "run_lookup_failed", detail: String(err?.message || err).slice(0, 200) };
+  }
+  if (!run || run.state !== "QUEUED") return { ok: true, resumed: false, reason: "no_queued_run" };
+
+  const deliverFn = deliver || (await import("./execution-run-send.mjs")).deliverExistingQueuedRun;
+  const wait = sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  let last = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    await wait(delayMs);
+    try {
+      last = await deliverFn(run.run_id, { root });
+    } catch (err) {
+      last = { ok: false, error: String(err?.message || err).slice(0, 200) };
+    }
+    if (last?.ok) return { ok: true, resumed: true, run_id: run.run_id, attempts: attempt };
+  }
+  return { ok: false, resumed: false, run_id: run.run_id, attempts, error: last?.error || "not_delivered" };
+}
+
