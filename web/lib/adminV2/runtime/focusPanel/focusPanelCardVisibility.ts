@@ -9,7 +9,10 @@
  */
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { FocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
+import {
+    withDerivedRows,
+    type FocusPanelPublishedLayout,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import { focusPanelCardCatalogLabel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import type { FocusPanelCardSectionMeta } from "@/lib/adminV2/runtime/focusPanel/focusPanelLayoutDocModel";
 import type { FocusPanelCardLink } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLinks";
@@ -107,11 +110,16 @@ export function filterPublishedLayoutToVisibleCards(
 
     if (layout.grid?.areas?.length) {
         const areas = layout.grid.areas.filter((area) => isVisible(area.card));
-        return {
+        // `rows` stays an array. Optional-chaining it produced `rows: undefined` on a
+        // grid-only layout, which `planPublishedLayout` then dereferenced — the runtime
+        // crash. When the projection is absent it is DERIVED from the filtered grid, so
+        // the two representations of one composition cannot disagree about which cards
+        // are placed.
+        return withDerivedRows({
             ...layout,
             grid: { ...layout.grid, areas },
-            rows: layout.rows
-                ?.map((row) => ({
+            rows: (layout.rows ?? [])
+                .map((row) => ({
                     ...row,
                     cells: row.cells
                         .map((cell) => ({
@@ -121,10 +129,10 @@ export function filterPublishedLayoutToVisibleCards(
                         .filter((cell) => cell.cards.length > 0),
                 }))
                 .filter((row) => row.cells.length > 0),
-        };
+        });
     }
 
-    if (!layout.rows?.length) return layout;
+    if (!layout.rows?.length) return { ...layout, rows: layout.rows ?? [] };
     return {
         ...layout,
         rows: layout.rows

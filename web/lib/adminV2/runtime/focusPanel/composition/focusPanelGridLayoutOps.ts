@@ -11,6 +11,7 @@
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
+    deriveRowsFromGrid,
     FOCUS_PANEL_GRID_COLUMNS,
     gridAreasInReadingOrder,
     resolveRowUnits,
@@ -439,12 +440,13 @@ export function removeArea(grid: FocusPanelGridLayout, card: FocusPanelCardKey):
 /**
  * Derive the reading-order `rows` fallback from a grid (one full-width cell per card,
  * top→bottom/left→right) so legacy consumers + responsive collapse keep working.
+ *
+ * Re-exported from the published-layout model, which is where the reader also needs it:
+ * a grid-only stored layout has its `rows` projection filled in on the way out, and the
+ * builder writes the same projection on the way in. Two implementations of one projection
+ * is how the two sides drift.
  */
-export function deriveRowsFromGrid(grid: FocusPanelGridLayout): FocusPanelPublishedLayout["rows"] {
-    return gridAreasInReadingOrder(grid).map((a) => ({
-        cells: [{ width: "full" as const, cards: [a.card], height: a.height }],
-    }));
-}
+export { deriveRowsFromGrid };
 
 /**
  * Convert an existing row/lane/stack published layout into grid placement (so the grid
