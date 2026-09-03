@@ -53,6 +53,9 @@ export type OperationalEnrollmentMockStore = {
     option_sets: Row[];
     option_set_items: Row[];
     gl_accounts: Row[];
+    // Money received and its application to an obligation (Thread 8).
+    payments: Row[];
+    payment_allocations: Row[];
 };
 
 export function createOperationalEnrollmentMockStore(
@@ -95,6 +98,8 @@ export function createOperationalEnrollmentMockStore(
         option_sets: seed?.option_sets ?? [],
         option_set_items: seed?.option_set_items ?? [],
         gl_accounts: seed?.gl_accounts ?? [],
+        payments: seed?.payments ?? [],
+        payment_allocations: seed?.payment_allocations ?? [],
     };
 }
 
@@ -440,12 +445,13 @@ function emulateReconcileConsumptionCorrection(
     }
 }
 
-type Filter = { col: string; op: "eq" | "in"; value: unknown };
+type Filter = { col: string; op: "eq" | "neq" | "in"; value: unknown };
 
 function applyFilters(rows: Row[], filters: Filter[]): Row[] {
     return rows.filter((row) => {
         for (const f of filters) {
             if (f.op === "eq" && row[f.col] !== f.value) return false;
+            if (f.op === "neq" && row[f.col] === f.value) return false;
             if (f.op === "in") {
                 const set = f.value as unknown[];
                 if (!set.includes(row[f.col])) return false;
@@ -540,6 +546,11 @@ export function createOperationalEnrollmentMockSupabase(
 
         chain.eq = vi.fn((col: string, value: unknown) => {
             filters.push({ col, op: "eq", value });
+            return chain;
+        });
+
+        chain.neq = vi.fn((col: string, value: unknown) => {
+            filters.push({ col, op: "neq", value });
             return chain;
         });
 

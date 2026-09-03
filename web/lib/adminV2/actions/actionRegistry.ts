@@ -41,6 +41,7 @@ import {
 } from "@/lib/adminV2/actions/definitions/staffPresenceActions";
 import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
 import { financialChargeActions } from "@/lib/adminV2/actions/definitions/financialChargeActions";
+import { financialPaymentActions } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
 import { healthFactActions } from "@/lib/adminV2/actions/definitions/healthFactActions";
 import { enrollmentRequirementExceptionActions } from "@/lib/adminV2/actions/definitions/enrollmentRequirementExceptionActions";
 
@@ -68,6 +69,7 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     // Child attendance: five operator intents over the existing invariant-owning services.
     ...childAttendanceActions,
     ...financialChargeActions,
+    ...financialPaymentActions,
     ...healthFactActions,
     // Governed requirement exception: make one requirement non-blocking, and put it back.
     ...enrollmentRequirementExceptionActions,

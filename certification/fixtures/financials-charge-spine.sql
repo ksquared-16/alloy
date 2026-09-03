@@ -25,6 +25,19 @@
 --    was not there. It is restored immediately after, before anything is written.
 set session_replication_role = replica;
 
+-- Money received against this account, and its applications. An application is not deletable and a
+-- posted childcare payment refuses DELETE — the same guarantees, suspended for teardown only.
+-- Applications go first: they reference both a payment and a charge.
+delete from payment_allocations where org_id = :'org'::uuid and payment_id in
+  (select id from payments where org_id = :'org'::uuid
+     and billable_source_id in (:'agr'::uuid, :'hh'::uuid));
+-- Refunds before receipts: `payments_refunds_payment_id_fkey` is ON DELETE RESTRICT.
+delete from payments where org_id = :'org'::uuid and refunds_payment_id in
+  (select id from payments where org_id = :'org'::uuid
+     and billable_source_id in (:'agr'::uuid, :'hh'::uuid));
+delete from payments where org_id = :'org'::uuid
+  and billable_source_id in (:'agr'::uuid, :'hh'::uuid);
+
 delete from charges where org_id = :'org'::uuid and source_charge_id in
   (select id from charges where org_id = :'org'::uuid
      and billable_source_id in (:'agr'::uuid, :'hh'::uuid));

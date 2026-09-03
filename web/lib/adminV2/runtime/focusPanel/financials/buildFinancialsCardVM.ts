@@ -12,14 +12,24 @@
  * DERIVED from there (agreement → `customer_member_id`), which is why no `child_id` column is needed
  * and none is added. A household's financial picture is the union over its children's agreements.
  *
- * ── WHAT IS DELIBERATELY ABSENT ──
+ * ── PAYMENTS ARE REAL HERE ──
  *
- * `payments.job_id` is NOT NULL and payments were never generalized to `billable_source_*` — only
- * `charges` and `ledger_transactions` were. So a childcare payment has no canonical seam today, and
- * this model reports that as an explicit unavailability rather than rendering a zero that would read
- * as "nothing has been paid". Autopay exists only in card-lab fixtures and the concept catalog, so it
- * is likewise reported absent rather than invented. Payer SPLITS belong to Processing and are not
- * modelled here at all.
+ * `paymentsCents` was hard-zero, on the stated grounds that `payments.job_id` was NOT NULL and that
+ * payments had never been generalized. The census settled both against the deployed database
+ * (certification/financials/payments-spine-census.sql, tha_be923375ea3595): `job_id` is NULLABLE and
+ * has been since `20260329210000`, and `payment_allocations.charge_id` already applies a payment to a
+ * charge. What was missing was a write path, not a schema.
+ *
+ * So payments received are now READ, by the same rule `jobPaymentBalances` uses for a job: active
+ * applications whose parent payment is POSTED. A pending or failed attempt is money that has not
+ * arrived and reduces nothing. An application is filed under the BILLING PERIOD OF THE CHARGE IT
+ * PAYS, not the date it was applied — a period's balance is what that period's charges still owe, and
+ * a payment made in October against a September charge settles September.
+ *
+ * ── WHAT IS STILL DELIBERATELY ABSENT ──
+ *
+ * Autopay exists only in card-lab fixtures and the concept catalog, so it is reported absent rather
+ * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -49,6 +59,28 @@ const ADJUSTMENT_CATEGORIES = new Set(["adjustment"]);
 
 /** Statuses that count toward what is owed. `draft` is not yet owed; `void` never was. */
 const OWED_STATUSES = new Set(["posted", "partially_paid", "paid"]);
+
+/** One payment on the account, as the card reads it. */
+export type FinancialsPaymentRow = {
+    paymentId: string;
+    /** inbound = money received; outbound = a refund. */
+    direction: "inbound" | "outbound";
+    /** The receipt this refund reverses, when it is one. */
+    refundsPaymentId: string | null;
+    amountCents: number;
+    currencyCode: string;
+    /** pending | posted | failed | voided. Only `posted` is money. */
+    status: string;
+    method: string;
+    processor: string | null;
+    /** The date the money arrived — not the date it was applied. */
+    receivedAt: string | null;
+    postedAt: string | null;
+    /** Active applications on this payment, summed. Zero for a payment sitting on the account. */
+    appliedCents: number;
+    reference: string | null;
+    notes: string | null;
+};
 
 export type FinancialsSubject = {
     customerMemberId: string;
@@ -169,6 +201,16 @@ export type FinancialsCardVM = {
     pastDue: FinancialsPastDue | null;
     pastDueBySubject: Record<string, FinancialsPastDue | null>;
     ledgerPeriods: FinancialsPeriodGroup[];
+    /**
+     * Money received on this account, newest first — receipts AND refunds.
+     *
+     * A refund is not a negative receipt: it is an outbound row naming the receipt it reverses, so
+     * the pair reads as "this arrived, and this much of it went back" rather than as two unrelated
+     * amounts. `appliedCents` is what each one is actually doing to a balance right now, which is
+     * how an operator tells a payment sitting unapplied on the account from one that has settled an
+     * obligation.
+     */
+    payments: FinancialsPaymentRow[];
     chargeTemplates: FinancialsChargeTemplateOption[];
     unavailable: FinancialsUnavailable[];
     /**
@@ -229,6 +271,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         pastDue: null,
         pastDueBySubject: {},
         ledgerPeriods: [],
+        payments: [],
         chargeTemplates: [],
         unavailable: [],
         paymentSetup: null,
@@ -245,12 +288,6 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
  */
 function platformUnavailabilities(): FinancialsUnavailable[] {
     return [
-        {
-            fact: "payments",
-            reason:
-                "payments.job_id is NOT NULL and payments were never generalized to billable_source_*, "
-                + "so a childcare payment has no canonical seam yet",
-        },
         {
             fact: "autopay",
             reason: "no canonical autopay truth exists — the concept appears only in design fixtures",
@@ -311,6 +348,127 @@ async function readAccountPayers(
         share: null,
         method: null,
     }));
+}
+
+/**
+ * MONEY RECEIVED ON THIS ACCOUNT, and what each payment is actually paying.
+ *
+ * ── THE ONE BALANCE RULE ──
+ *
+ * `appliedByChargeId` counts an application only when it is ACTIVE and its parent payment is POSTED.
+ * That predicate is `jobPaymentBalances`'s, quoted rather than re-derived, so the childcare card and
+ * the job drawer cannot answer the same question differently. A pending attempt has not arrived; a
+ * reversed application was given back; neither moves a balance.
+ *
+ * ── WHY THE PAYMENTS ARE FOUND THROUGH THE CHARGES ──
+ *
+ * Applications name a charge, and the charges are already narrowed to this account's billable
+ * sources, so the applications reachable from them are this account's by construction. The
+ * account-level read (`billable_source_id`) additionally picks up payments that have arrived and been
+ * applied to NOTHING yet — money on the account, which a balance-only read would render invisible.
+ */
+async function readAccountPayments(
+    supabase: SupabaseClient,
+    orgId: string,
+    billableSourceIds: readonly string[],
+    chargeIds: readonly string[],
+): Promise<{ payments: FinancialsPaymentRow[]; appliedByChargeId: Map<string, number> }> {
+    const appliedByChargeId = new Map<string, number>();
+    const sourceIds = billableSourceIds.length ? [...billableSourceIds] : [NO_SOURCE_SENTINEL];
+
+    const [allocResult, accountPaymentResult] = await Promise.all([
+        chargeIds.length
+            ? supabase
+                  .from("payment_allocations")
+                  .select("id, payment_id, charge_id, allocated_amount_cents, status")
+                  .eq("org_id", orgId)
+                  .eq("status", "active")
+                  .in("charge_id", [...chargeIds])
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
+        supabase
+            .from("payments")
+            .select(
+                "id, direction, refunds_payment_id, amount_cents, currency, status, payment_method, "
+                + "processor, received_at, posted_at, reference_number, notes",
+            )
+            .eq("org_id", orgId)
+            .in("billable_source_id", sourceIds)
+            .order("received_at", { ascending: false }),
+    ]);
+
+    /*
+     * A PAYMENTS READ THAT FAILS IS NOT A ZERO BALANCE.
+     *
+     * Returning "nothing has been paid" when the truth is "we could not look" is the exact defect
+     * this model closed for charges. The account read failing is reported by the caller as an
+     * unavailability; it never silently becomes a full balance owed.
+     */
+    if (accountPaymentResult.error) {
+        throw new Error(accountPaymentResult.error.message);
+    }
+    if (allocResult.error) {
+        throw new Error(allocResult.error.message);
+    }
+
+    const allocRows = (allocResult.data ?? []) as unknown as Array<Record<string, unknown>>;
+    const paymentRows = (accountPaymentResult.data ?? []) as unknown as Array<Record<string, unknown>>;
+
+    const statusByPaymentId = new Map(paymentRows.map((r) => [t(r.id), t(r.status).toLowerCase()]));
+    /*
+     * An application can name a payment the ACCOUNT read did not return — a job-era payment whose
+     * billable source is a job, applied to a charge this account owns. Its status still decides
+     * whether it counts, so it is looked up rather than assumed.
+     */
+    const unknownPaymentIds = [
+        ...new Set(
+            allocRows
+                .map((r) => t(r.payment_id))
+                .filter((id) => id && !statusByPaymentId.has(id)),
+        ),
+    ];
+    if (unknownPaymentIds.length) {
+        const { data: extra } = await supabase
+            .from("payments")
+            .select("id, status")
+            .eq("org_id", orgId)
+            .in("id", unknownPaymentIds);
+        for (const r of (extra ?? []) as unknown as Array<Record<string, unknown>>) {
+            statusByPaymentId.set(t(r.id), t(r.status).toLowerCase());
+        }
+    }
+
+    const appliedByPaymentId = new Map<string, number>();
+    for (const raw of allocRows) {
+        const paymentId = t(raw.payment_id);
+        const chargeId = t(raw.charge_id);
+        if (!paymentId || !chargeId) continue;
+        // Only POSTED money reduces a balance. This is the whole rule, and it lives here once.
+        if (statusByPaymentId.get(paymentId) !== "posted") continue;
+        const cents = Number(raw.allocated_amount_cents) || 0;
+        appliedByChargeId.set(chargeId, (appliedByChargeId.get(chargeId) ?? 0) + cents);
+        appliedByPaymentId.set(paymentId, (appliedByPaymentId.get(paymentId) ?? 0) + cents);
+    }
+
+    const payments: FinancialsPaymentRow[] = paymentRows.map((raw) => {
+        const id = t(raw.id);
+        return {
+            paymentId: id,
+            direction: t(raw.direction) === "outbound" ? "outbound" : "inbound",
+            refundsPaymentId: t(raw.refunds_payment_id) || null,
+            amountCents: Number(raw.amount_cents) || 0,
+            currencyCode: t(raw.currency) || "USD",
+            status: t(raw.status).toLowerCase(),
+            method: t(raw.payment_method),
+            processor: t(raw.processor) || null,
+            receivedAt: t(raw.received_at) || null,
+            postedAt: t(raw.posted_at) || null,
+            appliedCents: appliedByPaymentId.get(id) ?? 0,
+            reference: t(raw.reference_number) || null,
+            notes: t(raw.notes) || null,
+        };
+    });
+
+    return { payments, appliedByChargeId };
 }
 
 export async function buildFinancialsCardVM(
@@ -563,7 +721,29 @@ export async function buildFinancialsCardVM(
      * here rather than in the card keeps the rule in one place; doing it per subject rather than
      * re-fetching keeps the filter free of a network round trip.
      */
-    vm.reconciliation = reconcileRows(rows, period.key, today);
+    let appliedByChargeId = new Map<string, number>();
+    try {
+        const received = await readAccountPayments(
+            supabase,
+            args.orgId,
+            billableSourceIds,
+            rows.map((r) => r.chargeId),
+        );
+        vm.payments = received.payments;
+        appliedByChargeId = received.appliedByChargeId;
+    } catch (e) {
+        /*
+         * A payments read that fails must not become "nothing has been paid" — that would show a
+         * family the full amount owed for money they have already sent. The card says it cannot
+         * answer, which is what the `unavailable` list is for.
+         */
+        vm.unavailable = [
+            ...vm.unavailable,
+            { fact: "payments", reason: e instanceof Error ? e.message : String(e) },
+        ];
+    }
+
+    vm.reconciliation = reconcileRows(rows, period.key, today, appliedByChargeId);
     vm.reconciliationBySubject = Object.fromEntries(
         vm.subjects.map((s) => [
             s.customerMemberId,
@@ -571,16 +751,17 @@ export async function buildFinancialsCardVM(
                 rows.filter((r) => r.subjectMemberId === s.customerMemberId),
                 period.key,
                 today,
+                appliedByChargeId,
             ),
         ]),
     );
 
     // ── PAST DUE: real due-date semantics, over owed rows only ───────────────────────────────────
-    vm.pastDue = pastDueFor(rows, today);
+    vm.pastDue = pastDueFor(rows, today, appliedByChargeId);
     vm.pastDueBySubject = Object.fromEntries(
         vm.subjects.map((s) => [
             s.customerMemberId,
-            pastDueFor(rows.filter((r) => r.subjectMemberId === s.customerMemberId), today),
+            pastDueFor(rows.filter((r) => r.subjectMemberId === s.customerMemberId), today, appliedByChargeId),
         ]),
     );
 
@@ -663,11 +844,20 @@ export function isPostedMoney(lifecycleStatus: FinancialsLedgerRow["lifecycleSta
     return lifecycleStatus === "posted" || lifecycleStatus === "reversed";
 }
 
-/** THE reconciliation rule, in one place so no scope can compute it differently. */
+/**
+ * THE reconciliation rule, in one place so no scope can compute it differently.
+ *
+ * `appliedByChargeId` is money RECEIVED and applied, keyed by the charge it paid. Passing it per
+ * charge rather than as a total is what makes the subject filter and the period filter work on
+ * payments for free: narrowing the rows narrows the payments with them, so a per-child total can
+ * never sit above a ledger that does not add up to it. An empty map is "nothing has been paid",
+ * which is a different statement from "we cannot say" and is the honest one now that we can.
+ */
 export function reconcileRows(
     rows: readonly FinancialsLedgerRow[],
     periodKey: string,
     _today: string,
+    appliedByChargeId: ReadonlyMap<string, number> = new Map(),
 ): FinancialsReconciliation {
     const out = emptyReconciliation();
     for (const row of rows) {
@@ -695,20 +885,43 @@ export function reconcileRows(
     // Responsibility is the SUM OF EVERY OWED LINE, so it cannot drift from the rows beneath it.
     out.responsibilityCents =
         out.grossCents + out.discountsCents + out.fundingCents + out.adjustmentsCents;
-    out.paymentsCents = 0;
+    /*
+     * PAYMENTS ARE SUMMED OVER THE SAME ROWS, so the balance cannot drift from the ledger beneath it.
+     * A payment against a row this scope excludes — another child, another period — is another
+     * scope's payment, and is not counted twice by being counted here.
+     */
+    for (const row of rows) {
+        if (row.periodKey !== periodKey) continue;
+        if (!OWED_STATUSES.has(row.status)) continue;
+        out.paymentsCents += appliedByChargeId.get(row.chargeId) ?? 0;
+    }
     out.balanceCents = out.responsibilityCents - out.paymentsCents;
     return out;
 }
 
 /**
- * Past due over owed, unpaid rows whose due date has passed.
+ * Past due over owed rows whose due date has passed and which are STILL OWED.
  *
  * A REVERSED CHARGE IS NOT PAST DUE, and neither is the reversal that undid it. A correction copies
  * the source's `due_date`, so the pair would otherwise both qualify and report an overdue balance of
  * zero — announcing a collections problem for money nobody owes. Credits and replacements are kept:
  * they are partial and legitimately reduce what is still overdue.
+ *
+ * ── PAST DUE IS THE RESIDUAL, NOT THE FACE AMOUNT ──
+ *
+ * A charge that has been paid is not overdue, and one that has been HALF paid is overdue for the
+ * half. Subtracting what was applied is why `charges.status` is never advanced to `partially_paid` /
+ * `paid` when money is applied: a stored status would be a second answer to "how much is left", and
+ * the first time an application was reversed the two would disagree. The applications are the
+ * record; how much is outstanding is read from them.
  */
-export function pastDueFor(rows: readonly FinancialsLedgerRow[], today: string): FinancialsPastDue | null {
+export function pastDueFor(
+    rows: readonly FinancialsLedgerRow[],
+    today: string,
+    appliedByChargeId: ReadonlyMap<string, number> = new Map(),
+): FinancialsPastDue | null {
+    const outstanding = (r: FinancialsLedgerRow): number =>
+        r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
     const overdue = rows.filter(
         (r) =>
             OWED_STATUSES.has(r.status)
@@ -716,13 +929,20 @@ export function pastDueFor(rows: readonly FinancialsLedgerRow[], today: string):
             && r.lifecycleStatus !== "reversed"
             && r.correctionKind !== "reversal"
             && r.dueDate != null
-            && r.dueDate < today,
+            && r.dueDate < today
+            /*
+             * A POSITIVE obligation that has been paid in full is no longer overdue. A NEGATIVE row
+             * — a credit — is kept whatever its outstanding reads, because it is what reduces the
+             * overdue total rather than something that can itself be settled. Dropping it would put
+             * the credit's own amount back onto what the family owes.
+             */
+            && !(r.amountCents > 0 && outstanding(r) <= 0),
     );
     if (overdue.length === 0) return null;
     const oldest = overdue.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));
     const oldestDueDate = oldest.dueDate as string;
     return {
-        amountCents: overdue.reduce((sum, r) => sum + r.amountCents, 0),
+        amountCents: overdue.reduce((sum, r) => sum + outstanding(r), 0),
         oldestDueDate,
         agingDays: Math.max(
             0,
