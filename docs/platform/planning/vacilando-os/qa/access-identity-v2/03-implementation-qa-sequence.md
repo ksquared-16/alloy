@@ -36,13 +36,22 @@ anchors to under `JSON.parse`, and the obvious execution route fails closed on a
 · **W-0 made executable 2026-08-07** (mission `msn_bc33a72e3138ebc215`, assignment `asg_f34761f0f418ee`) — the
 amended SQL was **promoted into `combined_query`** and the stale top-level `query_hash` renamed to
 `runs_1_2_query_hash`. Until this landed the improvement was authored but **unreachable**, sitting in a key
-nothing reads. The alternative route — a dedicated run-3 artifact — is **unexecutable**: `queryArtifactPath` is
-a default parameter and none of its three call sites passes it, so it would have failed *silently*, spending
-the authorization on a byte-identical run. **That rename must not be reverted** (§4)
+nothing reads. The alternative route — a dedicated run-3 artifact — was **unexecutable** *at that date*:
+`queryArtifactPath` was a default parameter no call site passed, so it would have failed *silently*, spending
+the authorization on a byte-identical run. **That rename must not be reverted.** ⚠️ **The pinning claim is
+superseded as of 2026-09-03** — the director path now threads `queryArtifactPath`, proven by the 2026-08-19 Q15
+census running a non-wave0 artifact. The rename guidance stands; the pinning guidance does not (§4)
 · **W-0 run 3 EXECUTED 2026-08-07T17:24:16Z** (`tha_67f9c69f628d1a`) — **zero drift for the third consecutive
 run** across all of Q1–Q6, and the census **identifies its own target for the first time**: org fingerprint
 `ab7e5dde…`. Query hash `743cd63b…` → `a3982ca5…`, which is the added key, not drift. The Supabase project ref
 is still unproven, so `target.confirmed_against_live` stays `false` (§4)
+· **W-0 re-issued a fifth time 2026-09-03** (mission `msn_a8cbb93fb34c3c28c4`, assignment `asg_2ad19633107ecf`)
+— **run 4 prepared and verified executable, NOT executed**; blocked on one operator authorization, which prior
+grants do not cover because authorizations are scoped **per mission**. This is not a fourth identical run: **M9
+landed** (`20260818190000`), so **Q3 no longer measures what it measured**, and run 3's counts are **27 days
+old**, so W-6/M1's preflight has **aged out** under rule 5. Two of §4's standing mechanical facts are **now
+false and corrected** — the merge-back writes a **`.results.json` sidecar** and no longer touches the query
+artifact, and `queryArtifactPath` is **no longer pinned** (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -604,6 +613,63 @@ the apply follows closely, and *an aged preflight is not a preflight*. W-0 suppl
 is W-6's to flip and is deliberately not set by the census file.** If time has passed, the correct move is
 another census — now a single authorization on a proven channel. Full rule-by-rule evaluation lives at the
 census file's `w6_m1_preflight.preflight_run_3_outcome`.
+
+#### W-0 re-issued a fifth time — **2026-09-03**, assignment `asg_2ad19633107ecf`: run 4 prepared, not executed
+
+W-0 was re-issued under mission `msn_a8cbb93fb34c3c28c4`. Unlike the second and fourth issuances, **this one is
+not a re-run against a target nothing has touched** — and the reason is structural, not merely that time passed.
+
+**Q3 no longer measures what it measured.** `20260818190000_w16_user_roles_role_foreign_key.sql` adds
+`user_roles_role_definitions_fkey` — that is **M9, the migration Q3 exists to gate** — and
+`20260818170000_w13_collapse_portal_eligible_fifth_layer_grants.sql` is L2/W-13's collapse, which Q5 gates. The
+census file's own `residual_risks[2]` sets the rule: *"`user_roles.role` remains unconstrained text (C2) until
+M9 actually lands… M9's preflight must re-run Q3 rather than trust this result."* M9 has landed in the tree.
+Run 4 is the first census that can report what the constraint enforces rather than what an unconstrained text
+column happened to contain.
+
+**The preflight has aged out.** Run 3 is **27 days** old. Rule 5 above is explicit that an aged preflight is not
+a preflight, and commit `3e000209a` records W-6's apply as *authorized but with no channel to execute it* — so
+`q4_pairs_without_profile = 2` has been sitting unspent for four weeks. It cannot be cited into an apply at this
+age; the paragraph above already prescribes the remedy, *another census on a proven channel*.
+
+**Executed: no. Blocked on one operator authorization, and prior grants do not cover it.** Authorizations are
+stored **per mission** — `trusted-host-authz.mjs` keeps one store per `missionId` and `grantMissionAuthorization`
+keys on `{missionId, actionType}`. Run 3's grant belongs to `msn_e7894cb7225bae3c2b`, so it does not reach this
+mission. No worker-side path to the credential exists, by design. The channel itself is proven and current: the
+**Q15 census executed 2026-08-19** (`tha_e1d6bbd4b62a79`), the fourth successful run on this route.
+
+**The 2026-08-06 reason for waiting is no longer available.** That pass deferred partly because *"§4.1's W-23
+(Wave 0b) already schedules a re-run of Q1–Q6 on this same channel."* **There is no §4.1** — §4 is followed
+directly by §5 — and **W-23 has no definition anywhere in this document**, surviving only as the cross-references
+at lines 455–459 and as a cited pattern in `07-director-acceptance-rubric.md`. There is no scheduled second
+census to fold Q1–Q6 into, so the argument for waiting has no referent. This should be repaired or W-23 defined.
+
+**Readiness was verified so the authorization is not wasted when it lands.** The artifact validates rather than
+traps — top-level `query_hash` is run 3's `a3982ca5…`, correct for the promoted `combined_query`, and `743cd63b…`
+stays confined to `runs_1_2_query_hash`. Read-only validation passes by inspection and, more strongly, this exact
+text already executed as run 3. Every relation and column the census reads still resolves: a sweep of all
+migrations dated after run 3 for `DROP TABLE` / `DROP COLUMN` / `RENAME COLUMN` / `RENAME TO` returns only
+`action_link.token` and a scratch table. Full detail at the census file's `run_4_readiness`.
+
+##### Two mechanical facts above are now stale — corrected
+
+§4's *"Two mechanical facts for whoever runs the next census"* were true when observed on 2026-08-07. **One is
+now false**, and finding 3 of the fourth issuance is false too. Both are corrected here because both are written
+as standing constraints addressed to whoever runs the next census.
+
+| Superseded claim | What is true now |
+|---|---|
+| *"It overwrites `results` in place, so the prior run's raw result block does not survive in the file."* | **The merge-back no longer touches the query artifact at all.** `trusted-host-actions.mjs:780-782` derives the evidence path from `queryArtifactPath` by replacing `.json` with `.results.json`, and every write targets that sidecar. Run 4 creates **`wave0-authority-census.results.json`** and leaves `wave0-authority-census.json` unmodified. Corroborated in the wild: `q15-authority-census.results.json` sits beside its query artifact. Run 3's `results` block is therefore **not** at risk and needs no preservation step. |
+| *"`queryArtifactPath` is not selectable through any Director or operator path… only that file can be run 3."* | **No longer pinned.** `trusted-host-director.mjs:53` now takes `queryArtifactPath` and threads it at `:75` — and that is the worker-decision path, the one a paused worker reaches. Proven rather than inferred: the 2026-08-19 Q15 census read a **non-wave0** artifact and wrote its sidecar. Residual: the two `v2-api.mjs` call sites (`:832`, `:969`) still omit the argument and default to `wave0-authority-census.json`, so the route taken still decides the artifact. |
+
+**Mechanical fact 1 still holds** — nothing appends to `run_history`; run 4's entry must be written by hand, as
+run 3's was. The warning at the census file's `runs_1_2_query_provenance.what_the_directors_merge_back_will_do`
+describes the old behaviour and should now be read as history.
+
+**W-0's exit criteria remain met and were not re-asserted as current.** Q1–Q6 stay committed with run 3's counts,
+which are 27 days old. Nothing in this pass makes them fresher, and **no consumer should cite them into a
+lockout-class switch at this age** — the standing rule that every consumer re-derives rather than cites is
+unchanged, and is precisely why run 4 is requested.
 
 ---
 
