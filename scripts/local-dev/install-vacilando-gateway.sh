@@ -20,7 +20,20 @@ HOST_JS="${HERE}/lib/vacilando-gateway-host.mjs"
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
 # Default read from the ONE owner (lib/vacilando/managed-slots.mjs) so the
 # installer cannot pin a port the topology resolver has since reserved.
-PORT="${VACILANDO_PORT:-$("${NODE_BIN}" -e 'import("./lib/vacilando/managed-slots.mjs").then(m=>process.stdout.write(String(m.gatewayPort())))' --input-type=module 2>/dev/null || echo 3030)}"
+# Resolved from $HERE, not from the caller's CWD. The first cut used a relative
+# import, which resolves against whatever directory the installer happens to be
+# invoked from — so it failed everywhere except the toolkit root and landed on
+# the `|| echo` fallback. That fallback produced the right number by accident
+# rather than by derivation, which is precisely the class of "agrees today by
+# coincidence" this whole change exists to remove. It also silently wrote 3020
+# on the first migration attempt, because an inherited VACILANDO_PORT won the
+# `:-` and nobody was deriving anything at all.
+PORT="${VACILANDO_PORT:-$("${NODE_BIN}" --input-type=module -e "import(\"file://${HERE}/lib/vacilando/managed-slots.mjs\").then(m=>process.stdout.write(String(m.gatewayPort())))" 2>/dev/null)}"
+if [[ ! "$PORT" =~ ^[0-9]+$ ]]; then
+  echo "install-vacilando-gateway: could not resolve the Gateway port from the owner." >&2
+  echo "  Set VACILANDO_PORT explicitly, or fix lib/vacilando/managed-slots.mjs." >&2
+  exit 2
+fi
 
 # ---------------------------------------------------------------------------
 # Shared-host mutation guard. Two lanes each ran this installer and silently
