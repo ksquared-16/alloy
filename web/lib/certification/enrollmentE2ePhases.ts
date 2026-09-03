@@ -869,6 +869,7 @@ const requirementCompletion: Phase = {
         const walked = await withParticipantPage(ctx, pathA.journeyId, async (page) => {
             const trail: Array<Record<string, unknown>> = [];
             let lastSignature = "";
+            let signed = false;
             const signerName = `${CERT_FAMILIES.contextFree.parentFirstName} ${CERT_FAMILIES.contextFree.lastName}`;
 
             for (let i = 0; i < 14; i += 1) {
@@ -887,12 +888,34 @@ const requirementCompletion: Phase = {
                  * Approving paperwork you have just reviewed is a real participant act, not fabricated
                  * data, so it belongs here; typing into an empty field still does not.
                  */
-                const choice =
-                    buttons.find((b) => /that's right/i.test(b))
-                    ?? buttons.find((b) => /^no$/i.test(b))
-                    ?? buttons.find((b) =>
-                        /review paperwork|everything looks good|looks good|continue|next|submit|finish|done|agree|sign/i.test(b),
-                    );
+                /*
+                 * ORDERED PREFERENCE, not a single loose pattern.
+                 *
+                 * The previous version matched /sign/ and so kept picking "Tap to sign" -- reopening
+                 * the signature pad it had just filled in -- while "Sign and finish" sat right beside
+                 * it. A regex broad enough to find the finishing control was also broad enough to find
+                 * the one that undoes it, and `find` returns whichever appears first in the DOM.
+                 *
+                 * So the list is explicit and ordered by intent: commit a completed signature, then
+                 * finish, then advance, then confirm, then decline. Each entry is a label this runtime
+                 * actually renders.
+                 */
+                const prefer: readonly RegExp[] = [
+                    // NOTE: "Done" is deliberately absent. It belongs to the signature pad and is
+                    // handled inside the signing branch; leaving it here made the walker press Done
+                    // against an already-committed pad instead of pressing Sign and finish.
+                    /^sign and finish$/i,
+                    /^everything looks good$/i,
+                    /^review paperwork$/i,
+                    /that's right/i,
+                    /^(continue|next|submit|finish)$/i,
+                    /^no$/i,
+                ];
+                let choice: string | undefined;
+                for (const rx of prefer) {
+                    choice = buttons.find((b) => rx.test(b));
+                    if (choice) break;
+                }
 
                 trail.push({
                     step: i,
@@ -914,16 +937,48 @@ const requirementCompletion: Phase = {
                  * on behalf of a real person. "Type instead" is used rather than the canvas because a
                  * typed signature is deterministic and legible in evidence.
                  */
-                if (buttons.some((b) => /type instead/i.test(b))) {
+                /*
+                 * SIGNING IS A SEQUENCE, so it needs state rather than a pattern.
+                 *
+                 * "Type instead" only exists once the pad is OPEN, and the pad only opens via "Tap to
+                 * sign". Preferring "Sign and finish" first meant the walker never opened the pad and
+                 * then pressed finish forever against an unsigned form -- correctly refused each time.
+                 * Preferring anything matching /sign/ first meant it reopened the pad it had just
+                 * filled. Neither is fixable by reordering a flat list, because the right action
+                 * depends on where in the sequence we are.
+                 */
+                if (!signed && buttons.some((b) => /^tap to sign$/i.test(b)) && !buttons.some((b) => /instead$/i.test(b))) {
+                    await page.getByRole("button", { name: "Tap to sign" }).first().click().catch(() => undefined);
+                    await page.waitForTimeout(900);
+                    trail.push({ step: i, heading: "signature", buttons, chose: "opened the signature pad" });
+                    continue;
+                }
+
+                if (!signed && buttons.some((b) => /type instead/i.test(b))) {
                     await page.getByRole("button", { name: "Type instead" }).first().click().catch(() => undefined);
                     await page.waitForTimeout(600);
+                    const padControls = await (page as unknown as {
+                        evaluate(fn: () => unknown): Promise<unknown>;
+                    }).evaluate(() =>
+                        Array.from(document.querySelectorAll("input, textarea, [contenteditable]")).slice(0, 10).map((el) => {
+                            const i = el as HTMLInputElement;
+                            return {
+                                tag: el.tagName.toLowerCase(),
+                                type: i.type ?? null,
+                                editable: el.getAttribute("contenteditable"),
+                                name: i.name || i.getAttribute("aria-label") || i.placeholder || null,
+                                visible: !!(i.offsetWidth || i.offsetHeight),
+                            };
+                        }),
+                    ).catch(() => []);
                     await page.locator("input[type=text], input:not([type]), textarea").first()
                         .fill(signerName).catch(() => undefined);
                     await page.waitForTimeout(400);
                     const finish = buttons.find((b) => /^done$/i.test(b)) ?? "Done";
                     await page.getByRole("button", { name: finish }).first().click().catch(() => undefined);
                     await page.waitForTimeout(1200);
-                    trail.push({ step: i, heading: "signature", buttons, chose: `typed "${signerName}" and confirmed` });
+                    signed = true;
+                    trail.push({ step: i, heading: "signature", buttons, chose: `typed "${signerName}" and confirmed`, padControls });
                     continue;
                 }
 
@@ -943,6 +998,26 @@ const requirementCompletion: Phase = {
                      * rather than recording only that nothing moved.
                      */
                     const shown = (await page.locator("body").innerText().catch(() => "")).trim();
+                    /*
+                     * WHAT CONTROLS ARE ACTUALLY ON THE SCREEN. A stuck walker is nearly always a
+                     * control it never touched -- here, an explicit review-confirmation the screen
+                     * demands alongside the signature. Listing the inputs by type and label turns
+                     * "it stopped" into "it stopped because this was unticked".
+                     */
+                    const controls = await (page as unknown as {
+                        evaluate(fn: () => unknown): Promise<unknown>;
+                    }).evaluate(() =>
+                        Array.from(document.querySelectorAll("input, textarea, select")).slice(0, 14).map((el) => {
+                            const i = el as HTMLInputElement;
+                            return {
+                                tag: el.tagName.toLowerCase(),
+                                type: i.type ?? null,
+                                checked: typeof i.checked === "boolean" ? i.checked : null,
+                                name: i.name || i.getAttribute("aria-label") || i.placeholder || null,
+                                visible: !!(i.offsetWidth || i.offsetHeight),
+                            };
+                        }),
+                    ).catch(() => []);
                     const validation = shown
                         .split("\n")
                         .map((l) => l.trim())
@@ -954,6 +1029,7 @@ const requirementCompletion: Phase = {
                         buttons,
                         chose: "stopped: screen did not change",
                         surfaceSays: validation.length ? validation : "(no validation message shown)",
+                        controls,
                     });
                     break;
                 }
