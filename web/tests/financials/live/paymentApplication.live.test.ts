@@ -112,24 +112,29 @@ async function cardBalance(supabase: SupabaseClient): Promise<{ payments: number
 describe.skipIf(!env)("payment application — live, against the certification database", () => {
     const supabase = env ? createClient(env.url, env.serviceKey, { auth: { persistSession: false } }) : null;
 
+    /**
+     * THIS TEST CANNOT CLEAN UP AFTER ITSELF, and that is the guarantee working.
+     *
+     * A posted childcare payment refuses DELETE and an application refuses DELETE — the rules this
+     * file exists to certify. The service-role client is exempt from RLS but NOT from triggers, so a
+     * teardown that deleted these rows would mean the rules were not there. (A `delete()` here would
+     * simply fail, and failing quietly while claiming to tidy up is worse than not trying.)
+     *
+     * The reclaim path is `certification/fixtures/financials-charge-spine.sql`, which suspends the
+     * triggers with `session_replication_role = replica` for its own teardown and removes exactly
+     * these rows by billable source. Restoring a proving state is not an operator action; that is
+     * the whole reason the fixture is allowed to do what this is not.
+     *
+     * So this only ASSERTS the refusal, leaving the rows for the fixture — which makes the
+     * certification's own inability to tidy up a piece of evidence rather than an untidiness.
+     */
     afterAll(async () => {
-        if (!supabase || (writtenCharges.length === 0 && writtenPayments.length === 0)) return;
-        /*
-         * Innermost first, and the guarantees being certified apply to the certification's own
-         * leftovers: an application refuses DELETE and a posted childcare payment refuses DELETE.
-         * The service client is service_role, which RLS exempts but TRIGGERS do not — so teardown
-         * goes through the same order the fixture uses, and a refund is removed before its receipt
-         * because the FK is ON DELETE RESTRICT.
-         */
-        if (writtenPayments.length) {
-            await supabase.from("payment_allocations").delete().in("payment_id", writtenPayments);
-            await supabase.from("payments").delete().in("refunds_payment_id", writtenPayments);
-            await supabase.from("payments").delete().in("id", writtenPayments);
-        }
-        if (writtenCharges.length) {
-            await supabase.from("charges").delete().in("source_charge_id", writtenCharges);
-            await supabase.from("charges").delete().in("id", writtenCharges);
-        }
+        if (!supabase || writtenPayments.length === 0) return;
+        const attempted = await supabase.from("payments").delete().in("id", writtenPayments);
+        expect(
+            attempted.error?.message ?? "",
+            "a posted childcare payment must refuse DELETE, including this test's own rows",
+        ).toMatch(/is immutable/);
     });
 
     it("B — money applies once, the card agrees with the database, and a retry adds nothing", async () => {
