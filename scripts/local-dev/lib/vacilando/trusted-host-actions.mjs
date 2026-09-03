@@ -62,6 +62,8 @@ import {
   APPLY_MIGRATION_SH,
   readMigrationContent,
   ledgerLookupSql,
+  migrationPostconditionSql,
+  migrationPostconditionDescription,
 } from "./trusted-host-migrate.mjs";
 import { appendTimelineEvent } from "./timeline.mjs";
 import { attachEvidence } from "./evidence.mjs";
@@ -1171,7 +1173,69 @@ function defaultInspectLedger({ version }) {
     };
   }
   const applied = String(outText).includes(String(version));
-  return { applied };
+  if (!applied) return { applied: false };
+
+  /*
+   * RECORDED IS NOT THE SAME AS APPLIED.
+   *
+   * A certification database was found recording five Enrollment migrations while three of their
+   * effects were absent -- indexes missing, a backfill with no trace. Because the executor trusted
+   * the version string, every apply reported ok:true and did nothing. Silent and confidently wrong.
+   *
+   * So a recorded version is verified against evidence only a successful run could have produced.
+   * A migration that declares no postcondition keeps the old behaviour rather than blocking every
+   * migration the platform has ever applied, and a verifier that cannot RUN is not treated as a
+   * failed verifier -- an unreadable probe must not manufacture a mismatch.
+   */
+  const probe = migrationPostconditionSql(version);
+  if (!probe) return { applied: true, verification: "unverifiable" };
+
+  const verified = runLedgerProbe(probe, `verify-${version}`);
+  if (!verified.ok) return { applied: true, verification: "unverifiable", detail: verified.detail };
+  if (verified.satisfied) return { applied: true, verification: "verified" };
+
+  const expected = migrationPostconditionDescription(version) || "declared postcondition";
+  return {
+    applied: true,
+    inconsistent: true,
+    detail:
+      `Ledger records ${version} as applied, but its durable postcondition is absent. `
+      + `Expected: ${expected}. Observed: the probe returned false. `
+      + `The migration was recorded without taking effect; repair the ledger entry and re-apply `
+      + `through the governed executor rather than trusting the record.`,
+  };
+}
+
+/** Run a single-boolean probe through the trusted SQL child. Never throws. */
+function runLedgerProbe(sql, label) {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, `${label}.sql`);
+  const outFile = join(tmpDir, `${label}.out`);
+  const errFile = join(tmpDir, `${label}.err`);
+  writeFileSync(sqlFile, sql);
+  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 60_000,
+    encoding: "utf8",
+  });
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(sqlFile); } catch { /* */ }
+  if (child.status !== 0) return { ok: false, detail: errText.slice(0, 300) || "postcondition probe failed" };
+  // psql -A -t prints a bare `t` or `f`; anything else is not an answer this may act on.
+  const answer = String(outText).replace(/BEGIN|COMMIT/g, "").trim().split(/\s+/).filter(Boolean).pop();
+  if (answer !== "t" && answer !== "f") return { ok: false, detail: "postcondition probe returned no boolean" };
+  return { ok: true, satisfied: answer === "t" };
 }
 
 function defaultApplyMigrationFile({ entry, text }) {

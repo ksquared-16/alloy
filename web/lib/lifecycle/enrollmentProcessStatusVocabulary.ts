@@ -57,6 +57,7 @@ export const ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY: EnrollmentStatusVocabula
  * created for some other reason carries until a disposition is actually decided.
  */
 export const ENROLLING_CHILD_STATUS_KEY = "enrolling" as const;
+
 export const ENROLLED_CHILD_STATUS_KEY = "enrolled" as const;
 
 /** Dispositions that CONCLUDE a child's enrollment episode. Mirrors `terminal` below. */

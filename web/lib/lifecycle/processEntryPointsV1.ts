@@ -48,6 +48,15 @@ export const PROCESS_ENTRY_INTENTS = ["create_lead", "enrollment_start"] as cons
 
 export type ProcessEntryIntentV1 = (typeof PROCESS_ENTRY_INTENTS)[number];
 
+/**
+ * Beginning a child's Enrollment execution, whichever door it came through.
+ *
+ * Named because it is written into `process_instances.metadata.source` and read back by
+ * `resolveEffectiveStageKey` -- two spellings of this string in two code paths is precisely how one
+ * of them ends up governed by a stage the tenant never configured.
+ */
+export const ENROLLMENT_START_ENTRY_INTENT: ProcessEntryIntentV1 = "enrollment_start";
+
 /** The intent recorded when no creator named one — the default `buildEnrollmentProcessInstanceInsert` writes. */
 export const DEFAULT_PROCESS_ENTRY_INTENT: ProcessEntryIntentV1 = "create_lead";
 

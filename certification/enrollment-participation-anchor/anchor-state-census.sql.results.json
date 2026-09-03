@@ -1,0 +1,155 @@
+{
+  "trusted_host_action_id": "tha_f14373ae4fdd1e",
+  "query_hash": "7f1c376a3ae505a29dbbd8ef36dea7738613ee7536a92a55b32788599de10204",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T03:52:40.942Z",
+    "question_ids": [
+      "anchor_resolution",
+      "duplicate_active_context_free",
+      "journey_population",
+      "ledger",
+      "ledger_ceiling",
+      "opportunity_baseline",
+      "participant_session_baseline",
+      "schema_consistency_trigger",
+      "schema_participation_column",
+      "schema_participation_index"
+    ],
+    "questions": {
+      "anchor_resolution": {
+        "question_id": "anchor_resolution",
+        "row_count": null,
+        "rows": [
+          {
+            "anchored_journeys": 0,
+            "resolves_to_participation": 0,
+            "dangling": 0,
+            "participation_carries_opportunity": 0,
+            "participation_context_free": 0
+          }
+        ]
+      },
+      "duplicate_active_context_free": {
+        "question_id": "duplicate_active_context_free",
+        "row_count": null,
+        "rows": [
+          {
+            "groups": 0
+          }
+        ]
+      },
+      "journey_population": {
+        "question_id": "journey_population",
+        "row_count": null,
+        "rows": [
+          {
+            "context_type": "null",
+            "has_context_id": false,
+            "episode_open": false,
+            "journeys": 6,
+            "children": 2,
+            "orgs": 1
+          },
+          {
+            "context_type": "opportunity",
+            "has_context_id": true,
+            "episode_open": false,
+            "journeys": 2,
+            "children": 2,
+            "orgs": 1
+          },
+          {
+            "context_type": "opportunity",
+            "has_context_id": true,
+            "episode_open": true,
+            "journeys": 17,
+            "children": 17,
+            "orgs": 1
+          }
+        ]
+      },
+      "ledger": {
+        "question_id": "ledger",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20260827160000",
+            "recorded": true
+          },
+          {
+            "version": "20260827170000",
+            "recorded": true
+          },
+          {
+            "version": "20260827180000",
+            "recorded": true
+          }
+        ]
+      },
+      "ledger_ceiling": {
+        "question_id": "ledger_ceiling",
+        "row_count": null,
+        "rows": [
+          {
+            "max_recorded_version": "20260902090000"
+          }
+        ]
+      },
+      "opportunity_baseline": {
+        "question_id": "opportunity_baseline",
+        "row_count": null,
+        "rows": [
+          {
+            "opportunities": 2,
+            "participations": 2,
+            "participations_context_free": 0,
+            "participations_active_context_free": 0
+          }
+        ]
+      },
+      "participant_session_baseline": {
+        "question_id": "participant_session_baseline",
+        "row_count": null,
+        "rows": [
+          {
+            "sessions_bound_to_enrollment_journey": 21,
+            "distinct_journeys": 21
+          }
+        ]
+      },
+      "schema_consistency_trigger": {
+        "question_id": "schema_consistency_trigger",
+        "row_count": null,
+        "rows": [
+          {
+            "function": "validate_opportunity_customer_members_consistency",
+            "handles_absent_opportunity": true
+          }
+        ]
+      },
+      "schema_participation_column": {
+        "question_id": "schema_participation_column",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "opportunity_customer_members",
+            "column": "opportunity_id",
+            "is_nullable": true
+          }
+        ]
+      },
+      "schema_participation_index": {
+        "question_id": "schema_participation_index",
+        "row_count": null,
+        "rows": [
+          {
+            "index": "uq_opportunity_customer_members_unique",
+            "definition": "CREATE UNIQUE INDEX uq_opportunity_customer_members_unique ON public.opportunity_customer_members USING btree (org_id, opportunity_id, customer_member_id)"
+          }
+        ]
+      }
+    },
+    "row_count": 14
+  }
+}

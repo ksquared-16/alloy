@@ -1,0 +1,35 @@
+{
+  "trusted_host_action_id": "tha_b6279726fb2da6",
+  "query_hash": "93778197770db21b804c27ff2bf80a6dbe8c59136dd109dfe06353a95e81f1b4",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-02T19:02:38.207Z",
+    "question_ids": [
+      "opportunity_household_link"
+    ],
+    "questions": {
+      "opportunity_household_link": {
+        "question_id": "opportunity_household_link",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_link": "live_customer",
+            "name_matches_fixture_surname": false,
+            "opportunities": 2
+          },
+          {
+            "customer_link": "live_customer",
+            "name_matches_fixture_surname": true,
+            "opportunities": 2
+          },
+          {
+            "customer_link": "no_customer_id",
+            "name_matches_fixture_surname": true,
+            "opportunities": 13
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

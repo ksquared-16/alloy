@@ -330,7 +330,19 @@ export type StageOutcomeRuleTargetKind =
     | "move_to_stage"
     | "no_movement"
     /** Stamp Enrollment Date onto enrollment process_instance metadata (paperwork completion). */
-    | "stamp_enrollment_date";
+    | "stamp_enrollment_date"
+    /**
+     * The acquisition → Enrollment handoff, declared rather than implied.
+     *
+     * A FAMILY outcome may legitimately produce a CHILD effect, but it must say so: this target is
+     * what makes "the family decided to enrol" also mean "this child's Enrollment execution begins".
+     * Without it a family stage move silently left the child behind, which is how an acquisition
+     * child ended up with no Enrollment journey at all.
+     *
+     * It never advances siblings implicitly — see the executor, which refuses when the child target
+     * is ambiguous rather than guessing which children the family meant.
+     */
+    | "enter_child_enrollment";
 
 export type StageOutcomeRuleTargetV1 = {
     kind: StageOutcomeRuleTargetKind;
