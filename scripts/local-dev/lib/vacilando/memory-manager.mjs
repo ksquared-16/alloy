@@ -29,6 +29,29 @@ const run = (bin, args, timeout = 6000) =>
   });
 
 /**
+ * sysctl lives in /usr/sbin, which is not on every PATH this code runs under.
+ *
+ * A BARE NAME MADE THE PRESSURE READ SILENTLY BLIND. execFile("sysctl", …)
+ * returns "" when the binary cannot be resolved, and "" parses to level null —
+ * reported as "unknown" and treated as not-thrashing. So on any caller whose
+ * PATH lacks /usr/sbin, this module reports a calm host no matter what the
+ * kernel actually says, and auto-reclaim can never fire. MEASURED: bare sysctl
+ * does not resolve in a lane shell here, while /usr/sbin/sysctl -n
+ * kern.memorystatus_vm_pressure_level returns 1 immediately.
+ *
+ * The same failure shape was already fixed for lsof in read-core: a probe that
+ * cannot run must not be indistinguishable from a probe that found nothing.
+ */
+const SYSCTL_CANDIDATES = ["/usr/sbin/sysctl", "/sbin/sysctl", "sysctl"];
+async function sysctl(name, timeout = 3000) {
+  for (const bin of SYSCTL_CANDIDATES) {
+    const out = await run(bin, ["-n", name], timeout);
+    if (String(out).trim()) return out;
+  }
+  return "";
+}
+
+/**
  * Running worker dev servers, read straight from alloy-ro dev-status (the fast,
  * reliable source) rather than the resources cache, which can return empty under
  * memory pressure. Returns [{slot, port, pid}] for servers that are running.
@@ -107,12 +130,20 @@ export async function computeReclaim(snapshot) {
  */
 export async function memoryPressure(policy) {
   const [lvlRaw, swapRaw] = await Promise.all([
-    run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"], 3000),
-    run("sysctl", ["-n", "vm.swapusage"], 3000),
+    sysctl("kern.memorystatus_vm_pressure_level"),
+    sysctl("vm.swapusage"),
   ]);
   const level = Number(String(lvlRaw).trim()) || null; // 1 normal / 2 warn / 4 critical
   const tm = String(swapRaw).match(/total = ([\d.]+)M/), um = String(swapRaw).match(/used = ([\d.]+)M/);
   const swapPct = tm && um && +tm[1] ? (+um[1]) / (+tm[1]) : 0;
   const thrashing = level === 4 || (level === 2 && swapPct >= (policy?.swap_pct ?? 0.85));
-  return { thrashing, level, level_label: level === 4 ? "critical" : level === 2 ? "warn" : level === 1 ? "normal" : "unknown", swap_pct: Math.round(swapPct * 100) };
+  // `readable` says whether the kernel actually answered. Without it a blind
+  // probe and a calm host are the same object, and every consumer downstream
+  // has to guess which one it is holding.
+  return {
+    thrashing, level,
+    level_label: level === 4 ? "critical" : level === 2 ? "warn" : level === 1 ? "normal" : "unknown",
+    swap_pct: Math.round(swapPct * 100),
+    readable: level != null,
+  };
 }
