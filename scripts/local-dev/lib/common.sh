@@ -169,8 +169,17 @@ alloy_runtime_is_fixture() {
 alloy_refuse_occupied_port() {
   local port="$1"
   local context="${2:-}"
+  # Scope: "loopback" asks only whether 127.0.0.1/::1 (or a wildcard covering
+  # them) is taken. That is the right question for a dev server that binds
+  # loopback only, and it stops Tailscale Serve's permanent tailnet-address
+  # listeners from reading as "this port is occupied".
+  local scope="${3:-global}"
   local owner
-  owner="$(alloy_rc_port_owner "$port")"
+  if [[ "$scope" == "loopback" ]]; then
+    owner="$(alloy_rc_loopback_port_owner "$port")"
+  else
+    owner="$(alloy_rc_port_owner "$port")"
+  fi
   case "$owner" in
     owned\ *)
       local pid="${owner#owned }"
