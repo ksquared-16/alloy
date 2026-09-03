@@ -51,6 +51,22 @@ CROSS JOIN LATERAL jsonb_array_elements(
     ) WITH ORDINALITY AS views(view_row, view_ord)
 WHERE d.metadata ? 'lifecycle_builder_v1';
 
+-- `lifecycle_builder_v1` is publication-owned: a BEFORE trigger on `departments`
+-- refuses any direct write unless the transaction holds the capability token. The
+-- first attempt at this migration was refused by that guard, which is the guard
+-- working — and its HINT names the two sanctioned ways through.
+--
+-- `publish_business_process_revision_v1` is the wrong one here. That is the publish
+-- loop: it mints an immutable business-process revision, and this changes no process
+-- semantics. It removes two dead pointers that no runtime reads.
+--
+-- `begin_lifecycle_projection_write('migration')` is the other, and it exists for
+-- precisely this: the guard's own migration documents "an explicit, audited
+-- migration/repair mode ... for exceptional operations". The token is
+-- transaction-local, so it cannot outlive this file, and the verification block
+-- below still has to pass before any of it commits.
+SELECT public.begin_lifecycle_projection_write('migration');
+
 UPDATE public.departments AS d
 SET metadata = jsonb_set(
     d.metadata,
@@ -108,6 +124,10 @@ WHERE d.metadata ? 'lifecycle_builder_v1'
                 AND v.view_row->>'focus_panel_layout_id' = '9dedbfad-589f-480f-949c-2c5852d07e7d'
             )
   );
+
+-- Release the token immediately: 'migration' mode does not auto-release, and a
+-- token left set would authorize every later statement in this transaction.
+SELECT public.end_lifecycle_projection_write();
 
 CREATE TEMP TABLE _inert_focus_after ON COMMIT DROP AS
 SELECT
