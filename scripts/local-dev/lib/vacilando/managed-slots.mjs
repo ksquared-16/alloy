@@ -59,9 +59,91 @@ export const DEFAULT_MANAGED_SLOT_COUNT = 6;
  * range cannot express. Twelve slots from 3011 reach 3022, comfortably clear of
  * the canonical app port and of the 3911+ certification fixture range.
  */
-export const MANAGED_SLOT_HARD_MAX = 24;
+/*
+ * Lowered from 24 the moment reserved ports were modelled. Twenty-four slots
+ * from 3011 reach 3034 — past the Gateway's new home at 3030, so slot 20 would
+ * have collided with the control plane exactly the way slot 10 did when the
+ * Gateway sat on 3020. Fixing the collision at 3020 while leaving a hard max
+ * that walks over 3030 would have moved the defect nineteen slots to the right.
+ *
+ * Nineteen keeps the whole agent range (3011-3029) strictly below the control
+ * plane, which is the separation the Gateway was moved to create. It is far
+ * above the sixteen this program can test and above any capacity the measured
+ * memory model supports, so it constrains nothing real.
+ */
+export const MANAGED_SLOT_HARD_MAX = 19;
 
 export const DEFAULT_FIRST_AGENT_PORT = 3011;
+
+/**
+ * THE CONTROL PLANE MUST NOT SIT INSIDE THE AGENT RANGE.
+ *
+ * THE DEFECT THIS CLOSES, and it was written three lines above: the comment on
+ * MANAGED_SLOT_HARD_MAX reasoned that twelve slots reach 3022, "comfortably
+ * clear of the canonical app port and of the 3911+ certification fixture range"
+ * — and never mentioned the Gateway, which was sitting on 3020. Slot 10 of a
+ * twelve-slot topology IS 3020. The resolver would have handed a lane the port
+ * the control plane was listening on, and the first symptom would have been a
+ * dev server failing to bind, or worse, binding first and taking the Gateway's
+ * place. The clearance argument was right in form and incomplete in fact.
+ *
+ * So reserved ports are modelled rather than reasoned about in a comment. The
+ * Gateway moved to 3030 precisely so the agent range can grow to slot 16 (3026)
+ * without ever reaching it; this keeps that separation true by construction
+ * instead of by whoever last did the arithmetic.
+ */
+export const DEFAULT_GATEWAY_PORT = 3030;
+
+/**
+ * Where the Gateway listens. VACILANDO_PORT is the operator override the
+ * launchd agent already sets; the host config is the durable answer; the
+ * default is the shipped one. Read here so nothing downstream re-derives it.
+ */
+export function gatewayPort(env = process.env) {
+  const raw = env.VACILANDO_PORT ?? configuredNumber("VACILANDO_PORT", env);
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_GATEWAY_PORT;
+}
+
+/**
+ * Ports no managed slot may ever be given. The Gateway is the one that bit us;
+ * the canonical app port is included because a lane bound to it would shadow
+ * the very app the fleet serves.
+ */
+export function reservedControlPlanePorts(env = process.env) {
+  const raw = env.ALLOY_CANONICAL_PORT ?? configuredNumber("ALLOY_CANONICAL_PORT", env);
+  const canonical = Number(raw);
+  return new Set([
+    gatewayPort(env),
+    ...(Number.isInteger(canonical) && canonical > 0 ? [canonical] : [3000]),
+  ]);
+}
+
+/**
+ * Which slots of a proposed topology would land on a reserved port.
+ *
+ * Answered at RESOLUTION time, not when a server eventually fails to bind: a
+ * collision discovered at bind time has already cost a start, and on the losing
+ * side of the race it costs the control plane.
+ */
+export function topologyPortConflicts(count, env = process.env) {
+  const first = firstAgentPort(env);
+  const reserved = reservedControlPlanePorts(env);
+  const out = [];
+  for (let slot = 1; slot <= count; slot += 1) {
+    const port = first + slot - 1;
+    if (reserved.has(port)) out.push({ slot, port });
+  }
+  return out;
+}
+
+/** The largest topology at or below `count` that touches no reserved port. */
+function largestSafeCount(count, env) {
+  for (let n = count; n >= 1; n -= 1) {
+    if (!topologyPortConflicts(n, env).length) return n;
+  }
+  return 0;
+}
 
 function configPath(env) {
   return env.ALLOY_CONFIG_FILE || join(homedir(), ".config", "alloy-dev", "config");
@@ -99,6 +181,20 @@ export function resolveManagedSlotCount(env = process.env) {
   }
   if (n > MANAGED_SLOT_HARD_MAX) {
     return { count: DEFAULT_MANAGED_SLOT_COUNT, source: "above_hard_max_default", requested: n, hard_max: MANAGED_SLOT_HARD_MAX };
+  }
+  // FAIL CLOSED ON A RESERVED PORT. Handing out a slot whose port belongs to the
+  // control plane is worse than handing out fewer slots: the loser of that race
+  // is the Gateway. Shrink to the largest topology that owns none of them, and
+  // say which slot caused it rather than silently returning a smaller number.
+  const conflicts = topologyPortConflicts(n, env);
+  if (conflicts.length) {
+    return {
+      count: largestSafeCount(n, env),
+      source: "reserved_port_conflict",
+      requested: n,
+      conflicts,
+      reserved: [...reservedControlPlanePorts(env)].sort((a, b) => a - b),
+    };
   }
   return {
     count: n,
