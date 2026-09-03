@@ -91,6 +91,31 @@ export function resolveProvisioningPopulationWorkUnitId(args: {
     return host || surface;
 }
 
+/**
+ * The configuration layer a lens's concerns must read — the unit that HOSTS the active Work View.
+ *
+ * Membership already follows the lens's canonical host (`resolveProvisioningPopulationWorkUnitId`).
+ * Configuration must follow the SAME object, or a lens selected from another route keeps the route
+ * unit's configuration: right rows, wrong affordances. Pure; the caller supplies the units it already
+ * holds. Falls back to the surface layer when the host is the surface, or when the host row is not in
+ * the department set — never invents a layer.
+ */
+export function resolveActiveWorkViewConfigLayer<T extends { id: string; metadata?: unknown }>(input: {
+    surfaceWorkUnitId: string;
+    populationWorkUnitId: string;
+    surfaceMetadata: unknown;
+    deptWorkUnits: readonly T[];
+}): { workUnitId: string; metadata: unknown } {
+    const surface = input.surfaceWorkUnitId.trim();
+    const population = input.populationWorkUnitId.trim() || surface;
+    if (!population || population === surface) {
+        return { workUnitId: surface, metadata: input.surfaceMetadata ?? null };
+    }
+    const host = input.deptWorkUnits.find((u) => String(u.id) === population) ?? null;
+    if (!host) return { workUnitId: surface, metadata: input.surfaceMetadata ?? null };
+    return { workUnitId: population, metadata: host.metadata ?? null };
+}
+
 /** Pure resolution: configured Work Views + the department's units → canonical Settlement locators. */
 export function resolveSettlementLocators(input: {
     workViews: ReadonlyArray<WorkViewConfigV1Stored>;
