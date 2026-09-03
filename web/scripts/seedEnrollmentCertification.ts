@@ -93,46 +93,24 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
     }
 
     /*
-     * ORPHANED JOURNEYS, swept before anything else.
+     * NO BLANKET ORPHAN SWEEP. This is a correction, and the reason is worth keeping.
      *
-     * Twelve Enrollment journeys survived earlier resets: the child and household were deleted and
-     * the journey was not, after which it fell outside the namespace join and became invisible to
-     * every later cleanup. Same shape as the Opportunity leak -- ownership was discovered through
-     * identity, and the identity was destroyed before all the owned records had been collected.
+     * A previous version of this file swept every Enrollment journey whose subject child no longer
+     * existed. The rule is sound in isolation -- such a row cannot point at a live child -- but it is
+     * not SCOPED: it reaches rows this fixture never created. On its second run it deleted the two
+     * pre-baseline journeys the Director had explicitly said to preserve. The first run's numbers
+     * happened to come out clean, which is exactly why "it worked" is not evidence that a destructive
+     * rule is correctly bounded.
      *
-     * The selector needs no namespace and no timestamp, which is what makes it safe: a journey whose
-     * subject child NO LONGER EXISTS is unreachable product state by construction. It cannot point at
-     * a live child, because there is no row for it to point at. All twelve were proven against the
-     * live database first -- child absent, household absent, zero participations, zero agreements,
-     * zero placements -- before this was written.
+     * A fixture may remove what it created. It may not remove everything that looks like what it
+     * creates. Historical orphans belong to whoever authorises their removal, one enumerated list at
+     * a time -- not to a predicate that runs on every reset.
      *
-     * Sessions go first: they reference the journey, so removing the journey underneath them would
-     * either fail on the constraint or leave a second generation of orphans.
+     * PREVENTION is the fixture's actual job here, and it happens below: journey ids are collected
+     * through the child identity BEFORE that identity is deleted, so a reset cannot leave a journey
+     * behind for a later sweep to have to find. The defect was never that orphans were not being
+     * cleaned; it was that they were being created.
      */
-    const { data: liveChildren } = await supabase
-        .from("customer_members")
-        .select("id")
-        .eq("org_id", orgId);
-    const liveChildIds = new Set(((liveChildren ?? []) as Array<{ id: string }>).map((r) => r.id));
-
-    const { data: allJourneys } = await supabase
-        .from("process_instances")
-        .select("id, subject_id")
-        .eq("org_id", orgId)
-        .eq("process_key", "enrollment");
-    const orphanJourneyIds = ((allJourneys ?? []) as Array<{ id: string; subject_id: string }>)
-        .filter((r) => !liveChildIds.has(r.subject_id))
-        .map((r) => r.id);
-
-    const orphanedJourneys = orphanJourneyIds.length;
-    if (orphanJourneyIds.length) {
-        await supabase
-            .from("form_packet_sessions")
-            .delete()
-            .eq("org_id", orgId)
-            .in("process_instance_id", orphanJourneyIds);
-        await supabase.from("process_instances").delete().eq("org_id", orgId).in("id", orphanJourneyIds);
-    }
 
     // Reach households through the canonical person → customer link; `customers` carries no e-mail.
     const { data: persons } = await supabase
@@ -142,7 +120,7 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         .ilike("email", `%@${ENROLLMENT_CERT_DOMAIN}`);
     const personIds = ((persons ?? []) as Array<{ id: string }>).map((r) => r.id);
     if (!personIds.length) {
-        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities, orphaned_journeys: orphanedJourneys };
+        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities };
     }
     const { data: links } = await supabase
         .from("customer_persons")
@@ -151,7 +129,7 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         .in("person_id", personIds);
     const customerIds = [...new Set(((links ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id))];
     if (!customerIds.length) {
-        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities, orphaned_journeys: orphanedJourneys };
+        return { households: 0, children: 0, participations: 0, journeys: 0, orphaned_opportunities: orphanedOpportunities };
     }
 
     const { data: members } = await supabase
@@ -165,7 +143,6 @@ async function removeFixture(supabase: Supabase, orgId: string): Promise<Record<
         households: customerIds.length,
         children: memberIds.length,
         orphaned_opportunities: orphanedOpportunities,
-        orphaned_journeys: orphanedJourneys,
     };
 
     /*
