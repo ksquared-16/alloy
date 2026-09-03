@@ -86,12 +86,12 @@ Installed via `npm run local-dev:install` (`scripts/local-dev/`). Operator-frict
 | `alloy-agent-close` | Stop server + git summary; never removes worktree |
 | `alloy-agent-instructions` | Concrete prompt; `--copy` |
 | `alloy-ai-health` | Read-only AI/memory/cache/CPU diagnostics |
-| `alloy-worker-status` | Six-slot compact table (also Phase 4 initiative view) |
+| `alloy-worker-status` | Managed-slot compact table (also Phase 4 initiative view) |
 | `alloy-worker-pause` / `resume` | Overnight stop / morning restore of registry-owned processes |
 | `alloy-worker-doctor` | Drift/stale PID diagnosis (`--recover` to fix safely) |
 | `alloy-sprint-finish` | Free slot; preserve worktree; never push/merge/PR |
 
-Permanent slots (1–6) keep stable roles (Product, Architecture, Performance, UI/UX, Refactor, Experimental) and ports **3011–3016**. Optional shell helpers: `source ~/bin/alloy-dev/shell-aliases.sh` → `awt <slot>`, `devup`. See `scripts/local-dev/README.md`.
+Permanent slots (1–12) map to ports **3011–3022** (slot N → 3010 + N). Slots 1–6 retain their historical roles (Product, Architecture, Performance, UI/UX, Refactor, Experimental); 7–12 are general managed placements. Optional shell helpers: `source ~/bin/alloy-dev/shell-aliases.sh` → `awt <slot>`, `devup`. See `scripts/local-dev/README.md`.
 
 **Destructive flags (manual review required):**
 
@@ -118,7 +118,7 @@ exactly one of them had a process in it.
 | **Worktree** | Branch checkout and durable files | **No** — regardless of lifecycle metadata | Disk; reported separately |
 | **Provider session** | A real Claude/Cursor agent **process** attached to a lane | **Yes, while it must think** | `ALLOY_MAX_ACTIVE_PROVIDERS` (default 3) |
 | **Runtime/validation resource** | Ports, browsers, test workers, databases, exclusive leases | No — counted separately | `execution-resource.mjs` broker |
-| **Slot** | A *placement* identifier for governed fixed ports (3011–3016) and legacy `alloy-sprint-*` commands | No | Compatibility only |
+| **Slot** | A *placement* identifier for governed fixed ports (3011–3022) and legacy `alloy-sprint-*` commands | No | Compatibility only |
 
 ### The rules this implies
 
@@ -194,12 +194,12 @@ Repository-local exclusions: `.vscode/settings.json` excludes `node_modules`, `.
 | Rule | Guidance |
 |------|----------|
 | **Max concurrent (managed slots)** | Prefer toolkit defaults (`ALLOY_MAX_RUNNING_SERVERS`, typically 3) — see `managed-sprint-operations.md` |
-| **Port convention** | Canonical checkout: `3000`. Managed agent slots: **3011–3016** only |
+| **Port convention** | Canonical checkout: `3000`. Managed agent slots: **3011–3022** only |
 | **Ownership** | Start with `alloy-dev-start` / `alloy-sprint-start --with-server`; never invent ports |
 | **Shutdown** | `alloy-dev-stop` or `alloy-worker-pause`; confirm with `alloy-worker-status` / `workspace:ports` |
 | **Stale detection** | `alloy-worker-doctor` + `workspace:ports`; never kill unregistered processes |
 
-Do **not** start ad-hoc Next servers on invented ports for managed agents — that bypasses two-tier env and permanent slot ports (3011–3016). Use `alloy-dev-start` / `alloy-sprint-start --with-server` only.
+Do **not** start ad-hoc Next servers on invented ports for managed agents — that bypasses two-tier env and permanent slot ports (3011–3022). Use `alloy-dev-start` / `alloy-sprint-start --with-server` only.
 ### Validation concurrency
 
 | Command | Concurrent? | Notes |
