@@ -78,6 +78,7 @@ function childRow(over: Partial<ChildProvisioningRow> = {}): ChildProvisioningRo
         subjectId: "cm-1",
         participationId: "pi-1",
         contextId: "opp-1",
+        familyCustomerId: null,
         legacyOcmId: null,
         stageKey: "lead",
         statusKey: null,

@@ -127,6 +127,7 @@ describe("Waitlist placement rank + adjust projection", () => {
             stageKey: "waitlist",
             statusKey: null,
             legacyOcmId: null,
+            familyCustomerId: null,
             updatedAt: null,
             placementCandidateId: "pc-lennon",
             placementWaitlistRow: {
