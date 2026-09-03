@@ -70,8 +70,23 @@ main() {
 
   # (3) Verify against the SAME truth dev-status uses. Never claim stopped while a
   # listener still holds the port.
-  if [[ -n "$port" ]] && alloy_port_in_use "$port"; then
-    local owner; owner="$(alloy_port_owner "$port")"
+  #
+  # LOOPBACK SCOPE, for the same reason the start path uses it. Tailscale Serve
+  # holds each lane's tailnet addresses permanently, so the port-global question
+  # answers "unknown" for every lane port once a Serve route exists. With the
+  # probe failing closed on unknown, this block began refusing to confirm release
+  # for ports that were provably free: measured on :3017, where the port was
+  # empty, alloy-dev-stop still exited 1, and — because the refusal returns
+  # before the audit write — NO stop was recorded. The last stop in the whole
+  # lifecycle audit was 14:12:10 while stops kept being issued for hours.
+  #
+  # That silence is not cosmetic. Desired state is derived from this audit, so
+  # an unrecorded stop reads as "should still be running", which is exactly how
+  # a supervisor would resurrect a server an operator deliberately stopped.
+  local stop_owner
+  stop_owner="$(alloy_rc_loopback_port_owner "$port" 2>/dev/null || printf 'unknown')"
+  if [[ -n "$port" && "$stop_owner" != "free" ]]; then
+    local owner="$stop_owner"
     if [[ "$owner" == "unknown" ]]; then
       # Say which of the two it is. "Still listening (PID ?)" reads as a
       # measurement; this was never measured, and an operator told to force-kill
