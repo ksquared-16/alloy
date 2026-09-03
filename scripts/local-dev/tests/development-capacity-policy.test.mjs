@@ -391,6 +391,74 @@ test("the measured working set replaced the assumption", () => {
     "2 GB is the measured steady-state working set; 8 GB was a worst-case mistaken for a cost");
 });
 
+// ── burst admission, and the historical-swap trap ───────────────────────────
+//
+// The first implementation keyed burst on absolute swap used. That is wrong in
+// a way the memory manager had already written down in its own header: macOS
+// keeps swap allocated long after pressure normalises, so "has ever swapped" is
+// not "is constrained now". MEASURED on this host after the 11/12-server
+// staircase: swap_pct 66 with kernel pressure level 1 and thrashing false — a
+// fully recovered machine the absolute rule would have denied burst until the
+// next reboot, making the measured headroom permanently unusable.
+//
+// Pressure is injected in every case, so none of this depends on the host these
+// tests happen to run on.
+const RECOVERED = { thrashing: false, level: 1, level_label: "normal", swap_pct: 66, readable: true };
+const WARN      = { thrashing: false, level: 2, level_label: "warn", swap_pct: 90, readable: true };
+const THRASHING = { thrashing: true, level: 4, level_label: "critical", swap_pct: 95, readable: true };
+const BLIND     = { thrashing: false, level: null, level_label: "unknown", swap_pct: 0, readable: false };
+const admit = (running, pressure) =>
+  P.serverAdmissionDecision({ running, normalCeiling: 8, pressure });
+
+test("retained swap on a recovered host does NOT block burst", () => {
+  // The exact live condition: 2 GB still allocated, kernel says normal.
+  assert.equal(admit(8, RECOVERED).allow, true, "server 9 must be admissible");
+  assert.equal(admit(8, RECOVERED).tier, "burst");
+  assert.equal(admit(9, RECOVERED).allow, true, "server 10 must be admissible");
+});
+
+test("under the normal ceiling, admission is normal and not burst", () => {
+  const d = admit(7, RECOVERED);
+  assert.equal(d.allow, true);
+  assert.equal(d.tier, "normal");
+  assert.equal(d.state, "normal");
+});
+
+test("actual kernel pressure withholds burst", () => {
+  assert.equal(admit(8, WARN).allow, false, "warn is not a healthy host");
+  assert.equal(admit(8, WARN).state, "pressure_constrained");
+  assert.equal(admit(8, THRASHING).allow, false, "thrashing is not a healthy host");
+});
+
+test("an unreadable probe is never mistaken for a calm host", () => {
+  const d = admit(8, BLIND);
+  assert.equal(d.allow, false, "fail closed");
+  assert.match(d.reason, /could not be read/);
+  assert.equal(admit(8, null).allow, false, "absent pressure also fails closed");
+});
+
+test("server 11 is refused even on a perfectly healthy host", () => {
+  const d = admit(10, RECOVERED);
+  assert.equal(d.allow, false, "the measured knee is 11 and nothing starts one");
+  assert.equal(d.state, "burst_exhausted");
+  assert.equal(d.measured_knee, 11);
+  assert.match(d.reason, /knee is 11/);
+});
+
+test("the reason names all three numbers an operator needs", () => {
+  const d = admit(10, RECOVERED);
+  assert.equal(d.normal_ceiling, 8);
+  assert.equal(d.burst_ceiling, 10);
+  assert.equal(d.measured_knee, 11);
+});
+
+test("burst can never exceed the slots that exist", () => {
+  // POSITIVE CONTROL. Burst headroom is still bounded by topology, so a host
+  // with fewer slots than the burst ceiling cannot be talked into overcommitting.
+  const d = P.serverAdmissionDecision({ running: 5, normalCeiling: 8, pressure: RECOVERED, slotBound: 6 });
+  assert.equal(d.burst_ceiling, 6, "six slots cannot offer ten servers");
+});
+
 await Promise.all(started);
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

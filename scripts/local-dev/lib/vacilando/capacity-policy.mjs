@@ -455,6 +455,84 @@ export function observedCostDiagnostics({ workloads = [], observations = [] } = 
  * ample capacity. Counting that failure as evidence of scarcity would teach the
  * policy the wrong lesson, so capacity and runnability are reported separately.
  */
+/**
+ * May another persistent dev server start right now, and on whose budget?
+ *
+ * THE GAP THIS CLOSES. The policy learned normal 8 / burst 10 / knee 11, and
+ * nothing consumed them: admission still compared a count against a single
+ * number and refused. So the measured envelope was published and unenforced —
+ * the fleet could not use its burst headroom, and nothing knew the difference
+ * between "at budget" and "at the knee".
+ *
+ * The decision lives here because the ceilings do. Callers act; they do not
+ * recompute. `normalCeiling` is passed in because the OPERATOR owns it through
+ * host config — burst headroom is the policy's contribution above whatever the
+ * operator has chosen, not a replacement for it.
+ *
+ * Burst is not free capacity. It is offered only while the host is actually
+ * healthy, because the measured knee is one server above the burst ceiling and
+ * the cost of being wrong there is swap. `pressure` is the live signal; when it
+ * is unknown we do NOT burst, because "we could not tell" is not evidence of
+ * health.
+ */
+export function serverAdmissionDecision({
+  running = 0,
+  normalCeiling = null,
+  policy = CAPACITY_POLICY_V1,
+  pressure = null,
+  slotBound = null,
+} = {}) {
+  const normal = Number.isInteger(normalCeiling) && normalCeiling > 0
+    ? normalCeiling
+    : (policy.dev_server_normal_ceiling ?? 1);
+  let burst = Math.max(normal, policy.dev_server_burst_ceiling ?? normal);
+  const knee = policy.dev_server_measured_knee ?? null;
+  if (Number.isInteger(slotBound) && slotBound > 0) burst = Math.min(burst, slotBound);
+
+  const base = { running, normal_ceiling: normal, burst_ceiling: burst, measured_knee: knee };
+
+  if (running < normal) {
+    return { ...base, allow: true, tier: "normal", state: "normal",
+      reason: `${running}/${normal} normal servers` };
+  }
+  if (running >= burst) {
+    // The knee sits one above burst. Nothing here starts a server at it; the
+    // caller reclaims or queues instead.
+    return { ...base, allow: false, tier: null, state: "burst_exhausted",
+      reason: `${running}/${burst} servers — burst exhausted; the measured pressure knee is ${knee}. Reclaim an idle holder or queue.` };
+  }
+  // Between normal and burst: healthy host only, judged by the CANONICAL
+  // pressure owner rather than a second model invented here.
+  //
+  // The first cut keyed on absolute swap used, and that was wrong in a way the
+  // memory manager had already written down: macOS keeps swap allocated long
+  // after pressure normalises, so "this machine has ever swapped" is not
+  // "this machine is constrained now". MEASURED on this host after the
+  // staircase: swap_pct 66 with kernel pressure level 1, thrashing false — a
+  // fully recovered machine that the absolute rule would have denied burst
+  // until the next reboot, making the measured headroom permanently unusable.
+  //
+  // So: burst needs a kernel that says normal. Level 2 (warn) and 4 (critical)
+  // both withhold, and thrashing withholds regardless of level. Retained swap
+  // is not consulted directly at all — the pressure level already accounts for
+  // it when it matters, which is precisely what makes it the canonical answer.
+  //
+  // `readable` is the difference between a calm host and a blind probe. A probe
+  // that could not run must never look like good news.
+  const healthy = pressure !== null
+    && pressure.readable !== false
+    && pressure.thrashing !== true
+    && pressure.level === 1;
+  if (!healthy) {
+    return { ...base, allow: false, tier: null, state: "pressure_constrained",
+      reason: (pressure === null || pressure.readable === false)
+        ? `${running}/${normal} normal servers — burst withheld because host pressure could not be read`
+        : `${running}/${normal} normal servers — burst withheld: kernel pressure ${pressure.level_label ?? pressure.level}${pressure.thrashing ? ", thrashing" : ""}` };
+  }
+  return { ...base, allow: true, tier: "burst", state: "using_burst",
+    reason: `${running}/${normal} normal exhausted; admitting burst server ${running + 1} of ${burst} on a healthy host` };
+}
+
 export function executionBlockedReason({ exitCode = null, stderr = "", durationMs = null } = {}) {
   const s = String(stderr || "");
   if (/Cannot find native binding|Cannot find module '@[^']*binding-[^']*'/.test(s)) {
