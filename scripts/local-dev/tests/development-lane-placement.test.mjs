@@ -9,7 +9,7 @@
  * to a URL that will never answer.
  */
 import assert from "node:assert/strict";
-import { classifyLane, classifyLanes, PLACEMENT } from "../lib/vacilando/lane-placement.mjs";
+import { classifyLane, classifyLanes, PLACEMENT, isClosedLane } from "../lib/vacilando/lane-placement.mjs";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -130,6 +130,42 @@ test("10. more durable lanes than slots is a supported state", () => {
   const c = classifyLanes({ lanes, registrations: new Map(), worktreesRoot: root });
   assert.equal(c.rollup.durable, 14);
   assert.equal(c.rollup.parked, 14, "fourteen lanes and no slots is legal, not an error");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("11. a closed lane is history, not inventory", () => {
+  // The first cut counted every record as durable, so ten retired lanes made
+  // the fleet read 19 durable / 11 NO_WORKTREE when the truth was 9 and 1.
+  const root = fixture();
+  const closed = { lane_id: "z", status: "CLOSED", binding: { worktree_name: "wt-gone" } };
+  const r = classifyLane(closed, { registrations: new Map(), worktreesRoot: root });
+  assert.equal(r.placement, PLACEMENT.CLOSED);
+  assert.equal(r.disposition_required, false, "a retired lane already had its disposition");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("12. closed lanes are counted separately and never inflate durable", () => {
+  const root = fixture();
+  const regs = new Map([["wt-placed", { slot: 1, port: 3011 }]]);
+  const c = classifyLanes({
+    lanes: [lane("a", "wt-placed"), { ...lane("b", "wt-parked"), status: "CLOSED" }, { ...lane("c", null), status: "CLOSED" }],
+    registrations: regs, worktreesRoot: root,
+  });
+  assert.equal(c.rollup.durable, 1, "only the lane you can still act on");
+  assert.equal(c.rollup.closed, 2);
+  assert.equal(c.rollup.parked, 0, "a closed lane is not parked");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("13. closed lanes are kept, not hidden", () => {
+  const root = fixture();
+  const c = classifyLanes({
+    lanes: [{ ...lane("gone", "wt-parked"), status: "CLOSED" }],
+    registrations: new Map(), worktreesRoot: root,
+  });
+  assert.equal(c.lanes.length, 1, "history must remain readable");
+  assert.equal(isClosedLane({ status: "closed" }), true, "status match is case-insensitive");
+  assert.equal(isClosedLane({ status: "ACTIVE" }), false);
   rmSync(root, { recursive: true, force: true });
 });
 

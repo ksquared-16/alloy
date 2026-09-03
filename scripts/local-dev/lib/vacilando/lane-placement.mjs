@@ -35,7 +35,23 @@ export const PLACEMENT = Object.freeze({
   PLACED: "PLACED",
   PARKED: "PARKED",
   NO_WORKTREE: "NO_WORKTREE",
+  CLOSED: "CLOSED",
 });
+
+/**
+ * A closed lane is history, not inventory.
+ *
+ * The first cut counted every record in the store as durable, so ten retired
+ * lanes made the fleet read 19 durable / 11 NO_WORKTREE when the real answer
+ * was 9 and 6. Worse than a wrong number: the hygiene census then flagged each
+ * retired lane as a lane needing an explicit disposition, which is precisely
+ * the noise that trains people to ignore the census.
+ *
+ * Closed lanes are still returned and still classified — they are kept, not
+ * hidden — but they are counted separately from the fleet you can act on.
+ */
+const CLOSED_STATUSES = new Set(["CLOSED", "ARCHIVED", "RETIRED"]);
+export const isClosedLane = (lane) => CLOSED_STATUSES.has(String(lane?.status || "").toUpperCase());
 
 const RUNTIME_ROOT = () =>
   process.env.VACILANDO_GATEWAY_ROOT
@@ -85,7 +101,8 @@ export function classifyLane(lane, { registrations, worktreesRoot }) {
   const reg = name ? registrations.get(name) || null : null;
 
   let placement;
-  if (!name) placement = PLACEMENT.NO_WORKTREE;
+  if (isClosedLane(lane)) placement = PLACEMENT.CLOSED;
+  else if (!name) placement = PLACEMENT.NO_WORKTREE;
   else if (!exists) placement = PLACEMENT.NO_WORKTREE;
   else if (reg && reg.slot) placement = PLACEMENT.PLACED;
   else placement = PLACEMENT.PARKED;
@@ -110,6 +127,7 @@ export function classifyLane(lane, { registrations, worktreesRoot }) {
       ? ["lane identity", "history", "runs"]
       : ["lane identity", "branch", "worktree", "history", "runs", "uncommitted work", "placement eligibility"],
     placement_eligible: placement === PLACEMENT.PARKED,
+    // A retired lane needs no disposition — it already had one.
     disposition_required: placement === PLACEMENT.NO_WORKTREE,
   };
 }
@@ -124,12 +142,15 @@ export function classifyLanes({
   const items = lanes || readLanes(root);
   const rows = items.map((l) => classifyLane(l, { registrations: regs, worktreesRoot }));
   const count = (p) => rows.filter((r) => r.placement === p).length;
+  // Durable counts the fleet somebody can still act on. Retired lanes remain in
+  // `lanes` for history and are counted on their own.
   return {
     schema_version: LANE_PLACEMENT_SCHEMA,
     observed_at: new Date().toISOString(),
     lanes: rows,
     rollup: {
-      durable: rows.length,
+      durable: rows.filter((r) => r.placement !== PLACEMENT.CLOSED).length,
+      closed: count(PLACEMENT.CLOSED),
       placed: count(PLACEMENT.PLACED),
       parked: count(PLACEMENT.PARKED),
       no_worktree: count(PLACEMENT.NO_WORKTREE),
