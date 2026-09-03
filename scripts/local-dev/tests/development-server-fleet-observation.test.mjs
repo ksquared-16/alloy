@@ -69,18 +69,68 @@ test("5. nothing is recycle-eligible while idleness is unobservable", () => {
 test("6. a large WANTED server is the recycle shape, and is still refused", () => {
   // POSITIVE CONTROL for test 5. If the observer stopped seeing large servers
   // at all, "nothing eligible" would pass for the wrong reason.
+  //
+  // The reason is asserted as a PROPERTY, not as one fixed code. It first
+  // pinned /idleness/ and then legitimately failed once active-run evidence
+  // landed, because slot 6 — 6.3 GB, six hours old — turned out to be running
+  // a live run and started being refused for a STRONGER reason. Pinning the
+  // weakest acceptable answer would have made a real improvement look like a
+  // regression.
   const f = O.observeServerFleet();
   const running = f.servers.filter((s) => s.observed_state === "RUNNING");
   assert.ok(running.length > 0, "this test is meaningless without a running fleet");
-  const large = running.filter((s) => s.large);
-  if (large.length) {
-    const wanted = large.find((s) => s.desired_state === "RUNNING");
-    if (wanted) {
-      assert.match(wanted.recycle_blocked_reason, /idleness/,
-        "a large wanted server is blocked for lack of an idleness signal, not for being large");
+  const wanted = running.filter((s) => s.large && s.desired_state === "RUNNING");
+  for (const s of wanted) {
+    assert.ok(Object.values(O.RECYCLE_BLOCKED).includes(s.recycle_blocked_reason),
+      `slot ${s.slot} must be refused by a canonical reason, got ${s.recycle_blocked_reason}`);
+    assert.notEqual(s.recycle_blocked_reason, O.RECYCLE_BLOCKED.NOT_LARGE_ENOUGH,
+      "a large server cannot be refused for being small — that would mean size decided it");
+    if (!s.active_run) {
+      assert.equal(s.recycle_blocked_reason, O.RECYCLE_BLOCKED.IDLENESS_NOT_OBSERVABLE,
+        "with nothing else against it, the honest refusal is that idleness cannot be seen");
     }
   }
   assert.ok(running.some((s) => s.rss_mb > 0), "RSS must actually be measured");
+});
+
+test("6b. an active run outranks every other reason to take a server", () => {
+  // Measured while writing this: the single most attractive target on the host
+  // (6.3 GB, six hours old) was executing a run. Age and size are exactly the
+  // signals that would have chosen it, and both would have been wrong.
+  // Only RUNNING servers: a lane can hold an active run with no server at all
+  // (observed live — payments was VALIDATING with nothing on its port), and
+  // "not running" is the correct, stronger refusal for those.
+  const f = O.observeServerFleet();
+  for (const s of f.servers.filter((x) => x.active_run && x.observed_state === "RUNNING")) {
+    assert.equal(s.recycle_blocked_reason, O.RECYCLE_BLOCKED.ACTIVE_RUN,
+      `slot ${s.slot} is running ${s.active_run.state} and must be refused for THAT`);
+    assert.equal(s.recycle_eligible, false);
+  }
+});
+
+test("6b2. a lane can want work without holding a server, and that is refused for not running", () => {
+  const f = O.observeServerFleet();
+  for (const s of f.servers.filter((x) => x.active_run && x.observed_state !== "RUNNING")) {
+    assert.equal(s.recycle_blocked_reason, O.RECYCLE_BLOCKED.NOT_RUNNING);
+  }
+});
+
+test("6c. an unrecognised run state counts as active, not as finished", () => {
+  // Terminal states are listed rather than inferred. Reading an unknown state
+  // as finished is how a busy server becomes a recycle candidate.
+  assert.match(SRC, /\["COMPLETE", "FAILED", "CANCELLED", "ABANDONED"\]\.includes\(state\)/,
+    "the terminal set must be explicit");
+});
+
+test("6d. an orphan is proven by a missing worktree, never by silence", () => {
+  const f = O.observeServerFleet();
+  for (const s of f.servers) {
+    if (s.orphaned_registration) {
+      assert.equal(s.worktree_exists, false, "an orphan claim requires the worktree to actually be gone");
+      assert.ok(s.pid, "and something must actually be running");
+    }
+  }
+  assert.match(SRC, /orphaned_registration: Boolean\(pid && name && !worktreeExists\)/);
 });
 
 test("7. running-while-stopped is a reconcile, not a capacity decision", () => {

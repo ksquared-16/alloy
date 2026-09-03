@@ -83,6 +83,22 @@ export const CAPACITY_POLICY_V1 = Object.freeze({
   dev_server_burst_ceiling: 10,
   dev_server_measured_knee: 11,
 
+  // CERTIFIED 2026-09-03. Two concurrent browser certifications were not
+  // slower than one — 39.4 s and 47.7 s run together against 50.7 s solo, at
+  // eight servers. This is the AUTOMATED pool only. A human driving a browser
+  // from the MacBook against a QA route consumes none of it: that traffic is
+  // not scheduled here, cannot be queued here, and counting it would let a
+  // person looking at a page block the fleet.
+  browser_concurrency_ceiling: 2,
+
+  // Deliberately NOT raised. These are CPU-bound and were never independently
+  // measured; the server staircase says nothing about them, and raising a
+  // ceiling on evidence gathered about a different resource is the mistake the
+  // second-axis invariant exists to prevent.
+  validation_job_ceiling: 1,
+  heavy_job_ceiling: 1,
+  install_ceiling: 1,
+
   memory_reserve_fraction: 0.10,
   disk_reserve_fraction: 0.08,
   disk_reserve_min_gb: 20,
@@ -350,6 +366,22 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
         unmeasured: memoryUnmeasured,
         pressure_signal: cap?.swap_rate_known ? "swap_rate" : "unavailable",
       },
+      // Automated browser sessions. Flat and policy-owned rather than derived:
+      // the number came from measurement, not from a formula over cores.
+      browser_capacity: {
+        ceiling: policy.browser_concurrency_ceiling ?? null,
+        current: Number(cap?.browser_sessions) || 0,
+        remaining: Math.max(0, (policy.browser_concurrency_ceiling ?? 0) - (Number(cap?.browser_sessions) || 0)),
+        pool: "automated_only",
+        excludes: "human QA browsing a lane's QA route",
+      },
+      // One owner for the three ceilings that stay at one.
+      serialized_capacity: {
+        validation_jobs: { ceiling: policy.validation_job_ceiling ?? 1, current: Number(cap?.active_validation_jobs) || 0 },
+        heavy_jobs: { ceiling: policy.heavy_job_ceiling ?? 1, current: Number(cap?.active_heavy_jobs) || 0 },
+        installs: { ceiling: policy.install_ceiling ?? 1, current: Number(cap?.active_installs) || 0 },
+        why_not_raised: "CPU-bound and not independently measured; server-memory evidence does not apply",
+      },
       validation_capacity: {
         tokens: validationTokens, used: usedTokens,
         remaining: Math.max(0, validationTokens - usedTokens),
@@ -531,6 +563,47 @@ export function serverAdmissionDecision({
   }
   return { ...base, allow: true, tier: "burst", state: "using_burst",
     reason: `${running}/${normal} normal exhausted; admitting burst server ${running + 1} of ${burst} on a healthy host` };
+}
+
+/**
+ * Admission for the flat ceilings: browser sessions, validation jobs, heavy
+ * jobs, installs.
+ *
+ * These share a shape that the dev-server ladder does not: no burst, no
+ * reclaim, no pressure judgement — just a count against a number that came
+ * from measurement or from deliberate restraint. Giving them one function
+ * keeps four ceilings from drifting into four slightly different opinions
+ * about what "full" means.
+ *
+ * Full is QUEUE, never silent overrun. Exceeding a ceiling quietly is how a
+ * certified concurrency number becomes decorative.
+ */
+export const FLAT_CEILINGS = Object.freeze({
+  browser: "browser_concurrency_ceiling",
+  validation_job: "validation_job_ceiling",
+  heavy_job: "heavy_job_ceiling",
+  install: "install_ceiling",
+});
+
+export function flatCeilingAdmission({ kind, active = 0, policy = CAPACITY_POLICY_V1 } = {}) {
+  const field = FLAT_CEILINGS[kind];
+  if (!field) {
+    return { allow: false, kind, ceiling: null, active, remaining: null,
+      reason: `unknown capacity kind ${JSON.stringify(kind)}; refusing rather than admitting against no ceiling` };
+  }
+  const ceiling = policy[field];
+  if (!Number.isInteger(ceiling) || ceiling < 1) {
+    return { allow: false, kind, ceiling: null, active, remaining: null,
+      reason: `${field} is not configured; refusing rather than admitting against no ceiling` };
+  }
+  const n = Number.isFinite(active) ? active : 0;
+  const remaining = Math.max(0, ceiling - n);
+  if (n < ceiling) {
+    return { allow: true, kind, ceiling, active: n, remaining,
+      reason: `${n}/${ceiling} ${kind} in use` };
+  }
+  return { allow: false, kind, ceiling, active: n, remaining: 0, queue: true,
+    reason: `${n}/${ceiling} ${kind} in use — queue rather than exceed a certified ceiling` };
 }
 
 export function executionBlockedReason({ exitCode = null, stderr = "", durationMs = null } = {}) {
