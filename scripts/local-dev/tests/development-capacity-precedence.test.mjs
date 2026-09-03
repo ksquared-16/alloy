@@ -72,16 +72,22 @@ test("no config and no override: the built-in default, not zero and not unlimite
 });
 
 test("derived capacity is the base tier, and host config still outranks it", () => {
-  // This host derives 6 dev servers from 48 GB; the operator has chosen 3.
+  // This host derives 8 dev servers from 48 GB; the operator has chosen 3.
+  //
+  // It derived 6 until 2026-09-03, from an assumed 8 GB per dev server. That was
+  // a worst case mistaken for a cost: fresh servers measure 390-440 MB and eight
+  // under real load totalled 11-14 GB, and the host ran eight with zero swap.
+  // The precedence contract below is unchanged; only the derived number moved,
+  // and it moved because it is now measured rather than assumed.
   const withoutConfig = C.resolveCapacity(SERVERS, { env: { ALLOY_CONFIG_FILE: EMPTY_CONFIG }, derived });
-  assert.equal(withoutConfig.value, 6, "with nothing configured, the measured host answers");
+  assert.equal(withoutConfig.value, 8, "with nothing configured, the measured host answers");
   assert.equal(withoutConfig.source, "derived");
 
   const withConfig = C.resolveCapacity(SERVERS, { env: base, derived });
   assert.equal(withConfig.value, 3, "the operator's choice for this host wins over the derivation");
   assert.equal(withConfig.source, "host-config");
   // And the gap is REPORTED rather than quietly closed.
-  assert.equal(withConfig.derived_exceeds_enforced, 6);
+  assert.equal(withConfig.derived_exceeds_enforced, 8);
 });
 
 test("an explicit scoped override wins — the whole point", () => {
@@ -185,7 +191,7 @@ test("health can report that an override is active, and why", () => {
   assert.equal(quiet.override_active, false);
   assert.equal(quiet.override_reason, null);
   // And health can see that the measured host would allow more than is enforced.
-  assert.deepEqual(quiet.derived_exceeds_enforced[SERVERS], { enforced: 3, derived: 6 });
+  assert.deepEqual(quiet.derived_exceeds_enforced[SERVERS], { enforced: 3, derived: 8 });
 });
 
 test("every call site reads the one resolver", () => {

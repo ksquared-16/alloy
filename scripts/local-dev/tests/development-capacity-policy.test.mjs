@@ -322,6 +322,75 @@ await test("every constrained axis explains itself", () => {
   }
 });
 
+// ── normal / burst / measured knee ──────────────────────────────────────────
+//
+// The dev-server ceiling used to be min(slots, RAM / 8 GB-per-server). On the
+// 48 GB mini that produced SIX while the host demonstrably ran EIGHT under
+// authenticated compilation, a brokered typecheck and two browser
+// certifications with zero swap. The 8 GB figure was what a heavily exercised
+// UI server reaches after hours, not what a server costs: fresh ones measured
+// 390-440 MB, and eight under real load totalled 11-14 GB.
+//
+// The staircase then found the envelope directly — 8, 9 and 10 held zero swap;
+// 11 was where swap appeared and grew; 12 accelerated to ~2.3 GB with macOS
+// expanding the swapfile. These lock that in so the numbers cannot drift back
+// to an assumption.
+// Injected policy, so these assert the FORMULA rather than whatever topology
+// this machine happens to have configured. Reading managedSlotCount() here made
+// the result depend on ambient environment — a stale VACILANDO_PORT in one shell
+// silently moved the slot bound and failed these for the wrong reason.
+const DETERMINISTIC = Object.freeze({
+  ...P.CAPACITY_POLICY_V1,
+  dev_server_slots: 12,
+});
+const devCap = (o) => {
+  const out = P.computeCapacityPolicy(host(o), { policy: DETERMINISTIC });
+  const find = (x) => { for (const k of Object.keys(x || {})) {
+    if (k === "dev_server_capacity") return x[k];
+    if (x[k] && typeof x[k] === "object") { const r = find(x[k]); if (r) return r; }
+  } };
+  return find(out);
+};
+
+test("a big host offers the measured NORMAL ceiling, not an assumed one", () => {
+  const d = devCap({ logical_cores: 12, memory_total_gb: 48, dev_servers: 0 });
+  assert.equal(d.normal_ceiling, 8, "8 is the certified heavy-use baseline");
+  assert.equal(d.ceiling, 8, "the headline ceiling is the normal one");
+});
+
+test("burst is offered above normal but stops below the measured knee", () => {
+  const d = devCap({ logical_cores: 12, memory_total_gb: 48, dev_servers: 0 });
+  assert.equal(d.burst_ceiling, 10, "10 was the highest level with zero swap");
+  assert.equal(d.measured_knee, 11, "11 is where swap first appeared");
+  assert.ok(d.burst_ceiling < d.measured_knee, "burst must never reach the knee");
+});
+
+test("burst state and headroom are reported, not recomputed by consumers", () => {
+  const at6 = devCap({ logical_cores: 12, memory_total_gb: 48, dev_servers: 6 });
+  assert.equal(at6.using_burst, false);
+  assert.equal(at6.normal_remaining, 2);
+  assert.equal(at6.burst_remaining, 4);
+  const at9 = devCap({ logical_cores: 12, memory_total_gb: 48, dev_servers: 9 });
+  assert.equal(at9.using_burst, true, "nine is above normal, so it is burst");
+  assert.equal(at9.normal_remaining, 0);
+  assert.equal(at9.burst_remaining, 1);
+});
+
+test("a small host is still bounded by its own second axis", () => {
+  // POSITIVE CONTROL. Without this, raising the measured ceilings would silently
+  // offer eight servers on a laptop that cannot hold them, and every assertion
+  // above would still pass.
+  const d = devCap({ logical_cores: 4, memory_total_gb: 8, dev_servers: 0 });
+  assert.ok(d.normal_ceiling <= 4, `small host must stay small, got ${d.normal_ceiling}`);
+  assert.ok(d.burst_ceiling <= d.by_memory || d.burst_ceiling <= d.by_slots,
+    "burst is clamped by the same two axes as normal");
+});
+
+test("the measured working set replaced the assumption", () => {
+  assert.equal(P.CAPACITY_POLICY_V1.dev_server_memory_gb_each, 2,
+    "2 GB is the measured steady-state working set; 8 GB was a worst-case mistaken for a cost");
+});
+
 await Promise.all(started);
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
