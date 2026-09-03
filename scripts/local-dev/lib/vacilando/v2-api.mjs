@@ -1694,6 +1694,18 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
       const { attachLaneBrowserAuth, qaIdentityForSlot } = await import("./browser-auth.mjs");
       lanes = attachLaneBrowserAuth(lanes, { qaIdentityFor: qaIdentityForSlot });
     } catch { /* auth recovery is additive; lane discovery must still answer */ }
+    /*
+     * THE DIRECTOR-FACING APP URL, ON THE ROUTE THE LANE VIEW ACTUALLY READS.
+     *
+     * It was attached to /api/lanes and not here, so the surface the Director
+     * uses received app_url: null and the client fell back to deriving
+     * `http://localhost:<port>` itself — which on the MacBook is the MacBook.
+     * Enriching one of two lane routes is the same as enriching neither.
+     */
+    try {
+      const { attachLaneAppUrls } = await import("./lane-app-url.mjs");
+      lanes = attachLaneAppUrls(lanes);
+    } catch { /* routing detail is additive; lane discovery must still answer */ }
     let folders = [];
     try {
       const { listLaneFolders } = await import("./lane-folders.mjs");
