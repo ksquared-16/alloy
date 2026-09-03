@@ -123,5 +123,98 @@ else
   ok "13. bounded walk terminates and refuses"
 fi
 
+
+# ---------------------------------------------------------------------------
+# LISTENER OWNERSHIP: UNKNOWN IS NOT FREE
+#
+# THE DEFECT THESE ENCODE. `alloy_rc_port_pid` resolved `lsof` by bare name with
+# no /usr/sbin fallback and returned 1 for three different facts — tool missing,
+# probe failed, nothing listening. Callers read `return 1` as "free". Measured on
+# the Mac mini: 3014/3015/3016 were answering HTTP 200 from real next-server
+# processes while `alloy-dev-status` printed `(free)` for every one of them, and
+# `alloy_refuse_occupied_port` — the guard against starting a server on another
+# slot's port — was disarmed by the same conflation.
+# ---------------------------------------------------------------------------
+
+FIXTURE_PORT=3917
+/usr/bin/python3 -c "
+import socket, time
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', $FIXTURE_PORT)); s.listen(1); time.sleep(25)
+" >/dev/null 2>&1 &
+LISTENER_PID=$!
+disown "$LISTENER_PID" 2>/dev/null || true   # keep job-control chatter out of the suite output
+sleep 1
+
+owner="$(alloy_rc_port_owner "$FIXTURE_PORT")"
+case "$owner" in
+  owned\ *) ok "14. a live listener is reported owned with a PID ($owner)" ;;
+  *) bad "14. live listener reported '$owner', expected owned <pid>" ;;
+esac
+
+# The exact shell context that produced the defect: /usr/sbin absent from PATH.
+owner_nopath="$(PATH=/usr/bin:/bin bash -c '
+  ALLOY_LOCAL_DEV_ROOT="'"$ROOT"'"; source "'"$ROOT"'/lib/read-core.sh"
+  alloy_rc_port_owner '"$FIXTURE_PORT"'')"
+case "$owner_nopath" in
+  owned\ *) ok "15. ownership survives a PATH without /usr/sbin (no false free)" ;;
+  *) bad "15. PATH without /usr/sbin reported '$owner_nopath' — the original defect" ;;
+esac
+
+# And when the probe genuinely cannot run, the answer is unknown — never free.
+owner_noprobe="$(bash -c '
+  ALLOY_LOCAL_DEV_ROOT="'"$ROOT"'"; source "'"$ROOT"'/lib/read-core.sh"
+  alloy_rc_lsof_bin() { return 1; }
+  alloy_rc_port_owner '"$FIXTURE_PORT"'')"
+if [[ "$owner_noprobe" == "unknown" ]]; then
+  ok "16. an unavailable probe reports unknown, not free"
+else
+  bad "16. unavailable probe reported '$owner_noprobe'"
+fi
+
+# Fail closed: unknown must not satisfy "known free", and must count as in use.
+if bash -c '
+  ALLOY_LOCAL_DEV_ROOT="'"$ROOT"'"; source "'"$ROOT"'/lib/read-core.sh"
+  alloy_rc_lsof_bin() { return 1; }
+  alloy_rc_port_known_free '"$FIXTURE_PORT"''; then
+  bad "17. unknown was treated as known-free"
+else
+  ok "17. unknown is not known-free (bind guard fails closed)"
+fi
+
+# Kill only the fixture listener, and never this shell: an empty or self PID here
+# terminated the suite before its summary line the first time round.
+if [[ -n "${LISTENER_PID:-}" && "$LISTENER_PID" != "$$" ]]; then
+  kill -TERM "$LISTENER_PID" >/dev/null 2>&1 || true
+fi
+
+# A port with nothing on it is still allowed to be free — this must not become
+# a probe that can only ever say "unknown".
+if [[ "$(alloy_rc_port_owner 3918)" == "free" ]]; then
+  ok "18. an genuinely empty port is still reported free"
+else
+  bad "18. empty port was not reported free"
+fi
+
+# Source-level invariants: no second lsof resolver, and no (free) on the
+# unproven branch of the status table.
+if grep -q 'alloy_rc_lsof_bin' "$ROOT/lib/common.sh"; then
+  ok "19. common.sh delegates to the one lsof resolver in the read core"
+else
+  bad "19. common.sh carries a second lsof resolver"
+fi
+
+if grep -q 'unattributable' "$ROOT/alloy-dev-status"; then
+  ok "20. alloy-dev-status reports unattributable rather than free"
+else
+  bad "20. alloy-dev-status can still print (free) for an unproven port"
+fi
+
+if grep -q 'Refusing to bind a port that cannot be proven free' "$ROOT/lib/common.sh"; then
+  ok "21. alloy_refuse_occupied_port refuses an unprovable port"
+else
+  bad "21. the bind guard still proceeds when ownership is unknown"
+fi
+
 printf '\n==== dev-server-ownership: %s passed, %s failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

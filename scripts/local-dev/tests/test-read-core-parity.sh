@@ -43,7 +43,13 @@ assert_not_inlined "human-bytes IEC table"       'split\("B KB MB GB TB'
 assert_not_inlined "basic dirty agent-marker filter" "grep -vE .\\^..\\? .env.local.agent"
 assert_not_inlined "metadata nullglob glob loop" 'for f in "\$[A-Z_]*"/\*\.env'
 assert_not_inlined "inline root elif-chain"      '== "\$canon" \]\]; then'
-assert_in_core "port listener"  'lsof -nP -iTCP:'
+# The probe binary is resolved rather than named, so the literal `lsof -nP` no
+# longer appears — asserting on it would pin the defect, not the contract. What
+# must live in exactly one place is the OWNER of listener interpretation.
+assert_in_core "port listener"          '\-nP \-iTCP:'
+assert_in_core "lsof resolver"          'alloy_rc_lsof_bin\(\)'
+assert_in_core "three-state port owner" 'alloy_rc_port_owner\(\)'
+assert_not_inlined "lsof resolver" 'for candidate in /usr/sbin/lsof'
 assert_in_core "human-bytes"    'split\("B KB MB GB TB'
 assert_in_core "classify_root"  'alloy_rc_classify_root\(\)'
 # Both root commands must call the shared classifier.

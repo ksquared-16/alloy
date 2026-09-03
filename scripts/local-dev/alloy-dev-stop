@@ -71,13 +71,25 @@ main() {
   # (3) Verify against the SAME truth dev-status uses. Never claim stopped while a
   # listener still holds the port.
   if [[ -n "$port" ]] && alloy_port_in_use "$port"; then
-    local rem; rem="$(alloy_port_listener_pid "$port" 2>/dev/null || true)"
-    cat >&2 <<EOF
+    local owner; owner="$(alloy_port_owner "$port")"
+    if [[ "$owner" == "unknown" ]]; then
+      # Say which of the two it is. "Still listening (PID ?)" reads as a
+      # measurement; this was never measured, and an operator told to force-kill
+      # a PID nobody read is being sent to guess.
+      cat >&2 <<EOF
+error: cannot confirm :$port was released — the listener probe is unavailable, so
+ownership of this port could not be read either way. Not claiming it is stopped.
+Check the probe (lsof) before retrying; do not force-kill an unread PID.
+EOF
+    else
+      local rem="${owner#owned }"
+      cat >&2 <<EOF
 error: a dev server is still listening on :$port (PID ${rem:-?}) after SIGTERM.
 alloy-dev-stop does not send SIGKILL automatically.
 Manual force-kill (only if you have verified ownership):
   kill -KILL ${rem:-<pid>}
 EOF
+    fi
     exit 1
   fi
 

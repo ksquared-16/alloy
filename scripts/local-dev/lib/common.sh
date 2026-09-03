@@ -169,13 +169,23 @@ alloy_runtime_is_fixture() {
 alloy_refuse_occupied_port() {
   local port="$1"
   local context="${2:-}"
-  local pid
-  if pid="$(alloy_port_listener_pid "$port" 2>/dev/null)"; then
-    if [[ -n "$context" ]]; then
-      alloy_die "port $port is already in use by PID $pid ($context). Refusing to choose a different port."
-    fi
-    alloy_die "port $port is already in use by PID $pid. Refusing to choose a different port."
-  fi
+  local owner
+  owner="$(alloy_rc_port_owner "$port")"
+  case "$owner" in
+    owned\ *)
+      local pid="${owner#owned }"
+      if [[ -n "$context" ]]; then
+        alloy_die "port $port is already in use by PID $pid ($context). Refusing to choose a different port."
+      fi
+      alloy_die "port $port is already in use by PID $pid. Refusing to choose a different port."
+      ;;
+    unknown)
+      # Refusing here is the point. The alternative — proceeding because the
+      # probe failed — is how a second server lands on a port that is already
+      # serving another slot, and that collision is only visible afterwards.
+      alloy_die "port $port ownership could not be determined (listener probe unavailable)${context:+ ($context)}. Refusing to bind a port that cannot be proven free."
+      ;;
+  esac
 }
 
 alloy_confirm() {
@@ -543,9 +553,18 @@ alloy_port_listener_pid() {
   alloy_rc_port_pid "$1"
 }
 
+# FAILS CLOSED. "I could not look" must answer the same as "occupied" here: the
+# only action this gates is binding a port, and binding one that is already
+# serving another slot is the collision this guard exists to prevent. A false
+# "free" is unrecoverable in the way a false "busy" is not.
 alloy_port_in_use() {
   local port="$1"
-  alloy_port_listener_pid "$port" >/dev/null 2>&1
+  ! alloy_rc_port_known_free "$port"
+}
+
+# For callers that need the distinction rather than the decision.
+alloy_port_owner() {
+  alloy_rc_port_owner "$1"
 }
 
 alloy_pid_alive() {
@@ -565,19 +584,12 @@ alloy_process_command() {
 # contain. A managed production server was therefore classified `stale` while serving correctly, and
 # `browser-auth verify` refuses a server it cannot call toolkit-owned. Dev only escaped this by the
 # accident of its own command string.
+# ONE resolver, in the shared read core. This was a second copy, and the copy in
+# read-core.sh — the one the port probe uses — was the one that lacked the
+# fallback, so hardening this half fixed cwd lookups while port ownership stayed
+# broken. Delegating is the whole point.
 alloy_lsof_bin() {
-  if alloy_have_cmd lsof; then
-    printf 'lsof'
-    return 0
-  fi
-  local candidate
-  for candidate in /usr/sbin/lsof /usr/bin/lsof /sbin/lsof; do
-    if [[ -x "$candidate" ]]; then
-      printf '%s' "$candidate"
-      return 0
-    fi
-  done
-  return 1
+  alloy_rc_lsof_bin
 }
 
 alloy_process_cwd() {
