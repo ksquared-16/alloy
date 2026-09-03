@@ -41,7 +41,7 @@
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { attachLaneAppUrls, laneAppUrl, readServeStatus } from "./vacilando/lane-app-url.mjs";
 import { gatewayPort, isManagedSlot, managedSlots } from "./vacilando/managed-slots.mjs";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { createConnection } from "node:net";
@@ -157,6 +157,11 @@ const DEFAULT_PORT = gatewayPort();
 // SSE tick is human-visible Director cadence — not sub-second filesystem scan.
 const TICK_MS = 20000;
 const MEMORY_TICK_MS = 45000; // memory measure + idle-server auto-reclaim cadence
+// Dev-server supervision cadence. Slower than the conductor tick because each
+// pass reads the listener for every registered worktree, and a lane that lost
+// its server can wait a minute for recovery far more comfortably than the host
+// can afford a process census every twenty seconds.
+const SUPERVISE_TICK_MS = 60000;
 const RESOURCES_TTL_MS = 60000;
 const WORKTREE_DISK_TICK_MS = 15 * 60 * 1000;
 
@@ -2558,6 +2563,32 @@ export function createVacilandoServer() {
   // Memory Manager tick: measure reclaimable memory and auto-reclaim idle dev
   // servers when the host is thrashing. Slower cadence than the SSE tick.
   const memTimer = setInterval(() => { refreshMemory({ act: true }).catch(() => {}); }, MEMORY_TICK_MS);
+
+  // A CERTIFIED RECOVERY NOBODY RUNS IS NOT RECOVERY.
+  //
+  // alloy-dev-supervise restores a dev server that vanished without a canonical
+  // stop, and it was proven against fault injection — but nothing invoked it, so
+  // recovery only happened when a human typed the command. Four servers had
+  // already died on this host and stayed dead precisely because no layer was
+  // asking the question on a schedule.
+  //
+  // The Gateway is the control plane, so it is where the asking belongs. It
+  // SPAWNS the canonical command rather than reimplementing the decision: the
+  // desired-state derivation, the restart bound and the refusals all stay in one
+  // place, and this timer only decides WHEN to ask. Best effort by construction —
+  // a supervision pass must never be able to take the Gateway down with it.
+  const superviseTimer = setInterval(() => {
+    try {
+      const bin = join(HERE, "..", "alloy-dev-supervise");
+      if (!existsSync(bin)) return;
+      // ASYNC on purpose. A pass that has to restart a server waits on the
+      // canonical start path, which is seconds — the existing execFileSync
+      // pattern in this file is fine for a quick reap but would stall the
+      // control plane here. The timeout bounds a pass that wedges so passes
+      // cannot stack up behind each other.
+      execFile(bin, [], { timeout: 45000, killSignal: "SIGTERM" }, () => { /* best effort */ });
+    } catch { /* never break the control plane on supervision */ }
+  }, SUPERVISE_TICK_MS);
   memTimer.unref?.();
   // Disk hygiene changes slowly — measure + (opt-in) reactively reclaim every 10 min.
   const diskTimer = setInterval(() => { refreshDisk({ act: true }).catch(() => {}); }, 10 * 60 * 1000);
@@ -2803,6 +2834,7 @@ export function createVacilandoServer() {
     close: () => {
       clearInterval(timer);
       clearInterval(memTimer);
+      clearInterval(superviseTimer);
       clearInterval(diskTimer);
       clearInterval(worktreeDiskTimer);
       clearInterval(engHealthTimer);

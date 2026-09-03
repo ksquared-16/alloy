@@ -89,5 +89,26 @@ grep -q 'alloy_rc_loopback_port_owner' "${ROOT}/alloy-dev-stop" \
   && ok "17. alloy-dev-stop verifies release loopback-scoped so the stop is recorded" \
   || bad "17. alloy-dev-stop still asks the port-global question and can skip its audit write"
 
+# --- a certified recovery nobody runs is not recovery -----------------------
+#
+# The supervisor was fault-certified while NOTHING invoked it, so recovery only
+# happened when a human typed the command — which is exactly the state four dead
+# servers were already in. The Gateway is the control plane, so it owns the
+# schedule; it SPAWNS the canonical command rather than reimplementing the
+# decision, keeping desired-state derivation and the restart bound in one place.
+SERVER="${ROOT}/lib/vacilando-server.mjs"
+grep -q 'SUPERVISE_TICK_MS' "$SERVER" \
+  && ok "18. the Gateway schedules supervision on its own cadence" \
+  || bad "18. nothing schedules the supervisor"
+grep -q 'alloy-dev-supervise' "$SERVER" \
+  && ok "19. it invokes the canonical command, not a second implementation" \
+  || bad "19. the Gateway does not call the canonical supervisor"
+grep -q 'execFile(bin' "$SERVER" \
+  && ok "20. the pass is async, so a restart cannot stall the control plane" \
+  || bad "20. supervision blocks the Gateway event loop"
+grep -q 'clearInterval(superviseTimer)' "$SERVER" \
+  && ok "21. the timer is cleared on shutdown like its siblings" \
+  || bad "21. supervision timer leaks on close"
+
 printf '\n==== dev-server-supervisor: %s passed, %s failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
