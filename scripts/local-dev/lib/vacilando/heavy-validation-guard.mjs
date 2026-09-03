@@ -13,6 +13,7 @@
  *      (e.g. old package.json still calling tsc directly under `npm run typecheck`).
  */
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import os from "node:os";
 import { join } from "node:path";
 
@@ -80,18 +81,27 @@ export function brokerPathPrefix() {
  * Scan running processes for unbrokered heavy validators.
  * Returns [{ pid, pgid, command }] candidates (does not kill).
  */
-export function findUnbrokeredHeavyProcesses() {
+export function findUnbrokeredHeavyProcesses(deps = {}) {
   let out = "";
-  try {
-    // -ww: full argv. macOS ps supports -ax -o.
-    out = execFileSync("ps", ["-ax", "-o", "pid=,pgid=,command="], {
-      encoding: "utf8",
-      timeout: 8000,
-      maxBuffer: 8 * 1024 * 1024,
-    });
-  } catch {
-    return [];
+  if (typeof deps.psOut === "string") {
+    // Injected for deterministic tests. A guard that can only be exercised
+    // against whatever happens to be running is a guard nobody can prove.
+    out = deps.psOut;
+  } else {
+    try {
+      // -ww: full argv. macOS ps supports -ax -o.
+      out = execFileSync("ps", ["-ax", "-o", "pid=,pgid=,command="], {
+        encoding: "utf8",
+        timeout: 8000,
+        maxBuffer: 8 * 1024 * 1024,
+      });
+    } catch {
+      return [];
+    }
   }
+  // Ownership is resolved ONCE per scan, from the broker's own record of what it
+  // admitted, rather than per-process by guessing at an environment.
+  const { pgids, owned } = brokerOwnedPids(deps);
   const hits = [];
   for (const line of out.split("\n")) {
     const m = line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/);
@@ -100,13 +110,110 @@ export function findUnbrokeredHeavyProcesses() {
     const pgid = Number(m[2]);
     const command = m[3];
     if (!isUnbrokeredHeavyCommand(command)) continue;
-    // Skip if this process (or its env) shows broker execution.
+    // AUTHORITATIVE: a descendant of a live broker claim is broker-owned, even
+    // when nothing about the process itself advertises it.
+    if (owned.has(pid)) continue;
+    if (pgids.has(pgid)) continue;
+    // Secondary, and no longer load-bearing: honoured when the environment does
+    // happen to be readable.
     if (processHasBrokerEnv(pid)) continue;
     hits.push({ pid, pgid, command: command.slice(0, 240) });
   }
   return hits;
 }
 
+/**
+ * THE BROKER ALREADY KNOWS WHAT IT ADMITTED. ASK IT.
+ *
+ * THE DEFECT. Ownership was inferred by reading a descendant's environment for
+ * ALLOY_VALIDATE_EXECUTING=1 via `ps eww`. That environment is not reliably
+ * observable — for `npm exec next build` and the node processes it spawns, ps
+ * returns nothing usable — so the lookup returned false, the guard classified
+ * broker-owned work as unbrokered, and SIGTERMed it. Measured live: a brokered
+ * `vac run build` died rc=143 class=cancelled about six seconds after START,
+ * with pid 64288 `npm exec next build` reported as an unbrokered hit, while the
+ * host was idle (0/9 brokered budget, ~9.9 GB free against a 4.8 GB reserve).
+ * Not capacity — the guard killed its own broker's job.
+ *
+ * Environment inspection is a guess about a process. A claim is a RECORD of a
+ * decision: the broker admitted the job and wrote down the pid holding the
+ * claim. Descendants of that pid are broker-owned by construction, whether or
+ * not any of them happens to expose an environment variable.
+ *
+ * PID REUSE. Only LIVE claims are consulted. readClaimStore reaps claims whose
+ * holder has exited, so a finished job cannot leave behind an exemption that a
+ * later, unrelated process inherits by landing on the same pid.
+ */
+function brokerOwnedPids({ readClaims = defaultReadClaims, procTable = null } = {}) {
+  const roots = new Set();
+  const pgids = new Set();
+  for (const c of readClaims()) {
+    const pid = Number(c?.pid);
+    if (Number.isInteger(pid) && pid > 0) roots.add(pid);
+    const rp = Number(c?.root_provider_pid);
+    if (Number.isInteger(rp) && rp > 0) roots.add(rp);
+  }
+  if (!roots.size) return { roots, pgids, owned: new Set() };
+
+  // Walk the live process table once: a pid is owned when any ancestor is a
+  // claim root. Depth is bounded because the table is finite and each step moves
+  // strictly toward pid 1.
+  const parent = new Map();
+  const pgidOf = new Map();
+  for (const row of procTable || readProcTable()) {
+    parent.set(row.pid, row.ppid);
+    pgidOf.set(row.pid, row.pgid);
+  }
+  for (const r of roots) if (pgidOf.has(r)) pgids.add(pgidOf.get(r));
+
+  const owned = new Set(roots);
+  for (const pid of parent.keys()) {
+    let cur = pid;
+    for (let hop = 0; hop < 64; hop += 1) {
+      if (owned.has(cur)) { owned.add(pid); break; }
+      const next = parent.get(cur);
+      if (next == null || next === cur || next <= 1) break;
+      cur = next;
+    }
+  }
+  return { roots, pgids, owned };
+}
+
+/** pid/ppid/pgid for every live process. Separate so tests can inject one. */
+export function readProcTable() {
+  try {
+    const out = execFileSync("ps", ["-ax", "-o", "pid=,ppid=,pgid="], {
+      encoding: "utf8", timeout: 8000, maxBuffer: 8 * 1024 * 1024,
+    });
+    const rows = [];
+    for (const line of out.split("\n")) {
+      const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)$/);
+      if (m) rows.push({ pid: Number(m[1]), ppid: Number(m[2]), pgid: Number(m[3]) });
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+const requireFromHere = createRequire(import.meta.url);
+
+function defaultReadClaims() {
+  try {
+    // Loaded lazily: hooks that only classify a command string must not pay for
+    // the claim store, and a broken store must never make the guard throw.
+    const { readClaimStore } = requireFromHere("./validation-admission.mjs");
+    return readClaimStore()?.claims || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Secondary signal, kept because it is free when it works and costs nothing when
+ * it does not. It may no longer be the ONLY thing standing between a brokered
+ * build and a SIGTERM.
+ */
 function processHasBrokerEnv(pid) {
   try {
     const env = execFileSync("ps", ["eww", "-p", String(pid)], {
