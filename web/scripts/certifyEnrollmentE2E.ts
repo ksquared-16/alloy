@@ -13,7 +13,7 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { formatDriverReport, runEnrollmentCertification } from "@/lib/certification/enrollmentE2eDriver";
+import { formatDriverReport, runEnrollmentCertification, selectPhaseChain } from "@/lib/certification/enrollmentE2eDriver";
 import { REAL_ENROLLMENT_V1_PHASES } from "@/lib/certification/enrollmentE2ePhases";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
@@ -52,9 +52,22 @@ async function main(): Promise<void> {
         || process.env.ALLOY_CERT_ACTOR_USER_ID?.trim()
         || null;
 
+    /*
+     * ALLOY_CERT_PHASES runs one phase with its real prerequisite chain, from the same fresh
+     * bootstrap. Unset runs everything, which is what certification means; set, it is a debugging
+     * accelerator that still refuses to inherit state or skip a dependency.
+     */
+    const requested = (process.env.ALLOY_CERT_PHASES ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+    const phases = requested.length
+        ? selectPhaseChain(REAL_ENROLLMENT_V1_PHASES, requested)
+        : REAL_ENROLLMENT_V1_PHASES;
+    if (requested.length) {
+        console.log(`targeted chain: ${phases.map((p) => p.key).join(" -> ")}`);
+    }
+
     const result = await runEnrollmentCertification(
         { supabase, orgId, actorUserId, facts: {} },
-        REAL_ENROLLMENT_V1_PHASES,
+        phases,
     );
 
     console.log(formatDriverReport(result));

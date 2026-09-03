@@ -127,6 +127,38 @@ export async function runEnrollmentCertification(
     return { ok, phases: results, firstFailure };
 }
 
+/**
+ * Select a phase and everything it genuinely depends on, in declared order.
+ *
+ * A certification acceleration, not a second harness. Answering one question about one phase was
+ * costing a full six-minute suite run, so a targeted run executes the SAME prerequisite chain from
+ * the same fresh bootstrap and hands the target phase exactly the state it receives in a full run.
+ * It never attaches to stale fixture state and never skips a prerequisite — the dependency closure is
+ * computed, not hand-listed, so a chain cannot silently go stale when a phase gains a dependency.
+ */
+export function selectPhaseChain(
+    phases: readonly Phase[],
+    targetKeys: readonly string[],
+): readonly Phase[] {
+    const byKey = new Map(phases.map((p) => [p.key, p]));
+    const needed = new Set<string>();
+
+    const walk = (key: string) => {
+        if (needed.has(key)) return;
+        const phase = byKey.get(key);
+        if (!phase) return;
+        needed.add(key);
+        for (const dep of phase.dependsOn ?? []) walk(dep);
+    };
+    for (const k of targetKeys) walk(k);
+
+    // Bootstrap always runs: a targeted chain that inherited state would defeat the point.
+    const first = phases[0];
+    if (first) needed.add(first.key);
+
+    return phases.filter((p) => needed.has(p.key));
+}
+
 /** Render a report an operator can read without knowing the harness. */
 export function formatDriverReport(result: DriverRunResult): string {
     const mark: Record<PhaseStatus, string> = {

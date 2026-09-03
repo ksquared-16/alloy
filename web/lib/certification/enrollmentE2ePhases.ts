@@ -814,6 +814,111 @@ const governedException: Phase = {
 };
 
 /**
+ * THE SIGNATURE COMPONENT, as a state machine.
+ *
+ * Three separate bugs came from matching button text against a flat preference list: /sign/ reopened
+ * the pad it had just filled, preferring "Sign and finish" meant the pad never opened, and leaving
+ * "Done" in the list pressed it against an already-committed pad. Each was a different symptom of
+ * one mistake — a pattern standing in for a sequence — so the sequence is now explicit and only
+ * transitions valid for the observed state are attempted.
+ *
+ * The acknowledgements are ticked by LABEL, never by index. Two checkboxes look identical by
+ * position; one says "I acknowledge the information above is accurate", the other "I acknowledge
+ * this electronic signature applies to this form". Clicking to find out which is which is how a
+ * harness agrees to something on a family's behalf.
+ */
+type SignatureState =
+    | "pad_closed"
+    | "pad_open"
+    | "typed_value_present"
+    | "acks_complete"
+    | "committed"
+    | "finished"
+    | "stuck";
+
+async function driveSignature(
+    page: PlaywrightPage,
+    signerName: string,
+): Promise<{ readonly state: SignatureState; readonly transitions: readonly string[]; readonly acks: unknown }> {
+    const transitions: string[] = [];
+    let acks: unknown = null;
+
+    const buttons = async () =>
+        (await page.locator("button, [role=button]").allInnerTexts().catch(() => [])).map((b) => b.trim()).filter(Boolean);
+    const has = (list: readonly string[], rx: RegExp) => list.some((b) => rx.test(b));
+    const click = async (name: string) => {
+        await page.getByRole("button", { name }).first().click().catch(() => undefined);
+        await page.waitForTimeout(900);
+    };
+
+    // pad_closed -> pad_open
+    let btns = await buttons();
+    if (!has(btns, /instead$/i)) {
+        if (!has(btns, /^tap to sign$/i)) return { state: "stuck", transitions: ["no way to open the signature pad"], acks };
+        await click("Tap to sign");
+        transitions.push("pad_closed -> pad_open");
+        btns = await buttons();
+    }
+
+    // pad_open -> typed_value_present
+    if (has(btns, /^type instead$/i)) {
+        await click("Type instead");
+        transitions.push("pad_open -> typed mode");
+        btns = await buttons();
+    }
+    await page.locator('input[type="text"]').first().fill(signerName).catch(() => undefined);
+    await page.waitForTimeout(500);
+    transitions.push(`typed "${signerName}"`);
+
+    /*
+     * typed_value_present -> acks_complete. Only acknowledgements, only if unchecked, only if
+     * enabled and visible. Everything else on the pad is left exactly as the participant would find
+     * it.
+     */
+    acks = await (page as unknown as { evaluate(fn: () => unknown): Promise<unknown> }).evaluate(() => {
+        const out: Array<Record<string, unknown>> = [];
+        for (const el of Array.from(document.querySelectorAll('input[type="checkbox"]'))) {
+            const box = el as HTMLInputElement;
+            const label =
+                box.getAttribute("aria-label")
+                ?? (box.id ? document.querySelector(`label[for="${box.id}"]`)?.textContent : null)
+                ?? box.closest("label")?.textContent
+                ?? "";
+            const text = (label ?? "").trim();
+            const isAck = /acknowledge|agree|confirm/i.test(text);
+            const before = box.checked;
+            if (isAck && !box.checked && !box.disabled) box.click();
+            out.push({ label: text.slice(0, 110), wasChecked: before, nowChecked: box.checked, ticked: isAck && !before });
+        }
+        return out;
+    }).catch(() => null);
+    transitions.push("acknowledgements reconciled by label");
+    await page.waitForTimeout(500);
+
+    // acks_complete -> committed
+    btns = await buttons();
+    if (has(btns, /^done$/i)) {
+        await click("Done");
+        transitions.push("committed the signature");
+        btns = await buttons();
+    }
+
+    // committed -> finished
+    if (has(btns, /^sign and finish$/i)) {
+        await click("Sign and finish");
+        transitions.push("sign and finish");
+        await page.waitForTimeout(1500);
+        const after = await buttons();
+        if (!has(after, /^sign and finish$/i)) {
+            return { state: "finished", transitions, acks };
+        }
+        return { state: "stuck", transitions: [...transitions, "sign and finish did not advance"], acks };
+    }
+
+    return { state: "stuck", transitions: [...transitions, "no finish control present"], acks };
+}
+
+/**
  * G: satisfy the published blocking requirement through the participant product.
  *
  * The keystone. Everything downstream — ready state, Complete Enrollment, enrolled, handoff — needs a
@@ -870,6 +975,8 @@ const requirementCompletion: Phase = {
             const trail: Array<Record<string, unknown>> = [];
             let lastSignature = "";
             let signed = false;
+            let padInspected = false;
+            let checkboxReport: unknown = null;
             const signerName = `${CERT_FAMILIES.contextFree.parentFirstName} ${CERT_FAMILIES.contextFree.lastName}`;
 
             for (let i = 0; i < 14; i += 1) {
@@ -954,32 +1061,25 @@ const requirementCompletion: Phase = {
                     continue;
                 }
 
-                if (!signed && buttons.some((b) => /type instead/i.test(b))) {
-                    await page.getByRole("button", { name: "Type instead" }).first().click().catch(() => undefined);
-                    await page.waitForTimeout(600);
-                    const padControls = await (page as unknown as {
-                        evaluate(fn: () => unknown): Promise<unknown>;
-                    }).evaluate(() =>
-                        Array.from(document.querySelectorAll("input, textarea, [contenteditable]")).slice(0, 10).map((el) => {
-                            const i = el as HTMLInputElement;
-                            return {
-                                tag: el.tagName.toLowerCase(),
-                                type: i.type ?? null,
-                                editable: el.getAttribute("contenteditable"),
-                                name: i.name || i.getAttribute("aria-label") || i.placeholder || null,
-                                visible: !!(i.offsetWidth || i.offsetHeight),
-                            };
-                        }),
-                    ).catch(() => []);
-                    await page.locator("input[type=text], input:not([type]), textarea").first()
-                        .fill(signerName).catch(() => undefined);
-                    await page.waitForTimeout(400);
-                    const finish = buttons.find((b) => /^done$/i.test(b)) ?? "Done";
-                    await page.getByRole("button", { name: finish }).first().click().catch(() => undefined);
-                    await page.waitForTimeout(1200);
+                /*
+                 * The signature component owns its own sequence. The walker hands off rather than
+                 * trying to express mutually-dependent UI states as a preference list — which is what
+                 * produced three separate loops before.
+                 */
+                if (!signed && (buttons.some((b) => /^tap to sign$/i.test(b)) || buttons.some((b) => /instead$/i.test(b)))) {
+                    const sig = await driveSignature(page, signerName);
                     signed = true;
-                    trail.push({ step: i, heading: "signature", buttons, chose: `typed "${signerName}" and confirmed`, padControls });
-                    continue;
+                    trail.push({
+                        step: i,
+                        heading: "signature component",
+                        buttons,
+                        chose: `state machine -> ${sig.state}`,
+                        transitions: sig.transitions,
+                        acknowledgements: sig.acks,
+                    });
+                    if (sig.state === "finished") continue;
+                    trail.push({ step: i, heading: "(signature stuck)", buttons: await page.locator("button").allInnerTexts().catch(() => []), chose: sig.state });
+                    break;
                 }
 
                 if (!choice) break;
