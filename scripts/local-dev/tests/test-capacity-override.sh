@@ -162,5 +162,38 @@ printf 'x' > "${WORK}/other/web/node_modules/.installed"
 eq "a non-Next dev script does not need a Next binary" \
   "$(alloy_server_readiness_for_path "${WORK}/other" || true)" "ready"
 
+# ---------------------------------------------------------------------------
+# THE HARD CEILING FOLLOWS THE TOPOLOGY OWNER, NOT A LITERAL.
+#
+# capacity-policy.mjs had already been converged onto managedSlotCount(), while
+# this shell guard still returned a pinned 6. Raising ALLOY_MAX_AGENTS therefore
+# moved the derived Node ceiling and left the guard that actually REFUSES a start
+# stuck at six: two owners of "how many slots exist", disagreeing silently, with
+# the enforcing one wrong.
+# ---------------------------------------------------------------------------
+eq "server ceiling follows a six-slot topology" \
+  "$(ALLOY_MAX_AGENTS=6 alloy_capacity_hard_ceiling ALLOY_MAX_RUNNING_SERVERS)" "6"
+eq "server ceiling follows a twelve-slot topology" \
+  "$(ALLOY_MAX_AGENTS=12 alloy_capacity_hard_ceiling ALLOY_MAX_RUNNING_SERVERS)" "12"
+# PROVIDERS MUST NOT INHERIT THE SLOT COUNT. They were grouped behind the same
+# literal, which makes "parameterize it" look like "point both at the topology".
+# A dev server is bound by ports; a provider is bound by the machine. Configuring
+# sixteen slots on this host must not imply sixteen provider seats.
+providers_at_6="$(ALLOY_MAX_AGENTS=6 alloy_capacity_hard_ceiling ALLOY_MAX_ACTIVE_PROVIDERS)"
+providers_at_16="$(ALLOY_MAX_AGENTS=16 alloy_capacity_hard_ceiling ALLOY_MAX_ACTIVE_PROVIDERS)"
+eq "provider ceiling is unchanged by the slot count" "$providers_at_6" "$providers_at_16"
+if [[ "$providers_at_16" == "16" ]]; then
+  no "provider ceiling does not follow the slot count" "got $providers_at_16 at 16 slots — providers are a separate axis"
+else
+  ok "provider ceiling does not follow the slot count"
+fi
+# Installs and heavy jobs are bounded by CPU: more slots do not buy more cores.
+eq "heavy-job ceiling does not follow the slot count" \
+  "$(ALLOY_MAX_AGENTS=12 alloy_capacity_hard_ceiling ALLOY_MAX_CONCURRENT_HEAVY_JOBS)" "4"
+# A missing or nonsense topology must not collapse capacity to zero and refuse
+# every start on the host.
+eq "a nonsense topology falls back rather than refusing everything" \
+  "$(ALLOY_MAX_AGENTS=oops alloy_capacity_hard_ceiling ALLOY_MAX_RUNNING_SERVERS)" "6"
+
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
