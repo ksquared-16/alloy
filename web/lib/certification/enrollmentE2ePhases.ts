@@ -328,21 +328,44 @@ async function durableFingerprint(
      */
     const items = await supabase
         .from("form_packet_session_items")
-        .select("id, status, sequence_index")
+        .select("id, status, sequence_index, form_submission_id")
         .eq("org_id", orgId)
         .in("packet_session_id", rows.length ? rows.map((r) => String(r.id)) : ["00000000-0000-0000-0000-000000000000"]);
-    const itemRows = ((items.data ?? []) as Row[]);
+    const itemRows = ((items.data ?? []) as Row[])
+        .slice()
+        .sort((a, b) => Number(a.sequence_index ?? 0) - Number(b.sequence_index ?? 0));
+
+    /*
+     * FOLLOW THE FK THE RESOLVER FOLLOWS.
+     *
+     * resolveEnrollmentParticipantProgress deliberately does NOT read the session item's own status
+     * — its comment says so outright: resolving the hop to Forms "is what keeps Forms the
+     * satisfaction authority". Satisfaction is
+     * form_packet_session_items.form_submission_id -> form_submissions.status.
+     *
+     * So an item reading `submitted` proves nothing about the requirement, and earlier fingerprints
+     * here were watching a column the verdict does not consult.
+     */
+    const submissionIds = itemRows.map((r) => r.form_submission_id).filter(Boolean) as string[];
+    const subs = submissionIds.length
+        ? await supabase.from("form_submissions").select("id, status").in("id", submissionIds)
+        : { data: [] as Row[] };
+    const statusById = new Map(((subs.data ?? []) as Row[]).map((r) => [String(r.id), String(r.status)]));
 
     return {
         packetSessions: rows.length,
         sessionIds: rows.map((r) => String(r.id).slice(0, 8)).sort(),
         sessionStatuses: rows.map((r) => String(r.status)).sort(),
         sessionItems: itemRows.length,
-        // Every item's status, for THIS journey's session. No sort, no slice.
-        itemStatuses: itemRows
-            .slice()
-            .sort((a, b) => Number(a.sequence_index ?? 0) - Number(b.sequence_index ?? 0))
-            .map((r) => String(r.status)),
+        items: itemRows.map((r) => ({
+            item: String(r.id).slice(0, 8),
+            itemStatus: String(r.status),
+            // The authority. null here means the requirement has no evidence to resolve against.
+            formSubmissionId: r.form_submission_id ? String(r.form_submission_id).slice(0, 8) : null,
+            submissionStatus: r.form_submission_id
+                ? (statusById.get(String(r.form_submission_id)) ?? "(row missing)")
+                : null,
+        })),
     };
 }
 
@@ -1328,6 +1351,23 @@ const requirementCompletion: Phase = {
                     fpBeforeWalk,
                     fpAfterSignature: fpAfter,
                     firstBrokenInvariant: code,
+                    /*
+                     * THE REQUIREMENT'S OWN STATUS AND REASON, which was never captured.
+                     *
+                     * The driver only ever recorded the sufficiency DISPOSITION ("blocking"), which
+                     * collapses several distinct requirement states into one word. The projection
+                     * distinguishes them precisely — `unrealized` means the packet does not contain
+                     * the form the revision requires, which is a configuration mismatch and not an
+                     * unfinished participant. Reading the disposition instead of the status is how
+                     * this looked like a persistence problem for several runs while the durable rows
+                     * were correct the whole time.
+                     */
+                    requirementDetail: after.requirements.map((r) => ({
+                        id: r.requirement_id,
+                        status: (r as unknown as { status?: string }).status ?? null,
+                        disposition: r.disposition,
+                        reason: String((r as unknown as { reason?: string }).reason ?? "").slice(0, 200) || null,
+                    })),
                     cacheExperiment: {
                         eligibleBeforeInvalidate: gateBeforeInvalidate.eligible,
                         eligibleAfterInvalidate: gateAfterInvalidate.eligible,
