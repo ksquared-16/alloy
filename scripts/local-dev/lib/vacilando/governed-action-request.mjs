@@ -2362,7 +2362,10 @@ function proposalForRequest(rec) {
  * same proposal rather than asking the operator to decide again.
  */
 function ensureRepositoryGrant(rec, { actor, nowMs, root } = {}) {
-  if (rec.mission_id) return { ok: true };
+  // Mission-authorized requests now carry an execution grant too, so they need
+  // the same remint-on-expiry path. Returning early here left them with an
+  // expired grant and no way to renew it short of a second Director decision —
+  // the same dead end the artifact was added to remove.
   const proposal = proposalForRequest(rec);
   const existing = rec.grant_id ? getGrant(rec.grant_id, root) : null;
   if (existing && grantIsValidFor(existing, proposal, { nowMs }).ok) return { ok: true, grant: existing };
@@ -3263,6 +3266,38 @@ export async function approveGovernedAction(requestId, {
       note: `Operator approved governed action ${rec.action_key}.`,
       nowMs,
     });
+    // AUTHORITY IS NOT CAPABILITY, AND THE EXECUTOR NEEDS BOTH.
+    //
+    // THE DEFECT. Mission approval recorded a mission authorization and stopped.
+    // Repository approval minted a grnt_ artifact. Trusted-host executors
+    // validate the ARTIFACT — executeRestoreQaSessionTrustedHostAction passes
+    // `grant` to prepareRestore, whose first check refuses `grant_missing` — so
+    // a mission-authorized action could never satisfy the contract. Measured:
+    // the QA restores for lane_73a897409906 and lane_faacca6079ad were
+    // repository-authorized, got grants, and succeeded; both attempts on this
+    // mission-bound lane had grant_id null, zero grants minted, and failed. Not
+    // a slot-5 defect — every mission-bound lane was locked out of every
+    // grant-validating executor.
+    //
+    // The mission stays the AUTHORITY: the mission authorization above is
+    // untouched, still keyed by action type and target, still reusable within
+    // the mission. What is added is the CAPABILITY the executor consumes, and it
+    // is deliberately the same narrow artifact repository approval mints —
+    // pinned to this exact proposal's fingerprint, single-use, expiring. A
+    // reusable mission-wide grant would hand back exactly the standing
+    // permission the comment above refuses to create.
+    const missionGrant = mintGrant({
+      proposal: proposalForRequest(rec),
+      approvedBy: actor,
+      nowMs,
+      root,
+    });
+    if (!missionGrant.ok) {
+      appendAudit(rec, "approval_refused", { nowMs, error: missionGrant.error }, root);
+      return { ok: false, error: missionGrant.error, request: publicGovernedAction(rec) };
+    }
+    rec.grant_id = missionGrant.grant.grant_id;
+    rec.grant_expires_at = missionGrant.grant.expires_at;
   } else {
     const minted = mintGrant({
       proposal: proposalForRequest(rec),
