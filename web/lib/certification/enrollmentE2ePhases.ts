@@ -214,6 +214,76 @@ const noDuplicateActiveEpisode: Phase = {
 };
 
 /**
+ * L: the shared requirement-sufficiency verdict, read from the ACTIVE published configuration.
+ *
+ * This is the contract the operator surface and the completion gate both consult, so it is asserted
+ * once here rather than trusted twice. It deliberately asks the configuration what it requires
+ * instead of asserting a count: an earlier version of this program hardcoded "five Form
+ * requirements" against a tenant that publishes one, and spent days treating a correct system as
+ * broken. The number is evidence, never an expectation.
+ */
+const sufficiencyContract: Phase = {
+    key: "L_sufficiency",
+    title: "requirement sufficiency, from the active published configuration",
+    dependsOn: ["B_entry"],
+    async run(ctx) {
+        const { resolveEnrollmentCompletionSufficiency } = await import(
+            "@/lib/enrollment/completion/enrollmentCompletionSufficiency"
+        );
+        const { projectEnrollmentCompletionReadiness } = await import(
+            "@/lib/enrollment/completion/projectEnrollmentCompletionReadiness"
+        );
+
+        const entry = ctx.facts.B_entry as Record<string, { journeyId: string }> | undefined;
+        if (!entry) return { status: "failed", detail: "entry facts unavailable" };
+
+        const observed: Record<string, unknown> = {};
+        const problems: string[] = [];
+
+        for (const [family, f] of Object.entries(entry)) {
+            const res = await resolveEnrollmentCompletionSufficiency(ctx.supabase, {
+                orgId: ctx.orgId,
+                processInstanceId: f.journeyId,
+            });
+            if (!res.ok) {
+                problems.push(`${family}: sufficiency refused (${res.refusal.code}: ${res.refusal.detail})`);
+                continue;
+            }
+            const readiness = projectEnrollmentCompletionReadiness({ sufficiency: res.sufficiency });
+
+            /*
+             * The property under test is AGREEMENT, not a particular verdict. Whether this journey is
+             * ready or blocked is the tenant's configuration talking; what must never differ is the
+             * gate's answer and the operator projection's answer, because a surface that says "ready"
+             * over a gate that refuses is the defect this contract exists to prevent.
+             */
+            const gateEligible = res.sufficiency.eligible;
+            const surfaceReady = readiness.state === "ready";
+            if (gateEligible !== surfaceReady) {
+                problems.push(
+                    `${family}: the completion gate says ${gateEligible ? "eligible" : "blocked"} while the operator projection says ${readiness.state}`,
+                );
+            }
+
+            observed[family] = {
+                eligible: gateEligible,
+                projection: readiness.state,
+                requirements: res.sufficiency.requirements.length,
+                blocking: res.sufficiency.requirements.filter((r) => r.disposition === "blocking").length,
+            };
+        }
+
+        return problems.length
+            ? { status: "failed", detail: problems.join("; ") }
+            : {
+                  status: "passed",
+                  detail: `gate and operator projection agree for both paths: ${JSON.stringify(observed)}`,
+                  evidence: observed,
+              };
+    },
+};
+
+/**
  * Phases that need the participant browser surface. Declared, ordered and explicitly unimplemented
  * so the report shows the shape of what remains rather than hiding it.
  */
@@ -228,7 +298,6 @@ const browserPhases: readonly Phase[] = (
         ["I_correction", "review and correction"],
         ["J_signature", "signatures"],
         ["K_participant_complete", "participant completion"],
-        ["L_sufficiency", "requirement sufficiency: blocked then ready"],
         ["M_exception", "governed exception"],
         ["N_complete_enrollment", "Complete Enrollment"],
         ["P_handoff", "operational handoff"],
@@ -253,5 +322,6 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     entryState,
     pathAStaysContextFree,
     noDuplicateActiveEpisode,
+    sufficiencyContract,
     ...browserPhases,
 ];
