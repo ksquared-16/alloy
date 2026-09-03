@@ -71,6 +71,7 @@ import { activeAgentSessionForLane } from "./agent-session.mjs";
 import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
+import { listResourceClaims } from "./resource-claims.mjs";
 
 const OPEN_REQUEST = new Set(["REQUESTED", "QUEUED", "GRANTED"]);
 const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
@@ -209,8 +210,48 @@ export function collectStaleRunFacts(run, { root, nowMs = Date.now(), sendStore,
     session_alive: SESSION_ALIVE.has(session?.state),
     worker_report_ms: parseMs(run?.last_worker_report_at),
     worktree_activity_ms: worktreeActivityMs(worktree),
+    // Positive evidence that a brokered validation is actually running. Read
+    // from the claims owner rather than by looking for processes, because a
+    // claim is what the broker actually arbitrates on.
+    validation_in_flight: validationInFlight(run, worktree),
     now_ms: nowMs,
   };
+}
+
+/**
+ * Does a live resource claim belong to this run?
+ *
+ * Deliberately generous about attribution: any active claim naming this run,
+ * lane or worktree counts as in-flight. Over-attributing keeps a real
+ * validation protected, which is the failure worth having; under-attributing
+ * would let a running validation be treated as settled.
+ */
+function validationInFlight(run, worktree) {
+  let claims = [];
+  try {
+    // An unreadable claims store must read as "no claim in flight", never throw
+    // — this runs on the path that decides whether a lane can be used at all.
+    claims = requireClaims();
+  } catch { return false; }
+  if (!Array.isArray(claims) || !claims.length) return false;
+  const runId = run?.run_id || null;
+  const laneId = run?.lane_id || null;
+  const wt = worktree || run?.worktree_path || null;
+  return claims.some((c) => {
+    const blob = JSON.stringify(c || {});
+    return (runId && blob.includes(runId))
+      || (laneId && blob.includes(laneId))
+      || (wt && blob.includes(wt));
+  });
+}
+
+let claimsReader = null;
+/** Test seam: the claims store is a runtime file in production. */
+export function setClaimsReaderForTests(fn) { claimsReader = fn || null; }
+export function resetClaimsReaderForTests() { claimsReader = null; }
+function requireClaims() {
+  if (claimsReader) return claimsReader();
+  return listResourceClaims();
 }
 
 function workerHeartbeatRecent(facts) {
@@ -260,6 +301,46 @@ function pastSettle(run, facts) {
  * flight. With no timestamp to judge by, it is treated as still settling —
  * unknown timing must not become a licence to collect.
  */
+/**
+ * Is a VALIDATING run still plausibly validating?
+ *
+ * VALIDATING sat in PROTECTIVE_STATES unconditionally, alongside
+ * WAITING_RESOURCE and NEEDS_INPUT. The comment there explains why those two
+ * are unconditional: they wait on a PERSON or on a governed decision, and time
+ * alone does not resolve either. VALIDATING is not like that. It waits on a
+ * MACHINE — a brokered validation — and a machine either holds a claim or it
+ * does not.
+ *
+ * MEASURED: the Payments run entered VALIDATING at 19:47 and was still there
+ * three hours later. Its pane showed a finished turn, there was no vitest, no
+ * tsc, no build, no heavy process in its worktree and ZERO active resource
+ * claims anywhere on the host. Every stale check refused it with
+ * `protective_state_validating`, so the Director was told "this lane still has
+ * an open run" and offered manual stale-run surgery after an ordinary,
+ * successful turn.
+ *
+ * This is the same shape as the RECOVERING defect fixed directly below, and the
+ * fix is deliberately identical: protective while the work could still be IN
+ * FLIGHT, then falls through to the ORDINARY evaluation. Falling through is not
+ * a completion — the ordinary path still demands its own positive evidence
+ * (an idle turn agreeing with the transcript, silence past settle, no
+ * heartbeat) before anything is closed. Absence of a process is what lifts the
+ * unconditional block; it is never by itself the reason a run is completed.
+ */
+function validationSettled(run, facts, nowMs) {
+  // A live claim is positive evidence that validation really is in flight.
+  //
+  // When the caller did not collect the fact at all, ASK rather than assume.
+  // Reading an absent fact as "nothing is validating" would fail open for every
+  // caller that classifies a run without going through collectStaleRunFacts —
+  // exactly the direction this protection must not fail.
+  const inFlight = facts?.validation_in_flight ?? validationInFlight(run, run?.worktree_path || null);
+  if (inFlight) return false;
+  const enteredAt = parseMs(run?.updated_at);
+  if (enteredAt == null) return false;
+  return (nowMs - enteredAt) >= STALE_SETTLE_MS;
+}
+
 function recoverySettled(run, nowMs) {
   const recoveredAt = parseMs(run?.recovery_state?.recovered_at) ?? parseMs(run?.updated_at);
   if (recoveredAt == null) return false;
@@ -305,6 +386,9 @@ export function classifyExecutionRunStale(run, facts = {}) {
     // either.
     if (run.state === "RECOVERING" && recoverySettled(run, nowMs)) {
       // fall through to the ordinary evaluation below
+    } else if (run.state === "VALIDATING" && validationSettled(run, merged, nowMs)) {
+      // fall through too: nothing is validating, and it has been long enough
+      // that something would have claimed the broker if it were going to.
     } else {
       return { class: "active", reason: `protective_state_${run.state.toLowerCase()}`, evidence };
     }
@@ -326,7 +410,13 @@ export function classifyExecutionRunStale(run, facts = {}) {
       return { class: "active", reason: "governed_action_resumed", evidence };
     }
   }
-  if (run.state !== "EXECUTING" && run.state !== "RECOVERING") {
+  // RECOVERING was added here when its unconditional protection was lifted;
+  // VALIDATING needs the same allowance for the same reason. Without it the
+  // fall-through above is inert: the run clears the protective gate and is then
+  // refused two lines later for not being EXECUTING, which is exactly how the
+  // Payments run stayed open for three hours.
+  const settledProtective = run.state === "VALIDATING" && validationSettled(run, merged, nowMs);
+  if (run.state !== "EXECUTING" && run.state !== "RECOVERING" && !settledProtective) {
     return { class: "active", reason: "not_executing", evidence };
   }
   // `recovery_state` is the RECORD of a past recovery, not a live flag. Read as
@@ -503,7 +593,21 @@ export async function maybeCompleteIdleTurnFromLastOutput(lane, {
   collectLatest = null,
 } = {}) {
   const run = lane?.execution_run;
-  if (!run?.run_id || run.state !== "EXECUTING") {
+  // EXECUTING, or a VALIDATING run whose validation is demonstrably not in
+  // flight. Every other gate below still applies, so this widens WHICH runs may
+  // be completed from a finished turn, never the evidence required to complete
+  // one: the pane must be idle, the turn must have finished, no governed action
+  // may be pending, the grace must have passed, and the last output must agree
+  // with the transcript.
+  //
+  // Without this the Payments run could not be completed by any automatic path.
+  // Its turn had visibly finished — "Crunched for 58s · done" at an idle prompt
+  // — but the run had moved to VALIDATING, so the one routine that reads that
+  // signal refused it as not_executing and the Director was left to perform
+  // stale-run surgery by hand after an ordinary successful turn.
+  const completable = run?.state === "EXECUTING"
+    || (run?.state === "VALIDATING" && validationSettled(run, { validation_in_flight: validationInFlight(run, lane?.worktree?.path || run?.worktree_path || null) }, nowMs));
+  if (!run?.run_id || !completable) {
     return { ok: true, completed: false, skipped: "not_executing" };
   }
   if (lane?.provider_activity?.activity !== "ready") {

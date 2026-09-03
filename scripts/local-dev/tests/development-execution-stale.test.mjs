@@ -32,6 +32,8 @@ import {
   paneResultAgreesWithTranscript,
   reconcileStaleExecutionRuns,
   STALE_SETTLE_MS,
+  setClaimsReaderForTests,
+  resetClaimsReaderForTests,
 } from "../lib/vacilando/execution-stale.mjs";
 import { reconcileGovernor } from "../lib/vacilando/execution-reconcile.mjs";
 import { ensureResourceRequest, patchResourceRequest, readResourceRequestStore } from "../lib/vacilando/execution-resource.mjs";
@@ -408,6 +410,12 @@ await test("12. in-flight continuation prevents stale classification", async () 
 });
 
 await test("13. active validation prevents stale classification", async () => {
+  // The fixture below sets the STATE but never claimed the broker, and state
+  // alone no longer protects — that is the Payments defect. A validation that
+  // is genuinely running holds a claim, so the claim is what this asserts.
+  // The claim must be attributable to THIS run, exactly as a real broker claim
+  // is — a claim naming some other work protects nothing here.
+  setClaimsReaderForTests(() => [{ type: "cpu_heavy_job", resourceKey: "typecheck", missionId: LANE }]);
   const start = Date.now() - 3 * 60 * 60 * 1000;
   const now = Date.now();
   const run = seedExecuting({ instruction: PRODUCT, startMs: start });
@@ -423,6 +431,7 @@ await test("13. active validation prevents stale classification", async () => {
   assert.equal(cls.class, "active");
   assert.equal(cls.reason, "protective_state_validating");
   assert.equal(reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE }).count, 0);
+  resetClaimsReaderForTests();
 });
 
 await test("14. Identity-style stale soak allows new work after reconciliation", async () => {
@@ -812,12 +821,45 @@ await test("a parked RECOVERING run stops being protected forever", async () => 
   const undated = { ...parked, recovery_state: { abandoned_reason: "x" }, updated_at: null };
   assert.equal(classifyExecutionRunStale(undated, idle).class, "active");
 
-  // POSITIVE CONTROL 3: the other protective states are untouched. They wait on
-  // a person or a governed decision, and time alone does not resolve either.
-  for (const state of ["VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT"]) {
+  // POSITIVE CONTROL 3: the states that wait on a PERSON are untouched. They
+  // wait on a human or a governed decision, and time alone does not resolve
+  // either.
+  //
+  // VALIDATING was in this list and has been moved out deliberately. The
+  // rationale above is what disqualifies it: a validation waits on a MACHINE,
+  // and a machine either holds a broker claim or it does not. Leaving it here
+  // is what let the Payments run sit in VALIDATING for three hours with a
+  // finished pane, no heavy process and zero claims, while every check answered
+  // protective_state_validating. It is now treated exactly like RECOVERING —
+  // protective while the work could still be in flight, then evaluable.
+  for (const state of ["WAITING_RESOURCE", "NEEDS_INPUT"]) {
     const c = classifyExecutionRunStale({ ...parked, state }, idle);
     assert.equal(c.class, "active", state);
     assert.equal(c.reason, `protective_state_${state.toLowerCase()}`, state);
+  }
+
+  // POSITIVE CONTROL 3b: VALIDATING is protected by EVIDENCE rather than by its
+  // name — a live claim protects it for as long as the claim exists, and its
+  // absence only makes it evaluable, never stale-by-assertion.
+  {
+    const validating = { ...parked, state: "VALIDATING" };
+    setClaimsReaderForTests(() => [{ type: "cpu_heavy_job", resourceKey: "/tmp/whatever" }]);
+    try {
+      const held = classifyExecutionRunStale(validating, { ...idle, validation_in_flight: true });
+      assert.equal(held.class, "active", "a claimed validation must never be disturbed");
+      assert.equal(held.reason, "protective_state_validating");
+    } finally { resetClaimsReaderForTests(); }
+    setClaimsReaderForTests(() => []);
+    try {
+      const free = classifyExecutionRunStale(validating, idle);
+      assert.notEqual(free.reason, "protective_state_validating", "no claim past settle: evaluable");
+      // It is then judged on the ORDINARY evidence like any other run. This
+      // fixture has an idle session, no progress and no agent report past
+      // settle, so a stale verdict here is the full evidence speaking, not the
+      // missing claim. That absence alone never decides is asserted in
+      // development-validating-reconciliation, where a reporting run with no
+      // claim comes out ambiguous rather than stale.
+    } finally { resetClaimsReaderForTests(); }
   }
 
   // POSITIVE CONTROL 4: a settled recovery with a BUSY session is still active —
