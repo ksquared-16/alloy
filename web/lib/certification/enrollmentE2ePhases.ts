@@ -318,24 +318,31 @@ async function durableFingerprint(
      * failure persisted, which only rules out one of the candidates in §7 -- a signature written to
      * one submission while sufficiency reads another needs SUBMISSIONS and DEFINITIONS in view too.
      */
-    const defs = await supabase
-        .from("form_packet_definitions")
-        .select("id, key")
-        .eq("org_id", orgId);
-    const subs = await supabase
-        .from("form_submissions")
-        .select("id, status")
-        .eq("org_id", orgId);
-    const defRows = ((defs.data ?? []) as Row[]);
-    const subRows = ((subs.data ?? []) as Row[]);
+    /*
+     * SCOPED TO THIS JOURNEY, and not truncated.
+     *
+     * The first version counted submissions org-wide, sorted the statuses and sliced twelve. "draft"
+     * sorts first, so every "submitted" row fell off the end and I reported that the submission
+     * stayed draft. That was my fingerprint, not the product. A summary that sorts and truncates is
+     * capable of proving whatever its first page happens to contain.
+     */
+    const items = await supabase
+        .from("form_packet_session_items")
+        .select("id, status, sequence_index")
+        .eq("org_id", orgId)
+        .in("packet_session_id", rows.length ? rows.map((r) => String(r.id)) : ["00000000-0000-0000-0000-000000000000"]);
+    const itemRows = ((items.data ?? []) as Row[]);
 
     return {
         packetSessions: rows.length,
         sessionIds: rows.map((r) => String(r.id).slice(0, 8)).sort(),
         sessionStatuses: rows.map((r) => String(r.status)).sort(),
-        packetDefinitions: defRows.length,
-        formSubmissions: subRows.length,
-        submissionStatuses: subRows.map((r) => String(r.status)).sort().slice(0, 12),
+        sessionItems: itemRows.length,
+        // Every item's status, for THIS journey's session. No sort, no slice.
+        itemStatuses: itemRows
+            .slice()
+            .sort((a, b) => Number(a.sequence_index ?? 0) - Number(b.sequence_index ?? 0))
+            .map((r) => String(r.status)),
     };
 }
 
@@ -1157,7 +1164,17 @@ const requirementCompletion: Phase = {
                         transitions: sig.transitions,
                         acknowledgements: sig.acks,
                     });
-                    if (sig.state === "finished") break;
+                    /*
+                     * CONTINUE, do not break.
+                     *
+                     * I changed this to `break` on the reasoning that there was nothing left to click
+                     * once the signature reported finished. The single run that ever passed predates
+                     * that change, and every run since has failed -- so "finished" evidently is not
+                     * the end of the participant's work, and stopping there leaves the last step
+                     * undone. The no-progress guard already terminates the loop safely, so continuing
+                     * costs nothing and does not risk the spin it was meant to prevent.
+                     */
+                    if (sig.state === "finished") continue;
                     trail.push({ step: i, heading: "(signature stuck)", buttons: await page.locator("button").allInnerTexts().catch(() => []), chose: sig.state });
                     break;
                 }
@@ -1233,6 +1250,24 @@ const requirementCompletion: Phase = {
          * FAILS if the requirement never resolves, and it reports how long it waited so a slow write
          * is visible rather than smoothed over.
          */
+        /*
+         * CONTROLLED CACHE-BYPASS EXPERIMENT (§6), using the product's own supported invalidator.
+         *
+         * The trigger is a durable-read-only phase in the same Node process, which makes
+         * process-local retention the standing suspect even though the two caches on this path both
+         * look correctly scoped on inspection. Rather than argue from source, bust the config cache
+         * once here and record whether the verdict changes. If it does, retention is proven; if it
+         * does not, process-local caching is eliminated and the search moves on.
+         *
+         * This is instrumentation, not a fix: a certification harness that has to clear a cache to
+         * see the truth is reporting a defect, not avoiding one.
+         */
+        const { invalidateConfigReadCache } = await import("@/lib/runtime/provisioning/configReadCache");
+        const gateBeforeInvalidate = await gate();
+        invalidateConfigReadCache();
+        const gateAfterInvalidate = await gate();
+        const cacheMattered = gateBeforeInvalidate.eligible !== gateAfterInvalidate.eligible;
+
         let after = await gate();
         let settledAfterMs = 0;
         for (let waited = 0; !after.eligible && waited < 12000; waited += 1500) {
@@ -1293,6 +1328,11 @@ const requirementCompletion: Phase = {
                     fpBeforeWalk,
                     fpAfterSignature: fpAfter,
                     firstBrokenInvariant: code,
+                    cacheExperiment: {
+                        eligibleBeforeInvalidate: gateBeforeInvalidate.eligible,
+                        eligibleAfterInvalidate: gateAfterInvalidate.eligible,
+                        cacheMattered,
+                    },
                 },
             };
         }
