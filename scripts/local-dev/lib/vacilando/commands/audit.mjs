@@ -40,9 +40,14 @@ function eventId(rec) {
  * Append one execution audit event. Returns the stored record (with id).
  * `rec` fields: actor, command, input, target, preview_summary, confirmed,
  * outcome ("succeeded"|"failed"|"refused"|"blocked"), exit, error,
- * sources_refreshed[]. `occurredAtMs` is injected (executor reads the clock).
+ * sources_refreshed[]. `occurredAtMs` is normally injected (the executor reads
+ * the clock); it defaults to now so an omitting caller loses no record.
  */
-export function writeAuditEvent(rec, occurredAtMs) {
+export function writeAuditEvent(rec, occurredAtMs = Date.now()) {
+  // Defaulted, not required. Callers wrap this in a best-effort catch, so an
+  // omitted timestamp did not surface as an error — it threw RangeError and
+  // deleted the audit record. "Now" is the honest value for a caller that did
+  // not carry one, and it cannot fail.
   const occurred_at = new Date(occurredAtMs).toISOString();
   const full = {
     schema_version: AUDIT_SCHEMA,

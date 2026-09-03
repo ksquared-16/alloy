@@ -712,7 +712,7 @@ function conductorTick() {
             target: { kind: "host", label: "heavy-validation" },
             outcome: "succeeded",
             preview_summary: `terminated ${term.killed.length} unbrokered heavy validator(s)`,
-          });
+          }, Date.now());
         } catch { /* audit best-effort */ }
         // Escalation if still alive next tick
         setTimeout(() => {

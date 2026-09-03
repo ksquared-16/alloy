@@ -27,6 +27,11 @@
  * host is a guard nobody can prove.
  */
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const { writeAuditEvent, auditPath } = await import("../lib/vacilando/commands/audit.mjs");
 
 const G = await import("../lib/vacilando/heavy-validation-guard.mjs");
 
@@ -183,6 +188,42 @@ test("an empty claim set changes nothing about detection", () => {
     readClaims: claims([]),
   });
   assert.equal(hits.length, 2, "the guard must still guard");
+});
+
+test("the enforcement kill is actually auditable", () => {
+  // THE KILL WAS INVISIBLE. writeAuditEvent(rec, occurredAtMs) computes
+  // new Date(occurredAtMs).toISOString(), and conductorTick was the one call site
+  // in the whole system that passed no timestamp — so it threw RangeError
+  // ("Invalid time value") into the surrounding `catch { /* audit best-effort */ }`
+  // and wrote nothing. Every heavy-validation termination ever performed left no
+  // record, and an empty audit log was then read as proof the guard had never
+  // fired. It had: measured live, the Gateway server SIGTERMed a brokered
+  // `npm exec next build` while audit.jsonl showed zero enforce events.
+  //
+  // An enforcement path that cannot be audited cannot be investigated. This test
+  // fails if the timestamp argument ever goes missing again.
+  const root = mkdtempSync(join(tmpdir(), "alloy-audit-"));
+  const prior = process.env.ALLOY_RUNTIME_ROOT;
+  process.env.ALLOY_RUNTIME_ROOT = root;
+  try {
+    writeAuditEvent({
+      actor: "system",
+      command: "validation.broker.enforce",
+      input: { killed: [{ pid: 4242, command: "npm exec next build" }] },
+      target: { kind: "host", label: "heavy-validation" },
+      outcome: "succeeded",
+      preview_summary: "terminated 1 unbrokered heavy validator(s)",
+    }); // deliberately no timestamp — exactly how conductorTick calls it
+    const log = auditPath();
+    assert.ok(existsSync(log), "the enforcement record must reach disk");
+    const rec = JSON.parse(readFileSync(log, "utf8").trim().split("\n").pop());
+    assert.equal(rec.command, "validation.broker.enforce");
+    assert.ok(!Number.isNaN(Date.parse(rec.occurred_at)), "occurred_at must be a real time");
+  } finally {
+    if (prior === undefined) delete process.env.ALLOY_RUNTIME_ROOT;
+    else process.env.ALLOY_RUNTIME_ROOT = prior;
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
