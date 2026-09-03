@@ -27,7 +27,6 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import { setFocusPanelCardParticipation } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
-import { focusPanelSummaryDefaultDocForGrain } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import {
@@ -47,6 +46,10 @@ import {
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import {
+    focusPanelSummaryUsesPublishedDoc,
+    resolveFocusPanelSummaryActiveDoc,
+} from "@/lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryActiveDoc";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -161,20 +164,6 @@ export default function OpportunityFocusPanelModeGrid({
     // reference-only override).
     const isSummary = mode === "summary";
     const subjectGrain = asFocusPanelSubjectGrain(model.subject.type);
-    // ⚠ The published doc is CASE-ONLY, and the guard is load-bearing.
-    //
-    // `entity_layouts` addresses the Summary row by `entity_type="opportunities"` + a fixed layout
-    // key (R9), so the doc this hook returns is by definition the ENROLLMENT composition. Applying it
-    // to a person subject would put `current_work` / `household` / `children` on a staff member —
-    // i.e. a tenant who had ever opened the Surface Builder would silently break every non-case
-    // surface, while a tenant who had not would see the correct sparse panel. Two tenants, two
-    // behaviours, no error: exactly the class of failure this slice exists to remove.
-    //
-    // So the code-owned default is chosen by SUBJECT GRAIN, and only the case grain consults the
-    // publication. For the case grain that default is the SAME object reference the surface has
-    // always used, so the enrollment panel is identical rather than merely equivalent.
-    const isCaseGrain = subjectGrain === "opportunity";
-    const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary && isCaseGrain);
     /**
      * Does a settled family opportunity stand behind this subject?
      *
@@ -186,10 +175,26 @@ export default function OpportunityFocusPanelModeGrid({
      * grain would have re-litigated `cardAppliesToGrain` and leaked family cards onto every child.
      */
     const familySettlement = model.source !== "durable_subject";
-    const activeDoc = isSummary
-        ? (isCaseGrain ? publishedDoc : null)
-          ?? focusPanelSummaryDefaultDocForGrain(subjectGrain, { familySettlement })
-        : null;
+    /*
+     * WHICH SUBJECTS COMPOSE FROM THE ORG'S PUBLISHED SURFACE.
+     *
+     * The rule lives in `focusPanelSummaryUsesPublishedDoc`, which is also what the pending
+     * skeleton asks — one answer, not two. It is `(grain, context)` rather than grain alone
+     * because the enrollment Work Unit row IS a child subject standing on a family opportunity:
+     * gating on grain alone silently overrode the operator's published Surface with a hard-coded
+     * composition on the very surface they authored it for. A person or household subject still
+     * gets its code-owned default; that is the hazard the gate exists for, and it is unchanged.
+     */
+    const usesPublishedDoc = focusPanelSummaryUsesPublishedDoc(subjectGrain, { familySettlement });
+    const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary && usesPublishedDoc);
+    // Resolved through the SAME function the pending skeleton uses, so the surface cannot
+    // be composed from one document while loading and another once settled.
+    const activeDoc = resolveFocusPanelSummaryActiveDoc({
+        isSummary,
+        grain: subjectGrain,
+        publishedDoc,
+        context: { familySettlement },
+    });
     const instanceMap = useMemo(
         () => (activeDoc ? deriveFocusPanelInstanceMap(activeDoc) : new Map()),
         [activeDoc],
