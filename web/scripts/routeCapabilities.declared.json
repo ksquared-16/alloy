@@ -3664,6 +3664,12 @@
         "reason": "Development-only and read-only. The handler returns 404 whenever NODE_ENV is production, so it does not exist in any deployed environment; on a lane's local dev server it answers with that server's hostname, worktree, branch and commit. It reads nothing tenant-scoped and writes nothing, so there is no org principal whose capability could gate it. It exists because six rounds of operator QA failed on the assumption that the operator's localhost and the lane's localhost were one process; see docs/platform/governance/operator-qa-host-identity-defect-2026-09-02.md."
       }
     },
+    "app/api/dev/supabase-origin/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Development-only and read-only. The handler returns 404 whenever NODE_ENV is production, so it does not exist in any deployed environment. On a lane's local dev server it reports that server's own NEXT_PUBLIC_SUPABASE_URL origin plus the public URL and anon key, so a client running a STALE BUNDLE can sign in against the project the server is actually configured for rather than whatever was compiled into it. Both values are NEXT_PUBLIC and already ship to every browser that loads the app; the service role key is never read. It reads nothing tenant-scoped and writes nothing, so there is no org principal whose capability could gate it. It exists because a dev server served a bundle compiled against a dead local Supabase, and the login page reported 'Email or password is incorrect' for hours while the password was correct."
+      }
+    },
     "app/api/leads/gutters/route.ts": {
       "POST": {
         "status": "none",
