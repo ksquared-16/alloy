@@ -153,14 +153,20 @@ async function findParticipation(
     supabase: SupabaseClient,
     orgId: string,
     customerMemberId: string,
-): Promise<{ id: string; opportunity_id: string | null; outcome_status_key: string | null } | null> {
+): Promise<
+    | { id: string; opportunity_id: string | null; outcome_status_key: string | null; duplicates: number }
+    | null
+> {
     const { data } = await supabase
         .from("opportunity_customer_members")
         .select("id, opportunity_id, outcome_status_key")
         .eq("org_id", orgId)
         .eq("customer_member_id", customerMemberId);
     const rows = (data ?? []) as Array<{ id: string; opportunity_id: string | null; outcome_status_key: string | null }>;
-    return rows[0] ?? null;
+    // The count travels with the row. Taking [0] and discarding the rest is how a duplicate
+    // participation would pass verification in silence, and "no duplicate OCM" is a property this
+    // fixture is supposed to prove rather than hope for.
+    return rows[0] ? { ...rows[0], duplicates: rows.length } : null;
 }
 
 /**
@@ -532,7 +538,41 @@ export async function verifyEnrollmentCertification(
             .eq("org_id", orgId)
             .eq("process_key", "enrollment")
             .eq("subject_id", customerMemberId);
-        const instance = ((instances ?? []) as Array<{ id: string; context_type: string | null; context_id: string | null }>)[0];
+        const allInstances = (instances ?? []) as Array<{
+            id: string;
+            context_type: string | null;
+            context_id: string | null;
+        }>;
+        const instance = allInstances[0];
+
+        /*
+         * EXACTLY ONE JOURNEY PER CHILD, asserted rather than assumed.
+         *
+         * This read already fetched every instance for the child and then took [0], so a second
+         * journey would have passed verification in silence -- and "no duplicate child journey" is
+         * one of the properties this fixture exists to prove. Path B in particular reaches Enrollment
+         * through the family decision AND then calls Start Enrollment, so a duplicate here is a live
+         * possibility rather than a theoretical one.
+         */
+        if (participation && participation.duplicates > 1) {
+            findings.push(
+                `${spec.key}: ${participation.duplicates} participations exist for this child; exactly one is expected`,
+            );
+        }
+
+        if (allInstances.length > 1) {
+            findings.push(
+                `${spec.key}: ${allInstances.length} Enrollment journeys exist for this child; exactly one is expected`,
+            );
+        }
+
+        /* The anchor itself, likewise asserted: a journey pointing anywhere but the participation is
+         * the defect this whole lane was opened to correct. */
+        if (instance && participation && instance.context_id !== participation.id) {
+            findings.push(
+                `${spec.key}: the child's journey is not anchored to its participation`,
+            );
+        }
 
         if (spec.key === "context_free" && participation?.opportunity_id) {
             findings.push("context_free: participation still carries an acquisition Opportunity");
