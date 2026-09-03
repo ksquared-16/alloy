@@ -29,7 +29,7 @@ const code = (rel: string) =>
 
 const context = (tour: Partial<OperationalContext["signals"]["tour"]>) =>
     ({
-        signals: { tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null, ...tour } },
+        signals: { tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null, ...tour } },
     }) as OperationalContext;
 
 describe("the tour card stops showing raw keys", () => {

@@ -29,6 +29,7 @@ describe("System 5 Visual QA correction guards", () => {
                 ],
             },
             active_tour_bookings: [],
+            operator_relevant_tour_booking: null,
             reminders: {
                 state: "empty",
                 next_follow_up_iso: null,

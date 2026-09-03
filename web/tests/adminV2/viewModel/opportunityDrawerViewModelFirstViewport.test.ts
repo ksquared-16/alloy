@@ -90,6 +90,7 @@ describe("opportunityDrawerViewModelFirstViewport", () => {
         const vm = minimalSettledOpportunityDrawerViewModel({
             summaries: {
                 active_tour_bookings: [],
+                operator_relevant_tour_booking: null,
                 tasks: {
                     state: "loaded",
                     open_count: 1,

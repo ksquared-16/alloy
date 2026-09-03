@@ -21,7 +21,7 @@ function baseContext(truth: Record<string, unknown>): OperationalContext {
         signals: {
             work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
             attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-            tour: { scheduled: true, startAt: "2026-08-14T16:00:00.000Z", statusLabel: "confirmed", bookingId: "tb-1" },
+            tour: { scheduled: true, startAt: "2026-08-14T16:00:00.000Z", statusLabel: "confirmed", statusKey: "confirmed", bookingId: "tb-1" },
             communications: {
                 scheduledSendCount: 0,
                 nextFollowUpAt: null,

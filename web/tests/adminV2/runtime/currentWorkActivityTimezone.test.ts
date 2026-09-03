@@ -58,7 +58,7 @@ describe("activity path threads the operator timezone", () => {
     it("buildCurrentWorkActivityPreviewItems threads the timezone into the tour fallback", () => {
         const context = {
             signals: {
-                tour: { scheduled: true, startAt: "2026-06-15T02:30:00.000Z", statusLabel: "Scheduled", bookingId: null },
+                tour: { scheduled: true, startAt: "2026-06-15T02:30:00.000Z", statusLabel: "Scheduled", statusKey: null, bookingId: null },
             },
             truth: {},
         } as unknown as OperationalContext;

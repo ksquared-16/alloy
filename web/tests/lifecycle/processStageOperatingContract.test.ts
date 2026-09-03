@@ -634,7 +634,7 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
     const NULL_SIGNALS = {
         work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
         attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-        tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+        tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
         communications: {
             scheduledSendCount: 0,
             nextFollowUpAt: null,
