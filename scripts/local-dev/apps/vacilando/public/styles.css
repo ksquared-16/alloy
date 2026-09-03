@@ -33,28 +33,67 @@
   --rail-0:var(--vacilando-juniper); --rail-1:#2c4b3d; --rail-2:#253f32;
   --rail-active:#3c6753; --rail-hover:#33574a;
   --rail-text:#d7e4da; --rail-text-lo:#8fae9c; --rail-line:rgba(255,255,255,.08);
-  --bg:#f6f2ea; --bg-tint:#efe9dd; --card:#fff; --card-2:#fbf9f4;
-  --line:#ece5d8; --line-soft:#f1ece1; --line-strong:#e0d7c6;
+  /* ---------------------------------------------------------------------
+     GROUNDS. Four, and only four.
+
+     There were six near-identical creams in play (#f6f2ea, #efe9dd, #fbf9f4,
+     plus three line tints), which is why the app read as beige-on-beige with
+     no clear sense of what was a surface and what was the page. V2 has one
+     warm canvas, one white working surface, one inset, and one selected tone —
+     and every border is derived from the canvas rather than being its own
+     invented colour.
+     --------------------------------------------------------------------- */
+  --bg:#f4efe6;        /* the application canvas: warm cream/sand */
+  --bg-tint:#ebe4d6;   /* selection / hover ON the canvas */
+  --card:#fff;         /* elevated working surfaces */
+  --card-2:#faf7f1;    /* an inset INSIDE a surface */
+  --line:#e7e0d2; --line-soft:#f0eae0; --line-strong:#d9d0be;
   /* Primary text is navy. */
   --ink:var(--vacilando-navy); --ink-2:#54605a; --ink-3:#8a938c; --ink-4:#aab1a9;
   /* Warm emphasis / selected + active accents. */
   --terra:var(--vacilando-terracotta); --terra-soft:#f4e2d7; --terra-line:#e8c3af;
   --sand:var(--vacilando-sand); --sand-soft:#f6ecd8;
   --sage:var(--vacilando-sage); --juniper:var(--vacilando-juniper); --landscape:var(--vacilando-landscape);
-  /* SEMANTIC COLOURS DELIBERATELY UNCHANGED. Success, warning, error and
-     paused/planned carry meaning that is not the brand's to restate, and no
-     approved colour matches both the meaning and the contrast. Recolouring
-     these would make a failure look like an accent. */
-  --green:#3a8a5b; --green-soft:#e2f0e6; --green-ink:#2c7048; --script:#d9825f;
-  /* Links, progress and informational state: river. On --run-bg this is a
-     better ratio than the blue it replaces (4.18 vs 3.78), and small text on
-     that tint uses --run-ink at 4.93. */
+  /* ---------------------------------------------------------------------
+     SEMANTIC COLOUR IS NOW THE BRAND.
+
+     The previous set — #3a8a5b success, #5f7c9a planned, #c98a2e review,
+     #cf5a3a blocked — sat outside the approved seven, so a healthy lane, a
+     running lane and a waiting lane were each drawn in a colour the product
+     used nowhere else. V2 maps meaning onto the brand:
+
+       pine / juniper   primary action, active, healthy, selected
+       river · sage     secondary state and progress
+       terracotta       meaningful attention — and ONLY that
+       red              destructive and error — and ONLY that
+
+     RED IS RESERVED. "Busy", "waiting" and "high number" are not errors, and
+     giving them red is what made every screen look like an incident.
+     --------------------------------------------------------------------- */
+  --ok:var(--vacilando-juniper); --ok-ink:#2c4b3d; --ok-soft:#e6eeea;
+  /* Retained: many rules still reference --green. It now IS pine. */
+  --green:var(--vacilando-juniper); --green-soft:#e6eeea; --green-ink:#2c4b3d; --script:#d9825f;
+  /* Progress and running state: river. Secondary/quiet state: sage. */
   --run:var(--vacilando-river); --run-ink:var(--vacilando-river-ink);
-  --run-bg:#e6eefb; --review:#c98a2e; --review-bg:#f8eed6;
-  --blocked:#cf5a3a; --blocked-bg:#f8e2da; --done:#5a6b61; --done-bg:#eef0ec;
-  --plan:#5f7c9a; --plan-bg:#e9eff5; --paused:#b0894a; --paused-bg:#f3ead6; --idle:#8a938c; --idle-bg:#eef0ec;
-  --radius:12px; --radius-sm:9px; --pill:999px;
+  --run-bg:#e6eef2;
+  --plan:var(--vacilando-sage); --plan-bg:#ecefe5;
+  /* ATTENTION. One colour, used only where a human is genuinely wanted. */
+  /* MEASURED SIDE BY SIDE: the first attention tint (#f9ebe3) and the danger
+     tint (#f6e4e0) were three points apart in hue, so "a decision is waiting"
+     and "something is broken" painted the same pink. Attention is pulled toward
+     the desert/sand end of the brand and danger toward red, so the two are
+     distinguishable at a glance and not only by reading the words. */
+  --attn:var(--vacilando-terracotta); --attn-ink:var(--vacilando-terracotta-ink);
+  --attn-bg:#fbeedd; --attn-line:#e9cba7;
+  --review:var(--attn-ink); --review-bg:var(--attn-bg);
+  --paused:var(--attn-ink); --paused-bg:var(--attn-bg);
+  /* DESTRUCTIVE / ERROR. Restrained, and nothing else may borrow it. */
+  --danger:#a8392c; --danger-ink:#8f2f24; --danger-bg:#f7dedb; --danger-line:#e6bcb5;
+  --blocked:var(--danger); --blocked-bg:var(--danger-bg);
+  --done:#5a6b61; --done-bg:#eef0ec; --idle:#8a938c; --idle-bg:#eef0ec;
+  --radius:12px; --radius-sm:9px; --radius-lg:16px; --pill:999px;
   --shadow:0 1px 2px rgba(31,42,36,.04),0 5px 14px rgba(31,42,36,.05);
+  --shadow-sm:0 1px 2px rgba(31,42,36,.05);
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif;
   --script-face:"Snell Roundhand","Apple Chancery","Segoe Script",cursive;
   --mono:"SF Mono","JetBrains Mono","Fira Code",ui-monospace,Menlo,monospace;
@@ -89,7 +128,13 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
    card white the rest of the app uses, and states are restrained row
    treatments in the existing tokens. No new visual language, no tinting of the
    whole surface to say one lane needs you. */
-.rail{background:var(--card);color:var(--ink);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);}
+/* THE RAIL SITS ON THE APPLICATION CANVAS.
+   It was white, and the brand mark inside it painted its own cream plate — so
+   the logo sat on a visibly different ground from the navigation containing it,
+   with a hard rectangle around the artwork. Both are now the same warm canvas:
+   the mark needs no plate, the seam disappears, and white is freed to mean one
+   thing only — an elevated working surface. */
+.rail{background:var(--bg);color:var(--ink);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);}
 .brand{padding:16px 18px 12px;}
 /* The approved mark sits above the wordmark in the rail, on a deliberate cream
    plate.
@@ -98,8 +143,9 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
    #365C4A. The illustration was drawn for a light ground, and the same cream
    the app icons are composed on is what keeps every element of the journey
    readable. */
-.brand-mark{display:block;width:100%;max-width:154px;height:auto;margin:0 0 10px;
-  background:var(--bg);border-radius:10px;padding:8px 9px;}
+/* No plate. The rail IS the cream the artwork was drawn for. */
+.brand-mark{display:block;width:100%;max-width:150px;height:auto;margin:0 0 10px;
+  background:transparent;padding:0;}
 /* The wordmark was drawn for a dark ground; on white it takes the ink tokens. */
 .rail .brand .word{color:var(--ink);}
 .rail .brand .word b{color:var(--ink-2);}
@@ -2393,3 +2439,506 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   background: rgba(183, 121, 31, .10);
   border-left: 2px solid var(--needs-border, #b7791f);
 }
+
+/* ===========================================================================
+   VACILANDO UI V2
+   ===========================================================================
+
+   One visual system for every V2 surface. Everything below is built from the
+   tokens above — no surface introduces its own colour, radius or elevation,
+   which is the whole reason the previous UI read as several different products
+   stitched together.
+
+   THREE RULES:
+     · white is an elevated working surface; cream is the canvas; nothing else
+       is a ground.
+     · state colour comes from .vhealth / .vstate only.
+     · a value's PROVENANCE is a visual property (.is-live / .is-placeholder /
+       .is-unavailable), so an unbacked number cannot look like a measured one.
+   =========================================================================== */
+
+/* ---------- primary navigation (desktop rail) ---------- */
+.rail-primary{padding:6px 10px 4px;display:flex;flex-direction:column;gap:2px;}
+.vnav{display:flex;flex-direction:column;gap:2px;}
+.vnav-item{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:var(--radius-sm);
+  color:var(--ink-2);font-size:13.5px;font-weight:550;text-decoration:none;cursor:pointer;
+  border:1px solid transparent;}
+.vnav-item:hover{background:var(--card);border-color:var(--line-soft);color:var(--ink);}
+/* SELECTED IS PINE. One colour for "you are here", everywhere in the product. */
+.vnav-item.is-active{background:var(--juniper);border-color:var(--juniper);color:#f0f5f1;font-weight:650;}
+.vnav-item.is-active:hover{background:var(--rail-active);border-color:var(--rail-active);}
+.vnav-ico{width:17px;height:17px;flex:none;opacity:.9;}
+.vnav-label{flex:1 1 auto;}
+.vnav-badge{background:var(--attn);color:#fff;font-family:var(--mono);font-size:10.5px;font-weight:700;
+  min-width:19px;height:19px;border-radius:var(--pill);display:grid;place-items:center;padding:0 5px;}
+.vnav-item.is-active .vnav-badge{background:#fff;color:var(--attn-ink);}
+.nav-missions-label{margin-top:2px;}
+
+/* ---------- mobile bottom navigation ---------- */
+/* Hidden on desktop. It is NOT the rail at a smaller size: it carries the four
+   destinations and nothing else, at a tap size reachable with one thumb. */
+.rail-mobile{display:none;}
+.vtabs{display:grid;grid-template-columns:repeat(4,1fr);align-items:stretch;}
+.vtab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  /* 56px + the home-indicator inset: a real tap target, not a 30px link. */
+  min-height:56px;padding:7px 4px calc(7px + env(safe-area-inset-bottom,0px));
+  color:var(--ink-3);text-decoration:none;font-size:11px;font-weight:600;letter-spacing:.01em;}
+.vtab-ico-wrap{position:relative;display:grid;place-items:center;}
+.vtab-ico{width:22px;height:22px;}
+.vtab.is-active{color:var(--juniper);}
+.vtab.is-active .vtab-ico{stroke-width:2.1;}
+.vtab-label{line-height:1;}
+.vtab-badge{position:absolute;top:-5px;right:-9px;background:var(--attn);color:#fff;font-family:var(--mono);
+  font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:var(--pill);
+  display:grid;place-items:center;padding:0 4px;}
+
+/* ---------- page scaffold ---------- */
+.gw.is-page{display:block;min-height:0;overflow:auto;background:var(--bg);}
+.vpage{max-width:1440px;margin:0 auto;padding:20px 24px 40px;}
+.vpage-head{margin-bottom:18px;}
+.vpage-head-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.vpage-title{margin:0;font-size:23px;font-weight:650;letter-spacing:-.015em;color:var(--ink);}
+.vpage-lead{margin:5px 0 0;font-size:13.5px;color:var(--ink-2);max-width:64ch;}
+.vpage-actions{display:flex;gap:8px;align-items:center;}
+.vcrumb{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-3);margin-bottom:7px;}
+.vcrumb a{color:var(--ink-2);text-decoration:none;}
+.vcrumb a:hover{color:var(--juniper);text-decoration:underline;}
+.vcrumb-sep{color:var(--ink-4);}
+.vlink{color:var(--juniper);font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap;}
+.vlink:hover{text-decoration:underline;}
+
+/* ---------- surface ---------- */
+.vcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow-sm);overflow:hidden;}
+.vcard + .vcard{margin-top:14px;}
+.vcard-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding:13px 16px 0;}
+.vcard-title{margin:0;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);}
+.vcard-hint{margin:5px 0 0;font-size:12.5px;color:var(--ink-2);}
+.vcard-actions{display:flex;align-items:center;gap:8px;flex:none;}
+.vcard-body{padding:12px 16px 15px;}
+.vcard-head + .vcard-body{padding-top:10px;}
+/* Attention is a LEFT EDGE, not a filled panel. A tinted block for every
+   pending decision is how three requests turn a page into a warning screen. */
+.vcard.is-attention{border-color:var(--attn-line);box-shadow:inset 3px 0 0 var(--attn),var(--shadow-sm);}
+
+/* ---------- health & state ---------- */
+.vhealth{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);}
+.vhealth-dot{width:8px;height:8px;border-radius:50%;background:var(--ink-4);flex:none;}
+.vhealth.is-healthy{color:var(--ok-ink);} .vhealth.is-healthy .vhealth-dot{background:var(--ok);}
+.vhealth.is-watch{color:var(--attn-ink);} .vhealth.is-watch .vhealth-dot{background:var(--attn);}
+.vhealth.is-problem{color:var(--danger-ink);} .vhealth.is-problem .vhealth-dot{background:var(--danger);}
+.vhealth.is-unknown{color:var(--ink-3);}
+.vhealth-summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.vhealth-host{font-size:13px;font-weight:600;color:var(--ink);}
+.vhealth-warning{font-size:12px;color:var(--attn-ink);background:var(--attn-bg);
+  border-radius:var(--pill);padding:3px 10px;}
+
+.vstate{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);white-space:nowrap;}
+.vstate-dot{width:7px;height:7px;border-radius:50%;background:var(--ink-4);flex:none;}
+.vstate.is-run .vstate-dot{background:var(--run);} .vstate.is-run{color:var(--run-ink);}
+.vstate.is-ready .vstate-dot,.vstate.is-complete .vstate-dot{background:var(--ok);}
+.vstate.is-ready,.vstate.is-complete{color:var(--ok-ink);}
+.vstate.is-needs .vstate-dot{background:var(--attn);} .vstate.is-needs{color:var(--attn-ink);}
+.vstate.is-failed .vstate-dot{background:var(--danger);} .vstate.is-failed{color:var(--danger-ink);}
+.vstate.is-queued .vstate-dot,.vstate.is-quiesced .vstate-dot{background:var(--plan);}
+.vstate.is-recovering .vstate-dot{background:var(--attn);}
+/* A live dot BREATHES. It is the only motion in the product, and it means one
+   thing: something is happening right now. */
+.vstate.is-live .vstate-dot{animation:vpulse 2.4s ease-in-out infinite;}
+@keyframes vpulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+@media (prefers-reduced-motion:reduce){.vstate.is-live .vstate-dot{animation:none;}}
+
+/* ---------- metrics ---------- */
+.vgrid{display:grid;gap:10px;}
+.vgrid + .vgrid{margin-top:10px;}
+.vgrid-4{grid-template-columns:repeat(4,minmax(0,1fr));}
+.vgrid-3{grid-template-columns:repeat(3,minmax(0,1fr));}
+.vgrid-2{grid-template-columns:repeat(2,minmax(0,1fr));}
+.vmetric{display:flex;flex-direction:column;gap:3px;min-width:0;background:var(--card-2);
+  border:1px solid var(--line-soft);border-radius:var(--radius-sm);padding:9px 11px;}
+/* LABELS WRAP; THEY DO NOT TRUNCATE.
+   With nowrap + ellipsis, a four-across grid produced "SWAP TRA…", "SLOT CAPA…",
+   "AUTONOM…" and "TESTS PAS…" — a dashboard whose labels the operator has to
+   guess at. Two lines of a short label costs 13px and says what the number is. */
+.vmetric-label{font-size:10.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);
+  line-height:1.25;overflow-wrap:break-word;hyphens:none;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+/* `anywhere` split "responsive" across two lines as "responsiv/e". A value
+   breaks between words, and only breaks inside one when it genuinely cannot
+   fit — which is what break-word means and anywhere does not. */
+.vmetric-value{font-size:17px;font-weight:640;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.2;
+  overflow-wrap:break-word;}
+.vmetric.is-sm .vmetric-value{font-size:15.5px;}
+.vmetric-sub{font-size:11.5px;color:var(--ink-3);}
+/* PROVENANCE IS VISIBLE.
+   An unavailable field is copy, in muted ink, and can never be mistaken for a
+   reading. A placeholder is legible but permanently flagged. */
+.vmetric.is-unavailable .vmetric-value{font-size:12.5px;font-weight:500;color:var(--ink-3);line-height:1.35;}
+.vmetric.is-placeholder{border-style:dashed;border-color:var(--line-strong);background:transparent;}
+.vmetric.is-placeholder .vmetric-value{color:var(--ink-2);}
+.vmetric-flag{display:inline-block;margin-left:6px;font-family:var(--mono);font-size:9px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);background:var(--bg-tint);
+  border-radius:4px;padding:1px 5px;vertical-align:2px;}
+
+.vrows{display:flex;flex-direction:column;}
+.vrows + .vrows{margin-top:10px;border-top:1px solid var(--line-soft);padding-top:6px;}
+.vrow{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:6px 0;
+  border-bottom:1px solid var(--line-soft);font-size:13px;}
+.vrow:last-child{border-bottom:0;}
+.vrow-label{color:var(--ink-3);flex:none;}
+.vrow-value{color:var(--ink);font-weight:550;text-align:right;font-variant-numeric:tabular-nums;
+  overflow-wrap:anywhere;}
+.vrow.is-unavailable .vrow-value{color:var(--ink-3);font-weight:450;}
+
+.vmeters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:12px;}
+.vmeter-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px;}
+.vmeter-label{font-size:11px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);}
+.vmeter-value{font-size:13px;font-weight:640;color:var(--ink);font-variant-numeric:tabular-nums;}
+.vmeter-track{height:6px;border-radius:var(--pill);background:var(--bg-tint);overflow:hidden;}
+.vmeter-fill{height:100%;border-radius:var(--pill);background:var(--ok);transition:width .4s ease;}
+.vmeter-fill.is-watch{background:var(--attn);}
+.vmeter-fill.is-problem{background:var(--danger);}
+.vmeter.is-unavailable .vmeter-value{font-size:12px;font-weight:500;color:var(--ink-3);}
+
+/* ---------- progress (the provider estimate) ---------- */
+.vprogress{margin:12px 0;}
+.vprogress-track{height:8px;border-radius:var(--pill);background:var(--bg-tint);overflow:hidden;}
+/* Progress is RIVER, not pine. Pine means done or healthy; a bar that is 62%
+   pine reads as 62% success, which is not what a provider estimate says. */
+.vprogress-fill{height:100%;border-radius:var(--pill);background:var(--run);transition:width .5s ease;}
+/* Confidence is texture, not a different colour: a low-confidence estimate is
+   the same fact, held less firmly. */
+.vprogress-fill.is-low{background:repeating-linear-gradient(115deg,var(--run) 0 7px,rgba(255,255,255,.32) 7px 14px);}
+.vprogress-fill.is-high{background:var(--run);}
+.vprogress-meta-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:6px;flex-wrap:wrap;}
+.vprogress-label{font-size:12.5px;font-weight:600;color:var(--ink-2);}
+.vprogress-meta{font-size:11.5px;color:var(--ink-3);}
+.vprogress-summary{margin:6px 0 0;font-size:12.5px;color:var(--ink-2);line-height:1.45;}
+/* NO BAR WHEN THERE IS NO ESTIMATE. An empty track reads as "0% done", which is
+   a claim nobody made. */
+.vprogress.is-unavailable{display:flex;flex-direction:column;gap:3px;padding:9px 11px;
+  background:var(--card-2);border:1px dashed var(--line-strong);border-radius:var(--radius-sm);}
+.vprogress.is-unavailable .vprogress-label{color:var(--ink-3);font-weight:550;}
+
+/* ---------- needs you ---------- */
+.vneeds-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+.vneeds-row{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:12px;
+  padding:10px 2px;border-bottom:1px solid var(--line-soft);}
+.vneeds-row:last-child{border-bottom:0;}
+.vneeds-row-mark{width:8px;height:8px;border-radius:50%;background:var(--attn);flex:none;}
+.vneeds-row.is-destructive .vneeds-row-mark{background:var(--danger);}
+.vneeds-row-copy{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.vneeds-row-lane{font-size:11px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);}
+.vneeds-row-request{font-size:13.5px;font-weight:560;color:var(--ink);overflow-wrap:anywhere;}
+.vneeds-row-detail{font-size:12px;color:var(--ink-2);}
+.vneeds-row-age{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+/* THE LANE TRAY. Anchored to the composer, one line high, never a card in the
+   middle of the work narrative. */
+.vneeds-tray{display:flex;align-items:center;gap:11px;padding:9px 13px;margin:0 0 8px;
+  background:var(--attn-bg);border:1px solid var(--attn-line);border-radius:var(--radius-sm);}
+.vneeds-mark{width:8px;height:8px;border-radius:50%;background:var(--attn);flex:none;}
+.vneeds-copy{display:flex;align-items:baseline;gap:9px;min-width:0;flex:1 1 auto;flex-wrap:wrap;}
+.vneeds-title{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--attn-ink);flex:none;}
+.vneeds-request{font-size:13px;color:var(--ink);overflow-wrap:anywhere;}
+.vneeds-acts{display:flex;gap:7px;flex:none;margin-left:auto;}
+.vneeds-act{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--attn-ink);text-decoration:none;white-space:nowrap;}
+.vneeds-act:hover{text-decoration:underline;}
+
+/* ---------- lane rows ---------- */
+.vlane-list{display:flex;flex-direction:column;}
+.vlane{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:12px;
+  padding:10px 2px;border-bottom:1px solid var(--line-soft);text-decoration:none;color:inherit;}
+.vlane:last-child{border-bottom:0;}
+.vlane:hover{background:var(--card-2);}
+.vlane.is-active{background:var(--bg-tint);}
+.vlane-name{font-size:13.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vlane-when{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:32px;text-align:right;}
+.vlane-badge{background:var(--attn);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;
+  min-width:18px;height:18px;border-radius:var(--pill);display:grid;place-items:center;padding:0 5px;}
+.vlane-progress{display:block;width:52px;height:4px;border-radius:var(--pill);background:var(--bg-tint);overflow:hidden;}
+.vlane-progress-fill{display:block;height:100%;background:var(--run);border-radius:var(--pill);}
+
+/* ---------- activity ---------- */
+.vact-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;}
+.vact{display:grid;grid-template-columns:88px 132px 1fr auto;align-items:baseline;gap:12px;
+  padding:8px 2px;border-bottom:1px solid var(--line-soft);font-size:13px;}
+.vact:last-child{border-bottom:0;}
+.vact-kind{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);
+  background:var(--bg-tint);border-radius:4px;padding:2px 6px;text-align:center;white-space:nowrap;}
+.vact-kind[data-kind="governance"]{background:var(--attn-bg);color:var(--attn-ink);}
+.vact-kind[data-kind="failure"]{background:var(--danger-bg);color:var(--danger-ink);}
+.vact-kind[data-kind="promotion"],.vact-kind[data-kind="git"]{background:var(--ok-soft);color:var(--ok-ink);}
+.vact-kind[data-kind="work"]{background:var(--run-bg);color:var(--run-ink);}
+.vact-lane{font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vact-summary{color:var(--ink);min-width:0;overflow-wrap:anywhere;}
+.vact-when{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.vact.is-failed .vact-summary{color:var(--danger-ink);}
+
+.vfilters{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.vfilter{display:flex;flex-direction:column;gap:4px;}
+.vfilter-label{font-size:10.5px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);}
+.vfilter select{font:inherit;font-size:13px;color:var(--ink);background:var(--card);
+  border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:7px 9px;min-height:38px;min-width:150px;}
+.vfilter-count{font-size:12px;color:var(--ink-3);margin-left:auto;padding-bottom:9px;font-variant-numeric:tabular-nums;}
+
+/* ---------- segmented control ---------- */
+.vseg{display:inline-flex;background:var(--bg-tint);border-radius:var(--pill);padding:2px;gap:2px;}
+.vseg-opt{font:inherit;font-size:11.5px;font-weight:600;color:var(--ink-2);background:transparent;border:0;
+  border-radius:var(--pill);padding:5px 11px;cursor:pointer;min-height:28px;}
+.vseg-opt.is-on{background:var(--card);color:var(--ink);box-shadow:var(--shadow-sm);}
+
+/* ---------- empty states ---------- */
+.vempty{padding:16px 4px;}
+.vempty-title{margin:0;font-size:13.5px;font-weight:600;color:var(--ink-2);}
+.vempty-body{margin:5px 0 0;font-size:12.5px;color:var(--ink-3);max-width:56ch;line-height:1.5;}
+.vnote{margin:10px 0 0;font-size:12px;color:var(--ink-3);}
+
+/* ---------- provider rows ---------- */
+.vprov-rows{margin-top:10px;border-top:1px solid var(--line-soft);}
+.vprov-row{display:grid;grid-template-columns:1fr 1fr auto auto;gap:10px;align-items:baseline;
+  padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:12.5px;}
+.vprov-row:last-child{border-bottom:0;}
+.vprov-name{font-weight:650;color:var(--ink);text-transform:capitalize;}
+.vprov-model,.vprov-runs,.vprov-cost{color:var(--ink-3);font-variant-numeric:tabular-nums;}
+.vprov-cost{text-align:right;}
+
+/* ---------- placeholder banner ---------- */
+.vplaceholder-banner{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  padding:9px 16px;background:var(--attn-bg);border-bottom:1px solid var(--attn-line);
+  font-size:12.5px;color:var(--ink-2);}
+.vplaceholder-banner strong{color:var(--attn-ink);}
+.vplaceholder-off{font:inherit;font-size:12px;font-weight:600;color:var(--attn-ink);background:transparent;
+  border:1px solid var(--attn-line);border-radius:var(--pill);padding:3px 11px;cursor:pointer;margin-left:auto;min-height:30px;}
+
+/* ---------- home layout ---------- */
+/* Desktop uses the width on purpose: the operational narrative (needs you →
+   lanes → what just happened) reads down the wide column, and the machine
+   context sits beside it rather than pushing the narrative below the fold. */
+.vhome-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.95fr);gap:16px;align-items:start;}
+.vhome-col{display:flex;flex-direction:column;gap:14px;min-width:0;}
+.vhome-col .vcard + .vcard{margin-top:0;}
+.vsys-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;}
+.vsys-grid .vcard + .vcard{margin-top:0;}
+
+/* ---------- lane V2 ---------- */
+.vlane-head{flex:0 0 auto;padding:12px 18px 0;border-bottom:1px solid var(--line);background:var(--card);}
+.vlane-head-top{display:flex;align-items:center;gap:9px;}
+.vlane-back{display:none;}
+.vlane-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:4px 0 10px;}
+.vlane-head-id{min-width:0;}
+.vlane-title{margin:0;font-size:19px;font-weight:650;letter-spacing:-.012em;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vlane-head-state{margin-top:4px;}
+.vlane-head-meta{margin:4px 0 0;font-size:12px;color:var(--ink-3);}
+.vlane-head-acts{display:flex;gap:8px;flex:none;}
+.vtabs-lane{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.vtabs-lane::-webkit-scrollbar{display:none;}
+.vtab-lane{padding:8px 12px 9px;font-size:13px;font-weight:600;color:var(--ink-3);text-decoration:none;
+  border-bottom:2px solid transparent;white-space:nowrap;}
+.vtab-lane:hover{color:var(--ink-2);}
+.vtab-lane.is-active{color:var(--juniper);border-bottom-color:var(--juniper);}
+.vlane-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:14px 18px;background:var(--bg);}
+.vlane-interaction{flex:0 0 auto;padding:10px 18px max(10px,env(safe-area-inset-bottom,0px));
+  border-top:1px solid var(--line);background:var(--card);}
+.vwork-title{margin:0 0 4px;font-size:15px;font-weight:620;color:var(--ink);line-height:1.35;}
+.vwork-desc{margin:0;font-size:13px;color:var(--ink-2);line-height:1.5;}
+.vwork-status{display:flex;align-items:baseline;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line-soft);}
+.vwork-status-k{font-size:10.5px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);}
+.vwork-status-v{font-size:13px;font-weight:550;color:var(--ink);}
+.vwork-summary{margin:8px 0 0;font-size:12.5px;color:var(--ink-2);line-height:1.5;}
+.vcard-output .gw-msg-assistant{border:0;padding:0;background:transparent;box-shadow:none;margin:0;}
+.vtabshell-body{margin:0 0 8px;font-size:13.5px;color:var(--ink);}
+.vtabshell-status{margin:0 0 6px;font-size:12.5px;color:var(--attn-ink);}
+.vtabshell-owner,.vtabshell-link{margin:0 0 4px;font-size:12px;color:var(--ink-3);}
+.vtabshell-owner code{font-family:var(--mono);font-size:11.5px;background:var(--bg-tint);border-radius:4px;padding:1px 5px;}
+
+/* ---------- lane inspector ---------- */
+.vinsp-run{padding:2px 0 12px;border-bottom:1px solid var(--line);}
+.vinsp-run-h{margin:0 0 6px;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);}
+.vinsp-run-state{margin:0 0 10px;font-size:13px;}
+.vinsp-run-age{color:var(--ink-3);font-weight:500;}
+.vinsp-stop{margin-top:11px;}
+.vinsp-actions{margin-top:11px;display:flex;flex-direction:column;gap:9px;}
+.vinsp-id{padding:11px 0;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:9px;align-items:flex-start;}
+/* FOLDED BY DEFAULT. A healthy lane shows Run and nothing else; complexity
+   arrives when it is asked for, or when something fails. */
+.vinsp-sec{border-bottom:1px solid var(--line);}
+.vinsp-sum{padding:11px 0;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-3);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;min-height:40px;}
+.vinsp-sum::-webkit-details-marker{display:none;}
+.vinsp-sum::after{content:"›";margin-left:auto;font-size:16px;color:var(--ink-4);transition:transform .18s ease;}
+.vinsp-sec[open] > .vinsp-sum::after{transform:rotate(90deg);}
+.vinsp-sec[open] > .vinsp-sum{color:var(--ink-2);}
+.vinsp-body{padding:0 0 13px;display:flex;flex-direction:column;gap:10px;}
+.vinsp-badge{font-family:var(--mono);font-size:9.5px;background:var(--attn);color:#fff;border-radius:var(--pill);padding:1px 6px;}
+
+.vlegend{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px;}
+.vlegend-k{font-family:var(--mono);font-size:11px;color:var(--ink-2);font-weight:600;}
+.vlegend-v{margin:0;color:var(--ink-3);}
+
+/* ===========================================================================
+   MOBILE — designed, not compressed.
+   =========================================================================== */
+@media (max-width: 860px){
+  /* The rail becomes a drawer/list surface; primary navigation moves to the
+     bottom bar where a thumb can reach it. */
+  .rail-primary{display:none;}
+  .rail-mobile{display:block;position:sticky;bottom:0;z-index:40;
+    background:var(--card);border-top:1px solid var(--line);
+    box-shadow:0 -1px 3px rgba(31,42,36,.06);}
+  .app{grid-template-columns:1fr;}
+  body[data-v-page="home"] .rail,
+  body[data-v-page="activity"] .rail,
+  body[data-v-page="system"] .rail{display:none;}
+
+  .vpage{padding:14px 14px 22px;}
+  .vpage-title{font-size:20px;}
+  /* Stacked, same order, same hierarchy: needs you, lanes, health, usage,
+     effectiveness, activity. The mobile reader gets the same story. */
+  .vhome-grid,.vsys-grid{grid-template-columns:minmax(0,1fr);gap:12px;}
+  .vgrid-4{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .vmeters{grid-template-columns:minmax(0,1fr);gap:11px;}
+
+  /* Activity becomes two lines rather than four squeezed columns — the same
+     information, at a width where it is still readable. */
+  .vact{grid-template-columns:auto 1fr auto;grid-template-areas:"kind lane when" "sum sum sum";gap:6px 9px;padding:10px 2px;}
+  .vact-kind{grid-area:kind;} .vact-lane{grid-area:lane;} .vact-when{grid-area:when;}
+  .vact-summary{grid-area:sum;font-size:12.5px;color:var(--ink-2);}
+  .vfilter select{min-width:0;width:100%;}
+  .vfilter{flex:1 1 130px;}
+  .vfilter-count{width:100%;margin-left:0;padding-bottom:0;}
+
+  .vneeds-row{grid-template-columns:auto 1fr auto;grid-template-areas:"mark copy age" ". act act";gap:6px 10px;}
+  .vneeds-row-mark{grid-area:mark;} .vneeds-row-copy{grid-area:copy;}
+  .vneeds-row-age{grid-area:age;} .vneeds-row .btn{grid-area:act;justify-self:end;}
+
+  .vlane{grid-template-columns:1fr auto auto;gap:9px;padding:11px 2px;}
+  .vlane-progress{display:none;}
+
+  .vlane-head{padding:10px 14px 0;}
+  .vlane-back{display:inline-flex;align-items:center;justify-content:center;
+    min-width:36px;min-height:36px;margin-left:-8px;font-size:17px;color:var(--ink-2);text-decoration:none;}
+  .vlane-title{font-size:17px;}
+  .vlane-head-acts .btn{min-height:36px;}
+  .vlane-body{padding:11px 13px;}
+  .vlane-interaction{padding:9px 13px max(9px,env(safe-area-inset-bottom,0px));}
+  .vcard-body{padding:11px 13px 13px;}
+  .vcard-head{padding:12px 13px 0;}
+
+  /* Tap targets. Anything the thumb aims at clears 40px. */
+  .vseg-opt{min-height:34px;padding:7px 13px;}
+  .vtab-lane{padding:10px 13px 11px;min-height:42px;display:inline-flex;align-items:center;}
+  .vneeds-tray{flex-wrap:wrap;gap:8px;}
+  .vneeds-acts{width:100%;margin-left:0;}
+  .vneeds-acts .btn{flex:1 1 0;min-height:40px;}
+  .vinsp-sum{min-height:44px;}
+}
+
+/* Very narrow phones (iPhone SE, 320px). Nothing may clip or scroll sideways. */
+@media (max-width: 380px){
+  .vpage{padding:12px 11px 20px;}
+  .vgrid-4{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  .vmetric{padding:8px 9px;}
+  .vmetric-value{font-size:14.5px;}
+  .vact{grid-template-columns:auto 1fr;grid-template-areas:"kind lane" "sum sum" "when when";}
+  .vact-when{justify-self:start;}
+  .vtab-label{font-size:10px;}
+  .vlane-title{font-size:16px;}
+  .vprov-row{grid-template-columns:1fr auto;grid-template-areas:"name cost" "model runs";gap:2px 8px;}
+  .vprov-name{grid-area:name;} .vprov-model{grid-area:model;} .vprov-runs{grid-area:runs;text-align:right;} .vprov-cost{grid-area:cost;}
+}
+
+/* The composer must stay reachable with the keyboard open. The app already
+   tracks the visual viewport in --gw-vvh; the interaction zone is pinned inside
+   that box rather than to the layout viewport, which is what a phone keyboard
+   pushes off-screen. */
+@media (max-width: 860px){
+  .app:has(.gw.is-detail) .rail-mobile{display:none;}
+  .gw.is-detail .gw-lane-stage{display:flex;flex-direction:column;min-height:0;height:100%;}
+}
+
+/* ---------------------------------------------------------------------------
+   THE GLOBAL APPROVALS BAR IS A REACHABILITY GUARANTEE, NOT A PAGE SECTION.
+
+   Measured on a 390x844 phone: uncapped, one pending governed action rendered a
+   241px card at the top of EVERY route — including the lane, where it pushed
+   the head, the work and the composer down until the Send button sat 27px below
+   the viewport. That card is the exact pattern the V2 lane replaced with an
+   anchored tray at the composer.
+
+   It is now bounded and scrolls its own content, so the authorize path stays
+   reachable everywhere without owning the screen. On a mobile LANE it steps
+   aside entirely: the tray states the request at the interaction boundary and
+   `.gw-decision-bar` renders the same canonical approve control right above the
+   composer, so nothing is lost and nothing is duplicated on a small screen.
+   --------------------------------------------------------------------------- */
+.gw-approvals-bar{max-height:min(30vh,264px);overflow-y:auto;}
+@media (max-width:860px){
+  .gw-approvals-bar{max-height:26vh;}
+  .app:has(.gw.is-detail) .gw-approvals-bar{display:none;}
+  /* The back control already says where you came from; the breadcrumb is
+     desktop chrome and costs 36px of a phone's lane header. */
+  .vlane-crumb{display:none;}
+  .vlane-head-row{margin:2px 0 8px;}
+}
+
+/* The lane-list header wrapped four controls onto one nowrap row, so at 320px
+   "+ Add Lane" sat 50px past the edge. It wraps. */
+.gw-lanes-h-row{flex-wrap:wrap;row-gap:6px;}
+
+/* ---------------------------------------------------------------------------
+   THE GLOBAL APPROVALS BAR, MADE COMPACT.
+
+   It is a reachability guarantee: wherever the operator is, a pending
+   authorization is one click away. It is NOT the page. Rendered at its natural
+   size it was a 241px beige block above every route — taller than the Needs You
+   summary it duplicates, and visually the loudest thing on a screen that may
+   have nothing to do with the lane that raised it.
+
+   It is now a single strip. On HOME it is suppressed entirely: the Needs You
+   block IS the canonical global summary there, and stacking a second, louder
+   copy of the same request above it is the exact "excessive boxes" the V2 pass
+   set out to remove.
+   --------------------------------------------------------------------------- */
+body[data-v-page="home"] .gw-approvals-bar{display:none;}
+/* Compact form: heading and title on one line, actions beside them, the
+   diagnostic request id dropped from the strip entirely — it is a diagnostic
+   identifier, and the strip's whole job is to be small enough to ignore until
+   it is not. It uses the V2 attention tokens rather than its own amber. */
+.gw-approvals{margin:10px 16px 0;padding:8px 12px;border-radius:var(--radius-sm);
+  border-color:var(--attn-line);border-left-color:var(--attn);background:var(--attn-bg);}
+.gw-approvals-h{font-size:10.5px;letter-spacing:.08em;margin:0 0 4px;opacity:1;color:var(--attn-ink);}
+.gw-approvals-badge{min-width:18px;height:18px;font-size:11px;background:var(--attn);}
+.gw-approval-row{grid-template-areas:"main actions";gap:6px 14px;padding:4px 0;align-items:center;}
+.gw-approval-row-title{font-size:13.5px;}
+.gw-approval-row-ctx,.gw-approval-row-why,.gw-approval-row-esc{font-size:12px;margin:2px 0 0;}
+.gw-approval-row-ref{display:none;}
+.gw-approvals .btn{min-height:36px;}
+@media (max-width:860px){ .gw-approvals .btn{min-height:44px;} }
+
+/* ---------------------------------------------------------------------------
+   TILE DENSITY FOLLOWS AVAILABLE WIDTH, NOT A FIXED COUNT.
+
+   MEASURED at 1440: Home's side column is ~400px, so a four-across grid gave
+   each tile 70px of usable width. "AUTONOMOUS" broke to "AUTONOMOU / S",
+   "INTERVENTIONS" to "INTERVENTI / ONS", and the gateway's own value to
+   "responsiv / e". A metric whose label has to be reassembled by the reader is
+   not a metric.
+
+   The narrow column gets two across (~185px); the wide Home column and the
+   System grid keep four. Same components, same tokens — only the track count
+   answers to the space it actually has.
+   --------------------------------------------------------------------------- */
+.vhome-col-side .vgrid-4{grid-template-columns:repeat(2,minmax(0,1fr));}
+.vhome-grid{grid-template-columns:minmax(0,1.3fr) minmax(360px,1fr);}
+@media (max-width:1180px){
+  .vhome-grid{grid-template-columns:minmax(0,1fr);}
+  .vhome-col-side .vgrid-4{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+
+/* System stacks in two independent columns; see renderSystem for why. */
+.vsys-col{display:flex;flex-direction:column;gap:16px;min-width:0;}
+.vsys-col .vcard + .vcard{margin-top:0;}
+@media (max-width:860px){ .vsys-col{gap:12px;} }
