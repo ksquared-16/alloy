@@ -60,6 +60,10 @@ done
 case "$FIXTURE" in
   operational_cards_certification) NPM_SCRIPT="dev:seed:operational-cards-certification" ;;
   enrollment_certification) NPM_SCRIPT="dev:seed:enrollment-certification" ;;
+  # The REAL ENROLLMENT V1 certification driver. Read-only against the tenant: it drives real product
+  # entry points and asserts through database reads, and unlike the seed it creates no fixture data of
+  # its own — the fixture it certifies is the one above.
+  enrollment_e2e_certification) NPM_SCRIPT="dev:certify:enrollment-e2e" ;;
   *) die "fixture_not_allowlisted: $FIXTURE" 3 ;;
 esac
 
