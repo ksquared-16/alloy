@@ -231,7 +231,8 @@ describe("stamp_enrollment_date outcome target wiring", () => {
         const { defaultStageOperatingPlanForEnrollmentStage } = await import(
             "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans"
         );
-        const plan = defaultStageOperatingPlanForEnrollmentStage("enrollment");
+        // The child Enrollment-in-progress stage — `enrolling`, not a separate `enrollment`.
+        const plan = defaultStageOperatingPlanForEnrollmentStage("enrolling");
         const rule = plan?.outcome_rules.find((r) => r.when_outcome_key === "enrollment_complete");
         expect(rule?.targets.some((t) => t.kind === "stamp_enrollment_date")).toBe(true);
     });
