@@ -3353,6 +3353,13 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
      ratio and the line box are not what this element's max-height was measured
      against. Do not put a number back here. */
   max-height:none;
+  /* AND NO BAND FOR A PARTIAL LINE TO PAINT INTO.
+     The clamp yields four line boxes, but the operator message is a tinted block
+     with 8px of bottom padding, and the fifth line painted INTO that padding —
+     visible as a row of sliced letters under the fourth. Removing the bottom
+     padding while collapsed puts the clip edge immediately under the last full
+     line. The padding returns with the rest of the message on expand. */
+  padding-bottom:0;
 }
 /* A PROVIDER REPORT IS NOT A PARAGRAPH, SO THE CLAMP GOES DEEPER.
    Its body is `.gw-report-body` inside `.gw-report`, and clamping the outer
@@ -3628,3 +3635,45 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
 
 /* A request that names no lane this host knows. Stated, never linked. */
 .vneeds-row-unresolved{font-size:11.5px;font-weight:600;color:var(--ink-3);white-space:nowrap;}
+
+/* ===========================================================================
+   THE KEYBOARD IS THE BOTTOM INSET
+
+   MEASURED on the real device: a large blank band between the composer and the
+   iOS keyboard, and the composer reading as detached from it. The cause is not
+   the composer's height — it is that `env(safe-area-inset-bottom)` is reserved
+   THREE TIMES in the compose chain, by three elements that each legitimately
+   reserve it when the keyboard is CLOSED:
+
+     .view:has(.gw.is-detail)   padding-bottom: max(8px, env(safe-area-inset-bottom))
+     .vlane-interaction         padding-bottom: max(6px, env(safe-area-inset-bottom))
+     .gw.is-detail .gw-composer padding-bottom: max(4px, env(safe-area-inset-bottom))
+
+   On this Mac those resolve to 8 + 6 + 4 = 18px and everything looked fine —
+   which is exactly why the harness never saw it. On an iPhone each resolves to
+   the home-indicator inset instead: 34 + 34 + 34 = 102px of application-owned
+   emptiness, sitting under the composer, above a keyboard that already covers
+   the home indicator.
+
+   WHILE THE KEYBOARD IS OPEN THERE IS NO HOME INDICATOR TO AVOID. The keyboard
+   occupies that region. So the inset is not reserved at all here, in any of
+   them, and the composer ends at the bottom of the VISUAL viewport — which is
+   where the keyboard begins. One deliberate gap remains, declared once, in
+   pixels rather than as an inset.
+
+   `body` pads the app by the insets and `.app` subtracts them back out of the
+   visual-viewport height; those two must change together or the app ends short
+   of the viewport and re-opens the gap from the other side.
+   =========================================================================== */
+@media (max-width:860px){
+  :root[data-gw-compose] body{padding-bottom:0;}
+  :root[data-gw-compose] .app{
+    height:calc(var(--gw-vvh, 100dvh) - env(safe-area-inset-top, 0px));
+  }
+  :root[data-gw-compose] .view:has(.gw.is-detail){padding-bottom:0;}
+  :root[data-gw-compose] .vlane-interaction{padding-bottom:0;}
+  /* THE ONE DELIBERATE GAP. A fixed 6px so the Send row is not flush against
+     the keyboard's accessory bar — not an inset, so it cannot inflate to 34px
+     on a device and cannot be reserved twice. */
+  :root[data-gw-compose] .gw.is-detail .gw-composer{padding-bottom:6px;}
+}

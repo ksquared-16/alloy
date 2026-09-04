@@ -682,6 +682,27 @@ try {
       }));
     const cmOverflow = await overflow(cm);
     check(`compose ${label} no sideways scroll`, cmOverflow.docScroll <= cmOverflow.vw + 1);
+    // THE COMPOSER ENDS WHERE THE KEYBOARD BEGINS.
+    //
+    // On the real device the composer floated a long way above the keyboard,
+    // with an application-owned blank band beneath it. The cause was
+    // env(safe-area-inset-bottom) reserved three times over in the compose
+    // chain. This asserts the outcome geometrically: nothing between the
+    // composer and the bottom of the visual viewport.
+    const anchor = await cm.evaluate(() => {
+      const vh = Math.round(window.visualViewport?.height || window.innerHeight);
+      const g = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? { bottom: Math.round(el.getBoundingClientRect().bottom), padB: getComputedStyle(el).paddingBottom } : null;
+      };
+      return { vh, composer: g(".gw-composer"), zone: g(".vlane-interaction"), view: g(".view"), app: g(".app") };
+    });
+    check(`compose ${label} the composer ends at the bottom of the visual viewport`,
+      anchor.composer && Math.abs(anchor.vh - anchor.composer.bottom) <= 2,
+      `composer bottom ${anchor.composer?.bottom} of ${anchor.vh}`);
+    check(`compose ${label} no ancestor reserves a band under the composer`,
+      ["zone", "view", "app"].every((k) => anchor[k] && parseFloat(anchor[k].padB) === 0),
+      ["zone", "view", "app"].map((k) => `${k}:${anchor[k]?.padB}`).join(" "));
 
     // Leaving the mode restores the lane.
     await cm.evaluate(() => document.querySelector("#gw-instruction").blur());
