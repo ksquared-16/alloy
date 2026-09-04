@@ -28,7 +28,7 @@ const RUNNER = join(HERE, "..", "alloy-certify-fixture");
 const {
   CERTIFICATION_FIXTURES, IDENTITY_DECISIONS, FIXTURE_REFUSALS, ORG_ID_RE,
   listCertificationFixtures, validateFixtureRequest, assertLocalEnvironment,
-  authorizeFixtureCaller, parseFixtureResult, runCertificationFixture,
+  authorizeFixtureCaller, parseFixtureResult, runCertificationFixture, fixtureScriptPresent,
 } = await import("../lib/vacilando/certification-fixture.mjs");
 
 let pass = 0;
@@ -337,11 +337,246 @@ await test("a result never claims credentials reached the lane", async () => {
 });
 
 await test("the catalog is discoverable", () => {
+  /*
+   * ASSERTED AGAINST THE ALLOWLIST, not against a hard-coded count.
+   *
+   * This used to assert `list.length === 1`, which stopped being true the moment a second
+   * fixture was added and left the suite red on staging without anything being wrong. A
+   * count is the wrong assertion here: the property that matters is that the catalog
+   * reports exactly what the allowlist holds and invents nothing, and that survives a
+   * third entry without being rewritten a third time.
+   */
   const list = listCertificationFixtures();
-  assert.equal(list.length, 1);
-  assert.equal(list[0].fixture, "operational_cards_certification");
-  assert.deepEqual(list[0].operations, ["ensure", "verify", "reset"]);
-  assert.equal(list[0].reserved_namespace, "operational-cards-cert.alloy.invalid");
+  assert.deepEqual(
+    list.map((f) => f.fixture).sort(),
+    Object.keys(CERTIFICATION_FIXTURES).sort(),
+  );
+  for (const entry of list) {
+    const def = CERTIFICATION_FIXTURES[entry.fixture];
+    assert.deepEqual(entry.operations, Object.keys(def.operations), entry.fixture);
+    assert.equal(entry.reserved_namespace, def.reserved_namespace, entry.fixture);
+    assert.equal(typeof entry.description, "string");
+  }
+
+  // The original case, still pinned by name rather than by position.
+  const cards = list.find((f) => f.fixture === "operational_cards_certification");
+  assert.deepEqual(cards.operations, ["ensure", "verify", "reset"]);
+  assert.equal(cards.reserved_namespace, "operational-cards-cert.alloy.invalid");
+});
+
+/** The script-presence check, addressed by fixture name. */
+function fixtureScriptPresentFor(worktree, fixtureName) {
+  return fixtureScriptPresent(worktree, CERTIFICATION_FIXTURES[fixtureName]);
+}
+
+
+// ------------------------------------------------- 15. the E2E driver operation
+//
+// The third entry is a different KIND of thing to the two seed fixtures: it RUNS the
+// REAL ENROLLMENT V1 certification driver rather than seeding data. It is inside this
+// registry precisely so it inherits the property that makes the registry safe — a caller
+// names a fixture and an operation, and the pair resolves to a fixed npm script and a
+// fixed argument vector it cannot influence.
+
+/** A stand-in worktree carrying the E2E driver's npm script. */
+function makeE2eWorktree() {
+  const dir = mkdtempSync(join(tmpdir(), "vac-certe2e-"));
+  mkdirSync(join(dir, "web"), { recursive: true });
+  writeFileSync(join(dir, "web", "package.json"), JSON.stringify({
+    scripts: { "dev:certify:enrollment-e2e": "tsx scripts/certifyEnrollmentE2E.ts" },
+  }, null, 2));
+  return dir;
+}
+
+await test("the E2E driver is allowlisted, and bound to one fixed script and one operation", () => {
+  const def = CERTIFICATION_FIXTURES.enrollment_e2e_certification;
+  assert.equal(def.npm_script, "dev:certify:enrollment-e2e");
+  assert.deepEqual(Object.keys(def.operations), ["run"]);
+  assert.deepEqual(def.operations.run.args, []);
+  assert.equal(Object.isFrozen(def), true);
+  assert.equal(Object.isFrozen(def.operations), true);
+  assert.equal(Object.isFrozen(def.phase_ids), true);
+
+  // POSITIVE CONTROL: the operation is genuinely accepted.
+  assert.equal(validateFixtureRequest({
+    fixture: "enrollment_e2e_certification", operation: "run",
+  }).ok, true);
+});
+
+await test("adding an operation to one fixture does not widen another", () => {
+  // This is the regression the per-fixture matrix exists for. The runner used to match
+  // the fixture and the operation in two INDEPENDENT case blocks, so every operation was
+  // legal for every fixture and the pairing was never checked. Harmless while both
+  // fixtures took the same three operations; a hole the moment a fixture with a different
+  // operation was added.
+  for (const seed of ["operational_cards_certification", "enrollment_certification"]) {
+    const v = validateFixtureRequest({ fixture: seed, operation: "run" });
+    assert.equal(v.ok, false, `${seed} accepted run`);
+    assert.equal(v.error, FIXTURE_REFUSALS.UNKNOWN_OPERATION);
+    assert.match(runnerRefusal([seed, "run", "/tmp"]) || "", /operation_not_allowlisted/);
+  }
+  for (const op of ["ensure", "verify", "reset"]) {
+    const v = validateFixtureRequest({ fixture: "enrollment_e2e_certification", operation: op });
+    assert.equal(v.ok, false, `e2e accepted ${op}`);
+    assert.equal(v.error, FIXTURE_REFUSALS.UNKNOWN_OPERATION);
+    assert.match(runnerRefusal(["enrollment_e2e_certification", op, "/tmp"]) || "", /operation_not_allowlisted/);
+  }
+
+  // POSITIVE CONTROL: each fixture still accepts its own operations.
+  for (const op of ["ensure", "verify", "reset"]) {
+    assert.equal(validateFixtureRequest({ fixture: "enrollment_certification", operation: op }).ok, true, op);
+  }
+  assert.equal(validateFixtureRequest({ fixture: "enrollment_e2e_certification", operation: "run" }).ok, true);
+});
+
+await test("a phase selector is a closed vocabulary, at both entry points", () => {
+  // WHY THIS IS LOAD-BEARING RATHER THAN DECORATIVE. The driver itself cannot refuse an
+  // unknown phase: selectPhaseChain looks the key up and RETURNS SILENTLY when it misses,
+  // so a typo does not fail — it runs bootstrap alone and reports a green subset that
+  // proves nothing. A misspelled phase would be indistinguishable from a pass.
+  for (const bad of ["B_entryy", "nope", "N_complete_enrollment; id", "../x", "A_bootstrap,nope"]) {
+    const v = validateFixtureRequest({
+      fixture: "enrollment_e2e_certification", operation: "run", phases: bad,
+    });
+    assert.equal(v.ok, false, `${bad} was accepted`);
+    assert.equal(v.error, FIXTURE_REFUSALS.BAD_PHASE);
+  }
+  assert.match(
+    runnerRefusal(["enrollment_e2e_certification", "run", "/tmp", "--phases", "nope"]) || "",
+    /phase_not_allowlisted/,
+  );
+
+  // POSITIVE CONTROL: every declared phase is accepted, singly and together.
+  for (const good of CERTIFICATION_FIXTURES.enrollment_e2e_certification.phase_ids) {
+    assert.equal(validateFixtureRequest({
+      fixture: "enrollment_e2e_certification", operation: "run", phases: [good],
+    }).ok, true, good);
+  }
+  const all = [...CERTIFICATION_FIXTURES.enrollment_e2e_certification.phase_ids];
+  assert.equal(validateFixtureRequest({
+    fixture: "enrollment_e2e_certification", operation: "run", phases: all.join(","),
+  }).ok, true);
+});
+
+await test("a fixture that declares no phases refuses the parameter rather than ignoring it", () => {
+  // Silently dropping a selector the caller believed in is how a targeted run becomes a
+  // full mutating run nobody asked for.
+  for (const seed of ["operational_cards_certification", "enrollment_certification"]) {
+    const v = validateFixtureRequest({ fixture: seed, operation: "ensure", phases: ["A_bootstrap"] });
+    assert.equal(v.ok, false, `${seed} ignored phases`);
+    assert.equal(v.error, FIXTURE_REFUSALS.BAD_PHASE);
+    assert.equal(CERTIFICATION_FIXTURES[seed].phase_ids, undefined);
+  }
+  assert.match(
+    runnerRefusal(["enrollment_certification", "ensure", "/tmp", "--phases", "A_bootstrap"]) || "",
+    /phase_not_allowlisted/,
+  );
+
+  // POSITIVE CONTROL: omitting phases entirely is still a valid full run.
+  assert.equal(validateFixtureRequest({ fixture: "enrollment_certification", operation: "ensure" }).ok, true);
+});
+
+await test("a phase selection reaches the driver as an enum, never as a command line", async () => {
+  // The ONLY environment value a caller can influence, and it is drawn from the closed
+  // list above. Nothing else the caller supplies is placed on a command line at all.
+  const dir = makeE2eWorktree();
+  let seen = null;
+  const out = await runCertificationFixture({
+    fixture: "enrollment_e2e_certification",
+    operation: "run",
+    laneId: "lane_test",
+    cwd: dir,
+    phases: ["B_entry", "N_complete_enrollment"],
+    loadLane: () => laneFor(dir),
+    runner: async (argv) => {
+      seen = argv;
+      return { ok: true, code: 0, stdout: "", stderr: "", error: null };
+    },
+  });
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.phases, ["B_entry", "N_complete_enrollment"]);
+  // The vector is the fixture, the operation, the worktree, then the validated enum.
+  assert.deepEqual(seen, [
+    "enrollment_e2e_certification", "run", out.worktree_path,
+    "--phases", "B_entry,N_complete_enrollment",
+  ]);
+  assert.equal(out.credentials_exposed, false);
+  // No secret is echoed back to the caller under any key.
+  assert.equal(/service_role|SUPABASE_SERVICE|anon_key|eyJ/i.test(JSON.stringify(out)), false);
+});
+
+await test("the E2E driver's script must be present in the calling worktree", async () => {
+  // The driver lives in the Enrollment product worktree, not in the toolkit. A lane whose
+  // worktree does not carry it is told so, rather than starting a credential-holding
+  // process that would fail obscurely.
+  const dir = makeWorktree();  // carries the seed script, not the driver
+  const out = await runCertificationFixture({
+    fixture: "enrollment_e2e_certification",
+    operation: "run",
+    laneId: "lane_test",
+    cwd: dir,
+    loadLane: () => laneFor(dir),
+    runner: async () => { throw new Error("runner must not start"); },
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, FIXTURE_REFUSALS.SCRIPT_MISSING);
+  assert.match(runnerRefusal(["enrollment_e2e_certification", "run", dir]) || "", /fixture_script_not_present/);
+
+  // POSITIVE CONTROL: a worktree that does carry it passes this check.
+  const ok = makeE2eWorktree();
+  assert.equal(fixtureScriptPresentFor(ok, "enrollment_e2e_certification").ok, true);
+});
+
+await test("the E2E operation inherits every existing refusal", async () => {
+  const dir = makeE2eWorktree();
+  // Arbitrary cwd: knowing a lane id is not authority over a worktree it does not own.
+  const foreign = await runCertificationFixture({
+    fixture: "enrollment_e2e_certification",
+    operation: "run",
+    laneId: "lane_test",
+    cwd: "/tmp",
+    loadLane: () => laneFor(dir),
+    runner: async () => { throw new Error("runner must not start"); },
+  });
+  assert.equal(foreign.ok, false);
+  assert.equal(foreign.error, FIXTURE_REFUSALS.LANE_NOT_OWNED);
+
+  // Production runtime.
+  assert.equal(assertLocalEnvironment({ env: { NODE_ENV: "production" } }).ok, false);
+  assert.equal(assertLocalEnvironment({ env: { VERCEL: "1" } }).ok, false);
+
+  // Arbitrary executable / shell / flag, at the runner.
+  assert.match(runnerRefusal(["enrollment_e2e_certification", "run", dir, "--evil"]) || "", /unexpected argument/);
+  assert.match(runnerRefusal(["enrollment_e2e_certification", "run; id", dir]) || "", /operation_not_allowlisted/);
+
+  // A prohibited target is refused by the runner, which is the first place it is knowable.
+  const src = readFileSync(RUNNER, "utf8");
+  assert.match(src, /alloy_is_production_supabase_url/);
+  assert.match(src, /certification_target_prohibited/);
+});
+
+await test("the E2E entry is discoverable with its phase vocabulary", () => {
+  const listed = listCertificationFixtures().find((f) => f.fixture === "enrollment_e2e_certification");
+  assert.ok(listed, "not listed");
+  assert.deepEqual(listed.operations, ["run"]);
+  assert.equal(listed.phases.length, CERTIFICATION_FIXTURES.enrollment_e2e_certification.phase_ids.length);
+  assert.ok(listed.phases.includes("N_complete_enrollment"));
+  // The seed fixtures declare none, and say so by omission rather than an empty list.
+  const seed = listCertificationFixtures().find((f) => f.fixture === "enrollment_certification");
+  assert.equal(seed.phases, undefined);
+});
+
+await test("the runner restates the allowlist, so reaching it directly changes nothing", () => {
+  // Defence in depth is the established idiom of this boundary and the new entry keeps it.
+  const src = readFileSync(RUNNER, "utf8");
+  assert.match(src, /enrollment_e2e_certification:run\)/);
+  assert.match(src, /dev:certify:enrollment-e2e/);
+  assert.match(src, /ALLOWED_PHASES=/);
+  assert.match(src, /ALLOY_CERT_PHASES/);
+  // Every phase the Node layer declares is also refusable by the runner.
+  for (const p of CERTIFICATION_FIXTURES.enrollment_e2e_certification.phase_ids) {
+    assert.ok(src.includes(p), `runner is missing phase ${p}`);
+  }
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

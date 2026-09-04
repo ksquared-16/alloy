@@ -43,10 +43,12 @@ shift 3 2>/dev/null || true
 
 IDENTITY_DECISION=""
 ORG_ID=""
+PHASES=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --identity-decision) IDENTITY_DECISION="${2:-}"; shift 2 ;;
     --org) ORG_ID="${2:-}"; shift 2 ;;
+    --phases) PHASES="${2:-}"; shift 2 ;;
     *) die "unexpected argument: $1" ;;
   esac
 done
@@ -57,18 +59,50 @@ done
 # ── the allowlist, restated here on purpose ──────────────────────────────────
 # Defence in depth: this script must refuse the same things whether it was
 # reached through vac or directly.
-case "$FIXTURE" in
-  operational_cards_certification) NPM_SCRIPT="dev:seed:operational-cards-certification" ;;
-  enrollment_certification) NPM_SCRIPT="dev:seed:enrollment-certification" ;;
-  *) die "fixture_not_allowlisted: $FIXTURE" 3 ;;
+#
+# THE OPERATION IS MATCHED PER FIXTURE, not globally. It used to be two independent
+# `case` blocks, which meant every operation was legal for every fixture and the pairing
+# was never actually checked. That was harmless while both fixtures took the same three
+# operations, and stopped being harmless the moment a fixture with a DIFFERENT operation
+# was added: a global list would have made `enrollment_certification run` and
+# `enrollment_e2e_certification reset` both legal here. Adding an operation to one fixture
+# must not widen another, so the pair is the unit.
+case "${FIXTURE}:${OPERATION}" in
+  operational_cards_certification:ensure) NPM_SCRIPT="dev:seed:operational-cards-certification"; FIXTURE_ARGS=() ;;
+  operational_cards_certification:verify) NPM_SCRIPT="dev:seed:operational-cards-certification"; FIXTURE_ARGS=("--verify") ;;
+  operational_cards_certification:reset)  NPM_SCRIPT="dev:seed:operational-cards-certification"; FIXTURE_ARGS=("--remove") ;;
+  enrollment_certification:ensure)        NPM_SCRIPT="dev:seed:enrollment-certification";        FIXTURE_ARGS=() ;;
+  enrollment_certification:verify)        NPM_SCRIPT="dev:seed:enrollment-certification";        FIXTURE_ARGS=("--verify") ;;
+  enrollment_certification:reset)         NPM_SCRIPT="dev:seed:enrollment-certification";        FIXTURE_ARGS=("--remove") ;;
+  # The E2E driver. One operation, no fixture args; phase selection travels as a
+  # validated environment value below, never on the command line.
+  enrollment_e2e_certification:run)       NPM_SCRIPT="dev:certify:enrollment-e2e";               FIXTURE_ARGS=() ;;
+  *)
+    case "$FIXTURE" in
+      operational_cards_certification|enrollment_certification|enrollment_e2e_certification)
+        die "operation_not_allowlisted: $OPERATION is not an operation of $FIXTURE" 3 ;;
+      *) die "fixture_not_allowlisted: $FIXTURE" 3 ;;
+    esac
+    ;;
 esac
 
-case "$OPERATION" in
-  ensure) FIXTURE_ARGS=() ;;
-  verify) FIXTURE_ARGS=("--verify") ;;
-  reset)  FIXTURE_ARGS=("--remove") ;;
-  *) die "operation_not_allowlisted: $OPERATION" 3 ;;
-esac
+# -- phase selection: a closed vocabulary, restated here on purpose ----------
+# Only the E2E driver takes phases, and only these. The driver itself CANNOT refuse an
+# unknown one -- selectPhaseChain looks the key up and returns silently on a miss, so a
+# typo runs bootstrap alone and reports a green subset that proves nothing. Refusing here
+# is therefore load-bearing, not decorative.
+ALLOWED_PHASES="A_bootstrap B_entry R1_path_a_stays_context_free R2_no_duplicate_episode L_sufficiency C_participant_entry D_confirmation E_collection M_exception G_evidence K_participant_complete N_complete_enrollment Q_next_episode F_parties H_artifacts I_correction J_signature P_handoff S_responsive"
+if [[ -n "$PHASES" ]]; then
+  [[ "$FIXTURE" == "enrollment_e2e_certification" ]] \
+    || die "phase_not_allowlisted: $FIXTURE does not take a phase selection" 3
+  IFS=',' read -r -a REQUESTED_PHASES <<< "$PHASES"
+  for requested_phase in "${REQUESTED_PHASES[@]}"; do
+    requested_phase="${requested_phase//[[:space:]]/}"
+    [[ -n "$requested_phase" ]] || continue
+    [[ " ${ALLOWED_PHASES} " == *" ${requested_phase} "* ]] \
+      || die "phase_not_allowlisted: $requested_phase" 3
+  done
+fi
 
 case "$IDENTITY_DECISION" in
   ""|create_new_person|reuse_existing|refuse_ambiguous) : ;;
@@ -130,6 +164,9 @@ printf 'fixture=%s operation=%s worktree=%s trusted_env_names=%s\n' \
 cd "$WORKTREE/web"
 # Exported for the fixture only, and only when explicitly supplied.
 [[ -n "$ORG_ID" ]] && export ALLOY_CERT_ORG_ID="$ORG_ID"
+# Validated against the closed list above. This is the ONLY environment value a caller can
+# influence, it is an enum rather than a free string, and the driver already consumes it.
+[[ -n "$PHASES" ]] && export ALLOY_CERT_PHASES="$PHASES"
 if [[ -n "$IDENTITY_DECISION" ]]; then
   exec npm run --silent "$NPM_SCRIPT" -- "${FIXTURE_ARGS[@]+"${FIXTURE_ARGS[@]}"}" --identity-decision "$IDENTITY_DECISION"
 fi
