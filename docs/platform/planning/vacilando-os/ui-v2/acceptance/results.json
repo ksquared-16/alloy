@@ -1,23 +1,23 @@
 {
-  "accepted_at": "2026-09-04T00:34:56.525Z",
+  "accepted_at": "2026-09-04T00:42:42.495Z",
   "base": "http://127.0.0.1:3030",
   "installed_toolkit": [
     "source_repo=/Users/vacilando/Alloy",
     "source_ref=origin/staging",
-    "source_commit=10c2662ced411f3af8ca53f0af5c0a59878a1b83",
-    "source_commit_short=10c2662ced41",
+    "source_commit=e5d80d15edb27d07acb282d4c539326303711025",
+    "source_commit_short=e5d80d15edb2",
     "source_subdir=scripts/local-dev",
-    "installed_at=2026-09-04T00:23:07Z",
+    "installed_at=2026-09-04T00:41:27Z",
     "installed_by=alloy-toolkit",
     "command_count=84"
   ],
-  "passed": 42,
-  "failed": 2,
+  "passed": 44,
+  "failed": 0,
   "results": [
     {
       "name": "running gateway serves /api/v2/views/home (promoted route)",
       "ok": true,
-      "detail": "status 200 {\"ok\":true,\"approvals\":[{\"request_id\":\"gar_df65e019a6264d\",\"content_fingerprint\":\"baa688384a81e29c5bc14229f217a461\",\"mission_id\":null,\"autho"
+      "detail": "status 200 {\"ok\":true,\"approvals\":[{\"request_id\":\"gar_35cf28e9896886\",\"content_fingerprint\":\"55813d0793ea7fa6dead1d87a92c3ca0\",\"mission_id\":null,\"autho"
     },
     {
       "name": "running gateway serves /api/v2/views/system",
@@ -47,12 +47,12 @@
     {
       "name": "installed CLI accepts a progress-only report with no state argument",
       "ok": true,
-      "detail": "erun_9f77905b759d7ae5 lane_9b9082778292 WAITING_RESOURCE | progress ~62% (medium confidence, provider_estimate) — Installed-runtime acceptance: driving the live Gateway"
+      "detail": "erun_9f77905b759d7ae5 lane_9b9082778292 EXECUTING | progress ~62% (medium confidence, provider_estimate) — Installed-runtime acceptance: driving the live Gateway"
     },
     {
       "name": "the running Gateway projects the estimate to the UI",
       "ok": true,
-      "detail": "{\"percent\":62,\"confidence\":\"medium\",\"summary\":\"Installed-runtime acceptance: driving the live Gateway\",\"remaining_work\":\"mobile acceptance and terminal-state proof\",\"source\":\"provider_estimate\",\"updated_at\":\"2026-09-04T00:34:11.799Z\"}"
+      "detail": "{\"percent\":62,\"confidence\":\"medium\",\"summary\":\"Installed-runtime acceptance: driving the live Gateway\",\"remaining_work\":\"mobile acceptance and terminal-state proof\",\"source\":\"provider_estimate\",\"updated_at\":\"2026-09-04T00:41:57.043Z\"}"
     },
     {
       "name": "installed module: a run can be created for the terminal-state proof",
@@ -67,7 +67,7 @@
     {
       "name": "installed module: COMPLETE becomes a MEASURED 100%",
       "ok": true,
-      "detail": "{\"percent\":100,\"confidence\":\"high\",\"summary\":\"midway\",\"remaining_work\":null,\"source\":\"deterministic\",\"updated_at\":\"2026-09-04T00:34:12.011Z\"}"
+      "detail": "{\"percent\":100,\"confidence\":\"high\",\"summary\":\"midway\",\"remaining_work\":null,\"source\":\"deterministic\",\"updated_at\":\"2026-09-04T00:41:57.315Z\"}"
     },
     {
       "name": "installed module: FAILED removes the estimate",
@@ -165,9 +165,9 @@
       "detail": ""
     },
     {
-      "name": "LIVE desktop: Needs You is anchored at the composer boundary",
+      "name": "LIVE desktop: Needs You absent because nothing needs the operator",
       "ok": true,
-      "detail": ""
+      "detail": "no pending blocker on this lane — the tray correctly renders nothing"
     },
     {
       "name": "LIVE mobile 390: bottom navigation matches the V2 IA",
@@ -186,7 +186,7 @@
     },
     {
       "name": "LIVE mobile 390: composer on screen and no approvals surface pushes Send off",
-      "ok": false,
+      "ok": true,
       "detail": ""
     },
     {
@@ -216,7 +216,7 @@
     },
     {
       "name": "LIVE mobile 320: composer on screen and no approvals surface pushes Send off",
-      "ok": false,
+      "ok": true,
       "detail": ""
     },
     {
@@ -232,7 +232,7 @@
     {
       "name": "LIVE mobile: composer usable with the keyboard open",
       "ok": true,
-      "detail": "viewport 380, Send bottom 352"
+      "detail": "viewport 380, Send bottom 355"
     }
   ]
 }
