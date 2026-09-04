@@ -441,6 +441,70 @@ reported success is exactly the failure being designed out.
 live-certified — drift detected, `host.install_toolkit` auto-executed under
 policy, argv and health verified, blocked work resumed, no Director click.
 
+## Finding: Needs You transitional count divergence
+
+**Symptom.** The navigation badge, the global Needs You control, the panel
+heading and the rendered rows disagreed during transitions and only converged
+later. Steady state looked correct, which is why it read as a refresh-timing
+problem.
+
+**Root cause — not timing.** Four surfaces answered "how much needs you" from
+three different places. Rows came from the governed-action projection
+(`/api/v2/governed-actions/pending`); the badge came from the notification
+store's `counts.actionable` (`/api/notifications`); and the navigation read
+
+```js
+Number(G.attentionCount) || (G.home?.approvals?.length || 0)
+```
+
+where a genuine, **loaded zero is falsy** — so an authoritative empty state fell
+through to a stale snapshot count from a third collection. The surfaces were not
+slow to converge. They were reading different things, and one of them could not
+tell *no items* from *no data*.
+
+**Fix — one owner, one revision.** Promoted in `51ce6788d`, with `ac5605907`
+and `fc02b4db2`. `commitNeedsYou()` commits the actionable set once per
+revision and every surface paints from that object, with `count ===
+items.length`. They cannot disagree because only one answer exists at a time.
+Measured before the fix: 1/1/0/0 on Lanes, 0/0/1/1 on Home.
+
+**Tests.** The behavioural coverage lives with that implementation.
+`scripts/local-dev/tests/needs-you-consistency.test.mjs` adds a structural guard
+on the wiring SHAPE — that the set is committed once, that no surface reintroduces
+a falsy-zero `||` fallback to a second collection, and that the approvals heading
+is derived from the rows it is given. Shape is what regressed before, and steady
+state always converged, which is what made it easy to miss.
+
+## Finding: unintended database census execution
+
+**Incident.** A `database.read_census` executed that was not intended as program
+work, related to `q15-authority-census.results.json`.
+
+**The artifact is not the defect.** It is preserved, and marked
+[NON-EVIDENCE](../planning/vacilando-os/qa/access-identity-v2/q15-authority-census.NON-EVIDENCE.md).
+Its contents were not read or interpreted.
+
+**The defect** is that a census naming no query silently became a request to run
+the **most privileged** census available. Filing substituted
+`[Q15_CENSUS_ARTIFACT]` for empty `artifact_refs`, and `artifactPathFrom()`
+returned Q15 as its default — so the executor's own "query required" guard could
+never fire, because the field was already filled in by the time it looked.
+
+**Why forensics could not settle it.** A substituted request is stored
+byte-identically to one that explicitly asked for the authority census. The
+correction had to be a refusal at request time; no amount of audit reading
+distinguishes the two after the fact.
+
+**Fixed at both boundaries, independently.** Promoted in `51ce6788d`:
+`artifactPathFrom(refs, { fallback = null })` defaults to null with explicit
+opt-in at the display call sites, `validateInputs` turns that into
+`missing_query_artifact` before any database is touched, and the database target
+no longer defaults either. One target exists today, which is why that default
+looked harmless — the moment a second exists, silence would pick the privileged
+one. There is no safe default census. No compensating governed action was filed:
+the census was read-only, and inventing a mutable remediation for a read would
+add risk rather than remove it.
+
 ## Related
 
 - [`managed-sprint-operations.md`](managed-sprint-operations.md)
