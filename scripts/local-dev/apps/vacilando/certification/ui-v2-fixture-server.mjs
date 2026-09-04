@@ -52,6 +52,16 @@ export const LANES = [
       instruction: "Certify the trust runtime end to end\nBuild the E2E driver and run automated certification against the staged environment.",
       started_at: T(18), updated_at: T(1), created_at: T(19),
       latest_progress: { summary: "E2E driver built; automated certification in progress", at: T(1) },
+      // A RESOLVED governed action. The live lane carried one and the fixture
+      // did not, so the fixture's interaction zone was 65px shorter than a real
+      // one and the keyboard-open check passed on a lane that was simply less
+      // furnished than any real lane. Reproduced here so it cannot pass again.
+      governed_action: {
+        request_id: "ga_resolved01", status: "approved",
+        action_key: "repository.merge_pull_request",
+        title: "Merge pull request into staging",
+        resolved_at: T(3),
+      },
       progress_estimate: {
         percent: 62, confidence: "medium",
         summary: "E2E driver built; automated certification in progress",

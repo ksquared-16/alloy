@@ -84,19 +84,40 @@ const INSTALLED_VAC = process.env.VACILANDO_INSTALLED_VAC
   || join(homedir(), ".local", "share", "alloy", "toolkit", "current", "vac");
 
 function vac(...a) {
+  // USAGE GOES TO STDERR. Reading stdout alone reported "the installed CLI does
+  // not advertise --progress" while the CLI was printing exactly that, one
+  // stream over. A check that cannot see the thing it is checking is worse than
+  // no check: it fails a correct build.
   try {
-    return { ok: true, out: execFileSync(INSTALLED_VAC, a, { encoding: "utf8", cwd: REPO }) };
+    const out = execFileSync(INSTALLED_VAC, a, {
+      encoding: "utf8", cwd: REPO, stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { ok: true, out: String(out || "") };
   } catch (e) {
     return { ok: false, out: `${e.stdout || ""}${e.stderr || ""}`, code: e.status };
   }
 }
 
-const help = vac("run-status", "--help");
+/** stdout + stderr, for commands whose useful output is usage text. */
+function vacText(...a) {
+  const r = vac(...a);
+  if (r.out.trim()) return r.out;
+  try {
+    return execFileSync(`${INSTALLED_VAC} ${a.map((x) => JSON.stringify(x)).join(" ")} 2>&1`, {
+      encoding: "utf8", cwd: REPO, shell: true,
+    });
+  } catch (e) {
+    return `${e.stdout || ""}${e.stderr || ""}`;
+  }
+}
+
+const help = vacText("run-status", "--help");
 check("installed CLI advertises the progress flags",
-  /--progress\b/.test(help.out) && /--progress-confidence/.test(help.out) && /--progress-source/.test(help.out),
-  help.out.split("\n").slice(0, 3).join(" ").slice(0, 200));
+  /--progress\b/.test(help) && /--progress-confidence/.test(help) && /--progress-source/.test(help)
+  && /--remaining-work/.test(help),
+  help.split("\n")[1]?.trim().slice(0, 160));
 check("installed CLI documents progress as milestone-reported, not per message",
-  /milestone/i.test(help.out));
+  /milestone/i.test(help) && /No ETA/i.test(help));
 
 if (RUN_ID && LANE_ID) {
   // A PROGRESS-ONLY MILESTONE, WITH NO STATE ARGUMENT. This is the specific
@@ -132,8 +153,11 @@ const { mkdtempSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 
 const root = mkdtempSync(join(tmpdir(), "vac-accept-"));
-const made = ER.createQueuedRun({ laneId: "lane_acceptance001", instruction: "acceptance", worktreePath: REPO, root });
-const rid = made.run.run_id;
+const made = ER.createQueuedRun({ laneId: "lane_acce97a0ce11", instruction: "acceptance", worktreePath: REPO, root });
+check("installed module: a run can be created for the terminal-state proof",
+  made.ok === true, made.ok ? "" : JSON.stringify(made));
+const rid = made.run?.run_id;
+if (!rid) throw new Error(`cannot create acceptance run: ${JSON.stringify(made)}`);
 ER.reportRunState(rid, "executing", { cwd: REPO, root, progress_percent: 62, progress_confidence: "medium", progress_summary: "midway" });
 check("installed module: estimate persists on the run",
   ER.getExecutionRun(rid, root)?.progress_estimate?.percent === 62);
@@ -143,13 +167,13 @@ const done = ER.getExecutionRun(rid, root)?.progress_estimate;
 check("installed module: COMPLETE becomes a MEASURED 100%",
   done?.percent === 100 && done?.source === "deterministic", JSON.stringify(done));
 
-const r2 = ER.createQueuedRun({ laneId: "lane_acceptance002", instruction: "acceptance", worktreePath: REPO, root });
+const r2 = ER.createQueuedRun({ laneId: "lane_acce97a0ce22", instruction: "acceptance", worktreePath: REPO, root });
 ER.reportRunState(r2.run.run_id, "executing", { cwd: REPO, root, progress_percent: 55 });
 ER.transitionExecutionRun(r2.run.run_id, "FAILED", { root, origin: "agent", reason: "acceptance" });
 check("installed module: FAILED removes the estimate",
   ER.getExecutionRun(r2.run.run_id, root)?.progress_estimate === null);
 
-const r3 = ER.createQueuedRun({ laneId: "lane_acceptance003", instruction: "acceptance", worktreePath: REPO, root });
+const r3 = ER.createQueuedRun({ laneId: "lane_acce97a0ce33", instruction: "acceptance", worktreePath: REPO, root });
 ER.reportRunState(r3.run.run_id, "executing", { cwd: REPO, root, progress_percent: 40 });
 ER.transitionExecutionRun(r3.run.run_id, "ABANDONED", { root, origin: "system", reason: "acceptance" });
 check("installed module: ABANDONED removes the estimate",
@@ -229,8 +253,12 @@ try {
   check("browser session authenticates against the live Gateway", loggedIn);
 
   await desk.screenshot({ path: join(OUT, "live-01-desktop-home.png"), fullPage: true });
+  // `data-v-page` is on BOTH the page element and <body> (the shell sets it so
+  // CSS can key off the destination), so an === 1 count failed on a Home that
+  // was rendering perfectly. Scope to the page element.
   check("LIVE desktop: Home renders the V2 shell",
-    (await desk.locator('[data-v-page="home"]').count()) === 1);
+    (await desk.locator('.vpage[data-v-page="home"]').count()) === 1
+    && (await desk.locator(".vcard-needs, .vcard-health, .vcard-lanes").count()) >= 3);
   check("LIVE desktop: primary navigation is Home / Lanes / Activity / System",
     await desk.evaluate(() => {
       const items = [...document.querySelectorAll(".vnav-item .vnav-label")].map((n) => n.textContent.trim());
@@ -274,8 +302,19 @@ try {
     (await desk.locator(".vlane-head").count()) === 1
     && (await desk.locator(".vtabs-lane .vtab-lane").count()) === 6
     && (await desk.locator(".vcard-work").count()) === 1);
-  check("LIVE desktop: no ETA anywhere on the lane",
-    !(await desk.evaluate(() => /\bETA\b/i.test(document.body.innerText))));
+  // THE INVARIANT IS ABOUT THE PRODUCT, NOT ABOUT USER CONTENT.
+  //
+  // Scanning document.innerText failed on a real lane whose own transcript
+  // discusses ETA — the operator's instruction text and the agent's replies are
+  // rendered in the thread. The rule is that Vacilando must not render an ETA
+  // FIELD; it is not that the three letters may never appear in something a
+  // human wrote. Scoped to the product chrome accordingly.
+  check("LIVE desktop: no ETA field in the product chrome",
+    await desk.evaluate(() => {
+      const zones = [".vcard-work", ".vprogress", ".vlane-head", ".vinsp", ".vcard-health"];
+      return zones.every((z) => [...document.querySelectorAll(z)]
+        .every((el) => !/\bETA\b/i.test(el.innerText || "")));
+    }));
   const progText = await desk.locator(".vprogress-label").first().innerText().catch(() => "");
   check("LIVE desktop: progress renders from the installed contract",
     /Provider estimate: ~\d+% complete/.test(progText) || progText === "Progress estimate unavailable",
@@ -359,7 +398,11 @@ try {
   check("LIVE mobile: composer usable with the keyboard open",
     await kb.evaluate(() => {
       const s = document.querySelector("[data-gw-send]")?.getBoundingClientRect();
-      return Boolean(s) && s.bottom <= window.innerHeight + 2;
+      return Boolean(s) && s.bottom <= window.innerHeight + 2 && s.top >= 0;
+    }),
+    await kb.evaluate(() => {
+      const s = document.querySelector("[data-gw-send]")?.getBoundingClientRect();
+      return `viewport ${window.innerHeight}, Send bottom ${s ? Math.round(s.bottom) : "none"}`;
     }));
   await kb.context().close();
 } finally {

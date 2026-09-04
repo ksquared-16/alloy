@@ -264,6 +264,23 @@ try {
     Boolean(kbBox) && kbBox.sBottom <= kbBox.vh + 2, JSON.stringify(kbBox));
   const kbOverflow = await overflow(kb);
   check("no sideways scroll with the keyboard open", kbOverflow.docScroll <= kbOverflow.vw + 1);
+  // The regions that must yield when the keyboard is up. Asserted explicitly,
+  // because "Send happens to fit" passed on a lane that was simply less
+  // furnished than any real one.
+  check("keyboard-open lane sheds navigation chrome for the composer",
+    await kb.evaluate(() => {
+      const hidden = (s) => { const el = document.querySelector(s); return !el || getComputedStyle(el).display === "none"; };
+      return hidden(".vtabs-lane") && hidden(".vlane-head-top") && hidden(".vlane-head-meta");
+    }));
+  check("keyboard-open interaction zone bounds itself instead of pushing Send off",
+    await kb.evaluate(() => {
+      const z = document.querySelector(".vlane-interaction");
+      const c = document.querySelector(".gw-composer");
+      if (!z || !c) return false;
+      const zr = z.getBoundingClientRect();
+      const cr = c.getBoundingClientRect();
+      return zr.bottom <= window.innerHeight + 2 && cr.bottom <= window.innerHeight + 2;
+    }));
   await kb.close();
 } finally {
   await browser.close();
