@@ -61,7 +61,7 @@
   },
   "run_4_preparation": {
     "run": 4,
-    "status": "PREPARED — NOT EXECUTED. Prepared 2026-09-04 by claude (Vacilando managed worktree ui-vac), mission msn_3a5c03a002709dc240 v1, assignment asg_727e2369868c78, contentHash 5d17cc99075c029bedda580dc02ef6cb. This is the FIFTH re-issue of W-0. As with every prior one, no worker-side channel to database.read_census exists, so the run itself is an operator authorization and not worker work.",
+    "status": "REQUESTED — AWAITING OPERATOR AUTHORIZATION. Prepared 2026-09-04 by claude (Vacilando managed worktree ui-vac), mission msn_3a5c03a002709dc240 v1, assignment asg_727e2369868c78, contentHash 5d17cc99075c029bedda580dc02ef6cb (the FIFTH re-issue). FILED 2026-09-04T11:02:36Z under the SIXTH re-issue, mission msn_0e24196324d1441ac2 v1, assignment asg_45a7990a10e28c, contentHash 4624625b87d59bcce256b0a8746e7b72 — governed action request gar_c834cb05ce8425. See run_4_request_filed.",
     "why_a_run_4_is_genuinely_warranted_this_time": "The previous four re-issues were re-assertions of a met criterion, and this file names re-assertion as the wrong outcome. THIS ONE IS DIFFERENT, on evidence rather than on the calendar. Runs 1→2→3 spanned 2026-07-31 to 2026-08-07 and returned zero drift, but that stability was explicitly diagnosed as an idle tenant (drift_run_2_to_run_3.why_q4_still_did_not_grow) rather than a stable system. Run 3's evidence is now 28 days old, and in that window the world the counts describe MOVED: M1 (20260807140000_backfill_membership_access_profiles.sql) and M9 (20260818190000_w16_user_roles_role_foreign_key.sql) both reached origin/staging, and post-merge-certification-reconciliation.json finding_C records that NO instrument in any worker session can read whether they were APPLIED to the target. Q4 and Q3 are exactly the two reads that would settle it. A run 4 is therefore not a refresh of a stable number — it is the only available instrument for a question the programme currently cannot answer.",
     "THE_TRAP_THAT_WOULD_WASTE_THIS_AUTHORIZATION": {
       "severity": "HIGH — read this before filing the run-4 request.",
@@ -89,7 +89,8 @@
     },
     "hash_state_verified_2026_09_04": {
       "verdict": "THE HASH TRAP IS NOT ARMED. A run 4 using this file's combined_query will validate.",
-      "reasoning": "The top-level query_hash is a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42, which the DIRECTOR ITSELF computed and wrote during run 3's merge-back over this exact combined_query. `git log 873a2f097..HEAD -- <this file>` returns EMPTY and the file is unmodified in the working tree, so combined_query is byte-identical to the text that hash was computed over. validateInputs will therefore resolve expectedHash to a3982ca5…, compute the same value, and match.",
+      "reasoning": "The top-level query_hash is a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42, which the DIRECTOR ITSELF computed and wrote during run 3's merge-back over this exact combined_query. combined_query is byte-identical to the text that hash was computed over, so validateInputs resolves expectedHash to a3982ca5… (registry.mjs:185 — it falls back to the artifact's own query_hash when no expectedQueryHash is supplied), computes the same value, and matches.",
+      "reasoning_evidence_corrected_2026_09_04_by_asg_45a7990a10e28c": "The check ORIGINALLY recorded here was WRONG, and the verdict it supports is nevertheless right. It claimed `git log 873a2f097..HEAD -- <this file>` returns EMPTY. It does not — TWO commits after run 3 touch this file (3e000209a, 242865b3b), and by now several more. Had that been the only check, it would have been a false provenance argument. The correct check is against the KEYS rather than the file: `git diff 873a2f097 -- <this file> | grep '^[-+].*combined_query'` returns 5 lines, ALL of them `+` additions inside run_4_preparation prose that merely MENTION the string, and NONE of them the top-level `\"combined_query\":` key line; the same diff filtered on `'^[-+].*\"query_hash\"'` returns NOTHING AT ALL. Since JSON.stringify(_, null, 2) emits combined_query as a single line with escaped newlines, an unchanged key line is an unchanged query. So both the query text and the hash it is compared against are untouched since run 3's merge-back. Verdict unchanged; the evidence under it is now true.",
       "why_this_is_stronger_than_recomputing": "sha256 remains uncomputable in-worker (shasum and openssl are both permission-walled here, as node -e was in the slot-6 worker — reconfirmed this session). Rather than assert a hash by inspection, this check proves the TEXT has not changed since the authority that computed the hash last saw it. That is a provenance argument, and it needs no local sha256.",
       "standing_hazard_unchanged": "Do NOT 'restore' a top-level key named query_hash or combined_query_hash holding the runs 1/2 value 743cd63b… — see execution_mechanics_hash_trap. runs_1_2_query_hash is the correct home for that value and must keep its name."
     },
@@ -107,7 +108,90 @@
     ],
     "expected_but_not_asserted": "Q1, Q2, Q3, Q5 and Q6 are expected unchanged; Q4 is expected to have moved to 0 IF M1 applied. Recorded for triage only. §4's standing rule is that every consumer re-derives rather than cites, and residual_risks[0] stands: these counts are a snapshot, never an invariant.",
     "scope_note_five_vs_six_selects": "The assignment objective for this re-issue says 'five read-only SELECTs'. This census carries SIX queries, Q1–Q6. That is not a divergence to escalate: Q1–Q5 were W-0's original five, and Q6 was folded in from plan §6/W-8 ('a sixth Wave 0 query in practice; add it to W-0 if W-8 is scheduled'), which is recorded at queries[Q6].added_by and has been part of every executed run. Run 4 should execute the committed six-query combined_query unchanged, exactly as runs 1–3 did.",
-    "worker_tooling_2026_09_04": "Reconfirmed in this worktree (ui-vac), which is a different slot from the slot-6 worker that made the original finding. shasum -a 256 and openssl dgst -sha256 are both permission-walled; jq and git ARE available. So the constraint is unchanged in substance: query hashes remain Director-derived, and every check in this block was made mechanical through jq and git rather than by eye."
+    "worker_tooling_2026_09_04": "Reconfirmed in this worktree (ui-vac), which is a different slot from the slot-6 worker that made the original finding. shasum -a 256 and openssl dgst -sha256 are both permission-walled; jq and git ARE available. So the constraint is unchanged in substance: query hashes remain Director-derived, and every check in this block was made mechanical through jq and git rather than by eye.",
+    "run_4_request_filed": {
+      "status": "FILED — awaiting operator authorization.",
+      "request_id": "gar_c834cb05ce8425",
+      "filed_at": "2026-09-04T11:02:36.130Z",
+      "filed_by": "claude, mission msn_0e24196324d1441ac2 v1, assignment asg_45a7990a10e28c, contentHash 4624625b87d59bcce256b0a8746e7b72 (the SIXTH re-issue of W-0)",
+      "lane_id": "lane_9b9082778292",
+      "run_id": "asg_45a7990a10e28c",
+      "action_key": "database.read_census",
+      "target": "alloy_deployed_primary",
+      "channel": "vac governed-action --run <run> --lane <lane> --json '{...}' → requestGovernedAction, status 'requested', operator_approval_required true (governed-action-request.mjs:1650-1656 — a DATABASE_READ_CENSUS against DEFAULT_TARGET always requires an operator grant).",
+      "the_correction_that_made_this_step_possible": "Five re-issues in a row recorded 'there is no worker-side channel to database.read_census, so a re-dispatch cannot move it' and stopped at preparation. That conflates TWO channels. There is no worker-side channel to EXECUTE the census — that remains true, Director-side, by design, and no credential reaches the worker. But `vac governed-action` IS a worker-side channel to FILE the request, and filing is what puts the authorization card in front of the operator. Preparation without filing left the run waiting on an operator who had not been asked. This assignment asked.",
+      "artifact_ref_verified_in_the_stored_record": "The stated mitigation was verified AFTER filing rather than assumed. requests.json for gar_c834cb05ce8425 carries artifact_refs: ['docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json'] — so artifactPathFrom returns THIS census and not Q15_CENSUS_ARTIFACT. Checking the stored record is the only way to know the trap was actually avoided, because omitting the ref fails silently rather than loudly.",
+      "what_happens_on_approval": "The Director executes the committed six-query combined_query read-only against alloy_deployed_primary and writes results to wave0-authority-census.results.json — NOT into this file. See WHERE_RUN_4_RESULTS_WILL_ACTUALLY_LAND. Two hand edits are then still required: a run_history[4] entry and a drift comparison against run 3.",
+      "first_checks_to_make_on_the_results": [
+        "target_identity.org_fingerprint MUST equal ab7e5dde2e229d5c46e251456e4d9534. Anything else means a DIFFERENT target and invalidates every drift comparison outright — check this BEFORE reading any count.",
+        "q4_pairs_without_profile: 0 ⇒ M1 applied to the target; 2 ⇒ M1 NOT applied.",
+        "q3_undefined_membership_rows: non-zero ⇒ M9's FK is NOT on the target and C2 is still open there.",
+        "q4_membership_rows: > 8 ⇒ the membership writers were finally exercised, which is the first real test W-5 has had."
+      ],
+      "not_executed_by_this_assignment": "Filing is not running. As of this record the census has NOT run, no run-4 counts exist, and every number in this file is still run 3's, dated 2026-08-07. residual_risks[0] stands undiminished.",
+      "DUPLICATE_REQUEST_APPROVE_ONLY_ONE": {
+        "severity": "OPERATOR ACTION REQUIRED — two authorization cards now exist for ONE census.",
+        "finding": "W-0 was dispatched to two concurrent sessions in this same worktree, and BOTH filed run 4 within four minutes: gar_3368b11eb1b1ce (mission msn_595040c168e0103c38, assignment asg_94de43cc5c3482, created 2026-09-04T10:59:09.971Z) and gar_c834cb05ce8425 (mission msn_0e24196324d1441ac2, assignment asg_45a7990a10e28c, created 2026-09-04T11:02:36.130Z, THIS record).",
+        "why_they_did_not_collapse": "dedupeKey is [mission_id, lane_id, action_key, target, identityFromInputs].join('|') (governed-action-request.mjs:1140-1148). The two requests agree on lane, action_key, target AND artifact path — they differ ONLY in mission_id. Dedupe is therefore mission-scoped, and two missions asking for the identical census produce two independent requests rather than one. This is the same mission-scoping the sibling session recorded from the opposite direction (filing under run 3's mission would have returned run 3's counts).",
+        "recommendation": "APPROVE gar_3368b11eb1b1ce AND DENY gar_c834cb05ce8425. The sibling request was filed first, is already status 'awaiting_operator' with an open decision card (dec_b1c5c947f5129e), and is functionally identical: same artifact_refs naming this census, same target, same read-only mode. Approving both would run the same read twice and spend two authorizations on one census — precisely the economy §4.1 names as 'the mistake W-0 Q6 already avoided once'. Either one alone produces the same run 4.",
+        "why_this_was_not_self_corrected": "There is no worker-side channel to withdraw a filed governed action. `vac cancel` routes to the VALIDATION broker (vac:46-49 → alloy-validate cancel), not to governed actions, and governed-action-request.mjs exports no worker-facing cancel or withdraw. Cancelling is an operator decision, so the duplicate is reported here rather than quietly resolved.",
+        "the_generalisable_lesson": "Two sessions in one worktree, given the same objective, will each correctly conclude that filing is the right next step and each file. The duplicate is a property of concurrent dispatch, not of either session's reasoning. A lane-scoped or artifact-scoped dedupe would have collapsed these two; a mission-scoped one cannot."
+      }
+    }
+  },
+  "run_4_request": {
+    "status": "FILED AND AWAITING OPERATOR AUTHORIZATION. Not executed.",
+    "filed_at": "2026-09-04",
+    "filed_by": "claude, Vacilando managed worktree ui-vac, mission msn_595040c168e0103c38 v1, assignment asg_94de43cc5c3482, contentHash 5cc8a895477c55b065075f22faef3cbe (the SIXTH re-issue of W-0).",
+    "governed_action_request_id": "gar_3368b11eb1b1ce",
+    "what_this_pass_adds": "run_4_preparation (asg_727e2369868c78, earlier the same day) established that a run 4 is warranted and named the trap that would waste the authorization. It stopped at 'run 4 remains an operator authorization' without filing anything. THIS PASS FILED THE REQUEST, with artifact_refs stated explicitly, so the authorization the operator grants now lands on THIS census rather than on Q15. Everything below is what filing taught that reading could not.",
+    "how_it_was_filed": {
+      "command": "vac governed-action --run <run_id> --lane <lane_id> --json '{…}'",
+      "payload_shape": {
+        "action_key": "database.read_census",
+        "mission_id": "msn_595040c168e0103c38",
+        "assignment_id": "asg_94de43cc5c3482",
+        "target": "alloy_deployed_primary",
+        "artifact_refs": ["docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json"],
+        "inputs": { "worktreePath": "/Users/vacilando/Code/alloy-worktrees/ui-vac" }
+      },
+      "mitigation_applied": "artifact_refs names this file, per run_4_preparation.THE_TRAP_THAT_WOULD_WASTE_THIS_AUTHORIZATION. Omitting it would have run the Q15 census and returned green.",
+      "result": "governed-action requested gar_3368b11eb1b1ce"
+    },
+    "finding_1_the_lane_and_run_arguments_are_required_and_this_session_has_neither": {
+      "severity": "MEDIUM — it is what a filing pass hits first, and it looks like a refusal rather than a gap.",
+      "finding": "`vac governed-action` requires BOTH --run and --lane (vac-governed-action.mjs:61). This execution session has neither: `vac health --json` reports lanes.consistency.measurements.lanes = 0, and providers.orphaned lists this session's own seat as `pid 61631 · alloy-ui-vac · no lane`. So getDurableLane('ui-vac') returns null and resolveGovernedAuthority returns lane_not_found.",
+      "why_the_filing_still_succeeded": "validateRequestShape only consults the lane binding when mission_id is ABSENT (governed-action-request.mjs:1423-1454): the mission id is taken from the payload first and missionIdForLane() is merely the fallback. Passing mission_id explicitly therefore bypasses the unbound lane entirely. A pass that relies on the lane binding to supply the mission will dead-end on missing_mission_binding for a reason that has nothing to do with the census.",
+      "the_run_id": "No execution run exists for this session either, so --run cannot name a real one. This was checked rather than assumed to be harmless: getExecutionRun, patchRunFields and patchRunResourceWait (execution-run.mjs:298-307, :904-908, :1011-1015) all scan for a matching run_id and return null / no-op when there is none. An unmatched run id degrades to 'no run to resume', not to corrupting another lane's run. The converse is the real hazard — passing SOMEONE ELSE'S run id would transition their run to NEEDS_INPUT via releaseRunAfterGovernedFailure. Do not guess a run id that might exist.",
+      "recommendation": "For a censusfiled from an unbound session: always pass mission_id in the payload, and use a run id that provably belongs to no one."
+    },
+    "finding_2_the_evidence_does_not_land_in_this_file": {
+      "severity": "HIGH for whoever expects to read run 4's numbers here.",
+      "finding": "The Director's merge-back writes to a SIBLING file, not to this artifact. trusted-host-actions.mjs:782-784 computes `evidenceRel = queryArtifactPath.replace(/\\.json$/i, '') + '.results.json'`, so a run against wave0-authority-census.json writes wave0-authority-census.results.json. It has been that way since the original Trusted Host Actions commit 3bcd4fd9c (2026-07-31) — `git log -S` over that expression returns exactly one commit — so this is not a recent regression.",
+      "where_it_lands": "evidenceAbs = join(originatingRoot, evidenceRel), where originatingRoot is inputs.artifactRoot || inputs.worktreePath || resolveArtifactRoot(inputs) (trusted-host-actions.mjs:709-711). Runs 1–3 originated in worktree wt6-vacilando-os-product-def, which is why no wave0-authority-census.results.json has ever appeared beside this file. Run 4 was filed with worktreePath = the ui-vac worktree, so ITS results file will appear in ui-vac.",
+      "corroboration": "q15-authority-census.json and q15-authority-census.results.json sit side by side in this directory — that pair is the shape run 4 will produce.",
+      "consequence": "This artifact's run_history, drift block and results are STILL hand-written after every run. Run 3 recorded that the merge-back does not append to run_history; the stronger statement is that for a run originating outside wt6 the merge-back does not touch this file at all. Whoever receives run 4's results must copy them in by hand and must not assume silence here means the run did not happen — check for wave0-authority-census.results.json in the originating worktree first."
+    },
+    "finding_3_dedupe_is_scoped_per_mission_so_run_3_cannot_be_replayed_as_run_4": {
+      "severity": "LOW — but it is the failure this file would least be able to detect.",
+      "finding": "requestTrustedHostAction dedupes against listTrustedHostActions(missionId) and returns an EXISTING completed action with `deduped: true` when the queryHash matches (trusted-host-actions.mjs:294-304). Because combined_query is byte-identical to run 3's, the query hash is identical too — so a run-4 request filed under run 3's mission (msn_e7894cb7225bae3c2b) would have returned run 3's completed action and its 2026-08-07 counts, silently, as though freshly executed.",
+      "why_it_is_not_armed_here": "The dedupe list is scoped to the mission. This request is filed under msn_595040c168e0103c38, a mission with no prior census action, so no completed action can match. Verified from the code path rather than by running it.",
+      "generalisation": "Add this to the pattern run_4_preparation named: a census whose query is deliberately unchanged is a census whose dedupe key is unchanged. Freshness comes from the mission scope, not from the query. A future re-run filed under a mission that ALREADY ran this census will return the old numbers without erroring."
+    },
+    "readonly_validation_2026_09_04": {
+      "verdict": "The committed query still validates — argued from provenance, not from re-running the validator.",
+      "reasoning": "`git log --since=2026-08-07 -- scripts/local-dev/lib/vacilando/trusted-host-sql-readonly.mjs` returns EMPTY: FORBIDDEN_KEYWORDS, FORBIDDEN_PHRASES and validateReadOnlySql are byte-identical to the versions that passed run 3. run_4_preparation.hash_state_verified_2026_09_04 separately proves combined_query is unchanged since run 3. Same query, same validator, therefore same verdict. This retires the 'by inspection' caveat that has stood since 2026-08-06 for as long as both halves stay true.",
+      "still_the_real_gate": "validateReadOnlySql runs unconditionally at execution regardless of what this file claims."
+    },
+    "worker_tooling_extended_2026_09_04": "The permission wall is wider than previously recorded. Earlier passes established that `node -e` and `node --input-type=module` are walled while `node --version` is not. This pass additionally confirms that `node <script-file>` is walled — a script written into the worktree and invoked by path is refused too — as are `openssl dgst -sha256` and `shasum -a 256`. So there is no in-worker route to sha256 or to executing validateReadOnlySql, by any of the four obvious means. Both checks stay provenance arguments, which is why they were written as provenance arguments rather than as assertions.",
+    "what_remains": "ONE operator authorization. The request is in the Director's queue with status `requested`; the Director tick sweeps that status (governed-action-request.mjs:3583-3596), validates against the registry, and parks it at awaiting_operator. Nothing further is worker work. On authorization the Director validates the query, runs it read-only on the trusted host, writes wave0-authority-census.results.json into the ui-vac worktree, and attaches it to the mission evidence gallery against AC_W0 (trusted-host-actions.mjs:868-879).",
+    "on_receipt_of_results": [
+      "Compare target_identity.org_fingerprint against ab7e5dde2e229d5c46e251456e4d9534. Different ⇒ different target; the drift comparison is void and nothing else in the result may be read as drift.",
+      "q4_pairs_without_profile: 0 ⇒ M1 applied to the target; 2 ⇒ not applied. This is the answer post-merge-certification-reconciliation.json finding_C could not obtain.",
+      "q3_undefined_membership_rows: non-zero ⇒ M9's FK is NOT on the target and C2 is still open there.",
+      "q4_membership_rows: > 8 ⇒ the membership writers were finally exercised, and W-5's closure gets its first real test rather than an unrefuted one.",
+      "Append a run_history[4] entry BY HAND with the run 4 trusted host action id and query hash, and write a drift_run_3_to_run_4 block. The merge-back writes neither."
+    ]
   },
   "run_history": [
     {
