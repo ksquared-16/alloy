@@ -84,12 +84,36 @@ test("a specific blocker is accepted", () => {
 
 test("an unblocked turn may not carry a blocker or a director action", () => {
   const withBlocker = S.validateTurnSummary({
-    ...good, blocker: { what: "something", owner: "x", clearing_action: "y" },
+    ...good, status: "COMPLETE", blocker: { what: "something", owner: "x", clearing_action: "y" },
   });
   assert.ok(withBlocker.errors.some((e) => e.includes("must not carry a blocker")));
 
-  const withDirector = S.validateTurnSummary({ ...good, director_action: "Please look at this." });
-  assert.ok(withDirector.errors.some((e) => e.includes("not blocked or waiting")));
+  const withDirector = S.validateTurnSummary({ ...good, status: "COMPLETE", director_action: "Please look at this." });
+  assert.ok(withDirector.errors.some((e) => e.includes("no blocker to act on")));
+});
+
+test("PARTIAL may carry a blocker — work landed AND something is stuck", () => {
+  // Forcing this turn to choose between reporting the work and reporting the
+  // blocker is how one of the two goes missing.
+  const r = S.validateTurnSummary({
+    ...good, status: "PARTIAL",
+    blocker: {
+      what: "The install command is denied by the host permission classifier.",
+      owner: "operator",
+      clearing_action: "Approve the command or add a Bash permission rule.",
+    },
+    director_action: "Approve the install.",
+  });
+  assert.deepEqual(r.errors, []);
+});
+
+test("a PARTIAL blocker still has to be actionable", () => {
+  const r = S.validateTurnSummary({
+    ...good, status: "PARTIAL", blocker: { what: "Awaiting approval" },
+  });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes("owner and clearing_action")));
+  assert.ok(r.errors.some((e) => e.includes("names a state, not a cause")));
 });
 
 test("next_automatic_action is always required", () => {

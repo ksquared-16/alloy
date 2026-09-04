@@ -37,6 +37,15 @@ export const LIFECYCLE_STAGES = Object.freeze([
 const NEEDS_BLOCKER = new Set(["BLOCKED", "WAITING", "FAILED"]);
 
 /**
+ * PARTIAL is the case the first draft of this file got wrong: real work landed
+ * AND something is blocked. Forcing that turn to choose between reporting the
+ * work and reporting the blocker is how one of the two goes missing, so PARTIAL
+ * may carry a blocker without requiring one. A finished turn may not: a blocker
+ * on COMPLETE means the status is wrong.
+ */
+const MAY_CARRY_BLOCKER = new Set([...NEEDS_BLOCKER, "PARTIAL"]);
+
+/**
  * Phrases that describe a mood rather than a cause. Each of these was an actual
  * summary that told the operator nothing they could act on.
  */
@@ -110,14 +119,27 @@ export function validateTurnSummary(s = {}) {
     if (VAGUE_BLOCKERS.some((re) => re.test(text(b.what)))) {
       errors.push(`blocker.what names a state, not a cause: '${text(b.what)}'`);
     }
-  } else if (s.blocker && text(s.blocker.what)) {
+  } else if (s.blocker && text(s.blocker.what) && !MAY_CARRY_BLOCKER.has(s.status)) {
     errors.push(`status ${s.status} must not carry a blocker`);
+  }
+
+  // A PARTIAL turn that does carry one still has to make it actionable.
+  if (s.status === "PARTIAL" && s.blocker && text(s.blocker.what)) {
+    if (!text(s.blocker.owner) || !text(s.blocker.clearing_action)) {
+      errors.push("a PARTIAL blocker still requires owner and clearing_action");
+    }
+    if (VAGUE_BLOCKERS.some((re) => re.test(text(s.blocker.what)))) {
+      errors.push(`blocker.what names a state, not a cause: '${text(s.blocker.what)}'`);
+    }
   }
 
   // Part 6: the Director-action section appears only when the Director must
   // act. A standing "None" that nobody removed trains the operator to skip it.
-  if (text(s.director_action) && !NEEDS_BLOCKER.has(s.status)) {
-    errors.push("director_action is set on a turn that is not blocked or waiting");
+  // Keyed to whether a blocker EXISTS rather than to the status, because that
+  // is the thing that actually determines whether the Director has something
+  // to do.
+  if (text(s.director_action) && !(s.blocker && text(s.blocker.what))) {
+    errors.push("director_action is set on a turn with no blocker to act on");
   }
 
   if (!text(s.next_automatic_action)) {
