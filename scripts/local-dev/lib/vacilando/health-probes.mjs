@@ -189,6 +189,29 @@ export async function probeProcessTable({ exec = boundedExec, timeoutMs = 4000 }
   return out.ok ? out.stdout : null;
 }
 
+/**
+ * Resident memory per pid, as a second read alongside the process table.
+ *
+ * DELIBERATELY A SEPARATE PROBE. Adding an `rss=` column to probeProcessTable
+ * would change a format that parseProcessTable, its fixtures and every ancestry
+ * consumer already depend on, to serve one new reader. This asks its own
+ * question and answers it in its own shape; nothing existing has to move.
+ *
+ * Returns a Map(pid -> kilobytes), or null when ps could not answer — which is
+ * UNKNOWN, and must never be rendered as zero.
+ */
+export async function probeProcessMemory({ exec = boundedExec, timeoutMs = 4000 } = {}) {
+  const out = await exec("ps", ["-Ao", "pid=,rss="], { timeoutMs });
+  if (!out.ok) return null;
+  const map = new Map();
+  for (const raw of String(out.stdout || "").split("\n")) {
+    const m = raw.trim().match(/^(\d+)\s+(\d+)$/);
+    if (!m) continue;
+    map.set(Number(m[1]), Number(m[2]));
+  }
+  return map.size ? map : null;
+}
+
 export async function probeTmuxPanes({ exec = boundedExec, timeoutMs = 2500 } = {}) {
   const fmt = "#{pane_id}|#{pane_pid}|#{session_name}|#{pane_current_command}|#{pane_current_path}|#{pane_title}";
   const out = await exec("tmux", ["list-panes", "-a", "-F", fmt], { timeoutMs });

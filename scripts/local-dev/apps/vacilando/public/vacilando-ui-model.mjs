@@ -331,6 +331,12 @@ export const DEMO = Object.freeze({
     certifications: 3,
     promotions: 2,
   },
+  // Placeholder-mode values for the two lane-resource fields that have no
+  // source yet. They render with a `sample` chip and are auditable in the DOM.
+  lane_resources: {
+    peak_memory_mb: 2355,
+    cpu_pct: 18,
+  },
 });
 
 /* ---------------------------------------------------------------------------
@@ -454,6 +460,61 @@ export const LANE_RETURN_TARGETS = Object.freeze({
 export function laneReturnTarget(origin) {
   const t = LANE_RETURN_TARGETS[origin?.page];
   return t ? { ...t, scrollY: Number(origin?.scrollY) || 0 } : { ...LANE_RETURN_TARGETS.lanes, scrollY: 0 };
+}
+
+/**
+ * LANE RESOURCE USE — what this lane's process tree is holding.
+ *
+ * THE AUDIT THIS ENCODES. "CPU and memory by lane" is three separate questions
+ * with three different honest answers, and rendering them as one block of
+ * numbers would have hidden that:
+ *
+ *   MEMORY is LIVE. The chain is complete and every link has a canonical owner:
+ *   lane -> provider seat (provider-capacity) -> process tree (ancestry, not
+ *   cwd) -> resident memory (ps). It is a sum of per-process facts, so it means
+ *   exactly what it says.
+ *
+ *   PEAK MEMORY is AVAILABLE_NOT_WIRED. workload-observation already records
+ *   peak_rss_bytes keyed by lane — but only around a sampled VALIDATION
+ *   workload, not across a lane's life, and no projection carries it here.
+ *
+ *   CPU is INSTRUMENTATION_REQUIRED, and this is the one worth stating plainly.
+ *   `ps` on macOS reports %cpu as an average over a process's ENTIRE LIFETIME.
+ *   Rendered beside live memory it would read as "right now" and be nothing of
+ *   the sort — a long-lived idle seat would show the busy average of an hour
+ *   ago. Current CPU needs two samples and a delta over the attributed tree.
+ *   The host's load average cannot substitute: it is one number for the whole
+ *   machine and dividing it by lane count would be arithmetic, not measurement.
+ */
+export function buildLaneResources(lane, { placeholders = false } = {}) {
+  const use = lane?.resource_use || null;
+  const f = (v, mat, opts) => field(v, mat, { placeholders, ...opts });
+  return {
+    available: Boolean(use),
+    attribution: use?.attribution || null,
+    complete: use?.complete !== false,
+    process_count: f(use?.process_count ?? null, MATURITY.LIVE, {
+      label: "Processes", absent: "Not attributed",
+    }),
+    memory: f(use?.memory_mb ?? null, MATURITY.LIVE, {
+      label: "Memory", format: formatGb, absent: "Not attributed",
+    }),
+    peak_memory: f(null, MATURITY.AVAILABLE_NOT_WIRED, {
+      label: "Peak memory",
+      demo: DEMO.lane_resources.peak_memory_mb,
+      format: formatGb,
+      absent: "Not projected yet",
+      note: "workload-observation records peak_rss_bytes per lane for sampled validation workloads; no projection carries it here",
+    }),
+    cpu: f(null, MATURITY.INSTRUMENTATION_REQUIRED, {
+      label: "CPU",
+      demo: DEMO.lane_resources.cpu_pct,
+      unit: "%",
+      absent: "Not sampled",
+      note: "ps reports %cpu as a lifetime average, not current use; per-lane CPU needs a sampled delta over the attributed tree",
+    }),
+    sampled_at: use?.sampled_at || null,
+  };
 }
 
 export const HOME_LANE_LIMIT = 5;

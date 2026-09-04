@@ -27,6 +27,7 @@ import {
 import {
   buildActivityViewModel,
   buildCurrentWork,
+  buildLaneResources,
   buildHomeViewModel,
   buildLaneThread,
   buildSystemViewModel,
@@ -5117,6 +5118,7 @@ export function laneNeedsYouItems(lane) {
  * fails or when it is asked for.
  */
 export function renderLaneInspector(lane, {
+  placeholders = false,
   selectedId = null,
   telemetry = null,
   resources = null,
@@ -5189,6 +5191,26 @@ export function renderLaneInspector(lane, {
 
   const browser = renderBrowserAuthRecovery(lane);
 
+  // RESOURCES — three questions, three honest answers. See buildLaneResources:
+  // memory is measured over the lane's own process tree; peak memory has a
+  // source nothing projects here; per-lane CPU is not sampled at all, and a
+  // lifetime average dressed as "now" would be worse than its absence.
+  const res = buildLaneResources(lane, { placeholders });
+  const resources_block = res.available || res.cpu.placeholder || res.peak_memory.placeholder
+    ? `<div class="vrows">
+        ${metricRow(res.memory, { label: "Memory" })}
+        ${metricRow(res.peak_memory, { label: "Peak memory" })}
+        ${metricRow(res.cpu, { label: "CPU" })}
+        ${metricRow(res.process_count, { label: "Processes" })}
+      </div>
+      ${res.available && !res.complete
+        ? `<p class="vnote">Some processes in this lane's tree exited between the two reads; the total is partial.</p>`
+        : ""}
+      ${res.available
+        ? `<p class="vnote">Attributed by process ancestry from this lane's provider seat${res.sampled_at ? ` · sampled ${esc(ago(Date.parse(res.sampled_at), nowMs) || "now")} ago` : ""}.</p>`
+        : `<p class="vnote">No live provider seat for this lane, so nothing is attributed. An unmeasured lane is unknown, not idle.</p>`}`
+    : "";
+
   const diagnostics = [
     renderClaudeRunStatus(lane, telemetry),
     renderOutputChrome(output, { lane, lastInstruction: lane?.last_instruction }),
@@ -5237,6 +5259,7 @@ export function renderLaneInspector(lane, {
         <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(laneId)}">Rename lane</button>
         ${renderLaneFolderPicker(lane, folders, selectedId)}
         ${renderLaneRepository(lane, repositories)}`)}
+      ${section("resources", "Resources", resources_block)}
       ${section("environment", "Environment", environment)}
       ${section("git", "Git", git)}
       ${section("browser", "Browser session", browser, { open: Boolean(browser) })}
@@ -5469,6 +5492,7 @@ export function renderGatewayShell({
 
   // ONE inspector. Everything that is not the work itself lives here, folded.
   const detailsPanel = renderLaneInspector(lane, {
+    placeholders,
     selectedId, telemetry, resources, output, outputText, nowMs,
     asideInert, work, cap, developmentResources, lanes, executionCapacity,
     folders, repositories, notify, pending, bodyText, statusOpen,

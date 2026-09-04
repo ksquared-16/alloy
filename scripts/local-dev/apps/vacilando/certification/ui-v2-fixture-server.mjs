@@ -41,6 +41,24 @@ const T = (minutesAgo) => new Date(Date.now() - minutesAgo * 60_000).toISOString
 export const LANES = [
   {
     lane_id: "lane_trustruntime01", label: "Trust Runtime", slot: 6, folder_id: "fold_cert",
+    // RESOURCE ATTRIBUTION, as the lanes projection attaches it: the seat and
+    // its descendants, measured. Peak memory and CPU are deliberately absent
+    // from the record — nothing samples them — so the UI must say so rather
+    // than render a number.
+    resource_use: {
+      schema_version: "vacilando.lane_resource_use.v1",
+      lane_id: "lane_trustruntime01",
+      attribution: "ancestry",
+      seat_pids: [61631],
+      process_count: 6,
+      measured_process_count: 6,
+      complete: true,
+      memory_kb: 1_784_320,
+      memory_mb: 1743,
+      cpu_pct: null,
+      cpu_reason: "per-process CPU is not sampled; ps reports a lifetime average, not current use",
+      sampled_at: new Date(Date.now() - 4000).toISOString(),
+    },
     tmux: { alive: true }, runtime: "online", preferred_provider: "claude",
     binding: { provider: "claude", branch: "agent/trust-runtime", slot: 6 },
     claude: { presence: "present" },

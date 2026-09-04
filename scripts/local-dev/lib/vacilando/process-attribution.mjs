@@ -322,6 +322,106 @@ export function unattributedRecord(row, index, { maxDepth = MAX_ANCESTRY_DEPTH }
  * silently omitted the processes it could not explain would hide exactly the
  * case that started this work.
  */
+/**
+ * LANE RESOURCE USE — WHAT THIS LANE'S PROCESS TREE IS ACTUALLY HOLDING.
+ *
+ * The attribution question was already answered here: a provider seat belongs
+ * to a lane, and ancestry says which processes belong to that seat. What was
+ * missing was the MEASUREMENT — the process table this module reads carries
+ * pid, ppid and command, and no resource column at all.
+ *
+ * MEMORY IS HONEST BY CONSTRUCTION. RSS is a per-process fact that sums over a
+ * tree, so "this lane is holding 1.7 GB" is the sum of resident memory of the
+ * seat and its descendants, each counted once. Where a pid is in the tree but
+ * absent from the memory sample (it exited between the two reads) it is counted
+ * as a process and excluded from the total, and the record says so rather than
+ * quietly under-reporting.
+ *
+ * CPU IS DELIBERATELY NOT HERE. See laneResourceUse's `cpu` field: `ps` on
+ * macOS reports %cpu as an average over the process's ENTIRE LIFETIME, not
+ * current usage. Rendering that beside live memory as though both were "now"
+ * would be a fabricated number wearing a real one's clothes. Current CPU needs
+ * two samples and a delta over the attributed tree; until that exists the field
+ * is absent and declared, never estimated.
+ */
+export function descendantPids(pid, index, { maxDepth = MAX_ANCESTRY_DEPTH } = {}) {
+  const root = Number(pid);
+  const out = new Set();
+  if (!Number.isInteger(root) || !index?.childrenOf) return out;
+  let frontier = [root];
+  for (let depth = 0; depth < maxDepth && frontier.length; depth += 1) {
+    const next = [];
+    for (const cur of frontier) {
+      for (const kid of index.childrenOf.get(cur) || []) {
+        if (out.has(kid) || kid === root) continue;
+        out.add(kid);
+        next.push(kid);
+      }
+    }
+    frontier = next;
+  }
+  return out;
+}
+
+export function laneResourceUse({
+  seats = [],
+  processes = [],
+  memoryByPid = null,
+  nowMs = Date.now(),
+  maxDepth = MAX_ANCESTRY_DEPTH,
+} = {}) {
+  const index = buildProcessIndex(processes);
+  const byLane = new Map();
+  for (const seat of Array.isArray(seats) ? seats : []) {
+    const laneId = seat?.lane_id ? String(seat.lane_id) : null;
+    // A SEAT WITH NO PID OWNS NOTHING.
+    //
+    // tmux reports pane_pid as a STRING, so this coerces — but `Number(null)`
+    // is 0, and 0 IS an integer. A lane whose seat had no live pane therefore
+    // walked the descendants of pid 0 and claimed every process on the host:
+    // measured, on this machine, as one lane holding 675 processes and 19.4 GB.
+    // That is the exact failure mode this whole module exists to prevent — an
+    // attribution that looks authoritative and is fiction. pid 0 and 1 are walk
+    // terminators, never owners.
+    const pid = Number(seat?.pid);
+    if (!laneId || !Number.isInteger(pid) || ROOT_PIDS.has(pid) || pid < 0) continue;
+    if (!byLane.has(laneId)) byLane.set(laneId, { pids: new Set(), seats: [] });
+    const rec = byLane.get(laneId);
+    rec.seats.push(pid);
+    rec.pids.add(pid);
+    for (const kid of descendantPids(pid, index, { maxDepth })) rec.pids.add(kid);
+  }
+
+  const mem = memoryByPid instanceof Map ? memoryByPid : new Map(Object.entries(memoryByPid || {}).map(([k, v]) => [Number(k), Number(v)]));
+  const out = [];
+  for (const [laneId, rec] of byLane) {
+    let kb = 0;
+    let measured = 0;
+    for (const pid of rec.pids) {
+      const v = mem.get(pid);
+      if (Number.isFinite(v) && v >= 0) { kb += v; measured += 1; }
+    }
+    // No memory sample at all is UNKNOWN, not zero. A lane holding nothing and
+    // a lane we failed to measure must never render the same.
+    const available = mem.size > 0 && measured > 0;
+    out.push({
+      lane_id: laneId,
+      attribution: "ancestry",
+      seat_pids: rec.seats.slice().sort((a, b) => a - b),
+      process_count: rec.pids.size,
+      measured_process_count: measured,
+      complete: measured === rec.pids.size,
+      memory_kb: available ? kb : null,
+      memory_mb: available ? Math.round(kb / 1024) : null,
+      // Declared, not estimated. See the note above.
+      cpu_pct: null,
+      cpu_reason: "per-process CPU is not sampled; ps reports a lifetime average, not current use",
+      sampled_at: new Date(nowMs).toISOString(),
+    });
+  }
+  return out.sort((a, b) => (b.memory_kb || 0) - (a.memory_kb || 0));
+}
+
 export function attributionReport({
   seats = [],
   processes = [],
