@@ -82,6 +82,12 @@ if (op === "restore-deployed") {
     process.stderr.write("vac browser-auth restore-deployed: --target <deployed_target_key> is required\n");
     process.exit(2);
   }
+  // The governed layer refuses a request with no lane, so refusing here names the missing FLAG
+  // rather than letting the caller read `missing_lane_id` back from a layer they did not call.
+  if (!laneId) {
+    process.stderr.write("vac browser-auth restore-deployed: --lane <lane_id> is required — a governed request is filed against a lane\n");
+    process.exit(2);
+  }
   const { resolveDeployedTarget } = await import("./lib/vacilando/deployed-target-registry.mjs");
   const resolved = resolveDeployedTarget(targetKey);
   if (!resolved.ok) {
@@ -91,11 +97,11 @@ if (op === "restore-deployed") {
   const t = resolved.target;
   const { resolveGovernedAuthority } = await import("./lib/vacilando/governed-repository-authority.mjs");
   const { requestGovernedAction } = await import("./lib/vacilando/governed-action-request.mjs");
-  const authority = await resolveGovernedAuthority(laneId || null);
+  const authority = await resolveGovernedAuthority(laneId);
   const asked = requestGovernedAction({
     action_key: ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION,
     run_id: process.env.VACILANDO_RUN_ID || null,
-    lane_id: laneId || null,
+    lane_id: laneId,
     reason_worker_cannot_execute:
       "Minting a session on a deployed host uses the service-role boundary against a public deployment. A worker may request it; only the operator may approve it.",
     inputs: { deployed_target: t.key },

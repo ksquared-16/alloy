@@ -188,10 +188,32 @@ export function executeRestoreDeployedQaSessionSync({
     const authorized = grantCheck ? grantCheck(grant, action, { nowMs }) : { ok: true };
     if (!authorized.ok) return safeDeployedFailure({ code: authorized.error || "grant_rejected" });
 
-    const inputCheck = validateRestoreDeployedQaSessionInputs(action?.inputs || {});
-    if (!inputCheck.ok) return safeDeployedFailure({ code: inputCheck.error, detail: inputCheck.detail });
+    /*
+     * `action.inputs` AT EXECUTION TIME IS THE NORMALIZED SHAPE, NOT THE CALLER'S.
+     *
+     * requestTrustedHostAction stores `validateInputs().normalized`, so by the time an approved
+     * action executes its inputs are `{targetKey, dedupeKey}` — not `{deployed_target}`. Re-running
+     * the caller-facing validator over that refused the layer's own normalized object as
+     * `unexpected_input`, and because the request had already been approved it surfaced as
+     * `execution_failed` on an approval the operator had granted.
+     *
+     * The local sibling survives the same path only by coincidence: its normalized key is `laneId`,
+     * which its validator happens to accept. That is not a design, and it is why this is spelled out
+     * rather than mirrored.
+     *
+     * The caller boundary is NOT weakened by reading the normalized form here. It was enforced when
+     * the request was created; a normalized object cannot carry a caller-supplied URL, project or
+     * identity, because the validator that produced it emits only these two fields.
+     */
+    const raw = action?.inputs || {};
+    let targetKey = raw.targetKey ?? null;
+    if (targetKey == null) {
+        const inputCheck = validateRestoreDeployedQaSessionInputs(raw);
+        if (!inputCheck.ok) return safeDeployedFailure({ code: inputCheck.error, detail: inputCheck.detail });
+        targetKey = inputCheck.normalized.targetKey;
+    }
 
-    const resolved = resolveDeployedRestoreTarget(inputCheck.normalized.targetKey);
+    const resolved = resolveDeployedRestoreTarget(targetKey);
     if (!resolved.ok) return safeDeployedFailure({ code: resolved.error, detail: resolved.detail });
     const validated = resolved.validated;
 
