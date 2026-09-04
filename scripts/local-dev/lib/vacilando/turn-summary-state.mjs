@@ -107,10 +107,39 @@ export function collectCanonicalState({
   const pending = pendingGovernedTruth({ root });
 
   const unpushed = remoteAhead == null ? g.ahead : remoteAhead;
+
+  // THE LIFECYCLE DESCRIBES THIS WORK, NOT THE HOST. The first cut appended
+  // `installed` whenever the toolkit was converged, which produced
+  // implemented → committed → installed on a branch with six unpushed commits:
+  // a claim that the work was running when it had not even left the worktree.
+  // The toolkit being current says nothing about whether THIS branch is in it.
+  //
+  // So `installed` is asked as a question about the commit — is HEAD an
+  // ancestor of the sha the installed toolkit was built from — and the stages
+  // are emitted as a contiguous prefix, because a gap in the chain is not a
+  // lifecycle, it is two unrelated facts printed next to each other.
+  const installedSourceSha = conv.installed_sha
+    ? git(["rev-parse", `${conv.installed_sha}^{commit}`], worktreePath)
+    : null;
+  const headIsInstalled = installedSourceSha && g.head
+    ? git(["merge-base", "--is-ancestor", g.head, installedSourceSha], worktreePath) !== null
+    : false;
+
+  const satisfied = {
+    implemented: Boolean(g.head),
+    committed: Boolean(g.head),
+    pushed: unpushed === 0,
+    // Neither is measurable from the worktree alone; unmeasured is not claimed.
+    pr_open: false,
+    merged: headIsInstalled,
+    installed: headIsInstalled && conv.converged,
+    live_certified: false,
+  };
   const lifecycle = [];
-  if (g.head) lifecycle.push("implemented", "committed");
-  if (unpushed === 0) lifecycle.push("pushed");
-  if (conv.converged) lifecycle.push("installed");
+  for (const stage of ["implemented", "committed", "pushed", "pr_open", "merged", "installed", "live_certified"]) {
+    if (!satisfied[stage]) break;
+    lifecycle.push(stage);
+  }
 
   const current_state = [
     g.branch ? `branch ${g.branch} @ ${g.head_short}${unpushed ? ` (${unpushed} unpushed)` : ""}` : null,

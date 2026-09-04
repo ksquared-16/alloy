@@ -56,6 +56,7 @@ import {
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
+  fulfillSetProviderCeilingForMission,
   previewTrustedHostAuthorization,
 } from "./trusted-host-actions.mjs";
 import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
@@ -2503,6 +2504,28 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   }
   if (rec.action_key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
     return fulfillClosePullRequestForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  /*
+   * THE MISSING BRANCH. capacity.set_provider_ceiling was registered, mode-mapped,
+   * policy-covered, capability-granted and operator-APPROVED — and still failed
+   * `action_unavailable`, because execution fell through to the guard below.
+   * fulfillSetProviderCeilingForMission already existed in trusted-host-actions;
+   * it was simply never imported or dispatched, so the action has never been
+   * executable since it shipped. This is the exact failure the comment on that
+   * fallthrough describes: the action existed everywhere except in this dispatch,
+   * and the error names the registry rather than the missing branch.
+   */
+  if (rec.action_key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    return fulfillSetProviderCeilingForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},

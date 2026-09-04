@@ -151,3 +151,68 @@ export function executeProviderCeiling(normalized, { vacPath = null, runner = nu
     audited_at: parsed.at,
   };
 }
+
+/**
+ * Measure the ceiling gates.
+ *
+ * THE SAME DEFECT MERGE HAD. routine_provider_ceiling_experiment_v1 named six
+ * gates and nothing collected any of them, so every ceiling move escalated with
+ * "required gates were not measured" — and the operator approved it by reading
+ * exactly the state `vac capacity provider-observe` already prints. That click
+ * supplied a measurement, not a judgement.
+ *
+ * provider-observe is the canonical reader and it never writes, so the evidence
+ * comes from the same owner the executor compares against rather than from a
+ * second opinion about what is live.
+ */
+export function measureProviderCeilingGates(inputs = {}, { observe = null } = {}) {
+  const ev = {
+    ceiling_key: MANAGED_KEY,
+    expected_ceiling: asInt(inputs.expected_ceiling ?? inputs.expectedCeiling),
+    requested_ceiling: asInt(inputs.requested_ceiling ?? inputs.requestedCeiling),
+    rollback_ceiling: asInt(inputs.rollback_ceiling ?? inputs.rollbackCeiling),
+  };
+
+  let obs = null;
+  try {
+    if (observe) {
+      obs = observe();
+    } else {
+      const bin = installedVac();
+      if (!bin) return ev;
+      obs = JSON.parse(String(execFileSync(bin, ["capacity", "provider-observe", "--json"], {
+        encoding: "utf8", timeout: 30_000,
+      })));
+    }
+  } catch {
+    return ev; // unmeasured -> escalates, which is the correct failure direction
+  }
+  if (!obs || typeof obs !== "object") return ev;
+
+  const c = obs.ceilings || {};
+  const h = obs.host || {};
+
+  // Compare-and-set reads CONFIGURED, because that is the value the write
+  // targets. Enforced is checked separately below: the two disagreeing is
+  // itself the "unvalidated ceiling" condition, not a detail to average over.
+  ev.live_ceiling = asInt(c.configured);
+
+  // Headroom, measured rather than assumed. Raising capacity on a host already
+  // under pressure is how a capacity experiment becomes an outage.
+  const load1 = Array.isArray(h.load) ? Number(h.load[0]) : null;
+  const cores = asInt(h.cores);
+  ev.host_headroom_ok = (h.pressure_readable === true && h.gateway_http === 200
+    && Number.isFinite(load1) && cores != null)
+    ? (Number(h.pressure_level) <= 1 && load1 < cores)
+    : null;
+
+  // A previous experiment that left the ceiling incoherent must be reconciled
+  // by a human before another one starts on top of it. Owners disagreeing, or
+  // configured and enforced having drifted apart, is exactly that state.
+  ev.unvalidated_ceiling_active = (c.owners_agree == null || c.configured == null || c.enforced == null)
+    ? null
+    : (c.owners_agree !== true || asInt(c.configured) !== asInt(c.enforced));
+
+  ev.observed_ceilings = { configured: c.configured, enforced: c.enforced, derived: c.derived, owners_agree: c.owners_agree };
+  return ev;
+}

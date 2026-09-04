@@ -191,10 +191,16 @@ test("canonical state derives the lifecycle rather than accepting a claim", () =
   const s = ST.collectCanonicalState({ worktreePath: process.cwd() });
   assert.ok(s.lifecycle.includes("implemented"));
   assert.ok(s.lifecycle.includes("committed"));
-  // This branch has unpushed commits and a drifted toolkit, so neither of these
-  // may be claimed. If that ever changes, the assertion is what should change.
-  if (s.git.ahead > 0) assert.equal(s.lifecycle.includes("pushed"), false);
-  if (!s.convergence.converged) assert.equal(s.lifecycle.includes("installed"), false);
+  // The lifecycle is a contiguous prefix describing THIS work. A converged
+  // toolkit must never let an unpushed branch claim `installed`.
+  if (s.git.ahead > 0) {
+    assert.equal(s.lifecycle.includes("pushed"), false);
+    assert.equal(s.lifecycle.includes("installed"), false,
+      "an unpushed branch is not installed, however current the toolkit is");
+  }
+  const order = ["implemented", "committed", "pushed", "pr_open", "merged", "installed", "live_certified"];
+  const idx = s.lifecycle.map((x) => order.indexOf(x));
+  assert.deepEqual(idx, idx.map((_, i) => i), "stages must form a contiguous prefix");
   assert.ok(s.current_state.some((l) => l.startsWith("branch ")));
   assert.ok(s.current_state.some((l) => /TOOLKIT|CONVERGED|GATEWAY/.test(l)));
 });

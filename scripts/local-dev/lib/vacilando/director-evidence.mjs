@@ -27,6 +27,7 @@ import {
   measureDeleteRemoteBranchGates,
   isNeverDeletable,
 } from "./trusted-host-repository-housekeeping.mjs";
+import { measureProviderCeilingGates } from "./trusted-host-provider-ceiling.mjs";
 
 const PROTECTED = ["staging", "main", "master", "production"];
 
@@ -275,6 +276,14 @@ export function collectDirectorEvidence(rec, {
       // head_sha_still_matches compares the PR head against the sha the
       // REQUEST named, so the request's claim must be the one on trial.
       if (evidence.source_sha == null) evidence.source_sha = sha;
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "capacity.set_provider_ceiling") {
+    // Same defect merge had: the policy named six gates and nothing collected
+    // them, so every ceiling move escalated for want of a measurement the
+    // canonical reader already prints.
+    try {
+      Object.assign(evidence, measureProviderCeilingGates(inputs));
     } catch { /* unmeasured -> escalates */ }
   }
   if (rec?.action_key === "repository.close_pull_request") {
