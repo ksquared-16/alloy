@@ -448,7 +448,21 @@ try {
         header: h(".vlane-head"),
         work: h(".vcard-work"),
         workTitle: el(".vwork-title")?.textContent?.trim().slice(0, 60) || null,
-        firstMessageTop: top(".vmsg"),
+        // HOW DEEP THE CONVERSATION STARTS, measured from the top of the lane
+        // body — NOT the first message's viewport position. Once the thread
+        // scrolls to the latest exchange the first message sits far above the
+        // fold (measured: -5663), and `firstMessageTop < vh` then passes on
+        // anything. A check that cannot fail is not a check.
+        conversationTop: (() => {
+          const card = el(".vcard-thread");
+          const body = el(".vlane-body");
+          if (!card || !body) return null;
+          return Math.round(card.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop);
+        })(),
+        conversationVisible: [...document.querySelectorAll(".vmsg")].some((n) => {
+          const r = n.getBoundingClientRect();
+          return r.bottom > 0 && r.top < window.innerHeight;
+        }),
         textarea: h(".gw-composer textarea"),
         tray: h(".vneeds-tray"),
         stopShown: shown(".vlane-stop"),
@@ -460,6 +474,15 @@ try {
         scrollerScrolls: scroller ? scroller.scrollHeight > scroller.clientHeight + 4 : false,
         scrollTop: scroller ? Math.round(scroller.scrollTop) : null,
         scrollMax: scroller ? Math.round(scroller.scrollHeight - scroller.clientHeight) : null,
+        latestVisible: (() => {
+          if (!scroller) return null;
+          const authored = scroller.querySelectorAll(".vmsg-user, .vmsg-provider");
+          const last = authored[authored.length - 1];
+          if (!last) return null;
+          const r = last.getBoundingClientRect();
+          const s = scroller.getBoundingClientRect();
+          return r.top < s.bottom && r.bottom > s.top;
+        })(),
         docScroll: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
       };
     });
@@ -469,9 +492,11 @@ try {
       comp.detailsShown === true && comp.stopShown === false && comp.metaShown === false);
     check(`LIVE mobile ${w}: Current Work is an orientation summary`,
       comp.work !== null && comp.work <= 260, `${comp.work}px — "${comp.workTitle}"`);
-    check(`LIVE mobile ${w}: conversation begins in the first screen`,
-      comp.firstMessageTop !== null && comp.firstMessageTop < comp.vh,
-      `first message at ${comp.firstMessageTop} of ${comp.vh}`);
+    check(`LIVE mobile ${w}: conversation begins within one screen of the lane top`,
+      comp.conversationTop !== null && comp.conversationTop < comp.vh,
+      `conversation starts ${comp.conversationTop}px into the lane body (viewport ${comp.vh})`);
+    check(`LIVE mobile ${w}: conversation content is actually on screen`,
+      comp.conversationVisible === true);
     check(`LIVE mobile ${w}: the thread carries explicit bylines`,
       comp.roles.length > 0 && comp.bylines.length > 0,
       `${comp.roles.length} entries: ${[...new Set(comp.bylines)].join(", ")}`);
@@ -479,9 +504,14 @@ try {
       comp.textarea !== null && comp.textarea <= 48, `textarea ${comp.textarea}px`);
     check(`LIVE mobile ${w}: no page-level sideways scrolling`, comp.docScroll === true);
     if (comp.scrollerScrolls) {
+      // THE CONTRACT IS "THE LATEST EXCHANGE IS ON SCREEN", not "pinned to the
+      // absolute bottom". A lane opens at the TOP of the most recent authored
+      // message so the operator reads the start of what was said — so the
+      // assertion is that the latest message is visible, not that scrollTop
+      // equals scrollHeight.
       check(`LIVE mobile ${w}: a long thread opens at the latest message, not the oldest`,
-        comp.scrollMax !== null && comp.scrollTop >= comp.scrollMax - 24,
-        `scrollTop ${comp.scrollTop} of ${comp.scrollMax}`);
+        comp.latestVisible === true && comp.scrollTop > comp.scrollMax * 0.5,
+        `latest message visible=${comp.latestVisible}, scrollTop ${comp.scrollTop} of ${comp.scrollMax}`);
     } else {
       check(`LIVE mobile ${w}: the scroll hook is on the scrolling element`,
         comp.scrollTop !== null, "thread fits without scrolling on this lane");

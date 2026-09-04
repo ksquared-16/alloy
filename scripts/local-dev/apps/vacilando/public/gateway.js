@@ -851,16 +851,31 @@ function threadMessageKey() {
  * dropped the reader into the middle of a long completion; pinning to the top
  * of the whole thread showed old turns.
  */
+/**
+ * Where a lane opens.
+ *
+ * On the LATEST EXCHANGE — the top of the most recent authored message — so the
+ * operator reads the start of what was said rather than its last line. System
+ * events are skipped: landing on "development server restarted" is not why
+ * anyone opened a lane.
+ *
+ * TWO BUGS THIS FIXES, both introduced when the thread gained real authorship:
+ *
+ *   · It queried `.gw-msg-user` / `.gw-msg-assistant`. The user class no longer
+ *     exists, so the intended "position at the instruction" path was dead code.
+ *   · It used querySelector, which returns the FIRST match. With more than one
+ *     message in the thread that positions at the OLDEST — the exact behaviour
+ *     the correction was supposed to remove.
+ */
 function positionThreadForEntry() {
   const el = document.querySelector("[data-gw-thread]");
   if (!el) return;
-  const user = el.querySelector(".gw-msg-user");
-  if (user) {
-    el.scrollTop = Math.max(0, user.offsetTop - el.offsetTop);
-    return;
-  }
-  const msg = el.querySelector(".gw-msg-assistant");
-  el.scrollTop = msg ? Math.max(0, msg.offsetTop - el.offsetTop) : 0;
+  const authored = el.querySelectorAll('.vmsg-user, .vmsg-provider, .gw-msg-user, .gw-msg-assistant');
+  const latest = authored[authored.length - 1];
+  if (!latest) { el.scrollTop = el.scrollHeight; return; }
+  const target = Math.max(0, latest.offsetTop - el.offsetTop);
+  // Never scroll PAST the latest message to reach it.
+  el.scrollTop = Math.min(target, Math.max(0, el.scrollHeight - el.clientHeight));
 }
 
 /**
