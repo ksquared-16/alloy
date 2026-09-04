@@ -2931,9 +2931,21 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
    System grid keep four. Same components, same tokens — only the track count
    answers to the space it actually has.
    --------------------------------------------------------------------------- */
-.vhome-col-side .vgrid-4{grid-template-columns:repeat(2,minmax(0,1fr));}
-.vhome-grid{grid-template-columns:minmax(0,1.3fr) minmax(360px,1fr);}
-@media (max-width:1180px){
+/* BOTH OF THESE ARE DESKTOP RULES AND MUST SAY SO.
+   Written unscoped, they sat after the mobile block and silently un-stacked
+   Home on a phone — the second time in this file that a later, unfloored rule
+   beat the mobile one. Desktop rules live behind a min-width. */
+@media (min-width:861px){
+  .vhome-col-side .vgrid-4{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .vhome-grid{grid-template-columns:minmax(0,1.3fr) minmax(360px,1fr);}
+}
+/* MEASURED BUG, INTRODUCED BY THE PREVIOUS PASS. This rule restores four tracks
+   when Home stacks to one column — but it is declared AFTER the mobile rule and
+   is not height- or width-floored, so at 390px it beat `repeat(2, …)` and put
+   four ~70px tiles back on a phone: "SWAP TRAJE…", "GATEWAY respo/nsive",
+   "ESTIMATED… Cost not reporte/d". It now applies only in the band it was
+   written for. */
+@media (min-width:861px) and (max-width:1180px){
   .vhome-grid{grid-template-columns:minmax(0,1fr);}
   .vhome-col-side .vgrid-4{grid-template-columns:repeat(4,minmax(0,1fr));}
 }
@@ -3026,4 +3038,280 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
   }
   .gw-composer-h{display:none;}
   .gw-composer textarea{max-height:64px;}
+}
+
+/* ===========================================================================
+   THE CONVERSATION
+
+   A lane is a conversation. The first V2 cut rendered the operator's
+   instruction, the provider's output, a completed governed action and the run's
+   status as four similarly weighted white cards — so authorship and chronology,
+   the two things a conversation is made of, were invisible. Worse, provider
+   output sat directly above the composer where it read as something the
+   operator had typed.
+
+   Five roles, five treatments, and none of them look alike.
+   =========================================================================== */
+.vthread{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px;}
+.vthread.is-empty{padding:4px 0;}
+.vmsg{display:flex;flex-direction:column;gap:5px;min-width:0;}
+
+/* The byline is never optional and never inferred from position. */
+.vmsg-by{display:flex;align-items:baseline;gap:8px;}
+.vmsg-who{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;}
+.vmsg-when{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;margin-left:auto;}
+.vmsg-state{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--run-ink);background:var(--run-bg);border-radius:var(--pill);padding:1px 7px;}
+.vmsg-body{font-size:13.5px;line-height:1.55;color:var(--ink);overflow-wrap:break-word;}
+.vmsg-meta{font-size:11px;color:var(--ink-3);}
+
+/* YOU — the operator's own words, on a tinted ground with a pine rail. Set
+   apart from the provider by SIDE, GROUND and RAIL, not by colour alone. */
+.vmsg-user .vmsg-who{color:var(--ok-ink);}
+.vmsg-user-body{background:var(--bg-tint);border-left:3px solid var(--juniper);
+  border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:9px 12px;white-space:pre-wrap;}
+
+/* PROVIDER — an elevated surface, river byline, the provider's own name. */
+.vmsg-provider .vmsg-who{color:var(--run-ink);}
+.vmsg-provider .vmsg-body{background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius-sm);padding:10px 12px;}
+.vmsg-provider .gw-msg-assistant{border:0;background:transparent;box-shadow:none;padding:0;margin:0;}
+
+/* SYSTEM — one quiet line. Never a card. A completed governed action is
+   history, and history does not outrank the work in front of you. */
+.vmsg-system{flex-direction:row;align-items:baseline;gap:8px;
+  font-size:12.5px;color:var(--ink-3);padding:2px 0;}
+.vmsg-mark{color:var(--ok);font-weight:700;flex:none;}
+.vmsg-system.is-failed .vmsg-mark{color:var(--danger);}
+.vmsg-sys-text{min-width:0;overflow-wrap:break-word;}
+.vmsg-system .vmsg-when{flex:none;}
+
+/* ---------- current work, bounded ---------- */
+.vwork-details{margin-top:10px;}
+.vwork-details-sum{font-size:12.5px;font-weight:600;color:var(--juniper);cursor:pointer;
+  list-style:none;min-height:34px;display:inline-flex;align-items:center;}
+.vwork-details-sum::-webkit-details-marker{display:none;}
+.vwork-details-sum::after{content:" ›";color:var(--ink-4);}
+.vwork-details[open] .vwork-details-sum::after{content:" ⌄";}
+.vwork-details-body{margin-top:6px;padding:9px 11px;background:var(--card-2);
+  border:1px solid var(--line-soft);border-radius:var(--radius-sm);
+  font-size:12.5px;line-height:1.5;color:var(--ink-2);white-space:pre-wrap;
+  max-height:40vh;overflow-y:auto;overscroll-behavior:contain;}
+/* The title is a NAME. Two lines, then it stops. */
+.vwork-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.vwork-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+
+/* ---------- needs you: one line ---------- */
+.vneeds-tray{align-items:center;gap:9px;padding:7px 11px;}
+.vneeds-mark{width:auto;height:auto;border-radius:0;background:none;
+  color:var(--attn-ink);font-weight:800;font-size:13px;line-height:1;}
+.vneeds-request{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:13px;color:var(--ink);}
+.vneeds-review{flex:none;}
+
+/* ===========================================================================
+   MOBILE IS A DIFFERENT COMPOSITION, NOT A SMALLER ONE
+   =========================================================================== */
+@media (max-width:860px){
+  /* ---- the lane header ----
+     It was 175px: a back row, a 76px identity row carrying two full-size
+     buttons and a provider/model/slot/started line, and a 42px tab bar. That is
+     a phone's entire first fifth spent on chrome. Name, state · provider, and
+     ONE control. Stop lane and the identity detail live in Details, where the
+     Inspector's RUN block already owns them. */
+  .vlane-head{padding:8px 13px 0;}
+  .vlane-head-row{margin:0 0 6px;align-items:center;gap:10px;}
+  .vlane-title{font-size:16.5px;line-height:1.2;}
+  .vlane-head-state{margin-top:1px;font-size:12px;}
+  .vlane-head-who{color:var(--ink-3);}
+  .vlane-stop{display:none;}
+  .vlane-head-acts .btn{min-height:34px;padding:6px 11px;font-size:12.5px;}
+
+  /* ---- tabs ----
+     A compact scrolling rail, not six full-width desktop tabs. */
+  .vtabs-lane{gap:0;margin:0 -13px;padding:0 13px;}
+  .vtab-lane{padding:7px 11px 8px;min-height:36px;font-size:12.5px;border-bottom-width:2px;}
+
+  /* ---- current work ----
+     One line of title, one of phase. The instruction is behind the disclosure. */
+  .vcard-work .vcard-head{padding:10px 13px 0;}
+  .vcard-work .vcard-body{padding:7px 13px 11px;}
+  .vwork-title{font-size:14.5px;-webkit-line-clamp:2;}
+  .vwork-desc{font-size:12.5px;-webkit-line-clamp:2;}
+  .vwork-details-body{max-height:30vh;}
+
+  /* ---- the conversation ---- */
+  .vthread{gap:12px;}
+  .vmsg-body{font-size:13px;}
+  .vmsg-user-body{padding:8px 10px;}
+  .vmsg-provider .vmsg-body{padding:9px 10px;}
+
+  /* ---- the composer ----
+     Unfocused it reserved a large empty textarea. It is one line until there is
+     something to hold, and grows with the text or the focus. */
+  .gw-composer-h{display:none;}
+  .gw-composer textarea{min-height:38px;max-height:34vh;padding:9px 11px;}
+  .gw-composer-row{gap:8px;padding-top:7px;}
+  .gw-enter-hint,.gw-count{display:none;}
+  .vlane-interaction{padding:8px 13px max(8px, env(safe-area-inset-bottom, 0px));}
+
+  /* ---- home ----
+     ONE page identity: the app chrome names the destination, so the page does
+     not say it again. */
+  .topbar .crumb{display:none;}
+  .vpage-head{margin-bottom:12px;}
+  .vpage-title{font-size:19px;}
+  .vpage-lead{font-size:12.5px;}
+
+  /* Needs You on Home is a SUMMARY: lane, one line, age, a way in. */
+  .vneeds-row{padding:9px 2px;}
+  .vneeds-row-request{font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+
+  /* ---- lanes ----
+     THE LANES DESTINATION IS FOR FINDING LANES. A governed action card several
+     hundred pixels tall above the catalogue is the V2 attention model exactly
+     inverted: it is neither where the decision belongs nor what the operator
+     came here for. Home carries the summary; the nav badge carries the count. */
+  body[data-v-page="lanes"] .gw-approvals-bar{display:none;}
+  /* Denser rows: several lanes visible at once beats one tile per screen. */
+  .gw-lane{padding:9px 10px;}
+  .gw-lane-title{font-size:13.5px;}
+  .gw-lane-posture,.gw-lane-summary,.gw-lane-meta{font-size:11.5px;margin-top:2px;}
+}
+
+@media (max-width:380px){
+  .vlane-title{font-size:15.5px;}
+  .vtab-lane{padding:7px 9px 8px;font-size:12px;}
+  .vmsg-body{font-size:12.5px;}
+}
+
+/* THE LANE CATALOGUE CARRIES NO GOVERNED PAYLOAD, AT ANY WIDTH.
+   Scoped to list mode specifically: on a lane the compact strip is still the
+   global reachability guarantee for OTHER lanes' decisions, and on Home the
+   Needs You block is the canonical summary. Only the catalogue — the surface
+   whose entire job is "find me a lane" — refuses it outright. */
+.app:has(.gw[data-gw-mode="list"]) .gw-approvals-bar{display:none;}
+
+/* ---------------------------------------------------------------------------
+   THE PHONE LANE HEADER, MEASURED.
+
+   158px of a 844px screen, before any work was visible:
+     36  back row (holding one arrow — the breadcrumb is already hidden)
+     71  identity row, 30px of which was "Claude · claude-opus-5 · Slot 6 ·
+         Started 6:37 PM" wrapping to two lines
+     36  tabs
+     +   padding
+
+   The back arrow does not need a row of its own, and the model string, the slot
+   and the start time are identity detail the operator did not come here for.
+   Details owns them; the Inspector's RUN block already prints all four.
+
+   One row of [back][name · state · provider][Details], then tabs.
+   --------------------------------------------------------------------------- */
+@media (max-width:860px){
+  .vlane-head{
+    display:grid;grid-template-columns:auto minmax(0,1fr);
+    align-items:center;column-gap:8px;padding:6px 13px 0;
+  }
+  /* The back link joins the identity row instead of owning one. */
+  .vlane-head-top{display:contents;}
+  .vlane-back{grid-column:1;margin-left:-6px;}
+  .vlane-head-row{grid-column:2;margin:0;}
+  .vtabs-lane{grid-column:1 / -1;margin-top:4px;}
+  /* Identity detail belongs to Details. */
+  .vlane-head-meta{display:none;}
+
+  /* Stopping a run is not orientation. It is in the header's overflow — the
+     Inspector's RUN block — with the rest of the run controls. */
+  .vcard-work [data-gw-cancel-run]{display:none;}
+
+  /* The composer was 139px unfocused around a 48px field. */
+  .gw-composer-box{padding:7px 8px 8px;}
+  .gw-composer textarea{min-height:36px;}
+  .gw-composer-row{padding-top:6px;gap:7px;}
+  .gw-composer .btn.gw-send{min-height:38px;}
+  .vlane-interaction{padding:7px 13px max(7px, env(safe-area-inset-bottom, 0px));}
+}
+
+/* ---------------------------------------------------------------------------
+   KEYBOARD HEIGHT, DECLARED LAST SO IT ACTUALLY WINS.
+
+   The earlier keyboard block sits above the compact-header rules, so its
+   `display:none` on the back row was overridden by the later `display:contents`
+   that folds the back arrow into the identity row. Restated here, after them.
+
+   The back arrow now costs nothing — it shares the identity row — so it stays.
+   The tabs go: you cannot navigate tabs while composing, and they are 36px of a
+   380px viewport.
+   --------------------------------------------------------------------------- */
+@media (max-width:860px) and (max-height:520px){
+  .vlane-head{padding:4px 13px 0;}
+  .vtabs-lane{display:none;}
+  .vlane-head-meta{display:none;}
+  .vlane-title{font-size:15px;}
+  .vcard-work{display:none;}
+}
+
+/* Very narrow phones: the title and phase get one line less before they clamp. */
+@media (max-width:380px){
+  .vwork-title{font-size:14px;-webkit-line-clamp:2;}
+  .vwork-desc{-webkit-line-clamp:1;}
+  .vcard-work .vcard-head{padding:9px 11px 0;}
+  .vcard-work .vcard-body{padding:6px 11px 10px;}
+  .vwork-details-sum{min-height:30px;}
+}
+
+/* The copy control is a 44x88 tap target by rule, which inside a card header
+   renders as a large empty box around a small icon. In the conversation header
+   it is a quiet affordance, not a button-shaped hole. */
+.vcard-thread .vcard-actions .gw-copy{min-width:44px;min-height:36px;padding:6px 10px;font-size:13px;}
+.vcard-thread .gw-live-dot{font-size:10.5px;letter-spacing:.07em;}
+@media (max-width:860px){
+  .vcard-thread .vcard-actions .gw-copy{min-width:40px;min-height:34px;padding:5px 9px;}
+}
+
+/* ---------------------------------------------------------------------------
+   THE LANE CATALOGUE ON A PHONE.
+
+   MEASURED: the list header wrapped "+ Repo", "+ Folder" and "+ Add Lane" onto
+   two ragged rows; the folder header clipped its own name to "Ce…" to make room
+   for three badges and a Rename button it then cut off ("Renar"); the rows read
+   as tiles at ~155px each; and an empty "Development Status" card sat under all
+   of it.
+
+   A phone comes here to FIND A LANE. Registering a repository and renaming a
+   folder are desktop administration. The name of a folder is worth more than
+   three badges summarising it.
+   --------------------------------------------------------------------------- */
+@media (max-width:860px){
+  .gw-lanes-h-row{flex-wrap:nowrap;align-items:center;gap:8px;padding-right:2px;}
+  .gw-lanes-h{flex:1 1 auto;min-width:0;font-size:11px;}
+  /* Creating a lane stays. Registering a repo and creating a folder are
+     administration, and they are one tap away in Details/desktop. */
+  .gw-add-repo,.gw-add-folder{display:none;}
+  .gw-add{flex:none;white-space:nowrap;font-size:12.5px;}
+
+  /* A folder header is a NAME and a COUNT. */
+  .gw-folder-h{gap:8px;}
+  .gw-folder-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;}
+  .gw-folder-badge{display:none;}
+  .gw-folder-edit{display:none;}
+  .gw-folder-count{flex:none;}
+
+  /* Rows, not tiles. Several lanes at a glance beats one lane per screen. */
+  .gw-lane{padding:8px 9px;margin:0;border-radius:var(--radius-sm);}
+  .gw-lane + .gw-lane{margin-top:2px;}
+  .gw-lane-title{font-size:13.5px;}
+  .gw-lane-posture{font-size:12px;margin-top:1px;}
+  .gw-lane-summary{font-size:12px;margin-top:1px;}
+  .gw-lane-meta{font-size:11.5px;margin-top:1px;}
+
+  /* The machine panel belongs to System, which is one tap away in the bar. An
+     empty card is worse than an absent one. */
+  .gw-status{display:none;}
+
+  /* The top bar carried a title that duplicated the page's own, and nothing
+     else a phone needs above the fold. What is left is compact. */
+  .topbar{padding:6px 12px;min-height:0;gap:8px;}
+  .topbar .search,.topbar #improve-vacilando-btn,.topbar .gen{display:none;}
 }

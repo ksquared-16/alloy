@@ -23,6 +23,7 @@
 
 import {
   ACTIVITY_KINDS,
+  MESSAGE_ROLE,
   DATA_STATE,
   HEALTH,
   HEALTH_LABEL,
@@ -287,26 +288,24 @@ export function progress(p, { compact = false } = {}) {
 export function needsYouTray(items = [], { laneId = null } = {}) {
   const list = Array.isArray(items) ? items : [];
   if (!list.length) return "";
-  if (list.length > 1) {
-    return `<div class="vneeds vneeds-tray" data-v-needs="${list.length}" role="region" aria-label="Needs you">
-      <span class="vneeds-mark" aria-hidden="true"></span>
-      <span class="vneeds-title">Needs you · ${list.length}</span>
-      <a class="vneeds-act" href="#/home" data-v-needs-all>Review requests →</a>
-    </div>`;
-  }
-  const it = list[0];
-  return `<div class="vneeds vneeds-tray" data-v-needs="1" role="region" aria-label="Needs you">
-    <span class="vneeds-mark" aria-hidden="true"></span>
-    <div class="vneeds-copy">
-      <span class="vneeds-title">Needs you</span>
-      <span class="vneeds-request">${esc(it.request)}</span>
-    </div>
-    <div class="vneeds-acts">
-      <button type="button" class="btn sm" data-v-needs-review data-lane-id="${esc(laneId || it.lane_id || "")}">Review</button>
-      ${it.kind === "governed_action"
-        ? `<button type="button" class="btn sm primary" data-v-needs-authorize data-lane-id="${esc(laneId || it.lane_id || "")}">Authorize</button>`
-        : ""}
-    </div>
+
+  // ONE LINE. An interruption tray, not a proposal viewer.
+  //
+  // The tray previously carried the request plus two actions and wrapped to
+  // ~138px on a phone; the full governed proposal then rendered separately in
+  // the lane flow at 591px. Between them they pushed the composer off the
+  // screen at exactly the moment a decision was waiting. The tray now states
+  // WHAT is waiting and offers ONE way in; Review opens the detailed governed
+  // surface, which is where a proposal belongs.
+  const label = list.length > 1
+    ? `${list.length} requests`
+    : String(list[0].request || "A decision is waiting");
+  return `<div class="vneeds vneeds-tray" data-v-needs="${list.length}" role="region" aria-label="Needs you">
+    <span class="vneeds-mark" aria-hidden="true">!</span>
+    <span class="vneeds-title">Needs you</span>
+    <span class="vneeds-request">${esc(label)}</span>
+    <button type="button" class="btn sm vneeds-review" data-v-needs-review
+      data-lane-id="${esc(laneId || list[0].lane_id || "")}">Review</button>
   </div>`;
 }
 
@@ -319,13 +318,16 @@ export function needsYouList(model, { nowMs = Date.now() } = {}) {
       body: "Work that is running, queued or finished is on the lane list. This is only for decisions that cannot proceed without you.",
     });
   }
+  // A SUMMARY, NOT A PAYLOAD. Home is a scan surface: lane, one line of what is
+  // being asked, how long it has waited, and a way in. The reason, the
+  // escalation and the proposal are what Review opens — printing them here made
+  // four pending decisions consume most of a phone's first screen.
   return `<ul class="vneeds-list">${items.map((it) => `
     <li class="vneeds-row is-${esc(it.severity)}">
       <span class="vneeds-row-mark" aria-hidden="true"></span>
       <div class="vneeds-row-copy">
         <span class="vneeds-row-lane">${esc(it.lane_label)}</span>
         <span class="vneeds-row-request">${esc(it.request)}</span>
-        ${it.detail ? `<span class="vneeds-row-detail">${esc(it.detail)}</span>` : ""}
       </div>
       <span class="vneeds-row-age">${esc(it.at_ms ? `${ago(it.at_ms, nowMs)} ago` : "")}</span>
       <a class="btn sm" href="${esc(it.href)}">Review</a>
@@ -500,6 +502,10 @@ export function renderHome(vm, { nowMs = Date.now() } = {}) {
       : emptyState({ title: "No activity recorded yet", body: "Run events, commits and governed decisions appear here as they happen." }),
   });
 
+  // ONE PAGE IDENTITY. The app chrome already names the destination; a second
+  // "Home" directly beneath it is the same word twice and costs a phone header's
+  // worth of the first screen. The lead survives — it says what the page is for,
+  // which the chrome does not.
   return `<div class="vpage vpage-home" data-v-page="home">
     ${pageHeader({ title: "Home", lead: "What is running, what needs you, and whether the machine is healthy." })}
     <div class="vhome-grid">
@@ -701,4 +707,128 @@ export const MATURITY_COPY = Object.freeze({
 export function maturityLegend() {
   return `<dl class="vlegend">${Object.entries(MATURITY_COPY).map(([k, v]) => `
     <dt class="vlegend-k">${esc(k)}</dt><dd class="vlegend-v">${esc(v)}</dd>`).join("")}</dl>`;
+}
+
+
+/* ===========================================================================
+ * THE CONVERSATION
+ *
+ * One grammar, five roles, and the roles do NOT look alike.
+ *
+ * The regression this corrects: V2 rendered the operator's instruction, the
+ * provider's output, a completed governed action and the run's status as four
+ * white cards of similar weight, stacked. You could not tell who had said what,
+ * or in what order — and provider output sat directly above the composer, where
+ * it read as something the operator had typed.
+ *
+ * The grammar:
+ *   YOU        an authored message, right-anchored rail, ink on tint
+ *   PROVIDER   an authored message, provider identity, elevated surface
+ *   SYSTEM     one quiet line with a mark. Never a card.
+ *   GOVERNANCE the only role permitted to draw attention
+ *   RUN_STATUS what is happening, when nobody has said anything yet
+ * ========================================================================= */
+
+const ROLE_CLASS = Object.freeze({
+  [MESSAGE_ROLE.USER]: "vmsg-user",
+  [MESSAGE_ROLE.PROVIDER]: "vmsg-provider",
+  [MESSAGE_ROLE.SYSTEM]: "vmsg-system",
+  [MESSAGE_ROLE.GOVERNANCE]: "vmsg-governance",
+  [MESSAGE_ROLE.RUN_STATUS]: "vmsg-status",
+});
+
+/**
+ * The authorship line. It is the whole point of the thread, so it is never
+ * optional and never inferred from position.
+ */
+function byline(entry) {
+  const who = esc(entry.author || "");
+  const when = entry.clock ? `<span class="vmsg-when">${esc(entry.clock)}</span>` : "";
+  const state = entry.working
+    ? `<span class="vmsg-state">Working</span>`
+    : "";
+  return `<div class="vmsg-by"><span class="vmsg-who">${who}</span>${state}${when}</div>`;
+}
+
+export function messageRow(entry, { renderProviderBody = null, attachments = "" } = {}) {
+  if (!entry) return "";
+  const cls = ROLE_CLASS[entry.role] || "vmsg-system";
+
+  // SYSTEM IS ONE LINE. A completed governed action is history; it earns a mark
+  // and a sentence, not a panel that outlives the work it describes.
+  if (entry.role === MESSAGE_ROLE.SYSTEM) {
+    return `<li class="vmsg ${cls}${entry.ok === false ? " is-failed" : ""}" data-v-role="system">
+      <span class="vmsg-mark" aria-hidden="true">${entry.ok === false ? "✕" : "✓"}</span>
+      <span class="vmsg-sys-text">${esc(entry.body)}</span>
+      ${entry.clock ? `<span class="vmsg-when">${esc(entry.clock)}</span>` : ""}
+    </li>`;
+  }
+
+  if (entry.role === MESSAGE_ROLE.PROVIDER) {
+    const body = typeof renderProviderBody === "function"
+      ? renderProviderBody(entry)
+      : `<div class="vmsg-body">${esc(entry.body)}</div>`;
+    return `<li class="vmsg ${cls}" data-v-role="provider"${entry.working ? ' data-gw-live="1"' : ""}>
+      ${byline(entry)}
+      ${body}
+      ${entry.meta && !entry.working ? `<div class="vmsg-meta">${esc(entry.meta)}</div>` : ""}
+    </li>`;
+  }
+
+  // USER. The instruction is shown verbatim; delivery is quiet metadata.
+  return `<li class="vmsg ${cls}" data-v-role="user" data-gw-last>
+    ${byline(entry)}
+    <div class="vmsg-body vmsg-user-body gw-last-text" data-gw-msg-text>${esc(entry.body)}</div>
+    ${attachments}
+    ${entry.meta ? `<div class="vmsg-meta">${esc(entry.meta)}</div>` : ""}
+  </li>`;
+}
+
+export function renderThread(thread, { renderProviderBody = null, attachments = "", empty = null } = {}) {
+  const entries = thread?.entries || [];
+  if (!entries.length) {
+    return `<div class="vthread is-empty">${empty || emptyState({
+      title: "Nothing has happened on this lane yet",
+      body: "Write an instruction below to start.",
+    })}</div>`;
+  }
+  // NOTE: the scroll hook is NOT here. `data-gw-thread` marks the element the
+  // controller scrolls to keep the latest message in view, and this <ol> does
+  // not scroll — its ancestor .vlane-body does. Putting the hook on the list
+  // silently broke scroll-to-latest, so the operator landed on the OLDEST entry.
+  return `<ol class="vthread" data-v-thread="${entries.length}">${entries.map((e) => messageRow(e, {
+    renderProviderBody,
+    attachments: e.role === MESSAGE_ROLE.USER ? attachments : "",
+  })).join("")}</ol>`;
+}
+
+/* ---------------------------------------------------------------------------
+ * CURRENT WORK — the orientation card.
+ * ------------------------------------------------------------------------- */
+
+export function currentWorkCard(work, { state = null, tone = "", live = false, expanded = false, cancel = "" } = {}) {
+  if (!work?.active) {
+    return surface({
+      title: "Current work",
+      className: "vcard-work",
+      body: emptyState({ title: "No active work", body: "Ready for instruction — write one below to start." }),
+    });
+  }
+  const details = work.details
+    ? `<details class="vwork-details"${expanded ? " open" : ""} data-v-work-details>
+        <summary class="vwork-details-sum">View work details</summary>
+        <div class="vwork-details-body">${esc(work.details)}</div>
+      </details>`
+    : "";
+  return surface({
+    title: "Current work",
+    className: "vcard-work",
+    actions: state ? stateDot(state, { tone, live }) : "",
+    body: `
+      <h3 class="vwork-title">${esc(work.title)}</h3>
+      ${work.summary ? `<p class="vwork-desc">${esc(work.summary)}</p>` : ""}
+      ${progress(work.progress, { compact: true })}
+      ${details}
+      ${cancel}`,
+  });
 }

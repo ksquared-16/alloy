@@ -40,7 +40,7 @@ const T = (minutesAgo) => new Date(Date.now() - minutesAgo * 60_000).toISOString
 /** Four lanes covering the states the operator must be able to tell apart. */
 export const LANES = [
   {
-    lane_id: "lane_trustruntime01", label: "Trust Runtime", slot: 6,
+    lane_id: "lane_trustruntime01", label: "Trust Runtime", slot: 6, folder_id: "fold_cert",
     tmux: { alive: true }, runtime: "online", preferred_provider: "claude",
     binding: { provider: "claude", branch: "agent/trust-runtime", slot: 6 },
     claude: { presence: "present" },
@@ -49,7 +49,10 @@ export const LANES = [
     source_control: { posture: "CURRENT" },
     execution_run: {
       run_id: "erun_trust0001", lane_id: "lane_trustruntime01", state: "EXECUTING",
-      instruction: "Certify the trust runtime end to end\nBuild the E2E driver and run automated certification against the staged environment.",
+      // A REAL INSTRUCTION, not a tidy one. This is the length and shape an
+      // operator actually pastes, and printing it into the Current Work card is
+      // precisely what pushed the conversation off the first screen.
+      instruction: "Continue the existing REAL ENROLLMENT certification and take it to completion\n\nBuild the end-to-end driver, run automated certification against the staged environment, and do not stop at the first green suite. Cover every surface named in the brief: enrollment intake, roster reconciliation, tuition assignment, and the waitlist adjustment overlay. Where a surface cannot be certified, say which one and why rather than reporting partial success. Capture evidence for each pass and file it under the certification directory with the run id in the filename. If a governed capability is required, request it rather than working around it.",
       started_at: T(18), updated_at: T(1), created_at: T(19),
       latest_progress: { summary: "E2E driver built; automated certification in progress", at: T(1) },
       // A RESOLVED governed action. The live lane carried one and the fixture
@@ -69,10 +72,26 @@ export const LANES = [
       },
       attachments: [],
     },
+    // A DELIVERED PRIOR INSTRUCTION. Without one there is no conversation to
+    // get wrong, which is how the authorship regression survived certification.
+    last_instruction: {
+      instruction: "Continue the existing REAL ENROLLMENT certification and take it to completion\n\nBuild the end-to-end driver, run automated certification against the staged environment, and do not stop at the first green suite.",
+      status: "delivered",
+      delivered_at: T(19),
+    },
+    // A COMPLETED governed action — history, not a standing banner.
+    last_governed_outcome: {
+      ok: true, title: "Open a staging pull request",
+      detail: "PR #671 opened into staging", at: T(64), approved_by: "operator",
+    },
+    recent_system_activity: [
+      { summary: "Claude context refreshed automatically", at: T(35) },
+      { summary: "Development server restarted on slot 6", at: T(41) },
+    ],
     agent_report: null,
   },
   {
-    lane_id: "lane_surfaces000001", label: "Surfaces", slot: 4,
+    lane_id: "lane_surfaces000001", label: "Surfaces", slot: 4, folder_id: "fold_cert",
     tmux: { alive: true }, runtime: "online", preferred_provider: "claude",
     binding: { provider: "claude", branch: "agent/surfaces", slot: 4 },
     claude: { presence: "present" },
@@ -125,6 +144,26 @@ export const LANES = [
     git: { state: "clean", ahead: 0, behind: 0, branch: "agent/payments" },
     execution_run: null,
     previous_run: { run_id: "erun_pay0001", state: "COMPLETE", completed_at: T(47), completion_report: { summary: "Validation completed; 312 tests passed." } },
+  },
+  {
+    lane_id: "lane_suspended0001", label: "Communications", slot: 5,
+    tmux: { alive: true }, runtime: "online", preferred_provider: "claude",
+    binding: { provider: "claude", branch: "agent/communications", slot: 5 },
+    last_activity_ms: Date.now() - 130 * 60_000,
+    git: { state: "dirty", ahead: 4, behind: 2, branch: "agent/communications" },
+    // STALE PROGRESS: reported over 30 minutes ago, so it must render as
+    // unavailable rather than as a frozen bar.
+    execution_run: {
+      run_id: "erun_comm0001", lane_id: "lane_suspended0001", state: "WAITING_RESOURCE",
+      instruction: "Bring inbound SMS provisioning to parity with email receiving",
+      started_at: T(180), updated_at: T(130), created_at: T(181),
+      progress_estimate: {
+        percent: 45, confidence: "low", summary: "Provisioning flow drafted",
+        remaining_work: null, source: "provider_estimate", updated_at: T(95),
+      },
+      provider_suspension: { question: "Which carrier sandbox should provisioning target?" },
+      attachments: [],
+    },
   },
   {
     lane_id: "lane_runtimeperf001", label: "Runtime Performance", slot: 3,
@@ -185,7 +224,23 @@ const APPROVALS = [{
 
 const OUTPUT = {
   ok: true, available: true, lane_id: "lane_trustruntime01", mode: "recent",
-  text: "Database scan completed successfully.\nFound 1,248 records across 12 tables.\nNo anomalies detected.",
+  // Long, multi-paragraph provider output — what a real turn returns.
+  text: [
+    "Database scan completed successfully.",
+    "Found 1,248 records across 12 tables. No anomalies detected.",
+    "",
+    "Enrollment intake certified: 412 records, 0 orphaned participants, 0 duplicate",
+    "external ids. Roster reconciliation certified: term boundaries hold across all",
+    "four programs, and the two records flagged last run were stale fixtures rather",
+    "than live rows.",
+    "",
+    "Tuition assignment is NOT certified. Three assignments reference a rate card",
+    "that was superseded on 2026-08-30; the driver cannot tell whether that is a",
+    "data defect or an intentional grandfather clause, so it refuses to pass them.",
+    "",
+    "Waitlist adjustment overlay is blocked on browser access — see the governed",
+    "request on this lane.",
+  ].join("\n"),
   captured_at: T(18),
 };
 
@@ -204,7 +259,10 @@ const ROUTES = (url) => {
   const id = url.searchParams.get("id") || url.searchParams.get("lane_id");
   if (p === "/api/lanes" || p === "/api/v2/views/lanes") {
     return {
-      ok: true, lanes: LANES, folders: [], repositories: [],
+      // ONE real folder holding two lanes, and the rest unfiled — so both the
+      // "folders are meaningful" and "do not advertise their absence" paths are
+      // exercised by the same fixture.
+      ok: true, lanes: LANES, folders: [{ folder_id: "fold_cert", name: "Certification" }], repositories: [],
       unseen_count: 1, unseen_by_lane: { lane_surfaces000001: 1 },
       execution_capacity: { total: 6, active: 3, available: 3 },
       development_resources: { ok: true, resources: [] },

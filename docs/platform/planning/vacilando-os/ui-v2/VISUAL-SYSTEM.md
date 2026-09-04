@@ -154,3 +154,72 @@ The seven approved brand colours, the artwork, the wordmark, the icon set, the
 `--script-face` treatment, and the measured contrast ratios recorded in the
 `:root` comment block. This pass changes how those are *applied*, not what they
 are.
+
+---
+
+## 11. The conversation (September 2026 visual correction)
+
+UI V2's first cut was mechanically certified and visually wrong. Every geometric
+assertion passed on a phone that spent 158px of 844 on chrome before showing any
+work, and the lane no longer read as a conversation.
+
+### Five roles, five treatments
+
+A lane is a conversation between an operator and a provider, with the system
+occasionally speaking up. The first cut rendered all of it as similarly weighted
+white cards, which destroyed the two things a conversation is made of: **who
+said it** and **when**.
+
+| Role | Treatment |
+|---|---|
+| `USER` | Tinted ground (`--bg-tint`) behind a 3px pine rail, byline "You" in `--ok-ink`, verbatim text, delivery as quiet metadata |
+| `PROVIDER` | Elevated white surface with a quiet border, byline is the provider's own name in `--run-ink`, `Working` pill while mid-utterance |
+| `SYSTEM` | **One line.** A mark, a sentence, a clock, in `--ink-3`. Never a card. |
+| `GOVERNANCE` | The only role permitted to draw attention |
+| `RUN_STATUS` | What is happening when nobody has said anything yet |
+
+User and provider are separated by **name, ground and rail** — not colour alone,
+which is why the certification asserts different bylines *and* different
+computed backgrounds.
+
+Authorship and chronology are properties of the **data** (`buildLaneThread`), not
+decisions a renderer makes ad hoc, so no surface can quietly start attributing a
+provider's output to the operator's composer again.
+
+### A completed governed action is history
+
+It rendered as a permanent high-weight banner directly above the composer,
+outliving the work it described. It is now a one-line system entry in the
+thread, at the time it happened.
+
+### Current Work is an orientation card
+
+It printed the full mission instruction, so a long one pushed the conversation
+entirely below the fold — the card became a transcript viewer for the one piece
+of text the operator had just written themselves. Title (clamped to two lines),
+phase, progress, state. The instruction lives behind **View work details**.
+
+### Mobile is a different composition, not a smaller one
+
+Measured at 390×844, before and after:
+
+| | Before | After |
+|---|---|---|
+| Lane header | 158px | **84px** |
+| Current Work | 246px | **194px** |
+| First message | 506px | **380px** |
+| Idle composer field | 48px | **41px** |
+| Lane rows in the first screen | 5 | **10** |
+
+The back arrow shares the identity row rather than owning one. The model string,
+slot and start time moved to Details, which already printed all four. Stop lane
+moved to the Inspector's RUN block, which already had it. At keyboard height the
+tabs and the orientation card go too — you cannot navigate tabs while composing,
+and context for work you are already looking at is not what the space is for.
+
+### Two CSS bugs of my own, both the same shape
+
+A later, unfloored desktop rule beating the mobile one. Four ~70px metric tiles
+came back on a phone (`GATEWAY respo/nsive`, `ESTIMATED… Cost not reporte/d`),
+and Home un-stacked to two columns. **Desktop rules live behind a `min-width`.**
+Both were caught by reading screenshots, not by an assertion.

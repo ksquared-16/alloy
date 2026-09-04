@@ -133,11 +133,18 @@ try {
   const prog = await desk.locator(".vprogress-label").first().innerText();
   check("progress reads as a provider estimate", /Provider estimate: ~62% complete/.test(prog), prog);
   check("no ETA is shown", !(await desk.evaluate(() => /\bETA\b/i.test(document.body.innerText))));
-  check("current work precedes the agent output",
+  // CONTEXT -> CONVERSATION -> HUMAN ACTION. The output card became a
+  // chronological thread; the ordering contract is unchanged.
+  check("current work orients, then the conversation follows",
     await desk.evaluate(() => {
       const w = document.querySelector(".vcard-work")?.getBoundingClientRect().top ?? 1e9;
-      const o = document.querySelector(".vcard-output")?.getBoundingClientRect().top ?? -1;
-      return o > w;
+      const t = document.querySelector(".vcard-thread")?.getBoundingClientRect().top ?? -1;
+      return t > w;
+    }));
+  check("desktop keeps the conversation as the central content, not dashboard cards",
+    await desk.evaluate(() => {
+      const roles = [...document.querySelectorAll(".vthread [data-v-role]")].map((n) => n.dataset.vRole);
+      return roles.includes("user") && roles.includes("provider");
     }));
   check("the inspector is quiet by default",
     (await desk.locator(".vinsp-sec[open]").count()) === 0);
@@ -171,7 +178,7 @@ try {
     await desk.evaluate(() => {
       const t = document.querySelector(".vneeds-tray")?.getBoundingClientRect();
       const c = document.querySelector(".gw-composer")?.getBoundingClientRect();
-      const o = document.querySelector(".vcard-output")?.getBoundingClientRect();
+      const o = document.querySelector(".vcard-thread")?.getBoundingClientRect();
       return Boolean(t && c && o) && t.top > o.top && t.bottom <= c.top + 4;
     }));
   check("the tray is one line, not a card in the narrative",
@@ -221,6 +228,41 @@ try {
         return order.findIndex((c) => c.includes("vcard-needs")) === 0;
       }));
 
+    // ---- Home and Lanes as product surfaces ----
+    await open(m, "/home");
+    check(`mobile ${label} Home has ONE page identity`,
+      await m.evaluate(() => {
+        const crumb = document.querySelector(".topbar .crumb");
+        const title = document.querySelector(".vpage-title")?.textContent?.trim();
+        return title === "Home" && !(crumb && getComputedStyle(crumb).display !== "none");
+      }));
+    check(`mobile ${label} Home Needs You is a summary, not a payload`,
+      await m.evaluate(() => [...document.querySelectorAll(".vneeds-row")]
+        .every((r) => r.getBoundingClientRect().height <= 96 && !r.querySelector(".vneeds-row-detail"))));
+    check(`mobile ${label} Home metric tiles are wide enough to read`,
+      await m.evaluate(() => {
+        const g = document.querySelector(".vcard-health .vgrid-4");
+        return Boolean(g) && getComputedStyle(g).gridTemplateColumns.split(" ").length <= 2;
+      }));
+
+    await open(m, "/lanes");
+    check(`mobile ${label} the lane catalogue carries no governed payload`,
+      await m.evaluate(() => {
+        const bar = document.querySelector("#approvals-bar");
+        return !bar || getComputedStyle(bar).display === "none" || bar.getBoundingClientRect().height === 0;
+      }));
+    check(`mobile ${label} no "No folder" heading`,
+      await m.evaluate(() => !/no folder/i.test(document.querySelector("#view")?.innerText || "")));
+    const laneRows = await m.evaluate(() => {
+      const rows = [...document.querySelectorAll("[data-gw-lane]")];
+      return {
+        total: rows.length,
+        visible: rows.filter((r) => { const b = r.getBoundingClientRect(); return b.top >= 0 && b.bottom <= window.innerHeight; }).length,
+      };
+    });
+    check(`mobile ${label} several lanes are scannable at once`,
+      laneRows.visible >= 4, `${laneRows.visible} of ${laneRows.total} rows in the first screen`);
+
     await open(m, `/lanes/${LANE}`);
     // THE SUM, NOT THE PIECES. Every component was individually bounded and
     // every bound was honoured; nothing bounded what they had to share.
@@ -243,6 +285,66 @@ try {
         const insp = document.querySelector(".vinsp");
         return !insp || insp.hasAttribute("inert") || getComputedStyle(insp).display === "none" || insp.getBoundingClientRect().left >= window.innerWidth - 1;
       }));
+
+    // ===================== VISUAL / PRODUCT ASSERTIONS =====================
+    //
+    // GEOMETRY IS NOT DESIGN. "Nothing overflows" and "Send is technically
+    // visible" both passed on a lane that spent 158px of an 844px screen on
+    // chrome before showing any work. These measure whether the phone layout is
+    // actually FOR a phone.
+    const above = await m.evaluate(() => {
+      const h = (sel) => { const el = document.querySelector(sel); return el ? Math.round(el.getBoundingClientRect().height) : null; };
+      const top = (sel) => { const el = document.querySelector(sel); return el ? Math.round(el.getBoundingClientRect().top) : null; };
+      const shown = (sel) => { const el = document.querySelector(sel); return Boolean(el) && getComputedStyle(el).display !== "none" && el.getBoundingClientRect().height > 0; };
+      return {
+        vh: window.innerHeight,
+        header: h(".vlane-head"),
+        work: h(".vcard-work"),
+        firstMessageTop: top(".vmsg"),
+        textareaH: h(".gw-composer textarea"),
+        trayH: h(".vneeds-tray"),
+        stopShown: shown(".vlane-stop"),
+        metaShown: shown(".vlane-head-meta"),
+        cancelInCard: shown(".vcard-work [data-gw-cancel-run]"),
+      };
+    });
+    check(`mobile ${label} lane header is phone-scale`,
+      above.header !== null && above.header <= 100, `header ${above.header}px of ${above.vh}`);
+    check(`mobile ${label} header carries no desktop actions or identity detail`,
+      above.stopShown === false && above.metaShown === false && above.cancelInCard === false);
+    check(`mobile ${label} Current Work is a bounded summary, not a document`,
+      above.work !== null && above.work <= 230, `current work ${above.work}px`);
+    check(`mobile ${label} the long instruction is behind a disclosure`,
+      await m.evaluate(() => {
+        const d = document.querySelector("[data-v-work-details]");
+        const card = document.querySelector(".vcard-work");
+        if (!d || !card) return false;
+        return !d.open && !/do not stop at the first green suite/i.test(card.innerText);
+      }));
+    check(`mobile ${label} conversation begins in the first screen`,
+      above.firstMessageTop !== null && above.firstMessageTop < above.vh,
+      `first message at ${above.firstMessageTop} of ${above.vh}`);
+    check(`mobile ${label} authorship is visually distinguishable`,
+      await m.evaluate(() => {
+        const u = document.querySelector(".vmsg-user");
+        const p = document.querySelector(".vmsg-provider");
+        if (!u || !p) return false;
+        const uw = u.querySelector(".vmsg-who")?.textContent?.trim();
+        const pw = p.querySelector(".vmsg-who")?.textContent?.trim();
+        const ub = getComputedStyle(u.querySelector(".vmsg-body")).backgroundColor;
+        const pb = getComputedStyle(p.querySelector(".vmsg-body")).backgroundColor;
+        return Boolean(uw) && Boolean(pw) && uw !== pw && ub !== pb;
+      }));
+    check(`mobile ${label} a completed governed action is a system line, not a banner`,
+      await m.evaluate(() => {
+        const sys = document.querySelector(".vmsg-system");
+        const banner = document.querySelector(".gw-gv-outcome");
+        return Boolean(sys) && !banner && sys.getBoundingClientRect().height <= 60;
+      }));
+    check(`mobile ${label} the idle composer asks for one line`,
+      above.textareaH !== null && above.textareaH <= 44, `textarea ${above.textareaH}px`);
+    check(`mobile ${label} the Needs You tray is one line`,
+      above.trayH === null || above.trayH <= 52, `tray ${above.trayH}px`);
 
     await m.locator("[data-gw-aside-toggle]").click();
     await m.waitForTimeout(450);
@@ -276,10 +378,18 @@ try {
   // The regions that must yield when the keyboard is up. Asserted explicitly,
   // because "Send happens to fit" passed on a lane that was simply less
   // furnished than any real one.
+  // WHAT MUST YIELD WHEN THE KEYBOARD IS UP.
+  //
+  // The back row is no longer one of them: the compact header folds the back
+  // arrow into the identity row, so it costs nothing. What goes is everything
+  // you cannot use while composing — the tabs, the identity detail, and the
+  // orientation card, which is context for work you are already looking at.
   check("keyboard-open lane sheds navigation chrome for the composer",
     await kb.evaluate(() => {
-      const hidden = (s) => { const el = document.querySelector(s); return !el || getComputedStyle(el).display === "none"; };
-      return hidden(".vtabs-lane") && hidden(".vlane-head-top") && hidden(".vlane-head-meta");
+      const gone = (s) => { const el = document.querySelector(s); return !el || getComputedStyle(el).display === "none"; };
+      const head = document.querySelector(".vlane-head");
+      return gone(".vtabs-lane") && gone(".vlane-head-meta") && gone(".vcard-work")
+        && Boolean(head) && head.getBoundingClientRect().height <= 60;
     }));
   check("keyboard-open interaction zone bounds itself instead of pushing Send off",
     await kb.evaluate(() => {

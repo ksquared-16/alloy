@@ -399,19 +399,28 @@ test("a governed action and its lane's NEEDS_INPUT are one blocker, not two", ()
 });
 
 test("the lane tray is one line, and many requests collapse into one", () => {
+  // THE TRAY IS ONE LINE, AND IT DECIDES NOTHING.
+  //
+  // It carried the request plus Review AND Authorize, wrapped to ~138px on a
+  // phone, and the full governed proposal rendered separately at 591px. Between
+  // them they pushed the composer off screen at exactly the moment a decision
+  // was waiting. The tray now states WHAT is waiting and offers ONE way in;
+  // Review opens the canonical governed surface, which is where a proposal
+  // belongs and where approving actually happens.
   const one = needsYouTray([{ kind: "governed_action", request: "Read-only database census", lane_id: "l1" }], { laneId: "l1" });
   assert.match(one, /Needs you/);
   assert.match(one, /Read-only database census/);
   assert.match(one, /data-v-needs-review/);
-  assert.match(one, /data-v-needs-authorize/);
+  assert.equal(one.includes("data-v-needs-authorize"), false,
+    "the tray must not approve anything itself");
+  assert.equal(one.includes("vneeds-copy"), false, "one line, not a stacked block");
 
-  // THREE REQUESTS DO NOT BECOME THREE CARDS. That is how a lane stops being
-  // readable.
+  // THREE REQUESTS DO NOT BECOME THREE CARDS.
   const many = needsYouTray([{ request: "a" }, { request: "b" }, { request: "c" }]);
-  assert.match(many, /Needs you · 3/);
-  assert.match(many, /Review requests →/);
-  assert.equal(many.includes("a"), true); // the word "a" appears in "Needs"
+  assert.match(many, /Needs you/);
+  assert.match(many, /3 requests/);
   assert.equal((many.match(/vneeds-tray/g) || []).length, 1, "one tray, not three cards");
+  assert.equal((many.match(/data-v-needs-review/g) || []).length, 1, "one way in, not three");
 
   assert.equal(needsYouTray([]), "", "no tray when nothing needs the operator");
 });
@@ -426,10 +435,11 @@ test("the tray sits at the human interaction boundary", () => {
   const trayAt = out.indexOf("vneeds-tray");
   const composerAt = out.indexOf("gw-composer");
   const workAt = out.indexOf("vcard-work");
-  const outputAt = out.indexOf("vcard-output");
+  const threadAt = out.indexOf("vcard-thread");
   assert.ok(trayAt > 0 && composerAt > trayAt, "the tray is immediately above the composer");
-  assert.ok(workAt > 0 && outputAt > workAt, "current work precedes the agent output");
-  assert.ok(trayAt > outputAt, "the tray must never interrupt the work narrative");
+  // CONTEXT -> CONVERSATION -> HUMAN ACTION.
+  assert.ok(workAt > 0 && threadAt > workAt, "current work orients, then the conversation");
+  assert.ok(trayAt > threadAt, "the tray must never interrupt the conversation");
 });
 
 /* =========================================================================
