@@ -832,3 +832,37 @@ test("resolution falls back through path then name, and refuses a blank referenc
   assert.equal(resolveApprovalLane({}, lanes), null);
   assert.equal(resolveApprovalLane({ lane_id: "" }, lanes), null);
 });
+
+test("compose mode reserves the bottom safe-area inset exactly zero times", () => {
+  // THE CHECK THE GEOMETRY CANNOT MAKE.
+  //
+  // Desktop Chromium reports every safe-area inset as 0, so the browser probes
+  // measured 8 + 6 + 4 = 18px of padding under the composer and passed. On an
+  // iPhone the same three rules resolve to the home-indicator inset instead —
+  // 34 + 34 + 34 = 102px of blank, application-owned band between the composer
+  // and the keyboard. No amount of measuring on this machine can see that, so
+  // it is asserted against the stylesheet.
+  //
+  // While the keyboard is open there is no home indicator to avoid: the
+  // keyboard covers it. The compose block must therefore reserve the inset
+  // nowhere, and say so in pixels where it wants a gap.
+  const block = css.slice(css.indexOf("THE KEYBOARD IS THE BOTTOM INSET"));
+  assert.ok(block, "the compose anchor block must exist");
+  // DECLARATIONS ONLY. The comment above deliberately NAMES the three rules it
+  // replaces, so a slice that begins inside it would fail the very check it
+  // explains. Start at the @media that follows the prose.
+  const start = block.indexOf("@media");
+  const composeRules = block
+    .slice(start, block.indexOf("\n}\n", start) + 3)
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.equal(/safe-area-inset-bottom/.test(composeRules), false,
+    "compose mode must not reserve the bottom inset — the keyboard is the inset");
+  for (const sel of ["body", ".view:has(.gw.is-detail)", ".vlane-interaction"]) {
+    const re = new RegExp(`:root\\[data-gw-compose\\]\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\{[^}]*padding-bottom:0`);
+    assert.match(composeRules, re, `${sel} must not reserve a band under the composer`);
+  }
+  // body stops padding the bottom, so the app must stop subtracting it, or the
+  // app ends short of the viewport and the gap reopens from the other side.
+  assert.match(composeRules, /:root\[data-gw-compose\] \.app\{[^}]*height:calc\(var\(--gw-vvh[^}]*\)/);
+  assert.equal(/:root\[data-gw-compose\] \.app\{[^}]*safe-area-inset-bottom/.test(composeRules), false);
+});
