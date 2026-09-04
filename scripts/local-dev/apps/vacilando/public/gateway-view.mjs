@@ -5628,3 +5628,66 @@ export function railHtml(lanes, selectedId, attentionByLane, telemetryByLane, {
   }).join("");
   return `${add}${rendered}`;
 }
+
+/* ── Needs You: ONE actionable collection ─────────────────────────────────
+ *
+ * THE DEFECT THIS REPLACES. Four surfaces answered "how much needs you" from
+ * three different places. The rows came from the governed-action projection
+ * (/api/v2/governed-actions/pending), the badge came from the notification
+ * store's counts.actionable, and paintNav read
+ *
+ *     Number(G.attentionCount) || (G.home?.approvals?.length || 0)
+ *
+ * — where a genuine, loaded ZERO is falsy, so an authoritative empty state fell
+ * back to a stale snapshot count. That is why the surfaces disagreed during
+ * transitions and only converged later: they were not slow, they were reading
+ * different collections, and the one with a fallback could not tell "no items"
+ * from "no data".
+ *
+ * The view model below is the single owner. `count` is not stored alongside
+ * `items`; it IS items.length, so the two cannot drift. `loaded` is separate
+ * from `count` precisely so zero can be authoritative.
+ */
+
+/** The canonical operator-actionable statuses. One owner, mirrored from operator-input.mjs. */
+export const OPERATOR_ACTIONABLE_STATUSES = Object.freeze([
+  "awaiting_operator",
+  "awaiting_operator_approval",
+  "pending_operator",
+]);
+
+const ACTIONABLE = new Set(OPERATOR_ACTIONABLE_STATUSES);
+
+/**
+ * Build the committed Needs You revision.
+ *
+ * Every Needs You surface renders from the object this returns, at the same
+ * revision. Nothing downstream recomputes actionability.
+ */
+export function buildNeedsYouViewModel({ approvals = null, revision = 0, loaded = null } = {}) {
+  // `loaded` defaults to "did we actually receive a list", which is the only
+  // honest reading when the caller does not say. A null/absent list is NOT an
+  // empty one, and rendering it as zero is how a stale surface looks settled.
+  const isLoaded = loaded == null ? Array.isArray(approvals) : Boolean(loaded);
+  if (!isLoaded) return { revision, loaded: false, items: [], count: 0 };
+
+  const seen = new Set();
+  const items = [];
+  for (const a of Array.isArray(approvals) ? approvals : []) {
+    if (!a) continue;
+    // Terminal and non-actionable states never enter the collection, so a
+    // resolved item cannot resurrect into any surface.
+    if (!ACTIONABLE.has(String(a.status || ""))) continue;
+    // Duplicate lifecycle events for one request must not become two rows.
+    const key = String(a.request_id || a.id || "");
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    items.push(a);
+  }
+  return { revision, loaded: true, items, count: items.length };
+}
+
+/** The count every surface shows. Loaded-empty is authoritative zero. */
+export function needsYouCount(vm) {
+  return vm && vm.loaded ? vm.items.length : 0;
+}

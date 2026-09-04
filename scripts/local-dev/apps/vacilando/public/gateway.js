@@ -768,7 +768,11 @@ function resources() {
  * mobile app" and "the desktop app" stop being the same product.
  */
 function paintNav() {
-  const needs = Number(G.attentionCount) || (G.home?.approvals?.length || 0);
+  // ONE COLLECTION. This used to read
+  //   Number(G.attentionCount) || (G.home?.approvals?.length || 0)
+  // where a genuine loaded ZERO is falsy, so an authoritative empty state fell
+  // through to a stale snapshot count from a different collection entirely.
+  const needs = View.needsYouCount(G.needsYou);
   const primary = document.getElementById("primary-nav");
   if (primary) primary.innerHTML = View.renderPrimaryNav(G.page, { needsYou: needs });
   const tabs = document.getElementById("mobile-nav");
@@ -1380,20 +1384,34 @@ function startOutputPoll(laneId) {
  * operator was in when they could not find one.
  */
 async function refreshApprovals() {
+  let loaded = false;
   try {
     const r = await gwFetch("/api/v2/governed-actions/pending");
     const out = await r.json().catch(() => ({}));
-    G.approvals = Array.isArray(out.approvals) ? out.approvals : [];
-  } catch { G.approvals = G.approvals || []; }
-  // THE BADGE NEEDS AN OWNER THAT ALWAYS RUNS.
-  //
-  // The canonical counts arrived on the lane-list poll, which only runs on the
-  // lanes route — so an operator sitting anywhere else watched a stale number.
-  // Reading them here gives the attention count the same refresh cadence as the
-  // approvals it describes, and it is still the SERVER's projection: this
-  // fetches the count, it does not compute one.
+    if (Array.isArray(out.approvals)) {
+      G.approvals = out.approvals;
+      loaded = true;
+    } else {
+      G.approvals = G.approvals || [];
+    }
+  } catch {
+    // A FAILED FETCH IS NOT AN EMPTY SET. Keeping the previous items and
+    // leaving `loaded` false is what stops a transport hiccup from rendering
+    // an authoritative-looking zero across all four surfaces.
+    G.approvals = G.approvals || [];
+    loaded = Boolean(G.needsYou && G.needsYou.loaded);
+  }
+  // The notification projection is still refreshed — it drives the
+  // notification surfaces — but it is no longer a SECOND answer to "how much
+  // needs you". Fetched before the commit so nothing paints between the two.
   await refreshAttentionCounts();
+
+  // COMMIT ONCE, THEN PAINT EVERY SURFACE FROM THAT REVISION. The badge and the
+  // panel previously refreshed on different triggers and converged afterwards,
+  // which is precisely the visible intermediate state being removed.
+  commitNeedsYou(G.approvals, { loaded });
   paintApprovals();
+  paintNav();
 }
 
 async function refreshAttentionCounts() {
@@ -1410,10 +1428,31 @@ async function refreshAttentionCounts() {
 function paintApprovals() {
   const el = document.getElementById("approvals-bar");
   if (!el) return;
-  const rows = G.approvals || [];
+  // The SAME committed revision the badge and nav read. The heading count is
+  // derived from these rows inside the renderer, so heading and rows cannot
+  // disagree, and neither can disagree with the badge.
+  const rows = (G.needsYou && G.needsYou.items) || [];
   el.innerHTML = View.renderPendingApprovalsBar(rows);
   el.hidden = rows.length === 0;
   paintAttentionBadge();
+}
+
+/**
+ * Commit one Needs You revision, then paint every surface from it.
+ *
+ * ATOMIC FROM THE DIRECTOR'S POINT OF VIEW. The badge and the panel used to
+ * refresh on different triggers and converge afterwards; there was therefore a
+ * visible revision where the four surfaces disagreed. Committing before any
+ * paint means no surface can render a revision another surface has not.
+ */
+function commitNeedsYou(approvals, { loaded = true } = {}) {
+  G.needsYouRevision = (Number(G.needsYouRevision) || 0) + 1;
+  G.needsYou = View.buildNeedsYouViewModel({
+    approvals,
+    revision: G.needsYouRevision,
+    loaded,
+  });
+  return G.needsYou;
 }
 
 /**
@@ -1431,7 +1470,7 @@ function paintApprovals() {
 function paintAttentionBadge() {
   const badge = document.getElementById("nb-needs");
   if (!badge) return;
-  const n = Number(G.attentionCount) || 0;
+  const n = View.needsYouCount(G.needsYou);
   badge.textContent = String(n);
   badge.hidden = n === 0;
   badge.setAttribute("aria-hidden", n === 0 ? "true" : "false");
