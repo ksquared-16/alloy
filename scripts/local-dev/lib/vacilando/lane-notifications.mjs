@@ -25,8 +25,8 @@
  * read. External delivery is a best-effort projection of it.
  */
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 export const NOTIFICATION_STORE_SCHEMA = "vacilando.notifications.v1";
@@ -719,6 +719,49 @@ export function markAllNotificationsSeen({ nowMs = Date.now(), root = runtimeRoo
   return { ok: true, marked, unseen_count: 0 };
 }
 
+/**
+ * A TEST HELPER MUST NOT BE ABLE TO WIPE A REAL STORE.
+ *
+ * THE INCIDENT THIS CLOSES. During live acceptance this function was called
+ * with ALLOY_RUNTIME_ROOT pointed at the Gateway's own runtime root, to check
+ * one behaviour. It emptied the operator's live notification store: 500
+ * durable records, including their read state, gone in one call. The
+ * authoritative audit log survived — the record store is a bounded derived
+ * projection — but the operator's unread state did not, and nothing about the
+ * call site looked dangerous.
+ *
+ * The name said "ForTests" and that was the entire protection. A name is not a
+ * guard. This refuses unless the root is clearly disposable: an OS temp
+ * directory, or a root that explicitly opts in. Every real deployment root —
+ * ~/.local/state/alloy-dev and anything under a home directory — is refused,
+ * loudly, having changed nothing.
+ */
+function assertDisposableRoot(root, fnName) {
+  const r = String(root || "");
+  if (process.env.VACILANDO_ALLOW_DESTRUCTIVE_RESET === "1") return;
+  // Compare BOTH the raw and the symlink-resolved form of each side. On macOS
+  // tmpdir() is /var/folders/... which realpaths to /private/var/folders/...,
+  // and a path that does not exist yet cannot be resolved at all — so a
+  // one-sided comparison rejects legitimate temp roots.
+  const candidates = new Set([tmpdir(), realpathSyncSafe(tmpdir()), "/tmp", "/private/tmp"].filter(Boolean));
+  const forms = [r, realpathSyncSafe(r)].filter(Boolean);
+  for (const form of forms) {
+    for (const tmp of candidates) {
+      if (form === tmp || form.startsWith(tmp.endsWith("/") ? tmp : tmp + "/")) return;
+    }
+  }
+  throw new Error(
+    `${fnName} refused: ${r} is not a disposable test root. `
+    + "This helper empties the store; point ALLOY_RUNTIME_ROOT at a mkdtempSync() "
+    + "directory, or set VACILANDO_ALLOW_DESTRUCTIVE_RESET=1 if you truly mean it.",
+  );
+}
+
+function realpathSyncSafe(p) {
+  try { return realpathSync(String(p || "")); } catch { return String(p || ""); }
+}
+
 export function resetNotificationsForTests(root = runtimeRoot()) {
+  assertDisposableRoot(root, "resetNotificationsForTests");
   writeStore(emptyStore(), root);
 }

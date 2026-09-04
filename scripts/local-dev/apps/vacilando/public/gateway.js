@@ -79,6 +79,7 @@ const G = {
     lastTestAt: null,
     lastTestOk: null,
     pushEnabled: true,
+    categories: { needs_you: true, failures: true, completions: false },
   },
   notifyEndpoint: null,
   // ---- UI V2 ----------------------------------------------------------
@@ -234,6 +235,7 @@ function refreshNotifyFlags() {
     swControlling: typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller),
     vapidAvailable: G.notify?.vapidAvailable ?? null,
     pushEnabled: G.notify?.pushEnabled !== false,
+    categories: G.notify?.categories || { needs_you: true, failures: true, completions: false },
     lastTestAt: G.notify?.lastTestAt || null,
     lastTestOk: G.notify?.lastTestOk ?? null,
   };
@@ -448,8 +450,30 @@ async function fetchPushPreferences() {
     const j = await r.json();
     if (r.ok && j?.ok && j.preferences) {
       G.notify.pushEnabled = j.preferences.push_enabled !== false;
+      if (j.preferences.categories) G.notify.categories = j.preferences.categories;
     }
   } catch { /* keep the last known answer */ }
+}
+
+async function setPushCategory(key, enabled) {
+  if (!key) return;
+  const previous = { ...(G.notify.categories || {}) };
+  G.notify.categories = { ...previous, [key]: enabled };
+  paint();
+  try {
+    const r = await gwFetch("/api/notifications/preferences", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ categories: { [key]: enabled } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j?.ok) throw new Error(j?.error || "preference_failed");
+    if (j.preferences?.categories) G.notify.categories = j.preferences.categories;
+  } catch {
+    G.notify.categories = previous;
+    G.notify.error = "Could not change notification categories.";
+  }
+  paint();
 }
 
 async function setPhonePushEnabled(enabled) {
@@ -465,6 +489,7 @@ async function setPhonePushEnabled(enabled) {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j?.ok) throw new Error(j?.error || "preference_failed");
     G.notify.pushEnabled = j.preferences?.push_enabled !== false;
+    if (j.preferences?.categories) G.notify.categories = j.preferences.categories;
   } catch {
     // The switch must never show a setting the Gateway did not accept.
     G.notify.pushEnabled = previous;
@@ -2421,6 +2446,12 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     if (enable.disabled) return;
     await enableGatewayNotifications();
+    return;
+  }
+  const pushCat = e.target?.closest?.("[data-gw-push-category]");
+  if (pushCat) {
+    e.stopPropagation();
+    await setPushCategory(pushCat.getAttribute("data-gw-push-category"), Boolean(pushCat.checked));
     return;
   }
   const pushToggle = e.target?.closest?.("[data-gw-push-toggle]");

@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { pushEnabled } from "./notification-preferences.mjs";
+import { categoryForPush, pushAllowedForCategory, pushEnabled } from "./notification-preferences.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -523,6 +523,24 @@ export async function sendPushToSubscriptions(payload, {
     const out = { ok: true, sent: 0, failed: 0, pruned: 0, skipped: "push_disabled_by_operator" };
     recordDispatch(root, { ...out, type: payload?.type || null });
     return out;
+  }
+  // THE CATEGORY GATE, IN THE SAME PLACE AS THE MASTER SWITCH.
+  //
+  // Measured: 185 of the 252 push-eligible events in the store are
+  // completions — 73% of everything that reaches a phone. The automation
+  // everyone suspected pushes nothing at all, so "too many notifications" was
+  // almost entirely the sound of work finishing. A completion is worth knowing
+  // and rarely worth waking up for, so it is the one category that starts off.
+  //
+  // Nothing about the RECORD changes: the completion is still in Needs You,
+  // Activity and the lane. Only the phone stays quiet.
+  if (!ignorePreference) {
+    const category = categoryForPush(payload);
+    if (!pushAllowedForCategory(category, root)) {
+      const out = { ok: true, sent: 0, failed: 0, pruned: 0, skipped: "push_category_off:" + category };
+      recordDispatch(root, { ...out, type: payload?.type || null });
+      return out;
+    }
   }
   const store = readPushStore(root);
   const vapid = store.vapid?.publicKey && store.vapid?.privateKey

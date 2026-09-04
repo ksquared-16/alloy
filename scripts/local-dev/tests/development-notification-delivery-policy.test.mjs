@@ -262,6 +262,145 @@ test("the OFF copy states the guarantee, so it is safe to turn off", () => {
   return import("../apps/vacilando/public/gateway-view.mjs").then(({ renderNotificationControls }) => {
     const off = renderNotificationControls({ pushEnabled: false });
     assert.match(off, /Needs You, Activity and lane history are unchanged/);
-    assert.doesNotMatch(off, /checked/, "the switch reflects the stored setting");
+    // Target the MASTER toggle specifically. The category rows legitimately
+    // keep their own checked state while disabled — they describe what would
+    // be sent if the phone were switched back on.
+    const master = off.match(/<input type="checkbox" data-gw-push-toggle[^>]*>/)[0];
+    assert.doesNotMatch(master, /checked/, "the master switch reflects the stored setting");
+    assert.match(off, /data-gw-push-category="completions"[^>]*disabled/,
+      "category rows are disabled while nothing is being sent at all");
   });
+});
+
+// ------------------------------------------------- categories: the actual volume
+
+test("the category of a push is derived from the payload every path already sets", () => {
+  assert.equal(P.categoryForPush({ type: "governed_action.approval_required", state: "NEEDS_INPUT" }), "needs_you");
+  assert.equal(P.categoryForPush({ type: "execution_run.needs_input", state: "NEEDS_INPUT" }), "needs_you");
+  assert.equal(P.categoryForPush({ type: "execution_run.failed", state: "FAILED" }), "failures");
+  assert.equal(P.categoryForPush({ type: "execution_run.abandoned", state: "ABANDONED" }), "failures");
+  assert.equal(P.categoryForPush({ type: "execution_run.complete", state: "COMPLETE" }), "completions");
+});
+
+test("an uncategorisable push is treated as needs_you, not silently dropped", () => {
+  // The safe direction. A notification the operator did not need is a smaller
+  // failure than a blocked decision they never heard about.
+  assert.equal(P.categoryForPush({ type: "something.new" }), "needs_you");
+  assert.equal(P.categoryForPush({}), "needs_you");
+});
+
+test("completions start off, and the two costly-to-miss categories start on", () => {
+  reset();
+  const prefs = P.readNotificationPreferences();
+  assert.equal(prefs.categories.needs_you, true);
+  assert.equal(prefs.categories.failures, true);
+  assert.equal(prefs.categories.completions, false,
+    "185 of 252 push-eligible events are completions — this is the volume");
+});
+
+test("a completion is suppressed on the phone and untouched in the app", async () => {
+  reset();
+  let sends = 0;
+  const out = await Push.sendPushToSubscriptions(
+    { type: "execution_run.complete", state: "COMPLETE", lane_id: "lane_a", title: "L", body: "done", path: "/#/lanes" },
+    { send: async () => { sends += 1; return { statusCode: 201 }; } },
+  );
+  assert.equal(out.skipped, "push_category_off:completions");
+  assert.equal(sends, 0);
+  // The record is a separate concern and must be entirely unaffected.
+  N.upsertNotification({
+    subjectKey: "run:r1", runId: "r1", eventType: "complete", state: "COMPLETE",
+    attentionClass: "informational", summary: "done",
+  });
+  assert.equal(N.readNotificationStore().notifications.length, 1);
+});
+
+test("a blocking decision still reaches the phone with default preferences", async () => {
+  reset();
+  const out = await Push.sendPushToSubscriptions(
+    { type: "governed_action.approval_required", state: "NEEDS_INPUT", lane_id: "lane_a", title: "L", body: "approve", path: "/#/lanes" },
+    { send: async () => ({ statusCode: 201 }) },
+  );
+  assert.notEqual(out.skipped, "push_category_off:needs_you");
+});
+
+test("a failure still reaches the phone with default preferences", async () => {
+  reset();
+  const out = await Push.sendPushToSubscriptions(
+    { type: "execution_run.failed", state: "FAILED", lane_id: "lane_a", title: "L", body: "failed", path: "/#/lanes" },
+    { send: async () => ({ statusCode: 201 }) },
+  );
+  assert.notEqual(out.skipped, "push_category_off:failures");
+});
+
+test("turning completions back on is one preference away", async () => {
+  reset();
+  P.setNotificationCategories({ completions: true });
+  const out = await Push.sendPushToSubscriptions(
+    { type: "execution_run.complete", state: "COMPLETE", lane_id: "lane_a", title: "L", body: "done", path: "/#/lanes" },
+    { send: async () => ({ statusCode: 201 }) },
+  );
+  assert.notEqual(out.skipped, "push_category_off:completions");
+});
+
+test("the master switch still wins over any category", async () => {
+  reset();
+  P.setNotificationCategories({ needs_you: true });
+  P.setPushEnabled(false);
+  const out = await Push.sendPushToSubscriptions(
+    { type: "governed_action.approval_required", state: "NEEDS_INPUT", lane_id: "lane_a", title: "L", body: "b", path: "/#/lanes" },
+    { send: async () => ({ statusCode: 201 }) },
+  );
+  assert.equal(out.skipped, "push_disabled_by_operator");
+});
+
+test("setting categories does not clobber the master switch, or vice versa", () => {
+  reset();
+  P.setPushEnabled(false);
+  P.setNotificationCategories({ completions: true });
+  assert.equal(P.readNotificationPreferences().push_enabled, false, "switch survived a category write");
+  P.setPushEnabled(true);
+  assert.equal(P.readNotificationPreferences().categories.completions, true, "category survived a switch write");
+});
+
+test("a malformed category map degrades per-key, never wholesale", async () => {
+  reset();
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(P.notificationPreferencesPath(),
+    JSON.stringify({ push_enabled: true, categories: { needs_you: "yes", failures: false } }));
+  const c = P.readNotificationPreferences().categories;
+  assert.equal(c.needs_you, true, "a non-boolean falls back to the default, not to off");
+  assert.equal(c.failures, false, "a valid neighbour is still honoured");
+  assert.equal(c.completions, false);
+});
+
+// -------------------------------------------- a test helper is not a safe helper
+
+test("the reset helper refuses a live runtime root", async () => {
+  // THE INCIDENT. This function was called during live acceptance with
+  // ALLOY_RUNTIME_ROOT pointing at the Gateway's own root, to check one
+  // behaviour. It emptied the operator's real notification store — 500 durable
+  // records and their read state — in a single call that looked harmless. The
+  // suffix "ForTests" was the entire protection, and a name is not a guard.
+  const { homedir } = await import("node:os");
+  for (const live of [
+    "/Users/vacilando/.local/state/alloy-dev/gateway",
+    homedir(),
+    `${homedir()}/.local/state/alloy-dev`,
+  ]) {
+    assert.throws(() => N.resetNotificationsForTests(live), /not a disposable test root/, live);
+  }
+});
+
+test("the reset helper still works for real tests", async () => {
+  // The guard is worthless if it makes the legitimate path awkward — every
+  // suite in this repo depends on it.
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const disposable = mkdtempSync(join(tmpdir(), "vac-guard-ok-"));
+  assert.doesNotThrow(() => N.resetNotificationsForTests(disposable));
+  // A temp path that does not exist yet must also pass: it cannot be resolved,
+  // and refusing it would break first-run setup.
+  assert.doesNotThrow(() => N.resetNotificationsForTests(join(tmpdir(), "vac-guard-unborn")));
 });

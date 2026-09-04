@@ -195,3 +195,48 @@ test("the provider is asked, and the operator is not", () => {
     assert.doesNotMatch(block, /upsertNotification|pushRunOutcome|sendPush/);
   });
 });
+
+// ------------------------------------------- a finish claim is about the future
+
+test("a blocked or terminal lane does not keep promising a finish", async () => {
+  // OBSERVED on the installed runtime with a real reported estimate: a lane
+  // that reached NEEDS_INPUT still rendered "Needs you · ~80% · ~19m left".
+  // It was not nineteen minutes from finishing — it was stopped, waiting for a
+  // person, and would have said nineteen minutes for as long as nobody
+  // answered. FAILED said "~19m left" for work that had stopped entirely, and
+  // COMPLETE promised a finish it had already reached.
+  //
+  // The percentage describes the PAST and survives. The finish time is a
+  // promise about the FUTURE, which only a moving run can make.
+  const V = await import("../apps/vacilando/public/gateway-view.mjs");
+  const est = {
+    percent: 80, confidence: "medium", source: "provider_estimate",
+    updated_at: at(0),
+    estimated_finish_at: at(19), estimate_updated_at: at(0), estimate_confidence: "medium",
+  };
+  const lineFor = (state) => {
+    const lane = { lane_id: "l", name: "probe", execution_run: { state, progress_estimate: est } };
+    const work = V.canonicalLaneWorkState(lane, { nowMs: T0 });
+    return M.operatorStatusLine(M.laneOperatorStatus(lane, work, { nowMs: T0 }), "Claude");
+  };
+  for (const state of ["EXECUTING", "VALIDATING", "RECOVERING"]) {
+    assert.match(lineFor(state), /~19m left/, `${state} is moving and may estimate`);
+  }
+  for (const state of ["NEEDS_INPUT", "WAITING_RESOURCE", "FAILED", "COMPLETE", "ABANDONED"]) {
+    assert.doesNotMatch(lineFor(state), /left/, `${state} must not promise a finish`);
+    assert.match(lineFor(state), /~80%/, `${state} still reports how far it got`);
+  }
+});
+
+test("the states that may claim a finish are the states that may be solicited", () => {
+  // Same underlying question — is this run still moving? — so the two sets must
+  // not be able to drift apart.
+  for (const state of ["EXECUTING", "VALIDATING", "RECOVERING"]) {
+    assert.equal(M.finishClaimIsMeaningful({ state }), true, state);
+    assert.equal(R.progressSolicitationDue({ state }, { nowMs: T0 }), true, state);
+  }
+  for (const state of ["NEEDS_INPUT", "FAILED", "COMPLETE", "ABANDONED"]) {
+    assert.equal(M.finishClaimIsMeaningful({ state }), false, state);
+    assert.equal(R.progressSolicitationDue({ state }, { nowMs: T0 }), false, state);
+  }
+});

@@ -2297,6 +2297,13 @@ export function notificationUiState({
 export function renderNotificationControls(state = {}) {
   const st = notificationUiState(state);
   const pushOn = state.pushEnabled !== false;
+  const cats = state.categories || { needs_you: true, failures: true, completions: false };
+  const catRow = (key, label, hint) => `<label class="gw-notify-cat">
+      <input type="checkbox" data-gw-push-category="${key}" ${cats[key] !== false ? "checked" : ""}
+        ${pushOn ? "" : "disabled"} aria-label="${esc(label)}">
+      <span class="gw-notify-cat-l">${esc(label)}</span>
+      <span class="gw-notify-cat-h">${esc(hint)}</span>
+    </label>`;
   const toggle = `<div class="gw-notify-switch" data-gw-notify-switch>
     <label class="gw-switch">
       <input type="checkbox" data-gw-push-toggle ${pushOn ? "checked" : ""}
@@ -2307,6 +2314,20 @@ export function renderNotificationControls(state = {}) {
     <p class="gw-switch-copy">${pushOn
       ? "Approvals and finished work reach your device."
       : "Nothing is sent to your device. Needs You, Activity and lane history are unchanged."}</p>
+    ${/*
+      CATEGORIES, BECAUSE THE VOLUME IS COMPLETIONS.
+      Measured on 500 records: 185 of the 252 push-eligible events are
+      completions — 73%. Automatic governed work pushes nothing at all, so the
+      only lever that changes what the phone actually does is this one. Each
+      row says what it costs to switch off, because "Failures" is not a thing
+      anyone should turn off without knowing.
+    */ ""}
+    <div class="gw-notify-cats" ${pushOn ? "" : "aria-disabled=\"true\""}>
+      <p class="gw-notify-cats-h">Notify me about</p>
+      ${catRow("needs_you", "Needs You", "a decision is blocking work")}
+      ${catRow("failures", "Failures", "a run stopped and needs recovering")}
+      ${catRow("completions", "Completions", "work finished — still shown in the app")}
+    </div>
   </div>`;
   let action = "";
   if (st.action === "enable") {
