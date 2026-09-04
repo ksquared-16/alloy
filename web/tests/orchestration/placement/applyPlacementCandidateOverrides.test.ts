@@ -58,7 +58,13 @@ describe("applyPlacementCandidateOverrides", () => {
         expect(out.applied[0]?.effective_bucket_key).toBe("tier_staff_community");
     });
 
-    it("pin inserts manual precedence before bucket order", () => {
+    it("pin leaves the sort tuple alone and reports the ordinal instead", () => {
+        /*
+         * This assertion used to be `sort_tuple[1] === 2` — the ordinal spliced in ahead of the
+         * bucket order. That shape is what made an ordinal comparable to `bucket.priority_order`
+         * and collapsed every ordinal below it to one answer. A pin is a POSITION in the natural
+         * order now, applied by `applyCohortLocalManualPositions`; the tuple stays natural.
+         */
         const policy = policyOk(["preschool", 100, 1_700_000_000_000, "pc-1"]);
         const out = applyPlacementCandidateOverrides({
             policy,
@@ -73,9 +79,8 @@ describe("applyPlacementCandidateOverrides", () => {
                 },
             ],
         });
-        expect(out.effective.sort_tuple[0]).toBe("preschool");
-        expect(out.effective.sort_tuple[1]).toBe(2);
-        expect(out.effective.sort_tuple[2]).toBe(100);
+        expect(out.effective.sort_tuple).toEqual(["preschool", 100, 1_700_000_000_000, "pc-1"]);
+        expect(out.applied[0]?.pin_ordinal).toBe(2);
     });
 
     it("unpinned rows use large manual precedence constant in merge helper contract", () => {

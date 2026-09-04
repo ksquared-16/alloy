@@ -22,7 +22,15 @@ function row(id: string, cohort: string, overrideKinds: string[], ordinal = 1) {
             child_display_name: id,
             program_room_cohort_key: cohort,
             program_room_group_label: "Infant",
-            placement_priority_v2: { active_override_kinds: overrideKinds, sort_tuple: [cohort, ordinal, 0] },
+            placement_priority_v2: {
+                active_override_kinds: overrideKinds,
+                // The ordinal now travels as its own projected field. It is NOT a sort_tuple slot —
+                // see `applyCohortLocalManualPositions` for why a position cannot be a sort key.
+                ...(overrideKinds.includes("pin") ? { manual_pin_ordinal: ordinal } : {}),
+                // `ordinal` doubles as a generic priority component here so fixtures can have
+                // DISTINCT tuples; it is no longer the pin slot it once was.
+                sort_tuple: [cohort, ordinal, 0],
+            },
         },
     } as Record<string, unknown>;
 }

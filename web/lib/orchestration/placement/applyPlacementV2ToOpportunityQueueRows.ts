@@ -43,6 +43,13 @@ export type PlacementPriorityV2CandidatePreview = {
     active_override_kinds: string[];
     policy_bucket?: string;
     active_overrides?: Array<{ id: string; override_kind: string; reason: string }>;
+    /**
+     * The operator's requested position within this candidate's own cohort, when a pin is in force.
+     * Absent when the candidate has no manual position. Consumed by
+     * `applyCohortLocalManualPositions` — the ordinal is deliberately NOT part of `sort_tuple`,
+     * because it is a position in the natural order rather than a component of it.
+     */
+    manual_pin_ordinal?: number;
     /** Card 6 — informational forecast hints (no ordering impact by default). */
     forecast_hints?: string[];
     forecast_facts_present?: string[];
@@ -284,6 +291,10 @@ export function applyPlacementV2ToOpportunityQueueRows(params: {
                     override_kind: o.override_kind,
                     reason: o.reason,
                 })),
+                ...(() => {
+                    const ord = result.value.override_applied.find((a) => a.pin_ordinal != null)?.pin_ordinal;
+                    return ord != null ? { manual_pin_ordinal: ord } : {};
+                })(),
                 ...(forecastPreview.forecast_hints.length
                     ? {
                           forecast_hints: forecastPreview.forecast_hints,
