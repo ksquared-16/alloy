@@ -241,6 +241,23 @@ export const GATES = Object.freeze({
   // Converging onto what is already installed is a no-op, and a no-op that
   // restarts the Gateway is not free. Drift must be positively observed.
   toolkit_drift_observed: (ev) => (ev.toolkit_drift == null ? null : ev.toolkit_drift === true),
+  // ── Cross-lane dispatch ──────────────────────────────────────────────────
+  // "One lane may instruct another" would be impersonation. What these gates
+  // bound is far smaller: an authorized capacity mission placing ONE read-only
+  // task into an idle, eligible lane. Every one is measured from lane state or
+  // from the instruction text, never asserted by the requester.
+  dispatch_purpose_allowlisted: (ev) =>
+    (ev.dispatch_purpose_allowlisted == null ? null : ev.dispatch_purpose_allowlisted === true),
+  dispatch_mission_authorized: (ev) =>
+    (ev.dispatch_mission_authorized == null ? null : ev.dispatch_mission_authorized === true),
+  dispatch_target_eligible: (ev) =>
+    (ev.dispatch_target_eligible == null ? null : ev.dispatch_target_eligible === true),
+  dispatch_instruction_read_only: (ev) =>
+    (ev.dispatch_instruction_read_only == null ? null : ev.dispatch_instruction_read_only === true),
+  dispatch_target_not_busy: (ev) =>
+    (ev.dispatch_target_not_busy == null ? null : ev.dispatch_target_not_busy === true),
+  dispatch_bound_to_measurement: (ev) =>
+    (ev.dispatch_bound_to_measurement == null ? null : ev.dispatch_bound_to_measurement === true),
 });
 
 /**
@@ -430,6 +447,31 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     gates: Object.freeze([
       "install_source_is_promoted_staging", "install_artifact_provenance_valid",
       "toolkit_drift_observed", "previous_toolkit_retained", "gateway_restart_bounded",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
+    policy_id: "bounded_capacity_cohort_dispatch_v1",
+    label: "Bounded capacity cohort dispatch — one read-only task into one idle lane",
+    action_key: "lane.dispatch_measurement_instruction",
+    environments: Object.freeze(["development_certification"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // WHY A CROSS-LANE ACTION IS DELEGABLE AT ALL. The refused version of this
+    // is "let a lane instruct other lanes", which is remote control and should
+    // stay refused. What is delegated is one sentence: an authorized capacity
+    // mission may place ONE bounded read-only analysis task into a lane that is
+    // idle and eligible. It cannot displace running work (the target must be
+    // idle), cannot change anything (the instruction is scanned for mutation
+    // verbs and must carry the read-only banner), cannot be reused for another
+    // purpose (allowlisted), and cannot be issued by another mission.
+    //
+    // Reversibility: the target receives a queued certification run. Nothing is
+    // committed, pushed or configured, so undoing it is cancelling a run.
+    gates: Object.freeze([
+      "dispatch_purpose_allowlisted", "dispatch_mission_authorized",
+      "dispatch_target_eligible", "dispatch_target_not_busy",
+      "dispatch_instruction_read_only", "dispatch_bound_to_measurement",
       "no_governance_exception", "no_operator_hold",
     ]),
   }),

@@ -201,7 +201,21 @@ export function measureProviderCeilingGates(inputs = {}, { observe = null } = {}
   // under pressure is how a capacity experiment becomes an outage.
   const load1 = Array.isArray(h.load) ? Number(h.load[0]) : null;
   const cores = asInt(h.cores);
-  ev.host_headroom_ok = (h.pressure_readable === true && h.gateway_http === 200
+  // GATEWAY LIVENESS IS NOT HOST HEADROOM, and requiring it here was a
+  // self-deadlock. provider-observe measures gateway_http by curling the
+  // Gateway's own /api/health. This action executes INSIDE the Gateway and
+  // shells out synchronously, which blocks its event loop — so the Gateway
+  // cannot answer its own probe, gateway_http comes back null, and the gate
+  // could never pass when measured from the one place that matters. Every
+  // ceiling move escalated with "host_headroom_measured was not measured".
+  //
+  // It was also the wrong question. Headroom is about whether the HOST can
+  // absorb more providers: memory pressure and load against cores. Whether the
+  // Gateway answers HTTP is a liveness check of the measurer, and if the
+  // Gateway is executing this action its liveness is already established.
+  // gateway_http stays in the evidence as an observation, just not as a gate.
+  ev.gateway_http_observed = h.gateway_http ?? null;
+  ev.host_headroom_ok = (h.pressure_readable === true
     && Number.isFinite(load1) && cores != null)
     ? (Number(h.pressure_level) <= 1 && load1 < cores)
     : null;

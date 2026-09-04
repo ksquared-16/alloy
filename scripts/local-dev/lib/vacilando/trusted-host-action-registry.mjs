@@ -22,6 +22,7 @@ import {
   validateProviderCeilingInputs, CEILING_MIN, CEILING_MAX, MANAGED_KEY as PROVIDER_CEILING_KEY,
 } from "./trusted-host-provider-ceiling.mjs";
 import { validateInstallToolkitInputs, CONVERGENCE_REF } from "./toolkit-convergence.mjs";
+import { validateLaneDispatchInputs, DISPATCH_PURPOSES } from "./lane-dispatch.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -38,6 +39,7 @@ export const ACTION_TYPES = Object.freeze({
   VACILANDO_RETIRE_WORKTREE: "vacilando.retire_worktree",
   CAPACITY_SET_PROVIDER_CEILING: "capacity.set_provider_ceiling",
   HOST_INSTALL_TOOLKIT: "host.install_toolkit",
+  LANE_DISPATCH_MEASUREMENT_INSTRUCTION: "lane.dispatch_measurement_instruction",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -511,6 +513,40 @@ function defineHostInstallToolkit() {
   };
 }
 
+/**
+ * Place ONE bounded read-only certification task into ONE idle lane.
+ *
+ * The purpose is an allowlisted enum rather than free text, for the same reason
+ * the ceiling key is not an input: as an open field this becomes "instruct any
+ * lane to do anything", which is remote control wearing a narrow name.
+ */
+function defineLaneDispatchMeasurementInstruction() {
+  return {
+    actionType: ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION,
+    version: 1,
+    title: `Dispatch a bounded ${DISPATCH_PURPOSES[0]} task to one lane`,
+    requiredCapability: "trusted_host.lane.dispatch_measurement_instruction",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["purpose", "target_lane_id", "measurement_id", "source_mission_id", "instruction"],
+    },
+    outputSchema: {
+      target_lane_id: "string", run_id: "string",
+      measurement_id: "string", mutated_target_state: "boolean",
+    },
+    evidenceSchema: [
+      "dispatch_purpose_allowlisted", "dispatch_mission_authorized",
+      "dispatch_target_eligible", "dispatch_target_not_busy",
+      "dispatch_instruction_read_only", "dispatch_bound_to_measurement", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateLaneDispatchInputs(inputs);
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -628,6 +664,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
   [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
   [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
+  [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, defineLaneDispatchMeasurementInstruction()],
 ]);
 
 export function listRegisteredActions() {

@@ -91,7 +91,13 @@ test("an unreadable observation measures nothing and therefore escalates", () =>
 
 test("LIVE — this host measures its own ceiling gates", () => {
   const ev = P.measureProviderCeilingGates(INPUTS);
-  assert.equal(ev.live_ceiling, 4, "the certified live ceiling is 4");
+  // Not pinned to a literal: this experiment MOVES the ceiling, and a live
+  // assertion that hard-codes today's value fails the moment the thing under
+  // test works. What must hold is that the value is readable and inside the
+  // authorised window.
+  assert.ok(Number.isInteger(ev.live_ceiling), "the live ceiling must be readable");
+  assert.ok(ev.live_ceiling >= 4 && ev.live_ceiling <= 8,
+    `live ceiling ${ev.live_ceiling} is outside the authorised window`);
   assert.equal(typeof ev.host_headroom_ok, "boolean");
 });
 
@@ -130,4 +136,23 @@ test("validated inputs survive into the executor without becoming NaN", () => {
   assert.deepEqual(seen.slice(0, 8), [
     "capacity", "set-provider-ceiling", "--expected", "4", "--to", "5", "--rollback-to", "4",
   ]);
+});
+
+test("gateway liveness is not a headroom gate — it was a self-deadlock", () => {
+  // provider-observe measures gateway_http by curling the Gateway's own health
+  // endpoint. This action runs inside the Gateway and shells out synchronously,
+  // blocking its event loop, so the Gateway cannot answer its own probe. Making
+  // that a required gate meant the gate could never pass where it mattered.
+  const ev = P.measureProviderCeilingGates(INPUTS, {
+    observe: observation({ host: { gateway_http: null } }),
+  });
+  assert.equal(ev.host_headroom_ok, true, "an unanswerable self-probe must not block headroom");
+  assert.equal(ev.gateway_http_observed, null, "it is retained as an observation");
+});
+
+test("real host pressure still blocks, with gateway_http absent", () => {
+  const ev = P.measureProviderCeilingGates(INPUTS, {
+    observe: observation({ host: { gateway_http: null, pressure_level: 3 } }),
+  });
+  assert.equal(ev.host_headroom_ok, false, "pressure is the thing headroom actually measures");
 });
