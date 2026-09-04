@@ -21,6 +21,7 @@ import {
 import {
   validateProviderCeilingInputs, CEILING_MIN, CEILING_MAX, MANAGED_KEY as PROVIDER_CEILING_KEY,
 } from "./trusted-host-provider-ceiling.mjs";
+import { validateInstallToolkitInputs, CONVERGENCE_REF } from "./toolkit-convergence.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -36,6 +37,7 @@ export const ACTION_TYPES = Object.freeze({
   VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
   VACILANDO_RETIRE_WORKTREE: "vacilando.retire_worktree",
   CAPACITY_SET_PROVIDER_CEILING: "capacity.set_provider_ceiling",
+  HOST_INSTALL_TOOLKIT: "host.install_toolkit",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -471,6 +473,44 @@ function defineCapacitySetProviderCeiling() {
   };
 }
 
+/**
+ * Converge the installed toolkit onto promoted staging.
+ *
+ * The ref is NOT an input. As a parameter this becomes "install any commit
+ * onto this host", which is a far larger capability wearing a narrow name —
+ * the same trap the provider ceiling avoided by refusing to accept its key.
+ *
+ * Not retried. A compare-and-set that failed because staging moved must be
+ * re-measured by the caller; re-attempting against a prediction already known
+ * to be stale is how a host ends up running a commit nobody chose.
+ */
+function defineHostInstallToolkit() {
+  return {
+    actionType: ACTION_TYPES.HOST_INSTALL_TOOLKIT,
+    version: 1,
+    title: `Install the promoted ${CONVERGENCE_REF} toolkit`,
+    requiredCapability: "trusted_host.host.install_toolkit",
+    riskClass: "privileged_write",
+    timeoutMs: 300_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["expected_staging_sha", "reason"],
+    },
+    outputSchema: {
+      installed_sha: "string", previous_sha: "string",
+      already_converged: "boolean", readback_verified: "boolean",
+    },
+    evidenceSchema: [
+      "installed_toolkit_sha", "promoted_staging_sha", "toolkit_drift",
+      "artifact_provenance_valid", "previous_toolkit_retained",
+      "gateway_restart_bounded", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateInstallToolkitInputs(inputs);
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -587,6 +627,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
   [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
+  [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
 ]);
 
 export function listRegisteredActions() {

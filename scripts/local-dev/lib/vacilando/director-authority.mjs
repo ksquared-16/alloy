@@ -223,6 +223,24 @@ export const GATES = Object.freeze({
   no_live_process_affected: (ev) => (ev.live_process_affecting == null ? null : ev.live_process_affecting === 0),
   metadata_store_known: (ev) => (ev.metadata_store_known == null ? null : ev.metadata_store_known === true),
   certification_suite_passed: (ev) => (ev.certification_suite_passed == null ? null : ev.certification_suite_passed === true),
+  // ── Toolkit convergence ──────────────────────────────────────────────────
+  // Installing the commit that is ALREADY promoted staging carries no content
+  // decision — that was taken at merge by the certified merge gates. What is
+  // left is mechanical and entirely measurable, which is what makes it routine
+  // rather than an approval. Every gate below is measured from the host and
+  // the canonical repository, never claimed by the requester.
+  install_source_is_promoted_staging: (ev) =>
+    (ev.source_is_promoted_staging == null ? null : ev.source_is_promoted_staging === true),
+  install_artifact_provenance_valid: (ev) =>
+    (ev.artifact_provenance_valid == null ? null : ev.artifact_provenance_valid === true),
+  // Rollback is only real if the tree being replaced still exists afterwards.
+  previous_toolkit_retained: (ev) =>
+    (ev.previous_toolkit_retained == null ? null : ev.previous_toolkit_retained === true),
+  gateway_restart_bounded: (ev) =>
+    (ev.gateway_restart_bounded == null ? null : ev.gateway_restart_bounded === true),
+  // Converging onto what is already installed is a no-op, and a no-op that
+  // restarts the Gateway is not free. Drift must be positively observed.
+  toolkit_drift_observed: (ev) => (ev.toolkit_drift == null ? null : ev.toolkit_drift === true),
 });
 
 /**
@@ -383,6 +401,35 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
       "no_untracked_unreproducible", "not_protected_worktree_branch",
       "not_self_retirement", "retirement_fingerprint_bound",
       "no_implicit_branch_deletion",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
+    policy_id: "routine_toolkit_convergence_v1",
+    label: "Routine toolkit convergence — install promoted staging",
+    action_key: "host.install_toolkit",
+    // Never staging: this changes what THIS HOST runs. There is no deployed
+    // environment in which installing a local toolkit means anything, and
+    // naming one would invite the action to be claimed under it.
+    environments: Object.freeze(["development_certification"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // WHY THIS IS ROUTINE. A lane sat blocked indefinitely because promoted
+    // staging held a capability the installed toolkit did not, and the only
+    // path from promoted to installed went through a human. The content
+    // decision was already taken at merge; what a human added here was a
+    // measurement — is this really staging, can we go back — which is exactly
+    // the click the attention model exists to remove.
+    //
+    // Reversibility is the whole basis and it is structural, not a promise:
+    // the layout keeps one immutable tree per commit and `current` is a
+    // symlink, so rollback is flipping it back. previous_toolkit_retained
+    // proves the target still exists rather than assuming the layout was not
+    // pruned. A failed install never replaces a healthy current, because the
+    // flip happens after the tree is built, not before.
+    gates: Object.freeze([
+      "install_source_is_promoted_staging", "install_artifact_provenance_valid",
+      "toolkit_drift_observed", "previous_toolkit_retained", "gateway_restart_bounded",
       "no_governance_exception", "no_operator_hold",
     ]),
   }),

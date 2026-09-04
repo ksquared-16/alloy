@@ -270,6 +270,26 @@ export const ACTION_CLASS_INVENTORY = Object.freeze([
     bounds: null,
   }),
 
+  // ── Host / toolkit ───────────────────────────────────────────────────────
+  Object.freeze({
+    class_id: "host.install_toolkit", surface: "host", action_key: "host.install_toolkit", tier: A,
+    executes_via: "trusted host (canonical alloy-toolkit install)",
+    why: "Installing the commit that is already promoted staging carries no content decision — that was taken at merge. What is left is mechanical and measurable, and a human clicking yes to it supplies a measurement rather than a judgement. Reversibility is structural: one immutable tree per commit, and `current` is a symlink.",
+    bounds: null,
+  }),
+  Object.freeze({
+    class_id: "host.install_arbitrary_ref", surface: "host", action_key: null, tier: C,
+    executes_via: "operator",
+    why: "Installing a commit that is not promoted staging is choosing what the host runs, which is the decision the merge gates exist to make. The governed action refuses a ref input for exactly this reason.",
+    bounds: null,
+  }),
+  Object.freeze({
+    class_id: "host.gateway_reconcile", surface: "host", action_key: null, tier: B,
+    executes_via: "gateway",
+    why: "Restarting the Gateway onto a toolkit that was just verified restores intent rather than changing it.",
+    bounds: "Bounded restart budget per convergence; health verified after. An exhausted budget is STUCK, not another restart.",
+  }),
+
   // ── Data and credentials ─────────────────────────────────────────────────
   Object.freeze({
     class_id: "database.read_census", surface: "data", action_key: "database.read_census", tier: B,
