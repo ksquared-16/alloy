@@ -52,6 +52,7 @@ import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.m
 import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
+import { executeToolkitInstall } from "./toolkit-convergence.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
 import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
@@ -651,6 +652,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
     return executeSetProviderCeilingTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
+    return executeInstallToolkitTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -1654,10 +1658,18 @@ export function executeSetProviderCeilingTrustedHostAction(action, { actor = "di
   const i = action.inputs || {};
   let out;
   try {
+    // THE NORMALIZED NAMES COME FIRST, because they are what is actually
+    // stored. validateProviderCeilingInputs rewrites the request into
+    // {key, expected, requested, rollbackTo, ...} and THAT is what lands in
+    // action.inputs — so reading only expected_ceiling/expectedCeiling yielded
+    // undefined, Number(undefined) is NaN, and every ceiling move invoked
+    // `--expected NaN --to NaN`, hit the CLI's usage() and died with no stdout.
+    // The caller saw `command_failed` and no number ever moved. The raw names
+    // are kept as fallbacks so a request that skipped normalization still works.
     out = executeProviderCeiling({
-      expected: Number(i.expected_ceiling ?? i.expectedCeiling),
-      requested: Number(i.requested_ceiling ?? i.requestedCeiling),
-      rollbackTo: Number(i.rollback_ceiling ?? i.rollbackCeiling),
+      expected: Number(i.expected ?? i.expected_ceiling ?? i.expectedCeiling),
+      requested: Number(i.requested ?? i.requested_ceiling ?? i.requestedCeiling),
+      rollbackTo: Number(i.rollbackTo ?? i.rollback_ceiling ?? i.rollbackCeiling),
       reason: i.reason,
       experimentId: i.experiment_id ?? i.experimentId ?? null,
     }, { vacPath: i.vacPath || null });
@@ -1694,6 +1706,79 @@ export function fulfillSetProviderCeilingForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * Converge the installed toolkit onto promoted staging.
+ *
+ * The restart is NOT done here. The Gateway is the process executing this
+ * action; restarting it from inside itself kills the write that records what
+ * just happened, and the completion line for an install is the one piece of
+ * audit nobody can reconstruct afterwards. The result therefore reports
+ * `gateway_restart_required` and leaves reconciliation to a separate bounded
+ * step, keeping installed and running as the two distinct facts they are.
+ */
+export function executeInstallToolkitTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    out = executeToolkitInstall({
+      expectedStagingSha: i.expected_staging_sha ?? i.expectedStagingSha ?? null,
+    });
+  } catch (e) {
+    out = { ok: false, error: "install_threw", detail: String(e?.message || "").slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = out.error;
+    action.completed_at = iso(nowMs);
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: out.error, detail: out.detail || null, action };
+  }
+
+  action.state = "completed";
+  action.executionState = "completed";
+  action.result = {
+    installed_sha: out.installed_sha,
+    previous_sha: out.previous_sha,
+    already_converged: out.already_converged,
+    readback_verified: out.readback_verified,
+    rollback_target: out.rollback_target,
+    gateway_restart_required: out.gateway_restart_required,
+    credentialsExposed: false,
+  };
+  action.completed_at = iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action };
+}
+
+export function fulfillInstallToolkitForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.HOST_INSTALL_TOOLKIT, inputs, nowMs,
     authorizationContext: exactContext,
   });
   if (!req.ok) return req;
