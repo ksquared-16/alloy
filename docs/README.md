@@ -153,6 +153,7 @@ Then: **`platform/foundation/system-overview.md`**
 | Design & operational doctrine | `platform/governance/design-and-operational-doctrine.md` |
 | Documentation rules | `platform/governance/documentation-governance.md` |
 | Agent repo boundaries | `platform/governance/agent-repo-boundaries.md` |
+| **Director attention model** | `platform/governance/director-attention-model.md` |
 | **Managed sprint operations** | `platform/governance/managed-sprint-operations.md` |
 | Engineering Health (disk/Docker/caches) | `platform/governance/engineering-health.md` |
 | Workspace orchestration | `platform/governance/workspace-orchestration.md` |

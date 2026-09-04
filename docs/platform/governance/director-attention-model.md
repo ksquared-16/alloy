@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-04
+supersedes: []
+---
+
 # Director Attention Model
 
 **Status:** canonical governance doctrine
