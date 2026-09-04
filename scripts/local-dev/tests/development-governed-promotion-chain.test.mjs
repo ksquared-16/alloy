@@ -48,7 +48,7 @@ const { mintGrant, getGrant, resetGovernedGrantsForTests } =
   await import("../lib/vacilando/governed-repository-authority.mjs");
 const { createDurableLane, resetDevelopmentLanesForTests } =
   await import("../lib/vacilando/development-lane.mjs");
-const { resetExecutionRunsForTests } = await import("../lib/vacilando/execution-run.mjs");
+const { createQueuedRun, resetExecutionRunsForTests } = await import("../lib/vacilando/execution-run.mjs");
 const { repositoryStorePath } = await import("../lib/vacilando/repository-registry.mjs");
 
 const REPO = "ksquared-16/alloy";
@@ -496,11 +496,26 @@ function laneWithRepo() {
   return made.lane?.lane_id || made.lane_id;
 }
 
+/**
+ * A REAL run, not a made-up id.
+ *
+ * This fixture used to name `erun_promo0000001` and never create it, so these
+ * cases were exercising the split-brain hole rather than the scenario they
+ * describe: governed work was authorized against a run the canonical owner had
+ * never heard of. Governed requests now VERIFY the run they name, so the
+ * fixture has to supply one that exists — which is also the situation a
+ * missionless lane is actually in.
+ */
+function runFor(laneId) {
+  const made = createQueuedRun({ laneId, instruction: "promotion chain fixture", root: ROOT });
+  return made.run?.run_id || made.run_id || null;
+}
+
 function pushRequest(laneId, overrides = {}) {
   return {
     action_key: "repository.push",
     lane_id: laneId,
-    run_id: "erun_promo0000001",
+    run_id: runFor(laneId),
     purpose: "Publish the reviewed branch",
     reason_worker_cannot_execute: "The lane cannot hold GitHub credentials.",
     requesting_worker: laneId,
