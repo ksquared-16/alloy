@@ -88,57 +88,93 @@ Pushed summaries: 117 "Work complete and ready for review.", 29
 ## MEASURED after-policy
 
 Not a projection. The 500 records were replayed through the shipped
-`deliveryClassFor` / `isRoutineProgress` implementation:
+`deliveryClassFor` / `isRoutineProgress` / `categoryForPush` implementation.
+
+### Step 1 — the semantic policy
 
 | | BEFORE | AFTER |
 |---|---|---|
 | Records written to the store | 500 | **255** |
-| Push attempted / eligible (phone ON) | 222 | **255** |
-| Push delivered (phone OFF) | 222 | **0** |
+| Push-*eligible* by policy | 222 | **252** |
 
-| Delivery class | Records | Opens a record | Push-eligible |
+On its own this is a **re-targeting, not a reduction**: eligible push rises, and
+the rise is exactly the 33 approval requests that previously reached nobody.
+Reported honestly as such rather than presented as a win.
+
+### Step 2 — what the 252 eligible events actually are
+
+This is the breakdown that changed the design. Categorising them:
+
+| category | records | push-eligible | share of push |
 |---|---|---|---|
-| `routine_automatic` | 245 | 0 | 0 |
-| `important_terminal` | 222 | 222 | 222 |
-| `human_action_required` | 33 | 33 | 33 |
+| **completion** | 185 | **185** | **73%** |
+| Needs You / approval required | 33 | 33 | 13% |
+| failure requiring recovery | 21 | 21 | 8% |
+| abandoned (Vacilando closed it) | 13 | 13 | 5% |
+| routine automatic | 248 | 0 | 0% |
 
-(Event totals drift by one or two against the census table above: the store is
-live and kept collecting real events between the audit and the replay.)
+**Completions are 73% of everything that reaches a phone.** The automation
+everybody suspected pushes nothing at all. "Too many notifications" was, almost
+entirely, the sound of work finishing.
 
-### Stated honestly: this is a re-targeting, not a reduction
+### Step 3 — category preferences, and the real reduction
 
-Push-eligible volume goes **up**, 222 → 255. That increase is exactly the 33
-approval requests that previously reached nobody. It would be easy to present
-this pass as a 70% cut by also silencing routine completions, and that would be
-a worse product: a completion is the end of work the operator personally asked
-for, and they are entitled to hear about it.
+| | count |
+|---|---|
+| Originally delivered | 222 |
+| Delivered under default preferences (Needs You + Failures) | **67** |
+| **Reduction in phone pushes** | **70%** |
+| Delivered with the phone switched off | **0** |
 
-What actually improves:
+A completion is worth knowing and rarely worth waking up for: nothing is
+blocked, and it will still be done in the morning. It remains in Needs You,
+Activity and the lane — only the phone stays quiet. One checkbox brings it back.
 
-- **Notification-feed volume falls 49%** — 245 of 500 records (`worker_resumed`
-  232, `governed_action_complete` 13) stop being written at all and remain
-  visible as lane activity and in the audit log.
-- **The inversion is corrected.** 33 → 33 of the actionable class are now
-  eligible, from 0.
-- **The operator gets an actual off switch**, which is the only thing in this
-  pass that reduces delivered push to zero, and it is theirs to choose.
+The two categories that stay on are the ones where *not* telling someone has a
+cost: a decision blocking work, and a failure needing recovery.
 
 ### What the phone switch does and does not do
 
 | | Phone ON | Phone OFF |
 |---|---|---|
-| Push to device | yes | **no** |
+| Push to device | per category | **no** |
 | Needs You | unchanged | **unchanged** |
 | Activity feed | unchanged | **unchanged** |
 | Lane state / unseen counts | unchanged | **unchanged** |
 | Audit log | unchanged | **unchanged** |
 
-Nothing is queued while it is off. The switch gates delivery inside
-`sendPushToSubscriptions` — the one function every push passes through — and the
-durable record is always written before delivery is attempted, so the guarantee
-holds by construction rather than by remembering to honour it at each call site.
+Nothing is queued while it is off. The switch and the category gate both live
+inside `sendPushToSubscriptions` — the one function every push passes through —
+and the durable record is always written *before* delivery is attempted, so the
+guarantee holds by construction rather than by discipline.
 
 ## DEFERRED
 
-Active-client presence detection ("only notify my phone when I am away") is not
-built here. The feature delivered in this pass is the manual ON/OFF preference.
+Active-client presence detection ("only notify my phone when I am away").
+
+## INCIDENT — live notification store destroyed during this acceptance
+
+While verifying the `worker_resumed` suppression, `resetNotificationsForTests()`
+was called with `ALLOY_RUNTIME_ROOT` pointed at the Gateway's own runtime root.
+It emptied the operator's live store: **500 durable records and their read
+state**, in one call that looked harmless at the call site.
+
+**What survived.** The authoritative history was untouched —
+`notifications/events.jsonl` (2,116 governed events since 2026-08-19),
+`audit.jsonl`, `governed-actions/audit.jsonl`, and the execution-run store. The
+notification store is a *bounded derived projection* (capped at 500, newest
+first), not a system of record.
+
+**What was lost.** The derived record list and, materially, the operator's
+read/seen state. At the moment of loss the store held 1 actionable and 2 unseen
+items; there were 0 governed actions still pending an operator, so nothing
+genuinely awaiting a decision was dropped.
+
+**Not reconstructed, deliberately.** Run-lifecycle records could be re-derived
+from the execution-run store, but their read and delivery state could not — that
+would have meant fabricating notification history, which is worse than the gap.
+
+**Closed by code, not by resolve.** `resetNotificationsForTests()` now refuses
+any root that is not demonstrably disposable (an OS temp directory, or an
+explicit `VACILANDO_ALLOW_DESTRUCTIVE_RESET=1`). The suffix "ForTests" was the
+only protection it had, and a name is not a guard.

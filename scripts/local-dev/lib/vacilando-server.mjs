@@ -1238,6 +1238,37 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "attachment_remove_failed", detail: String(e && e.message || e) });
         }
       }
+      // THE OPERATOR'S PHONE SWITCH — the write half.
+      //
+      // It sits inside the POST block deliberately. An earlier revision put the
+      // whole route in the GET section, below
+      // `if (req.method !== "GET") return 405`, so READING the preference
+      // worked and every attempt to CHANGE it answered method_not_allowed: the
+      // switch rendered, moved, and silently snapped back. The unit tests
+      // exercised the module, not the routing, so they passed throughout.
+      //
+      // It is its own endpoint rather than a field on the push subscription:
+      // unsubscribing a device is a different act from asking not to be
+      // interrupted, and conflating them means "notifications off" silently
+      // uninstalls the ability to turn them back on from that device.
+      if (path === "/api/notifications/preferences") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const value = body.value || {};
+        const hasSwitch = typeof value.push_enabled === "boolean";
+        const hasCats = value.categories && typeof value.categories === "object";
+        if (!hasSwitch && !hasCats) {
+          return sendJson(res, 400, { ok: false, error: "push_enabled_or_categories_required" });
+        }
+        try {
+          const prefs = await import("./vacilando/notification-preferences.mjs");
+          if (hasSwitch) prefs.setPushEnabled(value.push_enabled);
+          if (hasCats) prefs.setNotificationCategories(value.categories);
+          return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "preferences_failed", detail: String(e && e.message || e) });
+        }
+      }
       if (path === "/api/notifications/seen") {
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
@@ -2097,28 +2128,11 @@ export function createVacilandoServer() {
         }
       }
     }
-    // THE OPERATOR'S PHONE SWITCH.
-    //
-    // GET reports it; POST sets it. It is deliberately its own endpoint rather
-    // than a field on the push-subscription record: unsubscribing a device is
-    // a different act from asking not to be interrupted, and conflating them
-    // means "notifications off" silently uninstalls the ability to turn them
-    // back on from that device.
+    // The read half of the phone switch; the write half is in the POST block.
     if (path === "/api/notifications/preferences") {
       try {
         const prefs = await import("./vacilando/notification-preferences.mjs");
-        if (req.method === "GET") {
-          return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
-        }
-        if (req.method === "POST") {
-          const body = await readJsonBody(req);
-          if (typeof body?.push_enabled !== "boolean") {
-            return sendJson(res, 400, { ok: false, error: "push_enabled_required" });
-          }
-          prefs.setPushEnabled(body.push_enabled);
-          return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
-        }
-        return sendJson(res, 405, { ok: false, error: "method_not_allowed" });
+        return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "preferences_failed", detail: String(e && e.message || e) });
       }

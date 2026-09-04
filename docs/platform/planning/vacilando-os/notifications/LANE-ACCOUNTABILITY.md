@@ -33,11 +33,29 @@ which is what keeps a resolved approval from becoming a stale Needs You item.
 17 tests.
 
 **PROJECTED.** Replaying the same 500 records through the shipped code:
-records written 500 → 255, push-eligible 222 → 255, push with the phone off
-222 → 0. This is a **re-targeting, not a reduction** — eligible push rises, and
-the rise is exactly the 33 notifications that previously reached nobody.
+records written 500 → 255, push-*eligible* 222 → 252. On its own that is a
+**re-targeting, not a reduction**.
+
+**OBSERVED.** Breaking the 252 down by category is what changed the design:
+**185 of them (73%) are completions**. The automation everybody suspected pushes
+nothing at all. So the phone noise was, almost entirely, work finishing.
+
+**IMPLEMENTED.** Category preferences — Needs You, Failures, Completions — with
+completions defaulting off. Delivered push falls **222 → 67, a 70% reduction**,
+while the 33 approval requests that previously reached nobody now arrive. One
+checkbox restores completions.
 
 **DEFERRED.** Presence detection ("only notify when I am away").
+
+**INCIDENT.** During acceptance I called `resetNotificationsForTests()` against
+the live runtime root and destroyed the operator's 500-record store and its read
+state. Authoritative history (2,116 events in `notifications/events.jsonl`, the
+audit logs, the execution-run store) was untouched — the store is a bounded
+derived projection. Nothing awaiting a decision was lost (0 governed actions were
+pending). I did not reconstruct it: read state cannot be recovered, and
+fabricating notification history is worse than the gap. The helper now refuses
+any non-disposable root. Full account in
+[`NOTIFICATION-AUDIT.md`](NOTIFICATION-AUDIT.md).
 
 ## 2. The phone switch
 
@@ -72,6 +90,15 @@ Rendered through `operatorStatusLine()`, the single projection all six surfaces
 already share: `Working · ~62% · ~20m left · Claude`. A stale or absent claim
 drops out of the line rather than rendering an empty slot.
 
+**A finish claim is also gated on the run still moving.** Observed on the
+installed runtime with a real estimate: a lane that reached `NEEDS_INPUT` still
+rendered `Needs you · ~80% · ~19m left`. It was not nineteen minutes from
+finishing — it was stopped, waiting for a person, and would have said nineteen
+minutes for as long as nobody answered. `FAILED` promised a finish for work that
+had stopped; `COMPLETE` promised one it had already reached. The percentage
+describes the past and survives; the finish time is a promise about the future,
+which only a moving run can make.
+
 **IMPLEMENTED.** Solicitation: `progressSolicitationDue()` marks an active run
 whose estimate is missing or stale, and the request rides the orientation text
 the provider already receives. **The provider is asked; the operator is not** —
@@ -91,6 +118,14 @@ tests. Verified rather than reimplemented; Home vs Lanes is unchanged.
 
 ## Test position
 
-788 → 807 tests. 18 failures throughout, the same 18 present on
-`origin/staging` before this work: pinned by name and compared per run, so the
-claim is "no new failures", not "the suite is green".
+788 → 830 tests. The same 18 failures present on `origin/staging` before this
+work, pinned by name and compared per run, so the claim is "no new failures",
+not "the suite is green".
+
+One further pre-existing failure surfaced during acceptance,
+`development-mission-delegation-integration`. It is environment-sensitive, not
+caused by this work: it fails identically on the toolkit built from staging
+**before** this merge (`42be8411d545`) and after (`ef9b58032a78`), while having
+passed in the worktree earlier the same day. A required deterministic gate
+measures `false` where it previously measured unmeasured. Recorded, not
+attributed to this change.

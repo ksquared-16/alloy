@@ -36,7 +36,31 @@ export const NOTIFICATION_PREFS_SCHEMA = "vacilando.notification-preferences.v1"
  */
 export const DEFAULT_PREFERENCES = Object.freeze({
   push_enabled: true,
+  categories: Object.freeze({
+    needs_you: true,
+    failures: true,
+    completions: false,
+  }),
 });
+
+/**
+ * THE CATEGORIES, AND WHY COMPLETIONS START OFF.
+ *
+ * Measured on the 500-record store: of the 252 events the policy makes
+ * push-eligible, 185 are completions — 73%. The automation everyone suspected
+ * pushes nothing at all. So "too many phone notifications" was, all along,
+ * almost entirely the sound of work finishing.
+ *
+ * A completion is worth knowing and rarely worth waking up for: the work is
+ * done, nothing is blocked, and it will still be done in the morning. It stays
+ * in Needs You, Activity and the lane exactly as before — only the phone stops
+ * buzzing for it. The two categories that remain on are the ones where NOT
+ * telling someone has a cost: a decision that is blocking work, and a failure
+ * that needs recovering.
+ *
+ * An operator who wants completions back gets them with one checkbox.
+ */
+export const NOTIFICATION_CATEGORIES = Object.freeze(["needs_you", "failures", "completions"]);
 
 function runtimeRoot() {
   return process.env.ALLOY_RUNTIME_ROOT?.trim()
@@ -69,11 +93,49 @@ export function readNotificationPreferences(root = runtimeRoot()) {
       push_enabled: typeof raw.push_enabled === "boolean"
         ? raw.push_enabled
         : DEFAULT_PREFERENCES.push_enabled,
+      categories: normalizeCategories(raw.categories),
       updated_at: raw.updated_at || null,
     };
   } catch {
-    return { ...DEFAULT_PREFERENCES };
+    return { ...DEFAULT_PREFERENCES, categories: { ...DEFAULT_PREFERENCES.categories } };
   }
+}
+
+/** An unknown or malformed category map falls back per-key, never wholesale. */
+function normalizeCategories(raw) {
+  const out = { ...DEFAULT_PREFERENCES.categories };
+  if (raw && typeof raw === "object") {
+    for (const key of NOTIFICATION_CATEGORIES) {
+      if (typeof raw[key] === "boolean") out[key] = raw[key];
+    }
+  }
+  return out;
+}
+
+/**
+ * Which preference governs this push?
+ *
+ * Derived from the payload TYPE, which every push path already sets, so a new
+ * path cannot accidentally arrive uncategorised and bypass the preference.
+ * Anything unrecognised is treated as needs_you — the safe direction, because
+ * the failure mode is a notification the operator did not need rather than a
+ * blocked decision they never heard about.
+ */
+export function categoryForPush(payload = {}) {
+  const type = String(payload.type || "").toLowerCase();
+  const state = String(payload.state || "").toUpperCase();
+  if (type.startsWith("governed_action.")) return "needs_you";
+  if (state === "NEEDS_INPUT") return "needs_you";
+  if (state === "FAILED" || state === "ABANDONED") return "failures";
+  if (state === "COMPLETE") return "completions";
+  return "needs_you";
+}
+
+export function pushAllowedForCategory(category, root = runtimeRoot()) {
+  const prefs = readNotificationPreferences(root);
+  if (prefs.push_enabled === false) return false;
+  const cats = prefs.categories || DEFAULT_PREFERENCES.categories;
+  return cats[category] !== false;
 }
 
 export function pushEnabled(root = runtimeRoot()) {
@@ -81,9 +143,28 @@ export function pushEnabled(root = runtimeRoot()) {
 }
 
 export function setPushEnabled(enabled, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const current = readNotificationPreferences(root);
   const next = {
     schema_version: NOTIFICATION_PREFS_SCHEMA,
     push_enabled: Boolean(enabled),
+    categories: current.categories || { ...DEFAULT_PREFERENCES.categories },
+    updated_at: new Date(nowMs).toISOString(),
+  };
+  atomicWrite(notificationPreferencesPath(root), next);
+  return next;
+}
+
+/** Set one or more category preferences, leaving the others as they were. */
+export function setNotificationCategories(patch = {}, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const current = readNotificationPreferences(root);
+  const categories = { ...(current.categories || DEFAULT_PREFERENCES.categories) };
+  for (const key of NOTIFICATION_CATEGORIES) {
+    if (typeof patch[key] === "boolean") categories[key] = patch[key];
+  }
+  const next = {
+    schema_version: NOTIFICATION_PREFS_SCHEMA,
+    push_enabled: current.push_enabled !== false,
+    categories,
     updated_at: new Date(nowMs).toISOString(),
   };
   atomicWrite(notificationPreferencesPath(root), next);
@@ -95,6 +176,7 @@ export function publicNotificationPreferences(root = runtimeRoot()) {
   const prefs = readNotificationPreferences(root);
   return {
     push_enabled: prefs.push_enabled !== false,
+    categories: prefs.categories || { ...DEFAULT_PREFERENCES.categories },
     updated_at: prefs.updated_at || null,
   };
 }

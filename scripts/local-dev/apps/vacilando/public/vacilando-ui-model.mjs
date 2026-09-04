@@ -1413,9 +1413,33 @@ export function operatorState(work, lane = null) {
  * `detail` carries the runtime phrase for Details and diagnostics, so nothing
  * is lost — it is simply no longer the headline.
  */
+/**
+ * A FINISH CLAIM IS ONLY MEANINGFUL WHILE THE CLOCK IS RUNNING.
+ *
+ * Observed on the installed runtime with a real reported estimate: a lane that
+ * reached NEEDS_INPUT still rendered "Needs you · ~80% · ~19m left". It is not
+ * nineteen minutes from finishing — it is stopped, waiting for a person, and
+ * the estimate will be nineteen minutes old the whole time nobody answers.
+ * FAILED read "Failed · ~19m left", and a COMPLETE run promised a finish it
+ * had already reached.
+ *
+ * The percentage is a statement about the PAST ("this much is done") and
+ * survives; the finish time is a promise about the FUTURE, and a blocked or
+ * terminal run is not in a position to make one. These are the states where
+ * work is actually advancing — the same set that may be solicited for an
+ * estimate, because they are the same question: is this run still moving?
+ */
+const FINISH_CLAIM_STATES = Object.freeze(["EXECUTING", "VALIDATING", "RECOVERING"]);
+
+export function finishClaimIsMeaningful(run) {
+  return FINISH_CLAIM_STATES.includes(String(run?.state || "").toUpperCase());
+}
+
 export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
   const state = operatorState(work, lane);
   const progress = laneProgress(lane?.execution_run, { nowMs });
+  const finishClaimable = Boolean(progress.finish?.available)
+    && finishClaimIsMeaningful(lane?.execution_run);
   return {
     state,
     label: OPERATOR_STATE_LABEL[state],
@@ -1429,9 +1453,9 @@ export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
     // The finish claim travels with the same identity line and under the same
     // rule: only while FRESH. A lane the operator has not heard from in hours
     // must not still be promising to be done in twenty minutes.
-    finish_label: progress.finish?.available ? progress.finish.label : null,
-    finish_at: progress.finish?.available ? progress.finish.finish_at : null,
-    finish_confidence: progress.finish?.available ? progress.finish.confidence : null,
+    finish_label: finishClaimable ? progress.finish.label : null,
+    finish_at: finishClaimable ? progress.finish.finish_at : null,
+    finish_confidence: finishClaimable ? progress.finish.confidence : null,
     runtime_detail: work?.label || null,
     runtime_hint: work?.hint || null,
   };

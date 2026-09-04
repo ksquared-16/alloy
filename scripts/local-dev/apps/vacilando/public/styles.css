@@ -3712,3 +3712,14 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
 .gw-switch input:focus-visible + .gw-switch-track{outline:2px solid var(--accent, #3b82f6);outline-offset:2px;}
 .gw-switch-label{font-weight:600;}
 .gw-switch-copy{margin:0;font-size:12px;color:var(--muted);}
+
+/* Category rows sit under the master switch and grey out with it — a category
+   choice is meaningless while nothing is being sent at all. */
+.gw-notify-cats{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);}
+.gw-notify-cats[aria-disabled="true"]{opacity:.45;}
+.gw-notify-cats-h{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--muted);}
+.gw-notify-cat{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:center;
+  min-height:36px;cursor:pointer;}
+.gw-notify-cat input{grid-row:1 / span 2;width:16px;height:16px;}
+.gw-notify-cat-l{font-weight:500;}
+.gw-notify-cat-h{grid-column:2;font-size:11px;color:var(--muted);}
