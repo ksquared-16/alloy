@@ -328,7 +328,7 @@ async function durableFingerprint(
      */
     const items = await supabase
         .from("form_packet_session_items")
-        .select("id, status, sequence_index, form_submission_id")
+        .select("id, status, sequence_index, form_submission_id, packet_item_id")
         .eq("org_id", orgId)
         .in("packet_session_id", rows.length ? rows.map((r) => String(r.id)) : ["00000000-0000-0000-0000-000000000000"]);
     const itemRows = ((items.data ?? []) as Row[])
@@ -352,6 +352,21 @@ async function durableFingerprint(
         : { data: [] as Row[] };
     const statusById = new Map(((subs.data ?? []) as Row[]).map((r) => [String(r.id), String(r.status)]));
 
+    /*
+     * THE REALIZED FORM IDENTITY, via the same hop the resolver makes.
+     *
+     * The session item names a packet_item_id; the FORM identity lives on form_packet_items. That is
+     * the id the projection indexes realized items by, so it is the id that must equal the
+     * requirement's ref.form_definition_id for the requirement to resolve at all.
+     */
+    const packetItemIds = itemRows.map((r) => r.packet_item_id).filter(Boolean) as string[];
+    const packetItems = packetItemIds.length
+        ? await supabase.from("form_packet_items").select("id, form_definition_id").in("id", packetItemIds)
+        : { data: [] as Row[] };
+    const formByPacketItem = new Map(
+        ((packetItems.data ?? []) as Row[]).map((r) => [String(r.id), String(r.form_definition_id ?? "")]),
+    );
+
     return {
         packetSessions: rows.length,
         sessionIds: rows.map((r) => String(r.id).slice(0, 8)).sort(),
@@ -360,6 +375,9 @@ async function durableFingerprint(
         items: itemRows.map((r) => ({
             item: String(r.id).slice(0, 8),
             itemStatus: String(r.status),
+            // The half of the identity comparison the packet owns.
+            realizedFormDefinitionId:
+                String(formByPacketItem.get(String(r.packet_item_id ?? "")) ?? "").slice(0, 8) || null,
             // The authority. null here means the requirement has no evidence to resolve against.
             formSubmissionId: r.form_submission_id ? String(r.form_submission_id).slice(0, 8) : null,
             submissionStatus: r.form_submission_id
@@ -1366,6 +1384,15 @@ const requirementCompletion: Phase = {
                         id: r.requirement_id,
                         status: (r as unknown as { status?: string }).status ?? null,
                         disposition: r.disposition,
+                        /*
+                         * THE REQUIRED FORM IDENTITY. For a form requirement, artifactIdFor() returns
+                         * ref.form_definition_id verbatim, so the artifact id IS the id the projection
+                         * looks up in realizedByFormDefinition. Printing it beside the realized id in
+                         * the fingerprint puts both halves of the mismatch on one screen.
+                         */
+                        requiredFormDefinitionId: String(
+                            (r as unknown as { artifact?: { id?: string } }).artifact?.id ?? "",
+                        ).slice(0, 8) || null,
                         reason: String((r as unknown as { reason?: string }).reason ?? "").slice(0, 200) || null,
                     })),
                     cacheExperiment: {
