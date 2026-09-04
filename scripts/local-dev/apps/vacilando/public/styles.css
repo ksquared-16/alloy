@@ -3075,7 +3075,13 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
 .vmsg-provider .vmsg-who{color:var(--run-ink);}
 .vmsg-provider .vmsg-body{background:var(--card);border:1px solid var(--line);
   border-radius:var(--radius-sm);padding:10px 12px;}
-.vmsg-provider .gw-msg-assistant{border:0;background:transparent;box-shadow:none;padding:0;margin:0;}
+/* THE PROVIDER MESSAGE IS AS TALL AS WHAT THE PROVIDER SAID.
+   `.gw-msg-assistant` carries `min-height: min(58vh, 22rem)` on mobile — a
+   floor that made sense when it was a standing pane that must not collapse.
+   Inside a thread it is dead space: MEASURED on the live lane, a 206px report
+   occupied 352px, leaving 146px of blank between the provider's last line and
+   the next entry. In a conversation, a short message is short. */
+.vmsg-provider .gw-msg-assistant{border:0;background:transparent;box-shadow:none;padding:0;margin:0;min-height:0;}
 
 /* SYSTEM — one quiet line. Never a card. A completed governed action is
    history, and history does not outrank the work in front of you. */
