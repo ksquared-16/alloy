@@ -27,10 +27,15 @@ import {
 import {
   buildActivityViewModel,
   buildCurrentWork,
+  buildLaneResources,
   buildHomeViewModel,
   buildLaneThread,
   buildSystemViewModel,
+  governedActionLabel,
+  laneOperatorStatus,
   laneProgress,
+  laneReturnTarget,
+  operatorStatusLine,
   readPlaceholderMode,
   writePlaceholderMode,
 } from "./vacilando-ui-model.mjs";
@@ -1562,19 +1567,6 @@ export function laneAwaitingOperatorApproval(lane) {
  * approval announced as "approve gar_4dc7b4d8bcd0e0" is one the operator cannot
  * match to anything on screen, which is the whole defect.
  */
-export function governedActionLabel(ga) {
-  if (!ga) return "Governed action";
-  if (ga.operator_label) return ga.operator_label;
-  if (ga.operator_card?.label) return ga.operator_card.label;
-  const i = ga.inputs || {};
-  const pr = i.pullRequestNumber ?? i.pull_request_number;
-  if (ga.action_key === "repository.merge_pull_request" && pr) return `Merge PR #${pr} to ${ga.target || "staging"}`;
-  const branch = i.branch || i.headBranch || i.head_branch;
-  if (ga.action_key === "repository.push" && branch) return `Push ${branch}`;
-  if (ga.action_key === "promotion.open_pr" && branch) return `Open PR ${branch} → ${i.base || ga.target || "staging"}`;
-  if (ga.title) return ga.title;
-  return ga.action_key ? String(ga.action_key).replace(/[._]/g, " ") : "Governed action";
-}
 
 /**
  * EVERY pending approval, at the top of every route.
@@ -4918,9 +4910,8 @@ export function renderCandidateList(candidates, loading) {
  */
 export function laneIdentityMeta(lane, telemetry, { nowMs = Date.now() } = {}) {
   const bits = [];
-  const who = laneProviderLabel(lane);
   const model = telemetry?.agent?.model || telemetry?.model || null;
-  bits.push(model ? `${who} · ${model}` : who);
+  if (model) bits.push(model);
   const slot = Number(lane?.slot ?? lane?.binding?.slot);
   if (Number.isInteger(slot)) bits.push(`Slot ${slot}`);
   const startedMs = lane?.execution_run?.started_at ? Date.parse(lane.execution_run.started_at) : NaN;
@@ -4928,7 +4919,15 @@ export function laneIdentityMeta(lane, telemetry, { nowMs = Date.now() } = {}) {
     const clock = new Date(startedMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     bits.push(`Started ${clock}`);
   }
+  // The provider is no longer repeated here: it is part of the status line.
   return bits.filter(Boolean).join(" · ");
+}
+
+/** Every back affordance on a lane, rendered from the recorded origin. */
+export function renderLaneBack(returnTo, { withLabel = false } = {}) {
+  const t = laneReturnTarget(returnTo);
+  return `<a class="gw-back vlane-back" data-gw-back data-v-return="${esc(t.page)}" href="${esc(t.hash)}"
+    aria-label="Back to ${esc(t.label)}">\u2190${withLabel ? ` ${esc(t.label)}` : ""}</a>`;
 }
 
 export function renderLaneTabs(laneId, active = "overview") {
@@ -4946,17 +4945,25 @@ export function renderLaneHeaderV2(lane, {
   tab = "overview",
   nowMs = Date.now(),
   asideOpen = false,
+  returnTo = null,
 } = {}) {
   const laneId = lane?.lane_id || selectedId;
   const label = lane?.label || laneId;
   const st = work || canonicalLaneWorkState(lane, { nowMs });
+  // ONE RESOLVER. Home, Lanes, this header and every badge read the same
+  // projection; nothing re-interprets execution state on its own.
+  const status = laneOperatorStatus(lane, st, { nowMs });
   const meta = laneIdentityMeta(lane, telemetry, { nowMs });
   const canStop = Boolean(lane?.execution_run && !["COMPLETE", "FAILED", "ABANDONED"].includes(lane.execution_run.state));
   return `<header class="vlane-head" data-gw-chat-head>
     <div class="vlane-head-top">
-      <a class="gw-back vlane-back" data-gw-back href="#/lanes" aria-label="Back to lanes">←</a>
+      ${renderLaneBack(returnTo)}
+      ${/*
+        THE BREADCRUMB NAMES WHERE YOU CAME FROM, because that is what "up"
+        means to the person who walked here. It used to say "Lanes /" always.
+      */ ""}
       <nav class="vcrumb vlane-crumb" aria-label="Breadcrumb">
-        <a href="#/lanes">Lanes</a><span class="vcrumb-sep" aria-hidden="true">/</span><span aria-current="page">${esc(label)}</span>
+        <a href="${esc(laneReturnTarget(returnTo).hash)}">${esc(laneReturnTarget(returnTo).label)}</a><span class="vcrumb-sep" aria-hidden="true">/</span><span aria-current="page">${esc(label)}</span>
       </nav>
     </div>
     ${/*
@@ -4970,10 +4977,28 @@ export function renderLaneHeaderV2(lane, {
     <div class="vlane-head-row">
       <div class="vlane-head-id">
         <h1 class="vlane-title">${esc(label)}</h1>
-        <div class="vlane-head-state" data-gw-stage-status>${stateDot(st.label, { tone: st.tone, live: st.live })}<span class="vlane-head-who"> · ${esc(laneProviderLabel(lane))}</span></div>
+        ${/*
+          WHAT LANE? WHAT STATE? ROUGHLY HOW FAR? WHO IS RUNNING IT? — answered
+          on one line, in the lane's identity, without a card of its own.
+          Progress rides here only while it is FRESH; the resolver omits a stale
+          or absent estimate rather than leaving a number attached to a lane
+          nobody has heard from in hours.
+        */ ""}
+        <div class="vlane-head-state" data-gw-stage-status>${stateDot(
+          operatorStatusLine(status, laneProviderLabel(lane)),
+          { tone: status.tone, live: status.live },
+        )}</div>
         ${meta ? `<p class="vlane-head-meta">${esc(meta)}</p>` : ""}
       </div>
       <div class="vlane-head-acts">
+        ${/*
+          THE INTERRUPTION CENTRE FOLLOWS THE OPERATOR ONTO THE LANE.
+          On a phone the top bar is hidden on a lane to give the conversation
+          the screen, which would strand the one global control. It is mounted
+          here as well and painted from the same model; CSS shows exactly one of
+          the two at any width, so there is never a second count to disagree.
+        */ ""}
+        <div class="vneeds-global vneeds-global-lane"></div>
         ${canStop ? `<button type="button" class="btn sm vlane-stop" data-gw-cancel-run data-lane-id="${esc(laneId)}">Stop lane</button>` : ""}
         <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
           aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
@@ -5047,8 +5072,16 @@ export function laneNeedsYouItems(lane) {
       detail: ga.reason_worker_cannot_execute || null,
     });
   }
+  // ONE BLOCKER IS ONE REQUEST.
+  //
+  // A run sits in NEEDS_INPUT *because* its governed action is awaiting the
+  // operator — they are the same interruption seen from the run and from the
+  // request. Counting both made the lane tray say "2 requests" for the single
+  // decision the global interruption centre counted once, which is precisely
+  // the cross-surface disagreement the one-resolver rule exists to prevent.
+  // buildNeedsYou already dedupes this; so does the tray.
   const run = lane?.execution_run;
-  if (run?.state === "NEEDS_INPUT") {
+  if (run?.state === "NEEDS_INPUT" && !items.length) {
     items.push({
       kind: "needs_input",
       lane_id: lane.lane_id,
@@ -5073,6 +5106,7 @@ export function laneNeedsYouItems(lane) {
  * fails or when it is asked for.
  */
 export function renderLaneInspector(lane, {
+  placeholders = false,
   selectedId = null,
   telemetry = null,
   resources = null,
@@ -5145,6 +5179,26 @@ export function renderLaneInspector(lane, {
 
   const browser = renderBrowserAuthRecovery(lane);
 
+  // RESOURCES — three questions, three honest answers. See buildLaneResources:
+  // memory is measured over the lane's own process tree; peak memory has a
+  // source nothing projects here; per-lane CPU is not sampled at all, and a
+  // lifetime average dressed as "now" would be worse than its absence.
+  const res = buildLaneResources(lane, { placeholders });
+  const resources_block = res.available || res.cpu.placeholder || res.peak_memory.placeholder
+    ? `<div class="vrows">
+        ${metricRow(res.memory, { label: "Memory" })}
+        ${metricRow(res.peak_memory, { label: "Peak memory" })}
+        ${metricRow(res.cpu, { label: "CPU" })}
+        ${metricRow(res.process_count, { label: "Processes" })}
+      </div>
+      ${res.available && !res.complete
+        ? `<p class="vnote">Some processes in this lane's tree exited between the two reads; the total is partial.</p>`
+        : ""}
+      ${res.available
+        ? `<p class="vnote">Attributed by process ancestry from this lane's provider seat${res.sampled_at ? ` · sampled ${esc(ago(Date.parse(res.sampled_at), nowMs) || "now")} ago` : ""}.</p>`
+        : `<p class="vnote">No live provider seat for this lane, so nothing is attributed. An unmeasured lane is unknown, not idle.</p>`}`
+    : "";
+
   const diagnostics = [
     renderClaudeRunStatus(lane, telemetry),
     renderOutputChrome(output, { lane, lastInstruction: lane?.last_instruction }),
@@ -5193,6 +5247,7 @@ export function renderLaneInspector(lane, {
         <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(laneId)}">Rename lane</button>
         ${renderLaneFolderPicker(lane, folders, selectedId)}
         ${renderLaneRepository(lane, repositories)}`)}
+      ${section("resources", "Resources", resources_block)}
       ${section("environment", "Environment", environment)}
       ${section("git", "Git", git)}
       ${section("browser", "Browser session", browser, { open: Boolean(browser) })}
@@ -5274,6 +5329,7 @@ export function renderGatewayShell({
   latestResponse = null,
   newUpdate = false,
   asideOpen = false,
+  returnTo = null,
   // INERT IS NOT THE SAME AS CLOSED. On desktop the details pane is a permanent
   // grid column — no rule hides it, and the fold preference changes nothing you
   // can see. Marking it inert whenever it was "closed" therefore left a pane
@@ -5382,7 +5438,7 @@ export function renderGatewayShell({
     return `<div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="${esc(selectedId)}" data-gw-loading>
       ${list}
       <section class="gw-main">
-        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+        ${renderLaneBack(returnTo, { withLabel: true })}
         <h1>${esc(selectedId)}</h1>
         <p class="gw-lead">Loading lane…</p>
       </section>
@@ -5396,7 +5452,7 @@ export function renderGatewayShell({
       : "This Development Lane could not be resolved.";
     return `<div class="gw is-detail" data-gw data-gw-mode="detail">${list}
       <section class="gw-main">
-        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+        ${renderLaneBack(returnTo, { withLabel: true })}
         <h1>${title}</h1>
         <p class="gw-lead">${lead}</p>
       </section>
@@ -5424,6 +5480,7 @@ export function renderGatewayShell({
 
   // ONE inspector. Everything that is not the work itself lives here, folded.
   const detailsPanel = renderLaneInspector(lane, {
+    placeholders,
     selectedId, telemetry, resources, output, outputText, nowMs,
     asideInert, work, cap, developmentResources, lanes, executionCapacity,
     folders, repositories, notify, pending, bodyText, statusOpen,
@@ -5450,14 +5507,20 @@ export function renderGatewayShell({
     nowMs,
     providerLabel: laneProviderLabel(lane),
   });
+  /*
+    CURRENT WORK IS GONE FROM OVERVIEW, AND NOTHING WAS LOST.
+
+    It printed the operator's own latest instruction as a titled card, directly
+    above the thread that prints the same instruction as their message. Two
+    renderings of one sentence, and the duplicate was the one occupying the top
+    of every phone screen.
+
+    The thread is the authoritative presentation: YOU said this, the PROVIDER
+    replied, the SYSTEM did these things. Progress moved into the lane's own
+    status line, where it answers "roughly how far" without a card. The run's
+    mission metadata is untouched and remains in Details and Runs.
+  */
   const overview = `
-        ${currentWorkCard(currentWork, {
-          state: currentWork.active ? work.label : null,
-          tone: currentWork.active ? work.tone : "",
-          live: currentWork.active ? work.live : false,
-          expanded: Boolean(userMessageExpanded),
-          cancel: renderCancelControl(lane?.execution_run, { pending: cancelPending }),
-        })}
         <section class="vcard vcard-thread">
           <div class="vcard-head">
             <div class="vcard-headings"><h2 class="vcard-title">Conversation</h2></div>
@@ -5492,7 +5555,7 @@ export function renderGatewayShell({
     ${list}
     <section class="gw-main">
       <div class="gw-lane-stage" data-gw-stage>
-        ${renderLaneHeaderV2(lane, { selectedId, work, telemetry, tab: activeTab, nowMs, asideOpen })}
+        ${renderLaneHeaderV2(lane, { selectedId, work, telemetry, tab: activeTab, nowMs, asideOpen, returnTo })}
         <div class="vlane-body" data-gw-lane-body data-gw-thread>
           ${tabBody}
         </div>
@@ -5569,7 +5632,11 @@ export function railLaneRow(lane, selectedId, attentionByLane, telemetryByLane) 
   // beyond the canonical state, and it earns its place by the same test
   // everything else failed: it changes what the operator can DO.
   const readOnly = cursorObservationOnly(lane) ? " · read-only" : "";
-  const attn = `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}${esc(queue)}${esc(readOnly)}</span>`;
+  // ONE OPERATOR STATE. The rail used to print the runtime phrase — including
+  // "Needs input · suspended", which told the operator that a provider process
+  // is not resident. That is scheduler machinery; it is in Details.
+  const opStatus = laneOperatorStatus(lane, canonicalLaneWorkState(lane));
+  const attn = `<span class="gw-lane-attn${opStatus.tone ? ` is-${opStatus.tone}` : ""}">${esc(st.mark)} ${esc(operatorStatusLine(opStatus))}${esc(queue)}${esc(readOnly)}</span>`;
   // NAVIGATION CARRIES NAME, STATE, RECENCY AND A GENUINE BLOCKER COUNT.
   //
   // It used to carry the provider and the Claude context percentage too. Neither

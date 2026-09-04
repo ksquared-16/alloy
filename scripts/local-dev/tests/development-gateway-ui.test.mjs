@@ -57,6 +57,8 @@ import {
   presenceLine,
   railHtml,
   laneIdentityMeta,
+  laneOperatorStatus,
+  operatorStatusLine,
   renderConnectFlow,
   renderCreateLaneFlow,
   renderCopyControl,
@@ -816,7 +818,11 @@ await test("lane detail shows current work; needs input, complete, and failed ar
     listReady: true,
     nowMs: now,
   });
-  assert.match(html, /Current work/);
+  // THE INSTRUCTION IS THE WORK CONTEXT, and it is shown once — as the
+  // operator's own message in the thread. The Current Work card printed it a
+  // second time as a titled card above that thread, and the duplicate owned the
+  // top of every phone screen. Progress moved into the lane's status line.
+  assert.equal(html.includes("vcard-work"), false, "no standalone Current Work card");
   assert.match(html, /Complete the remaining Communications ingress/);
   assert.match(html, /Working/);
   // Elapsed time is still on screen. V2 moved it out of the Current Work card
@@ -827,9 +833,13 @@ await test("lane detail shows current work; needs input, complete, and failed ar
   // NO INVENTED PROGRESS. This run reported no estimate, so the lane says so in
   // words and draws NO BAR — an empty track reads as "0% done", which is a
   // claim nobody made.
-  assert.match(html, /Progress estimate unavailable/);
+  // PROGRESS MOVED INTO THE LANE'S STATUS LINE, and an absent estimate is now
+  // OMITTED rather than announced: "Progress estimate unavailable" was copy the
+  // Current Work card carried, and there is no card. The invariant is
+  // unchanged and is what is asserted — nothing invents a number, and there is
+  // still no ETA.
   assert.equal(/vprogress-fill/.test(html), false, "no bar without an estimate");
-  assert.equal(/~\d+% complete/.test(html), false, "no percentage may be invented");
+  assert.equal(/~\d+%/.test(html), false, "no percentage may be invented");
   assert.equal(/\bETA\b/.test(html), false, "there is no estimator, so there is no ETA");
   assert.match(html, /data-gw-aside/);
   assert.match(html, /data-gw-stage-status/);
@@ -1503,9 +1513,12 @@ await test("idle lane shows No active work / Ready for instruction", () => {
   assert.match(html, /Current work/);
   assert.match(html, /No active work/);
   assert.match(html, /Ready for instruction/);
+  // renderCurrentWork still answers for the surfaces that ask it (Details), but
+  // the lane Overview no longer renders a Current Work card at all — an idle
+  // lane simply shows its conversation and its composer.
   const shell = renderGatewayShell({ lanes: [identity], selectedId: identity.lane_id, lane: identity, outputText: "hi" });
-  assert.match(shell, /No active work/);
-  assert.match(shell, /Ready for instruction/);
+  assert.equal(shell.includes("vcard-work"), false);
+  assert.match(shell, /gw-composer/);
 });
 
 await test("governed wait shows Waiting on Director, not Ready for instruction", () => {
@@ -1965,9 +1978,21 @@ await test("queued and connected lanes are not collapsed to Idle or Running", ()
   };
   const idleHint = deriveLaneStatus({ lane: queued, viewing: false });
   assert.equal(idleHint.listHint, "Queued for capacity");
+  // THE CONTRACT: a lane queued for capacity must never read as Idle — the work
+  // is accepted and waiting on the machine, not absent.
+  //
+  // WHAT CHANGED: navigation now speaks the OPERATOR vocabulary — Working,
+  // Needs you, Ready, Failed — because the runtime phrase was leaking scheduler
+  // machinery into it ("Needs input · suspended" told the operator that a
+  // provider process is not resident). Queued for capacity projects to Working:
+  // the machine is getting on with it and the operator has nothing to do. The
+  // runtime phrase itself is unchanged and remains in Details.
   const rail = railHtml([queued], queued.lane_id, { [queued.lane_id]: { listHint: "Idle" } });
-  assert.match(rail, /Queued for capacity/);
+  assert.match(rail, /Working/);
   assert.doesNotMatch(rail, />○ Idle</);
+  assert.equal(rail.includes("Ready"), false, "queued work is not an idle lane");
+  assert.equal(deriveLaneStatus({ lane: queued, viewing: false }).listHint, "Queued for capacity",
+    "the runtime phrase is preserved for Details");
   const executing = deriveLaneExecutionPosture({
     claude: { presence: "present" },
     execution_run: { state: "EXECUTING" },
@@ -2013,7 +2038,13 @@ await test("queued and connected lanes are not collapsed to Idle or Running", ()
   // Inspector.
   assert.match(railHtml([cursorLive], cursorLive.lane_id), /read-only/);
   assert.doesNotMatch(renderLaneSessionCallout(cursorLive), /Start Session/);
-  assert.match(laneIdentityMeta(cursorLive, null), /Cursor \(read-only\)/);
+  // The provider moved OUT of the identity meta and INTO the status line, so
+  // the header reads "Ready · Cursor (read-only)" rather than repeating the
+  // provider twice. Same fact, one place.
+  assert.match(
+    operatorStatusLine(laneOperatorStatus(cursorLive, canonicalLaneWorkState(cursorLive)), laneProviderLabel(cursorLive)),
+    /Cursor \(read-only\)/,
+  );
   assert.equal(/Context \d+%/.test(railHtml([cursorLive], cursorLive.lane_id, {}, {
     [cursorLive.lane_id]: { available: true, context: { percent_used: 38 } },
   })), false, "a context percentage must never appear in navigation");

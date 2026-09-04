@@ -331,6 +331,12 @@ export const DEMO = Object.freeze({
     certifications: 3,
     promotions: 2,
   },
+  // Placeholder-mode values for the two lane-resource fields that have no
+  // source yet. They render with a `sample` chip and are auditable in the DOM.
+  lane_resources: {
+    peak_memory_mb: 2355,
+    cpu_pct: 18,
+  },
 });
 
 /* ---------------------------------------------------------------------------
@@ -358,6 +364,9 @@ export function buildHomeViewModel({
     needsYou: buildNeedsYou({ lanes, approvals, laneState, nowMs }),
     health: buildSystemHealth({ resources, capacity, placeholders }),
     lanes: buildLaneSummaries({ lanes, laneState, nowMs }),
+    // HOME IS A COMMAND CENTRE, NOT A SECOND LANE DIRECTORY. See
+    // operationalLanes: the full catalogue is what Lanes is for.
+    activeLanes: operationalLanes(buildLaneSummaries({ lanes, laneState, nowMs })),
     usage: buildUsageModel({ usage, placeholders }),
     effectiveness: buildEffectivenessModel({ effectiveness, placeholders }),
     activity: Array.isArray(activity) ? activity.slice(0, 8) : [],
@@ -372,21 +381,83 @@ export function buildHomeViewModel({
  * that is merely working, merely queued, or merely finished is not here — it is
  * on the lane list, where routine state belongs.
  */
+/**
+ * THE NAME OF THE WORK, NOT THE NAME OF THE CAPABILITY.
+ *
+ * Lives here rather than in the view because the interruption centre, the lane
+ * tray and the approval surfaces must all call a governed action the same
+ * thing. It moved out of gateway-view when the global Needs You centre started
+ * listing these: reading `a.title || a.action_key` there printed
+ * "repository.merge_pull_request" at the operator, which is the same class of
+ * unactionable string as "approve gar_4dc7b4d8bcd0e0".
+ */
+export function governedActionLabel(ga) {
+  if (!ga) return "Governed action";
+  if (ga.operator_label) return ga.operator_label;
+  if (ga.operator_card?.label) return ga.operator_card.label;
+  const i = ga.inputs || {};
+  const pr = i.pullRequestNumber ?? i.pull_request_number;
+  if (ga.action_key === "repository.merge_pull_request" && pr) return `Merge PR #${pr} to ${ga.target || "staging"}`;
+  const branch = i.branch || i.headBranch || i.head_branch;
+  if (ga.action_key === "repository.push" && branch) return `Push ${branch}`;
+  if (ga.action_key === "promotion.open_pr" && branch) return `Open PR ${branch} → ${i.base || ga.target || "staging"}`;
+  if (ga.title) return ga.title;
+  return ga.action_key ? String(ga.action_key).replace(/[._]/g, " ") : "Governed action";
+}
+
+/**
+ * A GOVERNED ACTION'S LANE REFERENCE IS NOT ALWAYS A LANE ID.
+ *
+ * MEASURED on the running host: request gar_3368b11eb1b1ce carried
+ * `lane_id: "ui-vac"` — the WORKTREE NAME — while the lane it belongs to is
+ * `lane_9b9082778292`. Trusting that string produced `#/lanes/ui-vac`, and the
+ * operator got "Lane unavailable" from the one control that exists to take them
+ * to the thing that needs them.
+ *
+ * So the reference is RESOLVED against the lanes that actually exist rather
+ * than pasted into a route. Three attempts, narrowing: the id itself, the
+ * worktree path the request also carries, then the worktree name. If none of
+ * them names a real lane, the answer is NO LANE — the row still states what is
+ * being asked, and it offers no route it cannot honour. Fabricating a link is
+ * how the operator ends up somewhere that does not exist.
+ */
+export function resolveApprovalLane(approval, lanes = []) {
+  const list = Array.isArray(lanes) ? lanes : [];
+  const ref = String(approval?.lane_id || approval?.laneId || "").trim();
+  if (ref) {
+    const byId = list.find((l) => l.lane_id === ref);
+    if (byId) return byId;
+  }
+  const wt = approval?.worktree_path || approval?.worktreePath || null;
+  if (wt) {
+    const byPath = list.find((l) => (l.worktree_path?.path || l.worktree?.path) === wt);
+    if (byPath) return byPath;
+  }
+  if (ref) {
+    const byName = list.find((l) => (l.worktree_path?.name || l.worktree?.name) === ref);
+    if (byName) return byName;
+  }
+  return null;
+}
+
 export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => null, nowMs = Date.now() } = {}) {
   const items = [];
-  const labelById = new Map();
-  for (const l of lanes) labelById.set(l.lane_id, l.label || l.lane_id);
 
   for (const a of Array.isArray(approvals) ? approvals : []) {
-    const laneId = a.lane_id || a.laneId || null;
+    const lane = resolveApprovalLane(a, lanes);
+    const laneId = lane?.lane_id || null;
+    const ref = String(a.lane_id || a.laneId || "").trim();
     items.push({
       kind: "governed_action",
       lane_id: laneId,
-      lane_label: labelById.get(laneId) || a.lane_label || laneId || "Vacilando",
-      request: a.title || a.action_key || a.label || "Authorization required",
+      lane_label: lane?.label || a.lane_label || ref || "Vacilando",
+      // An unresolved reference is stated, not hidden: the operator should know
+      // the request exists even when nothing can be opened for it.
+      lane_resolved: Boolean(lane),
+      request: governedActionLabel(a),
       detail: a.reason_worker_cannot_execute || a.summary || null,
       at_ms: parseMs(a.requested_at || a.created_at || a.at),
-      href: laneId ? `#/lanes/${encodeURIComponent(laneId)}` : "#/lanes",
+      href: laneId ? `#/lanes/${encodeURIComponent(laneId)}` : null,
       severity: a.destructive || a.mode === "destructive" ? "destructive" : "authorize",
     });
   }
@@ -396,9 +467,9 @@ export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => nu
     const run = l.execution_run;
     // Already represented by its governed action; do not count the same
     // blocker twice.
-    const alreadyListed = items.some((i) => i.lane_id === l.lane_id);
+    const alreadyListed = items.some((i) => i.lane_id && i.lane_id === l.lane_id);
     if (alreadyListed) continue;
-    if (st?.key === "needs_input" || run?.state === "NEEDS_INPUT") {
+    if (operatorState(st, l) === OPERATOR_STATE.NEEDS_YOU) {
       items.push({
         kind: "needs_input",
         lane_id: l.lane_id,
@@ -407,6 +478,7 @@ export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => nu
         detail: null,
         at_ms: parseMs(run?.updated_at) || Number(l.last_activity_ms) || null,
         href: `#/lanes/${encodeURIComponent(l.lane_id)}`,
+        lane_resolved: true,
         severity: "answer",
       });
     }
@@ -414,6 +486,111 @@ export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => nu
 
   items.sort((a, b) => (a.at_ms || 0) - (b.at_ms || 0));
   return { items, count: items.length, nowMs };
+}
+
+/**
+ * HOME SHOWS WHAT IS HAPPENING; LANES SHOWS WHAT EXISTS.
+ *
+ * Home reproduced the entire lane directory, which is why the two surfaces read
+ * as the same page twice. The operational subset is the lanes that are DOING
+ * something or WAITING on someone — the ones that answer "what is running?".
+ * A lane that is merely Ready exists; it is not news, and finding it is the
+ * directory's job.
+ *
+ * Attention first, then most recently moved, then capped: Home is scanned, and
+ * a list you scroll is a list you stopped scanning.
+ */
+/**
+ * RETURN CONTEXT — ONE MECHANISM, NOT A RENDERER-SPECIFIC HACK.
+ *
+ * "Back" was the literal string `#/lanes`, written into six templates. So Home
+ * -> Trust Runtime -> Back landed on Lanes: a place the operator had not been,
+ * losing the command centre they were reading and the position they were at in
+ * it. A lane does not know where it should return to, and it should not: the
+ * NAVIGATION knows, because it is the thing that moved.
+ *
+ * The origin is recorded when the operator leaves a primary surface for a lane
+ * and is what every back affordance renders from. Lane -> lane keeps the
+ * original origin, because opening a second lane from the rail is not a new
+ * journey. A deep link has no origin and falls back to the directory.
+ */
+export const LANE_RETURN_TARGETS = Object.freeze({
+  home: { page: "home", hash: "#/home", label: "Home" },
+  lanes: { page: "lanes", hash: "#/lanes", label: "Lanes" },
+  activity: { page: "activity", hash: "#/activity", label: "Activity" },
+});
+
+export function laneReturnTarget(origin) {
+  const t = LANE_RETURN_TARGETS[origin?.page];
+  return t ? { ...t, scrollY: Number(origin?.scrollY) || 0 } : { ...LANE_RETURN_TARGETS.lanes, scrollY: 0 };
+}
+
+/**
+ * LANE RESOURCE USE — what this lane's process tree is holding.
+ *
+ * THE AUDIT THIS ENCODES. "CPU and memory by lane" is three separate questions
+ * with three different honest answers, and rendering them as one block of
+ * numbers would have hidden that:
+ *
+ *   MEMORY is LIVE. The chain is complete and every link has a canonical owner:
+ *   lane -> provider seat (provider-capacity) -> process tree (ancestry, not
+ *   cwd) -> resident memory (ps). It is a sum of per-process facts, so it means
+ *   exactly what it says.
+ *
+ *   PEAK MEMORY is AVAILABLE_NOT_WIRED. workload-observation already records
+ *   peak_rss_bytes keyed by lane — but only around a sampled VALIDATION
+ *   workload, not across a lane's life, and no projection carries it here.
+ *
+ *   CPU is INSTRUMENTATION_REQUIRED, and this is the one worth stating plainly.
+ *   `ps` on macOS reports %cpu as an average over a process's ENTIRE LIFETIME.
+ *   Rendered beside live memory it would read as "right now" and be nothing of
+ *   the sort — a long-lived idle seat would show the busy average of an hour
+ *   ago. Current CPU needs two samples and a delta over the attributed tree.
+ *   The host's load average cannot substitute: it is one number for the whole
+ *   machine and dividing it by lane count would be arithmetic, not measurement.
+ */
+export function buildLaneResources(lane, { placeholders = false } = {}) {
+  const use = lane?.resource_use || null;
+  const f = (v, mat, opts) => field(v, mat, { placeholders, ...opts });
+  return {
+    available: Boolean(use),
+    attribution: use?.attribution || null,
+    complete: use?.complete !== false,
+    process_count: f(use?.process_count ?? null, MATURITY.LIVE, {
+      label: "Processes", absent: "Not attributed",
+    }),
+    memory: f(use?.memory_mb ?? null, MATURITY.LIVE, {
+      label: "Memory", format: formatGb, absent: "Not attributed",
+    }),
+    peak_memory: f(null, MATURITY.AVAILABLE_NOT_WIRED, {
+      label: "Peak memory",
+      demo: DEMO.lane_resources.peak_memory_mb,
+      format: formatGb,
+      absent: "Not projected yet",
+      note: "workload-observation records peak_rss_bytes per lane for sampled validation workloads; no projection carries it here",
+    }),
+    cpu: f(null, MATURITY.INSTRUMENTATION_REQUIRED, {
+      label: "CPU",
+      demo: DEMO.lane_resources.cpu_pct,
+      unit: "%",
+      absent: "Not sampled",
+      note: "ps reports %cpu as a lifetime average, not current use; per-lane CPU needs a sampled delta over the attributed tree",
+    }),
+    sampled_at: use?.sampled_at || null,
+  };
+}
+
+export const HOME_LANE_LIMIT = 5;
+
+export function operationalLanes(summaries = [], { limit = HOME_LANE_LIMIT } = {}) {
+  const rank = { needs_you: 0, failed: 1, working: 2 };
+  return (Array.isArray(summaries) ? summaries : [])
+    .filter((l) => l.state_key && l.state_key !== OPERATOR_STATE.READY)
+    .sort((a, b) => {
+      const r = (rank[a.state_key] ?? 9) - (rank[b.state_key] ?? 9);
+      return r || (b.at_ms || 0) - (a.at_ms || 0);
+    })
+    .slice(0, limit);
 }
 
 export function buildSystemHealth({ resources = null, capacity = null, placeholders = false } = {}) {
@@ -484,17 +661,21 @@ export function buildLaneSummaries({ lanes = [], laneState = () => null, nowMs =
   return (Array.isArray(lanes) ? lanes : []).map((l) => {
     const st = laneState(l) || {};
     const run = l.execution_run || null;
+    // Home reads the SAME resolver as the rail and the lane header. Three
+    // surfaces interpreting execution state independently is how one lane came
+    // to read three ways.
+    const op = laneOperatorStatus(l, st, { nowMs });
     return {
       lane_id: l.lane_id,
       // READ-ONLY IS A STATE, NOT A PROVIDER INTERNAL. An observation-only lane
       // cannot be sent an instruction, so plain "Ready" is a promise it cannot
       // keep. It travels with the state everywhere the operator picks a lane.
       label: l.label || l.lane_id,
-      state: `${st.label || "Unknown"}${st.read_only || l.observation_only ? " · read-only" : ""}`,
-      state_key: st.key || "idle",
-      tone: st.tone || "",
+      state: `${operatorStatusLine(op)}${st.read_only || l.observation_only ? " · read-only" : ""}`,
+      state_key: op.state,
+      tone: op.tone,
       mark: st.mark || "○",
-      live: Boolean(st.live),
+      live: op.live,
       blockers: Number(l.unseen_needs_you || 0) || (st.key === "needs_input" ? 1 : 0),
       at_ms: Number(l.last_activity_ms) || parseMs(run?.updated_at) || null,
       progress: laneProgress(run, { nowMs }),
@@ -917,7 +1098,19 @@ export function buildLaneThread(lane, {
   const run = lane?.execution_run || lane?.previous_run || null;
 
   // ---- the operator's instruction -------------------------------------
-  const rec = lastInstruction || lane?.last_instruction || null;
+  //
+  // THE RUN'S OWN INSTRUCTION IS THE FALLBACK, and it has to be.
+  //
+  // The thread previously drew the operator's message only from the delivery
+  // record. That was survivable while a Current Work card printed the
+  // instruction separately; with that card removed, a lane whose delivery
+  // record had aged out showed a conversation with no operator in it — the run
+  // was executing an instruction the thread refused to name. The run carries
+  // the instruction it is executing, so it answers when the record cannot.
+  const runInstruction = run?.instruction
+    ? { instruction: run.instruction, status: "delivered", delivered_at: run.started_at || run.created_at }
+    : null;
+  const rec = lastInstruction || lane?.last_instruction || runInstruction;
   if (rec?.instruction && (rec.status === "delivered" || rec.status === "queued")) {
     const at = parseMs(rec.delivered_at || rec.queued_at) || parseMs(run?.created_at);
     entries.push({
@@ -1048,4 +1241,143 @@ export function buildCurrentWork(lane, { nowMs = Date.now() } = {}) {
     truncated,
     run,
   };
+}
+
+/* ===========================================================================
+ * THE OPERATOR STATE
+ *
+ * Runtime state and operator state are different vocabularies, and V2 was
+ * showing the first where it owed the second. "Needs input · suspended" told
+ * the operator two things, one of which was scheduler machinery: whether a
+ * provider process happens to be resident is Vacilando's problem, not theirs.
+ * The only fact that changed what the operator should DO was that the lane was
+ * waiting on them.
+ *
+ * FOUR STATES. That is the whole operator-facing vocabulary:
+ *
+ *   WORKING    a provider is executing
+ *   NEEDS_YOU  nothing can continue until the operator acts
+ *   READY      the lane can take work; nothing is running
+ *   FAILED     execution failed and recovery is required
+ *
+ * ONE RESOLVER feeds Home, Lanes, the lane header, badges and counts. Each
+ * renderer reinterpreting execution state independently is how the same lane
+ * came to read differently on three surfaces.
+ *
+ * NOTHING IS DESTROYED. The execution state is untouched and remains visible in
+ * Lane Details and System diagnostics, where machinery belongs.
+ * ========================================================================= */
+
+export const OPERATOR_STATE = Object.freeze({
+  WORKING: "working",
+  NEEDS_YOU: "needs_you",
+  READY: "ready",
+  FAILED: "failed",
+});
+
+export const OPERATOR_STATE_LABEL = Object.freeze({
+  working: "Working",
+  needs_you: "Needs you",
+  ready: "Ready",
+  failed: "Failed",
+});
+
+/** Presentation tone per operator state. One mapping, used everywhere. */
+export const OPERATOR_STATE_TONE = Object.freeze({
+  working: "run",
+  needs_you: "needs",
+  ready: "",
+  failed: "failed",
+});
+
+/**
+ * Runtime work state -> operator state.
+ *
+ * `work` is the existing canonicalLaneWorkState() result: the canonical owner
+ * of what the RUNTIME is doing. This projects it, and deliberately does not
+ * re-derive it — two answers to "what is this lane doing" is the bug this
+ * exists to prevent, not a shape to copy.
+ */
+export function operatorState(work, lane = null) {
+  const key = work?.key || null;
+  const group = work?.group || null;
+
+  // NEEDS YOU is the operator's own word for every runtime shape that cannot
+  // continue without them — needs_input, an awaiting-operator governed action,
+  // a provider suspended holding a question. Whether the process is resident is
+  // not the operator's problem; being asked is.
+  const ga = lane?.execution_run?.governed_action || lane?.governed_action || null;
+  const awaiting = ga && (ga.status === "awaiting_operator" || ga.status === "pending");
+  if (awaiting || key === "needs_input" || group === "needs_input") return OPERATOR_STATE.NEEDS_YOU;
+
+  if (key === "failed") return OPERATOR_STATE.FAILED;
+
+  // Working covers every shape of "the machine is getting on with it":
+  // executing, validating, recovering, queued for capacity, waiting on a
+  // resource, refreshing context. The operator does not act on any of them.
+  if (work?.live === true || group === "active") return OPERATOR_STATE.WORKING;
+
+  // Everything else — idle, complete, offline, a released provider, a stale
+  // capacity claim — is a lane that can take work.
+  return OPERATOR_STATE.READY;
+}
+
+/**
+ * The one lane-state descriptor every surface renders.
+ *
+ * `detail` carries the runtime phrase for Details and diagnostics, so nothing
+ * is lost — it is simply no longer the headline.
+ */
+export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
+  const state = operatorState(work, lane);
+  const progress = laneProgress(lane?.execution_run, { nowMs });
+  return {
+    state,
+    label: OPERATOR_STATE_LABEL[state],
+    tone: OPERATOR_STATE_TONE[state],
+    live: state === OPERATOR_STATE.WORKING,
+    // Progress rides with identity, not in a card of its own. Only a FRESH
+    // estimate earns a place: a stale one is silently omitted rather than
+    // leaving "~62%" attached to a lane nobody has heard from in hours.
+    percent: progress.available ? progress.percent : null,
+    estimate: progress.available && progress.source === "provider_estimate",
+    runtime_detail: work?.label || null,
+    runtime_hint: work?.hint || null,
+  };
+}
+
+/** "Working · ~62% · Claude" — the header line, assembled once. */
+export function operatorStatusLine(status, providerLabel = null) {
+  const bits = [status.label];
+  if (status.percent != null) bits.push(`${status.estimate ? "~" : ""}${status.percent}%`);
+  if (providerLabel) bits.push(providerLabel);
+  return bits.join(" · ");
+}
+
+/* ---------------------------------------------------------------------------
+ * MESSAGE PREVIEW — four lines, then ask.
+ * ------------------------------------------------------------------------- */
+
+/** Rendered lines a message may occupy before it collapses. */
+export const MESSAGE_PREVIEW_LINES = 4;
+
+/**
+ * Does this message need a preview?
+ *
+ * Line count is estimated from the text, not measured, because the model runs
+ * before layout. The clamp itself is CSS (`-webkit-line-clamp`), which is exact;
+ * this only decides whether to OFFER "Show more", so an approximate answer that
+ * errs toward offering it is the safe one.
+ *
+ * THE DATA IS NEVER TRUNCATED. The full text is always in the DOM — clamped
+ * visually — so copy, find-in-page and assistive technology keep the whole
+ * message.
+ */
+export function messageNeedsPreview(text, { lines = MESSAGE_PREVIEW_LINES, charsPerLine = 38 } = {}) {
+  const s = String(text || "");
+  if (!s.trim()) return false;
+  const hard = s.split("\n");
+  if (hard.length > lines) return true;
+  const soft = hard.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / charsPerLine)), 0);
+  return soft > lines;
 }

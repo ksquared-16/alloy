@@ -168,6 +168,48 @@ a plausible object, and the UI renders the governed unavailable state.
 
 ---
 
+## Lane — resources
+
+"How much of this machine is that lane holding?" had no answer: Home and System
+reported HOST totals. The chain is now joined from canonical owners rather than
+a fourth invented one:
+
+```
+lane  →  provider seat        (provider-capacity.observeLiveSeats: pane → lane)
+      →  process tree         (process-attribution: ANCESTRY, not cwd)
+      →  resident memory      (health-probes.probeProcessMemory)
+```
+
+Ancestry is the link that holds. Matching a worktree path in a command line is
+what failed before: the workload that once consumed half this host ran from
+`/private/tmp` and belonged to no worktree, while its process tree ran straight
+back to a provider seat.
+
+| Field | Maturity | Source, or what is missing |
+|---|---|---|
+| Memory | **LIVE** | Sum of RSS over the seat and its descendants, each pid counted once |
+| Processes | **LIVE** | Size of the attributed tree |
+| Peak memory | **AVAILABLE_NOT_WIRED** | `workload-observation` records `peak_rss_bytes` keyed by lane, but only around a sampled validation workload; no projection carries it here |
+| CPU | **INSTRUMENTATION_REQUIRED** | Nothing samples per-process CPU |
+
+**Why CPU is absent rather than approximate.** `ps` on macOS reports `%cpu` as an
+average over a process's ENTIRE LIFETIME. Rendered beside live memory it would
+read as "right now" and be nothing of the sort — a long-idle seat would show the
+busy average of an hour ago. Current CPU needs two samples and a delta over the
+attributed tree. The host load average cannot substitute: it is one number for
+the whole machine, and dividing it by lane count would be arithmetic, not
+measurement.
+
+**An unmeasured lane is UNKNOWN, never zero.** A lane with no live provider seat
+is not attributed at all. This is enforced, not merely intended: a seat with no
+pid once walked the descendants of pid 0 and reported one lane holding 675
+processes and 19.4 GB — the whole host. `pid` 0 and 1 are walk terminators,
+never owners, and the negative cases carry the certification.
+
+Partial reads are declared too. A pid present in the tree but absent from the
+memory sample (it exited between the two reads) is counted as a process,
+excluded from the total, and the record says the total is partial.
+
 ## Audit
 
 To list every field and its classification as rendered, `collectFields(vm)` walks

@@ -81,6 +81,11 @@ Two functions in the whole product turn a condition into a colour:
 - `healthDot(health)` — `healthy` · `watch` · `problem` · `unknown`
 - `stateDot(label, { tone, live })` — a lane's canonical work state
 
+`stateDot` is fed by `laneOperatorStatus()` + `operatorStatusLine()`, which
+render the operator vocabulary (WORKING / NEEDS YOU / READY / FAILED) with the
+progress estimate and provider folded into the same line:
+`● Working · ~62% · Claude`. No surface composes that line itself.
+
 A surface that wants to say "this is fine" uses them; it does not pick a green.
 No page function may inline a colour — enforced by test.
 
@@ -192,12 +197,23 @@ It rendered as a permanent high-weight banner directly above the composer,
 outliving the work it described. It is now a one-line system entry in the
 thread, at the time it happened.
 
-### Current Work is an orientation card
+### Current Work was an orientation card, and then it was nothing
 
-It printed the full mission instruction, so a long one pushed the conversation
-entirely below the fold — the card became a transcript viewer for the one piece
-of text the operator had just written themselves. Title (clamped to two lines),
-phase, progress, state. The instruction lives behind **View work details**.
+First correction: it printed the full mission instruction, so a long one pushed
+the conversation entirely below the fold. It was reduced to a title clamped to
+two lines, phase, progress and state, with the instruction behind
+**View work details**.
+
+Second correction, and the right one: **the card is gone.** A summary of the
+operator's instruction, sitting directly above that same instruction shown as
+the first YOU message, is a duplicate however small it is made. Its two useful
+parts had better homes — progress joined the status line, state became the
+operator vocabulary — and the instruction was already in the thread.
+
+What it cost to remove safely: `buildLaneThread()` needed a fallback to the
+run's own `instruction`, because a lane with no `last_instruction` record had
+been relying on the card to show it at all. Deleting the duplicate without that
+fallback deletes the original on exactly those lanes.
 
 ### Mobile is a different composition, not a smaller one
 
@@ -205,11 +221,12 @@ Measured at 390×844, before and after:
 
 | | Before | After |
 |---|---|---|
-| Lane header | 158px | **84px** |
-| Current Work | 246px | **194px** |
+| Lane header | 158px | **83px** |
+| Current Work | 246px | **removed** |
 | First message | 506px | **380px** |
 | Idle composer field | 48px | **41px** |
 | Lane rows in the first screen | 5 | **10** |
+| A 1,600-character provider report | 875px | **186px** |
 
 The back arrow shares the identity row rather than owning one. The model string,
 slot and start time moved to Details, which already printed all four. Stop lane
@@ -223,3 +240,87 @@ A later, unfloored desktop rule beating the mobile one. Four ~70px metric tiles
 came back on a phone (`GATEWAY respo/nsive`, `ESTIMATED… Cost not reporte/d`),
 and Home un-stacked to two columns. **Desktop rules live behind a `min-width`.**
 Both were caught by reading screenshots, not by an assertion.
+
+---
+
+## 12. Four-line message previews
+
+A single verbose provider report owned the whole phone screen, so the thread
+read as one document rather than a conversation. Every message longer than about
+four lines now renders clamped, with a per-message **Show more** / **Show less**.
+
+**It clamps; it never truncates.** The full text stays in the DOM — copy,
+find-in-page and assistive technology all get the whole message. The certification
+asserts the character count is identical collapsed and expanded, because "it
+looks shorter" is exactly what a truncating bug also looks like.
+
+Rules:
+
+- Expansion is **per message**, held in `G.expandedMessages` and re-applied in
+  `paint()` before scroll restoration. Live provider output cannot force an
+  expanded message closed, and expanding one does not expand another.
+- Attachments sit **outside** the clamp. An artifact is not prose, and hiding
+  the thing a message was carrying behind "Show more" hides the message's point.
+- A short message never gets a toggle.
+- `messageNeedsPreview()` only decides whether to *offer* the toggle. The clamp
+  itself is CSS, which is exact.
+
+### Two ways this was wrong before it was right
+
+Both were the same mistake — a clamp declared on an element whose display the
+browser was entitled to change — and both were invisible to geometry checks that
+measured the same broken layout.
+
+**A flex item's display is blockified.** `.vmsg` is a flex container, so
+`display:-webkit-box` on `.vmsg-clamp` computed to `flow-root`,
+`-webkit-line-clamp:4` did nothing, and every message rendered full height with
+a toggle underneath claiming otherwise. The clamp moved to the child, which is a
+block inside a block.
+
+**A provider report is not a paragraph.** Its prose is `.gw-report-body` inside
+`.gw-report`, and a clamp only counts *line* boxes — the whole report counted as
+one block child, so a real 1,600-character report still rendered 875px tall on
+an 844px phone. `.gw-report` is flattened to a block while collapsed (so its
+body is not a flex item either) and the clamp applies to the prose.
+
+The second bug survived the first certification pass because **the fixture was
+tidier than production**: the completed lane's report was one sentence —
+"Validation completed; 312 tests passed." — and a one-sentence report needs no
+preview. The fixture now carries a real multi-paragraph final report, and the
+defect appeared immediately. This is the third time a fixture kinder than
+reality has certified a product that does not exist.
+
+One further note on assertions: the first version of this check tested
+`getComputedStyle().display === "-webkit-box"` and failed against a clamp that
+was working perfectly — current Chromium reports the used display as `flow-root`
+while still clamping. **Assert the effect, not the spelling.**
+
+## 13. Compose Mode composition
+
+The keyboard state (`data-gw-keyboard`) says the viewport shrank. Compose Mode
+(`data-gw-compose`) says the operator is WRITING. They are different facts and
+they move different things: the first is geometry, the second is intent, and
+only the second is allowed to take the furniture away.
+
+What stands down while composing: the top bar, the lane's back row and
+breadcrumb, the six lane tabs, the identity metadata, Details and Stop lane, the
+bottom navigation, and the new-update affordance. What remains: one line of lane
+identity, the tail of the conversation, and the field.
+
+The composer becomes a COLUMN, not a row. A row layout is what made the field a
+slot — it can only ever be as tall as the button beside it.
+
+The provider selector stays reachable at reduced emphasis rather than being
+hidden. It is a choice the operator occasionally revisits; it is not part of
+writing, and removing it entirely removed a question they might need to answer.
+
+## 14. The message actions row
+
+Two actions, one row, no menu. *Show more* governs how much of a message you are
+looking at; *Copy* takes all of it either way. They render as quiet text
+affordances rather than buttons, because a thread of ten messages would
+otherwise carry twenty button-shaped holes.
+
+Copy confirms itself in place — the control says "Copied" and puts itself back.
+Not a toast that covers the thread, and not a layout change that moves the text
+being read.

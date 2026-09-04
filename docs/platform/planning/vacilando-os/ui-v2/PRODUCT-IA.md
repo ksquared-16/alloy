@@ -108,12 +108,11 @@ beside it. Mobile stacks the same blocks in the same order.
 
 ```
 HEADER      Lanes / Trust Runtime
-            Trust Runtime   ● Working
-            Claude · model · Slot 6 · Started 9:23 AM
+            Trust Runtime   ● Working · ~62% · Claude
+            model · Slot 6 · Started 9:23 AM
             [Stop lane] [Lane details]
 TABS        Overview · Activity · Files · Commits · Runs · Settings
-OVERVIEW    CURRENT WORK  — mission, description, progress, status
-            LATEST AGENT OUTPUT — clean human-readable result + artifacts
+OVERVIEW    THREAD — the conversation, oldest to newest
 TRAY        Needs you  (only when present, anchored to the composer)
 COMPOSER    instruction · attachments · provider · Send
 INSPECTOR   RUN (open) · Environment · Git · Browser session · Diagnostics
@@ -134,13 +133,51 @@ Unimplemented tabs render the shell and **name the owner that will fill them**
 (`LANE_TAB_MATURITY`). Hiding them would hide the intended shape; faking them
 would be worse.
 
-### Current Work
+### There is no Current Work card
 
-Mission title, one line of description, the provider progress bar, and status.
+There was one. It carried the mission title, a line of description, a progress
+bar and the status — and it sat directly above the same instruction, shown again
+as the first YOU message in the thread. The operator read their own words twice,
+once as a summary they did not write and once as the message they did.
 
-**There is no ETA.** No estimator exists in this product, and deriving one from a
-percentage would dress a guess up as a schedule. If an estimator is ever built it
-gets its own field and its own maturity row.
+Removing a duplicate is only correct if nothing is lost, so the instruction is
+now guaranteed to appear as an authored YOU message. When a lane has no
+`last_instruction` record, `buildLaneThread()` falls back to the run's own
+`instruction`; without that fallback, removing the card silently removed the
+instruction along with it on exactly the lanes that had never been re-instructed.
+
+Progress moved into the lane's status line — see
+[the provider progress contract](PROVIDER-PROGRESS-CONTRACT.md). Status moved
+into the operator vocabulary below.
+
+**There is still no ETA.** No estimator exists in this product, and deriving one
+from a percentage would dress a guess up as a schedule. If an estimator is ever
+built it gets its own field and its own maturity row.
+
+### The operator vocabulary — four words
+
+Execution state is a runtime concern with a dozen legitimate values. The
+operator has one question: *does this need me?* `SUSPENDED` in particular told
+them nothing they could act on — it named a scheduler decision, not a state of
+their work.
+
+| Operator state | What it means to a person |
+|---|---|
+| **WORKING** | The lane is doing something. Nothing is needed. |
+| **NEEDS YOU** | It stopped and is waiting on a human. |
+| **READY** | Idle and available. |
+| **FAILED** | It stopped and did not succeed. |
+
+`operatorState()` in `apps/vacilando/public/vacilando-ui-model.mjs` is the one
+resolver. Home, the Lanes list, the Lane header, the rail, the mobile surfaces
+and the navigation badge all read it, so they cannot disagree about the same
+lane.
+
+**The underlying execution states are untouched.** `WAITING_RESOURCE`,
+`NEEDS_INPUT`, `EXECUTING`, `ABANDONED` and the rest remain exactly as the
+runtime records them; this is a projection for one audience, not a replacement.
+The full runtime state stays visible in the Lane Inspector, which is where
+someone debugging the runtime is already looking.
 
 ### Needs You is an interruption state
 
@@ -154,6 +191,13 @@ readable. A secondary indication may also appear in the Inspector.
 
 The provider's clean, human-readable result — the structured agent report, never
 raw terminal text. Raw pane output remains available under Diagnostics.
+
+### Messages preview at four lines
+
+Every message longer than roughly four lines renders clamped, with a per-message
+**Show more** / **Show less**. See
+[the visual system](VISUAL-SYSTEM.md#12-four-line-message-previews) for the
+contract and the two ways it was got wrong before it was got right.
 
 ---
 
@@ -237,3 +281,105 @@ Designed, not compressed.
 No duplicates were created: `canonicalLaneWorkState`, `renderComposer`,
 `renderLaneList`, `renderAssistantMessage`, `renderCancelControl` and the
 governed-decision renderers are the pre-existing owners and are reused as-is.
+
+## 10. Compose Mode — typing is a mode
+
+MEASURED, on a 390-wide phone with the iOS keyboard up: the lane kept its back
+link, breadcrumb, title, status line, six scrolling tabs, a Details button and
+the four-destination bottom bar, and gave the instruction field 44px with a 76px
+ceiling — laid out as a ROW, so the field was a slot beside Send. Writing an
+instruction meant typing a mission statement through a letterbox while the
+chrome that said where you were took four times the space of what you were
+doing.
+
+Compose Mode is not the lane with less room. It is a different composition for a
+different task, entered on FOCUS of the instruction field — not by a height
+media query, because a short viewport and an operator writing are different
+facts and only one of them should move the furniture.
+
+| | Normal mobile lane | Compose Mode |
+|---|---|---|
+| Lane header | Title, state, meta, Details, Stop | One line: title and state |
+| Lane tabs | Six, scrolling | Hidden |
+| Bottom navigation | Four destinations | Hidden |
+| Conversation | The screen | Keeps a readable tail (≥40px) |
+| Field | 44px, ceiling 76px, in a row | 35% → 45% of the above-keyboard area, own line |
+| Send / attach | Reachable | Reachable, thumb-sized |
+| Provider | Hidden with the keyboard up | Reachable, de-emphasised |
+| Lane Needs You tray | One line | One line, kept |
+
+The field sizes against the VISUAL viewport — what the keyboard leaves behind —
+not the layout viewport. It opens at ~35%, grows to ~45%, then scrolls itself
+rather than eating the conversation it is replying to.
+
+**A proportion is an intention; the stage is the constraint.** On a 320×300
+viewport 45% still overflowed, because the header, the thread's floor and the
+composer's own controls do not shrink with the field: the interaction zone ran
+27px past the bottom of the screen and took Send with it. The field is therefore
+measured against the stage AFTER layout and yields when it must. Certified at
+390×380 (171px, 45%) and 320×300 (124px, 41%), with Send on screen at both.
+
+## 11. Needs You — global interrupt state
+
+Three pending requests used to render as the largest block of Home, AND as a bar
+above the content column on every route, AND above the lane catalogue. One
+decision, three renderings, all permanent, so the application read as
+perpetually alarmed even when nothing was wrong.
+
+An interruption is a property of the whole application, not content on a page.
+
+- **One control**, top-right in the shell, on every route and both form factors.
+  Silent with nothing pending — no badge, no colour. A terracotta count when the
+  machine is blocked on a human.
+- **Desktop** opens a right-side panel; **mobile** a bottom sheet. Opening it is
+  NOT navigation: the operator stays where they were.
+- **Each request** states its lane, the ask in operator language, one line of
+  why, and its age. The governed proposal — inputs, fingerprint, escalation,
+  approve/deny — is what **Review** opens, on the lane that raised it, because
+  that is the only place it has its context.
+- The top bar is hidden on a mobile lane, so the lane header mounts the same
+  control from the same model. Exactly one is visible at any width.
+
+### The lane's own exception
+
+Inside a lane, a compact tray at the composer boundary — and only when THAT lane
+is blocked. It explains why the run is waiting. It is not a copy of the global
+list, and a lane with nothing pending renders nothing.
+
+**One blocker is one request.** A run sits in `NEEDS_INPUT` *because* its
+governed action awaits the operator; counting both made the tray say "2
+requests" for the single decision the global centre counted once. Both dedupe.
+
+## 12. Home vs Lanes — different jobs
+
+Home reproduced the entire lane directory, which is why the two surfaces read as
+the same page twice.
+
+| | **Home — command centre** | **Lanes — workspace directory** |
+|---|---|---|
+| Answers | How is Vacilando doing? What is running? Is the machine healthy? | What lanes exist? How are they organised? Where do I create one? |
+| Lanes shown | **Active lanes** — working or waiting on you, attention first, capped at five, then *View all lanes →* | The complete catalogue, foldered and unfiled |
+| Also carries | System health, AI usage, AI effectiveness, recent activity | Add lane, folders, repositories, lane management |
+
+A lane that is merely Ready exists; it is not news. Finding it is the
+directory's job.
+
+## 13. Return context — Back is where you came from
+
+"Back" was the literal string `#/lanes`, written into six templates. So Home →
+Trust Runtime → Back stranded the operator on a surface they had never been on,
+having lost their place on the one they had.
+
+A lane does not know where it should return to, and it should not. **Navigation
+knows**, because navigation is the thing that moved. One mechanism:
+
+- The origin is recorded when the operator leaves a primary surface for a lane —
+  from EVERY entry point, including the rail, which navigates from `data-route`
+  and so recorded nothing at first.
+- Every back affordance and breadcrumb renders from it.
+- **Lane → lane keeps the origin.** Opening a second lane from the rail
+  continues the same journey.
+- Returning restores the scroll position, and the origin is spent on arrival.
+- A deep link has no journey; the directory is the honest fallback.
+
+Certified from Home, Lanes and Activity, on desktop and mobile.

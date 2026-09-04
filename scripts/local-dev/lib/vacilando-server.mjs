@@ -2008,6 +2008,15 @@ export function createVacilandoServer() {
           const withComplete = await applyIdleTurnCompletions(withActivity);
           for (let i = 0; i < lanes.length; i += 1) lanes[i] = withComplete[i];
         } catch { /* status still renders from the run alone */ }
+        // WHICH LANE IS HOLDING THE MACHINE. Joined from canonical owners —
+        // seat from provider-capacity, tree from process-attribution ancestry,
+        // resident memory from health-probes. Secondary to discovery, like every
+        // other attacher here: a slow `ps` must never fail the lane list.
+        try {
+          const { attachLaneResourceUse } = await import("./vacilando/lane-resource-use.mjs");
+          const withResources = await attachLaneResourceUse(lanes);
+          for (let i = 0; i < lanes.length; i += 1) lanes[i] = withResources[i];
+        } catch { /* a lane without a resource reading still renders */ }
         let repositories = [];
         try {
           const R = await import("./vacilando/repository-registry.mjs");

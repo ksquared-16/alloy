@@ -41,6 +41,24 @@ const T = (minutesAgo) => new Date(Date.now() - minutesAgo * 60_000).toISOString
 export const LANES = [
   {
     lane_id: "lane_trustruntime01", label: "Trust Runtime", slot: 6, folder_id: "fold_cert",
+    // RESOURCE ATTRIBUTION, as the lanes projection attaches it: the seat and
+    // its descendants, measured. Peak memory and CPU are deliberately absent
+    // from the record — nothing samples them — so the UI must say so rather
+    // than render a number.
+    resource_use: {
+      schema_version: "vacilando.lane_resource_use.v1",
+      lane_id: "lane_trustruntime01",
+      attribution: "ancestry",
+      seat_pids: [61631],
+      process_count: 6,
+      measured_process_count: 6,
+      complete: true,
+      memory_kb: 1_784_320,
+      memory_mb: 1743,
+      cpu_pct: null,
+      cpu_reason: "per-process CPU is not sampled; ps reports a lifetime average, not current use",
+      sampled_at: new Date(Date.now() - 4000).toISOString(),
+    },
     tmux: { alive: true }, runtime: "online", preferred_provider: "claude",
     binding: { provider: "claude", branch: "agent/trust-runtime", slot: 6 },
     claude: { presence: "present" },
@@ -143,7 +161,41 @@ export const LANES = [
     last_activity_ms: Date.now() - 47 * 60_000,
     git: { state: "clean", ahead: 0, behind: 0, branch: "agent/payments" },
     execution_run: null,
-    previous_run: { run_id: "erun_pay0001", state: "COMPLETE", completed_at: T(47), completion_report: { summary: "Validation completed; 312 tests passed." } },
+    // A REAL FINAL REPORT, NOT A SENTENCE.
+    // This fixture used to read "Validation completed; 312 tests passed." — one
+    // tidy line. A provider's actual closing report runs to many paragraphs, and
+    // a fixture tidier than production certifies a product that does not exist:
+    // the four-line preview passed against a message that never needed one.
+    previous_run: {
+      run_id: "erun_pay0001", state: "COMPLETE", completed_at: T(47),
+      completion_report: {
+        summary: [
+          "Validation completed. 312 tests passed, 1 pre-existing failure left untouched.",
+          "",
+          "Ledger reconciliation is certified. All 1,248 postings balance against the",
+          "settlement file, including the 14 partial refunds that the previous run",
+          "reported as orphaned — those were fixture rows, not live data, and the",
+          "reconciler now says so explicitly rather than counting them as anomalies.",
+          "",
+          "Currency rounding is certified at the boundary and NOT in the interior. Every",
+          "amount crossing the provider edge is rounded once, at that edge, to the",
+          "currency's own minor unit. Interior arithmetic stays in integer minor units,",
+          "so the half-cent drift that produced the 0.02 discrepancy on multi-line",
+          "invoices cannot recur — there is no longer a place for it to accumulate.",
+          "",
+          "Refund idempotency is NOT certified. Two refunds issued inside the same",
+          "second against the same charge still produce two provider calls. The second",
+          "is rejected by the provider, so no double refund reaches a customer, but the",
+          "lane is relying on the provider to be the safety net rather than holding the",
+          "invariant itself. Fixing that needs a uniqueness constraint the migration",
+          "would have to add, which is outside what this run was authorized to do.",
+          "",
+          "Dispute webhooks remain unverified. The signing secret is held by the",
+          "operator and the lane cannot read it, so the handler was exercised against a",
+          "locally-signed payload only. That proves the parser, not the trust boundary.",
+        ].join("\n"),
+      },
+    },
   },
   {
     lane_id: "lane_suspended0001", label: "Communications", slot: 5,
@@ -167,6 +219,7 @@ export const LANES = [
   },
   {
     lane_id: "lane_runtimeperf001", label: "Runtime Performance", slot: 3,
+    worktree_path: { name: "runtimeperf", path: "/Users/vacilando/Code/alloy-worktrees/runtimeperf", managed: true },
     tmux: { alive: false }, runtime: "offline", preferred_provider: "claude",
     binding: { provider: "claude", branch: "agent/runtime-perf", slot: 3 },
     last_activity_ms: Date.now() - 3 * 60 * 60_000,
@@ -215,11 +268,24 @@ const USAGE = {
   cost_note: "Cost is authoritative only when the provider reports it.",
 };
 
+// MORE THAN ONE INTERRUPTION AT A TIME IS THE NORMAL CASE, and a one-request
+// fixture certified a list that never had to group, sort or fit. Two lanes, two
+// different capabilities, two ages.
 const APPROVALS = [{
   request_id: "ga_census01", lane_id: "lane_surfaces000001",
   action_key: "database.readonly_census", title: "Read-only database census",
   status: "awaiting_operator", requested_at: T(6),
   reason_worker_cannot_execute: "The lane cannot reach production credentials; the Director must run it.",
+}, {
+  // THE SHAPE THE RUNNING HOST ACTUALLY FILES. gar_3368b11eb1b1ce carried the
+  // WORKTREE NAME where a lane id belongs, which built #/lanes/ui-vac and gave
+  // the operator "Lane unavailable". A fixture that only ever carries clean lane
+  // ids certifies a resolver that never has to resolve anything.
+  request_id: "ga_merge01", lane_id: "runtimeperf",
+  worktree_path: "/Users/vacilando/Code/alloy-worktrees/runtimeperf",
+  action_key: "repository.merge_pull_request", title: "Promotion into staging",
+  status: "awaiting_operator", requested_at: T(52),
+  reason_worker_cannot_execute: "Merging is Director-owned; this lane holds no credentials.",
 }];
 
 const OUTPUT = {

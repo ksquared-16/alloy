@@ -23,7 +23,10 @@
 
 import {
   ACTIVITY_KINDS,
+  MESSAGE_PREVIEW_LINES,
   MESSAGE_ROLE,
+  messageNeedsPreview,
+  operatorStatusLine,
   DATA_STATE,
   HEALTH,
   HEALTH_LABEL,
@@ -335,6 +338,74 @@ export function needsYouList(model, { nowMs = Date.now() } = {}) {
 }
 
 /* ---------------------------------------------------------------------------
+ * NEEDS YOU IS GLOBAL INTERRUPT STATE, NOT A PAGE SECTION.
+ *
+ * It used to be the first and largest block of content on Home AND a permanent
+ * banner above the lane catalogue AND a bar on every other route — three
+ * renderings of the same three requests, each one loud, none of them where the
+ * operator happened to be. A pending decision is an INTERRUPTION: it belongs in
+ * the shell, at a fixed place, quiet until it has something to say.
+ *
+ * One control, top-right, on every route and both form factors. Silent with
+ * nothing pending; a terracotta count when the machine is blocked on a human.
+ * ------------------------------------------------------------------------- */
+
+export function needsYouControl(count = 0) {
+  const n = Number(count) || 0;
+  const label = n ? `Needs you — ${n} ${n === 1 ? "request" : "requests"}` : "Needs you — nothing pending";
+  return `<button type="button" class="vneeds-ctl${n ? " has-items" : ""}"
+    data-v-needs-open aria-expanded="false" aria-controls="needs-panel" aria-label="${esc(label)}" title="${esc(label)}">
+    <svg class="vneeds-ctl-ico" aria-hidden="true"><use href="#nav-needs"></use></svg>
+    <span class="vneeds-ctl-label">Needs you</span>
+    ${n ? `<span class="vneeds-ctl-badge">${n}</span>` : ""}
+  </button>`;
+}
+
+/**
+ * The expanded surface: a right-side panel on desktop, a sheet on a phone.
+ *
+ * A SUMMARY, NOT A PAYLOAD. Each request states the lane, what is being asked
+ * in operator language, one line of why, and how long it has waited. The
+ * governed proposal — inputs, fingerprint, escalation, approve/deny — is what
+ * Review opens, on the lane that raised it. Dumping full payloads here is what
+ * made the old bar 241px tall per request.
+ */
+export function needsYouPanel(model, { nowMs = Date.now() } = {}) {
+  const items = model?.items || [];
+  const n = items.length;
+  const body = n
+    ? `<ul class="vneeds-list vneeds-panel-list">${items.map((it) => `
+        <li class="vneeds-row is-${esc(it.severity)}" data-v-needs-item="${esc(it.lane_id || "")}">
+          <span class="vneeds-row-mark" aria-hidden="true"></span>
+          <div class="vneeds-row-copy">
+            <span class="vneeds-row-lane">${esc(it.lane_label)}</span>
+            <span class="vneeds-row-request">${esc(it.request)}</span>
+            ${it.detail ? `<span class="vneeds-row-why">${esc(it.detail)}</span>` : ""}
+          </div>
+          <span class="vneeds-row-age">${esc(it.at_ms ? `${ago(it.at_ms, nowMs)}` : "")}</span>
+          ${/*
+            NO ROUTE IS OFFERED THAT CANNOT BE HONOURED. A request whose lane
+            reference does not name a real lane gets no Review link — sending the
+            operator to "Lane unavailable" is worse than telling them plainly
+            that this one cannot be opened from here.
+          */ ""}
+          ${it.href
+            ? `<a class="btn sm" href="${esc(it.href)}" data-v-needs-review-link>Review</a>`
+            : `<span class="vneeds-row-unresolved" title="This request does not name a lane that exists on this host">No lane</span>`}
+        </li>`).join("")}</ul>`
+    : emptyState({
+      title: "Nothing needs you",
+      body: "Work that is running, queued or finished is on the lanes. This is only for decisions that cannot proceed without you.",
+    });
+  return `<div class="vneeds-panel-head">
+      <h2 class="vneeds-panel-title">Needs you</h2>
+      ${n ? `<span class="vneeds-panel-count">${n}</span>` : ""}
+      <button type="button" class="vneeds-panel-close" data-v-needs-close aria-label="Close">\u00d7</button>
+    </div>
+    <div class="vneeds-panel-body">${body}</div>`;
+}
+
+/* ---------------------------------------------------------------------------
  * LANE ROWS AND ACTIVITY ROWS
  * ------------------------------------------------------------------------- */
 
@@ -398,15 +469,10 @@ export function renderHome(vm, { nowMs = Date.now() } = {}) {
   if (!vm) return `<div class="vpage" data-v-page="home">${emptyState({ title: "Loading…" })}</div>`;
   const h = vm.health;
 
-  const needs = surface({
-    title: "Needs you",
-    hint: vm.needsYou.count
-      ? "Decisions that cannot proceed without you."
-      : null,
-    className: `vcard-needs${vm.needsYou.count ? " has-items" : ""}`,
-    tone: vm.needsYou.count ? "attention" : null,
-    body: needsYouList(vm.needsYou, { nowMs }),
-  });
+  // NEEDS YOU IS NOT HOME'S CONTENT. It was the first and largest block here,
+  // and the same requests were simultaneously in a bar above this page and
+  // above the lane catalogue. It is global interrupt state and it lives in the
+  // shell — see needsYouControl / needsYouPanel.
 
   const health = surface({
     title: "System health",
@@ -436,13 +502,23 @@ export function renderHome(vm, { nowMs = Date.now() } = {}) {
       </div>`,
   });
 
+  // WHAT IS RUNNING — not the catalogue. Home answers "how is Vacilando doing";
+  // "what lanes exist, and how are they organised" is the directory's question,
+  // and answering it twice is what made the two surfaces feel like one page.
+  const active = vm.activeLanes || [];
   const lanes = surface({
-    title: "Lanes",
-    actions: `<a class="vlink" href="#/lanes">All lanes →</a>`,
+    title: "Active lanes",
+    hint: active.length ? "Lanes that are working or waiting on you." : null,
+    actions: `<a class="vlink" href="#/lanes">View all lanes \u2192</a>`,
     className: "vcard-lanes",
-    body: vm.lanes.length
-      ? `<div class="vlane-list">${vm.lanes.map((l) => laneRowV2(l, { nowMs, showProgress: true })).join("")}</div>`
-      : emptyState({ title: "No lanes yet", body: "Create a lane to start work." }),
+    body: active.length
+      ? `<div class="vlane-list">${active.map((l) => laneRowV2(l, { nowMs, showProgress: true })).join("")}</div>`
+      : emptyState({
+        title: vm.lanes.length ? "Nothing is running" : "No lanes yet",
+        body: vm.lanes.length
+          ? "Every lane is ready for work. The full list is on Lanes."
+          : "Create a lane to start work.",
+      }),
   });
 
   const usage = surface({
@@ -509,7 +585,7 @@ export function renderHome(vm, { nowMs = Date.now() } = {}) {
   return `<div class="vpage vpage-home" data-v-page="home">
     ${pageHeader({ title: "Home", lead: "What is running, what needs you, and whether the machine is healthy." })}
     <div class="vhome-grid">
-      <div class="vhome-col vhome-col-main">${needs}${lanes}${activity}</div>
+      <div class="vhome-col vhome-col-main">${lanes}${activity}</div>
       <div class="vhome-col vhome-col-side">${health}${usage}${effectiveness}</div>
     </div>
   </div>`;
@@ -750,6 +826,60 @@ function byline(entry) {
   return `<div class="vmsg-by"><span class="vmsg-who">${who}</span>${state}${when}</div>`;
 }
 
+/**
+ * The four-line preview control.
+ *
+ * SCAN DENSITY, NOT HIDING. The message is entirely in the DOM — the clamp is
+ * CSS — so copy, find-in-page and assistive technology all see the full text.
+ * What changes is how much vertical space one message may claim before the
+ * operator has agreed to spend it.
+ *
+ * Expansion is PER MESSAGE and is owned by the DOM, not by app state: a live
+ * provider message that repaints must not slam itself shut while the operator
+ * is reading it, and a repaint must not expand the whole thread either.
+ */
+function previewToggle(id) {
+  return `<button type="button" class="vmsg-more" data-v-msg-more="${esc(id)}" aria-expanded="false">
+    <span class="vmsg-more-open">Show more</span><span class="vmsg-more-close">Show less</span>
+  </button>`;
+}
+
+/**
+ * COPY IS A PRIMARY ACTION, NOT AN OVERFLOW ITEM.
+ *
+ * Provider output is the thing the operator carries OUT of Vacilando — into a
+ * commit message, a ticket, a reply. Burying that behind "…" taxed the most
+ * common thing anyone does with a final report.
+ *
+ * The text travels ON THE BUTTON rather than being scraped from the DOM at
+ * click time, and that is the whole point: the visible body is line-clamped and
+ * may be wrapped in provider-specific markup, so reading the rendered element
+ * would copy a four-line excerpt of a rich rendering. `entry.body` is the
+ * underlying message — the same string whether the row is collapsed or open,
+ * with its own newlines — and the byline, clock and "Working" chrome are not in
+ * it because they were never part of what the provider said.
+ */
+function copyButton(entry) {
+  return `<button type="button" class="vmsg-copy" data-v-msg-copy="${esc(entry.id)}"
+    data-v-copy-text="${esc(entry.body)}" aria-label="Copy message" title="Copy message">
+    <span class="vmsg-copy-mark" aria-hidden="true">\u29c9</span><span class="vmsg-copy-label">Copy</span>
+  </button>`;
+}
+
+/**
+ * The one actions row a message carries. Show more governs how much of the
+ * message you are looking at; Copy takes all of it regardless. They sit
+ * together because they are the two things you do to a message, and neither is
+ * worth a menu.
+ */
+function msgActions(entry, clamp) {
+  const bits = [];
+  if (clamp) bits.push(previewToggle(entry.id));
+  if (entry.body) bits.push(copyButton(entry));
+  if (!bits.length) return "";
+  return `<div class="vmsg-acts">${bits.join("")}</div>`;
+}
+
 export function messageRow(entry, { renderProviderBody = null, attachments = "" } = {}) {
   if (!entry) return "";
   const cls = ROLE_CLASS[entry.role] || "vmsg-system";
@@ -764,21 +894,29 @@ export function messageRow(entry, { renderProviderBody = null, attachments = "" 
     </li>`;
   }
 
+  const clamp = messageNeedsPreview(entry.body);
+
   if (entry.role === MESSAGE_ROLE.PROVIDER) {
     const body = typeof renderProviderBody === "function"
       ? renderProviderBody(entry)
       : `<div class="vmsg-body">${esc(entry.body)}</div>`;
-    return `<li class="vmsg ${cls}" data-v-role="provider"${entry.working ? ' data-gw-live="1"' : ""}>
+    return `<li class="vmsg ${cls}${clamp ? " is-clampable" : ""}" data-v-role="provider"
+      data-v-msg-id="${esc(entry.id)}"${entry.working ? ' data-gw-live="1"' : ""}>
       ${byline(entry)}
-      ${body}
+      <div class="vmsg-clamp" data-v-msg-clamp>${body}</div>
+      ${msgActions(entry, clamp)}
       ${entry.meta && !entry.working ? `<div class="vmsg-meta">${esc(entry.meta)}</div>` : ""}
     </li>`;
   }
 
   // USER. The instruction is shown verbatim; delivery is quiet metadata.
-  return `<li class="vmsg ${cls}" data-v-role="user" data-gw-last>
+  // Attachments sit OUTSIDE the clamp — an artifact is not prose, and hiding it
+  // behind "Show more" would hide the thing the message was carrying.
+  return `<li class="vmsg ${cls}${clamp ? " is-clampable" : ""}" data-v-role="user"
+    data-v-msg-id="${esc(entry.id)}" data-gw-last>
     ${byline(entry)}
-    <div class="vmsg-body vmsg-user-body gw-last-text" data-gw-msg-text>${esc(entry.body)}</div>
+    <div class="vmsg-clamp" data-v-msg-clamp><div class="vmsg-body vmsg-user-body gw-last-text" data-gw-msg-text>${esc(entry.body)}</div></div>
+    ${msgActions(entry, clamp)}
     ${attachments}
     ${entry.meta ? `<div class="vmsg-meta">${esc(entry.meta)}</div>` : ""}
   </li>`;

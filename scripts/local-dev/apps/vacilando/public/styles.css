@@ -3321,3 +3321,292 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
   .topbar{padding:6px 12px;min-height:0;gap:8px;}
   .topbar .search,.topbar #improve-vacilando-btn,.topbar .gen{display:none;}
 }
+
+/* ---------------------------------------------------------------------------
+   FOUR-LINE MESSAGE PREVIEW.
+
+   SCAN DENSITY, NOT HIDING. The message is entirely in the DOM — this clamps it
+   visually — so copy, find-in-page and assistive technology keep the whole text.
+   What changes is how much of the screen one message may claim before the
+   operator has agreed to spend it: a phone should show several exchanges, not
+   one verbose provider response.
+   --------------------------------------------------------------------------- */
+.vmsg-clamp{min-width:0;}
+/* THE CLAMP GOES ON THE CHILD, NOT ON .vmsg-clamp ITSELF.
+   `.vmsg` is a flex container, so `.vmsg-clamp` is a flex item — and a flex
+   item's display is BLOCKIFIED. `display:-webkit-box` became `flow-root`,
+   `-webkit-line-clamp:4` computed to 4 and did nothing, and every message
+   rendered full height while the toggle sat underneath claiming otherwise. A
+   browser probe caught it; the geometry checks had not, because they were
+   asserting against the same broken layout.
+   The child is an ordinary block inside a block, so it is never blockified. */
+.vmsg:not(.vmsg-provider).is-clampable:not(.is-expanded) .vmsg-clamp > *{
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+}
+/* A PROVIDER REPORT IS NOT A PARAGRAPH, SO THE CLAMP GOES DEEPER.
+   Its body is `.gw-report-body` inside `.gw-report`, and clamping the outer
+   wrapper does nothing: a clamp only counts LINE boxes, and `.gw-report` is a
+   block child, so the whole report counted as one item and a 1,600-character
+   report rendered 875px tall on an 844px phone — the exact complaint the
+   preview was meant to answer. It surfaced only once the fixture was made as
+   long as a real report.
+   `.gw-report` is flattened to a block while collapsed for the same reason the
+   wrapper moved: a flex ITEM has its display blockified, so a clamp declared on
+   `.gw-report-body` inside a flex parent would be discarded in turn. */
+.vmsg-provider.is-clampable:not(.is-expanded) .gw-report{display:block;}
+.vmsg-provider.is-clampable:not(.is-expanded) .gw-report-h{margin-bottom:6px;}
+.vmsg-provider.is-clampable:not(.is-expanded) .gw-report-body{
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+}
+.vmsg-more{
+  align-self:flex-start;font:inherit;font-size:12.5px;font-weight:600;
+  color:var(--juniper);background:transparent;border:0;padding:4px 0;cursor:pointer;
+  min-height:32px;
+}
+.vmsg-more:hover{text-decoration:underline;}
+.vmsg-more-close{display:none;}
+.vmsg.is-expanded .vmsg-more-open{display:none;}
+.vmsg.is-expanded .vmsg-more-close{display:inline;}
+/* A fade tells the reader there IS more, so "Show more" is an offer rather than
+   a surprise. Only while collapsed, and never over the user's tinted ground
+   where it would read as a gradient someone chose. */
+.vmsg-provider.is-clampable:not(.is-expanded) .vmsg-clamp{position:relative;}
+.vmsg-provider.is-clampable:not(.is-expanded) .vmsg-clamp::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;
+  background:linear-gradient(to bottom, rgba(255,255,255,0), var(--card));
+}
+
+/* ---------------------------------------------------------------------------
+   THE MESSAGE ACTIONS ROW
+
+   Two actions, one row, no menu. "Show more" governs how much of the message
+   you are looking at; Copy takes all of it either way. They read as quiet text
+   affordances rather than buttons because a thread of ten messages would
+   otherwise carry twenty button-shaped holes.
+   --------------------------------------------------------------------------- */
+.vmsg-acts{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.vmsg-acts .vmsg-more{align-self:auto;}
+.vmsg-copy{
+  display:inline-flex;align-items:center;gap:5px;
+  font:inherit;font-size:12.5px;font-weight:600;
+  color:var(--ink-3);background:transparent;border:0;padding:4px 0;cursor:pointer;
+  min-height:32px;
+}
+.vmsg-copy:hover{color:var(--juniper);text-decoration:underline;}
+.vmsg-copy:focus-visible{outline:2px solid var(--juniper);outline-offset:2px;border-radius:4px;}
+.vmsg-copy-mark{font-size:13px;line-height:1;}
+/* Confirmation is the same control saying what it did — not a toast that
+   covers the thread, and not a layout change that moves the text being read. */
+.vmsg-copy.is-copied{color:var(--juniper);}
+.vmsg-copy.is-failed{color:var(--clay, #a4452f);}
+
+@media (max-width:860px){
+  .vmsg-more{min-height:36px;font-size:13px;}
+  /* Thumb targets, without turning the row into two chips. */
+  .vmsg-acts{gap:18px;}
+  .vmsg-copy{min-height:36px;font-size:13px;}
+}
+
+/* ===========================================================================
+   COMPOSE MODE — TYPING IS A MODE
+
+   MEASURED, on a 390-wide phone with the iOS keyboard up: the lane kept its
+   back link, breadcrumb, title, status line, six scrolling tabs, a Details
+   button and the four-destination bottom bar, and gave the instruction field
+   44px with a 76px ceiling — laid out as a ROW, so the field was a slot beside
+   Send. Writing a real instruction meant typing a mission statement through a
+   letterbox while the chrome that told you where you were took four times the
+   space of the thing you were doing.
+
+   This is not the normal lane with less room. It is a different composition
+   for a different task. Orientation chrome stands down — you already know
+   which lane you are in, because you are typing into it — the thread keeps
+   enough tail to show what is being replied to, and the field becomes the
+   subject of the screen.
+
+   `data-gw-compose` is set by focus on the instruction field (see
+   syncComposeMode), not by media query: a short viewport is not the same fact
+   as an operator writing, and only one of them should move the furniture.
+   =========================================================================== */
+@media (max-width:860px){
+  /* ---- what stands down ------------------------------------------------ */
+  /* Orientation. You are in the lane; the question is what to say, not where
+     you are. Details and Stop lane are decisions, not writing, and both are one
+     dismissal away. */
+  :root[data-gw-compose] .topbar,
+  :root[data-gw-compose] .vtabs-lane,
+  :root[data-gw-compose] .vlane-head-top,
+  :root[data-gw-compose] .vlane-head-meta,
+  :root[data-gw-compose] .vlane-head-acts,
+  :root[data-gw-compose] .vtabs,
+  :root[data-gw-compose] .gw-new-update,
+  :root[data-gw-compose] .gw-composer-h{display:none;}
+
+  /* ---- the minimal lane context that remains --------------------------- */
+  /* One line: which lane, and what it is doing. That is the whole of what a
+     writer needs to keep in view. */
+  :root[data-gw-compose] .vlane-head{padding:4px 13px 0;}
+  :root[data-gw-compose] .vlane-head-row{margin:0 0 4px;align-items:center;}
+  :root[data-gw-compose] .vlane-head-id{
+    display:flex;align-items:baseline;gap:8px;min-width:0;flex-wrap:nowrap;
+  }
+  :root[data-gw-compose] .vlane-title{
+    font-size:14px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+  }
+  :root[data-gw-compose] .vlane-head-state{margin-top:0;flex:0 0 auto;font-size:11.5px;}
+
+  /* ---- the conversation keeps its tail --------------------------------- */
+  /* It shrinks, it does not disappear: replying to something you can no longer
+     see is the defect this mode exists to fix, not one to introduce. */
+  /* 40px is the floor the composer sizer reserves for the thread; the two
+     numbers must agree or one of them silently wins. */
+  :root[data-gw-compose] .vlane-body{flex:1 1 auto;min-height:40px;padding:8px 13px;}
+
+  /* ---- the writing surface --------------------------------------------- */
+  /* The interaction zone stops rationing itself: in this mode it IS the screen,
+     and the thread above it is what yields. */
+  :root[data-gw-compose] .vlane-interaction{
+    max-height:none;flex:0 0 auto;padding:6px 13px max(6px, env(safe-area-inset-bottom, 0px));
+  }
+  :root[data-gw-compose] .gw.is-detail .gw-composer{
+    padding:6px 8px;box-shadow:none;border-radius:var(--radius-lg);
+    padding-bottom:max(4px, env(safe-area-inset-bottom, 0px));
+  }
+  /* COLUMN, NOT ROW. A row layout is what made the field a slot: it can only
+     ever be as tall as the button beside it. The field owns its own line and
+     the controls sit under it. */
+  :root[data-gw-compose] .gw-composer-box{flex-direction:column;align-items:stretch;gap:6px;}
+  /* The inline height is computed against the visual viewport in
+     autosizeInstruction; these ceilings would otherwise clamp it back to the
+     quick-reply size. Beyond its cap the field scrolls itself. */
+  :root[data-gw-compose] .gw-composer textarea{
+    max-height:none;min-height:0;overflow-y:auto;font-size:16px;line-height:1.45;
+    flex:0 0 auto;width:100%;
+  }
+  /* Send and attach stay immediately reachable at a thumb-sized target. The
+     provider stays REACHABLE but stops competing with the writing: it is a
+     choice you occasionally revisit, not part of composing. */
+  :root[data-gw-compose] .gw-composer-row{
+    margin-top:0;flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;
+  }
+  :root[data-gw-compose] .gw-lane-stage:not(:has(.gw-start)) .gw-provider{
+    display:flex;flex:0 1 auto;min-width:0;opacity:.72;
+  }
+  :root[data-gw-compose] .gw-provider-opt{min-height:34px;padding:5px 9px;font-size:12px;}
+  :root[data-gw-compose] .gw-attach{flex:0 0 auto;min-height:40px;display:flex;align-items:center;}
+  :root[data-gw-compose] .gw-send{min-height:40px;min-width:76px;margin-left:auto;flex:0 0 auto;}
+  /* No giant empty container around the controls. */
+  :root[data-gw-compose] .gw-count,
+  :root[data-gw-compose] .gw-enter-hint{display:none;}
+
+  /* A lane-scoped interruption still explains why the run is waiting, so it
+     survives compose mode — as one compact line, not a panel. */
+  :root[data-gw-compose] .vneeds-tray{flex:0 0 auto;padding:5px 9px;font-size:12px;}
+}
+
+/* ===========================================================================
+   NEEDS YOU — THE GLOBAL INTERRUPTION CENTRE
+
+   MEASURED, before: three pending requests rendered as the first and largest
+   block of Home (a card per request, above the fold), AND as a bar pinned to
+   the top of the content column on every other route, AND above the lane
+   catalogue. One decision, three simultaneous renderings, none of them where
+   the operator happened to be looking — and all of them permanent, so the
+   application read as perpetually alarmed even when nothing was wrong.
+
+   An interruption is not page content. It is a property of the whole
+   application: either something is blocked on a human or nothing is. So it
+   lives in the shell, in one fixed place, and says nothing at all until it has
+   something to say.
+   =========================================================================== */
+.vneeds-global{display:flex;align-items:center;margin-left:8px;}
+
+.vneeds-ctl{
+  display:inline-flex;align-items:center;gap:7px;
+  font:inherit;font-size:12.5px;font-weight:600;color:var(--ink-2);
+  background:transparent;border:1px solid var(--line);border-radius:var(--pill);
+  padding:5px 11px;min-height:32px;cursor:pointer;
+}
+.vneeds-ctl:hover{background:var(--bg-tint);color:var(--ink);}
+.vneeds-ctl:focus-visible{outline:2px solid var(--juniper);outline-offset:2px;}
+.vneeds-ctl-ico{width:15px;height:15px;flex:0 0 auto;}
+/* QUIET WHEN QUIET. With nothing pending this is a label, not an alert: no
+   terracotta, no badge, no pulse. The colour is the signal, so it may only
+   appear when the signal is real. */
+.vneeds-ctl.has-items{border-color:var(--attn);color:var(--attn-ink);}
+.vneeds-ctl-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;border-radius:var(--pill);
+  background:var(--attn);color:#fff;font-size:11px;font-weight:700;line-height:1;
+}
+
+.vneeds-scrim{position:fixed;inset:0;z-index:60;background:rgba(31,42,36,.18);}
+.vneeds-scrim[hidden]{display:none;}
+
+/* Desktop: a right-side panel, anchored under the top bar. It overlays rather
+   than reflows — opening your interruptions must not move the work underneath
+   them. */
+.vneeds-panel{
+  position:fixed;z-index:61;top:56px;right:16px;width:min(380px, calc(100vw - 32px));
+  max-height:min(72vh, 560px);display:flex;flex-direction:column;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.vneeds-panel[hidden]{display:none;}
+.vneeds-panel-head{
+  display:flex;align-items:center;gap:9px;padding:11px 14px;
+  border-bottom:1px solid var(--line);flex:0 0 auto;
+}
+.vneeds-panel-title{margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);}
+.vneeds-panel-count{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;border-radius:var(--pill);
+  background:var(--attn);color:#fff;font-size:11px;font-weight:700;
+}
+.vneeds-panel-close{
+  margin-left:auto;font:inherit;font-size:18px;line-height:1;color:var(--ink-3);
+  background:transparent;border:0;cursor:pointer;min-width:32px;min-height:32px;border-radius:var(--radius-sm);
+}
+.vneeds-panel-close:hover{background:var(--bg-tint);color:var(--ink);}
+.vneeds-panel-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px 14px 12px;}
+/* One line of WHY, under what is being asked. The proposal itself — inputs,
+   fingerprint, escalation, approve/deny — is what Review opens, on the lane
+   that raised it, because that is the only place it has its context. */
+.vneeds-row-why{
+  display:block;font-size:12px;color:var(--ink-3);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+
+@media (max-width:860px){
+  /* A phone gets a sheet, thumb-reachable, rather than a panel pinned to a
+     corner it has to stretch for. */
+  .vneeds-panel{
+    top:auto;bottom:0;right:0;left:0;width:auto;
+    max-height:min(78dvh, 620px);
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  .vneeds-ctl-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
+  .vneeds-ctl{min-height:36px;padding:6px 10px;}
+  .vneeds-panel-close{min-width:44px;min-height:44px;}
+  .vneeds-panel-list .btn{min-height:40px;}
+}
+
+/* Compose mode owns the screen; an interruption centre is not what the operator
+   is doing while typing, and its control is inside the chrome that stands down. */
+@media (max-width:860px){
+  :root[data-gw-compose] .vneeds-panel,
+  :root[data-gw-compose] .vneeds-scrim{display:none;}
+}
+
+/* EXACTLY ONE CONTROL IS VISIBLE AT ANY WIDTH. The lane-header mount exists for
+   the mobile lane, where the top bar stands down; on desktop the top bar's
+   control is the one, and this one is not rendered at all. */
+.vneeds-global-lane{display:none;}
+@media (max-width:860px){
+  .app:has(.gw.is-detail) .vneeds-global-lane{display:flex;margin-left:0;}
+  .app:has(.gw.is-detail) .vneeds-global-lane .vneeds-ctl{padding:5px 9px;min-height:32px;}
+}
+
+/* A request that names no lane this host knows. Stated, never linked. */
+.vneeds-row-unresolved{font-size:11.5px;font-weight:600;color:var(--ink-3);white-space:nowrap;}

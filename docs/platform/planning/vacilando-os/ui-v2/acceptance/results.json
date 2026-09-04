@@ -1,13 +1,13 @@
 {
-  "accepted_at": "2026-09-04T03:17:12.765Z",
+  "accepted_at": "2026-09-04T03:27:33.449Z",
   "base": "http://127.0.0.1:3030",
   "installed_toolkit": [
     "source_repo=/Users/vacilando/Alloy",
     "source_ref=origin/staging",
-    "source_commit=b2a3f427c7ec300f2989f9bf54d4358ce8847158",
-    "source_commit_short=b2a3f427c7ec",
+    "source_commit=4ee65145b96b8d576f958b54aae5b441c0fa254e",
+    "source_commit_short=4ee65145b96b",
     "source_subdir=scripts/local-dev",
-    "installed_at=2026-09-04T03:15:14Z",
+    "installed_at=2026-09-04T03:26:02Z",
     "installed_by=alloy-toolkit",
     "command_count=84"
   ],
@@ -52,7 +52,7 @@
     {
       "name": "the running Gateway projects the estimate to the UI",
       "ok": true,
-      "detail": "{\"percent\":62,\"confidence\":\"medium\",\"summary\":\"Installed-runtime acceptance: driving the live Gateway\",\"remaining_work\":\"mobile acceptance and terminal-state proof\",\"source\":\"provider_estimate\",\"updated_at\":\"2026-09-04T03:16:07.954Z\"}"
+      "detail": "{\"percent\":62,\"confidence\":\"medium\",\"summary\":\"Installed-runtime acceptance: driving the live Gateway\",\"remaining_work\":\"mobile acceptance and terminal-state proof\",\"source\":\"provider_estimate\",\"updated_at\":\"2026-09-04T03:26:29.246Z\"}"
     },
     {
       "name": "installed module: a run can be created for the terminal-state proof",
@@ -67,7 +67,7 @@
     {
       "name": "installed module: COMPLETE becomes a MEASURED 100%",
       "ok": true,
-      "detail": "{\"percent\":100,\"confidence\":\"high\",\"summary\":\"midway\",\"remaining_work\":null,\"source\":\"deterministic\",\"updated_at\":\"2026-09-04T03:16:08.181Z\"}"
+      "detail": "{\"percent\":100,\"confidence\":\"high\",\"summary\":\"midway\",\"remaining_work\":null,\"source\":\"deterministic\",\"updated_at\":\"2026-09-04T03:26:29.474Z\"}"
     },
     {
       "name": "installed module: FAILED removes the estimate",
@@ -277,7 +277,7 @@
     {
       "name": "LIVE mobile 390: a long thread opens at the latest message, not the oldest",
       "ok": true,
-      "detail": "latest message visible=true, scrollTop 6076 of 6076"
+      "detail": "latest message visible=true, scrollTop 5946 of 5946"
     },
     {
       "name": "LIVE mobile 390: Details opens the compact Lane Inspector",
@@ -387,7 +387,7 @@
     {
       "name": "LIVE mobile 320: a long thread opens at the latest message, not the oldest",
       "ok": true,
-      "detail": "latest message visible=true, scrollTop 6547 of 6776"
+      "detail": "latest message visible=true, scrollTop 6746 of 6746"
     },
     {
       "name": "LIVE mobile 320: Details opens the compact Lane Inspector",

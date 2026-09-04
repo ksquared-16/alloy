@@ -38,11 +38,29 @@ amended SQL was **promoted into `combined_query`** and the stale top-level `quer
 `runs_1_2_query_hash`. Until this landed the improvement was authored but **unreachable**, sitting in a key
 nothing reads. The alternative route — a dedicated run-3 artifact — is **unexecutable**: `queryArtifactPath` is
 a default parameter and none of its three call sites passes it, so it would have failed *silently*, spending
-the authorization on a byte-identical run. **That rename must not be reverted** (§4)
+the authorization on a byte-identical run. **That rename must not be reverted** (§4). **The unexecutable-route
+claim is SUPERSEDED as of 2026-09-04** — the artifact path *is* now choosable, and its default has flipped away
+from this file; see the W-0 run-4 entry below
 · **W-0 run 3 EXECUTED 2026-08-07T17:24:16Z** (`tha_67f9c69f628d1a`) — **zero drift for the third consecutive
 run** across all of Q1–Q6, and the census **identifies its own target for the first time**: org fingerprint
 `ab7e5dde…`. Query hash `743cd63b…` → `a3982ca5…`, which is the added key, not drift. The Supabase project ref
 is still unproven, so `target.confirmed_against_live` stays `false` (§4)
+· **W-0 run 4 PREPARED, NOT EXECUTED 2026-09-04** (mission `msn_3a5c03a002709dc240`, assignment
+`asg_727e2369868c78`) — run 3's counts are **28 days old** and M1/M9 have since reached staging with their apply
+state unreadable by any worker, so **Q4 and Q3 are now the only instrument** that can settle it. Re-grounding
+passes and the hash trap is not armed. **⚠ The request must carry `artifact_refs` naming this file** — an empty
+`artifact_refs` silently runs the **Q15** census instead (§4)
+· **W-0 run 4 REQUEST FILED 2026-09-04** (mission `msn_595040c168e0103c38`, assignment `asg_94de43cc5c3482`) —
+governed action **`gar_3368b11eb1b1ce`**, `artifact_refs` stated explicitly so the trap above is not armed.
+**Run 4 now needs one operator authorization and no further worker work.** Filing also found that an unbound
+session must pass `mission_id` explicitly, and that dedupe is **mission-scoped** — the same request under run 3's
+mission would have silently returned run 3's counts (§4)
+· **W-0 run 4 filed a SECOND time 2026-09-04** (mission `msn_0e24196324d1441ac2`, assignment
+`asg_45a7990a10e28c`) — `gar_c834cb05ce8425`, filed independently four minutes later by a concurrent session
+given the same objective. **Mission-scoped dedupe did not collapse the two, so there are now two operator cards
+for one census: approve `gar_3368b11eb1b1ce`, deny this one.** No worker-side withdraw exists. This pass also
+corrected the run-4 preparation's own hash evidence — the `git log … returns EMPTY` claim is false, though the
+verdict it supports survives on a stronger key-level check (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -129,6 +147,31 @@ function re-creates all 57 keys on the next org creation, so M5 must edit that l
 RL-3's subject is repaired and re-runs green over the full catalog; W-11's instrument is deliberately
 **unnumbered** and a lock number is requested of the Director (`DR-12`). W-10's row and key counts are
 restated to **37 rows over 57 keys** (§7)
+· **W-4 fifth issuance 2026-09-04** (mission `msn_0e24196324d1441ac2`, assignment `asg_a7d97e07ef0c59`) —
+**nothing could be executed**: no `node_modules`, no resolvable `typescript`, so the AST walk had no parser
+and **no count is claimed for this date**; the 2026-08-07 column is still the last measured one. The finding
+is instead that **the ratchet moved seven times between 2026-08-07 and now — unresolved 15 → 22, advisory
+10 → 12 — and this document recorded none of it.** Two of those moves are **the check going red on staging
+and stopping a build** (PR #416, PR #555), which is the first evidence in the record that `prebuild` bites in
+CI rather than only locally. Verified without executing: the register is internally consistent (ceilings
+**22/12** equal the list lengths, `baseline` empty), **all 34 listed routes exist**, and the direction
+predicate holds both ways. **Citation drift found again** — `enrollment-upload`'s entry has drifted on five
+of five cited lines and names a since-renamed function, **eight days after that entry claimed line-by-line
+verification**; the security model is intact, the description is not. Recorded, not corrected — the register
+is outside this assignment's scope (§5)
+· **W-5 third issuance 2026-09-04** (mission `msn_0e24196324d1441ac2`, assignment `asg_d465c0259237e6`) — the
+audit was re-run by table across `app/`+`lib/` at a base **994 web commits** later: the writer set is **still
+three**, all three still on the RPC, and **no SQL path writes `user_roles` either** (the migration tree grew by
+57 and contains exactly one `INSERT INTO user_roles`, W-5's own function). **The fourth instance of the escape
+class, now in the pattern rather than the subject:** the discovery lock's `DIRECT_WRITE` regex cannot match a
+chained write whose intermediate call carries a **nested parenthesis** — `.eq("user_id", String(id)).update(…)`
+is invisible to it, and `[^)]*` is why. The second issuance's headline repair (*"the chained-call form is
+matched"*) holds only for parenthesis-free arguments, and **its non-vacuity guard cannot detect this**, because
+the anchor it pins is the adjacent form. Zero live victims; **recorded and escalated, not fixed — the tier B
+lock is not in this assignment's scope** and no test could be executed to prove a pattern change red. Tier C
+**strengthened within scope**: W-16's role FK (`20260818190000`, landed *after* W-5's last issuance) makes the
+opposite failure direction injectable for the first time, so the suite now covers **orphan profiles** as well as
+orphan memberships. Tier C still unexecuted — the service-role key remains absent by design (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -589,7 +632,7 @@ rather than confirming it backwards — their target remains inferential; every 
    commit `7dc06920a`), which is also where runs 1 and 2's exact query text lives now that `combined_query`
    carries the amendment.
 
-**W-0's counts are no longer eight days old — they are current as of this run.** The standing rule is
+**W-0's counts were current as of run 3. They are not current now — see the run-4 section below.** The standing rule is
 unchanged and still governs: Q4 is the count that grows, and every §11 preflight must re-derive it rather than
 cite this one. Per the census file's `now_also_serves_w6_m1_preflight`, this run is *also* the fresh Q4 that
 W-6/M1 requires immediately before apply, and its `q4_pairs_without_profile = 2` is the number M1 must equal.
@@ -604,6 +647,169 @@ the apply follows closely, and *an aged preflight is not a preflight*. W-0 suppl
 is W-6's to flip and is deliberately not set by the census file.** If time has passed, the correct move is
 another census — now a single authorization on a proven channel. Full rule-by-rule evaluation lives at the
 census file's `w6_m1_preflight.preflight_run_3_outcome`.
+
+#### W-0 re-issued a fifth time — **2026-09-04**, assignment `asg_727e2369868c78`: run 4 prepared, and the executor moved underneath it
+
+W-0 was re-issued a fifth time (mission `msn_3a5c03a002709dc240` v1, contentHash `5d17cc99075c029bedda580dc02ef6cb`)
+against exit criteria met on 2026-07-31 and re-confirmed twice. **The counts were not re-asserted and no
+byte-identical run was requested** — this file names that as the wrong outcome. Full preparation is at the census
+file's `run_4_preparation`; §4 records what changed.
+
+**Why a run 4 is warranted on evidence rather than on the calendar.** Runs 1→2→3 returned zero drift, but that
+was diagnosed as an *idle tenant*, not a stable system. Run 3's evidence is now **28 days old**, and in that
+window the world its counts describe moved: **M1** (`20260807140000_backfill_membership_access_profiles.sql`)
+and **M9** (`20260818190000_w16_user_roles_role_foreign_key.sql`) both reached `origin/staging`, and
+[`post-merge-certification-reconciliation.json`](./post-merge-certification-reconciliation.json) `finding_C`
+records that **no worker session can read whether they were applied** to the target. Q4 and Q3 settle exactly
+that, from the data side, without the migration ledger and without a second authorization:
+
+| Query | What run 4 settles that nothing else can |
+|---|---|
+| **Q4** | `q4_pairs_without_profile` = **0** ⇒ M1 **is** applied to the target; = **2** ⇒ it is **not** |
+| **Q3** | M9's own in-transaction preflight aborts unless undefined rows are 0, so a non-zero Q3 proves the FK is **not** on the target and C2 is still open there |
+| **Q4** | **The first real test of W-5.** Three runs held `q4_membership_rows` at 8, so the writers were never exercised. If 28 days of use moved it, membership rows must grow while `pairs_without_profile` stays flat |
+| `target_identity` | Run 3 *established* fingerprint `ab7e5dde…`; run 4 is the first that can be **checked against** it. A different fingerprint invalidates the comparison outright |
+
+**⚠ THE TRAP THAT WOULD WASTE THE AUTHORIZATION — read before filing the request.** A `database.read_census`
+request filed with **no `artifact_refs`** no longer runs this census. It silently runs the **Q15** census — a
+different artifact answering different questions, carrying no Q1–Q6 expression at all.
+`governed-action-request.mjs:1801-1803` falls back to `[Q15_CENSUS_ARTIFACT]` whenever `artifactRefs` is empty
+and the action key is `DATABASE_READ_CENSUS`, and `:1091-1094` resolves the same default. **The run-4 request
+must state `artifact_refs: ["docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json"]`
+explicitly.**
+
+This **supersedes the claim made above** (and in the header) that the artifact path *"is not choosable through any
+Director or operator path"*. That was true when written — `queryArtifactPath` was a default parameter no call
+site passed — and the governed-action-request layer has since added artifact selection **and flipped the
+effective default away from this file**. `trusted-host-actions.mjs:903` still defaults to
+`wave0-authority-census.json`, so the two layers now disagree; the ref must be *stated*, not relied upon. The old
+default protected W-0 by accident, the new one endangers it by accident. **This is the second time the execution
+plumbing — not the SQL — was the thing most likely to waste an authorization** (the first was the stale
+`query_hash` trap). Both were invisible from the SQL. Any future census re-issue should re-read the executor first.
+
+**⚠ AND RUN 4 WILL NOT UPDATE THE CENSUS FILE.** The evidence write-back is no longer pinned to it:
+`trusted-host-actions.mjs:782-784` now *derives* the path as `<query artifact>.results.json`, so run 4 lands in
+**`wave0-authority-census.results.json`** — a file that does not yet exist, so the merge branch is skipped and a
+bare `{trusted_host_action_id, query_hash, results}` is written instead. **`wave0-authority-census.json` will
+still read `status: executed`, `census_run_at: 2026-08-07` and run 3's `results` afterwards.** Anyone consuming
+run 4 must read the `.results.json`; citing this file's `results` block would silently quote run 3. That
+supersedes the artifact's `evidence_write_back_confirms_it` note (true when written) and both predictions in
+`what_the_directors_merge_back_will_do`. One genuine upside: runs 1-3's `results` now **survive** rather than
+being overwritten. `run_history` is still not appended to, so run 4 needs two hand edits after it lands — a
+`run_history[4]` entry and a drift comparison against run 3.
+
+**Re-grounding: PASS.** Exactly one migration since run 3 touches a census table —
+`20260818190000_w16_user_roles_role_foreign_key.sql` — and it only drops and re-adds a constraint (lines 84-91).
+No column the census reads was added, dropped, renamed or retyped, so all six queries still resolve.
+
+**The hash trap is not armed.** `git log 873a2f097..HEAD -- wave0-authority-census.json` is empty and the file is
+clean, so `combined_query` is byte-identical to the text the Director itself hashed as `a3982ca5…` during run 3's
+merge-back. That is a *provenance* argument and needs no local `sha256` — which remains unavailable (`shasum` and
+`openssl` are permission-walled in this worktree too, as `node -e` was in slot 6).
+
+**Still the only blocker: the operator authorization.** There is no worker-side channel to *execute*
+`database.read_census` — that is Director-side by design and no credential reaches the worker.
+
+#### W-0 re-issued a sixth time — **2026-09-04**, assignment `asg_45a7990a10e28c`: run 4 **filed**
+
+Mission `msn_0e24196324d1441ac2` v1, contentHash `4624625b87d59bcce256b0a8746e7b72`. The run-4 preparation
+above was complete and correct; **what it had not done was ask.** Run 4 is now a filed governed action —
+**`gar_c834cb05ce8425`**, `status: requested`, `operator_approval_required: true`, filed 2026-09-04T11:02:36Z
+on lane `lane_9b9082778292`, run `asg_45a7990a10e28c`.
+
+**The correction that unblocked this, and it is a distinction five re-issues collapsed.** Every pass since
+2026-08-06 recorded *"there is no worker-side channel to `database.read_census`, so a re-dispatch cannot move
+it"* and stopped at preparation. That conflates two channels. There is no worker-side channel to **execute**
+the census — true, and it must stay true. But **`vac governed-action` is a worker-side channel to _file_ the
+request**, and filing is what puts the authorization card in front of the operator
+(`governed-action-request.mjs:1650-1656`: a `DATABASE_READ_CENSUS` against the default target always requires
+an operator grant). Five passes of preparation had been waiting on an operator who **had not been asked**.
+
+**The trap was avoided, and verified rather than assumed.** The stored record for `gar_c834cb05ce8425` carries
+`artifact_refs: ["…/wave0-authority-census.json"]`, checked in `requests.json` *after* filing — the only way to
+know, since omitting the ref runs Q15 silently rather than failing.
+
+**One correction to the preparation's own evidence, which does not change its verdict.**
+`hash_state_verified_2026_09_04` argued the hash trap is unarmed because
+`git log 873a2f097..HEAD -- wave0-authority-census.json` *"returns EMPTY."* **It does not** — two commits after
+run 3 touch the file (`3e000209a`, `242865b3b`). The verdict is still right, on a check against the *keys*
+rather than the file: `git diff 873a2f097 -- <file> | grep '^[-+].*combined_query'` returns five lines, all
+additions inside run-4 prose that merely mention the string and none of them the top-level `"combined_query":`
+key line, and the same diff filtered on `"query_hash"` returns nothing. `combined_query` is emitted as one line
+with escaped newlines, so an unchanged key line is an unchanged query. **The trap is not armed.**
+
+**Nothing has run.** Filing is not running. Every count in the census file is still run 3's, dated
+2026-08-07; W-0's exit criteria remain met on run-3 evidence, and `residual_risks[0]` stands undiminished.
+On approval, results land in `wave0-authority-census.results.json` — **not** in the census file — and
+`run_history[4]` plus the run-3 drift comparison still need writing by hand.
+
+**⚠ TWO CARDS, ONE CENSUS — approve `gar_3368b11eb1b1ce`, deny `gar_c834cb05ce8425`.** W-0 was dispatched to
+two concurrent sessions in this worktree and **both filed run 4 within four minutes**: `gar_3368b11eb1b1ce`
+(mission `msn_595040c168e0103c38`, 10:59:09Z) and `gar_c834cb05ce8425` (this assignment, 11:02:36Z). They did
+not collapse because **dedupe is mission-scoped** — `dedupeKey` is
+`[mission_id, lane_id, action_key, target, identityFromInputs]` (`governed-action-request.mjs:1140-1148`), and
+these two agree on *every* component except `mission_id`, including the artifact path. The sibling was filed
+first and is already `awaiting_operator` with decision card `dec_b1c5c947f5129e`; both name this census in
+`artifact_refs`, so **either one alone produces the same run 4** and approving both would spend two
+authorizations on one read — the economy §4.1 calls *"the mistake `W-0` Q6 already avoided once."*
+
+This was **not** self-corrected because there is no worker-side withdraw: `vac cancel` routes to the
+*validation* broker (`vac:46-49`), and `governed-action-request.mjs` exports no worker-facing cancel. The
+duplicate is a property of concurrent dispatch rather than of either session's reasoning — both correctly
+concluded that filing was the missing step. **A lane- or artifact-scoped dedupe would have collapsed these
+two; a mission-scoped one cannot.**
+
+#### W-0's *other* sixth re-issue — **2026-09-04**, assignment `asg_94de43cc5c3482`: the sibling filing, `gar_3368b11eb1b1ce`
+
+Mission `msn_595040c168e0103c38` v1, contentHash `5cc8a895477c55b065075f22faef3cbe`. **This is the request the
+section above recommends approving.** The two assignments ran concurrently in this worktree, neither able to see
+the other, and reached the same conclusion independently: the fifth pass's *"run 4 remains an operator
+authorization"* was true about **executing** and false about **asking**, and nobody had asked. This one filed at
+10:59:09Z with `artifact_refs` stated explicitly; `asg_45a7990a10e28c` filed at 11:02:36Z. **The collision, and
+the recommendation to approve this one and deny `gar_c834cb05ce8425`, are recorded once, above.** That section's
+account is the authoritative one — it could read the stored records and this session could not. Only what it does
+*not* cover appears here.
+
+**1. `--lane` and `--run` are mandatory and neither is discoverable from an unbound session.**
+`vac governed-action` requires both (`vac-governed-action.mjs:61`), but `vac health --json` reported
+`lanes.consistency` → `lanes: 0` with **both** provider seats unbound (`pid 61631 · alloy-ui-vac · no lane`),
+measured twice ~20 minutes apart. The filing succeeded because `validateRequestShape` consults the lane binding
+**only when `mission_id` is absent** (`governed-action-request.mjs:1423-1454`) — the payload's mission id wins and
+`missionIdForLane()` is merely the fallback. **Pass `mission_id` explicitly**, or an unbound session dead-ends on
+`missing_mission_binding` for a reason that has nothing to do with the census. (The sibling filed on lane
+`lane_9b9082778292` while the same check reported zero lanes; both observations stand, unreconciled from the
+worker side.) The run id is the sharper hazard: an unmatched one is a safe no-op (`execution-run.mjs:904-908`,
+`:1011-1015` scan and return null), but a run id belonging to **another** lane would transition *their* run to
+`NEEDS_INPUT` via `releaseRunAfterGovernedFailure`. **Do not guess one that might exist.**
+
+**2. A correction: the evidence path was never pinned to the census file.** The fifth pass is right that run 4
+lands in `wave0-authority-census.results.json` and right about every consequence, but not about the timing — it
+reads as a regression (*"no longer pinned"*, *"now derives"*). `git log -S` over the
+`.replace(/\.json$/i, "") + ".results.json"` expression returns **exactly one commit, `3bcd4fd9c` (2026-07-31)**,
+the original Trusted Host Actions change. The derivation predates run 1. It did not *move*; the reason no
+`.results.json` sits beside this file is that `evidenceAbs` is joined to the **originating worktree**
+(`trusted-host-actions.mjs:709-711`) and runs 1–3 originated in `wt6-vacilando-os-product-def`. So this artifact's
+`results` block was carried back **by hand**, not written by the merge-back — which makes the standing "two hand
+edits after run 4" instruction an understatement rather than a new burden. Both run-4 requests name the `ui-vac`
+worktree, so the results file will appear here.
+
+**3. There is a *second* mission-scoped dedupe, in the trusted-host layer, and its failure mode is worse.**
+The section above cites `dedupeShapeOf` for why the two requests did not collapse. Downstream,
+`requestTrustedHostAction` dedupes again — on `queryHash`, across `listTrustedHostActions(missionId)` — and
+returns an existing **completed** action with `deduped: true` (`trusted-host-actions.mjs:294-304`). Because
+`combined_query` is deliberately byte-identical to run 3's, so is its hash. **A run-4 request filed under run 3's
+mission (`msn_e7894cb7225bae3c2b`) would have returned run 3's completed action and its 2026-08-07 counts,
+silently, as though freshly executed** — the Q15 failure shape from a third direction. Neither filing is exposed,
+because both used fresh missions. **Freshness comes from the mission scope, not from the query**: a census whose
+query is deliberately unchanged is a census whose dedupe key is unchanged.
+
+**One caveat retired.** `readonly_validation` has stood as *"by inspection"* since 2026-08-06 because the worker
+cannot execute `validateReadOnlySql`. It can be discharged by provenance instead:
+`git log --since=2026-08-07 -- scripts/local-dev/lib/vacilando/trusted-host-sql-readonly.mjs` is **empty**, so the
+validator is byte-identical to the one run 3 passed, and `combined_query` is byte-identical to what run 3 fed it.
+Same query, same validator, same verdict. The permission wall is meanwhile **wider** than recorded: not just
+`node -e`, but `node <script-file>`, `shasum -a 256` and `openssl dgst -sha256` are all refused, so there is no
+in-worker route to `sha256` by any obvious means. Both checks stay provenance arguments because they have to be.
 
 ---
 
@@ -1203,6 +1409,118 @@ but that was its judgment, not a property of the system. **Dispatch, not this pl
 changed identity, and its title describes a fixture rather than an access sprint.** Whether Wave 1 should still
 be re-issued at all is a Director question, raised here rather than absorbed.
 
+#### Wave 1, sixth issuance — **2026-09-04**, assignment `asg_aca1b697a73e02`: the criterion three runs called unmet is met, and the suite could not be run
+
+The sixth issuance of W-1…W-3, and the first across a **month-long** interval. §4's rule holds a sixth time:
+**re-execute rather than re-assert.** Two things make this run different from the five before it. The finding is
+**good news for once** — W-2's exit criterion, recorded *not met* in three consecutive issuances, is now met,
+and not by a Wave 1 change. And the evidence is **weaker than any prior run's**: the suites could not be
+executed at all.
+
+| Field | Value |
+|---|---|
+| Base | `bda34e2e8` @ `agent/ui-vac` — **995 web commits** since the fifth-issuance base `448ca9d9f`. API routes 570 → **603**; migrations 314 → **371**. This root is `managed-worktree`, sanctioned, and **8 commits behind `origin/staging`** |
+| Suites | **NOT RUN.** No dependencies installed in this worktree; see *"The evidence this run cannot supply"* below |
+| Subjects | Re-derived statically: analytics family **27** (floor 27) · class-wide G2 **103 of 603** (floor was 91) |
+| Changed | `web/tests/access/analyticsRouteGates.test.ts` — one ratchet (91 → 103) and two comments. No route handler, library, schema or migration |
+
+**The evidence this run cannot supply, stated first.** `web/node_modules` does not exist in this worktree.
+`npx vitest` cannot load `vitest.config.ts` (`Cannot find module 'vitest/config'`); the brokered
+`vac run test` reaches the same wall and exits `rc=1 class=config` with `warning: the command never ran`.
+Installing dependencies required an approval this session did not have. **So no test result is claimed here —
+not green, not red, not a count.** Every number below is a static re-derivation that replicates each lock's own
+predicate against the same file set, and it is labelled as such. Three prior issuances declined to claim a
+typecheck they could not run; this one declines to claim a suite. The exit criteria for W-1…W-3 are therefore
+**re-derived but not re-proved**, and that gap is the honest scope of this record.
+
+**W-1 / RL-1 — holds on every clause, and the class-wide ratchet had drifted 12 below the live count.**
+
+The family census is **27** files (floor 27), unchanged across 995 commits, and all 27 call a gate that denies a
+principal the portal refuses to admit. The class-wide G2 subject is **103 of 603** route files, and **all 103**
+call a listed sufficient gate or the reviewed capability predicate — no route resolves a raw access context and
+gates on nothing else. All four pinned path assertions still hold, including the two negative ones
+(`metrics/resolve` and `admin/departments` still absent from the subject). The alias lock finds three aliases,
+both named ones present, and no alias of a listed symbol is unlisted.
+
+The floor sat at **91 against a live 103** — twelve routes of free slack, the largest gap this ratchet has
+carried, and precisely what W-4's lesson and the 2026-08-06 record warn about. Ratcheted to 103. Because it was
+set without a run, the derivation is written into the source rather than asserted here: comment-stripping was
+proved a **no-op on this corpus** (zero raw-resolution calls occur in a comment, line or block form), and every
+way the executed predicate can differ from the derivation — `codeOnly` joining a match across a stripped block
+comment, `\s*` spanning a newline, `readdirSync` seeing files ripgrep's gitignore filter does not — moves the
+count **up**, never down. So the executed subject is ≥ 103 and the new floor can only fail loudly. That
+asymmetry is the whole argument for setting it blind: **a loud failure is worth more than silent slack**, which
+is this plan's own standing preference. The next run that can execute the suite should confirm the exact figure.
+
+**A third subject gap, in the list the fifth issuance repaired — recorded, and deliberately not fixed.**
+`SUFFICIENT_GATES` omits two real portal-enforcing gates, both exported by `lib/adminAuth.ts`, which is itself
+one of the three `ACCESS_PRIMITIVE_MODULES` the alias lock reads: `getAdminAuthCached` (null unless
+`bundle.ok && bundle.portalEligible`, `:43-45`) with its `@deprecated` alias `getAdminAuth` (`:92`), and
+`requireAdmin` (`:98-107`, strictly stronger — portal **and** `role === "admin"`).
+
+This is the alias lock's own gap one level up, and the pattern is now four deep: 2026-08-04 listed
+*directories*, 2026-08-06 moved to the *primitive*, 2026-08-07 caught the *alias*, and each repair left a
+hand-maintained list policing the layer beneath it. The alias lock asks whether an alias of an **already
+listed** symbol is listed — so `getAdminAuth` is found by `exportedAliases` and correctly not flagged, because
+its target was never listed either. **A module can export a wholly new gate and neither list notices.**
+
+It is the **noisy, not unsafe** direction — an unlisted *gate* flags a correctly gated route, it never hides an
+exposure — and it has **zero live victims**, since all 103 subject routes call a gate that is listed. **Left
+unlisted on purpose.** Adding entries to `SUFFICIENT_GATES` is the *permissive* direction, and widening a lock
+against no observed failure, in a session that cannot execute it, is how a lock quietly stops locking. The
+durable repair is the same change of question once more — require every export of the three primitive modules
+to be classified as gate, raw resolution, or reviewed non-gate — and it belongs with a run that can prove it
+red. Recorded, not absorbed.
+
+**W-2 / RL-11 — the exit criterion is MET, for the first time since W-2 shipped.** The 2026-08-06, 2026-08-07
+and fifth-issuance records each closed with *"W-2's exit criterion remains not met"*, naming the same two
+`user_department_access` paths. Both are closed, and **neither was closed by Wave 1**:
+
+- **W-8 shipped and deleted the write.** `lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts` now
+  contains **no `insert`, `upsert` or `update` at all** — verified against the file, not inferred from its
+  header. The module's own note states the vector plainly: the subject *"was always `currentUserId`, so the
+  write was self-authority… `refreshDepartmentScopeDimensions` folded the new row into that same request's live
+  allow-list."* It now returns `SELF_DEPARTMENT_PROVISIONING_MESSAGE`, a refusal that names the remedy as
+  another administrator. **This is the exact latent path the 2026-08-06 record predicted W-8 would arm, closed
+  in the same change that removed the bypass** — the sequencing that record asked for, honoured.
+- `POST /api/admin/lifecycle-catalog/repair` consequently reaches no authority write; its remaining `.insert`
+  (`repairLifecycleWorkspaceVisibility.ts:202`) targets `departments`. `POST /api/admin/departments` delegates
+  to the same now-read-only helper.
+
+**And the prescribed durable repair was built.** 2026-08-06 asked for a subject enumerated by something other
+than a text census over route files; 2026-08-07 showed W-5 had already invalidated the by-table version.
+`web/tests/access/selfAuthorityRouteDiscovery.test.ts` now discovers the subject by **route shape and import
+closure**, with an `EXEMPT` register that is *"an exemption register, not the lock's subject: a new route that
+is not on it fails the lock, which is the opposite of the enumerated-subject failure."* It carries the
+anti-vacuity anchor the prior runs asked for (it asserts the closure sees `users/[userId]/role/route.ts`, which
+contains no authority table name), and its four exemptions each carry a reason — including
+`lifecycle-catalog/delete`, **discovered by the lock and in no prior enumeration**. The guard itself is intact
+and still called by all three routes (`role:33`, `remove:46`, `access-scope:81`).
+
+**W-3 / RL-2 — structurally closed by W-10, and *replaced* rather than deleted, as the plan required.**
+`lib/admin/permissionGrid.ts` no longer holds `PERMISSION_GRID_ROWS`; the grid is a projection of
+`permission_definitions`, and a row naming a key the catalog does not hold is **unrepresentable** rather than a
+defect to catch. W-3's QA note said the assertion *"becomes structurally unnecessary at W-10 and must be
+replaced, not deleted, by the projection test"* — it was: `permissionGrid.test.ts` now runs RL-3's *"is sound —
+no row can name a key the catalog does not hold"* (`:140`) plus H2/RL-48, and the file grew from 5 tests to
+roughly 24. C13 → W-11 still owns the `workflows.*` restore question, and `ops.workflows.*` now appears in
+`lib/admin/unenforcedPermissionKeys.json` as a W-50 unenforced key — so the row would still grant nothing.
+
+**Concurrency, a third time — and this run is inside it, not merely observing it.** Two artifacts were
+uncommitted in this worktree at session start and both belong to **this assignment's own mission**
+(`msn_0e24196324d1441ac2`, contentHash `4624625b87d59bcce256b0a8746e7b72`): a rewrite of §4's W-0 sixth-issuance
+section, and an untracked `a.md` headed *"DX-5 Evidence Experience — Discovery"* carrying the identical mission
+id and hash. So the mission is running Wave 1 and a DX-5 discovery pass against one worktree simultaneously.
+Neither was touched, reverted, or built upon — the fourth issuance's judgment, now applied as policy. **The
+mission identity divergence the fifth issuance escalated has widened, not closed:** Wave 1 is being re-issued
+under a mission titled *"DX-5 Evidence Experience"*, against a file headed `msn_e9133cdade883793d2`, and its
+phase names an access sprint. `X-2` / `DR-4` / `QE-15` register the document divergence; whether an
+evidence-experience mission should be issuing Wave 1 at all remains the Director question the fifth issuance
+raised and no run has answered.
+
+**Not verified this run.** No suite execution, no typecheck, no live database query — W-0's counts are now
+**four weeks** old. Wave 1 needs no live query, but M1 must still re-derive Q4 rather than cite it.
+
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
 517 of 539 route files hold a service-role client. I-3 requires every one to resolve and gate a principal
@@ -1630,6 +1948,151 @@ that the result *gates* the handler. W-14 and W-15 still own that proof. The mis
 recorded at §5's fourth-issuance leg applies to this assignment too (`msn_bc33a72e3138ebc215`, *"DX7 Fixture —
 Ready Promotion"*); it is not re-raised here.
 
+#### W-4, fifth issuance — **2026-09-04**, assignment `asg_a7d97e07ef0c59`: nothing could be executed, and the ratchet moved seven times without this document
+
+Fifth leg, and the first across a **four-week** interval. §4's rule applies a fifth time: **re-execute rather
+than re-assert** — and this run could not execute. That is the first thing to say, because it bounds
+everything below. The finding is therefore not a measurement: it is that **the register advanced seven times
+between 2026-08-07 and today, twice because the check went red on staging, and this document recorded none of
+it.** The workstream kept working; its record stopped.
+
+| Field | Value |
+|---|---|
+| Base | `20a20f0db` @ `agent/ui-vac` — **996 web commits** since the 2026-08-07 base `448ca9d9f`. API routes 570 → **603**. Root is `managed-worktree`, sanctioned, **8 commits behind `origin/staging`** |
+| CLI | **NOT RUN.** `web/node_modules` does not exist; `npm ci` and `node <script>` were both declined by the permission layer, and **no `typescript` package is resolvable anywhere on this machine** — the AST walk has no parser |
+| Lock | **NOT RUN.** `web/tests/access/serviceClientPrincipalCheck.test.ts` is present (10,324 bytes) and unmodified; vitest is unavailable for the same reason |
+| Evidence | [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) **not regenerated** — regeneration is the check |
+| Changed by this assignment | **No source, test, register or migration file.** This record is the deliverable |
+
+##### The evidence this run cannot supply, stated first
+
+W-4's entire instrument is an AST walk over TypeScript's own parser, and the parser is a package this worktree
+does not have. There is no honest substitute: a text census of `supabaseAdmin` importers is precisely the
+instrument §10.2 forbids and the one `auditAuthorityPaths.mjs` used to over-report by 30×. **So no count is
+claimed for 2026-09-04 — not routes, not holders, not resolvers, and above all not the unresolved figure that
+is this workstream's headline number.** The 2026-08-07 column remains the last measured one, and it is now
+four weeks old against a tree that grew 33 route files.
+
+What follows is either a **fact about a file** (existence, list length, an import statement) or a **fact about
+the register's own history**. Neither is a measurement of the tree's authority, and neither is labelled as one.
+
+##### What was verified without executing anything
+
+Four things, all mechanical, none requiring the walk:
+
+1. **The artifacts are present and wired.** `web/scripts/checkServiceClientPrincipal.mjs` (29,567 bytes), the
+   register, the lock, and `web/package.json:7` — `prebuild` still runs `check:service-client-principal`
+   second of four, so `next build` still cannot proceed past it.
+2. **The register is internally consistent.** `ratchet.max_subject_unresolved` is **22** and `exceptions`
+   holds **22** entries; `max_transitive_only_unresolved` is **12** and `advisory_transitive_only` holds
+   **12**; `baseline` is **empty**. The ceilings sit exactly at the list lengths, which is the state the
+   2026-08-06 leg made enforceable in both directions.
+3. **Zero deletion-class staleness.** All **34** listed route files exist at this base.
+4. **The direction predicate holds both ways.** All **22** exceptions import a service-role client directly
+   (or carry `SUPABASE_SERVICE_ROLE_KEY` inline); all **12** advisory entries import **none**, which is what
+   makes them transitive-only. This is the half of the check's predicate an import statement can settle. The
+   other half — *resolves no principal* — is exactly the half that needs the walk, and it is not claimed.
+
+##### The finding: seven ratchet moves, and the first evidence the check bites in CI
+
+The 2026-08-07 record closed with *"the ratchet sits exactly at the live floor in both directions"* at
+**unresolved 15 / advisory 10**. The register now reads **22 / 12**, through seven moves it recorded itself:
+
+| Date | Move | Why |
+|---|---|---|
+| 2026-08-14 | unresolved 15 → **14**; advisory 10 → **12** | **Staging `prebuild` RED after PR #416.** `book` stopped importing a client (stale exception); `book` + new `confirm-attendance` became transitive-only |
+| 2026-08-16 | 14 → **16** | Participant Runtime V1 — `enrollment-objective`, `enrollment-turn` |
+| 2026-08-18 | 16 → **17** | `enrollment-edit` |
+| 2026-08-19 | 17 → **18** | `enrollment-document` |
+| 2026-08-19 | 18 → **19** | `enrollment-signature-asset` |
+| 2026-08-19 | 19 → **20** | `communications/unsubscribe` (WS8 V1 recipient opt-out) |
+| 2026-08-27 | 20 → **22** | **Staging build RED on PR #555.** `enrollment-artifact`, `enrollment-upload` |
+
+**Two of the seven are the check going red in continuous integration and stopping a build.** Every prior leg
+ran the check locally, on a base someone had already made green; this is the first evidence in the record that
+`prebuild` refuses a staging landing that adds an unresolved service-client route. That is the exit criterion
+— *"the number stops growing silently"* — working in the one place it was never observed working. It is the
+strongest thing this run has to report, and it comes from the register's history rather than from anything
+this session ran.
+
+**And the direction is one move down, six up: net +7 on a list whose stated discipline is that it may only
+shrink.** The register argues each raise is not a loosening, and per entry the argument is sound and specific:
+nine of the eleven `public/forms/[token]` entries sit on one gate, `resolveParticipantEnrollmentFromToken`,
+which is itself the same `resolvePublicFormLinkByToken` the original four used. A participant route has no
+session principal to resolve **by construction** — the token *is* the principal — so the ceiling moving with
+the family is the designed behaviour, not an escape.
+
+But the aggregate deserves saying plainly: **the reviewed-exception list grew ~47% in three weeks, and every
+one of those weeks fell outside a W-4 assignment.** The check bounded it, the register reasoned it, and the
+plan document — the artifact a reader consults to learn what the exception baseline *is* — said 15 throughout.
+The exit criterion promises the number stops growing *silently*; it did not grow silently, it grew **loudly in
+a file nobody was reading**. That is a different failure, and it is this record's to own rather than the
+check's.
+
+##### The un-reviewed window adds nothing to the subject
+
+The register was last reviewed 2026-08-27 (last committed `d90c6e4e7`, 2026-08-26). Since then: **three route
+files added, one already deleted.** The two survivors are `dev/build-identity` and `dev/supabase-origin`, and
+**neither imports any Supabase client** — they are outside W-4's subject entirely, not exceptions to it.
+Eight route files were modified; three are already-listed exceptions, one is `dev/supabase-origin`, and the
+remaining four are admin routes that hold a client *and* call `getAdminContextCached` or `loadAdminRouteGate`
+— wrappers the walk discovers rather than hand-lists, so they are credited without a register entry.
+
+This is a statement about the *inputs* to the check, not its output. It says no un-reviewed route obviously
+belongs on a list; it does not say the check is green, and this run cannot say that.
+
+##### Citation drift, found again — and this time eight days after the entry claimed line-by-line review
+
+The 2026-08-06 leg found four inaccurate advisory reasons and named the general defect: **nothing binds a
+reason to the line it cites.** The 2026-08-07 leg declined to re-read the register, calling three commits a
+weak reason to expect drift. Two entries were spot-checked this run — the two newest, added 2026-08-27 by the
+note that says both were *"verified against the tree line-by-line rather than assumed"*:
+
+- **`enrollment-artifact` is exact.** Gate at `:52`, `resolveActiveArtifact` at `:59` — both correct, both
+  still read-only, no caller-supplied selector on the path.
+- **`enrollment-upload` has drifted on five of five cited lines, and one names a symbol that no longer
+  exists.** The register cites the gate at `:75` (actual **`:73`**), the field id at `:88` (actual **`:86`**),
+  `uploadDestinationForField` at `:105` — the function is now **`resolveParticipantUploadDestination`** at
+  **`:110`** — `doc_type` from the schema at `:135` (actual **`:146`**), and the subject read at `:111-117`
+  (actual **`:123-128`**).
+
+**The security model is intact, and arguably stronger.** The route's own header (`:16-25`) documents why the
+resolver changed: it now searches every artifact *this session realized* rather than only the active one,
+because collecting required evidence up front refused the Exemption's attachments. The boundary is unchanged
+— the caller still names a field id and nothing else, the destination still comes from a schema the session
+pins, `doc_type` still comes from the schema (`:146`), the entity is still the session's own
+`process_instances.subject_id` (`:123-128`), and the PDF/PNG/JPEG magic-byte sniff with a 10MB cap is intact
+(`:36`, `:40-42`, `:97-98`).
+
+**What decayed is the register's description, in eight days, with the build green throughout** — and the entry
+carried an explicit line-by-line verification claim when it was written. That closes the question the
+2026-08-07 leg left open: drift is not a function of how many commits touched the file, it is a function of
+whether the file was touched at all, and `enrollment-upload/route.ts` is on the modified list. The control is
+still periodic human re-reading, and it is still the only control.
+
+**Recorded, not corrected.** This assignment's scope names one file — this document — and the register is not
+it. Correcting five citations in a security register is a register edit, and doing it outside scope is the
+move §4 exists to prevent. Handed forward as a follow-up, with the exact replacements above.
+
+##### Not verified this run
+
+**No check, no lock, no typecheck, no evidence regeneration, no live database query** — W-0's counts are now
+**four weeks** old, though nothing in W-4 depends on them. **No red demonstration**, at the CLI or in-process;
+both need the parser. **The other 32 register entries were not re-read**, and given that the two newest drifted
+within eight days, the twenty added since the last full line-by-line review (2026-08-06) should be assumed to
+carry drift until someone checks.
+
+**The honest limit above is unchanged and still governs**: this check proves a principal is *resolved*, never
+that the result *gates* the handler. W-14 and W-15 still own that proof.
+
+**Concurrency and mission identity.** Two artifacts belonging to this same mission
+(`msn_0e24196324d1441ac2`, contentHash `4624625b87d59bcce256b0a8746e7b72`) were uncommitted in this worktree
+at session start: §5's Wave 1 sixth-issuance section, and an untracked `a.md` headed *"DX-5 Evidence Experience
+— Discovery"*. Neither was touched, reverted, or built upon. The divergence §5's fifth and sixth issuances
+escalated applies here too and has not closed: **this W-4 leg is issued under a mission titled *"DX-5 Evidence
+Experience"***, against a document headed `msn_e9133cdade883793d2`, with a phase naming an access sprint.
+Whether an evidence-experience mission should be issuing Wave 1 remains the unanswered Director question.
+
 ---
 
 ## 6. Wave 2 — The scope invariant
@@ -1849,6 +2312,126 @@ snapshot caveat, because the tree is still being edited by another assignment.
 the most recent `type: "test"` artifact for an assignment is authoritative and earlier ones are historical; or
 an **amend/withdraw** operation so a worker can retract an artifact it authored. Without one of them, "do not
 leave contradictory artifacts" is an instruction no worker can carry out.
+
+#### W-5, third issuance — **2026-09-04**, assignment `asg_d465c0259237e6`: the wiring held for 996 commits, and the lock's *pattern* is the fourth escape
+
+Third issuance, and the first across a **four-week** interval — the two prior ones were written the same day.
+§4's rule applies again: **re-execute rather than re-assert.** The wiring re-executes clean, which after 996
+web commits is the substantive good news. The finding is one level below the last one: the second issuance
+repaired the lock's **subject** and left its **pattern** narrower than the record claims.
+
+| Field | Value |
+|---|---|
+| Base | `20a20f0db` @ `agent/ui-vac` — **994 web commits** since the second-issuance base `3f8046824`. API routes 570 → **603**; migrations 314 → **371**. Root is `managed-worktree`, sanctioned, **1 commit ahead of `origin/staging`** on `web` |
+| Suites | **NOT RUN.** `web/node_modules` is absent and `node` invocation was declined by the permission layer, so neither vitest nor a standalone script could execute. See *"The evidence this run cannot supply"* |
+| Writer set | Re-enumerated **by table** across `web/app` + `web/lib`: **still three**, all routed through the RPC. **No fourth product writer in 996 commits** |
+| Changed | `web/tests/access/membershipProfileInvariant.integration.test.ts` — one added tier C case and its header note. **No route handler, library, schema or migration** |
+
+##### The evidence this run cannot supply, stated first
+
+`web/node_modules` does not exist in this worktree, and `node` could not be invoked to run even a standalone
+script. **So no test result is claimed here — not green, not red, not a count.** The tier B suite's last
+measured result remains the second issuance's *16 passed / 0 failed* at `3f8046824`, now four weeks old. Every
+statement below is either a **fact about a file** (an import, a constraint, a grep result) or a **derivation
+that replicates a predicate by hand**, and each is labelled as such. This is the same limit the Wave 1 sixth
+issuance and W-4's fifth issuance hit on the same day, in the same worktree.
+
+##### What re-executed clean
+
+**The audit was re-run by table, not by name** — the question that missed `createOrgAndAssignAdmin` twice.
+Across `web/app` and `web/lib`, **nineteen** files name `user_roles` (7 under `app/`, 12 under `lib/`);
+**every one of them but the three known writers is a read, a doc comment or a type**. `lib/access/memberRoleAssignment.ts` and `lib/access/actorPermissionGrants.ts`
+are new since the last issuance and both only read; `lib/employment/employmentService.ts` names the table solely
+to state that employment must never touch it. All three writers still import `@/lib/admin/membershipWithProfile`
+and still hold no direct write.
+
+**And the audit was widened to the layer no prior issuance checked: SQL.** The migration tree grew from 314 to
+371 — 57 migrations that the tier B lock, which walks `.ts`/`.tsx` under `app/` and `lib/`, is structurally
+unable to see. Across all 371, there is exactly **one** `INSERT INTO … user_roles`, and it is inside W-5's own
+`create_membership_with_access_profile`. No later migration redefines, drops or re-grants either function.
+**A membership cannot be created by a migration or a database function outside the atomic path** — that is a
+new check, and it passes.
+
+Direct writers outside `app/`+`lib/` are unchanged from the prior record: two seed scripts (both of which write
+profiles of their own) and `tests/processing/cert/processingIdentityCertFixtures.ts:115`, still uncovered and
+still deliberately so. Nothing under `components/`, `hooks/`, `contexts/` or `certification/` touches the table.
+
+##### The finding: `[^)]*` — the lock's pattern is narrower than its record claims
+
+The second issuance's repair reads: *"The chained-call form (`.from("user_roles").select(…).eq(…).update(…)`)
+is matched, which the old single-`.`-hop pattern missed."* That is true only for intermediate calls whose
+**arguments contain no parenthesis**. The pattern at `membershipAtomicWiring.test.ts:39` walks intermediate
+hops with `(?:\.\s*\w+\([^)]*\)\s*)*?`, and `[^)]*` **cannot cross a nested `)`**. So:
+
+| Form | Matched |
+|---|---|
+| `.from("user_roles").insert({…})` | yes — zero hops |
+| `.from("user_roles").eq("org_id", orgId).update({…})` | yes — plain arguments |
+| `.from("user_roles").eq("user_id", String(id)).update({…})` | **no** |
+| `.from("user_roles").in("role", roles.map((r) => r.key)).update({…})` | **no** |
+
+The derivation, since it could not be executed: after `.eq(`, `[^)]*` consumes up to the `)` that closes
+`String(`, `\)` consumes that `)`, and the next repetition then faces `)` where it requires `.` — and no
+shorter `[^)]*` helps, because every character it could give back is a non-`)`, so `\)` fails too. The match
+attempt dies with `.update` still ahead of it. `String(…)`, `.map(…)` and a nested resolver call are ordinary
+Supabase idioms, not contrived ones.
+
+**Its non-vacuity guard cannot catch this, and that is the sharper half.** The guard added by the second
+issuance exists precisely so the empty-set assertion cannot pass for the wrong reason — but the writer it pins,
+`processingIdentityCertFixtures.ts:115`, is `.from("user_roles").upsert(…)`, the **adjacent** form with zero
+intermediate hops. It exercises the branch that was never in doubt. **Nothing anchors the chained form at all**,
+so the pattern could be reverted to the old single-hop version and every test in the file would still pass.
+
+This is the **fourth** appearance of this escape class in this workstream, and the progression is now explicit:
+2026-08-04 hand-listed *directories*; 2026-08-06 moved to the *primitive*; 2026-08-07 caught the *alias*; the
+second issuance replaced a pinned *subject* with discovery. Each repair moved the weakness one layer down and
+left it there. **It is now in the regex.** The same day's Wave 1 record found the identical shape a fourth time
+in RL-1's gate list, independently — which is what makes it structural rather than an accident of one lock.
+
+**Zero live victims**, and that is not mitigation: all three writers are on the RPC, so the empty-set assertion
+is correct today for reasons that have nothing to do with the pattern's reach. The exposure is entirely
+prospective — a fifth writer added in the chained-with-nested-paren shape lands green.
+
+**Recorded and escalated, not fixed.** `membershipAtomicWiring.test.ts` is **not in this assignment's scope**;
+the deliverables name the plan and the tier C suite. Beyond scope, the honest constraint is that a pattern
+change could not be proven here — this session cannot execute the suite, and widening a matcher blind is how a
+lock acquires false positives that the next runner disables. The durable repair is the same change of question
+this workstream has now made three times: **parse rather than match** — resolve `.from("user_roles")` chains
+through the TypeScript AST, as `checkServiceClientPrincipal.mjs` already does for W-4, so argument syntax
+stops being able to hide a terminal call. That belongs with a run that can prove it red against a probe in each
+of the four rows above.
+
+##### Tier C, strengthened — and the migration that made it possible landed after the last issuance
+
+Tier C previously injected failure one way only: a non-existent `org_id`. Because
+`user_access_profiles.org_id` references `orgs(id)`, that fails the **first** statement in the function — the
+profile insert — so it proves no membership is left behind but says nothing about the profile insert being
+inside the transaction, since it never lands. **The opposite direction was untested: a failure *after* the
+profile row is written, which without a transaction leaves an orphan profile** — `q4_profiles_without_membership`,
+the count W-0 measured at zero and no test defends.
+
+That direction was not injectable when W-5 shipped. **W-16's `20260818190000_w16_user_roles_role_foreign_key.sql`**
+— eleven days after W-5's last issuance — constrains `user_roles (org_id, role)` to
+`role_definitions (org_id, role_key)`. A real org with an undefined role now fails the **second** statement,
+after the profile insert has succeeded. One case was added on exactly that seam, asserting both counts return
+to zero, with the assertion written against the invariant rather than the SQLSTATE (there is no `CHECK` on
+`user_roles.role`; the FK is the enforcement, so the failure is the FK's — but the test does not depend on
+that). Tier C is **7 cases**, was 6.
+
+**Tier C still has never been executed, and the reason is unchanged and structural**, not a permission this
+assignment lacked: `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by design, so `hasEnv` is
+false by construction and `describe.skipIf(!hasEnv)` skips cleanly. The added case is therefore **authored, not
+proven**, exactly like the six beside it. The Director-side execution channel the second issuance asked for is
+still the blocker, and it is now guarding one more assertion than before.
+
+##### Exit criterion
+
+**Argued, not demonstrated — and the gap is narrower on one axis and wider on another than the last record
+said.** *"Q4's count cannot grow"* holds by construction at this base: every membership-creating path in
+`app/`, `lib/` **and now SQL** goes through a single transaction. What is newly weaker is the guarantee that a
+*future* path would be caught — the lock's discovery is sound and its pattern is not. No live database query
+was made, so Q4 is not re-derived here; per §11 that remains M1's job, and W-0's counts are now **four weeks**
+old.
 
 ### W-6 — Backfill profiles for existing memberships *(S · migration · shared → preflight)*
 
@@ -3342,7 +3925,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
-| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review |
 
 **W-11 has no lock in either register, and did not mint one.** `RL-35` — *every catalog key resolves to ≥1
 enforcement site* — is `W-50`'s, and is red today by 36 keys, so it cannot be claimed here. The product-source
