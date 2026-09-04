@@ -1547,8 +1547,19 @@ const completeEnrollment: Phase = {
                 // The most specific child identity, so movement targets exactly this journey.
                 process_instance_id: pathA.journeyId,
             },
-            // The family stage move belongs to the operator UI; the child effect is what is certified.
-            skipTargetKinds: ["move_to_stage"],
+            /*
+             * NOTHING IS SKIPPED ANY MORE.
+             *
+             * This used to skip `move_to_stage`, and the reason was sound at the time: the
+             * completion rule then sat beside a family-grain `enrolling`, so the movement it
+             * carried was the FAMILY Opportunity's, which the operator UI owns and which a child
+             * certification has no business performing.
+             *
+             * That is no longer what the target is. `enrolling` is the child's own stage, and the
+             * move is the child's move to `enrolled` — one of the two durable facts this phase
+             * exists to certify. Skipping it would certify half the outcome and leave the process
+             * stage behind, which is exactly the split-truth this program has been closing.
+             */
         } as Parameters<typeof executeStageOperatingOutcome>[0]);
 
         const failed = result.failed_targets ?? [];
@@ -1558,7 +1569,8 @@ const completeEnrollment: Phase = {
 
         const after = await readChildState(ctx, pathA.childId, pathA.journeyId);
         const nowEnrolled = String(after.ocmStatus ?? "").toLowerCase() === "enrolled";
-        if (!nowEnrolled) {
+        const nowEnrolledStage = String(after.processStage ?? "").toLowerCase() === "enrolled";
+        if (!nowEnrolled || !nowEnrolledStage) {
             /*
              * REPORT WHAT THE EXECUTOR DID, not only what the row says afterwards.
              *
@@ -1568,7 +1580,10 @@ const completeEnrollment: Phase = {
             const raw = result as unknown as Record<string, unknown>;
             return {
                 status: "failed",
-                detail: `after Complete Enrollment the child reads ${String(after.ocmStatus)}, not enrolled`,
+                detail: nowEnrolled
+                    ? `after Complete Enrollment the child's durable status is enrolled but the `
+                      + `journey stage reads ${String(after.processStage)}, not enrolled`
+                    : `after Complete Enrollment the child reads ${String(after.ocmStatus)}, not enrolled`,
                 evidence: {
                     before,
                     after,
