@@ -56,6 +56,7 @@ import {
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
+  fulfillSetProviderCeilingForMission,
   previewTrustedHostAuthorization,
 } from "./trusted-host-actions.mjs";
 import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
@@ -991,11 +992,41 @@ export function pendingGovernedActionForRun(runId, root = runtimeRoot()) {
   return newestPending(readGovernedActionStore(root).requests.filter((r) => r.run_id === runId));
 }
 
+/** Statuses after which a request will never need the operator again. */
+export const SETTLED_GOVERNED_STATUSES = Object.freeze(["complete", "failed"]);
+const SETTLED = new Set(SETTLED_GOVERNED_STATUSES);
+
+/**
+ * Retention that cannot evict an unanswered request.
+ *
+ * This was `slice(-200)`, which keeps the newest 200 records whatever state
+ * they are in — so a request still awaiting the Director could be dropped by
+ * 200 unrelated requests arriving after it. The card then disappears from the
+ * queue, and a pending approval that vanishes is indistinguishable from one
+ * that was resolved: the lane waits on a decision nobody can see any more.
+ *
+ * Only settled records are disposable, so only settled records are counted
+ * against the cap. Unsettled ones are kept regardless of age and of how many
+ * there are — an unbounded backlog is a problem to SHOW the operator, never
+ * one to fix by forgetting the oldest of it.
+ */
+export function retainGovernedRequests(requests, cap = 200) {
+  if (!Array.isArray(requests) || requests.length <= cap) return requests;
+  const unsettled = requests.filter((r) => !SETTLED.has(r.status));
+  const settled = requests.filter((r) => SETTLED.has(r.status));
+  // Budget can be zero once the unsettled backlog alone fills the cap, and
+  // `slice(-0)` is `slice(0)` — it returns EVERYTHING. Guard the zero case
+  // explicitly rather than letting a negative-index idiom decide it.
+  const budget = Math.max(0, cap - unsettled.length);
+  const keep = new Set(budget === 0 ? [] : settled.slice(-budget).map((r) => r.request_id));
+  return requests.filter((r) => !SETTLED.has(r.status) || keep.has(r.request_id));
+}
+
 function putRequest(store, rec) {
   const idx = store.requests.findIndex((r) => r.request_id === rec.request_id);
   if (idx >= 0) store.requests[idx] = rec;
   else store.requests.push(rec);
-  if (store.requests.length > 200) store.requests = store.requests.slice(-200);
+  store.requests = retainGovernedRequests(store.requests);
   return store;
 }
 
@@ -2473,6 +2504,28 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   }
   if (rec.action_key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
     return fulfillClosePullRequestForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  /*
+   * THE MISSING BRANCH. capacity.set_provider_ceiling was registered, mode-mapped,
+   * policy-covered, capability-granted and operator-APPROVED — and still failed
+   * `action_unavailable`, because execution fell through to the guard below.
+   * fulfillSetProviderCeilingForMission already existed in trusted-host-actions;
+   * it was simply never imported or dispatched, so the action has never been
+   * executable since it shipped. This is the exact failure the comment on that
+   * fallthrough describes: the action existed everywhere except in this dispatch,
+   * and the error names the registry rather than the missing branch.
+   */
+  if (rec.action_key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    return fulfillSetProviderCeilingForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},

@@ -122,6 +122,146 @@ No Director preference converts an unsafe or unsupported operation into routine
 automation. Approval history is never evidence that a new destructive class is
 safe.
 
+## The action-class inventory
+
+Every action class Vacilando can take, with the tier that decides whether it
+interrupts. **The canonical source is
+`scripts/local-dev/lib/vacilando/director-operating-authorization.mjs`** — the
+table below is a rendering of it. A structural test reconciles the inventory
+against the delegated policy set, so a policy added without a filed tier fails
+the suite rather than quietly producing an authorization that under-reports
+what runs unattended.
+
+Two things are worth reading off it directly. Most classes are **not** governed
+trusted-host actions — a checkpoint, a dev-server restart and a lane pause are
+executed by the lane or the supervisor, and they are inventoried anyway so the
+notification model can ask the same question of every class. And a tier B row
+always states its bounds: a tier B with no bounds is a mis-filed tier A, and a
+bound nobody measures is a mis-filed tier C.
+
+**repository**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `repository.checkpoint` | A | vac checkpoint-create (lane) | — |
+| `repository.push` | A | trusted host | — |
+| `promotion.open_pr` | A | trusted host | — |
+| `repository.merge_pull_request` | B | trusted host | Exact expected head, base staging, mergeable, checks green, certification suite passed, zero unresolved findings. Any one unmeasured escalates. |
+| `repository.close_pull_request` | A | trusted host | — |
+| `repository.delete_remote_branch` | B | trusted host | Branch unprotected, remote head matches expected, no open PR depends on it, no active lane references it, no unique work lost. |
+| `repository.force_push` | D | operator only | — |
+| `repository.delete` | D | operator only | — |
+
+**runtime**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `runtime.dev_server_start` | A | alloy-dev-start (canonical lifecycle) | — |
+| `runtime.dev_server_stop` | A | alloy-dev-stop (canonical lifecycle) | — |
+| `runtime.dev_server_recycle` | B | supervisor | Ownership proven, desired state RUNNING, restart budget not exhausted. |
+| `runtime.supervisor_recovery` | B | supervisor | Within the recovery budget. restart_exhausted leaves tier B and notifies STUCK. |
+
+**lane**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `lane.create` | A | gateway | — |
+| `lane.place` | A | gateway | — |
+| `lane.pause` | A | gateway | — |
+| `lane.resume` | A | gateway | — |
+| `lane.park` | B | gateway | Idle eligibility positively measured. Absence of recent activity is not proof of idleness. |
+| `lane.close` | B | gateway | Branch durability proven. Unprovable durability, or unique unmerged work, is tier C. |
+| `lane.stale_run_reconciliation` | B | trusted host | Allowlisted corrections only, plan fingerprint current, zero destructive corrections, no foreign or ambiguous owner mutation, no live process affected. |
+
+**worktree**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `worktree.create` | A | alloy-worktree-create | — |
+| `worktree.provision` | A | toolkit | — |
+| `worktree.retire` | B | trusted host | Safety measured, state candidate, tree clean, no live references, durability proven, no unique work at risk, not self-retirement, fingerprint-bound, branch never deleted along with it. |
+| `worktree.remove_orphaned` | B | host steward | Ownership proven and durability proven. Either one unmeasured makes it tier C. |
+
+**qa_identity**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `environment.restore_qa_session` | C | operator only | — |
+| `environment.provision_qa_identity` | C | operator only | — |
+| `environment.assign_qa_identity_access` | C | operator only | — |
+| `qa.browser_sign_in` | C | operator (human sign-in) | — |
+| `qa.director_auth_routing` | C | operator | — |
+
+**capacity**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `capacity.server_admission` | B | gateway | Normal 8 concurrent dev servers, burst 10 while pressure is healthy, memory-pressure knee 11. |
+| `capacity.provider_admission` | B | gateway | Within the live certified provider ceiling. |
+| `capacity.browser_admission` | B | gateway | Automated browser concurrency 2. |
+| `capacity.set_provider_ceiling` | B | trusted host | ALLOY_MAX_ACTIVE_PROVIDERS only, 4..8 inclusive, compare-and-set against the live value, rollback declared, host headroom measured, no unvalidated ceiling already active. |
+| `capacity.expand_beyond_window` | C | operator | — |
+
+**data**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `database.read_census` | B | trusted host | Allowlisted query artifact matching its expected hash. |
+| `database.apply_migration` | C | operator only | — |
+
+**credential**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `credential.provision` | D | operator only | — |
+| `credential.bind_trusted_secret` | D | operator only | — |
+
+**spend**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `spend.activate_paid_service` | C | operator only | — |
+
+**governance**
+
+| Class | Tier | Executes via | Bounds |
+|---|---|---|---|
+| `governance.update_policy` | D | operator only | — |
+| `governance.delegate_authority` | D | operator only | — |
+| `executor.grant_authority` | D | operator only | — |
+
+## The durable Director Operating Authorization
+
+`director_operating_authorization_v1`, effective 2026-09-04.
+
+The delegated policy set answers *"is this request allowed"*. That is the
+evaluator's question. The Director's question is different — *"what have I
+signed up to, what is still mine, and when did that last change"* — and before
+this there was nothing durable to point at that answered it. That absence is
+why the same consent kept being re-established.
+
+The authorization is **derived from** the live policy constants at call time,
+never copied. A second hand-maintained list is the obvious way to write it and
+the wrong one: the copy drifts, and a governance document that disagrees with
+the evaluator is worse than none, because people believe it.
+
+It records the authorized action classes and their gates, the policies that are
+**written but not enabled** (a decision the operator has not yet taken, visible
+as that rather than absent), the bounded values, the classes reserved to human
+judgement, the classes that are never automatic, and a version history in which
+every widening names who authorized it.
+
+**Inheritance is a property to protect, not a mechanism to build.** There is one
+document; every lane imports the same module. A lane may hold a *narrower*
+override, and `validateLaneOverride` refuses a widening one — the failure mode
+being a lane that quietly grants itself more than the fleet, invisible precisely
+because per-lane policy is where nobody looks.
+
+Widening and narrowing are treated asymmetrically on purpose.
+`classifyAuthorizationChange` marks any added action class **or dropped gate** as
+a widening that requires an explicit operator decision. Narrowing may happen
+silently, because it can only ever reduce what runs unattended.
+
 ## What "unmeasured" means
 
 A gate returns `true`, `false`, or `null`. **`null` never passes.** An
@@ -236,9 +376,77 @@ genuinely Director-required ones retained, stale or terminal ones closed,
 duplicates collapsed. Old `NEEDS YOU` cards do not survive merely because they
 predate the policy.
 
+## Finding: routine approval fatigue
+
+**Observed.** The Director approved essentially every routine governed action.
+Approval requests slowed execution, blocked otherwise-safe lanes, produced
+`NEEDS YOU` states that needed no decision, flooded notifications, and trained
+the operator to click rather than evaluate — which diluted the interruptions
+that genuinely mattered.
+
+**Root cause, measured rather than assumed.** Not missing policy. Every routine
+promotion already had a delegated policy and `director_approved` already mapped
+to auto-execute. Replaying real requests through the evaluator found three
+distinct causes: push and open-PR were denied on `managed_agent_branch`, which
+tested whether a branch was *named* like agent work; and merge was disabled
+while six of its ten gates were measured by nothing at all. The operator was
+being asked to supply a *measurement* — reading the same GitHub page a collector
+could read — not a judgement.
+
+**Mitigation.** Ownership is measured from the requesting worktree; the merge
+gate collector was built first and the approval removed second.
+
+**Status: not yet resolved.** This finding closes only when a real routine
+promotion completes with no Director interruption under the installed toolkit.
+Until the toolkit carrying these changes is the installed one, the old name
+proxy is still what evaluates every request — including the pushes that
+delivered this fix, each of which required a click.
+
+## Finding: toolkit convergence bootstrap gap
+
+**Observed.** Promoted staging contained a required control-plane capability.
+The installed toolkit stayed on the previous commit. The lane that needed the
+capability reported "operator-run install required" and stopped. Nothing was
+broken and nothing retried.
+
+**Root causes — two absences, not one misconfiguration.**
+
+1. **No toolkit drift signal.** Nothing compared the installed toolkit sha to
+   promoted staging. `control-plane-health.json` carried no toolkit field, so
+   the Gateway could not report that it was running old code even in principle.
+2. **No governed install action.** The trusted-host registry held thirteen
+   action keys and none installed a toolkit, so a lane could not propose the
+   install *even to be refused*. The evaluator answered "no delegated policy
+   covers this action", which reads like a policy decision and is really an
+   absence.
+
+The old toolkit could therefore neither detect its own drift nor request its own
+replacement — which is what made this a bootstrap problem rather than a bug.
+
+**Resolution.** `toolkit-convergence.mjs` owns drift detection and the
+convergence status; `host.install_toolkit` is a registered governed action;
+`routine_toolkit_convergence_v1` makes ordinary convergence Tier A. One
+operator-run bootstrap install is required to reach the first toolkit that
+contains these.
+
+**A distinction the fix depends on.** Installed and running are separate facts.
+The Gateway host process resolves through the `current` symlink and the
+control-plane server names a sha outright, so flipping the symlink moves
+neither: the executing argv is read from the process, and a path routed through
+`current` is reported as *unpinned* rather than as matching. `TOOLKIT
+UNVERIFIED` is a distinct state from `CONVERGED`, and a symlink-only check that
+reported success is exactly the failure being designed out.
+
+**Status: not resolved.** Closes when autonomous post-bootstrap convergence is
+live-certified — drift detected, `host.install_toolkit` auto-executed under
+policy, argv and health verified, blocked work resumed, no Director click.
+
 ## Related
 
 - [`managed-sprint-operations.md`](managed-sprint-operations.md)
 - [`agent-repo-boundaries.md`](agent-repo-boundaries.md)
 - `scripts/local-dev/lib/vacilando/director-authority.mjs` — the policy set and gates
 - `scripts/local-dev/lib/vacilando/director-evidence.mjs` — what is measured
+- `scripts/local-dev/lib/vacilando/director-operating-authorization.mjs` — the durable authorization and the action-class inventory
+- `scripts/local-dev/lib/vacilando/toolkit-convergence.mjs` — drift detection, convergence status and outcome verification
+- `scripts/local-dev/lib/vacilando/turn-summary.mjs` — the operator-facing turn summary contract
