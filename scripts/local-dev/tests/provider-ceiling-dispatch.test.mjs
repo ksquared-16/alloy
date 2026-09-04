@@ -70,3 +70,48 @@ test("the toolkit install is reachable end to end", () => {
   assert.match(SRC, /fulfillInstallToolkitForMission,/);
   assert.match(SRC, /rec\.action_key === ACTION_TYPES\.HOST_INSTALL_TOOLKIT/);
 });
+
+test("every action's validateInputs returns the `normalized` the request layer reads", () => {
+  /*
+   * requestTrustedHostAction reads `validated.normalized.dedupeKey` as soon as
+   * validation succeeds, and stores `validated.normalized` as the action's
+   * inputs. host.install_toolkit returned {ok, evidence, plan} with no
+   * `normalized`, so that read threw a TypeError and the governed request
+   * failed with `execution_threw` BEFORE any trusted-host action existed —
+   * which is why the failure carried no action id to inspect.
+   *
+   * Registration, dispatch and the validate contract are three separate things
+   * that must agree. The other tests here cover the first two.
+   */
+  const samples = {
+    "capacity.set_provider_ceiling": { expected_ceiling: 4, requested_ceiling: 5, rollback_ceiling: 4, reason: "round trip" },
+    "host.install_toolkit": null, // validated live below; it reads real host state
+    "lane.dispatch_measurement_instruction": {
+      purpose: "capacity_provider_certification", target_lane_id: "lane_abc123",
+      measurement_id: "m1", source_mission_id: "msn_x",
+      instruction: "CAPACITY V2 PROVIDER CERTIFICATION — READ-ONLY. DO NOT MODIFY PRODUCT STATE.\n\nInspect and report.",
+    },
+  };
+  for (const [actionType, inputs] of Object.entries(samples)) {
+    if (inputs === null) continue;
+    const def = R.getActionDefinition(actionType);
+    assert.ok(def, `${actionType} must be registered`);
+    const v = def.validateInputs(inputs);
+    assert.equal(v.ok, true, `${actionType} sample inputs should validate: ${JSON.stringify(v)}`);
+    assert.ok(v.normalized, `${actionType}.validateInputs must return normalized — the request layer reads it`);
+    assert.ok(v.normalized.dedupeKey || v.normalized.queryHash,
+      `${actionType}.normalized needs a dedupeKey or queryHash`);
+  }
+});
+
+test("host.install_toolkit honours the same contract against live host state", async () => {
+  const T = await import("../lib/vacilando/toolkit-convergence.mjs");
+  const v = T.validateInstallToolkitInputs({
+    expected_staging_sha: T.measureToolkitConvergence().promoted_staging_sha,
+    reason: "contract check against real host state",
+  });
+  assert.equal(v.ok, true, `should validate: ${JSON.stringify(v)}`);
+  assert.ok(v.normalized, "normalized must be present or the request layer throws");
+  assert.match(v.normalized.dedupeKey, /^toolkit_install:origin\/staging:[0-9a-f]{12}$/);
+  assert.match(v.normalized.expectedStagingSha, /^[0-9a-f]{12}$/);
+});
