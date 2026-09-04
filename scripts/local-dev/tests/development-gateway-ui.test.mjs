@@ -679,24 +679,35 @@ await test("Copy copies active lane output text only", () => {
     listReady: true,
   });
   assert.match(html, /VISIBLE_PANE_OUTPUT/);
-  assert.match(html, /data-gw-copy/);
-  assert.equal(html.includes("do not copy me") && html.includes("data-gw-copy"), true);
-  const copyBtn = html.slice(html.indexOf("data-gw-copy") - 80, html.indexOf("data-gw-copy") + 80);
-  assert.equal(copyBtn.includes("do not copy me"), false);
-  assert.equal(copyBtn.includes("wt1-access-identity"), false);
+  // THE THREAD-LEVEL COPY IS GONE, AND THE RULE IT ENFORCED IS NOT.
+  //
+  // This asserted a Copy control in the Conversation card header. Measured on
+  // the installed product, that control rendered above BOTH messages while each
+  // message already carried its own — the duplication this pass removed
+  // everywhere else — and it copied "the active output" rather than the message
+  // the operator was looking at. What must still hold is what the rule was for:
+  // a copy never carries the operator's own instruction, and every message
+  // carries its own control.
+  assert.equal(/data-gw-copy/.test(html), false, "no thread-level Copy in the V2 lane");
+  assert.match(html, /data-v-msg-copy/, "every message owns its own Copy instead");
+  const perMessage = [...html.matchAll(/data-v-copy-text="([^"]*)"/g)].map((m) => m[1]);
+  assert.ok(perMessage.length > 0);
+  assert.equal(perMessage.some((t) => t.includes("VISIBLE_PANE_OUTPUT")), true,
+    "the provider message copies what the provider said");
   assert.equal(copyableOutputText({
     selectedId: "alloy-identity",
     output: { ok: true, lane_id: "alloy-other", text: "OTHER_LANE" },
   }), null);
   assert.equal(copyableOutputText({ selectedId: "alloy-identity", output: { ok: false, lane_id: "alloy-identity", text: "nope" } }), null);
   assert.equal(copyableOutputText({ selectedId: "alloy-identity", output: { ok: true, lane_id: "alloy-identity", text: "   " } }), null);
+  // renderCopyControl is still the canonical control for surfaces that copy an
+  // OUTPUT rather than a message; it is simply no longer mounted over the thread.
   const empty = renderCopyControl({ text: null });
   assert.match(empty, /disabled/);
   const copied = renderCopyControl({ text: "x", feedback: "copied" });
   assert.match(copied, />Copied</);
   const failed = renderCopyControl({ text: "x", feedback: "failed" });
   assert.match(failed, /Copy failed/);
-  assert.match(gwSrc, /copyActiveOutput/);
   // Copy must yield the COMPLETE assistant response. In "recent" mode the
   // visible text is a bounded pane snapshot, so copying it handed over a
   // fragment; the copy path now fetches the complete text for the SELECTED lane

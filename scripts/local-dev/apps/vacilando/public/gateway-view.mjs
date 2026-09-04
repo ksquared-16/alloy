@@ -5506,6 +5506,8 @@ export function renderGatewayShell({
     attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
     nowMs,
     providerLabel: laneProviderLabel(lane),
+    // The visible pane output, for the WORKING case where it IS the message.
+    paneText: copyableOutputText({ selectedId, output, outputText }) || "",
   });
   /*
     CURRENT WORK IS GONE FROM OVERVIEW, AND NOTHING WAS LOST.
@@ -5524,8 +5526,14 @@ export function renderGatewayShell({
         <section class="vcard vcard-thread">
           <div class="vcard-head">
             <div class="vcard-headings"><h2 class="vcard-title">Conversation</h2></div>
+            ${/*
+              NO THREAD-LEVEL COPY. Every message owns its own Copy control, so a
+              second one in the card header is the duplication this pass removed
+              everywhere else — and it copied "the active output", which is not
+              the message the operator is looking at. Measured on the installed
+              product: one thread-level Copy still rendered above both messages.
+            */ ""}
             <div class="vcard-actions">
-              ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
               ${liveMark}
             </div>
           </div>

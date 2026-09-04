@@ -3354,7 +3354,14 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
    wrapper moved: a flex ITEM has its display blockified, so a clamp declared on
    `.gw-report-body` inside a flex parent would be discarded in turn. */
 .vmsg-provider.is-clampable:not(.is-expanded) .gw-report{display:block;}
-.vmsg-provider.is-clampable:not(.is-expanded) .gw-report-h{margin-bottom:6px;}
+/* THE FOUR LINES ARE THE MESSAGE'S, NOT THE BODY'S.
+   Measured on the installed product against a real 2,660-character report: the
+   collapsed message rendered SIX lines, because `.gw-report-h` — a status chip
+   and a phase caption — sits above the four clamped body lines and counts too.
+   That chip is duplicate status while collapsed: the byline already says who
+   spoke and the lane's own status line already says what the run is doing. It
+   returns when the message is expanded, where there is room for it. */
+.vmsg-provider.is-clampable:not(.is-expanded) .gw-report-h{display:none;}
 .vmsg-provider.is-clampable:not(.is-expanded) .gw-report-body{
   display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
 }
