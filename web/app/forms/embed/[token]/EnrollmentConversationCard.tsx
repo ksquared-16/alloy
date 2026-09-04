@@ -291,8 +291,20 @@ function StructuredFactEditor({
 }: {
     editor: SemanticEditor;
     label: string;
-    /** The value being corrected, as the parent reads it — the editor opens on it, not on blank. */
-    initial?: string;
+    /**
+     * The value being corrected, as the parent reads it — the editor opens on it, not on blank.
+     *
+     * REQUIRED, and it was optional. Three of the four call sites passed it and the fourth simply
+     * did not, which TypeScript accepted in silence: `initial` defaulted to undefined, `shown`
+     * became "", and for a date field `isoDraft("")` produced "". A parent clicking Edit on a
+     * confirmed Birthday met an EMPTY date input and had to retype from memory the value they were
+     * only trying to correct.
+     *
+     * Nothing about that failure was visible in the editor — it renders whatever it is handed — so
+     * the type is what has to prevent it. Making this required turns "a call site forgot the value"
+     * from a silent runtime blank into a compile error.
+     */
+    initial: string;
     busy: boolean;
     onSave: (value: unknown) => void;
     onCancel: () => void;
@@ -635,6 +647,7 @@ function SettledGroup({
                                 <StructuredFactEditor
                                     editor={fact.editor}
                                     label={fact.label}
+                                    initial={fact.value}
                                     busy={busy}
                                     onSave={(value) => onSave(fact.ref, value)}
                                     onCancel={onCancel}

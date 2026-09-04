@@ -2326,6 +2326,20 @@ const correctionRegeneration: Phase = {
             await page.waitForTimeout(2500);
             const afterClickButtons = await visibleButtons(page);
             const afterClickText = (await visibleText(page)).replace(/\s+/g, " ").trim();
+            /*
+             * WHICH EDITOR ACTUALLY RENDERED. The component tags itself with
+             * `data-participant-fact-editor` and each branch produces a different input shape, so
+             * reading the DOM says which branch ran instead of inferring it from the value being
+             * empty — the difference between "the date conversion failed" and "a different editor
+             * opened entirely".
+             */
+            const editorDom = await page.evaluate<string>(
+                "JSON.stringify(Array.from(document.querySelectorAll('[data-participant-fact-editor]')).map(function(el){"
+                + "return {kind: el.getAttribute('data-participant-fact-editor'),"
+                + " inputs: Array.from(el.querySelectorAll('input,select,textarea')).map(function(i){"
+                + "return {tag: i.tagName, type: i.getAttribute('type'), ariaLabel: i.getAttribute('aria-label'),"
+                + " value: i.value, defaultValue: i.defaultValue};})};}))",
+            ).catch(() => "[]");
 
             /*
              * THE FIELD IS FOUND BY ITS VALUE, not by its position.
@@ -2361,6 +2375,7 @@ const correctionRegeneration: Phase = {
                     foundValues,
                     afterClickButtons,
                     afterClickText,
+                    editorDom,
                 };
             }
 
@@ -2399,6 +2414,7 @@ const correctionRegeneration: Phase = {
                 foundValues?: string[];
                 afterClickButtons?: string[];
                 afterClickText?: string;
+                editorDom?: string;
             };
             return {
                 status: "failed",
@@ -2414,6 +2430,7 @@ const correctionRegeneration: Phase = {
                     // reproduce the run to find out.
                     afterClickButtons: vv.afterClickButtons ?? [],
                     afterClickSurface: (vv.afterClickText ?? "").slice(0, 400),
+                    editorDom: (vv.editorDom ?? "").slice(0, 900),
                 },
             };
         }
