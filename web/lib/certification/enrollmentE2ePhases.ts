@@ -1859,10 +1859,41 @@ const operationalHandoff: Phase = {
             };
         };
 
-        const before = await countsFor();
-        if (before.errors.length) {
-            return { status: "failed", detail: `could not read operational outputs: ${before.errors.join("; ")}` };
+        /*
+         * THE READ IS RETRIED. THE VERDICT IS NOT.
+         *
+         * One of two back-to-back full runs failed here on `TypeError: fetch failed` — the transport
+         * dropped and no answer ever arrived. Refusing was right; converting an unreadable result
+         * into a false "zero operational outputs" would have been the silent-nothing failure this
+         * phase exists to catch. But the verdict then described the network rather than the product.
+         *
+         * So only the READ crosses the retry boundary, and only for transport failures. An answered
+         * read is final — including an answer of zero rows, which is exactly the case the gate check
+         * below must be allowed to fail on. Nothing about Complete Enrollment, and no write, is
+         * re-executed.
+         */
+        const { boundedRead } = await import("@/lib/certification/transientReadRetry");
+        const read = await boundedRead(countsFor, {
+            errorOf: (c) => (c.errors.length ? c.errors.join("; ") : null),
+        });
+        if (!read.ok) {
+            return {
+                status: "failed",
+                detail:
+                    `could not read operational outputs after ${read.attempts} attempt(s): ${read.error}`
+                    + (read.deterministic ? " (deterministic — not retried)" : " (transient — retried and still failing)"),
+                evidence: {
+                    attempts: read.attempts,
+                    transientErrors: read.transientErrors,
+                    deterministic: read.deterministic,
+                },
+            };
         }
+        const before = read.value;
+        // The transient is reported even when a later attempt succeeded: a degrading link that is
+        // hidden by a successful retry stays invisible until it fails permanently.
+        const readAttempts = read.attempts;
+        const readTransients = read.transientErrors;
 
         const produced =
             before.agreements.length + before.placements.length + before.schedules.length;
@@ -1899,6 +1930,8 @@ const operationalHandoff: Phase = {
                     + `child durably (OCM ${String(child.ocmStatus)}, process ${String(child.processState)}).`,
                 evidence: {
                     childId: pathA.childId,
+                    readAttempts,
+                    transientErrors: readTransients,
                     handoffEnabledForOrg: false,
                     gate: "isChildcareOperationalEnrollmentV1EnabledForOrg (env flag AND org_settings metadata)",
                     agreements: 0,
@@ -1922,6 +1955,8 @@ const operationalHandoff: Phase = {
                     + "succeeded.",
                 evidence: {
                     childId: pathA.childId,
+                    readAttempts,
+                    transientErrors: readTransients,
                     handoffEnabledForOrg: true,
                     agreements: 0,
                     placements: 0,
@@ -1999,6 +2034,8 @@ const operationalHandoff: Phase = {
             evidence: {
                 childId: pathA.childId,
                 journeyId: pathA.journeyId,
+                readAttempts,
+                transientErrors: readTransients,
                 before: summarize(before),
                 after: summarize(after),
                 retry: retryDetail,
