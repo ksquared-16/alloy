@@ -12,6 +12,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 const T = await import("../lib/vacilando/toolkit-convergence.mjs");
 const DA = await import("../lib/vacilando/director-authority.mjs");
@@ -310,4 +311,35 @@ test("an unreadable status can never verify", () => {
   const v = T.verifyConvergenceOutcome({ expectedSha: "684153774d2a", status: null, loopbackHealth: 200, directorHealth: 200 });
   assert.equal(v.verified, false);
   assert.ok(v.reasons.some((r) => r.includes("unreadable")));
+});
+
+test("the convergence gates are actually COLLECTED, not merely named", async () => {
+  // The third occurrence of one defect in this subsystem: merge, then the
+  // provider ceiling, then this. A policy names the right gates, no collector
+  // fills them, and every request escalates with "required gates were not
+  // measured" — which reads like caution and is really an absent function call.
+  const E = await import("../lib/vacilando/director-evidence.mjs");
+  const src = readFileSync(new URL("../lib/vacilando/director-evidence.mjs", import.meta.url), "utf8");
+  assert.match(src, /measureToolkitConvergence/,
+    "director-evidence must collect convergence evidence, or every install escalates");
+  assert.match(src, /rec\?\.action_key === "host\.install_toolkit"/);
+  assert.equal(typeof E.collectDirectorEvidence, "function");
+});
+
+test("measured convergence evidence satisfies every gate the policy names", async () => {
+  const DA2 = await import("../lib/vacilando/director-authority.mjs");
+  const policy = DA2.DELEGATED_POLICIES_V1.find((p) => p.policy_id === "routine_toolkit_convergence_v1");
+  const ev = T.measureToolkitConvergence({
+    ...fixture(), readLink: () => `/toolkit/${OLD}`,
+  });
+  const decision = DA2.evaluateDirectorAuthority({
+    request: { action_key: "host.install_toolkit", target: "development_certification" },
+    evidence: { ...ev, governance_exception_active: false, operator_hold: false },
+  });
+  assert.equal(decision.decision, "director_approved",
+    `unmeasured: ${JSON.stringify(decision.unmeasured_gates || [])}`);
+  // Every gate the policy names must have been filled by the collector.
+  for (const gate of policy.gates) {
+    assert.notEqual(decision.deterministic_evidence[gate], null, `${gate} was not measured`);
+  }
 });
