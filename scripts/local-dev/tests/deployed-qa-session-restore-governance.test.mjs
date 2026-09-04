@@ -220,6 +220,42 @@ test("a failed verification after a successful mint is NOT restored", () => {
     assert.equal(out.verified_at, null);
 });
 
+/* ── 5b. The executor must accept the shape the layer actually hands it ──── */
+
+test("an APPROVED action executes from the normalized inputs the layer stored", () => {
+    // The defect this pins, observed live on gar_6c7426280d42ed. requestTrustedHostAction stores
+    // `validateInputs().normalized`, so an approved action's `inputs` are {targetKey, dedupeKey} —
+    // not {deployed_target}. The executor re-ran the CALLER-facing validator over that and refused
+    // the layer's own object as `unexpected_input`, surfacing as `execution_failed` on an approval
+    // the operator had already granted. The local sibling survives the same path only because its
+    // normalized key happens to be in its accepted list.
+    const mint = recordingMint();
+    const out = executeRestoreDeployedQaSessionSync({
+        action: { id: "tha_test", inputs: { targetKey: TARGET, dedupeKey: `restore_deployed_qa_session:${TARGET}` } },
+        grant: { id: "g" }, grantCheck: grantAll,
+        read: envRead(REF), fetchJson: fetchRef(REF), mint,
+        verify: () => ({ ok: true }), authRoot: "/x/auth",
+    });
+    assert.equal(mint.calls.length, 1, "the normalized shape must reach the mint, not be refused before it");
+    assert.equal(out.ok, true);
+    assert.equal(out.target_key, TARGET);
+});
+
+test("the raw caller shape still goes through the full validator", () => {
+    // Reading the normalized form must not become a way to skip the boundary: a RAW input object
+    // is still validated, so a caller-supplied URL is refused exactly as before.
+    const mint = recordingMint();
+    const out = executeRestoreDeployedQaSessionSync({
+        action: action({ deployed_target: TARGET, baseUrl: "https://evil.example" }),
+        grant: { id: "g" }, grantCheck: grantAll,
+        read: envRead(REF), fetchJson: fetchRef(REF), mint,
+        verify: () => ({ ok: true }), authRoot: "/x/auth",
+    });
+    assert.equal(out.ok, false);
+    assert.equal(out.failure_code, "caller_supplied_forbidden_input");
+    assert.equal(mint.calls.length, 0);
+});
+
 /* ── 6. Nothing on the way out may carry a secret ───────────────────────── */
 
 test("a failure result has no field a token could occupy", () => {
