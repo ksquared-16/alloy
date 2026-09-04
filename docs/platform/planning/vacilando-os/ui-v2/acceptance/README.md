@@ -61,7 +61,38 @@ staging can be arbitrarily far ahead of what is served.
 
 ## What acceptance found
 
-**One real defect, in the class a fixture cannot reach.**
+**Two real defects, both in the class a fixture cannot reach**, and both with the
+same shape: *the fixture lane was tidier than any real lane.*
+
+### 1. Three bounded components summed to more than the screen
+
+Measured at 390×844 — a phone at **full height, no keyboard** — on a real lane
+with a pending governed action:
+
+```
+interaction zone 888   in a viewport of 844
+  decision bar   591   (its own max-height: min(70vh, 620px) — 70vh = 591)
+  needs-you tray 138
+  composer       132
+Send button bottom 1083                      → 239px BELOW THE FOLD
+```
+
+Every piece was individually bounded and every bound was honoured. Nothing
+bounded their **sum** against the space they had to share. The operator could not
+reach Send while a governed action was pending — the exact moment the product
+most needs them to.
+
+The container now governs: the composer is the floor and never shrinks,
+everything above it shares the remainder and scrolls, and the component
+max-heights inside the zone are released so two authorities are not disagreeing
+about the same space.
+
+The fixture's pending governed action was a title and one sentence; the real one
+renders 591px of proposal — purpose, escalation reason, six facts, two artifact
+paths. The fixture now carries a fully furnished proposal, and a check asserts
+the zone fits its stage rather than that Send merely happens to land on screen.
+
+### 2. The keyboard-open lane could not shed its chrome
 
 At 390×380 — a phone with the keyboard up — on a real lane carrying a
 governed-outcome banner, the lane header (175px) and the interaction zone
@@ -71,8 +102,10 @@ button sat 31px below the fold.
 
 The fixture lane had no outcome banner and a shorter header, so the same check
 passed on a lane less furnished than any real one. The fixture now carries a
-resolved governed action, and the fix makes the header and interaction zone
-yield when the viewport is that short.
+resolved governed action, and when the viewport is that short the lane sheds the
+back row, the tabs and the identity meta — the operator is typing, and everything
+that is not the instruction they are typing yields. It all returns when the
+keyboard closes.
 
 **Two harness defects, corrected rather than relaxed.**
 
