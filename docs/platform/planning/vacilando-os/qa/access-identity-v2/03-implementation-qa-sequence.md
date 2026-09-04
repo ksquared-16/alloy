@@ -734,59 +734,52 @@ duplicate is a property of concurrent dispatch rather than of either session's r
 concluded that filing was the missing step. **A lane- or artifact-scoped dedupe would have collapsed these
 two; a mission-scoped one cannot.**
 
-#### W-0 re-issued a sixth time — **2026-09-04**, assignment `asg_94de43cc5c3482`: **the run-4 request is filed**
+#### W-0's *other* sixth re-issue — **2026-09-04**, assignment `asg_94de43cc5c3482`: the sibling filing, `gar_3368b11eb1b1ce`
 
-W-0 was re-issued a sixth time (mission `msn_595040c168e0103c38` v1, contentHash `5cc8a895477c55b065075f22faef3cbe`),
-hours after the fifth. **The counts were not re-asserted.** The fifth pass established that a run 4 is warranted
-on evidence and named the trap that would waste the authorization, then stopped at *"run 4 remains an operator
-authorization."* That sentence was true about *executing*, and it quietly conceded something that was not true
-about *asking*: **filing the request is worker work, and it had not been done.** This pass did it.
+Mission `msn_595040c168e0103c38` v1, contentHash `5cc8a895477c55b065075f22faef3cbe`. **This is the request the
+section above recommends approving.** The two assignments ran concurrently in this worktree, neither able to see
+the other, and reached the same conclusion independently: the fifth pass's *"run 4 remains an operator
+authorization"* was true about **executing** and false about **asking**, and nobody had asked. This one filed at
+10:59:09Z with `artifact_refs` stated explicitly; `asg_45a7990a10e28c` filed at 11:02:36Z. **The collision, and
+the recommendation to approve this one and deny `gar_c834cb05ce8425`, are recorded once, above.** That section's
+account is the authoritative one — it could read the stored records and this session could not. Only what it does
+*not* cover appears here.
 
-| Field | Value |
-|---|---|
-| Governed action request | **`gar_3368b11eb1b1ce`**, status `requested` — swept by the Director tick (`governed-action-request.mjs:3583-3596`), validated against the registry, then parked at `awaiting_operator` |
-| Channel | `vac governed-action --run … --lane … --json '{…}'` — the worker-facing route, filed with `processNow: false` so the Director owns processing |
-| Mitigation applied | `artifact_refs: ["…/wave0-authority-census.json"]` **stated explicitly**, per the fifth pass's trap. Omitting it runs the **Q15** census and returns green |
-| Query | **Unchanged**, `a3982ca5…` — byte-identical to run 3, so run 4's counts stay directly comparable to runs 1–3 |
-| Remaining | **One operator authorization.** Nothing further is worker work |
+**1. `--lane` and `--run` are mandatory and neither is discoverable from an unbound session.**
+`vac governed-action` requires both (`vac-governed-action.mjs:61`), but `vac health --json` reported
+`lanes.consistency` → `lanes: 0` with **both** provider seats unbound (`pid 61631 · alloy-ui-vac · no lane`),
+measured twice ~20 minutes apart. The filing succeeded because `validateRequestShape` consults the lane binding
+**only when `mission_id` is absent** (`governed-action-request.mjs:1423-1454`) — the payload's mission id wins and
+`missionIdForLane()` is merely the fallback. **Pass `mission_id` explicitly**, or an unbound session dead-ends on
+`missing_mission_binding` for a reason that has nothing to do with the census. (The sibling filed on lane
+`lane_9b9082778292` while the same check reported zero lanes; both observations stand, unreconciled from the
+worker side.) The run id is the sharper hazard: an unmatched one is a safe no-op (`execution-run.mjs:904-908`,
+`:1011-1015` scan and return null), but a run id belonging to **another** lane would transition *their* run to
+`NEEDS_INPUT` via `releaseRunAfterGovernedFailure`. **Do not guess one that might exist.**
 
-Three things only filing could teach, all in the plumbing again.
+**2. A correction: the evidence path was never pinned to the census file.** The fifth pass is right that run 4
+lands in `wave0-authority-census.results.json` and right about every consequence, but not about the timing — it
+reads as a regression (*"no longer pinned"*, *"now derives"*). `git log -S` over the
+`.replace(/\.json$/i, "") + ".results.json"` expression returns **exactly one commit, `3bcd4fd9c` (2026-07-31)**,
+the original Trusted Host Actions change. The derivation predates run 1. It did not *move*; the reason no
+`.results.json` sits beside this file is that `evidenceAbs` is joined to the **originating worktree**
+(`trusted-host-actions.mjs:709-711`) and runs 1–3 originated in `wt6-vacilando-os-product-def`. So this artifact's
+`results` block was carried back **by hand**, not written by the merge-back — which makes the standing "two hand
+edits after run 4" instruction an understatement rather than a new burden. Both run-4 requests name the `ui-vac`
+worktree, so the results file will appear here.
 
-**1. The `--lane` and `--run` arguments are mandatory, and this session has neither.** `vac governed-action`
-requires both (`vac-governed-action.mjs:61`), but `vac health --json` reports `lanes.consistency` →
-`lanes: 0`, and `providers.orphaned` lists this session's own seat as `pid 61631 · alloy-ui-vac · no lane`. So
-`getDurableLane('ui-vac')` is `null` and `resolveGovernedAuthority` returns `lane_not_found`. The filing
-succeeded anyway because `validateRequestShape` consults the lane binding **only when `mission_id` is absent**
-(`governed-action-request.mjs:1423-1454`) — the payload's mission id wins and `missionIdForLane()` is merely the
-fallback. **Pass `mission_id` explicitly from an unbound session**, or the request dead-ends on
-`missing_mission_binding` for a reason that has nothing to do with the census. The run id is the sharper hazard:
-an unmatched one is a safe no-op (`execution-run.mjs:904-908`, `:1011-1015` scan and return null), but a run id
-belonging to *another* lane would transition **their** run to `NEEDS_INPUT` via `releaseRunAfterGovernedFailure`.
-Do not guess one that might exist.
-
-**2. A correction to the paragraph above — the evidence path was never pinned to the census file.** The fifth
-pass is right that run 4 lands in `wave0-authority-census.results.json` and right about every consequence, but
-not about the timing: `git log -S` over the `.replace(/\.json$/i, "") + ".results.json"` expression returns
-**exactly one commit — `3bcd4fd9c`, 2026-07-31**, the original Trusted Host Actions change. The derivation has
-been there since before run 1. It did not *move*; it was always this, and the reason no `.results.json` sits
-beside this file is that `evidenceAbs` is joined to the **originating worktree**
-(`trusted-host-actions.mjs:709-711`) and runs 1–3 originated in `wt6-vacilando-os-product-def`. This artifact's
-`results` block was therefore carried back by hand, not written by the merge-back. **Run 4 was filed with
-`worktreePath` = the `ui-vac` worktree, so its `.results.json` will appear there.** The operational instruction is
-unchanged and still correct: read the `.results.json`, and do not read silence in this file as "the run did not
-happen."
-
-**3. A census whose query is deliberately unchanged is a census whose dedupe key is unchanged.**
-`requestTrustedHostAction` dedupes on `queryHash` across `listTrustedHostActions(missionId)` and returns an
-existing **completed** action with `deduped: true` (`trusted-host-actions.mjs:294-304`). Filed under run 3's
-mission, this request would have returned run 3's action and its 2026-08-07 counts *silently, as though freshly
-executed* — the same silent-wrong-answer shape as the Q15 trap, from a third direction. It is not armed here
-only because the dedupe list is **mission-scoped** and `msn_595040c168e0103c38` has no prior census action.
-**Freshness comes from the mission scope, not from the query.** A future re-run filed under a mission that has
-already run this census will hand back the old numbers.
+**3. There is a *second* mission-scoped dedupe, in the trusted-host layer, and its failure mode is worse.**
+The section above cites `dedupeShapeOf` for why the two requests did not collapse. Downstream,
+`requestTrustedHostAction` dedupes again — on `queryHash`, across `listTrustedHostActions(missionId)` — and
+returns an existing **completed** action with `deduped: true` (`trusted-host-actions.mjs:294-304`). Because
+`combined_query` is deliberately byte-identical to run 3's, so is its hash. **A run-4 request filed under run 3's
+mission (`msn_e7894cb7225bae3c2b`) would have returned run 3's completed action and its 2026-08-07 counts,
+silently, as though freshly executed** — the Q15 failure shape from a third direction. Neither filing is exposed,
+because both used fresh missions. **Freshness comes from the mission scope, not from the query**: a census whose
+query is deliberately unchanged is a census whose dedupe key is unchanged.
 
 **One caveat retired.** `readonly_validation` has stood as *"by inspection"* since 2026-08-06 because the worker
-cannot execute `validateReadOnlySql`. It can now be discharged by provenance instead:
+cannot execute `validateReadOnlySql`. It can be discharged by provenance instead:
 `git log --since=2026-08-07 -- scripts/local-dev/lib/vacilando/trusted-host-sql-readonly.mjs` is **empty**, so the
 validator is byte-identical to the one run 3 passed, and `combined_query` is byte-identical to what run 3 fed it.
 Same query, same validator, same verdict. The permission wall is meanwhile **wider** than recorded: not just
