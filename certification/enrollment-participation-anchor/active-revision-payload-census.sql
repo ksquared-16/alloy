@@ -1,46 +1,84 @@
--- The full published Business Process payload for the active Enrollment department.
+-- The deployed Enrollment configuration payload, chunked.
 --
--- WHY THE WHOLE PAYLOAD. The corrected revision's Law 4 checksum is sha256 over a JS-canonical
--- serialization, so it must be computed by product code from the exact deployed bytes. A summary
--- cannot produce it.
+-- WHY THIS VERSION EXISTS. The previous artifact joined from `configuration_publications` and
+-- returned NOTHING; the trusted host reports empty output as `result_parse_failed`, so a census that
+-- finds no rows looks exactly like a census that is broken. This one always emits `payload_source`
+-- first and can never come back silent.
 --
--- WHY IT IS CHUNKED. The payload is a single long jsonb text value, and the host parses one line
--- per row. Emitting it whole risks a truncated line that would either fail to parse or, worse,
--- parse into a payload that is quietly incomplete — and a checksum over a truncated payload is
--- exactly the kind of wrong-but-plausible artefact this program has already paid for. Fixed 3000
--- character chunks with an explicit index and total let the lane reassemble and verify length
--- before trusting a single byte of it.
+-- AND IT TAKES THE PAYLOAD FROM WHEREVER IT ACTUALLY IS. `publish_business_process_revision_v1`
+-- writes an immutable revision AND projects it into `departments.metadata.lifecycle_builder_v1`. A
+-- tenant configured before that runtime existed has only the projection. `source` on every row says
+-- which one these bytes came from, because the correction and its Law 4 checksum must be computed
+-- over the payload the runtime actually reads.
 --
--- OUTPUT CONTRACT: `question_id|row_kind|payload` with payload as JSON text — the shape
--- post-orphan-sweep-census.sql used successfully. The first version of this file returned ordinary
--- tabular columns and failed `result_parse_failed`.
-with active as (
-    select cp.subject_id as department_id,
-           cp.revision_id,
-           cp.revision_number,
-           cp.payload_checksum,
-           r.payload::text as payload_text
-    from public.configuration_publications cp
-    join public.business_process_revisions r on r.id = cp.revision_id
-    where cp.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
-      and cp.domain_key = 'business_process'
-      and cp.revision_number = (
-          select max(i.revision_number) from public.configuration_publications i
-          where i.org_id = cp.org_id and i.domain_key = cp.domain_key and i.subject_id = cp.subject_id
-      )
+-- CHUNKED because the host parses one line per row and the payload is a single long value. A line
+-- truncated in transit would still parse as JSON and still produce a confident checksum over
+-- configuration the tenant does not have, so every chunk carries an index and the identity row
+-- declares the total length to verify the reassembly against.
+with src as (
+    select d.id as department_id,
+           coalesce(
+               (select r.payload
+                  from public.business_process_revisions r
+                  join public.configuration_publications cp
+                    on cp.revision_id = r.id
+                   and cp.domain_key = 'business_process'
+                   and cp.subject_id = d.id
+                 where r.org_id = d.org_id and r.department_id = d.id
+                 order by cp.revision_number desc
+                 limit 1),
+               d.metadata->'lifecycle_builder_v1'
+           ) as payload,
+           case when exists (
+               select 1 from public.configuration_publications cp
+               where cp.org_id = d.org_id and cp.domain_key = 'business_process' and cp.subject_id = d.id
+           ) then 'published_revision' else 'departments_projection' end as source,
+           (select cp.revision_id from public.configuration_publications cp
+             where cp.org_id = d.org_id and cp.domain_key = 'business_process' and cp.subject_id = d.id
+             order by cp.revision_number desc limit 1) as revision_id,
+           (select cp.revision_number from public.configuration_publications cp
+             where cp.org_id = d.org_id and cp.domain_key = 'business_process' and cp.subject_id = d.id
+             order by cp.revision_number desc limit 1) as revision_number,
+           (select cp.payload_checksum from public.configuration_publications cp
+             where cp.org_id = d.org_id and cp.domain_key = 'business_process' and cp.subject_id = d.id
+             order by cp.revision_number desc limit 1) as payload_checksum
+    from public.departments d
+    where d.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+      and d.metadata ? 'lifecycle_builder_v1'
+),
+active as (
+    select department_id,
+           source,
+           coalesce(revision_id::text, 'none') as revision_id,
+           coalesce(revision_number, 0) as revision_number,
+           coalesce(payload_checksum, 'none') as payload_checksum,
+           payload::text as payload_text
+    from src
+    where payload is not null
 )
 select question_id, 'data' as row_kind, payload
 from (
-    select 'revision_identity'::text as question_id,
+    -- ALWAYS ONE ROW, even when nothing below matches.
+    select 'payload_source'::text as question_id,
+           json_build_object(
+               'departments_with_builder', (select count(*) from src),
+               'payloads_available', (select count(*) from active),
+               'sources', (select coalesce(json_agg(distinct source), '[]'::json) from active)
+           )::text as payload
+
+    union all
+
+    select 'revision_identity'::text,
            json_build_object(
                'department_id', a.department_id,
+               'source', a.source,
                'revision_id', a.revision_id,
                'revision_number', a.revision_number,
                'payload_checksum', a.payload_checksum,
                'payload_length', length(a.payload_text),
                'chunk_size', 3000,
                'chunk_total', ceil(length(a.payload_text) / 3000.0)::int
-           )::text as payload
+           )::text
     from active a
 
     union all

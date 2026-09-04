@@ -21,7 +21,7 @@
  * another lane already fixed it, and the second means this repair is wrong.
  */
 
-import { writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
 import { businessProcessPayloadChecksum } from "@/lib/lifecycle/businessProcessPayloadChecksum";
@@ -34,6 +34,7 @@ import {
     CHILD_ENROLLMENT_STAGE_KEY,
     correctEnrollmentStageGrainDrift,
 } from "@/lib/businessProcesses/configuration/correctEnrollmentStageGrainDrift";
+import { reassembleCensusPayload } from "@/lib/businessProcesses/configuration/reassembleCensusPayload";
 import { ENROLLMENT_START_ENTRY_INTENT } from "@/lib/lifecycle/processEntryPointsV1";
 
 type DeployedRow = {
@@ -44,16 +45,32 @@ type DeployedRow = {
     payload: string;
 };
 
-/** Read the census artifact, whatever envelope the trusted host wrapped it in. */
+/**
+ * Read the census artifact and rebuild the deployed payloads from its chunks.
+ *
+ * The reconstruction is PROVEN complete before anything is returned — every declared chunk present
+ * exactly once, and the reassembled length equal to what the database itself reported. A partial
+ * reconstruction is refused rather than corrected, because a payload short by one chunk still
+ * parses, still validates, and still produces a confident checksum over configuration the tenant
+ * does not have. See reassembleCensusPayload.
+ */
 function readDeployedRows(path: string): DeployedRow[] {
-    const raw = JSON.parse(require("fs").readFileSync(path, "utf8")) as Record<string, unknown>;
-    const candidates = [raw.results, raw, (raw.results as Record<string, unknown>)?.rows, raw.rows];
-    for (const candidate of candidates) {
-        if (Array.isArray(candidate) && candidate.length && "payload" in (candidate[0] as object)) {
-            return candidate as DeployedRow[];
-        }
+    const censusJson = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    const { revisions, failures } = reassembleCensusPayload(censusJson);
+    if (failures.length) {
+        throw new Error(
+            `census payload could not be reassembled, so nothing was generated:\n`
+            + failures.map((f) => `  department ${f.department_id ?? "?"}: ${f.reason}`).join("\n"),
+        );
     }
-    throw new Error(`no census rows carrying a payload found in ${path}`);
+    if (!revisions.length) throw new Error(`census returned no deployed revision in ${path}`);
+    return revisions.map((r) => ({
+        department_id: r.department_id,
+        revision_id: r.revision_id,
+        revision_number: r.revision_number,
+        payload_checksum: r.payload_checksum,
+        payload: JSON.stringify(r.payload),
+    }));
 }
 
 function sqlLiteral(value: string): string {
