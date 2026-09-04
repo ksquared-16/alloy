@@ -83,7 +83,7 @@ async function stampCarryForward(params: {
     supabase: SupabaseClient;
     orgId: string;
     workId: string;
-    opportunityId: string;
+    opportunityId?: string | null;
     fromStageKey: string;
     toStageKey: string;
     destinationTemplate: StageWorkTemplateV1;
@@ -186,7 +186,7 @@ export async function reconcileBusinessProcessWorkAcrossStageMove(params: {
     supabase: SupabaseClient;
     orgId: string;
     userId: string;
-    opportunityId: string;
+    opportunityId?: string | null;
     departmentId: string;
     sourceStageKey: string;
     destinationStageKey: string;
@@ -196,7 +196,13 @@ export async function reconcileBusinessProcessWorkAcrossStageMove(params: {
     now?: Date;
 }): Promise<ReconcileBusinessProcessWorkAcrossStageMoveResult> {
     const orgId = params.orgId.trim();
-    const opportunityId = params.opportunityId.trim();
+    /*
+     * Optional: context-free Enrollment carries no Opportunity, and this used to call `.trim()`
+     * on it unconditionally — which threw `Cannot read properties of null (reading 'trim')` and
+     * degraded a stage move that had already succeeded. The guard below already treats a missing
+     * id as "nothing to reconcile"; it simply was never reached.
+     */
+    const opportunityId = (params.opportunityId ?? "").trim();
     const sourceStageKey = params.sourceStageKey.trim();
     const destinationStageKey = params.destinationStageKey.trim();
     const initiatingWorkId = trimOrNull(params.initiatingWorkId);

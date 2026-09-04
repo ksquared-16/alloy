@@ -1568,9 +1568,14 @@ const completeEnrollment: Phase = {
             outcomeKey: "enrollment_complete",
             subject: {
                 journey_segment: "child",
-                // Required by the subject type even for a context-free child; empty says "no
-                // acquisition episode" rather than pointing at one that does not exist.
-                opportunity_id: "",
+                /*
+                 * NO ACQUISITION EPISODE, SAID AS null.
+                 *
+                 * This passed `""` and called it "no acquisition episode". It is not: it is an
+                 * invalid uuid, and Postgres said so from whichever query reached it first. The
+                 * subject type now admits `null`, so absence can be stated instead of encoded.
+                 */
+                opportunity_id: null,
                 customer_member_id: pathA.childId,
                 /*
                  * The participation, named directly.
@@ -1601,7 +1606,33 @@ const completeEnrollment: Phase = {
 
         const failed = result.failed_targets ?? [];
         if (failed.length) {
-            return { status: "failed", detail: (result.errors ?? []).join("; ") || "completion outcome failed" };
+            /*
+             * A FAILURE HERE MUST NAME THE TARGET, not just the message.
+             *
+             * This reported only the joined error strings, and `invalid input syntax for type
+             * uuid: ""` names the TYPE rather than the column, the target, or the field — so the
+             * same message was chased through three layers before anything identified which
+             * configured target actually raised it. The executor already knows; it simply was not
+             * being asked.
+             */
+            return {
+                status: "failed",
+                detail: (result.errors ?? []).join("; ") || "completion outcome failed",
+                evidence: {
+                    departmentId,
+                    subjectOpportunityId: pathA.opportunityId ?? null,
+                    participationId: pathA.participationId,
+                    journeyId: pathA.journeyId,
+                    childId: pathA.childId,
+                    stageKey: plan.stage_key,
+                    outcomeKey: "enrollment_complete",
+                    appliedTargets: (result.applied_targets ?? []).map((t) => t.kind),
+                    failedTargets: failed.map((t) => t.kind),
+                    failedTargetDetail: failed.map((t) => JSON.stringify(t)),
+                    errors: result.errors ?? [],
+                    degraded: result.degraded ?? [],
+                },
+            };
         }
 
         const after = await readChildState(ctx, pathA.childId, pathA.journeyId);

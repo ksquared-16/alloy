@@ -60,7 +60,17 @@ import {
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
-    opportunity_id: string;
+    /**
+     * The acquisition Opportunity, when the subject has one.
+     *
+     * CONTEXT-FREE ENROLLMENT HAS NONE, and absence is `null` — never `""`. This was typed as a
+     * required `string`, which left a caller with no way to say "there is no Opportunity" and
+     * exactly one way to compile: pass the empty string. That is not absence, it is an invalid
+     * uuid, and it travelled through this executor into `.eq()` calls that reported
+     * `invalid input syntax for type uuid: ""` from whichever query reached Postgres first.
+     * Widening the type is the fix; the normalization below stops an older caller re-introducing it.
+     */
+    opportunity_id: string | null;
     /** Child subject = customer_members.id. Threaded so movement targets the process instance directly. */
     customer_member_id?: string | null;
     /** Optional direct process-instance id (most specific child identity). */
@@ -195,6 +205,33 @@ export type ApplyStageOutcomeRuleTargetResult = {
     degraded?: string;
 };
 
+/** Blank optional uuid -> null. Absence is null; "" is an invalid uuid, not an absent one. */
+function blankToNull(value: string | null | undefined): string | null {
+    const trimmed = (value ?? "").trim();
+    return trimmed ? trimmed : null;
+}
+
+/**
+ * Normalize every optional uuid-valued identity on an execution subject.
+ *
+ * Scoped deliberately to this boundary: these are the fields that reach uuid columns on the
+ * Complete Enrollment / stage-outcome path. `journey_segment` and `participant_label` are not
+ * identities and are passed through untouched.
+ */
+export function normalizeSubjectIdentities(
+    subject: StageOutcomeExecutionSubject,
+): StageOutcomeExecutionSubject {
+    return {
+        ...subject,
+        opportunity_id: blankToNull(subject.opportunity_id),
+        customer_member_id: blankToNull(subject.customer_member_id),
+        process_instance_id: blankToNull(subject.process_instance_id),
+        opportunity_customer_member_id: blankToNull(subject.opportunity_customer_member_id),
+        placement_candidate_id: blankToNull(subject.placement_candidate_id),
+        work_id: blankToNull(subject.work_id),
+    };
+}
+
 export async function applyStageOutcomeRuleTarget(
     supabase: SupabaseClient,
     params: {
@@ -207,7 +244,21 @@ export async function applyStageOutcomeRuleTarget(
         target: StageOutcomeRuleTargetV1;
     },
 ): Promise<ApplyStageOutcomeRuleTargetResult> {
-    const { orgId, userId, subject, target, plan, stageKey, departmentId } = params;
+    const { orgId, userId, target, plan, stageKey, departmentId } = params;
+
+    /*
+     * OPTIONAL UUIDS ARE NORMALIZED ONCE, HERE, AT THE BOUNDARY.
+     *
+     * Every optional identity on the subject is a uuid column downstream, and a blank string is
+     * not a uuid. Postgres refuses it with `invalid input syntax for type uuid: ""` — a message
+     * that names the type and not the field, which is why this one survived several layers and
+     * was read as a configuration fault rather than an identity one.
+     *
+     * Absence is `null` from here down. Coercing blanks at the single entry point every target
+     * kind passes through means no individual case has to remember, and a caller still typed
+     * against the old required-string shape cannot reintroduce it.
+     */
+    const subject = normalizeSubjectIdentities(params.subject);
 
     switch (target.kind) {
         case "no_movement":
