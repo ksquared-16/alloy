@@ -2942,3 +2942,54 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
 .vsys-col{display:flex;flex-direction:column;gap:16px;min-width:0;}
 .vsys-col .vcard + .vcard{margin-top:0;}
 @media (max-width:860px){ .vsys-col{gap:12px;} }
+
+/* ---------------------------------------------------------------------------
+   THE KEYBOARD-OPEN LANE.
+
+   MEASURED on the installed runtime at 390x380 — a phone with the keyboard up —
+   on a lane carrying a governed-outcome banner:
+
+     stage 370   =   head 175  +  body 22  +  interaction 216      → 391 needed
+     Send button bottom 411, viewport 380                          → 31px below the fold
+
+   The body already shrank to 22px. The two FIXED regions did not shrink at all,
+   and together they were taller than the stage. The fixture certification missed
+   it because its lane produced a shorter header and no outcome banner: a real
+   lane is simply more furnished than a fixture, which is exactly the class of
+   defect installed-runtime acceptance exists to catch.
+
+   When the viewport is this short, the operator is typing. Everything that is
+   not the instruction they are typing yields:
+
+     · the back row and the lane tabs go — you are already in this lane, and you
+       cannot navigate tabs while composing;
+     · the identity row compacts to the name and state;
+     · the interaction zone stops being unshrinkable: anything above the
+       composer (governed outcome, decision bar, Needs You tray) scrolls inside
+       a bounded box, so the composer and its Send button always fit.
+
+   All of it returns the moment the keyboard closes.
+   --------------------------------------------------------------------------- */
+@media (max-width: 860px) and (max-height: 520px){
+  .vlane-head{padding:6px 13px 0;}
+  .vlane-head-top,
+  .vtabs-lane{display:none;}
+  .vlane-head-row{margin:0 0 6px;align-items:center;}
+  .vlane-title{font-size:15px;}
+  .vlane-head-meta{display:none;}
+  .vlane-head-state{margin-top:2px;}
+  .vlane-head-acts .btn{min-height:32px;padding:5px 9px;font-size:12px;}
+
+  /* The composer is the floor. Everything stacked above it inside the
+     interaction zone scrolls rather than pushing Send off the screen. */
+  .vlane-interaction{
+    display:flex;flex-direction:column;min-height:0;
+    max-height:72vh;padding:6px 13px max(6px, env(safe-area-inset-bottom, 0px));
+  }
+  .vlane-interaction > *:not(.gw-composer){
+    flex:0 1 auto;min-height:0;overflow-y:auto;
+  }
+  .vlane-interaction > .gw-composer{flex:0 0 auto;}
+  .gw-composer-h{display:none;}
+  .gw-composer textarea{max-height:64px;}
+}

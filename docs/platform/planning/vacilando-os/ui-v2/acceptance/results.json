@@ -1,0 +1,238 @@
+{
+  "accepted_at": "2026-09-04T00:26:08.984Z",
+  "base": "http://127.0.0.1:3030",
+  "installed_toolkit": [
+    "source_repo=/Users/vacilando/Alloy",
+    "source_ref=origin/staging",
+    "source_commit=10c2662ced411f3af8ca53f0af5c0a59878a1b83",
+    "source_commit_short=10c2662ced41",
+    "source_subdir=scripts/local-dev",
+    "installed_at=2026-09-04T00:23:07Z",
+    "installed_by=alloy-toolkit",
+    "command_count=84"
+  ],
+  "passed": 41,
+  "failed": 3,
+  "results": [
+    {
+      "name": "running gateway serves /api/v2/views/home (promoted route)",
+      "ok": true,
+      "detail": "status 200 {\"ok\":true,\"approvals\":[{\"request_id\":\"gar_b50946a5e675cc\",\"content_fingerprint\":\"ebc55b7ca2eab93b5bdf35cc7dcbec95\",\"mission_id\":\"msn_8ed927"
+    },
+    {
+      "name": "running gateway serves /api/v2/views/system",
+      "ok": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "running gateway serves /api/v2/views/activity",
+      "ok": true,
+      "detail": "25 events from the real run/scm/governed logs"
+    },
+    {
+      "name": "running gateway lists real lanes",
+      "ok": true,
+      "detail": "9 lanes"
+    },
+    {
+      "name": "installed CLI advertises the progress flags",
+      "ok": true,
+      "detail": "vac run-status <run_id> [<state>] --progress <0-100> [--progress-confidence low|medium|high]"
+    },
+    {
+      "name": "installed CLI documents progress as milestone-reported, not per message",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed CLI accepts a progress-only report with no state argument",
+      "ok": true,
+      "detail": "erun_9f77905b759d7ae5 lane_9b9082778292 EXECUTING | progress ~62% (medium confidence, provider_estimate) — Installed-runtime acceptance: driving the live Gateway"
+    },
+    {
+      "name": "the running Gateway projects the estimate to the UI",
+      "ok": true,
+      "detail": "{\"percent\":62,\"confidence\":\"medium\",\"summary\":\"Installed-runtime acceptance: driving the live Gateway\",\"remaining_work\":\"mobile acceptance and terminal-state proof\",\"source\":\"provider_estimate\",\"updated_at\":\"2026-09-04T00:25:24.886Z\"}"
+    },
+    {
+      "name": "installed module: a run can be created for the terminal-state proof",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed module: estimate persists on the run",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed module: COMPLETE becomes a MEASURED 100%",
+      "ok": true,
+      "detail": "{\"percent\":100,\"confidence\":\"high\",\"summary\":\"midway\",\"remaining_work\":null,\"source\":\"deterministic\",\"updated_at\":\"2026-09-04T00:25:25.153Z\"}"
+    },
+    {
+      "name": "installed module: FAILED removes the estimate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed module: ABANDONED removes the estimate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed module: an estimate older than 30m is stale",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed UI: a stale estimate renders 'Progress estimate unavailable'",
+      "ok": true,
+      "detail": "Progress estimate unavailable"
+    },
+    {
+      "name": "installed UI: an absent estimate renders unavailable, not 0%",
+      "ok": true,
+      "detail": "Progress estimate unavailable"
+    },
+    {
+      "name": "browser session authenticates against the live Gateway",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: Home renders the V2 shell",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: primary navigation is Home / Lanes / Activity / System",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: logo and navigation share one ground",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: no placeholder/demo value is presented as truth",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: unavailable fields use governed copy, not a number",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: data maturity remains inspectable",
+      "ok": true,
+      "detail": "24 annotated fields"
+    },
+    {
+      "name": "LIVE desktop: Activity renders real runtime history",
+      "ok": true,
+      "detail": "200 rows"
+    },
+    {
+      "name": "LIVE desktop: System renders host telemetry from the running host",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: lane uses the V2 layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: no ETA anywhere on the lane",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: progress renders from the installed contract",
+      "ok": true,
+      "detail": "Provider estimate: ~62% complete"
+    },
+    {
+      "name": "LIVE desktop: no misleading empty/0% bar when there is no estimate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: inspector is quiet by default",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: Needs You absent because nothing needs the operator",
+      "ok": true,
+      "detail": "no pending blocker on this lane — the tray correctly renders nothing"
+    },
+    {
+      "name": "LIVE mobile 390: bottom navigation matches the V2 IA",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: Home does not scroll sideways",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "LIVE mobile 390: lane usable at phone width",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "LIVE mobile 390: composer on screen and no approvals surface pushes Send off",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: diagnostics are not dumped into the primary lane view",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: Details opens the compact Lane Inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: bottom navigation matches the V2 IA",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: Home does not scroll sideways",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "LIVE mobile 320: lane usable at phone width",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "LIVE mobile 320: composer on screen and no approvals surface pushes Send off",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: diagnostics are not dumped into the primary lane view",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: Details opens the compact Lane Inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile: composer usable with the keyboard open",
+      "ok": false,
+      "detail": ""
+    }
+  ]
+}
