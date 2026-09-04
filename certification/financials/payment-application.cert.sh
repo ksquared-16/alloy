@@ -197,9 +197,26 @@ if [ -z "$CHG" ]; then bad "could not post an enrolment charge"; else
 
         # ══ P3 — a retried apply cannot reduce the balance twice ═════════════════════════════════
         note "P3 — a second active application of the same payment to the same charge is refused"
-        must_fail "P3 · the duplicate application is refused by the index" \
-            "$(apply_sql "$PAY" "$CHG" 1)" "uq_payment_allocations_one_active_per_payment_charge"
+        # Two rules can refuse this, and only one of them is the rule being certified. Here the
+        # payment and the charge are BOTH exhausted, so `enforce_payment_allocation_bounds` refuses
+        # first and the index is never consulted. That refusal is correct and worth asserting — but
+        # asserting it against the index's name was asserting something this scenario cannot reach.
+        must_fail "P3 · a retry against an exhausted payment is refused by the bounds trigger" \
+            "$(apply_sql "$PAY" "$CHG" 1)" "is already applied"
         must_eq "P3 · the balance is still zero, not negative" "$(printf 'select %s' "$(outstanding "$CHG")")" "0"
+
+        # THE INDEX ITSELF. A duplicate that is within BOTH bounds passes the trigger, which leaves
+        # the partial unique index as the only thing that can refuse it. That is the claim the
+        # doctrine actually makes — "one active application per (payment_id, charge_id)" — and it is
+        # the claim that has to survive two transactions racing each other.
+        P3_CHG="$(post_charge enrollment_agreement "$AGREEMENT" 100000)"
+        P3_PAY="$(record_payment enrollment_agreement "$AGREEMENT" 200000 posted "cert-pay-p3" "")"
+        must_ok "P3 · a partial application is accepted, and both sides keep room" \
+            "$(apply_sql "$P3_PAY" "$P3_CHG" 40000)"
+        must_fail "P3 · a SECOND application within both bounds is refused by the index" \
+            "$(apply_sql "$P3_PAY" "$P3_CHG" 40000)" "uq_payment_allocations_one_active_per_payment_charge"
+        must_eq "P3 · the balance moved exactly once" \
+            "$(printf 'select %s' "$(outstanding "$P3_CHG")")" "60000"
 
         # ══ P4 · P5 — a retry and a replayed provider event cannot duplicate money ═══════════════
         note "P4/P5 — a replayed request and a replayed provider event cannot write a second payment"
@@ -332,8 +349,14 @@ must_ok "P15 · a pre-enrolment household payment applies" "$(apply_sql "$HH_PAY
 must_eq "P15 · the household balance is settled" "$(printf 'select %s' "$(outstanding "$HH_CHG")")" "0"
 must_fail "P15 · the household receipt is immutable in place" \
     "update payments set amount_cents=1 where id='$HH_PAY'" "is immutable"
-must_fail "P15 · a duplicate household application is refused" \
-    "$(apply_sql "$HH_PAY" "$HH_CHG" 1)" "uq_payment_allocations_one_active_per_payment_charge"
+must_fail "P15 · a duplicate household application is refused by the bounds trigger" \
+    "$(apply_sql "$HH_PAY" "$HH_CHG" 1)" "is already applied"
+# And the index reaches the household source too — same scenario, same guarantee, other source.
+HH_CHG2="$(post_charge customer "$HOUSEHOLD" 10000)"
+HH_PAY2="$(record_payment customer "$HOUSEHOLD" 20000 posted "cert-hh-2" "")"
+must_ok "P15 · a partial household application is accepted" "$(apply_sql "$HH_PAY2" "$HH_CHG2" 4000)"
+must_fail "P15 · a household duplicate within both bounds is refused by the index" \
+    "$(apply_sql "$HH_PAY2" "$HH_CHG2" 4000)" "uq_payment_allocations_one_active_per_payment_charge"
 
 # ══ P16 — job billing is untouched ═══════════════════════════════════════════════════════════════
 note "P16 — job billing keeps its own lifecycle; the childcare enforcement does not reach it"

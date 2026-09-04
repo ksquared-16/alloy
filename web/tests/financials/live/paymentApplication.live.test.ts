@@ -34,6 +34,7 @@ import {
     applyPaymentToCharge,
     readChargeBalance,
     recordAndApplyChildcarePayment,
+    recordChildcarePayment,
     refundChildcarePayment,
 } from "@/lib/financials/childcarePaymentService";
 
@@ -184,20 +185,49 @@ describe.skipIf(!env)("payment application — live, against the certification d
         // E — THE DATABASE REFUSES A SECOND APPLICATION. This is the guarantee no mock holds: the
         // service's lookup would let two concurrent applies through, and the partial unique index
         // will not.
+        //
+        // The scenario has to be chosen with care. TWO rules can refuse a duplicate, and only one of
+        // them is the index. Against a payment and a charge that are both exhausted — as they are
+        // above — `enforce_payment_allocation_bounds` refuses first and the index is never
+        // consulted. Asserting the index's name there asserts something the scenario cannot reach.
+        // A duplicate that is within BOTH bounds passes the trigger, which leaves the index as the
+        // only thing that can refuse it.
+        const indexCharge = await postCharge(client, 100_000);
+        const roomy = await recordChildcarePayment(client, {
+            orgId: ORG,
+            billableSourceType: "enrollment_agreement",
+            billableSourceId: AGREEMENT,
+            amountCents: 200_000,
+            paymentMethod: "check" as const,
+            idempotencyKey: `${RUN}-index`,
+            actorUserId: ACTOR,
+        });
+        writtenPayments.push(roomy.payment.id);
+        await applyPaymentToCharge(client, {
+            orgId: ORG,
+            paymentId: roomy.payment.id,
+            chargeId: indexCharge,
+            amountCents: 40_000,
+            actorUserId: ACTOR,
+        });
+
         await expect(
             client.from("payment_allocations").insert({
                 org_id: ORG,
-                payment_id: paid.payment.id,
-                charge_id: chargeId,
+                payment_id: roomy.payment.id,
+                charge_id: indexCharge,
                 target_entity_type: "charge",
-                target_entity_id: chargeId,
-                allocated_amount_cents: 1,
+                target_entity_id: indexCharge,
+                allocated_amount_cents: 40_000,
                 status: "active",
                 allocation_type: "payment_application",
             }).then((r) => {
                 if (r.error) throw new Error(r.error.message);
             }),
         ).rejects.toThrow(/uq_payment_allocations_one_active_per_payment_charge/);
+
+        // And the balance moved exactly once, by exactly what was applied.
+        expect((await readChargeBalance(client, ORG, indexCharge)).outstandingCents).toBe(60_000);
     });
 
     it("C — a partial payment leaves an exact residual, and the first survives the second", async () => {
