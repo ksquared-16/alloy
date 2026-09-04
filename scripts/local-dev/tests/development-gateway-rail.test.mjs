@@ -137,8 +137,13 @@ test("the attention badge reads the canonical projection, not an approvals array
   assert.ok(GW.includes("function paintAttentionBadge()"));
   assert.ok(/G\.attentionCount = Number\(counts\.actionable\)/.test(GW),
     "attention is the canonical actionable count");
-  // The approvals bar still RENDERS the records — it just stops counting them.
-  assert.ok(GW.includes("renderPendingApprovalsBar"));
+  // The records are still RENDERED — the global interruption centre lists them
+  // now, and it still does not feed the badge. The permanent approvals bar that
+  // used to render them was removed: it put the same pending decisions above
+  // every route, above Home's own card and above the lane catalogue at once.
+  assert.ok(GW.includes("needsYouPanel"), "the records must still be reachable somewhere");
+  assert.ok(!/renderPendingApprovalsBar/.test(GW),
+    "the permanent approvals bar is gone; three renderings of one decision was the defect");
 });
 
 test("a lane row shows its unseen count from the server-side owner", () => {

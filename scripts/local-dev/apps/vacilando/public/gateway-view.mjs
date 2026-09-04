@@ -31,6 +31,7 @@ import {
   buildHomeViewModel,
   buildLaneThread,
   buildSystemViewModel,
+  governedActionLabel,
   laneOperatorStatus,
   laneProgress,
   laneReturnTarget,
@@ -1566,19 +1567,6 @@ export function laneAwaitingOperatorApproval(lane) {
  * approval announced as "approve gar_4dc7b4d8bcd0e0" is one the operator cannot
  * match to anything on screen, which is the whole defect.
  */
-export function governedActionLabel(ga) {
-  if (!ga) return "Governed action";
-  if (ga.operator_label) return ga.operator_label;
-  if (ga.operator_card?.label) return ga.operator_card.label;
-  const i = ga.inputs || {};
-  const pr = i.pullRequestNumber ?? i.pull_request_number;
-  if (ga.action_key === "repository.merge_pull_request" && pr) return `Merge PR #${pr} to ${ga.target || "staging"}`;
-  const branch = i.branch || i.headBranch || i.head_branch;
-  if (ga.action_key === "repository.push" && branch) return `Push ${branch}`;
-  if (ga.action_key === "promotion.open_pr" && branch) return `Open PR ${branch} → ${i.base || ga.target || "staging"}`;
-  if (ga.title) return ga.title;
-  return ga.action_key ? String(ga.action_key).replace(/[._]/g, " ") : "Governed action";
-}
 
 /**
  * EVERY pending approval, at the top of every route.

@@ -381,6 +381,30 @@ export function buildHomeViewModel({
  * that is merely working, merely queued, or merely finished is not here — it is
  * on the lane list, where routine state belongs.
  */
+/**
+ * THE NAME OF THE WORK, NOT THE NAME OF THE CAPABILITY.
+ *
+ * Lives here rather than in the view because the interruption centre, the lane
+ * tray and the approval surfaces must all call a governed action the same
+ * thing. It moved out of gateway-view when the global Needs You centre started
+ * listing these: reading `a.title || a.action_key` there printed
+ * "repository.merge_pull_request" at the operator, which is the same class of
+ * unactionable string as "approve gar_4dc7b4d8bcd0e0".
+ */
+export function governedActionLabel(ga) {
+  if (!ga) return "Governed action";
+  if (ga.operator_label) return ga.operator_label;
+  if (ga.operator_card?.label) return ga.operator_card.label;
+  const i = ga.inputs || {};
+  const pr = i.pullRequestNumber ?? i.pull_request_number;
+  if (ga.action_key === "repository.merge_pull_request" && pr) return `Merge PR #${pr} to ${ga.target || "staging"}`;
+  const branch = i.branch || i.headBranch || i.head_branch;
+  if (ga.action_key === "repository.push" && branch) return `Push ${branch}`;
+  if (ga.action_key === "promotion.open_pr" && branch) return `Open PR ${branch} → ${i.base || ga.target || "staging"}`;
+  if (ga.title) return ga.title;
+  return ga.action_key ? String(ga.action_key).replace(/[._]/g, " ") : "Governed action";
+}
+
 export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => null, nowMs = Date.now() } = {}) {
   const items = [];
   const labelById = new Map();
@@ -392,7 +416,7 @@ export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => nu
       kind: "governed_action",
       lane_id: laneId,
       lane_label: labelById.get(laneId) || a.lane_label || laneId || "Vacilando",
-      request: a.title || a.action_key || a.label || "Authorization required",
+      request: governedActionLabel(a),
       detail: a.reason_worker_cannot_execute || a.summary || null,
       at_ms: parseMs(a.requested_at || a.created_at || a.at),
       href: laneId ? `#/lanes/${encodeURIComponent(laneId)}` : "#/lanes",
