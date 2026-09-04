@@ -244,6 +244,25 @@ test("installed-but-not-running is its own state, never 'converged'", () => {
   assert.match(st.headline, /GATEWAY BEHIND INSTALL/);
 });
 
+test("a gateway behind the install says so in STATE, not only in the headline", () => {
+  // The defect this pins: `state` was `plan.state` verbatim, and `plan` answers only
+  // "is the installed toolkit the promoted one?". So this exact host reported
+  // `state: "converged"` beside `converged: false` and a GATEWAY BEHIND INSTALL headline —
+  // two fields disagreeing, with the misleading one being the short field callers key on.
+  // A governed action was promoted, installed, filed, and failed `action_unavailable`
+  // while `state` said converged the whole way.
+  const st = T.convergenceStatus({
+    ...fixture({ installed: STAGING.slice(0, 12) }),
+    readLink: () => `/toolkit/${STAGING.slice(0, 12)}`,
+    readOwner: owner(`/Users/x/.local/share/alloy/toolkit/${OLD}/lib/vacilando-server.mjs`),
+  });
+  assert.equal(st.state, "gateway_restart_required");
+  assert.notEqual(st.state, "converged", "state must never read converged while the gateway is behind");
+  assert.match(st.reason, /code installed is not code running/);
+  // The two fields must agree, which is the general form of the bug.
+  assert.equal(st.converged, st.state === "converged");
+});
+
 test("an unpinned gateway leaves convergence UNVERIFIED, never ok", () => {
   const st = T.convergenceStatus({
     ...fixture({ installed: STAGING.slice(0, 12) }),

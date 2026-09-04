@@ -317,8 +317,27 @@ export function convergenceStatus(opts = {}) {
     converged: ev.toolkit_drift === false && gatewayMatchesInstalled === true,
     drifted: ev.toolkit_drift === true,
     rollback_target: ev.previous_toolkit_retained ? ev.installed_toolkit_sha : null,
-    state: plan.state,
-    reason: plan.reason,
+    /*
+     * `state` MUST account for the gateway, not only for installed-vs-staging.
+     *
+     * It used to be `plan.state` verbatim, and `plan` answers a narrower question: is the installed
+     * toolkit the promoted one? So a host that had installed the newest sha while its gateway still
+     * ran the previous one reported `state: "converged"` beside `converged: false` and a headline
+     * reading GATEWAY BEHIND INSTALL. Two fields disagreed and the misleading one was the short one
+     * a caller keys on.
+     *
+     * That is not hypothetical. A governed action was promoted, installed, and then filed — and
+     * failed `action_unavailable`, because the running gateway had loaded its modules before the
+     * `current` symlink moved. `state` said converged throughout.
+     */
+    state: ev.toolkit_drift === false && gatewayMatchesInstalled === false
+      ? "gateway_restart_required"
+      : ev.toolkit_drift === false && gatewayMatchesInstalled == null
+        ? "gateway_unverified"
+        : plan.state,
+    reason: ev.toolkit_drift === false && gatewayMatchesInstalled === false
+      ? `installed ${ev.installed_toolkit_sha} is promoted, but the gateway is still running ${gw.executing_sha}; code installed is not code running`
+      : plan.reason,
     // The one-line form the operating model should be able to say.
     headline: ev.toolkit_drift === true
       ? `TOOLKIT DRIFT — staging ${ev.promoted_staging_sha}, installed ${ev.installed_toolkit_sha}`
