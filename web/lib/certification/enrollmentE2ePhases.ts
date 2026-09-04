@@ -2653,6 +2653,244 @@ const signatureInteraction: Phase = {
     },
 };
 
+
+/**
+ * T: Path B, driven end to end through the SAME machinery Path A was certified with.
+ *
+ * WHY THIS PHASE EXISTS SEPARATELY. The driver already proved Path B's ENTRY — B_entry shows the
+ * acquisition-backed participation, its anchored journey and no premature second journey. What it
+ * had never done is carry that child through the participant runtime to enrolled. A generic green
+ * suite was being read as parity it had not measured, so the gap is closed by measurement.
+ *
+ * WHAT IT MUST NOT DO. Invent a Path-B-specific choreography. The claim under test is that ONE
+ * completion architecture serves both entries, and a second walker would make that claim
+ * unfalsifiable — it would prove only that two different implementations each work. So every step
+ * reuses the helper Path A uses: `withParticipantPage`, `advanceParticipantToSignature`,
+ * `driveSignature`, `readChildState`, and the same configured outcome executor. The ONLY thing that
+ * differs is where the child came from.
+ */
+const pathBParity: Phase = {
+    key: "T_pathb_parity",
+    title: "acquisition-backed Path B, through the same completion architecture",
+    dependsOn: ["S_responsive"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as
+            | Record<string, { childId: string; participationId: string; journeyId: string }>
+            | undefined;
+        const pathB = entry?.opportunity_backed;
+        if (!pathB) return { status: "failed", detail: "no opportunity-backed child recorded by B_entry" };
+
+        // ── 1. the acquisition state Path B starts from ──────────────────────────────────────
+        const { data: ocmRows } = await ctx.supabase
+            .from("opportunity_customer_members")
+            .select("id, outcome_status_key, opportunity_id")
+            .eq("org_id", ctx.orgId)
+            .eq("customer_member_id", pathB.childId);
+        const { data: piRows } = await ctx.supabase
+            .from("process_instances")
+            .select("id, state, stage_key, context_id")
+            .eq("org_id", ctx.orgId)
+            .eq("process_key", "enrollment")
+            .eq("subject_id", pathB.childId);
+
+        const ocms = (ocmRows ?? []) as Array<{ id: string; outcome_status_key: string | null; opportunity_id: string | null }>;
+        const journeys = (piRows ?? []) as Array<{ id: string; state: string | null; stage_key: string | null; context_id: string | null }>;
+        const acquisitionOcm = ocms.find((o) => o.opportunity_id);
+
+        if (!acquisitionOcm) {
+            return { status: "failed", detail: "Path B carries no acquisition-backed participation" };
+        }
+        if (ocms.length !== 1) {
+            // A second participation would mean the family decision created rather than reused.
+            return {
+                status: "failed",
+                detail: `Path B child holds ${ocms.length} participations; the family decision must REUSE the acquisition OCM`,
+                evidence: { ocms: ocms.map((o) => ({ opportunityId: o.opportunity_id, status: o.outcome_status_key })) },
+            };
+        }
+        if (journeys.length !== 1) {
+            return {
+                status: "failed",
+                detail: `Path B child holds ${journeys.length} Enrollment journeys; exactly one is expected`,
+            };
+        }
+        const journey = journeys[0];
+        if (journey.context_id !== acquisitionOcm.id) {
+            // The journey must anchor to the PARTICIPATION, not to the Opportunity.
+            return {
+                status: "failed",
+                detail: "the Path B journey is not anchored to its participation",
+                evidence: { contextId: journey.context_id, participationId: acquisitionOcm.id },
+            };
+        }
+
+        const initial = {
+            opportunityId: acquisitionOcm.opportunity_id,
+            participationId: acquisitionOcm.id,
+            journeyId: journey.id,
+            ocmStatus: acquisitionOcm.outcome_status_key,
+            journeyAnchoredToParticipation: true,
+        };
+
+        // ── 2-7. the participant chain, through the shared helpers ───────────────────────────
+        const signerName = `${CERT_FAMILIES.opportunityBacked.parentFirstName} ${CERT_FAMILIES.opportunityBacked.lastName}`;
+        const walk = await withParticipantPage(ctx, journey.id, async (page) => {
+            const opened = (await visibleText(page)).replace(/\s+/g, " ").trim();
+            const leaks = internalLeaks(opened);
+            const nav = await advanceParticipantToSignature(page);
+            if (!nav.ok) return { opened, leaks, nav, signature: null };
+            const signature = await driveSignature(page, signerName);
+            return { opened, leaks, nav, signature };
+        });
+        if (!walk.ok) return { status: "failed", detail: `Path B participant runtime: ${walk.detail}` };
+        const { opened, leaks, nav, signature } = walk.value;
+
+        if (leaks.length) {
+            return {
+                status: "failed",
+                detail: `Path B participant surface exposed acquisition/internal vocabulary: ${leaks.join(", ")}`,
+                evidence: { leaks, opened: opened.slice(0, 400) },
+            };
+        }
+        if (!nav.ok) {
+            return {
+                status: "failed",
+                detail: "SIGNATURE_SURFACE_NOT_REACHED on Path B",
+                evidence: { reason: nav.reason, promptAtStop: nav.prompt, buttonsAtStop: nav.buttons, trail: nav.trail },
+            };
+        }
+        if (!signature || signature.state !== "finished") {
+            return {
+                status: "failed",
+                detail: `Path B signature did not finish: ${signature?.state ?? "not run"}`,
+                evidence: { transitions: signature?.transitions ?? [], acknowledgements: signature?.acks ?? null },
+            };
+        }
+
+        // ── 8. the gate is ready, and the child is NOT enrolled by paperwork ─────────────────
+        const { resolveEnrollmentParticipantProgress } = await import(
+            "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress"
+        );
+        const progress = await resolveEnrollmentParticipantProgress(ctx.supabase, {
+            orgId: ctx.orgId,
+            processInstanceId: journey.id,
+        } as Parameters<typeof resolveEnrollmentParticipantProgress>[1]);
+        if (!progress.ok) return { status: "failed", detail: `Path B progress refused: ${progress.refusal.code}` };
+
+        const afterPaperwork = await readChildState(ctx, pathB.childId, journey.id);
+        if (String(afterPaperwork.ocmStatus) === "enrolled") {
+            // The negative that matters most, and it must hold for BOTH entries.
+            return {
+                status: "failed",
+                detail: "Path B participant completion AUTO-ENROLLED the child; enrolling is the operator's decision",
+                evidence: { afterPaperwork },
+            };
+        }
+
+        // ── 9. the real operator-owned Complete Enrollment ───────────────────────────────────
+        const { defaultStageOperatingPlanForEnrollmentStage } = await import(
+            "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans"
+        );
+        const { executeStageOperatingOutcome } = await import("@/lib/lifecycle/executeStageOperatingOutcome");
+        const { resolveEnrollmentDepartmentForOpportunity } = await import(
+            "@/lib/lifecycle/resolveStageWorkOutcomeContext"
+        );
+
+        const stageKey = progress.value.stage_key ?? "";
+        const plan = defaultStageOperatingPlanForEnrollmentStage(stageKey);
+        if (!plan) return { status: "failed", detail: `no operating plan for Path B stage ${stageKey}` };
+
+        // Path B HAS an Opportunity, so it is passed — the same resolver, given the hint it has.
+        const departmentId = await resolveEnrollmentDepartmentForOpportunity({
+            supabase: ctx.supabase,
+            orgId: ctx.orgId,
+            opportunityId: acquisitionOcm.opportunity_id,
+        });
+        if (!departmentId) return { status: "failed", detail: "no enrollment department resolved for Path B" };
+
+        const result = await executeStageOperatingOutcome({
+            supabase: ctx.supabase,
+            orgId: ctx.orgId,
+            userId: ctx.actorUserId ?? "",
+            departmentId,
+            plan,
+            outcomeKey: "enrollment_complete",
+            subject: {
+                journey_segment: "child",
+                // Present, and passed through — Path B's Opportunity is real acquisition context.
+                opportunity_id: acquisitionOcm.opportunity_id,
+                customer_member_id: pathB.childId,
+                opportunity_customer_member_id: acquisitionOcm.id,
+                process_instance_id: journey.id,
+            },
+        } as Parameters<typeof executeStageOperatingOutcome>[0]);
+
+        const applied = (result.applied_targets ?? []).map((t) => t.kind);
+        const failed = (result.failed_targets ?? []).map((t) => t.kind);
+        if (failed.length) {
+            return {
+                status: "failed",
+                detail: `Path B Complete Enrollment failed targets: ${(result.errors ?? []).join("; ")}`,
+                evidence: { appliedTargets: applied, failedTargets: failed, errors: result.errors ?? [] },
+            };
+        }
+        if (!applied.length) {
+            // An empty target list must never read as completion.
+            return { status: "failed", detail: "Path B Complete Enrollment applied NO targets; that is not a completion" };
+        }
+
+        // ── final state, and no duplication ──────────────────────────────────────────────────
+        const final = await readChildState(ctx, pathB.childId, journey.id);
+        const { data: finalOcms } = await ctx.supabase
+            .from("opportunity_customer_members")
+            .select("id, opportunity_id, outcome_status_key")
+            .eq("org_id", ctx.orgId)
+            .eq("customer_member_id", pathB.childId);
+        const { data: finalPis } = await ctx.supabase
+            .from("process_instances")
+            .select("id")
+            .eq("org_id", ctx.orgId)
+            .eq("process_key", "enrollment")
+            .eq("subject_id", pathB.childId);
+
+        const ocmCount = ((finalOcms ?? []) as unknown[]).length;
+        const piCount = ((finalPis ?? []) as unknown[]).length;
+        if (String(final.ocmStatus) !== "enrolled") {
+            return { status: "failed", detail: `after Complete Enrollment Path B reads ${String(final.ocmStatus)}, not enrolled`, evidence: { final } };
+        }
+        if (ocmCount !== 1 || piCount !== 1) {
+            return {
+                status: "failed",
+                detail: `Path B duplicated records: ${ocmCount} participation(s), ${piCount} journey(s)`,
+            };
+        }
+        if (final.ocmOpportunityId !== acquisitionOcm.opportunity_id) {
+            return { status: "failed", detail: "Path B lost its acquisition Opportunity context through completion" };
+        }
+
+        return {
+            status: "passed",
+            detail:
+                "acquisition-backed Path B completed through the SAME architecture as Path A: the acquisition "
+                + "participation was reused rather than duplicated, the journey stayed anchored to it, the "
+                + "participant chain ran on the shared helpers, paperwork did NOT auto-enrol the child, and the "
+                + "operator outcome moved it enrolling -> enrolled with the Opportunity preserved as acquisition context",
+            evidence: {
+                initial,
+                signatureState: signature.state,
+                signatureTransitions: signature.transitions,
+                afterPaperwork,
+                appliedTargets: applied,
+                failedTargets: failed,
+                final,
+                participations: ocmCount,
+                journeys: piCount,
+                opportunityPreserved: final.ocmOpportunityId === acquisitionOcm.opportunity_id,
+            },
+        };
+    },
+};
+
 /**
  * S: the same product at 1280 and at 375.
  *
@@ -2776,4 +3014,5 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     correctionRegeneration,
     signatureInteraction,
     responsiveProof,
+    pathBParity,
 ];
