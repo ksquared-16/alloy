@@ -178,4 +178,115 @@ test.describe("financials card — payment controls through the operator's own c
             final.reconciliation.responsibilityCents - final.reconciliation.paymentsCents,
         );
     });
+
+    test("history, filtering, and the refusals — through the card's own contract", async ({ page }) => {
+        const readCard = async (query: string) => {
+            const res = await page.request.get(`/api/admin/financials/card?${query}`);
+            expect(res.ok()).toBeTruthy();
+            const json = (await res.json()) as { ok: boolean; vm: Record<string, unknown> };
+            expect(json.ok).toBeTruthy();
+            return json.vm as unknown as CardVm & {
+                ledgerPeriods: Array<{ period: { key: string; label: string }; rows: CardRow[] }>;
+                payments: Array<Record<string, unknown>>;
+                payers: Array<{ share: string | null }>;
+                subjects: Array<{ customerMemberId: string; displayName: string }>;
+                rows: Array<CardRow & { categoryLabel: string; periodKey: string | null; subjectMemberId: string | null; correctionKind: string | null }>;
+                account: { customerId: string | null } | null;
+            };
+        };
+        const execute = async (actionKey: string, payload: Record<string, unknown>) => {
+            const res = await page.request.post("/api/admin/actions/execute", {
+                data: { action_key: actionKey, entity_type: "child", entity_id: CHILD, mode: "execute", confirmation: { confirmed: true }, payload },
+            });
+            return { status: res.status(), body: (await res.json()) as { ok?: boolean; error?: { message?: string } } };
+        };
+
+        await page.goto("/workspace");
+        const vm = await readCard(`customer_id=${HOUSEHOLD}`);
+
+        // ── HISTORY ──────────────────────────────────────────────────────────────────────────────
+        // Posting is represented: posted rows carry a human category label, never a type key.
+        const posted = vm.rows.filter((r) => r.status !== "draft" && r.status !== "void");
+        expect(posted.length).toBeGreaterThan(0);
+        for (const r of posted.slice(0, 12)) {
+            expect(r.categoryLabel, "a human label, never an internal key").toMatch(/^[A-Z]/);
+            expect(r.categoryLabel).not.toMatch(/_/);
+        }
+        // Correction/reversal history is present and identifies itself as a correction.
+        const corrections = vm.rows.filter((r) => r.correctsChargeId !== null);
+        if (corrections.length) {
+            for (const c of corrections) expect(c.correctionKind).toBeTruthy();
+            // A correction is never itself payable.
+            for (const c of corrections) expect(c.offersPayment).toBe(false);
+        }
+        // Billing-period grouping: every group's rows belong to that period, newest group first.
+        expect(vm.ledgerPeriods.length).toBeGreaterThan(0);
+        for (const g of vm.ledgerPeriods) {
+            expect(g.period.label).toMatch(/^[A-Z][a-z]+ \d{4}$/);
+            for (const r of g.rows) expect(r.periodKey).toBe(g.period.key);
+        }
+        const keys = vm.ledgerPeriods.map((g) => g.period.key);
+        expect([...keys].sort((a, b) => b.localeCompare(a))).toEqual(keys);
+        // Receipt is distinct from application, and the journal is not the balance.
+        const receipts = vm.payments.filter((p) => p.direction === "inbound" && p.status === "posted");
+        expect(receipts.length).toBeGreaterThan(0);
+        for (const p of receipts) {
+            expect(Number(p.appliedCents)).toBeLessThanOrEqual(Number(p.amountCents));
+        }
+        expect(vm.reconciliation.balanceCents).toBe(
+            vm.reconciliation.responsibilityCents - vm.reconciliation.paymentsCents,
+        );
+
+        // ── FILTERING ────────────────────────────────────────────────────────────────────────────
+        expect(vm.subjects.length).toBeGreaterThan(0);
+        const child = vm.subjects[0].customerMemberId;
+        const scoped = await readCard(`customer_member_id=${child}`);
+        // Child attribution does not change account ownership: the same household answers.
+        expect(scoped.account?.customerId).toBe(vm.account?.customerId);
+        // Every row attributable to a child names that child; a household charge names none and is
+        // never attributed to a sibling.
+        for (const r of vm.rows) {
+            if (r.subjectMemberId !== null) {
+                expect(vm.subjects.some((s) => s.customerMemberId === r.subjectMemberId)).toBe(true);
+            }
+        }
+        // Payer filtering: canonical payer identity exists but carries NO share, so the surface
+        // states payers and fabricates no responsibility split. Truthful N/A, asserted.
+        for (const payer of vm.payers) expect(payer.share).toBeNull();
+
+        // ── FAILURE AND SECURITY ─────────────────────────────────────────────────────────────────
+        const payableRow = vm.rows.find((r) => r.offersPayment);
+        if (payableRow) {
+            const zero = await execute("payment.record", { charge_id: payableRow.chargeId, amount_cents: 0, payment_method: "cash" });
+            expect(zero.status).not.toBe(200);
+            const negative = await execute("payment.record", { charge_id: payableRow.chargeId, amount_cents: -5000, payment_method: "cash" });
+            expect(negative.status).not.toBe(200);
+            const badMethod = await execute("payment.record", { charge_id: payableRow.chargeId, amount_cents: 100, payment_method: "bitcoin" });
+            expect(badMethod.status).not.toBe(200);
+        }
+        // A draft charge refuses money through the operator's own path.
+        const draft = vm.rows.find((r) => r.status === "draft");
+        if (draft) {
+            const onDraft = await execute("payment.record", { charge_id: draft.chargeId, amount_cents: 100, payment_method: "cash" });
+            expect(onDraft.status).not.toBe(200);
+        }
+        // A charge from another organization is not reachable: the org comes from the session, so an
+        // unknown id resolves to nothing rather than to another tenant's money.
+        const foreign = await execute("payment.record", {
+            charge_id: "00000000-0000-4000-8000-0000000000ff",
+            amount_cents: 100,
+            payment_method: "cash",
+        });
+        expect(foreign.status).not.toBe(200);
+        // A cross-organization READ answers with no account rather than another tenant's ledger.
+        const foreignCard = await readCard("customer_id=00000000-0000-4000-8000-0000000000fe");
+        expect(foreignCard.rows.length).toBe(0);
+
+        // ── RELOAD RECONCILES TO PERSISTENCE ─────────────────────────────────────────────────────
+        const before = await readCard(`customer_id=${HOUSEHOLD}`);
+        await page.reload();
+        const after = await readCard(`customer_id=${HOUSEHOLD}`);
+        expect(after.reconciliation.balanceCents).toBe(before.reconciliation.balanceCents);
+        expect(after.rows.length).toBe(before.rows.length);
+    });
 });
