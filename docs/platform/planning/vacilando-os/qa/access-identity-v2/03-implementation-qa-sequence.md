@@ -38,11 +38,18 @@ amended SQL was **promoted into `combined_query`** and the stale top-level `quer
 `runs_1_2_query_hash`. Until this landed the improvement was authored but **unreachable**, sitting in a key
 nothing reads. The alternative route — a dedicated run-3 artifact — is **unexecutable**: `queryArtifactPath` is
 a default parameter and none of its three call sites passes it, so it would have failed *silently*, spending
-the authorization on a byte-identical run. **That rename must not be reverted** (§4)
+the authorization on a byte-identical run. **That rename must not be reverted** (§4). **The unexecutable-route
+claim is SUPERSEDED as of 2026-09-04** — the artifact path *is* now choosable, and its default has flipped away
+from this file; see the W-0 run-4 entry below
 · **W-0 run 3 EXECUTED 2026-08-07T17:24:16Z** (`tha_67f9c69f628d1a`) — **zero drift for the third consecutive
 run** across all of Q1–Q6, and the census **identifies its own target for the first time**: org fingerprint
 `ab7e5dde…`. Query hash `743cd63b…` → `a3982ca5…`, which is the added key, not drift. The Supabase project ref
 is still unproven, so `target.confirmed_against_live` stays `false` (§4)
+· **W-0 run 4 PREPARED, NOT EXECUTED 2026-09-04** (mission `msn_3a5c03a002709dc240`, assignment
+`asg_727e2369868c78`) — run 3's counts are **28 days old** and M1/M9 have since reached staging with their apply
+state unreadable by any worker, so **Q4 and Q3 are now the only instrument** that can settle it. Re-grounding
+passes and the hash trap is not armed. **⚠ The request must carry `artifact_refs` naming this file** — an empty
+`artifact_refs` silently runs the **Q15** census instead (§4)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -589,7 +596,7 @@ rather than confirming it backwards — their target remains inferential; every 
    commit `7dc06920a`), which is also where runs 1 and 2's exact query text lives now that `combined_query`
    carries the amendment.
 
-**W-0's counts are no longer eight days old — they are current as of this run.** The standing rule is
+**W-0's counts were current as of run 3. They are not current now — see the run-4 section below.** The standing rule is
 unchanged and still governs: Q4 is the count that grows, and every §11 preflight must re-derive it rather than
 cite this one. Per the census file's `now_also_serves_w6_m1_preflight`, this run is *also* the fresh Q4 that
 W-6/M1 requires immediately before apply, and its `q4_pairs_without_profile = 2` is the number M1 must equal.
@@ -604,6 +611,57 @@ the apply follows closely, and *an aged preflight is not a preflight*. W-0 suppl
 is W-6's to flip and is deliberately not set by the census file.** If time has passed, the correct move is
 another census — now a single authorization on a proven channel. Full rule-by-rule evaluation lives at the
 census file's `w6_m1_preflight.preflight_run_3_outcome`.
+
+#### W-0 re-issued a fifth time — **2026-09-04**, assignment `asg_727e2369868c78`: run 4 prepared, and the executor moved underneath it
+
+W-0 was re-issued a fifth time (mission `msn_3a5c03a002709dc240` v1, contentHash `5d17cc99075c029bedda580dc02ef6cb`)
+against exit criteria met on 2026-07-31 and re-confirmed twice. **The counts were not re-asserted and no
+byte-identical run was requested** — this file names that as the wrong outcome. Full preparation is at the census
+file's `run_4_preparation`; §4 records what changed.
+
+**Why a run 4 is warranted on evidence rather than on the calendar.** Runs 1→2→3 returned zero drift, but that
+was diagnosed as an *idle tenant*, not a stable system. Run 3's evidence is now **28 days old**, and in that
+window the world its counts describe moved: **M1** (`20260807140000_backfill_membership_access_profiles.sql`)
+and **M9** (`20260818190000_w16_user_roles_role_foreign_key.sql`) both reached `origin/staging`, and
+[`post-merge-certification-reconciliation.json`](./post-merge-certification-reconciliation.json) `finding_C`
+records that **no worker session can read whether they were applied** to the target. Q4 and Q3 settle exactly
+that, from the data side, without the migration ledger and without a second authorization:
+
+| Query | What run 4 settles that nothing else can |
+|---|---|
+| **Q4** | `q4_pairs_without_profile` = **0** ⇒ M1 **is** applied to the target; = **2** ⇒ it is **not** |
+| **Q3** | M9's own in-transaction preflight aborts unless undefined rows are 0, so a non-zero Q3 proves the FK is **not** on the target and C2 is still open there |
+| **Q4** | **The first real test of W-5.** Three runs held `q4_membership_rows` at 8, so the writers were never exercised. If 28 days of use moved it, membership rows must grow while `pairs_without_profile` stays flat |
+| `target_identity` | Run 3 *established* fingerprint `ab7e5dde…`; run 4 is the first that can be **checked against** it. A different fingerprint invalidates the comparison outright |
+
+**⚠ THE TRAP THAT WOULD WASTE THE AUTHORIZATION — read before filing the request.** A `database.read_census`
+request filed with **no `artifact_refs`** no longer runs this census. It silently runs the **Q15** census — a
+different artifact answering different questions, carrying no Q1–Q6 expression at all.
+`governed-action-request.mjs:1801-1803` falls back to `[Q15_CENSUS_ARTIFACT]` whenever `artifactRefs` is empty
+and the action key is `DATABASE_READ_CENSUS`, and `:1091-1094` resolves the same default. **The run-4 request
+must state `artifact_refs: ["docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json"]`
+explicitly.**
+
+This **supersedes the claim made above** (and in the header) that the artifact path *"is not choosable through any
+Director or operator path"*. That was true when written — `queryArtifactPath` was a default parameter no call
+site passed — and the governed-action-request layer has since added artifact selection **and flipped the
+effective default away from this file**. `trusted-host-actions.mjs:903` still defaults to
+`wave0-authority-census.json`, so the two layers now disagree; the ref must be *stated*, not relied upon. The old
+default protected W-0 by accident, the new one endangers it by accident. **This is the second time the execution
+plumbing — not the SQL — was the thing most likely to waste an authorization** (the first was the stale
+`query_hash` trap). Both were invisible from the SQL. Any future census re-issue should re-read the executor first.
+
+**Re-grounding: PASS.** Exactly one migration since run 3 touches a census table —
+`20260818190000_w16_user_roles_role_foreign_key.sql` — and it only drops and re-adds a constraint (lines 84-91).
+No column the census reads was added, dropped, renamed or retyped, so all six queries still resolve.
+
+**The hash trap is not armed.** `git log 873a2f097..HEAD -- wave0-authority-census.json` is empty and the file is
+clean, so `combined_query` is byte-identical to the text the Director itself hashed as `a3982ca5…` during run 3's
+merge-back. That is a *provenance* argument and needs no local `sha256` — which remains unavailable (`shasum` and
+`openssl` are permission-walled in this worktree too, as `node -e` was in slot 6).
+
+**Still the only blocker: the operator authorization.** There is no worker-side channel to `database.read_census`,
+so a fifth re-dispatch cannot move it — the lesson already recorded at `w6_m1_preflight.why_not_executed`.
 
 ---
 
