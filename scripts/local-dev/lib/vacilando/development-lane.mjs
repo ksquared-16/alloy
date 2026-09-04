@@ -79,8 +79,27 @@ export function readDevelopmentLaneStore(root = runtimeRoot()) {
       // write. Folders live in the same file and must be carried forward.
       folders: raw.folders && typeof raw.folders === "object" ? raw.folders : {},
     };
-  } catch {
-    return emptyStore();
+  } catch (err) {
+    /*
+     * ABSENCE IS THE ONLY LEGITIMATE EMPTY — the same defect, in the same shape, as the one that
+     * emptied the execution-run store and lost every run on every lane.
+     *
+     * This caught EVERY failure and returned an empty store: a transient read error, a partial
+     * file, an EMFILE under load, the window during a concurrent rename. The next write then
+     * persisted that fabricated emptiness, and `lane_not_found` began coming back for lanes that
+     * plainly existed a moment earlier. That is exactly what happened on 2026-09-04 while this
+     * very fix was being promoted for the runs store — the lanes store went to
+     * `{"lanes": {}, "folders": {}}` mid-run.
+     *
+     * ENOENT means the store has never been written on this host and is answered honestly. A file
+     * that EXISTS but cannot be read or parsed is damage, not absence, and a caller that cannot
+     * read the store must not be handed a confident answer about what it contains.
+     */
+    if (err && err.code === "ENOENT") return emptyStore();
+    throw new Error(
+      `development lane store is present but unreadable (${err?.code || "parse failed"}): `
+      + developmentLaneStorePath(root),
+    );
   }
 }
 
