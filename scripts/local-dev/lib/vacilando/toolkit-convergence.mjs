@@ -65,6 +65,24 @@ function run(cmd, args, { cwd = undefined } = {}) {
   }
 }
 
+/**
+ * The running control-plane process, read from the process table.
+ *
+ * Matches the server rather than the host wrapper: the wrapper is routinely
+ * launched through `current` and so carries no sha, while the server names the
+ * toolkit it was started from.
+ */
+function defaultGatewayPs() {
+  try {
+    const out = String(execFileSync("ps", ["-Ao", "pid,command"], { encoding: "utf8" }));
+    const rows = out.split("\n").filter((l) => /vacilando-server\.mjs/.test(l) && !/\bgrep\b/.test(l));
+    const row = rows.find((l) => /\/toolkit\/[0-9a-f]{12}\//.test(l)) || rows[0];
+    return row ? row.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The sha the `current` symlink resolves to, or null when unreadable. */
 export function installedToolkitSha({ toolkitRoot = TOOLKIT_ROOT, readLink = null } = {}) {
   try {
@@ -239,8 +257,14 @@ export function observeGatewayExecution({
     out.gateway_pid = owner.pid ?? null;
     out.gateway_argv = owner.argv;
     out.executing_path = owner.argv[1];
-  } else if (psRunner) {
-    const line = psRunner();
+  } else {
+    // THE OWNER FILE IS NOT A DEPENDABLE SOURCE OF TRUTH. It vanished across a
+    // Gateway restart on this host, and the observation degraded to UNVERIFIED
+    // while `ps` could see the answer the whole time. Failing closed was right;
+    // depending on a file that can disappear was not. The process table is the
+    // thing that cannot lie about what is executing, so it is the fallback
+    // rather than an injected extra.
+    const line = (psRunner || defaultGatewayPs)();
     if (line) {
       const m = String(line).trim().match(/^(\d+)\s+(.*)$/);
       if (m) {
