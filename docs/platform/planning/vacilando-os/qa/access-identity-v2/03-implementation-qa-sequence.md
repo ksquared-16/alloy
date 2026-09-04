@@ -651,6 +651,17 @@ default protected W-0 by accident, the new one endangers it by accident. **This 
 plumbing — not the SQL — was the thing most likely to waste an authorization** (the first was the stale
 `query_hash` trap). Both were invisible from the SQL. Any future census re-issue should re-read the executor first.
 
+**⚠ AND RUN 4 WILL NOT UPDATE THE CENSUS FILE.** The evidence write-back is no longer pinned to it:
+`trusted-host-actions.mjs:782-784` now *derives* the path as `<query artifact>.results.json`, so run 4 lands in
+**`wave0-authority-census.results.json`** — a file that does not yet exist, so the merge branch is skipped and a
+bare `{trusted_host_action_id, query_hash, results}` is written instead. **`wave0-authority-census.json` will
+still read `status: executed`, `census_run_at: 2026-08-07` and run 3's `results` afterwards.** Anyone consuming
+run 4 must read the `.results.json`; citing this file's `results` block would silently quote run 3. That
+supersedes the artifact's `evidence_write_back_confirms_it` note (true when written) and both predictions in
+`what_the_directors_merge_back_will_do`. One genuine upside: runs 1-3's `results` now **survive** rather than
+being overwritten. `run_history` is still not appended to, so run 4 needs two hand edits after it lands — a
+`run_history[4]` entry and a drift comparison against run 3.
+
 **Re-grounding: PASS.** Exactly one migration since run 3 touches a census table —
 `20260818190000_w16_user_roles_role_foreign_key.sql` — and it only drops and re-adds a constraint (lines 84-91).
 No column the census reads was added, dropped, renamed or retyped, so all six queries still resolve.
