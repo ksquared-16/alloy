@@ -33,12 +33,28 @@ independently verified against `origin/staging` before reporting.
 
 ## Observed instances
 
-At least **four** occurrences in lane `lane_9b9082778292`. The clearest, fully
-documented instance:
+At least **five** occurrences in lane `lane_9b9082778292`. Two are documented
+here in full; both are `repository.push` failures, and neither went anywhere
+near a merge.
+
+### Instance A — `gar_069e7c22bf39c4`
 
 | | |
 |---|---|
-| Request | `gar_dd80251b477976` |
+| Action | `repository.push` |
+| Reported failure | `execution_failed` / `head_drift` — filed at `48d35af59`, HEAD had moved to `5bd67ae8c` |
+| Notice also claimed | "The merge into staging already succeeded. Do not retry the merge." |
+| Actual `origin/staging` | `63f19eb9028d83236851db460287f26c22508a3c` |
+| Candidate commits present | **none** — `48d35af59` and `5bd67ae8c` both absent |
+| Actual `origin/agent/ui-vac` | `c400968` — unchanged; the push did nothing at all |
+
+`head_drift` means the push was refused for a stale expected SHA. The remote
+branch did not move. No merge was attempted, requested, or possible.
+
+### Instance B — `gar_dd80251b477976`
+
+| | |
+|---|---|
 | Action | `repository.push` (not even a merge) |
 | Reported failure | `repository_not_allowlisted` — repository named `Alloy`, allowlist wants `ksquared-16/alloy` |
 | Notice also claimed | "The merge into staging already succeeded. Do not retry the merge." |
