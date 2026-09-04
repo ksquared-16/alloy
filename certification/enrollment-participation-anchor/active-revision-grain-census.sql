@@ -14,24 +14,38 @@ from (
     -- ALWAYS ONE ROW. Where does this org's configuration actually live?
     select 'config_source'::text as question_id,
            json_build_object(
-               'org_id', '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33',
+               'org_id', '93667019-bd28-49b5-a688-acc9bb1e0a19',
+               -- IS THIS ORG EVEN HERE? A previous run of this census returned every count as
+               -- zero and read as "the tenant has no configuration". It had a wrong org id, and
+               -- was measuring an org that does not exist. Zero-because-absent and
+               -- zero-because-unconfigured are different answers and the census must separate
+               -- them, so it reports the org's existence and its TOTAL departments before
+               -- reporting how many of them carry configuration.
+               'org_exists', (
+                   select count(*) > 0 from public.orgs o
+                   where o.id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
+               ),
+               'departments_total', (
+                   select count(*) from public.departments d
+                   where d.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
+               ),
                'departments_with_builder', (
                    select count(*) from public.departments d
-                   where d.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+                   where d.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
                      and d.metadata ? 'lifecycle_builder_v1'
                ),
                'business_process_revisions', (
                    select count(*) from public.business_process_revisions r
-                   where r.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+                   where r.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
                ),
                'configuration_publications', (
                    select count(*) from public.configuration_publications cp
-                   where cp.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+                   where cp.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
                      and cp.domain_key = 'business_process'
                ),
                'business_process_drafts', (
                    select count(*) from public.business_process_drafts d
-                   where d.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+                   where d.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
                )
            )::text as payload
 
@@ -50,7 +64,7 @@ from (
                )
            )::text
     from public.departments d
-    where d.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+    where d.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
       and d.metadata ? 'lifecycle_builder_v1'
 
     union all
@@ -92,7 +106,7 @@ from (
     from public.departments d
     cross join lateral jsonb_array_elements(coalesce(d.metadata->'lifecycle_builder_v1'->'processes','[]'::jsonb)) proc
     cross join lateral jsonb_array_elements(coalesce(proc->'stages','[]'::jsonb)) stage
-    where d.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+    where d.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
       and d.metadata ? 'lifecycle_builder_v1'
 
     union all
@@ -105,7 +119,7 @@ from (
            )::text
     from public.departments d
     cross join lateral jsonb_array_elements(coalesce(d.metadata->'lifecycle_builder_v1'->'processes','[]'::jsonb)) proc
-    where d.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+    where d.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
       and d.metadata ? 'lifecycle_builder_v1'
 ) census
 order by question_id, payload

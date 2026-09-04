@@ -43,7 +43,7 @@ with src as (
              where cp.org_id = d.org_id and cp.domain_key = 'business_process' and cp.subject_id = d.id
              order by cp.revision_number desc limit 1) as payload_checksum
     from public.departments d
-    where d.org_id = '93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33'
+    where d.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
       and d.metadata ? 'lifecycle_builder_v1'
 ),
 active as (
@@ -61,6 +61,16 @@ from (
     -- ALWAYS ONE ROW, even when nothing below matches.
     select 'payload_source'::text as question_id,
            json_build_object(
+               -- Existence before absence: an all-zero answer must not be readable as "no
+               -- configuration" when the real cause is an org id that matches nothing.
+               'org_exists', (
+                   select count(*) > 0 from public.orgs o
+                   where o.id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
+               ),
+               'departments_total', (
+                   select count(*) from public.departments d
+                   where d.org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'
+               ),
                'departments_with_builder', (select count(*) from src),
                'payloads_available', (select count(*) from active),
                'sources', (select coalesce(json_agg(distinct source), '[]'::json) from active)

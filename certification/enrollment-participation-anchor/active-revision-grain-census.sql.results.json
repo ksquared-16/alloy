@@ -1,0 +1,27 @@
+{
+  "trusted_host_action_id": "tha_f83e35e9076b4e",
+  "query_hash": "6b8dd09d848e3608d82fc80f36822a51da98f946a1feffd5d49d43b372cf5187",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-04T15:02:24.676Z",
+    "question_ids": [
+      "config_source"
+    ],
+    "questions": {
+      "config_source": {
+        "question_id": "config_source",
+        "row_count": null,
+        "rows": [
+          {
+            "org_id": "93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33",
+            "departments_with_builder": 0,
+            "business_process_revisions": 0,
+            "configuration_publications": 0,
+            "business_process_drafts": 0
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
