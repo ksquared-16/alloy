@@ -108,28 +108,52 @@ A run that has not reported inside `PROGRESS_STALE_MS` (30 minutes) is **not**
 
 ## Presentation rules
 
+**Progress is an adjective on the lane's status, not a section of its own.**
+
+The first implementation gave progress its own labelled band — a bar, a
+`Provider estimate: ~62% complete` caption and an `Updated 1m ago` timestamp,
+sitting near the lane's state. Two things then described what the lane was
+doing, in two visual languages, and the operator had to reconcile them. A
+percentage is not a peer of the state; it *qualifies* the state.
+
+So it now renders inside the one status line the operator already reads:
+
+```
+Trust Runtime    ● Working · ~62% · Claude
+```
+
 | Situation | Rendering |
 |---|---|
-| Fresh estimate with a percent | A bar, plus `Provider estimate: ~62% complete` and `Updated 1m ago` |
-| `source: deterministic` | `Measured: ~100% complete` |
-| `source: operator` / `derived` | `Operator estimate:` / `Derived estimate:` |
-| Confidence `low` | The same bar, hatched — the same fact, held less firmly |
-| Stale (> 30m) | **No bar.** `Progress estimate unavailable`, plus `last estimate 4h ago` |
-| Never reported | **No bar.** `Progress estimate unavailable` |
+| Fresh estimate with a percent | `● Working · ~62% · Claude` |
+| `source: provider_estimate` | `~` prefix — the tilde IS the word "estimate" |
+| `source: deterministic` | The percentage with **no** `~` — it was measured |
+| Stale (> 30m) | The percentage is **omitted**. `● Working · Claude` |
+| Never reported | The percentage is **omitted**. `● Working · Claude` |
+| Terminal run | No percentage; the state carries the outcome |
 
-A zero-width bar is never drawn. An empty track reads as "0% done", which is a
-claim nobody made.
+A stale or absent estimate produces *no* percentage and *no* apology. "Progress
+estimate unavailable" was a sentence spent telling the operator about a field
+rather than about their lane.
 
-`laneProgress()` in `apps/vacilando/public/vacilando-ui-model.mjs` is the single
-consumer-side derivation, so the Lane, the lane list and Home cannot disagree
-about the same run.
+There is **no bar**, on any surface. A bar is a second progress subsystem: it
+needs a track, a fill, a hatch for low confidence and a rule for zero width,
+and it competes with the status dot for the same meaning. The certification
+asserts that no `.vprogress` element exists anywhere.
+
+No ETA is derived, on any surface, ever.
+
+`laneOperatorStatus()` and `operatorStatusLine()` in
+`apps/vacilando/public/vacilando-ui-model.mjs` are the single consumer-side
+derivation, so the Lane header, the lane list, the rail and Home cannot
+disagree about the same run.
 
 ## Consumers
 
 | Consumer | Status |
 |---|---|
-| Lane · Current Work | SHIPPED |
-| Lane list row (compact bar) | SHIPPED |
+| Lane header status line | SHIPPED |
+| Lane list row | SHIPPED |
+| Rail lane row | SHIPPED |
 | Home · Lanes | SHIPPED |
 | Notifications / Activity | DEFERRED — a progress milestone is not yet an activity event |
 | Analytics | DEFERRED — see the telemetry backlog |

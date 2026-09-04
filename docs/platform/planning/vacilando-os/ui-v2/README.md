@@ -23,6 +23,10 @@ Read in this order:
 | [TELEMETRY-BACKLOG.md](TELEMETRY-BACKLOG.md) | Every gap deliberately left open, tiered by value |
 | [CERTIFICATION.md](CERTIFICATION.md) | Desktop and mobile evidence, and how to reproduce it |
 
+Authorization volume — why the operator was asked 182 times in 200 governed
+requests, and the standing-grant change that removed 95 of those interruptions —
+is [standing-authorization.md](../../../governance/standing-authorization.md).
+
 Doctrine for how execution is *operated* remains
 [ENGINEERING-OPERATIONS-CENTER.md](../ENGINEERING-OPERATIONS-CENTER.md). The
 prior presentation pass is [UI-REALIZATION.md](../UI-REALIZATION.md). This phase
@@ -32,11 +36,17 @@ extends neither; it is the surface they are expressed through.
 
 **SHIPPED** — the application shell; Home / Lanes / Activity / System navigation
 on desktop and mobile; the Home command centre; the V2 lane (header, tabs,
-Current Work, latest output, composer); the Needs You tray at the human
-interaction boundary; the Lane Inspector with progressive disclosure; the
-Activity feed and its filters; the System surface; the provider progress
-contract end to end; the data-maturity layer and the governed placeholder
-mechanism; the V2 visual system.
+conversation thread, composer); four-line message previews with per-message
+Show more; the operator state vocabulary (WORKING / NEEDS YOU / READY / FAILED)
+from one resolver; provider progress rendered inside the lane's status line; the
+Needs You tray at the human interaction boundary; the Lane Inspector with
+progressive disclosure; the Activity feed and its filters; the System surface;
+the provider progress contract end to end; the data-maturity layer and the
+governed placeholder mechanism; the V2 visual system.
+
+**REMOVED** — the standalone Current Work card (it duplicated the operator's own
+instruction, already shown as the first YOU message); the standalone progress
+bar and its caption; `SUSPENDED` as an operator-facing word.
 
 **REPRESENTED BUT NOT WIRED** — swap trajectory; disk on Home before the probe
 is called; stale/failed process counts; health history; lane provider usage

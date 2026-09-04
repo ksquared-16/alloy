@@ -130,16 +130,29 @@ try {
     && /Slot 6/.test(await desk.locator(".vlane-head-meta").innerText()));
   check("lane tabs are present",
     (await desk.locator(".vtab-lane").count()) === 6);
-  const prog = await desk.locator(".vprogress-label").first().innerText();
-  check("progress reads as a provider estimate", /Provider estimate: ~62% complete/.test(prog), prog);
+  // PROGRESS IS AN ADJECTIVE ON THE STATUS, NOT A SUBSYSTEM.
+  // It used to be its own labelled band ("Provider estimate: ~62% complete"),
+  // which read as a second, competing account of what the lane was doing.
+  // It now qualifies the one state the operator already reads.
+  const statusLine = await desk.locator(".vlane-head .vstate").first().innerText();
+  check("progress qualifies the lane's status in one line",
+    /Working/.test(statusLine) && /~62%/.test(statusLine) && /Claude/.test(statusLine), statusLine);
+  check("the estimate is marked as an estimate", statusLine.includes("~"), statusLine);
+  check("there is no second progress subsystem",
+    (await desk.locator(".vprogress, .vprogress-label, .vprogress-bar").count()) === 0);
   check("no ETA is shown", !(await desk.evaluate(() => /\bETA\b/i.test(document.body.innerText))));
-  // CONTEXT -> CONVERSATION -> HUMAN ACTION. The output card became a
-  // chronological thread; the ordering contract is unchanged.
-  check("current work orients, then the conversation follows",
+  // THE CURRENT WORK CARD IS GONE, AND THE INSTRUCTION IS NOT.
+  // The card restated the operator's own instruction directly above the same
+  // instruction shown as the first YOU message. Removing a duplicate is only
+  // correct if nothing is lost, so this asserts both halves.
+  check("no standalone Current Work card",
+    (await desk.locator(".vcard-work").count()) === 0);
+  check("the instruction survives as an authored YOU message, before any reply",
     await desk.evaluate(() => {
-      const w = document.querySelector(".vcard-work")?.getBoundingClientRect().top ?? 1e9;
-      const t = document.querySelector(".vcard-thread")?.getBoundingClientRect().top ?? -1;
-      return t > w;
+      const roles = [...document.querySelectorAll(".vthread [data-v-role]")].map((n) => n.dataset.vRole);
+      const u = roles.indexOf("user");
+      const p = roles.indexOf("provider");
+      return u >= 0 && (p === -1 || u < p);
     }));
   check("desktop keeps the conversation as the central content, not dashboard cards",
     await desk.evaluate(() => {
@@ -278,8 +291,11 @@ try {
         const c = document.querySelector(".gw-composer")?.getBoundingClientRect();
         return Boolean(c) && c.bottom <= window.innerHeight + 2 && c.top >= 0;
       }));
-    check(`mobile ${label} lane shows progress and state`,
-      /~62% complete/.test(await m.locator(".vprogress-label").first().innerText()));
+    check(`mobile ${label} lane shows progress inside its status, not beside it`,
+      /Working/.test(await m.locator(".vlane-head .vstate").first().innerText())
+      && /~62%/.test(await m.locator(".vlane-head .vstate").first().innerText()));
+    check(`mobile ${label} carries no second progress subsystem`,
+      (await m.locator(".vprogress, .vprogress-label, .vprogress-bar").count()) === 0);
     check(`mobile ${label} hides diagnostics from the primary lane screen`,
       await m.evaluate(() => {
         const insp = document.querySelector(".vinsp");
@@ -312,14 +328,14 @@ try {
       above.header !== null && above.header <= 100, `header ${above.header}px of ${above.vh}`);
     check(`mobile ${label} header carries no desktop actions or identity detail`,
       above.stopShown === false && above.metaShown === false && above.cancelInCard === false);
-    check(`mobile ${label} Current Work is a bounded summary, not a document`,
-      above.work !== null && above.work <= 230, `current work ${above.work}px`);
-    check(`mobile ${label} the long instruction is behind a disclosure`,
+    check(`mobile ${label} spends no height on a Current Work card`,
+      above.work === null, `current work ${above.work}px`);
+    check(`mobile ${label} the operator's instruction is still said, before any reply`,
       await m.evaluate(() => {
-        const d = document.querySelector("[data-v-work-details]");
-        const card = document.querySelector(".vcard-work");
-        if (!d || !card) return false;
-        return !d.open && !/do not stop at the first green suite/i.test(card.innerText);
+        const roles = [...document.querySelectorAll(".vthread [data-v-role]")].map((n) => n.dataset.vRole);
+        const u = roles.indexOf("user");
+        const p = roles.indexOf("provider");
+        return u >= 0 && (p === -1 || u < p);
       }));
     check(`mobile ${label} conversation begins in the first screen`,
       above.firstMessageTop !== null && above.firstMessageTop < above.vh,
@@ -341,6 +357,79 @@ try {
         const banner = document.querySelector(".gw-gv-outcome");
         return Boolean(sys) && !banner && sys.getBoundingClientRect().height <= 60;
       }));
+    // ================= FOUR-LINE PREVIEW, PER MESSAGE =================
+    //
+    // A long provider message used to own the whole screen, so the thread read
+    // as one document instead of a conversation. The fix CLAMPS, it does not
+    // truncate: every character stays in the DOM, so copy, find-in-page and a
+    // screen reader still get the whole message. The checks below exist
+    // because "it looks shorter" is exactly what a truncating bug also looks
+    // like.
+    // Measure the element the clamp is actually applied to, and subtract its
+    // own padding. Measuring the padded bubble instead reports ~100px for a
+    // correct four-line clamp and invites "relax the threshold", which is how
+    // a real defect gets certified away.
+    const clamp = await m.evaluate(() => {
+      const el = document.querySelector(".vmsg.is-clampable");
+      if (!el) return null;
+      const inner = el.querySelector("[data-v-msg-clamp] > *");
+      const cs = getComputedStyle(inner);
+      const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      const line = parseFloat(cs.lineHeight) || 18;
+      return {
+        text: Math.round(inner.getBoundingClientRect().height - pad),
+        lines: Math.round(line),
+        clampProp: cs.webkitLineClamp,
+        display: cs.display,
+        chars: inner.textContent.trim().length,
+        hasToggle: Boolean(el.querySelector("[data-v-msg-more]")),
+      };
+    });
+    // ASSERT THE EFFECT, NOT THE SPELLING. This check first read
+    // `getComputedStyle().display === "-webkit-box"` and failed on a clamp that
+    // was working perfectly: current Chromium reports the used display as
+    // `flow-root` while still clamping. The height below is the real contract,
+    // and it is what caught the genuine defect — `.vmsg` is a flex container,
+    // so a clamp declared on `.vmsg-clamp` was blockified away and every
+    // message rendered full height with a toggle underneath lying about it.
+    check(`mobile ${label} a long message declares the four-line preview`,
+      clamp !== null && clamp.clampProp === "4", clamp && `line-clamp ${clamp.clampProp}`);
+    check(`mobile ${label} a long message previews at four lines`,
+      clamp !== null && clamp.text <= clamp.lines * 4 + 4,
+      clamp && `${clamp.text}px of text, line ${clamp.lines}px`);
+    check(`mobile ${label} a clamped message offers Show more`, clamp?.hasToggle === true);
+    await m.locator("[data-v-msg-more]").first().click();
+    await m.waitForTimeout(200);
+    const expanded = await m.evaluate(() => {
+      const el = document.querySelector(".vmsg.is-clampable");
+      const inner = el.querySelector("[data-v-msg-clamp] > *");
+      const cs = getComputedStyle(inner);
+      const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      return {
+        open: el.classList.contains("is-expanded"),
+        rendered: Math.round(inner.getBoundingClientRect().height - pad),
+        chars: inner.textContent.trim().length,
+        others: document.querySelectorAll(".vmsg.is-expanded").length,
+      };
+    });
+    check(`mobile ${label} Show more reveals the whole message`,
+      expanded.open && expanded.rendered > clamp.text,
+      `${expanded.rendered}px expanded vs ${clamp.text}px clamped`);
+    // THE DATA WAS NEVER TRUNCATED. Same character count either way — the
+    // clamp is a visual treatment, so copy and assistive technology keep it all.
+    check(`mobile ${label} the preview clamps, it does not truncate`,
+      expanded.chars === clamp.chars && clamp.chars > 150,
+      `${clamp.chars} characters collapsed, ${expanded.chars} expanded`);
+    check(`mobile ${label} expanding one message expands only that message`,
+      expanded.others === 1, `${expanded.others} expanded`);
+    await m.locator("[data-v-msg-more]").first().click();
+    await m.waitForTimeout(200);
+    check(`mobile ${label} Show less collapses it again`,
+      await m.evaluate(() => !document.querySelector(".vmsg.is-clampable").classList.contains("is-expanded")));
+    check(`mobile ${label} a short message is never given a toggle`,
+      await m.evaluate(() => [...document.querySelectorAll(".vmsg:not(.is-clampable)")]
+        .every((el) => !el.querySelector("[data-v-msg-more]"))));
+
     check(`mobile ${label} the idle composer asks for one line`,
       above.textareaH !== null && above.textareaH <= 44, `textarea ${above.textareaH}px`);
     check(`mobile ${label} the Needs You tray is one line`,
@@ -355,6 +444,51 @@ try {
         const r = insp?.getBoundingClientRect();
         return Boolean(r) && r.width > 0 && r.left < window.innerWidth - 20;
       }));
+    // ============ THE CASE THAT MOTIVATED THE PREVIEW AT ALL ============
+    //
+    // A completed lane, whose provider closed with a real multi-paragraph final
+    // report. The working lane certifies a SHORT status message, so on its own
+    // it proves nothing about the thing the operator actually complained
+    // about: one verbose provider answer owning the entire phone screen.
+    await open(m, "/lanes/lane_payments00001");
+    await m.screenshot({ path: join(OUT, `14-mobile${label}-long-report.png`), fullPage: false });
+    const report = await m.evaluate(() => {
+      const el = document.querySelector(".vmsg-provider");
+      if (!el) return null;
+      // A provider report is a heading plus prose, so the FOUR LINES are the
+      // prose. Measuring the whole card instead would demand that its heading
+      // and byline fit inside the four lines too, and the honest way to pass
+      // that is to delete the heading.
+      const outer = el.querySelector("[data-v-msg-clamp] > *");
+      const prose = el.querySelector(".gw-report-body") || outer;
+      const cs = getComputedStyle(prose);
+      const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      return {
+        clampable: el.classList.contains("is-clampable"),
+        chars: outer.textContent.trim().length,
+        text: Math.round(prose.getBoundingClientRect().height - pad),
+        whole: Math.round(outer.getBoundingClientRect().height),
+        lines: Math.round(parseFloat(cs.lineHeight) || 18),
+        vh: window.innerHeight,
+        toggle: Boolean(el.querySelector("[data-v-msg-more]")),
+      };
+    });
+    check(`mobile ${label} a real provider report is long enough to be worth clamping`,
+      report !== null && report.chars > 900, report && `${report.chars} characters`);
+    // Four line BOXES, measured against a fifth. `lineHeight` and the actual
+    // line box differ by a point or two once a report's prose sets its own
+    // font, so an exact 4x threshold fails a correct clamp — and the tempting
+    // fix, padding the tolerance until it passes, is how a five-line clamp gets
+    // certified as four. A strict "fewer than five lines" cannot be satisfied
+    // by anything but a working clamp: unclamped, this report was 875px.
+    check(`mobile ${label} a long provider report previews at four lines`,
+      report !== null && report.clampable && report.text < report.lines * 5,
+      report && `${report.text}px of text, line ${report.lines}px`);
+    check(`mobile ${label} the long report does not own the screen`,
+      report !== null && report.whole < report.vh / 2,
+      report && `${report.whole}px of ${report.vh}`);
+    check(`mobile ${label} the long report offers Show more`, report?.toggle === true);
+
     await m.close();
   }
 

@@ -143,7 +143,41 @@ export const LANES = [
     last_activity_ms: Date.now() - 47 * 60_000,
     git: { state: "clean", ahead: 0, behind: 0, branch: "agent/payments" },
     execution_run: null,
-    previous_run: { run_id: "erun_pay0001", state: "COMPLETE", completed_at: T(47), completion_report: { summary: "Validation completed; 312 tests passed." } },
+    // A REAL FINAL REPORT, NOT A SENTENCE.
+    // This fixture used to read "Validation completed; 312 tests passed." — one
+    // tidy line. A provider's actual closing report runs to many paragraphs, and
+    // a fixture tidier than production certifies a product that does not exist:
+    // the four-line preview passed against a message that never needed one.
+    previous_run: {
+      run_id: "erun_pay0001", state: "COMPLETE", completed_at: T(47),
+      completion_report: {
+        summary: [
+          "Validation completed. 312 tests passed, 1 pre-existing failure left untouched.",
+          "",
+          "Ledger reconciliation is certified. All 1,248 postings balance against the",
+          "settlement file, including the 14 partial refunds that the previous run",
+          "reported as orphaned — those were fixture rows, not live data, and the",
+          "reconciler now says so explicitly rather than counting them as anomalies.",
+          "",
+          "Currency rounding is certified at the boundary and NOT in the interior. Every",
+          "amount crossing the provider edge is rounded once, at that edge, to the",
+          "currency's own minor unit. Interior arithmetic stays in integer minor units,",
+          "so the half-cent drift that produced the 0.02 discrepancy on multi-line",
+          "invoices cannot recur — there is no longer a place for it to accumulate.",
+          "",
+          "Refund idempotency is NOT certified. Two refunds issued inside the same",
+          "second against the same charge still produce two provider calls. The second",
+          "is rejected by the provider, so no double refund reaches a customer, but the",
+          "lane is relying on the provider to be the safety net rather than holding the",
+          "invariant itself. Fixing that needs a uniqueness constraint the migration",
+          "would have to add, which is outside what this run was authorized to do.",
+          "",
+          "Dispute webhooks remain unverified. The signing secret is held by the",
+          "operator and the lane cannot read it, so the handler was exercised against a",
+          "locally-signed payload only. That proves the parser, not the trust boundary.",
+        ].join("\n"),
+      },
+    },
   },
   {
     lane_id: "lane_suspended0001", label: "Communications", slot: 5,

@@ -41,6 +41,20 @@ The fixture lanes deliberately cover the states the operator must be able to tel
 apart: one **working with a live progress estimate**, one **blocked on a governed
 action**, one **ready** with a completed previous run, one **offline**.
 
+### The fixture must be at least as ugly as production
+
+This is the rule the harness keeps breaking, and it has now cost three defects.
+A fixture tidier than reality certifies a product that does not exist.
+
+The completed lane's report used to be one sentence — "Validation completed; 312
+tests passed." The four-line preview passed against it because a one-sentence
+report needs no preview. Given a real multi-paragraph final report, the same
+check failed instantly and correctly: **875px of provider output on an 844px
+phone.** The fixture now carries the long report, and the certification asserts
+it is genuinely long (>900 characters) before asserting anything about how it is
+displayed — a check that silently starts passing because its subject got smaller
+is worse than no check.
+
 ## Viewports
 
 | Name | Size | Why |
@@ -52,7 +66,7 @@ action**, one **ready** with a completed previous run, one **offline**.
 
 ## Result
 
-**49 checks, 49 passed, 0 failed.** See
+**113 checks, 113 passed, 0 failed.** See
 [`certification/results.json`](certification/results.json) for the machine record.
 
 ### Desktop
@@ -95,7 +109,7 @@ sideways.
 
 ## Defects the certification found and this mission fixed
 
-Certification is only worth running if it can fail. It did, three times.
+Certification is only worth running if it can fail. It did, six times.
 
 1. **The global approvals bar rendered a 241px card at the top of every route.**
    Measured at 390 × 844: it pushed the lane header, the work and the composer
@@ -113,16 +127,45 @@ Certification is only worth running if it can fail. It did, three times.
 3. **The lane breadcrumb cost 36px of a phone's header** for information the back
    control already gives. Hidden below 861px.
 
-Two further findings were **check defects, not product defects**, and the check
-was made precise rather than loosened:
+4. **The four-line clamp never worked, on any message.** `.vmsg` is a flex
+   container, so `display:-webkit-box` on `.vmsg-clamp` was blockified to
+   `flow-root` and `-webkit-line-clamp:4` computed to `4` and did nothing. Every
+   message rendered full height with a **Show more** button underneath claiming
+   otherwise. The geometry checks had not caught it because they were asserting
+   against the same broken layout. Fixed by moving the clamp to the child.
+
+5. **A provider report escaped the clamp even after that fix.** Its prose is
+   `.gw-report-body` inside `.gw-report`, and a clamp counts *line* boxes — the
+   whole report counted as one block child. A real 1,600-character report
+   rendered **875px tall on an 844px phone**, which is precisely the complaint
+   the preview existed to answer. Fixed by flattening `.gw-report` to a block
+   while collapsed and clamping the prose. This one was only visible once the
+   fixture was made as long as production.
+
+6. **The certification still asserted the removed progress subsystem.** It
+   waited 30s for a `.vprogress-label` that no longer exists and aborted the run
+   — a certification that cannot finish reports nothing at all. Rewritten to
+   assert the current contract: progress inside the status line, and **no**
+   `.vprogress` element anywhere.
+
+Three further findings were **check defects, not product defects**, and each
+check was made precise rather than loosened:
 
 - Lane tabs are inside a container that scrolls horizontally on purpose. The
   overflow check now ignores descendants of a deliberate scroller.
 - A closed mobile drawer is parked off-canvas and is `inert`. The check now
   ignores `inert` / `aria-hidden` subtrees.
 
-Both exclusions are narrow, and `document.documentElement.scrollWidth` is still
-asserted separately, so neither can hide a page that actually scrolls.
+- The clamp check asserted `getComputedStyle().display === "-webkit-box"` and
+  failed a clamp that was working perfectly: current Chromium reports the used
+  display as `flow-root` while still clamping. It now asserts the **effect** —
+  the prose occupies fewer than five line boxes — which is the contract, and
+  which is what caught defects 4 and 5. The threshold is "fewer than five
+  lines", not "four lines plus a tolerance": padding a tolerance until a check
+  passes is how a five-line clamp gets certified as four.
+
+Both scroll exclusions are narrow, and `document.documentElement.scrollWidth` is
+still asserted separately, so neither can hide a page that actually scrolls.
 
 ## What the certification does not prove
 

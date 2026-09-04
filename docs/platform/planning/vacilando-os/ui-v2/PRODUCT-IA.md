@@ -108,12 +108,11 @@ beside it. Mobile stacks the same blocks in the same order.
 
 ```
 HEADER      Lanes / Trust Runtime
-            Trust Runtime   ● Working
-            Claude · model · Slot 6 · Started 9:23 AM
+            Trust Runtime   ● Working · ~62% · Claude
+            model · Slot 6 · Started 9:23 AM
             [Stop lane] [Lane details]
 TABS        Overview · Activity · Files · Commits · Runs · Settings
-OVERVIEW    CURRENT WORK  — mission, description, progress, status
-            LATEST AGENT OUTPUT — clean human-readable result + artifacts
+OVERVIEW    THREAD — the conversation, oldest to newest
 TRAY        Needs you  (only when present, anchored to the composer)
 COMPOSER    instruction · attachments · provider · Send
 INSPECTOR   RUN (open) · Environment · Git · Browser session · Diagnostics
@@ -134,13 +133,51 @@ Unimplemented tabs render the shell and **name the owner that will fill them**
 (`LANE_TAB_MATURITY`). Hiding them would hide the intended shape; faking them
 would be worse.
 
-### Current Work
+### There is no Current Work card
 
-Mission title, one line of description, the provider progress bar, and status.
+There was one. It carried the mission title, a line of description, a progress
+bar and the status — and it sat directly above the same instruction, shown again
+as the first YOU message in the thread. The operator read their own words twice,
+once as a summary they did not write and once as the message they did.
 
-**There is no ETA.** No estimator exists in this product, and deriving one from a
-percentage would dress a guess up as a schedule. If an estimator is ever built it
-gets its own field and its own maturity row.
+Removing a duplicate is only correct if nothing is lost, so the instruction is
+now guaranteed to appear as an authored YOU message. When a lane has no
+`last_instruction` record, `buildLaneThread()` falls back to the run's own
+`instruction`; without that fallback, removing the card silently removed the
+instruction along with it on exactly the lanes that had never been re-instructed.
+
+Progress moved into the lane's status line — see
+[the provider progress contract](PROVIDER-PROGRESS-CONTRACT.md). Status moved
+into the operator vocabulary below.
+
+**There is still no ETA.** No estimator exists in this product, and deriving one
+from a percentage would dress a guess up as a schedule. If an estimator is ever
+built it gets its own field and its own maturity row.
+
+### The operator vocabulary — four words
+
+Execution state is a runtime concern with a dozen legitimate values. The
+operator has one question: *does this need me?* `SUSPENDED` in particular told
+them nothing they could act on — it named a scheduler decision, not a state of
+their work.
+
+| Operator state | What it means to a person |
+|---|---|
+| **WORKING** | The lane is doing something. Nothing is needed. |
+| **NEEDS YOU** | It stopped and is waiting on a human. |
+| **READY** | Idle and available. |
+| **FAILED** | It stopped and did not succeed. |
+
+`operatorState()` in `apps/vacilando/public/vacilando-ui-model.mjs` is the one
+resolver. Home, the Lanes list, the Lane header, the rail, the mobile surfaces
+and the navigation badge all read it, so they cannot disagree about the same
+lane.
+
+**The underlying execution states are untouched.** `WAITING_RESOURCE`,
+`NEEDS_INPUT`, `EXECUTING`, `ABANDONED` and the rest remain exactly as the
+runtime records them; this is a projection for one audience, not a replacement.
+The full runtime state stays visible in the Lane Inspector, which is where
+someone debugging the runtime is already looking.
 
 ### Needs You is an interruption state
 
@@ -154,6 +191,13 @@ readable. A secondary indication may also appear in the Inspector.
 
 The provider's clean, human-readable result — the structured agent report, never
 raw terminal text. Raw pane output remains available under Diagnostics.
+
+### Messages preview at four lines
+
+Every message longer than roughly four lines renders clamped, with a per-message
+**Show more** / **Show less**. See
+[the visual system](VISUAL-SYSTEM.md#12-four-line-message-previews) for the
+contract and the two ways it was got wrong before it was got right.
 
 ---
 

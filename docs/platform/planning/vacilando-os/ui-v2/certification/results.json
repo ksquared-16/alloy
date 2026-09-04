@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T03:19:32.014Z",
+  "captured_at": "2026-09-04T04:16:41.233Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -18,7 +18,7 @@
       "height": 380
     }
   },
-  "passed": 84,
+  "passed": 113,
   "failed": 0,
   "results": [
     {
@@ -62,9 +62,19 @@
       "detail": ""
     },
     {
-      "name": "progress reads as a provider estimate",
+      "name": "progress qualifies the lane's status in one line",
       "ok": true,
-      "detail": "Provider estimate: ~62% complete"
+      "detail": "Working · ~62% · Claude"
+    },
+    {
+      "name": "the estimate is marked as an estimate",
+      "ok": true,
+      "detail": "Working · ~62% · Claude"
+    },
+    {
+      "name": "there is no second progress subsystem",
+      "ok": true,
+      "detail": ""
     },
     {
       "name": "no ETA is shown",
@@ -72,7 +82,12 @@
       "detail": ""
     },
     {
-      "name": "current work orients, then the conversation follows",
+      "name": "no standalone Current Work card",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the instruction survives as an authored YOU message, before any reply",
       "ok": true,
       "detail": ""
     },
@@ -94,7 +109,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 8:00 PM Stop lane RUNTIME Executing"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 8:58 PM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
@@ -217,7 +232,12 @@
       "detail": ""
     },
     {
-      "name": "mobile 390 lane shows progress and state",
+      "name": "mobile 390 lane shows progress inside its status, not beside it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 carries no second progress subsystem",
       "ok": true,
       "detail": ""
     },
@@ -237,19 +257,19 @@
       "detail": ""
     },
     {
-      "name": "mobile 390 Current Work is a bounded summary, not a document",
+      "name": "mobile 390 spends no height on a Current Work card",
       "ok": true,
-      "detail": "current work 194px"
+      "detail": "current work nullpx"
     },
     {
-      "name": "mobile 390 the long instruction is behind a disclosure",
+      "name": "mobile 390 the operator's instruction is still said, before any reply",
       "ok": true,
       "detail": ""
     },
     {
       "name": "mobile 390 conversation begins in the first screen",
       "ok": true,
-      "detail": "first message at 158 of 844"
+      "detail": "first message at 157 of 844"
     },
     {
       "name": "mobile 390 authorship is visually distinguishable",
@@ -258,6 +278,46 @@
     },
     {
       "name": "mobile 390 a completed governed action is a system line, not a banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 a long message declares the four-line preview",
+      "ok": true,
+      "detail": "line-clamp 4"
+    },
+    {
+      "name": "mobile 390 a long message previews at four lines",
+      "ok": true,
+      "detail": "81px of text, line 20px"
+    },
+    {
+      "name": "mobile 390 a clamped message offers Show more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Show more reveals the whole message",
+      "ok": true,
+      "detail": "121px expanded vs 81px clamped"
+    },
+    {
+      "name": "mobile 390 the preview clamps, it does not truncate",
+      "ok": true,
+      "detail": "209 characters collapsed, 209 expanded"
+    },
+    {
+      "name": "mobile 390 expanding one message expands only that message",
+      "ok": true,
+      "detail": "1 expanded"
+    },
+    {
+      "name": "mobile 390 Show less collapses it again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 a short message is never given a toggle",
       "ok": true,
       "detail": ""
     },
@@ -273,6 +333,26 @@
     },
     {
       "name": "mobile 390 Lane details opens the inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 a real provider report is long enough to be worth clamping",
+      "ok": true,
+      "detail": "1636 characters"
+    },
+    {
+      "name": "mobile 390 a long provider report previews at four lines",
+      "ok": true,
+      "detail": "92px of text, line 21px"
+    },
+    {
+      "name": "mobile 390 the long report does not own the screen",
+      "ok": true,
+      "detail": "204px of 844"
+    },
+    {
+      "name": "mobile 390 the long report offers Show more",
       "ok": true,
       "detail": ""
     },
@@ -362,7 +442,12 @@
       "detail": ""
     },
     {
-      "name": "mobile 320 lane shows progress and state",
+      "name": "mobile 320 lane shows progress inside its status, not beside it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 carries no second progress subsystem",
       "ok": true,
       "detail": ""
     },
@@ -382,19 +467,19 @@
       "detail": ""
     },
     {
-      "name": "mobile 320 Current Work is a bounded summary, not a document",
+      "name": "mobile 320 spends no height on a Current Work card",
       "ok": true,
-      "detail": "current work 211px"
+      "detail": "current work nullpx"
     },
     {
-      "name": "mobile 320 the long instruction is behind a disclosure",
+      "name": "mobile 320 the operator's instruction is still said, before any reply",
       "ok": true,
       "detail": ""
     },
     {
       "name": "mobile 320 conversation begins in the first screen",
       "ok": true,
-      "detail": "first message at -216 of 568"
+      "detail": "first message at -180 of 568"
     },
     {
       "name": "mobile 320 authorship is visually distinguishable",
@@ -403,6 +488,46 @@
     },
     {
       "name": "mobile 320 a completed governed action is a system line, not a banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 a long message declares the four-line preview",
+      "ok": true,
+      "detail": "line-clamp 4"
+    },
+    {
+      "name": "mobile 320 a long message previews at four lines",
+      "ok": true,
+      "detail": "78px of text, line 19px"
+    },
+    {
+      "name": "mobile 320 a clamped message offers Show more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Show more reveals the whole message",
+      "ok": true,
+      "detail": "155px expanded vs 78px clamped"
+    },
+    {
+      "name": "mobile 320 the preview clamps, it does not truncate",
+      "ok": true,
+      "detail": "209 characters collapsed, 209 expanded"
+    },
+    {
+      "name": "mobile 320 expanding one message expands only that message",
+      "ok": true,
+      "detail": "1 expanded"
+    },
+    {
+      "name": "mobile 320 Show less collapses it again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 a short message is never given a toggle",
       "ok": true,
       "detail": ""
     },
@@ -418,6 +543,26 @@
     },
     {
       "name": "mobile 320 Lane details opens the inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 a real provider report is long enough to be worth clamping",
+      "ok": true,
+      "detail": "1636 characters"
+    },
+    {
+      "name": "mobile 320 a long provider report previews at four lines",
+      "ok": true,
+      "detail": "92px of text, line 21px"
+    },
+    {
+      "name": "mobile 320 the long report does not own the screen",
+      "ok": true,
+      "detail": "222px of 568"
+    },
+    {
+      "name": "mobile 320 the long report offers Show more",
       "ok": true,
       "detail": ""
     },
