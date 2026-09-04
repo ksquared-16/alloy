@@ -1131,9 +1131,23 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
   return event;
 }
 
+/**
+ * The query artifact a request NAMES, or null.
+ *
+ * THE FAIL-OPEN THIS CLOSES. This returned Q15_CENSUS_ARTIFACT when a request
+ * carried no artifact_refs, so a census that named no query silently became THE
+ * authority census and executed. The executor's own guard could never catch it:
+ * by the time the inputs reached validateInputs, queryArtifactPath had already
+ * been filled in with a default, so "missing query" never looked missing.
+ *
+ * A census that does not say what it is querying is not a census with a
+ * sensible default; it is an incomplete request, and it must fail closed.
+ * Callers that render this for display tolerate null; callers that execute on
+ * it must refuse.
+ */
 function artifactPathFrom(refs = []) {
   const first = Array.isArray(refs) ? refs.find(Boolean) : refs;
-  return first ? String(first) : Q15_CENSUS_ARTIFACT;
+  return first ? String(first) : null;
 }
 
 /**
@@ -1816,9 +1830,26 @@ export function requestGovernedAction(input = {}, {
   const runId = input.run_id || input.runId || activeRunForLane(laneId, storeRoot)?.run_id || null;
   const run = runId ? getExecutionRun(runId, storeRoot) : null;
   const worktreePath = resolveWorktreePath(input, laneId, run, storeRoot);
-  const artifactRefs = shape.artifactRefs.length
-    ? shape.artifactRefs
-    : (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS ? [Q15_CENSUS_ARTIFACT] : []);
+  /*
+   * FILING BOUNDARY: A CENSUS MUST NAME ITS QUERY.
+   *
+   * This used to substitute [Q15_CENSUS_ARTIFACT] when a census request carried
+   * no artifact_refs. A malformed or incomplete request therefore became a
+   * fully-formed request to run the authority census, and executed — which is
+   * how an unintended census ran and produced q15-authority-census.results.json.
+   *
+   * The substitution is removed rather than made stricter. There is no safe
+   * default query: "which census did you mean" has no answer a machine may
+   * choose, and picking the most privileged one is the worst available guess.
+   */
+  if (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS && !shape.artifactRefs.length) {
+    return {
+      ok: false,
+      error: "census_query_required",
+      detail: "a database census must name its query in artifact_refs; there is no default census",
+    };
+  }
+  const artifactRefs = shape.artifactRefs;
   // AN ABBREVIATED SHA CANNOT BE APPROVED INTO ANYTHING.
   //
   // A merge was requested with expectedHeadSha "d40f469b4". The operator pressed
@@ -2179,7 +2210,11 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
         rec.purpose,
         "",
         "Artifact:",
-        artifactPathFrom(rec.artifact_refs).split("/").pop(),
+        // A census with no named query can no longer be filed, but an OLD
+        // record persisted before that guard existed can still be rendered.
+        // It must read as unnamed rather than crash the card or, worse, print
+        // a query the request never actually asked for.
+        (artifactPathFrom(rec.artifact_refs) || "(no query named)").split("/").pop(),
         "",
         "Data mode:",
         rec.requested_mode === "read_only" ? "Read-only" : rec.requested_mode,

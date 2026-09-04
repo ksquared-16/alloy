@@ -205,7 +205,24 @@ function defineDatabaseReadCensus() {
           actualHash: hash,
         };
       }
-      const target = inputs.databaseTarget || inputs.database_target || DEFAULT_TARGET;
+      /*
+       * EXECUTION BOUNDARY: THE TARGET IS STATED OR THE CENSUS DOES NOT RUN.
+       *
+       * This defaulted to DEFAULT_TARGET when the request named no database,
+       * which is the same class of fail-open as substituting a default query:
+       * an incomplete request became a complete one and executed against a
+       * database nobody had named. This boundary must refuse independently of
+       * the filing boundary, because an old or malformed persisted request can
+       * still reach it.
+       */
+      const target = inputs.databaseTarget || inputs.database_target || null;
+      if (!target) {
+        return {
+          ok: false,
+          code: "missing_database_target",
+          detail: "a census must name its database target; there is no default",
+        };
+      }
       if (target !== DEFAULT_TARGET && target !== "alloy_deployed_primary") {
         return { ok: false, code: "wrong_database_target", detail: `Unsupported target: ${target}` };
       }
