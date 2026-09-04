@@ -40,6 +40,8 @@ import {
 import {
   findAuthorization,
   grantMissionAuthorization,
+  standingGrantEligible,
+  SUBJECT_SCOPES,
   grantExactRequestAuthorization,
   revokeAuthorization,
 } from "./trusted-host-authz.mjs";
@@ -1634,8 +1636,9 @@ function policyDecision(rec, { nowMs } = {}) {
   // Same identity the mint and the execution boundary use — including the
   // environment, which this call used to leave out entirely while passing
   // `rec.target` as the database target.
+  const identity = authorizationIdentityFor(rec);
   const auth = findAuthorization({
-    ...authorizationIdentityFor(rec).lookup,
+    ...identity.lookup,
     nowMs: nowMs ?? Date.now(),
   });
   if (auth) {
@@ -1645,6 +1648,31 @@ function policyDecision(rec, { nowMs } = {}) {
       authorization_id: auth.authorizationId,
       reason: "existing_mission_authorization",
     };
+  }
+  // STANDING AUTHORITY THIS LANE ALREADY HOLDS.
+  //
+  // A separate probe rather than a widening of the one above, deliberately.
+  // The lookup above is filed under mission-or-repository; reordering it to
+  // prefer the lane would have re-homed every existing grant. This asks a
+  // strictly narrower question — "has the operator already approved THIS
+  // capability for THIS lane, in this repository and environment?" — and can
+  // only ever match a grant that was minted with an explicitly declared
+  // wildcard subject scope, for one of STANDING_ELIGIBLE_ACTIONS.
+  const standingScope = standingScopeFor(rec);
+  if (standingScope && standingGrantEligible(rec.action_key, { environment: identity.environment })) {
+    const standing = findAuthorization({
+      ...identity.lookup,
+      missionId: standingScope,
+      nowMs: nowMs ?? Date.now(),
+    });
+    if (standing) {
+      return {
+        auto_execute: true,
+        operator_approval_required: false,
+        authorization_id: standing.authorizationId,
+        reason: "existing_lane_standing_authorization",
+      };
+    }
   }
   // Production / deployed-primary reads require an operator grant.
   if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS && rec.target === DEFAULT_TARGET) {
@@ -2281,6 +2309,26 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
  */
 function authorityScopeFor(rec) {
   return rec?.mission_id || rec?.authority?.repository_id || null;
+}
+
+/**
+ * THE SCOPE A STANDING GRANT IS FILED AND FOUND UNDER — THE LANE, AND ONLY THE LANE.
+ *
+ * The first attempt reused `authorityScopeFor`, and a certification caught it:
+ * that resolver falls back to `authority.repository_id`, so one lane's approved
+ * push minted a grant every OTHER lane on the same repository could inherit.
+ * The test that failed was "the requesting lane cannot approve its own push" —
+ * a fresh lane was auto-executing on authority nobody had given it.
+ *
+ * A repository is not an owner; it is a shared resource. The lane is the
+ * narrowest thing that owns work and outlives a single request, so a standing
+ * grant is filed under the lane and found under the lane. A request with no
+ * lane gets no standing grant at all, because there would be nothing to bound
+ * it to and "unbounded" is not a scope.
+ */
+function standingScopeFor(rec) {
+  const lane = String(rec?.lane_id || "").trim();
+  return lane || null;
 }
 
 /**
@@ -3290,6 +3338,41 @@ export async function approveGovernedAction(requestId, {
   // Director never saw. It gets a single-use grant pinned to this exact
   // proposal instead: this PR, this head SHA, this target, this method, this
   // run. A different SHA is a different decision.
+  // A STANDING GRANT FOR A NARROW ALLOWLIST — the reason the operator was asked
+  // 153 redundant times in 17 hours.
+  //
+  // Approving a bounded, repeatable capability granted authority over ONE
+  // content fingerprint, so the next identical push, PR or session restore
+  // asked again. The authorization model already had MISSION_STANDING with an
+  // explicit subject scope and nothing ever minted one. This routes it, for the
+  // three capabilities STANDING_ELIGIBLE_ACTIONS justifies and no others.
+  //
+  // The grant is scoped to the SAME identity the lookup uses — capability,
+  // repository, environment, and the lane or mission that owns it — so it
+  // cannot reach another lane, another repository or another environment. It
+  // expires, it is auditable, and it is revocable. Everything not on that
+  // allowlist keeps the single-use grant pinned to this exact proposal.
+  const standingScope = standingScopeFor(rec);
+  const sIdentity = authorizationIdentityFor(rec);
+  if (standingScope && standingGrantEligible(rec.action_key, { environment: sIdentity.environment })) {
+    grantMissionAuthorization({
+      // The LANE. Never the mission and never the repository: a grant filed
+      // under a shared resource is inheritable by everything sharing it.
+      missionId: standingScope,
+      actionType: rec.action_key,
+      databaseTarget: sIdentity.databaseTarget || rec.target,
+      actor,
+      // Explicitly reusable for any subject of THIS capability inside THIS
+      // scope. Declared, never inferred: absence is not a wildcard.
+      subjectScope: SUBJECT_SCOPES.ANY_WITHIN_MISSION,
+      repository: sIdentity.repository || null,
+      environment: sIdentity.environment || null,
+      sourceDecisionId: rec.decision_id,
+      note: `Operator approved ${rec.action_key}; standing for this lane, repository and environment.`,
+      nowMs,
+    });
+  }
+
   if (rec.mission_id) {
     // Subject and target from the SAME resolver the lookup uses. This site kept
     // `actionQueryHash` and `rec.target`, a fourth spelling of a subject key

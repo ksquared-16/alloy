@@ -135,6 +135,62 @@ export function isOperatorOnlyAuthzEnvironment(env) {
  * Absence of a binding is not a wildcard. A grant that may cover more than one
  * subject has to SAY so.
  */
+/**
+ * CAPABILITIES A STANDING GRANT MAY COVER FOR REPEATED USE.
+ *
+ * MEASURED, not assumed. Over a 17-hour sample of 200 governed requests, 173
+ * required an operator click and 153 of those (88%) were a REPEAT ask for one of
+ * only 20 (lane, capability) pairs. Every approval minted a single-use grant
+ * bound to one content fingerprint, so the next identical operation asked again.
+ * 303 grants existed; 300 were CONSUMED and not one was ever minted standing.
+ *
+ * The authorization model already had the answer — MISSION_STANDING with an
+ * explicit subject scope — and nothing used it. This is that mechanism being
+ * routed, not a parallel permission system.
+ *
+ * WHY THESE THREE, AND ONLY THESE THREE:
+ *
+ *   repository.push          the capability already refuses every protected ref,
+ *                            force, deletion and multi-ref form, and refuses a
+ *                            repository that is not allowlisted. What remains is
+ *                            a lane pushing its own feature branch. Every push in
+ *                            the sample was to feat/ fix/ chore/ docs/ promote/.
+ *   promotion.open_pr        opens a pull request. It merges nothing, changes no
+ *                            protected ref, and is undone by closing it.
+ *   environment.restore_qa_session
+ *                            a local browser session on this host, lane-scoped,
+ *                            with no external side effect.
+ *
+ * WHY NOT THE OTHERS — each is a real trust boundary, and the count of asks is
+ * not an argument against a boundary:
+ *
+ *   repository.merge_pull_request  promotion authority into staging. A standing
+ *                            grant would cover a head SHA nobody reviewed.
+ *   database.apply_migration       production mutation.
+ *   database.read_census           reads the deployed primary, which
+ *                            AUTHZ_OPERATOR_ONLY_ENVIRONMENTS says a derived
+ *                            authority may NEVER cover. Read-only is not the
+ *                            same as inside the boundary.
+ *   repository.delete_remote_branch  destructive.
+ *   environment.assign_qa_identity_access  identity and access.
+ *
+ * A standing grant stays bounded by capability, repository, environment and
+ * lane/mission; it expires; it is auditable; and it cannot widen itself, because
+ * every dimension it declares is matched, and a declared-but-different dimension
+ * is a non-match rather than a shrug.
+ */
+export const STANDING_ELIGIBLE_ACTIONS = Object.freeze([
+  "repository.push",
+  "promotion.open_pr",
+  "environment.restore_qa_session",
+]);
+
+export function standingGrantEligible(actionType, { environment = null } = {}) {
+  if (!STANDING_ELIGIBLE_ACTIONS.includes(String(actionType || ""))) return false;
+  // Never inside an operator-only environment, whatever the capability.
+  return !isOperatorOnlyAuthzEnvironment(environment);
+}
+
 export const SUBJECT_SCOPES = Object.freeze({
   /** Valid for one subject only: the queryHash it was issued against. */
   EXACT: "exact",
