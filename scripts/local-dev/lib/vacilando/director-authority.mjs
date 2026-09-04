@@ -432,7 +432,19 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     // Never staging: this changes what THIS HOST runs. There is no deployed
     // environment in which installing a local toolkit means anything, and
     // naming one would invite the action to be claimed under it.
-    environments: Object.freeze(["development_certification"]),
+    //
+    // "host" is listed because it is the honest name for the thing this action
+    // changes, and omitting it made nothing safer — it made measured installs
+    // escalate with "No delegated policy covers host.install_toolkit in host",
+    // which is a routing gap wearing the costume of a safety decision.
+    //
+    // The guard the comment above describes is untouched: no deployed
+    // environment is named, and alloy_deployed_primary stays refused
+    // independently by AUTHZ_OPERATOR_ONLY_ENVIRONMENTS — an install request
+    // that named it is in the record, and it escalated correctly. All seven
+    // gates below are unchanged. This widens WHERE the policy applies, never
+    // WHAT it lets through unmeasured.
+    environments: Object.freeze(["development_certification", "host"]),
     consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
     enabled: true,
     // WHY THIS IS ROUTINE. A lane sat blocked indefinitely because promoted
