@@ -26,6 +26,8 @@ function usage(code = 2) {
        vac run-status <run_id> [<state>] --progress <0-100> [--progress-confidence low|medium|high]
                                          [--progress-summary "..."] [--progress-source provider_estimate|deterministic|operator|derived]
                                          [--remaining-work "..."]
+                                         [--estimated-remaining-minutes <n> | --estimated-finish-at <iso>]
+                                         [--estimate-confidence low|medium|high]
 States: executing | validating | waiting-resource | needs-input | recovering | complete | failed
 Progress is an ESTIMATE reported at milestones, not per message. No ETA is derived from it.
 `);
@@ -53,6 +55,9 @@ let progressConfidence = null;
 let progressSummary = null;
 let progressSource = null;
 let remainingWork = null;
+let estimatedRemainingMinutes = null;
+let estimatedFinishAt = null;
+let estimateConfidence = null;
 while (args.length) {
   const a = args.shift();
   if (a === "--reason") reason = args.shift() || "";
@@ -78,11 +83,22 @@ while (args.length) {
   else if (a.startsWith("--progress-source=")) progressSource = a.slice(18);
   else if (a === "--remaining-work") remainingWork = args.shift() || "";
   else if (a.startsWith("--remaining-work=")) remainingWork = a.slice(17);
+  // HOW MUCH LONGER, as reported by the only party with a plan. Never derived
+  // from --progress: elapsed time over a guess is a schedule nobody made.
+  else if (a === "--estimated-remaining-minutes") estimatedRemainingMinutes = args.shift() || "";
+  else if (a.startsWith("--estimated-remaining-minutes=")) estimatedRemainingMinutes = a.slice(30);
+  else if (a === "--estimated-finish-at") estimatedFinishAt = args.shift() || "";
+  else if (a.startsWith("--estimated-finish-at=")) estimatedFinishAt = a.slice(22);
+  else if (a === "--estimate-confidence") estimateConfidence = args.shift() || "";
+  else if (a.startsWith("--estimate-confidence=")) estimateConfidence = a.slice(22);
   else usage();
 }
 
 // Something must actually be reported. A bare run id is a no-op, not a report.
-if (!state && progressPercent === null && progressSummary === null && !checkpointReady) usage();
+// A finish estimate alone is a real report: "about an hour left" is useful
+// from a provider that will not put a number on percent done.
+if (!state && progressPercent === null && progressSummary === null && !checkpointReady
+    && estimatedRemainingMinutes === null && estimatedFinishAt === null) usage();
 
 let payload = null;
 if (json) {
@@ -108,6 +124,9 @@ const out = reportRunState(runId, state, {
   progress_summary: progressSummary,
   progress_source: progressSource,
   remaining_work: remainingWork,
+  estimated_remaining_minutes: estimatedRemainingMinutes,
+  estimated_finish_at: estimatedFinishAt,
+  estimate_confidence: estimateConfidence,
 });
 
 if (!out.ok) {

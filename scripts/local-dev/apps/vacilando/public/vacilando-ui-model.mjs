@@ -743,6 +743,53 @@ export function laneProgress(run, { nowMs = Date.now(), staleMs = PROGRESS_STALE
     source: est.source || null,
     confidence: est.confidence || null,
     stale: false,
+    finish: laneFinishEstimate(run, { nowMs, staleMs }),
+  };
+}
+
+/**
+ * The finish estimate, rendered as the claim it is.
+ *
+ * Its own freshness, separate from the percentage's. A provider can report
+ * "62%" and say nothing about time, and an hour-old "about 20 minutes" is not
+ * a schedule — it is a statement that has already expired. Both get the same
+ * treatment the percentage gets: when it is stale, say so, and do not paint a
+ * number nobody has stood behind recently.
+ *
+ * The word ESTIMATE and the "~" are load-bearing here for the same reason they
+ * are on the percentage.
+ */
+export function laneFinishEstimate(run, { nowMs = Date.now(), staleMs = PROGRESS_STALE_MS } = {}) {
+  const est = run?.progress_estimate || null;
+  const at = est?.estimated_finish_at ? Date.parse(est.estimated_finish_at) : NaN;
+  if (!est || !Number.isFinite(at)) {
+    return { available: false, label: "No finish estimate", finish_at: null, confidence: null, stale: false };
+  }
+  const reportedAt = Date.parse(est.estimate_updated_at || est.updated_at || "");
+  const age = Number.isFinite(reportedAt) ? nowMs - reportedAt : Infinity;
+  if (!(age <= staleMs)) {
+    return {
+      available: false,
+      label: "Finish estimate out of date",
+      finish_at: est.estimated_finish_at,
+      confidence: est.estimate_confidence || null,
+      stale: true,
+    };
+  }
+  const remainMs = at - nowMs;
+  // An estimate the clock has already passed is not a finish time, and
+  // counting up past it ("−12m") pretends to a precision nobody claimed.
+  const label = remainMs <= 0
+    ? "Finish estimate passed"
+    : `~${relativeAge(remainMs)} left`;
+  return {
+    available: remainMs > 0,
+    label,
+    finish_at: est.estimated_finish_at,
+    remaining_minutes: Math.max(0, Math.round(remainMs / 60_000)),
+    confidence: est.estimate_confidence || null,
+    source: est.estimate_source || null,
+    stale: false,
   };
 }
 
@@ -1379,15 +1426,34 @@ export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
     // leaving "~62%" attached to a lane nobody has heard from in hours.
     percent: progress.available ? progress.percent : null,
     estimate: progress.available && progress.source === "provider_estimate",
+    // The finish claim travels with the same identity line and under the same
+    // rule: only while FRESH. A lane the operator has not heard from in hours
+    // must not still be promising to be done in twenty minutes.
+    finish_label: progress.finish?.available ? progress.finish.label : null,
+    finish_at: progress.finish?.available ? progress.finish.finish_at : null,
+    finish_confidence: progress.finish?.available ? progress.finish.confidence : null,
     runtime_detail: work?.label || null,
     runtime_hint: work?.hint || null,
   };
 }
 
-/** "Working · ~62% · Claude" — the header line, assembled once. */
+/**
+ * "Working · ~62% · ~20m left · Claude" — the header line, assembled once.
+ *
+ * ONE function, so all six surfaces that show lane state — desktop nav, Home,
+ * the Lanes directory, the lane header, and both mobile equivalents — say the
+ * same thing. Adding the finish claim here rather than at each call site is
+ * what stops a second, disagreeing answer appearing on one of them.
+ *
+ * Order is deliberate: what the lane is doing, how far in, how much longer,
+ * who is doing it. Anything absent drops out rather than rendering an empty
+ * slot, so a provider that reports nothing still yields a clean "Working ·
+ * Claude".
+ */
 export function operatorStatusLine(status, providerLabel = null) {
   const bits = [status.label];
   if (status.percent != null) bits.push(`${status.estimate ? "~" : ""}${status.percent}%`);
+  if (status.finish_label) bits.push(status.finish_label);
   if (providerLabel) bits.push(providerLabel);
   return bits.join(" · ");
 }
