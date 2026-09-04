@@ -193,3 +193,28 @@ ugly. These were found by reading the captures and fixed in the same pass.
 12. **System left a ~380px hole.** A two-track grid sizes every row to its
     tallest cell, so Host (eleven rows) stranded empty space under Capacity
     (five). System now stacks two independent columns, like Home.
+
+## Promotion-time regression comparison
+
+The four known durability failures were re-measured against `origin/staging`
+itself, in matched conditions, so "not a regression" is a measurement rather
+than an assertion.
+
+| Tree | Result |
+|---|---|
+| `origin/staging` (real git worktree) | PASS=79 FAIL=4 |
+| candidate rebased onto it | PASS=80 FAIL=4 |
+
+Same four suites (`development-gateway-ui`, `development-lane-provisioning`,
+`development-certification-fixture`, `development-director-execution-bridge`),
+one new passing suite (`development-gateway-ui-v2`), zero new failures.
+
+**A first attempt at this comparison was wrong and is recorded because it
+matters how.** The baseline was taken from a `git archive` extract rather than a
+git worktree, and reported PASS=77 FAIL=6 — two *extra* failures that made the
+candidate look better than staging. The cause was environmental:
+`development-execution-run` asserts that resource-governance files are frozen
+outside their owning slice, which needs repository context the bare extract does
+not have. Re-run from a real detached worktree at the same commit, staging gives
+the expected four. A baseline that flatters the candidate is as much a defect as
+one that condemns it.
