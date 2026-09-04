@@ -44,7 +44,13 @@ function client(db: { instances: Row[]; opportunities?: Row[]; inserts: number }
         const rows = () => (table === "process_instances" ? db.instances : (db.opportunities ?? []));
         const matches = (r: Row) => Object.entries(filters).every(([k, v]) => (r[k] ?? null) === v);
 
-        const q: Record<string, unknown> = {
+        /*
+         * The double is self-referential — `single` delegates to `maybeSingle` on the
+         * same object — so `Record<string, unknown>` left the delegated member
+         * untyped and calling it was an error. Only the member actually called
+         * needs declaring; everything else stays `unknown` on purpose.
+         */
+        const q: Record<string, unknown> & { maybeSingle: () => Promise<unknown> } = {
             select: () => q,
             eq: (c: string, v: unknown) => {
                 filters[c] = v;

@@ -15,7 +15,11 @@ import {
     addCardToGrid,
     removeArea,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
-import type { FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
+// FocusPanelGridLayout is owned by focusPanelPublishedLayout — the same module
+// focusPanelGridLayoutOps imports it from. It was previously imported from
+// focusPanelCardGrid, which no longer exports it, so this file had lost the type
+// entirely: `grid.areas` became `any` and three callbacks silently followed.
+import type { FocusPanelGridLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 
 const EMPTY: FocusPanelGridLayout = { columns: 12, areas: [] };
 

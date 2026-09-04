@@ -32,6 +32,7 @@ import { laneAppUrl, readServeStatus } from "./lane-app-url.mjs";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveDeployedTarget, rejectCallerSuppliedTargetFields } from "./deployed-target-registry.mjs";
 
 /** Every state the flow can be in. Displayed verbatim; never inferred twice. */
 export const BROWSER_AUTH_STATES = Object.freeze({
@@ -752,3 +753,113 @@ export function laneSlot(lane) {
   const n = m ? Number(m[1]) : null;
   return n && SLOT_PORTS[n] ? n : null;
 }
+
+/* ── Deployed targets ─────────────────────────────────────────────────────
+ *
+ * A SECOND DESTINATION CLASS, NOT A RELAXED FIRST ONE.
+ *
+ * validateBrowserAuthRequest stays exactly as it was: slot-derived, loopback
+ * only, and it still refuses a non-loopback base. Widening it would have meant
+ * the one function that guarantees "a slot session is a loopback session" no
+ * longer guaranteed it, and every existing caller would silently inherit the
+ * looser rule. So deployed targets get their own validator, and the two cannot
+ * be confused because neither can produce the other's shape.
+ */
+
+/**
+ * Validate a deployed managed-session request.
+ *
+ * The caller supplies a registry KEY and nothing else. Base URL, host, expected
+ * identity and the credential-env pointer all come from the trusted registry;
+ * every other dimension is refused by name rather than ignored, so a caller
+ * that tried learns the boundary instead of quietly getting a different session
+ * than it asked for.
+ */
+export function validateDeployedBrowserAuthRequest(inputs = {}, {
+  resolveTarget = null,
+  rejectCallerFields = null,
+} = {}) {
+  const reject = rejectCallerFields || defaultRejectDeployedFields;
+  const refusal = reject(inputs);
+  if (!refusal.ok) return refusal;
+
+  const resolve = resolveTarget || defaultResolveDeployedTarget;
+  const resolved = resolve(inputs.deployed_target ?? inputs.deployedTarget ?? inputs.target_key);
+  if (!resolved.ok) return resolved;
+  const t = resolved.target;
+
+  // Belt and braces against a future table edit: the deployed class must never
+  // produce a loopback base, or a deployed "proof" could be satisfied by the
+  // local dev server.
+  if (isLoopbackBase(t.base_url)) {
+    return {
+      ok: false,
+      error: "deployed_base_is_loopback",
+      detail: "a deployed target may not resolve to loopback; that is the local slot class",
+    };
+  }
+  if (!t.qa_identity || !/^[^@\s]+@[^@\s]+$/.test(String(t.qa_identity))) {
+    return {
+      ok: false,
+      error: BROWSER_AUTH_REFUSALS.NO_IDENTITY,
+      detail: "the deployed target names no managed QA identity; there is no silent fallback account",
+    };
+  }
+  return {
+    ok: true,
+    destination_class: "deployed_target",
+    target_key: t.key,
+    environment: t.environment,
+    base_url: t.base_url,
+    host: t.host,
+    expected_identity: t.qa_identity,
+    trusted_env_key: t.trusted_env_key,
+    storage_key: t.storage_key,
+  };
+}
+
+/** The local class, named explicitly so the two are never told apart by accident. */
+export function destinationClassOf(validated) {
+  if (!validated || validated.ok === false) return null;
+  if (validated.destination_class === "deployed_target") return "deployed_target";
+  return Number.isInteger(Number(validated.slot)) ? "local_slot" : null;
+}
+
+/**
+ * A deployed verification may never be satisfied by local storage, and a local
+ * verification may never be satisfied by deployed storage.
+ *
+ * This is the check that stops the original defect recurring in the other
+ * direction: the failure being designed out is a loopback session presented as
+ * deployed proof, and its mirror is equally wrong.
+ */
+export function assertStorageMatchesDestination({ destinationClass, storagePath }) {
+  const deployed = /\/deployed\/[^/]+\/storage-state\.json$/.test(String(storagePath || ""));
+  const slot = /\/slot\d+\/storage-state\.json$/.test(String(storagePath || ""));
+  if (destinationClass === "deployed_target") {
+    return deployed
+      ? { ok: true }
+      : { ok: false, error: "local_storage_cannot_prove_deployed", detail: String(storagePath || "") };
+  }
+  if (destinationClass === "local_slot") {
+    return slot
+      ? { ok: true }
+      : { ok: false, error: "deployed_storage_cannot_prove_local", detail: String(storagePath || "") };
+  }
+  return { ok: false, error: "unknown_destination_class" };
+}
+
+/*
+ * Static, not dynamic.
+ *
+ * The first cut deferred these behind `await import(...)` on a suspicion of
+ * circularity, which produced two defects at once: an async resolver called
+ * from a synchronous validator (so `resolved.ok` read undefined on a Promise
+ * and every deployed request would have been refused), and a "reject" stub that
+ * rejected nothing — the exact guard the security model depends on, silently
+ * disabled. deployed-target-registry imports nothing, so there was never a
+ * cycle to avoid. The registry remains the single owner of both the target
+ * table and the forbidden-field list; this only binds to it.
+ */
+const defaultResolveDeployedTarget = (key) => resolveDeployedTarget(key);
+const defaultRejectDeployedFields = (inputs) => rejectCallerSuppliedTargetFields(inputs);
