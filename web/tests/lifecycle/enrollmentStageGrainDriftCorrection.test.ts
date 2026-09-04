@@ -183,3 +183,44 @@ describe("the repair produces a payload publication accepts", () => {
         expect(checksum).toMatch(/^[0-9a-f]{64}$/);
     });
 });
+
+describe("the repair introduces nothing it did not set out to change", () => {
+    /*
+     * THE SAFETY PROPERTY FOR A MIGRATION, and the one worth pinning hardest.
+     *
+     * A repair that fixes its target while quietly breaking something else is worse than no repair,
+     * because it arrives with a green report. So the comparison is not "does the corrected payload
+     * validate" — the deployed one does not either — but "is every error in the corrected payload
+     * also an error in the deployed one".
+     *
+     * It is not: the deployed payload carries pre-existing configuration debt that blocks
+     * republication independently of this drift — a `closed_lost` stage referenced by three Close as
+     * Lost transitions but absent from the stage list, family stages moving the family case onto the
+     * child-grain `waitlist`, and `waitlist` itself declaring no exits. Those are neither caused nor
+     * resolved here, and the migration generator refuses to publish while any of them stand.
+     */
+    const deployed = parse(deployedDriftedPayload());
+    const corrected = correctEnrollmentStageGrainDrift(deployed).builder;
+    const signature = (r: { errors: { code: string; message: string }[] }) =>
+        new Set(r.errors.map((e) => `${e.code} :: ${e.message}`));
+
+    const before = signature(validateParsedBusinessProcessForPublish(deployed, serializeLifecycleBuilderV1(deployed)));
+    const after = signature(validateParsedBusinessProcessForPublish(corrected, serializeLifecycleBuilderV1(corrected)));
+
+    it("adds NO publication error that the deployed payload did not already have", () => {
+        expect([...after].filter((e) => !before.has(e))).toEqual([]);
+    });
+
+    it("resolves exactly the grain-drift errors, named rather than counted", () => {
+        const resolved = [...before].filter((e) => !after.has(e)).join("\n");
+        expect(resolved).toContain("moves to “Enrollment”, but that stage is missing");
+        expect(resolved).toContain('moves a family to "Enrolling", which is configured for individual children');
+    });
+
+    it("leaves the pre-existing debt visible instead of masking it", () => {
+        // If a later change makes these disappear, that is a real edit someone should have to justify.
+        const remaining = [...after].join("\n");
+        expect(remaining).toContain("Closed Lost");
+        expect(remaining).toContain('moves a family to "Waitlist"');
+    });
+});
