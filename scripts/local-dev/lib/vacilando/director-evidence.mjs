@@ -29,6 +29,9 @@ import {
 } from "./trusted-host-repository-housekeeping.mjs";
 import { measureProviderCeilingGates } from "./trusted-host-provider-ceiling.mjs";
 import { measureToolkitConvergence } from "./toolkit-convergence.mjs";
+import { measureLaneDispatchGates } from "./lane-dispatch.mjs";
+import { getDurableLane } from "./development-lane.mjs";
+import { activeRunForLane } from "./execution-run.mjs";
 
 const PROTECTED = ["staging", "main", "master", "production"];
 
@@ -277,6 +280,23 @@ export function collectDirectorEvidence(rec, {
       // head_sha_still_matches compares the PR head against the sha the
       // REQUEST named, so the request's claim must be the one on trial.
       if (evidence.source_sha == null) evidence.source_sha = sha;
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "lane.dispatch_measurement_instruction") {
+    // Wired here, not only written. The collector existing is not the same as
+    // the collector being CALLED, and a unit test that invokes it directly
+    // cannot tell those apart — which is how this very action nearly shipped
+    // with six permanently unmeasured gates.
+    try {
+      Object.assign(evidence, measureLaneDispatchGates(inputs, {
+        missionId: rec.mission_id || null,
+        lookupLane: (laneId) => {
+          try { return getDurableLane(laneId, stateRoot); } catch { return null; }
+        },
+        activeRunFor: (laneId) => {
+          try { return activeRunForLane(laneId, stateRoot); } catch { return null; }
+        },
+      }));
     } catch { /* unmeasured -> escalates */ }
   }
   if (rec?.action_key === "host.install_toolkit") {

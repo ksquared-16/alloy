@@ -249,3 +249,17 @@ test("a busy target surfaces the healthy refusal rather than a generic failure",
   assert.equal(out.ok, false);
   assert.equal(out.error, "current_run_active");
 });
+
+test("the collector is CALLED, not merely written", async () => {
+  // This action nearly shipped with six permanently unmeasured gates: the
+  // collector existed and its unit test invoked it directly, which cannot tell
+  // "written" from "wired". The collection PATH is what a real request uses.
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../lib/vacilando/director-evidence.mjs", import.meta.url), "utf8");
+  assert.match(src, /measureLaneDispatchGates/, "director-evidence must import the collector");
+  assert.match(src, /rec\?\.action_key === "lane\.dispatch_measurement_instruction"/,
+    "director-evidence must dispatch to it for this action key");
+  // And it must supply the lane lookups, or target eligibility stays null forever.
+  assert.match(src, /lookupLane:/);
+  assert.match(src, /activeRunFor:/);
+});
