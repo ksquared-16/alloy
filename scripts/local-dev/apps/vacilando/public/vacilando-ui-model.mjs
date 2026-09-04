@@ -405,21 +405,59 @@ export function governedActionLabel(ga) {
   return ga.action_key ? String(ga.action_key).replace(/[._]/g, " ") : "Governed action";
 }
 
+/**
+ * A GOVERNED ACTION'S LANE REFERENCE IS NOT ALWAYS A LANE ID.
+ *
+ * MEASURED on the running host: request gar_3368b11eb1b1ce carried
+ * `lane_id: "ui-vac"` — the WORKTREE NAME — while the lane it belongs to is
+ * `lane_9b9082778292`. Trusting that string produced `#/lanes/ui-vac`, and the
+ * operator got "Lane unavailable" from the one control that exists to take them
+ * to the thing that needs them.
+ *
+ * So the reference is RESOLVED against the lanes that actually exist rather
+ * than pasted into a route. Three attempts, narrowing: the id itself, the
+ * worktree path the request also carries, then the worktree name. If none of
+ * them names a real lane, the answer is NO LANE — the row still states what is
+ * being asked, and it offers no route it cannot honour. Fabricating a link is
+ * how the operator ends up somewhere that does not exist.
+ */
+export function resolveApprovalLane(approval, lanes = []) {
+  const list = Array.isArray(lanes) ? lanes : [];
+  const ref = String(approval?.lane_id || approval?.laneId || "").trim();
+  if (ref) {
+    const byId = list.find((l) => l.lane_id === ref);
+    if (byId) return byId;
+  }
+  const wt = approval?.worktree_path || approval?.worktreePath || null;
+  if (wt) {
+    const byPath = list.find((l) => (l.worktree_path?.path || l.worktree?.path) === wt);
+    if (byPath) return byPath;
+  }
+  if (ref) {
+    const byName = list.find((l) => (l.worktree_path?.name || l.worktree?.name) === ref);
+    if (byName) return byName;
+  }
+  return null;
+}
+
 export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => null, nowMs = Date.now() } = {}) {
   const items = [];
-  const labelById = new Map();
-  for (const l of lanes) labelById.set(l.lane_id, l.label || l.lane_id);
 
   for (const a of Array.isArray(approvals) ? approvals : []) {
-    const laneId = a.lane_id || a.laneId || null;
+    const lane = resolveApprovalLane(a, lanes);
+    const laneId = lane?.lane_id || null;
+    const ref = String(a.lane_id || a.laneId || "").trim();
     items.push({
       kind: "governed_action",
       lane_id: laneId,
-      lane_label: labelById.get(laneId) || a.lane_label || laneId || "Vacilando",
+      lane_label: lane?.label || a.lane_label || ref || "Vacilando",
+      // An unresolved reference is stated, not hidden: the operator should know
+      // the request exists even when nothing can be opened for it.
+      lane_resolved: Boolean(lane),
       request: governedActionLabel(a),
       detail: a.reason_worker_cannot_execute || a.summary || null,
       at_ms: parseMs(a.requested_at || a.created_at || a.at),
-      href: laneId ? `#/lanes/${encodeURIComponent(laneId)}` : "#/lanes",
+      href: laneId ? `#/lanes/${encodeURIComponent(laneId)}` : null,
       severity: a.destructive || a.mode === "destructive" ? "destructive" : "authorize",
     });
   }
@@ -429,7 +467,7 @@ export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => nu
     const run = l.execution_run;
     // Already represented by its governed action; do not count the same
     // blocker twice.
-    const alreadyListed = items.some((i) => i.lane_id === l.lane_id);
+    const alreadyListed = items.some((i) => i.lane_id && i.lane_id === l.lane_id);
     if (alreadyListed) continue;
     if (operatorState(st, l) === OPERATOR_STATE.NEEDS_YOU) {
       items.push({
@@ -440,6 +478,7 @@ export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => nu
         detail: null,
         at_ms: parseMs(run?.updated_at) || Number(l.last_activity_ms) || null,
         href: `#/lanes/${encodeURIComponent(l.lane_id)}`,
+        lane_resolved: true,
         severity: "answer",
       });
     }

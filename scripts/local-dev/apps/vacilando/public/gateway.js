@@ -1562,7 +1562,16 @@ function setNeedsYouOpen(open) {
   if (open) panel.innerHTML = View.needsYouPanel(needsYouVm());
   panel.hidden = !open;
   if (scrim) scrim.hidden = !open;
-  document.documentElement.toggleAttribute("data-v-needs-open", open);
+  // A DIFFERENT NAME FROM THE CONTROL'S OWN HOOK, DELIBERATELY.
+  //
+  // This root flag was called `data-v-needs-open` — the same attribute the
+  // button carries. `closest("[data-v-needs-open]")` then matched <html> for
+  // EVERY click in the document while the sheet was open, so the click handler
+  // treated every click as a press of the Needs You control: it preventDefault'd
+  // the event and toggled the panel. Review could not navigate, and nothing else
+  // on the page worked either while the sheet was up. A state flag and an action
+  // hook must never share a selector.
+  document.documentElement.toggleAttribute("data-v-needs-panel-open", open);
   const buttons = [...document.querySelectorAll("[data-v-needs-open]")];
   buttons.forEach((b) => b.setAttribute("aria-expanded", open ? "true" : "false"));
   if (open) panel.querySelector(".vneeds-panel-close")?.focus();

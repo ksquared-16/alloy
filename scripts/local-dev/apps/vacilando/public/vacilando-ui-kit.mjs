@@ -383,7 +383,15 @@ export function needsYouPanel(model, { nowMs = Date.now() } = {}) {
             ${it.detail ? `<span class="vneeds-row-why">${esc(it.detail)}</span>` : ""}
           </div>
           <span class="vneeds-row-age">${esc(it.at_ms ? `${ago(it.at_ms, nowMs)}` : "")}</span>
-          <a class="btn sm" href="${esc(it.href)}" data-v-needs-review-link>Review</a>
+          ${/*
+            NO ROUTE IS OFFERED THAT CANNOT BE HONOURED. A request whose lane
+            reference does not name a real lane gets no Review link — sending the
+            operator to "Lane unavailable" is worse than telling them plainly
+            that this one cannot be opened from here.
+          */ ""}
+          ${it.href
+            ? `<a class="btn sm" href="${esc(it.href)}" data-v-needs-review-link>Review</a>`
+            : `<span class="vneeds-row-unresolved" title="This request does not name a lane that exists on this host">No lane</span>`}
         </li>`).join("")}</ul>`
     : emptyState({
       title: "Nothing needs you",

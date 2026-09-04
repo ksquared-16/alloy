@@ -40,6 +40,7 @@ import {
   metric,
   laneReturnTarget,
   messageRow,
+  resolveApprovalLane,
   needsYouControl,
   needsYouPanel,
   needsYouTray,
@@ -783,4 +784,51 @@ test("lane resources are honest field by field", () => {
   assert.equal(none.available, false);
   assert.equal(none.memory.state, "unavailable");
   assert.equal(/^0/.test(none.memory.display), false, "unmeasured must never render as zero");
+});
+
+test("a governed action's lane reference is resolved, never pasted into a route", () => {
+  // MEASURED ON THE RUNNING HOST. gar_3368b11eb1b1ce carried lane_id "ui-vac" —
+  // the worktree NAME — while its lane is lane_9b9082778292. Trusting it built
+  // #/lanes/ui-vac, and the operator got "Lane unavailable" from the one control
+  // that exists to take them to what needs them.
+  const lanes = [{
+    lane_id: "lane_9b9082778292",
+    label: "UI-Vac",
+    worktree_path: { name: "ui-vac", path: "/Users/vacilando/Code/alloy-worktrees/ui-vac" },
+  }];
+  const approval = {
+    request_id: "gar_3368b11eb1b1ce",
+    lane_id: "ui-vac",
+    worktree_path: "/Users/vacilando/Code/alloy-worktrees/ui-vac",
+    action_key: "database.read_census",
+    title: "Read-only database census",
+    requested_at: new Date(Date.now() - 45 * 60_000).toISOString(),
+  };
+  assert.equal(resolveApprovalLane(approval, lanes)?.lane_id, "lane_9b9082778292");
+
+  const m = buildNeedsYou({ lanes, approvals: [approval] });
+  assert.equal(m.count, 1);
+  assert.equal(m.items[0].lane_id, "lane_9b9082778292");
+  assert.equal(m.items[0].lane_label, "UI-Vac", "the row names the lane, not the worktree");
+  assert.equal(m.items[0].href, "#/lanes/lane_9b9082778292");
+  assert.equal(m.items[0].lane_resolved, true);
+});
+
+test("a reference that names no lane offers no route at all", () => {
+  const approval = { lane_id: "a-lane-that-does-not-exist", action_key: "repository.push" };
+  const m = buildNeedsYou({ lanes: [], approvals: [approval] });
+  assert.equal(m.items[0].href, null, "never #/lanes/<invalid id>");
+  assert.equal(m.items[0].lane_resolved, false);
+  const panel = needsYouPanel(m);
+  assert.equal(/href="#\/lanes\/a-lane-that-does-not-exist"/.test(panel), false);
+  assert.match(panel, /vneeds-row-unresolved/, "it says so rather than linking nowhere");
+});
+
+test("resolution falls back through path then name, and refuses a blank reference", () => {
+  const lanes = [{ lane_id: "lane_x", label: "X", worktree_path: { name: "wt-x", path: "/tmp/wt-x" } }];
+  assert.equal(resolveApprovalLane({ lane_id: "lane_x" }, lanes)?.lane_id, "lane_x");
+  assert.equal(resolveApprovalLane({ lane_id: "nope", worktree_path: "/tmp/wt-x" }, lanes)?.lane_id, "lane_x");
+  assert.equal(resolveApprovalLane({ lane_id: "wt-x" }, lanes)?.lane_id, "lane_x");
+  assert.equal(resolveApprovalLane({}, lanes), null);
+  assert.equal(resolveApprovalLane({ lane_id: "" }, lanes), null);
 });

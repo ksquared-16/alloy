@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T11:40:23.015Z",
+  "captured_at": "2026-09-04T12:03:02.040Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -18,7 +18,7 @@
       "height": 380
     }
   },
-  "passed": 199,
+  "passed": 209,
   "failed": 0,
   "results": [
     {
@@ -149,7 +149,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 4:21 AM Stop lane RUNTIME Executing"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 4:43 AM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
@@ -817,6 +817,31 @@
       "detail": ""
     },
     {
+      "name": "desktop every Review link points at a lane that exists",
+      "ok": true,
+      "detail": "#/lanes/lane_runtimeperf001 #/lanes/lane_surfaces000001"
+    },
+    {
+      "name": "desktop Review opens a real lane, not \"Lane unavailable\"",
+      "ok": true,
+      "detail": "{\"hash\":\"#/lanes/lane_runtimeperf001\",\"unavailable\":false,\"panelClosed\":true}"
+    },
+    {
+      "name": "desktop Review closes the sheet on its way",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop the open flag does not impersonate the control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop a click inside the sheet is not swallowed by the control",
+      "ok": true,
+      "detail": "{\"prevented\":false}"
+    },
+    {
       "name": "mobile390 /home renders no permanent Needs You content",
       "ok": true,
       "detail": ""
@@ -855,6 +880,31 @@
       "name": "mobile390 the governed payload stays behind Review",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "mobile390 every Review link points at a lane that exists",
+      "ok": true,
+      "detail": "#/lanes/lane_runtimeperf001 #/lanes/lane_surfaces000001"
+    },
+    {
+      "name": "mobile390 Review opens a real lane, not \"Lane unavailable\"",
+      "ok": true,
+      "detail": "{\"hash\":\"#/lanes/lane_runtimeperf001\",\"unavailable\":false,\"panelClosed\":true}"
+    },
+    {
+      "name": "mobile390 Review closes the sheet on its way",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 the open flag does not impersonate the control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 a click inside the sheet is not swallowed by the control",
+      "ok": true,
+      "detail": "{\"prevented\":false}"
     },
     {
       "name": "Home shows a bounded operational subset, not the directory",

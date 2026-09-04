@@ -772,6 +772,49 @@ try {
     check(`${label} each request names its lane, the ask, and its age`,
       panel.rows > 0 && panel.lane && panel.request && panel.age && panel.review);
     check(`${label} the governed payload stays behind Review`, panel.payload === false);
+    // A REQUEST'S LANE REFERENCE IS RESOLVED, NEVER PASTED INTO A ROUTE.
+    // The running host files some requests with the worktree NAME in lane_id;
+    // trusting it produced #/lanes/ui-vac and "Lane unavailable".
+    const routes = await ny.evaluate(() => [...document.querySelectorAll("#needs-panel [data-v-needs-review-link]")]
+      .map((a) => a.getAttribute("href")));
+    check(`${label} every Review link points at a lane that exists`,
+      routes.length > 0 && routes.every((h) => /^#\/lanes\/lane_[a-z0-9]+$/.test(h)),
+      routes.join(" "));
+    // And following one must not land on the unavailable screen.
+    await ny.locator("#needs-panel [data-v-needs-review-link]").first().click();
+    await ny.waitForTimeout(700);
+    const landed = await ny.evaluate(() => ({
+      hash: location.hash,
+      unavailable: /Lane unavailable|could not be resolved/i.test(document.body.innerText),
+      panelClosed: document.getElementById("needs-panel")?.hidden === true,
+    }));
+    check(`${label} Review opens a real lane, not "Lane unavailable"`,
+      landed.unavailable === false && /^#\/lanes\/lane_/.test(landed.hash), JSON.stringify(landed));
+    check(`${label} Review closes the sheet on its way`, landed.panelClosed === true);
+    // A STATE FLAG MUST NOT SHARE A SELECTOR WITH AN ACTION HOOK.
+    //
+    // The open flag was written to <html> under the SAME attribute the control
+    // carries, so closest("[data-v-needs-open]") matched the root for EVERY
+    // click while the sheet was open: the handler treated every click in the
+    // document as a press of the Needs You control, cancelled it, and toggled
+    // the panel. Review could not navigate and nothing else worked either.
+    await open(ny, "/home");
+    await ny.locator("[data-v-needs-open]:visible").first().click();
+    await ny.waitForTimeout(250);
+    check(`${label} the open flag does not impersonate the control`,
+      await ny.evaluate(() => !document.documentElement.hasAttribute("data-v-needs-open")
+        && document.documentElement.hasAttribute("data-v-needs-panel-open")));
+    // Proof by behaviour, not just by attribute name: an ordinary link inside
+    // the sheet still does what a link does.
+    const stillWorks = await ny.evaluate(() => {
+      const a = document.querySelector("#needs-panel [data-v-needs-review-link]");
+      if (!a) return null;
+      const ev = new MouseEvent("click", { bubbles: true, cancelable: true });
+      a.dispatchEvent(ev);
+      return { prevented: ev.defaultPrevented };
+    });
+    check(`${label} a click inside the sheet is not swallowed by the control`,
+      stillWorks && stillWorks.prevented === false, JSON.stringify(stillWorks));
     await ny.close();
   }
 

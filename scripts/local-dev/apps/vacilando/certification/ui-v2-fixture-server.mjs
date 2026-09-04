@@ -219,6 +219,7 @@ export const LANES = [
   },
   {
     lane_id: "lane_runtimeperf001", label: "Runtime Performance", slot: 3,
+    worktree_path: { name: "runtimeperf", path: "/Users/vacilando/Code/alloy-worktrees/runtimeperf", managed: true },
     tmux: { alive: false }, runtime: "offline", preferred_provider: "claude",
     binding: { provider: "claude", branch: "agent/runtime-perf", slot: 3 },
     last_activity_ms: Date.now() - 3 * 60 * 60_000,
@@ -276,7 +277,12 @@ const APPROVALS = [{
   status: "awaiting_operator", requested_at: T(6),
   reason_worker_cannot_execute: "The lane cannot reach production credentials; the Director must run it.",
 }, {
-  request_id: "ga_merge01", lane_id: "lane_runtimeperf001",
+  // THE SHAPE THE RUNNING HOST ACTUALLY FILES. gar_3368b11eb1b1ce carried the
+  // WORKTREE NAME where a lane id belongs, which built #/lanes/ui-vac and gave
+  // the operator "Lane unavailable". A fixture that only ever carries clean lane
+  // ids certifies a resolver that never has to resolve anything.
+  request_id: "ga_merge01", lane_id: "runtimeperf",
+  worktree_path: "/Users/vacilando/Code/alloy-worktrees/runtimeperf",
   action_key: "repository.merge_pull_request", title: "Promotion into staging",
   status: "awaiting_operator", requested_at: T(52),
   reason_worker_cannot_execute: "Merging is Director-owned; this lane holds no credentials.",
