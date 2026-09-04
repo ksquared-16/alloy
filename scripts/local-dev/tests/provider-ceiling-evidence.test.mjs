@@ -131,3 +131,22 @@ test("validated inputs survive into the executor without becoming NaN", () => {
     "capacity", "set-provider-ceiling", "--expected", "4", "--to", "5", "--rollback-to", "4",
   ]);
 });
+
+test("gateway liveness is not a headroom gate — it was a self-deadlock", () => {
+  // provider-observe measures gateway_http by curling the Gateway's own health
+  // endpoint. This action runs inside the Gateway and shells out synchronously,
+  // blocking its event loop, so the Gateway cannot answer its own probe. Making
+  // that a required gate meant the gate could never pass where it mattered.
+  const ev = P.measureProviderCeilingGates(INPUTS, {
+    observe: observation({ host: { gateway_http: null } }),
+  });
+  assert.equal(ev.host_headroom_ok, true, "an unanswerable self-probe must not block headroom");
+  assert.equal(ev.gateway_http_observed, null, "it is retained as an observation");
+});
+
+test("real host pressure still blocks, with gateway_http absent", () => {
+  const ev = P.measureProviderCeilingGates(INPUTS, {
+    observe: observation({ host: { gateway_http: null, pressure_level: 3 } }),
+  });
+  assert.equal(ev.host_headroom_ok, false, "pressure is the thing headroom actually measures");
+});
