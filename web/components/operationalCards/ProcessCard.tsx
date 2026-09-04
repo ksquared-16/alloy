@@ -196,6 +196,8 @@ export default function ProcessCard({
                                                 disabled={a.disabled}
                                                 title={a.disabledReason ?? undefined}
                                                 data-process-action-group={a.key ?? undefined}
+                                                onMouseEnter={a.onIntent}
+                                                onFocus={a.onIntent}
                                             >
                                                 {a.label} ▾
                                             </Action>
@@ -207,6 +209,8 @@ export default function ProcessCard({
                                                     disabled={m.disabled}
                                                     title={m.disabledReason ?? undefined}
                                                     onSelect={() => m.onInvoke?.()}
+                                                    onMouseEnter={m.onIntent}
+                                                    onFocus={m.onIntent}
                                                     data-process-action={m.key ?? undefined}
                                                 >
                                                     {m.label}
@@ -221,6 +225,8 @@ export default function ProcessCard({
                                         disabled={a.disabled}
                                         title={a.disabledReason ?? undefined}
                                         onClick={a.onInvoke}
+                                        onMouseEnter={a.onIntent}
+                                        onFocus={a.onIntent}
                                         data-process-action={a.key ?? undefined}
                                     >
                                         {a.label}

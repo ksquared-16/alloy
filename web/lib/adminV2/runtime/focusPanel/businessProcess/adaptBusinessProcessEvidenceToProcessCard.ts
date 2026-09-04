@@ -49,6 +49,12 @@ export type ProcessCardActionInput = {
     disabledReason?: string | null;
     /** Executes through the shared command host. */
     onInvoke?: () => void;
+    /**
+     * Operator intent, ahead of the click — hover, keyboard focus, or opening the group this
+     * command sits in. The card reports the gesture; the runtime decides what (if anything) is
+     * worth warming for it. Never a side effect the operator can see.
+     */
+    onIntent?: () => void;
     /** Secondary operations on the same operational concept (see `ProcessAction.menu`). */
     menu?: ProcessCardActionInput[];
 };
@@ -116,6 +122,9 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
         disabled: a.disabled,
         disabledReason: a.disabledReason ?? null,
         onInvoke: a.onInvoke,
+        // Intent travels with the command. Dropping it here is invisible — the card still renders
+        // and still executes — and the only symptom is that every command opens cold.
+        onIntent: a.onIntent,
         ...(a.menu?.length
             ? {
                   menu: a.menu.map((m) => ({
@@ -125,6 +134,7 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
                       disabled: m.disabled,
                       disabledReason: m.disabledReason ?? null,
                       onInvoke: m.onInvoke,
+                      onIntent: m.onIntent,
                   })),
               }
             : {}),

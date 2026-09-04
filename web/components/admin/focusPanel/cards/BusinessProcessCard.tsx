@@ -25,6 +25,7 @@ import {
     logProcessCardCommandWithheld,
 } from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
+import { warmCurrentWorkCapabilityOnIntent } from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
@@ -234,6 +235,25 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
         [projection.commands, context.signals.tour, viewerTimeZone],
     );
 
+    /*
+     * WARM ON INTENT, SO THE CLICK LANDS ON SOMETHING ALREADY THERE.
+     *
+     * Send Tour Invitation opens through a prepare step that mints the invitation and renders the
+     * template before the composer has anything to show — seconds of "Preparing tour invitation…"
+     * if it starts at the click. Current Work has always warmed its capabilities on intent through
+     * `warmCurrentWorkCapabilityOnIntent`; the Process card, which is where an operator actually
+     * clicks, never reported the gesture, so every command it launched started cold.
+     *
+     * This is the SAME dispatcher, keyed on the resolved interaction host — no Tour-specific
+     * preloading here, and nothing this card knows about what any command needs. Intent is hover
+     * or keyboard focus, never render: prepare mints a real invitation, so it must follow a gesture
+     * the operator actually made.
+     */
+    const warmCommand = useCallback(
+        (command: ProcessCardCommand) => warmCurrentWorkCapabilityOnIntent(command.action, context),
+        [context],
+    );
+
     const actions = useMemo<ProcessCardActionInput[]>(() => {
         const toInput = (command: ProcessCardCommand): ProcessCardActionInput => ({
             key: command.key,
@@ -242,6 +262,7 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
             disabled: command.status !== "executable",
             disabledReason: command.unavailableReason,
             onInvoke: () => invoke(command),
+            onIntent: () => warmCommand(command),
         });
 
         if (!tourPresentation.grouped) return projection.commands.map(toInput);
@@ -257,6 +278,9 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
             // Executable when any member is; the members carry their own verdicts.
             disabled: tourPresentation.tour.every((c) => c.status !== "executable"),
             disabledReason: null,
+            // Reaching the group IS intent toward its members — the menu item is one hover away,
+            // and the member commands are the ones carrying a prepare step.
+            onIntent: () => tourPresentation.tour.forEach(warmCommand),
             menu: tourPresentation.tour.map(toInput),
         };
 
@@ -269,7 +293,7 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
             out.push(toInput(command));
         });
         return out;
-    }, [projection.commands, invoke, tourPresentation]);
+    }, [projection.commands, invoke, tourPresentation, warmCommand]);
 
     /*
      * DRIFT IS REPORTED, NEVER RENDERED. A configured command whose action is no longer registered
