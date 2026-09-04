@@ -225,7 +225,12 @@ function client(db: Record<string, Row[]>) {
             return { data: selected(), error: null };
         };
 
-        const q: Record<string, unknown> = {
+        /*
+                 * Self-referential double: `upsert` delegates to `insert` on the same
+                 * object, so `Record<string, unknown>` left that member untyped.
+                 * Only the delegated member is declared.
+                 */
+                const q: Record<string, unknown> & { insert: (payload: unknown) => unknown } = {
             select: () => q,
             eq: (col: string, val: unknown) => {
                 filters.push({ col, val, op: "eq" });

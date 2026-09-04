@@ -172,16 +172,22 @@ describe("controls are semantic, not one text box", () => {
                 options: [],
                 optional: false,
                 field_ids: [],
+                // next_turn requires these three. editor and party are
+                // nullable and evidence is a list, so the empty shape is
+                // exact rather than a placeholder.
+                editor: null,
+                party: null,
+                evidence: [],
             }),
         ).toMatchObject({ kind: "value", inputType: "text" });
     });
 
     it("boolean and closed-enum needs get their own controls", () => {
         expect(
-            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "boolean", label: "Consent", options: [], optional: false, field_ids: [] }),
+            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "boolean", label: "Consent", options: [], optional: false, field_ids: [], editor: null, party: null, evidence: [] }),
         ).toMatchObject({ kind: "boolean" });
         expect(
-            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "select", label: "Program", options: ["AM", "PM"], optional: false, field_ids: [] }),
+            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "select", label: "Program", options: ["AM", "PM"], optional: false, field_ids: [], editor: null, party: null, evidence: [] }),
         ).toMatchObject({ kind: "options", options: ["AM", "PM"] });
     });
 

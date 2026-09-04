@@ -57,6 +57,12 @@ function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObj
             options: [],
             optional: false,
             field_ids: [],
+            // next_turn requires these three. editor and party are
+            // nullable and evidence is a list, so the empty shape is
+            // exact rather than a placeholder.
+            editor: null,
+            party: null,
+            evidence: [],
         },
         // No question outstanding — the ordinary case.
         pending_clarification: null,
