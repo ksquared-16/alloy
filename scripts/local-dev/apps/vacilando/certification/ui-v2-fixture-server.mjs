@@ -83,10 +83,36 @@ export const LANES = [
       instruction: "Restore the QA browser session for slot 4",
       state_reason: "Read-only database census — authorization required before the worker can proceed",
       started_at: T(52), updated_at: T(6), created_at: T(53),
+      // A FULLY FURNISHED pending governed action.
+      //
+      // The live decision bar rendered 591px of proposal detail; the fixture's
+      // was a title and one sentence. Three individually-bounded components then
+      // summed to 888px inside an 844px viewport on the real runtime and put
+      // Send 239px below the fold, while the fixture passed. A fixture that is
+      // tidier than reality certifies nothing about reality.
       governed_action: {
         request_id: "ga_census01", status: "awaiting_operator",
         action_key: "database.readonly_census", title: "Read-only database census",
         reason_worker_cannot_execute: "The lane cannot reach production credentials; the Director must run it.",
+        detail: "Read-only database census · Target: alloy_deployed_primary · Data mode: Read-only",
+        purpose: "Establish the true row counts behind the enrollment surfaces before the migration is planned, so the plan is built on measured cardinality rather than on an estimate.",
+        escalation_reason: "The worker cannot reach production credentials, and the census reads a deployed database. A read is still a production interaction, so it is authorised rather than assumed.",
+        approve_label: "Authorize census",
+        proposal: {
+          summary: "Run the committed read-only census query against the deployed primary.",
+          paths: [
+            "supabase/censuses/enrollment-cardinality.sql",
+            "docs/platform/planning/vacilando-os/qa/census/expected-shape.json",
+          ],
+          facts: [
+            { label: "Target", value: "alloy_deployed_primary" },
+            { label: "Data mode", value: "Read-only" },
+            { label: "Query artifact", value: "supabase/censuses/enrollment-cardinality.sql" },
+            { label: "Expected hash", value: "sha256:2f1c9e40b6a1d7c3e5f80a49bb2d6714cf03a8e1" },
+            { label: "Rows scanned", value: "unknown until executed" },
+            { label: "Writes", value: "none — the capability refuses any statement that is not a SELECT" },
+          ],
+        },
       },
       attachments: [],
     },
