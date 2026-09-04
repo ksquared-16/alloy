@@ -459,6 +459,26 @@ test("burst can never exceed the slots that exist", () => {
   assert.equal(d.burst_ceiling, 6, "six slots cannot offer ten servers");
 });
 
+test("a provider costs what a provider costs, not what someone feared", () => {
+  // MEASURED 2026-09-04: five resident providers at 344, 566, 597, 671 and
+  // 739 MB — 2.9 GB total, mean 583 MB, max under 0.75 GB. The policy claimed
+  // 6 GB each, which made 48 GB of RAM imply eight providers and made memory
+  // look like a real constraint. It is not: cores and upstream throughput are.
+  assert.ok(P.CAPACITY_POLICY_V1.provider_memory_gb_each <= 1,
+    "6 GB per provider is roughly ten times the measured cost");
+  const cap = { cores: 12, memory_total_gb: 48 };
+  const axis = P.computeCapacityPolicy(cap).axes.provider_capacity;
+  assert.equal(axis.bounded_by, "cores", "memory must no longer be the binding axis");
+  assert.ok(axis.by_memory >= 24, `memory should allow many providers, got ${axis.by_memory}`);
+});
+
+test("the provider ceiling is still bounded, not unbounded", () => {
+  // Correcting the memory input must not remove the ceiling — cores still bind.
+  const axis = P.computeCapacityPolicy({ cores: 12, memory_total_gb: 48 }).axes.provider_capacity;
+  assert.equal(axis.ceiling, Math.min(axis.by_cores, axis.by_memory));
+  assert.ok(axis.ceiling >= P.CAPACITY_POLICY_V1.provider_floor);
+});
+
 await Promise.all(started);
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
