@@ -116,6 +116,16 @@ const NEVER_RETIRE = Object.freeze(["staging", "main", "master", "production"]);
 export const GATES = Object.freeze({
   managed_repository: (ev) => (ev.repository == null ? null : ev.managed_repository === true),
   managed_agent_branch: (ev) => (ev.branch == null ? null : MANAGED_BRANCH.test(String(ev.branch))),
+  /**
+   * Ownership proven by observation instead of by naming convention.
+   *
+   * managed_agent_branch asks whether a branch is NAMED like agent work.
+   * This asks the question the guard actually cares about: is the lane making
+   * the request the lane that holds this branch, at this exact commit. A name
+   * can be chosen; being checked out on a branch cannot be claimed.
+   */
+  branch_owned_by_requesting_lane: (ev) =>
+    (ev.branch_owned_by_requesting_lane == null ? null : ev.branch_owned_by_requesting_lane === true),
   branch_matches_originating_work: (ev) =>
     (ev.branch == null || ev.originating_branch == null ? null : String(ev.branch) === String(ev.originating_branch)),
   full_exact_sha: (ev) => (ev.source_sha == null ? null : FULL_SHA.test(String(ev.source_sha))),
@@ -241,7 +251,7 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     // unmanaged repository, or move under an ambiguous SHA. History rewrites
     // and force pushes are a different action key and stay operator-owned.
     gates: Object.freeze([
-      "managed_repository", "managed_agent_branch", "full_exact_sha",
+      "managed_repository", "branch_owned_by_requesting_lane", "full_exact_sha",
       "not_protected_branch_write", "no_credential_material",
       "no_governance_exception", "no_operator_hold",
     ]),
@@ -260,7 +270,7 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     // the exact SHA being proposed, which is measurable and was the cause of a
     // real head_branch_not_on_remote failure in this history.
     gates: Object.freeze([
-      "managed_repository", "managed_agent_branch", "full_exact_sha",
+      "managed_repository", "branch_owned_by_requesting_lane", "full_exact_sha",
       "base_is_staging", "branch_pushed_to_remote",
       "no_governance_exception", "no_operator_hold",
     ]),
@@ -382,9 +392,21 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     action_key: "repository.merge_pull_request",
     environments: Object.freeze(["staging"]),
     consequence_class: CONSEQUENCE_CLASSES.CERTIFIED_PROMOTION,
-    // OFF until the operator turns it on. Merge is where content becomes
-    // everyone else's problem, so it does not inherit push's tier.
-    enabled: false,
+    // Merge is where content becomes everyone else's problem, so it does not
+    // inherit push's tier and never will: it carries the strictest gate set
+    // here, and every one of them is measured from GitHub rather than claimed.
+    //
+    // TURNED ON under the Director Attention Model, and the order matters.
+    // This shipped OFF because nothing collected pull-request state, so all ten
+    // gates below were unmeasured and every merge escalated. That approval was
+    // not supplying judgement — the operator was reading the same PR page the
+    // collector now reads and clicking approve, which cost an interruption and
+    // added no safety. director-evidence now measures head sha, base branch,
+    // mergeability, check counts, the certification suite and unresolved review
+    // findings directly. The safeguard was built first; only then was the
+    // approval removed. If that measurement ever regresses, these gates go
+    // unmeasured and merges escalate again on their own.
+    enabled: true,
     gates: Object.freeze([
       "managed_repository", "full_exact_sha", "base_is_staging",
       "required_checks_successful", "pull_request_mergeable", "head_sha_still_matches",

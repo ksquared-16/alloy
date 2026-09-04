@@ -23,6 +23,7 @@ import { observeRetirementCandidates } from "./worktree-retirement-observe.mjs";
 import { homedir } from "node:os";
 import {
   measureClosePullRequestGates,
+  measureMergePullRequestGates,
   measureDeleteRemoteBranchGates,
   isNeverDeletable,
 } from "./trusted-host-repository-housekeeping.mjs";
@@ -141,6 +142,31 @@ export function collectDirectorEvidence(rec, {
     governance_exception_active: governanceExceptionActive === true,
     operator_hold: operatorHold === true,
   };
+
+  // OWNERSHIP, MEASURED RATHER THAN INFERRED FROM A NAME.
+  //
+  // The push and open-PR policies used to prove ownership with a branch-name
+  // pattern, which is a proxy: it is satisfied by anything named correctly and
+  // says nothing about who actually holds the branch. What the guard is really
+  // for is "this lane is pushing its own work", and that is directly
+  // observable — the requesting worktree is checked out on this branch, at
+  // this exact sha. A lane cannot fake being on a branch it is not on.
+  //
+  // Both readings come from the worktree the REQUEST RECORD names, never from
+  // inputs, because a worker that could name its own worktree could name
+  // somebody else's and push their branch.
+  if (wt && branch) {
+    const head = git(["rev-parse", "HEAD"], wt);
+    const onBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], wt);
+    evidence.requesting_worktree_branch = onBranch;
+    evidence.requesting_worktree_head = head;
+    evidence.branch_owned_by_requesting_lane = (onBranch == null || head == null)
+      ? null
+      : (String(onBranch) === String(branch)
+        && (sha == null || String(head).toLowerCase() === String(sha).toLowerCase()));
+  } else {
+    evidence.branch_owned_by_requesting_lane = null;
+  }
   // Repository housekeeping measures REAL GitHub state. Anything unreadable
   // stays null, and a null gate escalates — a cleanup that cannot be proven
   // safe is never a cleanup the Director performs.
@@ -234,6 +260,21 @@ export function collectDirectorEvidence(rec, {
           evidence.retirement_state = "stale";
         }
       }
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "repository.merge_pull_request") {
+    // The merge policy has always named these gates and nothing measured them,
+    // so every merge escalated and the operator approved it by reading exactly
+    // the state this now reads. Measuring it is what makes the click removable.
+    try {
+      Object.assign(evidence, measureMergePullRequestGates({
+        repository,
+        pullRequestNumber: Number(inputs.pullRequestNumber ?? inputs.pull_request_number),
+        expectedHeadSha: sha,
+      }));
+      // head_sha_still_matches compares the PR head against the sha the
+      // REQUEST named, so the request's claim must be the one on trial.
+      if (evidence.source_sha == null) evidence.source_sha = sha;
     } catch { /* unmeasured -> escalates */ }
   }
   if (rec?.action_key === "repository.close_pull_request") {
