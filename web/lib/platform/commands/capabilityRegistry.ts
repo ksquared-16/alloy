@@ -47,6 +47,8 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "charge.add",
     "charge.post",
     "charge.reverse",
+    "payment.record",
+    "payment.refund",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -245,6 +247,47 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             "The lawful way posted money changes. Writes a NEW corrective row referencing the original "
             + "through source_charge_id; the original stays exactly as posted. Immutability without a "
             + "correction path is a dead end, not a guarantee.",
+    }),
+    // Money RECEIVED, and given back. The counterpart to charge.post: posting says what is owed,
+    // this says what has been paid, and the balance is the difference. Both write to the substrate
+    // that already exists — `payments` + `payment_allocations.charge_id` — so the childcare card and
+    // the job drawer compute a balance the same way.
+    def({
+        capabilityKey: "payment.record",
+        canonicalCommandKey: "payment.record",
+        operatorLabel: "Record payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.record",
+        implementationStatus: "production",
+        reason:
+            "Records authoritative money received against a POSTED charge and applies it, reducing the "
+            + "balance exactly once. Idempotent — a retried request returns the payment already recorded "
+            + "and its existing application. This RECORDS money; it does not collect it, so a family who "
+            + "pays by cash or check is representable without a provider.",
+    }),
+    def({
+        capabilityKey: "payment.refund",
+        canonicalCommandKey: "payment.refund",
+        operatorLabel: "Refund payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.refund",
+        implementationStatus: "production",
+        reason:
+            "The lawful way received money changes. Writes a NEW outbound row referencing the receipt "
+            + "through refunds_payment_id and reverses the applications that were holding the balance "
+            + "down; the original receipt stays exactly as received and is never deleted.",
     }),
     def({
         capabilityKey: "attendance.check_in",

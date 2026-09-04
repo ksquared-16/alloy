@@ -7,7 +7,7 @@ supersedes: []
 
 # Billing and financials platform
 
-**Status:** Canonical module doctrine (June 2026). Defines how **Operational Consequences (L5)** — charges, invoices, payments, ledger, GL — derive from operational facts, and locks the decision to **generalize billing before building childcare billing**. **The five P3.1 implementation gates are ratified and built, P3.2 rate configuration + Rate Resolution is built, and P3.3 draft Charge Resolution + a minimum responsibility shape + a read-only preview API (P3.3.1) are built (June 2026)** — see "P3.3 as-built", "P3.2 as-built", "Ratified P3.1 implementation gates", and "P3.1 as-built" below. Posting (invoices, AR, payments, ledger/GL writes), split/subsidy responsibility, cadence/proration, and subsidy remain deferred.
+**Status:** Canonical module doctrine (June 2026). Defines how **Operational Consequences (L5)** — charges, invoices, payments, ledger, GL — derive from operational facts, and locks the decision to **generalize billing before building childcare billing**. **The five P3.1 implementation gates are ratified and built, P3.2 rate configuration + Rate Resolution is built, and P3.3 draft Charge Resolution + a minimum responsibility shape + a read-only preview API (P3.3.1) are built (June 2026)** — see "P3.3 as-built", "P3.2 as-built", "Ratified P3.1 implementation gates", and "P3.1 as-built" below. Charge posting and **payment application** are built (September 2026) — see "Household parity + actor attribution as-built", "Correction lineage" and "Payment application" below. Invoices/statements, AR, ledger/GL writes on the childcare path, split/subsidy responsibility, cadence/proration, autopay, dunning and subsidy remain deferred.
 
 > **Layer:** Billing is **L5 Operational Consequences** in [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md). It derives from **L4 Operational Facts** (attendance, delivered service), targets **L3 Projections** (expected tuition/revenue) for variance, and reads **L1 Configuration** (rate rules). It never derives directly from enrollment/intent.
 
@@ -238,6 +238,101 @@ more than one live reversal, **0** corrections whose source is itself a correcti
 correction rows at all on any billable source: the bound is asserted over a table with no correction
 history, so nothing existing is invalidated by it.
 
+### Payment application — money received, applied once (September 2026)
+
+Migration `supabase/migrations/20260903190000_payment_application_childcare_spine.sql`.
+
+Posting says what a family owes. Nothing said what they had paid: `buildFinancialsCardVM` returned
+`paymentsCents = 0` as a literal and declared payments unrepresentable, so the card's own zone —
+"Payments received", "Current balance" — rendered a hard-coded zero above a real ledger. The stated
+reason was that `payments.job_id` is NOT NULL and payments were never generalized.
+
+**Half of that was false, and the half that was true was not the blocker.** Census
+`certification/financials/payments-spine-census.sql` (`tha_be923375ea3595`) asked the deployed
+database directly:
+
+- `payments.job_id` is **NULLABLE**, and has been since `20260329210000`. A childcare payment was
+  never blocked by a NOT NULL constraint.
+- `payment_allocations.charge_id` **exists** and targets a charge, and `charges` was already
+  generalized to `billable_source_*` by P3.1. Applying money to a childcare charge was already
+  expressible with no new table.
+- `payments` never received the generic billable-source dimension. P3.1 generalized `charges`,
+  `ledger_transactions` and `gl_journal_lines` and skipped this one table.
+- **No unique index existed on either money table beyond the two primary keys.** Nothing stood
+  between a retried request, or a replayed provider event, and a second reduction of a balance.
+- 0 payments, 0 allocations, 2 posted childcare charges. Nothing to backfill; no existing row could
+  conflict with a uniqueness rule.
+
+What was actually missing was a **write path**. No application code ever inserted a `payments` or
+`payment_allocations` row except the Python Stripe executor, whose `insert_payment` takes `job_id`
+and `customer_id` as required arguments and allocates to `target_entity_type = 'job'`. A childcare
+family could be charged and could never pay.
+
+- **One balance rule, quoted rather than re-derived.** Owed is charge amount minus **active**
+  applications whose parent payment is **posted** — `jobPaymentBalances`'s predicate, used verbatim
+  by `childcarePaymentService`, by the allocation bound trigger and by the card read model. The
+  childcare card and the job drawer answer the same arithmetic; a second rule is how two surfaces
+  begin disagreeing about money.
+- **Payments carry the generic billable-source dimension.** `job | enrollment_agreement | customer`,
+  backfilled to `job` from `job_id`. Without it there is no way to say "this is childcare money", so
+  every guarantee below would have to be written against all payments and would break job billing —
+  whose PATCH route edits `status_key` / `paid_at` / `notes` on live rows. `payments.customer_id` is
+  not a second answer: for a childcare payment it carries the same household so job-era readers of
+  "whose payment is this" keep resolving.
+- **A payment reduces a balance exactly once**, asserted by the partial unique index
+  `uq_payment_allocations_one_active_per_payment_charge` — one active application per
+  `(payment_id, charge_id)`. The index rather than a service check, for the same reason charge
+  reversal uses one: two concurrent applies both pass a lookup. Reversed rows sit outside the
+  predicate, so a corrected re-application stays possible.
+- **A retry and a replayed provider event are harmless**, by `uq_payments_org_idempotency_key` and
+  `uq_payments_org_processor_transaction`. The latter restores what `payments_provider_payment_id_ux`
+  used to guarantee before `20260329210000` dropped it and nothing replaced it.
+- **Neither side may be over-spent.** `enforce_payment_allocation_bounds` refuses an application
+  exceeding what the payment is worth or what the charge still asks, and refuses a draft, void or
+  non-positive charge outright. It locks the payment and the charge **before** summing their
+  siblings; without those locks two concurrent applications each see the old total and both pass.
+- **A refund is a new row, never an edit.** `payments.refunds_payment_id` gives the receipt the same
+  append-only lineage `charges.source_charge_id` gives a posted charge. The bound is arithmetic
+  rather than a count — partial refunds are legitimate and repeatable, which is where this differs
+  from charge reversal — and a refund cannot itself be refunded. Applications are **reversed**
+  (`status = 'reversed'`, `reversed_at`, `reversal_reason`), never deleted, and a partial refund
+  re-applies the kept remainder as a new row rather than editing the amount of an existing one.
+- **Posted childcare money is append-only**, by `enforce_childcare_payment_immutability`: financial
+  fields and the receipt stamps are frozen, DELETE is refused, and a posted receipt never reverts to
+  pending or failed. Quantified over `CHILDCARE_BILLABLE_SOURCE_TYPES`; job rows pass through.
+- **The childcare write role gate now covers the tables that receive the money.** `20260902130000`
+  gated `charges` / `ledger_transactions` / `gl_journal_lines` and stopped there, so money arriving
+  was less protected than money owed. `payment_allocations` resolves its childcare-ness through its
+  parent payment rather than duplicating the column.
+- **`charges.status` is deliberately never advanced to `partially_paid` / `paid`.** A stored status
+  would be a second answer to "how much is left", and the first reversed application would make the
+  two disagree. Past due is the **residual**, read from the applications — a charge paid in full is
+  not overdue, and one half paid is overdue for the half.
+- **Recording is not collecting.** `payment.record` and `payment.refund` write authoritative money
+  received; Stripe collection stays with `POST /admin/payments/run` and its own executor. Provider
+  status is not financial truth — `status = 'posted'` is. Making collection a prerequisite would mean
+  a family who pays by cash or check cannot be recorded as having paid.
+- **Money received and money applied are different facts, and the gap between them is a real state.**
+  `payment.record` and the application are separate writes precisely so that a family may pay before
+  anyone decides which obligation the money settles. The unapplied remainder is **derived, never
+  stored** — the receipt's amount minus its active applications minus what has been refunded, by
+  `readPaymentUnappliedCents`. A stored credit balance would be a second answer to "what is still
+  available", and the first reversed application would make the two disagree, for the same reason
+  `charges.status` is never advanced. Refunds are subtracted because a full refund reverses the
+  applications, which by itself would make the whole receipt look freshly available to apply again;
+  the money left the building, and only the un-refunded part of it can be assigned to anything.
+- **What this deliberately leaves as a seam, and where.** Stripe collection stays behind
+  `POST /admin/payments/run` and keeps its own executor, so an automated collection becomes a
+  `payment.record` caller rather than a second money path. Payer responsibility and split billing
+  attach to the **application**, not the receipt: `payment_allocations` already carries one row per
+  obligation, so a split is more rows and not a new table. Subsidy is a payer whose money is recorded
+  the same way and told apart by `payments.billable_source_type` plus its own source. Accounting and
+  GL writes on the childcare path hang off the application as the posting event, alongside the
+  `ledger_transactions` / `gl_journal_lines` generalization P3.1 already did. The Financials
+  workspace reads this contract through `buildFinancialsCardVM`, which quotes the balance rule rather
+  than re-deriving it — a workspace surface is a new reader of the same projection, never a new
+  balance calculation.
+
 ---
 
 ## What not to do
@@ -253,6 +348,7 @@ history, so nothing existing is invalidated by it.
 - Do not allow broad `authenticated` client writes for childcare money; writes are server-side + `has_org_role` (P3.1 gate 3).
 - Do not write a childcare money guarantee against the `'enrollment_agreement'` literal; quantify over `CHILDCARE_BILLABLE_SOURCE_TYPES`, or the next source admitted escapes it silently.
 - Do not raise on a repeated post — posting is idempotent and a retry reports the existing posting.
+- Do not store a family's unapplied credit as a column or a row; it is the receipt minus its active applications minus its refunds, derived on read.
 - Do not leave a correction unbounded; a posted charge admits ONE live reversal and no further correction after it, and a correction is never itself corrected.
 - Do not enforce a money-uniqueness rule with a read-then-write in the service; two concurrent reversals both pass it. State it as a constraint and mirror it in the service for the message.
 - Do not write a childcare constraint whose predicate omits the childcare sources — a partial index naming only `correction_kind` governs job billing too, which is the job-vertical regression P3.1 forbids. Certify constraints against a real database; a mock has no index.
@@ -269,6 +365,10 @@ history, so nothing existing is invalidated by it.
 - Do not let Charge Resolution post, invoice, create AR, or write ledger/GL — it only emits **draft** childcare charges via `childcareChargeService` (P3.3); Posting is a later, separate stage.
 - Do not recompute or overwrite a posted childcare charge during Charge Resolution — re-resolution skips posted rows and only recalculates drafts in place (P3.3).
 - Do not build split/subsidy/guardian-specific responsibility or a `service_agreement` table yet — P3.3 ships only the default household/account payer stamped on `charge.metadata.responsibility`.
+- Do not create a second payments table, a childcare-only payment ledger, a second balance calculation, a duplicate allocation model, or a parallel Stripe integration — the substrate is `payments` + `payment_allocations.charge_id`, and the balance rule is `jobPaymentBalances`'s.
+- Do not let a payment mutate a posted charge. Applying money writes an application row; the charge's principal, category and posting stamp are frozen, and `charges.status` is not advanced to reflect payment — outstanding is derived from the applications.
+- Do not count a pending or failed payment against a balance, and do not treat provider status as financial truth — only `payments.status = 'posted'` is money.
+- Do not delete a payment or an application to undo one. A refund is a new outbound row via `refunds_payment_id`; an application is reversed, never removed.
 
 ---
 
@@ -292,3 +392,4 @@ history, so nothing existing is invalidated by it.
 - Charge derivation (facts → charges) or rate-rule sourcing changes.
 - Invoice/statement modeling is introduced.
 - Billing moves from doctrine to implemented schema/runtime (record the model here).
+- The payment application contract changes — the balance predicate, the idempotency keys, the one-active-application bound, or the refund lineage rule.

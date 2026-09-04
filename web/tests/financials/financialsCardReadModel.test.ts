@@ -142,12 +142,69 @@ describe("reconciliation — the total is the sum of its rows, by construction",
         expect(out.responsibilityCents).toBe(7_500);
     });
 
-    it("reports payments as ZERO because the platform cannot record one for an enrollment account", () => {
-        // `payments.job_id` is NOT NULL and payments were never generalized to billable_source_*.
-        // The card names that absence; the model must not invent a figure for it.
+    it("reports payments as ZERO when nothing has been applied — which is now a FACT, not an absence", () => {
+        // This used to assert an unavailability: `payments.job_id is NOT NULL`, so no childcare
+        // payment could exist. The census proved that false against the deployed primary — job_id
+        // has been nullable since `20260329210000` — so zero is now the honest reading of an account
+        // that has paid nothing, and it is distinguishable from an account we could not read.
         const out = reconcileRows([row({ amountCents: 7_500 })], "2026-08", "2026-08-26");
         expect(out.paymentsCents).toBe(0);
         expect(out.balanceCents).toBe(out.responsibilityCents);
+    });
+
+    it("subtracts money APPLIED to this period's charges, exactly once", () => {
+        const out = reconcileRows(
+            [row({ chargeId: "a", amountCents: 130_000 })],
+            "2026-08",
+            "2026-08-26",
+            new Map([["a", 50_000]]),
+        );
+        expect(out.responsibilityCents).toBe(130_000);
+        expect(out.paymentsCents).toBe(50_000);
+        expect(out.balanceCents).toBe(80_000);
+    });
+
+    it("counts a payment against ANOTHER period's charge in that period, not this one", () => {
+        // A period's balance is what THAT period's charges still owe. A payment made in October
+        // against a September charge settles September, and September is where it is filed.
+        const rows = [
+            row({ chargeId: "aug", amountCents: 100_000, periodKey: "2026-08" }),
+            row({ chargeId: "jul", amountCents: 40_000, periodKey: "2026-07" }),
+        ];
+        const applied = new Map([["aug", 25_000], ["jul", 40_000]]);
+        const august = reconcileRows(rows, "2026-08", "2026-08-26", applied);
+        const july = reconcileRows(rows, "2026-07", "2026-08-26", applied);
+        expect(august.paymentsCents).toBe(25_000);
+        expect(august.balanceCents).toBe(75_000);
+        expect(july.paymentsCents).toBe(40_000);
+        expect(july.balanceCents).toBe(0);
+    });
+
+    it("narrows payments with the subject filter, so a per-child total cannot sit above its ledger", () => {
+        const rows = [
+            row({ chargeId: "a", subjectMemberId: "child-1", amountCents: 7_500 }),
+            row({ chargeId: "b", subjectMemberId: "child-2", amountCents: 2_500 }),
+        ];
+        const applied = new Map([["a", 5_000], ["b", 2_500]]);
+        const all = reconcileRows(rows, "2026-08", "2026-08-26", applied);
+        const one = reconcileRows(rows.filter((r) => r.subjectMemberId === "child-1"), "2026-08", "2026-08-26", applied);
+        const other = reconcileRows(rows.filter((r) => r.subjectMemberId === "child-2"), "2026-08", "2026-08-26", applied);
+        expect(all.paymentsCents).toBe(7_500);
+        expect(one.paymentsCents).toBe(5_000);
+        expect(other.paymentsCents).toBe(2_500);
+        expect(one.paymentsCents + other.paymentsCents).toBe(all.paymentsCents);
+        expect(one.balanceCents).toBe(2_500);
+        expect(other.balanceCents).toBe(0);
+    });
+
+    it("ignores an application against a DRAFT row — a draft is not owed, so nothing pays it", () => {
+        const out = reconcileRows(
+            [row({ chargeId: "d", amountCents: 5_000, status: "draft", lifecycleStatus: "draft" })],
+            "2026-08",
+            "2026-08-26",
+            new Map([["d", 5_000]]),
+        );
+        expect(out.paymentsCents).toBe(0);
     });
 
     it("narrows to one subject and still reconciles — the filter cannot break the total", () => {
@@ -264,6 +321,26 @@ describe("correction lineage — a reversed charge is a pair, not a disappearanc
             "2026-08-26",
         );
         expect(out?.amountCents).toBe(100_000);
+    });
+
+    it("drops a fully PAID overdue charge, and keeps the residual of a partly paid one", () => {
+        // Past due is what is still owed, not the face amount of everything with an old due date.
+        // This is why `charges.status` is never advanced to `paid` when money is applied: a stored
+        // status would be a second answer to "how much is left".
+        const rows = [
+            row({ chargeId: "settled", amountCents: 130_000, dueDate: "2026-08-01" }),
+            row({ chargeId: "partial", amountCents: 100_000, dueDate: "2026-08-05" }),
+        ];
+        const applied = new Map([["settled", 130_000], ["partial", 40_000]]);
+        const out = pastDueFor(rows, "2026-08-26", applied);
+        expect(out?.amountCents).toBe(60_000);
+        // The oldest STILL-OVERDUE charge decides the aging, not one that has been paid off.
+        expect(out?.oldestDueDate).toBe("2026-08-05");
+    });
+
+    it("reports nothing past due once every overdue charge is paid", () => {
+        const rows = [row({ chargeId: "a", amountCents: 130_000, dueDate: "2026-08-01" })];
+        expect(pastDueFor(rows, "2026-08-26", new Map([["a", 130_000]]))).toBeNull();
     });
 });
 
