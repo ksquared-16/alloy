@@ -2,7 +2,61 @@
  * Vacilando Gateway V2 — pure view/helpers for Development Lanes.
  * No fetch, no timers, no tmux. The controller owns I/O.
  */
-export const GATEWAY_HOME = "#/lanes";
+import {
+  ago as kitAgo,
+  currentWorkCard,
+  esc as kitEsc,
+  renderThread,
+  laneRowV2,
+  needsYouTray,
+  placeholderBanner,
+  progress as renderProgress,
+  renderActivity,
+  renderHome,
+  renderMobileNav,
+  renderPrimaryNav,
+  renderSystem,
+  healthDot,
+  maturityLegend,
+  metricRow,
+  surface as vSurface,
+  stateDot,
+  emptyState as vEmptyState,
+  pageHeader as vPageHeader,
+} from "./vacilando-ui-kit.mjs";
+import {
+  buildActivityViewModel,
+  buildCurrentWork,
+  buildLaneResources,
+  buildHomeViewModel,
+  buildLaneThread,
+  buildSystemViewModel,
+  governedActionLabel,
+  isActionableGovernedAction,
+  laneOperatorStatus,
+  laneProgress,
+  laneReturnTarget,
+  operatorStatusLine,
+  readPlaceholderMode,
+  writePlaceholderMode,
+} from "./vacilando-ui-model.mjs";
+
+// The V2 kit and model are re-exported through the canonical view module so
+// the controller has exactly one import surface and there is no second place to
+// look for "the view layer".
+export * from "./vacilando-ui-kit.mjs";
+export * from "./vacilando-ui-model.mjs";
+
+/**
+ * HOME IS HOME.
+ *
+ * The gateway used to open on the lane list because the lane list was the only
+ * thing that existed. With a real Home the default destination is the question
+ * the operator actually arrives with — what needs me, what is running, is the
+ * machine healthy — not a directory of lanes.
+ */
+export const GATEWAY_HOME = "#/home";
+export const GATEWAY_LANES = "#/lanes";
 export const LANE_INSTRUCTION_MAX = 24000;
 export const OUTPUT_POLL_MS = 8000;
 export const OUTPUT_BURST_POLL_MS = 2000;
@@ -33,19 +87,51 @@ export function decodeLaneId(value) {
   try { return decodeURIComponent(raw); } catch { return raw; }
 }
 
+/**
+ * The canonical lane tabs.
+ *
+ * Not every tab has a product underneath it yet, and that is deliberate: the
+ * SHELL is what this phase establishes, and each tab states its own maturity
+ * rather than being hidden until its backend exists. See the data contract.
+ */
+export const LANE_TABS = Object.freeze([
+  { key: "overview", label: "Overview" },
+  { key: "activity", label: "Activity" },
+  { key: "files", label: "Files" },
+  { key: "commits", label: "Commits" },
+  { key: "runs", label: "Runs" },
+  { key: "settings", label: "Settings" },
+]);
+
+export const LANE_TAB_KEYS = Object.freeze(LANE_TABS.map((t) => t.key));
+
 export function parseGatewayHash(hash) {
   const raw = String(hash || "").replace(/^#\/?/, "");
   const [pathPart] = raw.split("?");
   const p = (pathPart || "").split("/").filter(Boolean).map((seg) => decodeLaneId(seg) || seg);
-  const name = p[0] || "lanes";
+  const name = p[0] || "home";
   const sub = p[1] || null;
   if (name === "lanes" && sub === "connect") {
-    return { name: "lanes", sub: "connect", candidateId: p[2] || null };
+    return { name: "lanes", sub: "connect", candidateId: p[2] || null, tab: "overview" };
   }
   if (name === "lanes" && sub === "create") {
-    return { name: "lanes", sub: "create" };
+    return { name: "lanes", sub: "create", tab: "overview" };
   }
-  return { name, sub };
+  // #/lanes/:id/:tab — the tab is part of the address so a lane view is
+  // linkable and survives a reload on the tab the operator was reading.
+  if (name === "lanes" && sub) {
+    const tab = LANE_TAB_KEYS.includes(p[2]) ? p[2] : "overview";
+    return { name, sub, tab };
+  }
+  return { name, sub, tab: "overview" };
+}
+
+/** Which primary destination is highlighted for this hash? */
+export function primaryNavKey(name) {
+  if (name === "activity") return "activity";
+  if (name === "system") return "system";
+  if (name === "lanes" || name === "settings") return "lanes";
+  return "home";
 }
 
 /**
@@ -64,36 +150,32 @@ export function detailViewKind({ selectedId, lanes, lane, loading, listReady } =
   return "missing";
 }
 
+export const GATEWAY_ROUTES = Object.freeze(["home", "lanes", "activity", "system", "settings"]);
+
 export function isGatewayRoute(name) {
-  return name === "lanes" || name === "settings";
+  return GATEWAY_ROUTES.includes(name);
 }
 
 export function isPrimaryGatewayHash(hash) {
   const h = String(hash || "");
-  return !h || h === "#" || h === "#/" || h === "#/lanes" || h.startsWith("#/lanes/")
-    || h === "#/settings" || h.startsWith("#/settings");
+  if (!h || h === "#" || h === "#/") return true;
+  return GATEWAY_ROUTES.some((r) => h === `#/${r}` || h.startsWith(`#/${r}/`));
 }
 
 export function defaultGatewayHash() {
   return GATEWAY_HOME;
 }
 
-export function laneDetailHash(laneId) {
-  return `#/lanes/${encodeURIComponent(laneId)}`;
+export function laneDetailHash(laneId, tab = null) {
+  const base = `#/lanes/${encodeURIComponent(laneId)}`;
+  return tab && tab !== "overview" && LANE_TAB_KEYS.includes(tab) ? `${base}/${tab}` : base;
 }
 
-export function esc(s) {
-  return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
-
-export function ago(ms, nowMs = Date.now()) {
-  if (!ms) return null;
-  const s = Math.max(0, (nowMs - Number(ms)) / 1000);
-  if (s < 60) return `${s | 0}s`;
-  if (s < 3600) return `${(s / 60) | 0}m`;
-  if (s < 86400) return `${(s / 3600) | 0}h`;
-  return `${(s / 86400) | 0}d`;
-}
+// esc() and ago() are defined ONCE, in the kit, and used from here. They were
+// duplicated the moment a second view module existed, which is exactly how two
+// surfaces start rendering the same timestamp differently.
+export const esc = kitEsc;
+export const ago = kitAgo;
 
 export function gitLine(git, sourceControl) {
   if (sourceControl?.posture === "CONFLICT") return "Conflict";
@@ -217,6 +299,63 @@ export function repositoryErrorText(error, detail = {}) {
       return detail.detail || "Clone is not available yet. Clone it yourself, then connect it.";
     default: return "That repository could not be registered.";
   }
+}
+
+/**
+ * Operator-facing text for a refused Add lane.
+ *
+ * The wizard read every refusal through repositoryErrorText, so a create the
+ * server refused reported "That path contains characters Vacilando will not
+ * open" about a branch name — no path was involved, and no path could be
+ * corrected to fix it.
+ */
+export function laneCreateErrorText(error, detail = {}) {
+  switch (error) {
+    case "path_refused": {
+      const fields = (detail.fields || []).join(", ");
+      return fields
+        ? `Vacilando does not accept ${fields} on a new lane.`
+        : "Execution substrate fields are not accepted.";
+    }
+    case "invalid_branch_name": return "That branch name cannot be used.";
+    case "invalid_base_ref": return "That base branch name cannot be used.";
+    case "unexpected_control_field":
+      return `The form sent a field the Gateway does not accept: ${(detail.fields || []).join(", ")}.`;
+    case "repository_not_found":
+    case "repository_not_active":
+    case "cross_repository_binding_refused":
+      return repositoryErrorText(error, detail);
+    default: return createErrorText(error);
+  }
+}
+
+/**
+ * What to say when the lane exists but its workspace does not.
+ *
+ * The lane is real, so the operator must not create it again; the workspace is
+ * not, so they must not be told the lane is ready either.
+ */
+export function workspaceFailureText(workspace = {}) {
+  const w = workspace || {};
+  const reason = {
+    branch_exists: `the branch ${w.branch || "it needs"} already exists`,
+    destination_exists: "a directory of that name is already there",
+    base_ref_not_found: `the base branch ${w.ref || w.base_ref || "it was given"} does not exist here`,
+    repository_mid_merge: "that repository is mid-merge or mid-rebase",
+    repository_root_missing: "that repository's folder is missing",
+    invalid_branch_name: "that branch name cannot be used",
+    invalid_worktree_name: "that name does not make a usable folder name",
+    worktree_add_failed: "Git refused to create the worktree",
+    worktree_identity_mismatch: "the new worktree did not belong to that repository",
+    cross_repository_binding_refused: "that worktree belongs to a different repository",
+    worktree_already_bound: "another lane is already bound to that worktree",
+    no_free_slot: "all six managed slots are taken, so it could not be registered",
+    registration_failed: "the fleet could not register it, so nothing could reach its agent",
+  }[w.error] || (w.registered === false
+    ? "the fleet could not register it"
+    : `it failed (${w.error || "reason unknown"})`);
+  return `The lane was created, but its workspace was not: ${reason}. `
+    + "Open the lane and fix it there \u2014 creating another lane would duplicate this one.";
 }
 
 /** Operator-facing text for every attachment refusal the server can return. */
@@ -1227,7 +1366,14 @@ export function groupLanesByFolder(lanes, folders = [], { collapsed = new Set(),
     const raw = lane?.folder_id ? String(lane.folder_id) : null;
     // A folder_id the store no longer knows must not hide the lane.
     const id = raw && known.has(raw) ? raw : UNFILED_FOLDER_ID;
-    const g = groupFor(id, id === UNFILED_FOLDER_ID ? "No folder" : known.get(id).name);
+    // ABSENT ORGANISATION IS NOT A GROUP NAME.
+    //
+    // Unfiled lanes were headed "No folder", so an operator with one real
+    // folder saw a heading whose entire content was the fact that the other
+    // lanes had none. Folders are optional; the ungrouped remainder is simply
+    // "Lanes". (With NO folders at all the list stays flat and no header is
+    // rendered — see renderLaneList.)
+    const g = groupFor(id, id === UNFILED_FOLDER_ID ? "Lanes" : known.get(id).name);
     g.lanes.push(lane);
     if (index < g.rank) g.rank = index;
     const work = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
@@ -1422,19 +1568,6 @@ export function laneAwaitingOperatorApproval(lane) {
  * approval announced as "approve gar_4dc7b4d8bcd0e0" is one the operator cannot
  * match to anything on screen, which is the whole defect.
  */
-export function governedActionLabel(ga) {
-  if (!ga) return "Governed action";
-  if (ga.operator_label) return ga.operator_label;
-  if (ga.operator_card?.label) return ga.operator_card.label;
-  const i = ga.inputs || {};
-  const pr = i.pullRequestNumber ?? i.pull_request_number;
-  if (ga.action_key === "repository.merge_pull_request" && pr) return `Merge PR #${pr} to ${ga.target || "staging"}`;
-  const branch = i.branch || i.headBranch || i.head_branch;
-  if (ga.action_key === "repository.push" && branch) return `Push ${branch}`;
-  if (ga.action_key === "promotion.open_pr" && branch) return `Open PR ${branch} → ${i.base || ga.target || "staging"}`;
-  if (ga.title) return ga.title;
-  return ga.action_key ? String(ga.action_key).replace(/[._]/g, " ") : "Governed action";
-}
 
 /**
  * EVERY pending approval, at the top of every route.
@@ -2148,8 +2281,33 @@ export function notificationUiState({
   return { kind: "off", headline: "Notify", label: "Get notified when managed work completes or needs you.", action: "enable" };
 }
 
+/**
+ * THE PHONE SWITCH IS NOT A DIAGNOSTIC.
+ *
+ * Everything below it — permission, subscription, push service, last test —
+ * answers "is this machinery working?", which is a question an operator asks
+ * roughly once. "Stop interrupting me" is a question they ask at 11pm, on a
+ * phone, and it must not require opening a troubleshooting popover to find.
+ * So the switch renders OUTSIDE the details element, first, and the health
+ * report stays folded underneath it where it belongs.
+ *
+ * The copy states the guarantee explicitly, because a notification switch that
+ * might also be hiding work from you is one nobody dares turn off.
+ */
 export function renderNotificationControls(state = {}) {
   const st = notificationUiState(state);
+  const pushOn = state.pushEnabled !== false;
+  const toggle = `<div class="gw-notify-switch" data-gw-notify-switch>
+    <label class="gw-switch">
+      <input type="checkbox" data-gw-push-toggle ${pushOn ? "checked" : ""}
+        aria-label="Send notifications to my phone">
+      <span class="gw-switch-track" aria-hidden="true"><span class="gw-switch-thumb"></span></span>
+      <span class="gw-switch-label">Notify my phone</span>
+    </label>
+    <p class="gw-switch-copy">${pushOn
+      ? "Approvals and finished work reach your device."
+      : "Nothing is sent to your device. Needs You, Activity and lane history are unchanged."}</p>
+  </div>`;
   let action = "";
   if (st.action === "enable") {
     action = `<button type="button" class="btn sm gw-notify-enable" data-gw-notify-enable>Enable notifications</button>`;
@@ -2166,13 +2324,14 @@ export function renderNotificationControls(state = {}) {
       <dt>Last test</dt><dd>${esc(st.health.lastTest)}</dd>
     </dl>`
     : "";
-  return `<details class="gw-notify" data-gw-notify data-kind="${esc(st.kind || "off")}">
-    <summary class="gw-notify-sum" aria-label="Notifications">
+  return `${toggle}
+  <details class="gw-notify" data-gw-notify data-kind="${esc(st.kind || "off")}">
+    <summary class="gw-notify-sum" aria-label="Notification delivery status">
       <span class="gw-notify-mark" aria-hidden="true"></span>
       <span class="gw-notify-sum-label">${esc(st.headline || "Notify")}</span>
     </summary>
     <div class="gw-notify-pop">
-      <p class="gw-notify-h">Notifications</p>
+      <p class="gw-notify-h">Delivery status</p>
       <p class="gw-notify-copy">${esc(st.label)}</p>
       ${health}
       <div class="gw-notify-actions">${action}</div>
@@ -4538,7 +4697,11 @@ export function renderLaneWizard(state = {}) {
 
   const isLast = step === "review";
   const canNext = isLast ? true : laneStepReady(nextLaneStep(step, draft), draft);
-  const actions = `${step === "repository" ? "" : `<button type="button" class="btn" data-gw-wiz-back>Back</button>`}
+  // Once the lane exists, Create must be gone. The workspace can still have
+  // failed, and pressing Create again would answer that with a second lane.
+  const actions = state.createdLaneId
+    ? `<a class="btn primary" href="${laneDetailHash(state.createdLaneId)}">Open lane</a>`
+    : `${step === "repository" ? "" : `<button type="button" class="btn" data-gw-wiz-back>Back</button>`}
     <button type="button" class="btn primary" ${isLast ? "data-gw-wiz-create" : "data-gw-wiz-next"}
       ${(!canNext || state.submitting) ? "disabled" : ""}>
       ${state.submitting ? "Creating\u2026" : (isLast ? "Create lane" : "Next")}</button>`;
@@ -4747,6 +4910,429 @@ export function renderCandidateList(candidates, loading) {
   }).join("")}</div>`;
 }
 
+/* ===========================================================================
+ * LANE V2
+ *
+ * The lane is the surface the operator spends their day on, and until now it
+ * was a chat thread with an ever-growing pile of diagnostic cards stacked
+ * beside and below it. The V2 anatomy is deliberate and fixed:
+ *
+ *   HEADER      breadcrumb · identity · state · provider/slot/started · controls
+ *   TABS        Overview · Activity · Files · Commits · Runs · Settings
+ *   OVERVIEW    CURRENT WORK (with progress) · LATEST AGENT OUTPUT
+ *   TRAY        Needs you — anchored at the composer, never mid-narrative
+ *   COMPOSER    the human interaction boundary
+ *   INSPECTOR   RUN, then Environment / Git / Browser / Diagnostics, collapsed
+ *
+ * The ordering rule that drove all of it: the further a thing is from the
+ * operator's decision, the further down and further folded it goes.
+ * =========================================================================== */
+
+/**
+ * The secondary metadata line: who is working, on which slot, since when.
+ *
+ * These facts were previously scattered across the rail, the row and three
+ * cards. They are identity, so they sit under the name — and they are NOT in
+ * the lane list, because none of them changes which lane you open.
+ */
+export function laneIdentityMeta(lane, telemetry, { nowMs = Date.now() } = {}) {
+  const bits = [];
+  const model = telemetry?.agent?.model || telemetry?.model || null;
+  if (model) bits.push(model);
+  const slot = Number(lane?.slot ?? lane?.binding?.slot);
+  if (Number.isInteger(slot)) bits.push(`Slot ${slot}`);
+  const startedMs = lane?.execution_run?.started_at ? Date.parse(lane.execution_run.started_at) : NaN;
+  if (Number.isFinite(startedMs)) {
+    const clock = new Date(startedMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    bits.push(`Started ${clock}`);
+  }
+  // The provider is no longer repeated here: it is part of the status line.
+  return bits.filter(Boolean).join(" · ");
+}
+
+/** Every back affordance on a lane, rendered from the recorded origin. */
+export function renderLaneBack(returnTo, { withLabel = false } = {}) {
+  const t = laneReturnTarget(returnTo);
+  return `<a class="gw-back vlane-back" data-gw-back data-v-return="${esc(t.page)}" href="${esc(t.hash)}"
+    aria-label="Back to ${esc(t.label)}">\u2190${withLabel ? ` ${esc(t.label)}` : ""}</a>`;
+}
+
+export function renderLaneTabs(laneId, active = "overview") {
+  const cur = LANE_TAB_KEYS.includes(active) ? active : "overview";
+  return `<nav class="vtabs-lane" role="tablist" aria-label="Lane sections">${LANE_TABS.map((t) => `
+    <a class="vtab-lane${t.key === cur ? " is-active" : ""}" role="tab"
+      aria-selected="${t.key === cur ? "true" : "false"}"
+      href="${esc(laneDetailHash(laneId, t.key))}" data-v-lane-tab="${t.key}">${esc(t.label)}</a>`).join("")}</nav>`;
+}
+
+export function renderLaneHeaderV2(lane, {
+  selectedId = null,
+  work = null,
+  telemetry = null,
+  tab = "overview",
+  nowMs = Date.now(),
+  asideOpen = false,
+  returnTo = null,
+} = {}) {
+  const laneId = lane?.lane_id || selectedId;
+  const label = lane?.label || laneId;
+  const st = work || canonicalLaneWorkState(lane, { nowMs });
+  // ONE RESOLVER. Home, Lanes, this header and every badge read the same
+  // projection; nothing re-interprets execution state on its own.
+  const status = laneOperatorStatus(lane, st, { nowMs });
+  const meta = laneIdentityMeta(lane, telemetry, { nowMs });
+  const canStop = Boolean(lane?.execution_run && !["COMPLETE", "FAILED", "ABANDONED"].includes(lane.execution_run.state));
+  return `<header class="vlane-head" data-gw-chat-head>
+    <div class="vlane-head-top">
+      ${renderLaneBack(returnTo)}
+      ${/*
+        THE BREADCRUMB NAMES WHERE YOU CAME FROM, because that is what "up"
+        means to the person who walked here. It used to say "Lanes /" always.
+      */ ""}
+      <nav class="vcrumb vlane-crumb" aria-label="Breadcrumb">
+        <a href="${esc(laneReturnTarget(returnTo).hash)}">${esc(laneReturnTarget(returnTo).label)}</a><span class="vcrumb-sep" aria-hidden="true">/</span><span aria-current="page">${esc(label)}</span>
+      </nav>
+    </div>
+    ${/*
+      MOBILE CARRIES A DIFFERENT COMPOSITION, NOT A SMALLER ONE.
+      The phone header renders name + "state · provider" and ONE control
+      (Details). Stop lane, the model string, the slot and the start time are
+      desktop-scale identity; on a phone they cost most of the first viewport
+      and none of them is what the operator came to see. They live in Details,
+      where the Inspector's RUN block already owns them.
+    */ ""}
+    <div class="vlane-head-row">
+      <div class="vlane-head-id">
+        <h1 class="vlane-title">${esc(label)}</h1>
+        ${/*
+          WHAT LANE? WHAT STATE? ROUGHLY HOW FAR? WHO IS RUNNING IT? — answered
+          on one line, in the lane's identity, without a card of its own.
+          Progress rides here only while it is FRESH; the resolver omits a stale
+          or absent estimate rather than leaving a number attached to a lane
+          nobody has heard from in hours.
+        */ ""}
+        <div class="vlane-head-state" data-gw-stage-status>${stateDot(
+          operatorStatusLine(status, laneProviderLabel(lane)),
+          { tone: status.tone, live: status.live },
+        )}</div>
+        ${meta ? `<p class="vlane-head-meta">${esc(meta)}</p>` : ""}
+      </div>
+      <div class="vlane-head-acts">
+        ${/*
+          THE INTERRUPTION CENTRE FOLLOWS THE OPERATOR ONTO THE LANE.
+          On a phone the top bar is hidden on a lane to give the conversation
+          the screen, which would strand the one global control. It is mounted
+          here as well and painted from the same model; CSS shows exactly one of
+          the two at any width, so there is never a second count to disagree.
+        */ ""}
+        <div class="vneeds-global vneeds-global-lane"></div>
+        ${canStop ? `<button type="button" class="btn sm vlane-stop" data-gw-cancel-run data-lane-id="${esc(laneId)}">Stop lane</button>` : ""}
+        <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
+          aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
+      </div>
+    </div>
+    ${renderLaneTabs(laneId, tab)}
+  </header>`;
+}
+
+/**
+ * CURRENT WORK — the first thing in Overview.
+ *
+ * Mission, one line of description, the provider's progress estimate, and the
+ * status. NO ETA: there is no estimator in this product, and deriving one from
+ * a percentage would be inventing a schedule out of a guess. If an estimator is
+ * ever built, it gets its own field and its own maturity row.
+ */
+export function renderLaneCurrentWork(lane, { nowMs = Date.now(), cancelPending = false } = {}) {
+  const run = lane?.execution_run || null;
+  const prog = laneProgress(run, { nowMs });
+  if (!run?.state) {
+    return vSurface({
+      title: "Current work",
+      className: "vcard-work",
+      body: vEmptyState({
+        title: "No active work",
+        // The same words the inspector uses. One phrase for one state: two
+        // renderers describing an idle lane differently is how a product starts
+        // sounding like two products.
+        body: "Ready for instruction — write one below to start.",
+      }),
+    });
+  }
+  const work = canonicalLaneWorkState(lane, { nowMs });
+  const instruction = run.instruction ? String(run.instruction) : "";
+  const title = instruction.split("\n").find((l) => l.trim()) || work.label;
+  const rest = instruction.split("\n").slice(1).join(" ").trim();
+  const summary = run.completion_report?.summary || run.latest_progress?.summary || null;
+  return vSurface({
+    title: "Current work",
+    className: "vcard-work",
+    actions: stateDot(work.label, { tone: work.tone, live: work.live }),
+    body: `
+      <h3 class="vwork-title">${esc(title.slice(0, 160))}</h3>
+      ${rest ? `<p class="vwork-desc">${esc(rest.slice(0, 240))}</p>` : ""}
+      ${renderProgress(prog)}
+      <div class="vwork-status">
+        <span class="vwork-status-k">Status</span>
+        <span class="vwork-status-v">${esc(work.label)}</span>
+      </div>
+      ${summary && summary !== prog.summary ? `<p class="vwork-summary">${esc(summary)}</p>` : ""}
+      ${renderCancelControl(run, { pending: cancelPending })}`,
+  });
+}
+
+/**
+ * The genuine blockers on THIS lane, in the shape the tray consumes.
+ *
+ * "Genuine" is doing work here. A lane that is running, queued, validating or
+ * finished has nothing for the operator to do and produces nothing. Only an
+ * unresolved governed action or a run that asked a question does.
+ */
+export function laneNeedsYouItems(lane) {
+  const items = [];
+  const ga = lane?.execution_run?.governed_action || lane?.governed_action || null;
+  // ONE DEFINITION OF ACTIONABLE. See isActionableGovernedAction: a lane payload
+  // carries a SNAPSHOT of its governed action, so a resolved one stays embedded
+  // in the record long after the decision. The whitelist is what keeps it out.
+  if (isActionableGovernedAction(ga)) {
+    items.push({
+      kind: "governed_action",
+      lane_id: lane.lane_id,
+      request: ga.title || ga.action_key || "Authorization required",
+      detail: ga.reason_worker_cannot_execute || null,
+    });
+  }
+  // ONE BLOCKER IS ONE REQUEST.
+  //
+  // A run sits in NEEDS_INPUT *because* its governed action is awaiting the
+  // operator — they are the same interruption seen from the run and from the
+  // request. Counting both made the lane tray say "2 requests" for the single
+  // decision the global interruption centre counted once, which is precisely
+  // the cross-surface disagreement the one-resolver rule exists to prevent.
+  // buildNeedsYou already dedupes this; so does the tray.
+  const run = lane?.execution_run;
+  if (run?.state === "NEEDS_INPUT" && !items.length) {
+    items.push({
+      kind: "needs_input",
+      lane_id: lane.lane_id,
+      request: run.state_reason || "The agent asked a question",
+      detail: null,
+    });
+  }
+  return items;
+}
+
+/**
+ * LANE INSPECTOR.
+ *
+ * RUN is open. Everything else is folded.
+ *
+ * That is the whole design: a healthy lane shows six facts and a Stop button,
+ * and the operator has to ASK for the rest. The previous right-hand column
+ * rendered the session callout, runtime controls, context refresh, localhost,
+ * current work, previous work, output chrome, run status, provider health,
+ * context line, system activity, raw terminal and the machine status panel — in
+ * one scroll, always, healthy or not. Complexity now arrives when something
+ * fails or when it is asked for.
+ */
+export function renderLaneInspector(lane, {
+  placeholders = false,
+  selectedId = null,
+  telemetry = null,
+  resources = null,
+  output = null,
+  outputText = "",
+  nowMs = Date.now(),
+  asideInert = true,
+  work = null,
+  cap = null,
+  developmentResources = null,
+  lanes = [],
+  executionCapacity = null,
+  folders = [],
+  repositories = [],
+  notify = null,
+  pending = false,
+  bodyText = "",
+  statusOpen = false,
+} = {}) {
+  const laneId = lane?.lane_id || selectedId;
+  const st = work || canonicalLaneWorkState(lane, { nowMs });
+  const posture = cap || deriveLaneExecutionPosture(lane);
+  const run = lane?.execution_run || null;
+  const startedMs = run?.started_at ? Date.parse(run.started_at) : NaN;
+  const activeFor = Number.isFinite(startedMs) ? ago(startedMs, nowMs) : null;
+  const slot = Number(lane?.slot ?? lane?.binding?.slot);
+  const slotTotal = executionCapacity?.total ?? null;
+  const ctxPct = telemetry?.context?.percent_used;
+  const started = Number.isFinite(startedMs)
+    ? new Date(startedMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    : null;
+  const model = telemetry?.agent?.model || null;
+  const canStop = Boolean(run && !["COMPLETE", "FAILED", "ABANDONED"].includes(run.state));
+
+  // Actions that GATE PROGRESS stay in the always-visible RUN block. A control
+  // the operator cannot find is the same as no control, and these three —
+  // session recovery, runtime hold/release, context refresh — are each the
+  // difference between a lane that can keep working and one that cannot.
+  const actions = [
+    renderLaneSessionCallout(lane, { executionCapacity }),
+    renderLaneRuntimeControls(lane, posture, { capacity: executionCapacity }),
+    renderContextRefreshButton(lane),
+  ].filter((h) => String(h || "").trim()).join("\n");
+
+  const section = (key, title, body, { open = false, badge = null } = {}) => {
+    if (!String(body || "").trim()) return "";
+    return `<details class="vinsp-sec" data-v-inspector="${key}"${open ? " open" : ""}>
+      <summary class="vinsp-sum">${esc(title)}${badge ? `<span class="vinsp-badge">${esc(badge)}</span>` : ""}</summary>
+      <div class="vinsp-body">${body}</div>
+    </details>`;
+  };
+
+  const git = [
+    renderSourceControl(lane),
+    (() => {
+      const line = gitLine(lane?.git, lane?.source_control);
+      const branch = lane?.git?.branch || lane?.binding?.branch || null;
+      return `<div class="vrows">
+        ${branch ? `<div class="vrow"><span class="vrow-label">Branch</span><span class="vrow-value">${esc(branch)}</span></div>` : ""}
+        ${line ? `<div class="vrow"><span class="vrow-label">State</span><span class="vrow-value">${esc(line)}</span></div>` : ""}
+        ${lane?.git?.head_short ? `<div class="vrow"><span class="vrow-label">Latest commit</span><span class="vrow-value">${esc(lane.git.head_short)}</span></div>` : ""}
+      </div>`;
+    })(),
+  ].filter(Boolean).join("\n");
+
+  const environment = [
+    renderLaneLocalhost(lane),
+    renderProviderHealth(output?.provider_health),
+  ].filter((h) => String(h || "").trim()).join("\n");
+
+  const browser = renderBrowserAuthRecovery(lane);
+
+  // RESOURCES — three questions, three honest answers. See buildLaneResources:
+  // memory is measured over the lane's own process tree; peak memory has a
+  // source nothing projects here; per-lane CPU is not sampled at all, and a
+  // lifetime average dressed as "now" would be worse than its absence.
+  const res = buildLaneResources(lane, { placeholders });
+  const resources_block = res.available || res.cpu.placeholder || res.peak_memory.placeholder
+    ? `<div class="vrows">
+        ${metricRow(res.memory, { label: "Memory" })}
+        ${metricRow(res.peak_memory, { label: "Peak memory" })}
+        ${metricRow(res.cpu, { label: "CPU" })}
+        ${metricRow(res.process_count, { label: "Processes" })}
+      </div>
+      ${res.available && !res.complete
+        ? `<p class="vnote">Some processes in this lane's tree exited between the two reads; the total is partial.</p>`
+        : ""}
+      ${res.available
+        ? `<p class="vnote">Attributed by process ancestry from this lane's provider seat${res.sampled_at ? ` · sampled ${esc(ago(Date.parse(res.sampled_at), nowMs) || "now")} ago` : ""}.</p>`
+        : `<p class="vnote">No live provider seat for this lane, so nothing is attributed. An unmeasured lane is unknown, not idle.</p>`}`
+    : "";
+
+  const diagnostics = [
+    renderClaudeRunStatus(lane, telemetry),
+    renderOutputChrome(output, { lane, lastInstruction: lane?.last_instruction }),
+    renderRecentSystemActivity(lane?.recent_system_activity),
+    renderPreviousWork(lane?.previous_run),
+    renderTerminalDiagnostics(bodyText, { pending, output }),
+    renderStatus(lane, resources, {
+      open: Boolean(statusOpen),
+      summary: statusSummaryLine(lane, telemetry),
+      sessionLine: st.headline,
+      telemetry,
+      developmentResources,
+      lanes,
+      executionCapacity,
+    }),
+  ].filter((h) => String(h || "").trim()).join("\n");
+
+  return `<aside class="gw-lane-aside vinsp" data-gw-aside id="gw-details-panel"${asideInert ? ' aria-hidden="true" inert' : ""}>
+    <div class="gw-aside-head">
+      <div class="gw-aside-title">Lane details</div>
+      <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
+    </div>
+    <div class="gw-aside-body">
+      <section class="vinsp-run">
+        <h2 class="vinsp-run-h">Run</h2>
+        <p class="vinsp-run-state" data-gw-presence>${stateDot(st.label, { tone: st.tone, live: st.live })}${activeFor ? `<span class="vinsp-run-age"> · ${esc(activeFor)} active</span>` : ""}</p>
+        <div class="vrows">
+          <div class="vrow"><span class="vrow-label">Agent</span><span class="vrow-value">${esc(laneProviderLabel(lane))}${model ? ` / ${esc(model)}` : ""}</span></div>
+          <div class="vrow"><span class="vrow-label">Slot</span><span class="vrow-value">${Number.isInteger(slot) ? esc(slotTotal ? `${slot} / ${slotTotal}` : String(slot)) : "Not bound"}</span></div>
+          <div class="vrow" data-gw-context><span class="vrow-label">Context</span><span class="vrow-value">${Number.isFinite(ctxPct) ? `${Math.round(ctxPct)}%` : "Not reported"}</span></div>
+          <div class="vrow"><span class="vrow-label">Started</span><span class="vrow-value">${started ? esc(started) : "—"}</span></div>
+        </div>
+        ${canStop ? `<button type="button" class="btn sm vinsp-stop" data-gw-cancel-run data-lane-id="${esc(laneId)}">Stop lane</button>` : ""}
+        ${actions ? `<div class="vinsp-actions">${actions}</div>` : ""}
+      </section>
+      ${/*
+        ORGANISATION IS NOT LANE STATE.
+        Rename, folder and repository used to sit in the always-visible part of
+        the panel, which meant a lane with no folder and no repository shouted
+        "No folder" and "Not attributed" — in red — every time the operator
+        opened it. Folders are OPTIONAL organisation; absent organisation is not
+        a problem to report. They live on the Settings tab, which is where an
+        operator goes to change them, and are folded here.
+      */ ""}
+      ${section("organisation", "Organisation", `
+        <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(laneId)}">Rename lane</button>
+        ${renderLaneFolderPicker(lane, folders, selectedId)}
+        ${renderLaneRepository(lane, repositories)}`)}
+      ${section("resources", "Resources", resources_block)}
+      ${section("environment", "Environment", environment)}
+      ${section("git", "Git", git)}
+      ${section("browser", "Browser session", browser, { open: Boolean(browser) })}
+      ${section("diagnostics", "Diagnostics", diagnostics)}
+      ${section("notifications", "Notifications", renderNotificationControls(notify || {}))}
+    </div>
+  </aside>`;
+}
+
+/**
+ * Tabs whose product does not exist yet.
+ *
+ * They render the shell and SAY SO. Hiding them would hide the intended shape;
+ * faking them would be worse. Each names the owner that will fill it.
+ */
+export const LANE_TAB_MATURITY = Object.freeze({
+  activity: {
+    title: "Lane activity",
+    body: "Run transitions, checkpoints and governed decisions for this lane.",
+    status: "Shell only — the global Activity feed is wired; the lane-scoped filter is not.",
+    owner: "ui-v2-views.projectActivityFeed, filtered by lane_id",
+  },
+  files: {
+    title: "Files",
+    body: "The files this run has changed in the lane worktree.",
+    status: "Not implemented — no file-change projection exists.",
+    owner: "source-control.mjs checkpoint readiness already attributes changed paths",
+  },
+  commits: {
+    title: "Commits",
+    body: "Commits produced on this lane's branch.",
+    status: "Not implemented — commits are observed but not projected for the UI.",
+    owner: "source-control.mjs",
+  },
+  runs: {
+    title: "Runs",
+    body: "Every Execution Run this lane has had, and how each ended.",
+    status: "Not implemented — the run store keeps the history; nothing lists it.",
+    owner: "execution-run.mjs listExecutionRunsForLane()",
+  },
+});
+
+export function renderLaneTabShell(tab, lane) {
+  const m = LANE_TAB_MATURITY[tab];
+  if (!m) return "";
+  return vSurface({
+    title: m.title,
+    className: "vcard-tabshell",
+    body: `<p class="vtabshell-body">${esc(m.body)}</p>
+      <p class="vtabshell-status">${esc(m.status)}</p>
+      <p class="vtabshell-owner">Owner: <code>${esc(m.owner)}</code></p>
+      <p class="vtabshell-link">Maturity is tracked in the Vacilando UI V2 data contract.</p>`,
+  });
+}
+
 export function renderGatewayShell({
   lanes,
   selectedId,
@@ -4773,6 +5359,7 @@ export function renderGatewayShell({
   latestResponse = null,
   newUpdate = false,
   asideOpen = false,
+  returnTo = null,
   // INERT IS NOT THE SAME AS CLOSED. On desktop the details pane is a permanent
   // grid column — no rule hides it, and the fold preference changes nothing you
   // can see. Marking it inert whenever it was "closed" therefore left a pane
@@ -4796,8 +5383,27 @@ export function renderGatewayShell({
   settings = false,
   blockingScreen = null,
   screenPending = null,
+  // V2 destinations. `page` is the primary route; the lane branches below are
+  // reached only when page === "lanes".
+  page = "lanes",
+  tab = "overview",
+  homeVm = null,
+  activityVm = null,
+  systemVm = null,
+  placeholders = false,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
+  // The three standalone destinations render before any lane logic runs: they
+  // are not a mode of the lane view, they are their own surfaces.
+  if (page === "home") {
+    return `<div class="gw is-page" data-gw data-gw-mode="home">${placeholderBanner(placeholders)}${renderHome(homeVm, { nowMs })}</div>`;
+  }
+  if (page === "activity") {
+    return `<div class="gw is-page" data-gw data-gw-mode="activity">${placeholderBanner(placeholders)}${renderActivity(activityVm, { nowMs })}</div>`;
+  }
+  if (page === "system") {
+    return `<div class="gw is-page" data-gw data-gw-mode="system">${placeholderBanner(placeholders)}${renderSystem(systemVm)}</div>`;
+  }
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders, repositories });
   // A sheet owns the screen while it is open: it is a decision the operator is
   // in the middle of, and the lane list behind it must not steal the tap.
@@ -4862,7 +5468,7 @@ export function renderGatewayShell({
     return `<div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="${esc(selectedId)}" data-gw-loading>
       ${list}
       <section class="gw-main">
-        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+        ${renderLaneBack(returnTo, { withLabel: true })}
         <h1>${esc(selectedId)}</h1>
         <p class="gw-lead">Loading lane…</p>
       </section>
@@ -4876,7 +5482,7 @@ export function renderGatewayShell({
       : "This Development Lane could not be resolved.";
     return `<div class="gw is-detail" data-gw data-gw-mode="detail">${list}
       <section class="gw-main">
-        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+        ${renderLaneBack(returnTo, { withLabel: true })}
         <h1>${title}</h1>
         <p class="gw-lead">${lead}</p>
       </section>
@@ -4885,16 +5491,6 @@ export function renderGatewayShell({
   }
   const work = canonicalLaneWorkState(lane, { output: output || { text: outputText }, nowMs });
   const pending = Boolean(outputPending) && !(outputText && String(outputText).trim());
-  const ctxLine = contextCompact(telemetry);
-  const statusHtml = renderStatus(lane, resources, {
-    open: Boolean(statusOpen),
-    summary: statusSummaryLine(lane, telemetry),
-    sessionLine: work.headline,
-    telemetry,
-    developmentResources,
-    lanes,
-    executionCapacity,
-  });
   const copyText = copyableOutputText({
     selectedId: lane?.lane_id || selectedId,
     output,
@@ -4909,109 +5505,122 @@ export function renderGatewayShell({
   const liveMark = work.live
     ? `<span class="gw-live-dot" data-gw-live-dot>${work.stale ? "Stale" : "Working"}</span>`
     : "";
-  // ONE details panel. Everything that is not the conversation lives here — it
-  // used to be split between an inline <details> under the thread and a second
-  // "Lane details" fold in the aside, so the same lane facts appeared twice and
-  // neither place was complete.
-  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideInert ? ' aria-hidden="true" inert' : ""}>
-        <div class="gw-aside-head">
-          <div class="gw-aside-title">Details</div>
-          <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
-        </div>
-        <div class="gw-aside-body">
-          <div class="gw-aside-id">
-            <h1>${esc(lane?.label || selectedId)}</h1>
-            <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
-            <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
-            ${renderLaneFolderPicker(lane, folders, selectedId)}
-            ${renderLaneRepository(lane, repositories)}
+  const laneId = lane?.lane_id || selectedId;
+  const activeTab = LANE_TAB_KEYS.includes(tab) ? tab : "overview";
+
+  // ONE inspector. Everything that is not the work itself lives here, folded.
+  const detailsPanel = renderLaneInspector(lane, {
+    placeholders,
+    selectedId, telemetry, resources, output, outputText, nowMs,
+    asideInert, work, cap, developmentResources, lanes, executionCapacity,
+    folders, repositories, notify, pending, bodyText, statusOpen,
+  });
+
+  // NEEDS YOU IS AN INTERRUPTION, NOT A SECTION.
+  //
+  // It is rendered immediately above the composer — at the boundary where the
+  // human already is — so a request for authorization never lands in the middle
+  // of the work narrative between Current Work and the agent's output.
+  const needsItems = laneNeedsYouItems(lane);
+  const tray = needsYouTray(needsItems, { laneId });
+
+  // CONTEXT -> CONVERSATION -> HUMAN ACTION.
+  //
+  // Current Work orients (one card, bounded). The thread is the body, and it is
+  // a conversation: who said it, when, in order. The composer is where the human
+  // acts. Nothing else competes for that space.
+  const currentWork = buildCurrentWork(lane, { nowMs });
+  const thread = buildLaneThread(lane, {
+    assistant,
+    lastInstruction: lastInstruction || lane?.last_instruction,
+    attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
+    nowMs,
+    providerLabel: laneProviderLabel(lane),
+    // The visible pane output, for the WORKING case where it IS the message.
+    paneText: copyableOutputText({ selectedId, output, outputText }) || "",
+  });
+  /*
+    CURRENT WORK IS GONE FROM OVERVIEW, AND NOTHING WAS LOST.
+
+    It printed the operator's own latest instruction as a titled card, directly
+    above the thread that prints the same instruction as their message. Two
+    renderings of one sentence, and the duplicate was the one occupying the top
+    of every phone screen.
+
+    The thread is the authoritative presentation: YOU said this, the PROVIDER
+    replied, the SYSTEM did these things. Progress moved into the lane's own
+    status line, where it answers "roughly how far" without a card. The run's
+    mission metadata is untouched and remains in Details and Runs.
+  */
+  const overview = `
+        <section class="vcard vcard-thread">
+          <div class="vcard-head">
+            <div class="vcard-headings"><h2 class="vcard-title">Conversation</h2></div>
+            ${/*
+              NO THREAD-LEVEL COPY. Every message owns its own Copy control, so a
+              second one in the card header is the duplication this pass removed
+              everywhere else — and it copied "the active output", which is not
+              the message the operator is looking at. Measured on the installed
+              product: one thread-level Copy still rendered above both messages.
+            */ ""}
+            <div class="vcard-actions">
+              ${liveMark}
+            </div>
           </div>
+          <div class="vcard-body">
+            ${renderThread(thread, {
+              // Keeps the assistant-message hook the existing renderers and
+              // styles bind to: this IS the assistant body, now inside a
+              // thread entry that also says who authored it and when.
+              renderProviderBody: () => `<div class="vmsg-body gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">${renderAssistantMessage(assistant, { pending })}</div>`,
+              attachments: renderMessageAttachments((lane?.execution_run || lane?.previous_run)?.attachments || []),
+            })}
+          </div>
+        </section>`;
+
+  const tabBody = activeTab === "overview"
+    ? overview
+    : (activeTab === "settings"
+      ? `<section class="vcard vcard-lane-settings"><div class="vcard-body">
+          <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(laneId)}">Rename lane</button>
+          ${renderLaneFolderPicker(lane, folders, selectedId)}
+          ${renderLaneRepository(lane, repositories)}
           ${renderNotificationControls(notify || {})}
-          ${renderBrowserAuthRecovery(lane)}
-          ${/*
-            ONE runtime section, directly below the conversation. These were three
-            separate cards stacked in sequence, which read as three unrelated
-            things; they are one subject — whether this lane can keep working.
-          */ ""}
-          ${(() => {
-            const parts = [
-              renderLaneSessionCallout(lane, { executionCapacity }),
-              renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity }),
-              renderContextRefreshButton(lane),
-            ].filter((html) => String(html || "").trim());
-            if (!parts.length) return "";
-            return `<section class="gw-runtime-section" data-gw-runtime-section>
-              <h2 class="gw-runtime-section-h">Runtime</h2>
-              ${parts.join("\n")}
-            </section>`;
-          })()}
-          ${renderLaneLocalhost(lane)}
-          ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending, activity: lane?.provider_activity?.activity })}${renderPreviousWork(lane?.previous_run)}
-          ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
-          ${renderClaudeRunStatus(lane, telemetry)}
-          ${renderProviderHealth(output?.provider_health)}
-          ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
-          ${renderRecentSystemActivity(lane?.recent_system_activity)}
-          ${renderTerminalDiagnostics(bodyText, { pending, output })}
-          ${statusHtml}
-        </div>
-      </aside>`;
-  // The chat status line is ONE line: canonical state, then who is on the lane.
-  const providerBit = laneProviderLabel(lane);
-  const statusLine = [work.label, providerBit].filter(Boolean).join(" · ");
-  return `<div class="gw is-detail${asideOpen ? " is-aside-open" : ""}" data-gw data-gw-mode="detail" data-lane-id="${esc(lane?.lane_id || selectedId)}">
+        </div></section>`
+      : renderLaneTabShell(activeTab, lane));
+
+  return `<div class="gw is-detail${asideOpen ? " is-aside-open" : ""}" data-gw data-gw-mode="detail" data-lane-id="${esc(laneId)}" data-gw-tab="${esc(activeTab)}">
     ${list}
     <section class="gw-main">
       <div class="gw-lane-stage" data-gw-stage>
-        <header class="gw-chat-head" data-gw-chat-head>
-          <a class="gw-back" data-gw-back href="#/lanes" aria-label="Back to lanes">← Lanes</a>
-          <div class="gw-chat-id">
-            <h1 class="gw-chat-title">${esc(lane?.label || selectedId)}</h1>
-            <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}" data-gw-stage-status>${esc(statusLine)}</span>
-          </div>
-          <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
-            aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
-        </header>
-        <div class="gw-thread" data-gw-thread>
-          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, {
-            expanded: Boolean(userMessageExpanded),
-            // The run owns its attachments, so reopening the lane restores them
-            // from the same projection that restores the prompt text.
-            attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
-          })}
-          <article class="gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">
-            <div class="gw-msg-tools">
-              ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
-              ${liveMark}
-            </div>
-            ${renderAssistantMessage(assistant, { pending })}
-          </article>
+        ${renderLaneHeaderV2(lane, { selectedId, work, telemetry, tab: activeTab, nowMs, asideOpen, returnTo })}
+        <div class="vlane-body" data-gw-lane-body data-gw-thread>
+          ${tabBody}
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
-        ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
-        ${/*
-          ACTIONS BELONG WHERE THE CONVERSATION IS.
-          These three were in the details rail: the session callout that says
-          Claude's session failed, the runtime controls that keep or release the
-          lane, and the context refresh. Each one gates progress, and the rail is
-          the wrong home for anything that does — it is a reference column the
-          Director may have collapsed, it is the first thing to run out of room,
-          and while it was inert it could not be scrolled or clicked at all. An
-          action the operator cannot reach is the same as no action.
-        */ ""}
-        ${renderGovernedOutcome(lane)}
-        ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
-        ${renderUnanswerableScreen(blockingScreen, { laneId: lane?.lane_id || selectedId })}
-        ${renderComposer({
-          ...(composer || {}),
-          idleStart: cap.state === "IDLE",
-          queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
-          provider: lane?.preferred_provider || "claude",
-          cursorSendAvailable: cursorComposerAvailable({ lane, providers }),
-          attachments,
-          attachmentsUploading,
-          attachmentError,
-        })}
+        <div class="vlane-interaction">
+          ${/*
+            renderGovernedOutcome is GONE from here. A COMPLETED governed action
+            is history: it rendered as a permanent high-weight banner directly
+            above the composer, outliving the work it described and competing
+            with it forever. It is now a one-line SYSTEM entry in the thread, at
+            the time it happened. See buildLaneThread.
+          */ ""}
+          ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
+          ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
+          ${renderUnanswerableScreen(blockingScreen, { laneId })}
+          ${tray}
+          ${renderComposer({
+            ...(composer || {}),
+            idleStart: cap.state === "IDLE",
+            queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
+            provider: lane?.preferred_provider || "claude",
+            cursorSendAvailable: cursorComposerAvailable({ lane, providers }),
+            attachments,
+            attachmentsUploading,
+            attachmentError,
+          })}
+        </div>
       </div>
       ${renderAttachmentLightbox(lightbox)}
       <div class="gw-aside-scrim" data-gw-aside-close aria-hidden="true"></div>
@@ -5019,7 +5628,6 @@ export function renderGatewayShell({
     </section>
   </div>`;
 }
-
 /**
  * ONE ROW, LEFT-ALIGNED, INSIDE ITS REPOSITORY.
  *
@@ -5055,14 +5663,31 @@ export function railLaneRow(lane, selectedId, attentionByLane, telemetryByLane) 
   else if (runState === "WAITING_RESOURCE" && !wait?.ready_to_resume && wait?.queue_position) queue = ` · #${wait.queue_position} in queue`;
   else if (runState === "VALIDATING" && wait?.resource_key === "runtime_timing_certification") queue = " · Exclusive timing window";
   else if (runState === "VALIDATING" && wait?.label) queue = ` · ${wait.label}`;
-  const attn = `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}${esc(queue)}</span>`;
-  const ctx = contextCompact(telemetryByLane?.[lane.lane_id]);
-  const who = agentLabel(lane);
-  const meta = ctx ? `${who} · ${ctx}` : who;
+  // READ-ONLY IS A STATE, NOT A PROVIDER INTERNAL.
+  //
+  // An observation-only lane cannot be sent an instruction, so "Ready" alone is
+  // a promise the lane cannot keep. This is the one qualifier navigation carries
+  // beyond the canonical state, and it earns its place by the same test
+  // everything else failed: it changes what the operator can DO.
+  const readOnly = cursorObservationOnly(lane) ? " · read-only" : "";
+  // ONE OPERATOR STATE. The rail used to print the runtime phrase — including
+  // "Needs input · suspended", which told the operator that a provider process
+  // is not resident. That is scheduler machinery; it is in Details.
+  const opStatus = laneOperatorStatus(lane, canonicalLaneWorkState(lane));
+  const attn = `<span class="gw-lane-attn${opStatus.tone ? ` is-${opStatus.tone}` : ""}">${esc(st.mark)} ${esc(operatorStatusLine(opStatus))}${esc(queue)}${esc(readOnly)}</span>`;
+  // NAVIGATION CARRIES NAME, STATE, RECENCY AND A GENUINE BLOCKER COUNT.
+  //
+  // It used to carry the provider and the Claude context percentage too. Neither
+  // changes WHICH LANE YOU OPEN, which is the only question navigation answers,
+  // and "Claude · Context 38%" beside every row is diagnostic noise in the one
+  // place that has to stay scannable. Both are one click away in the lane's
+  // Inspector, where lane facts belong.
+  const whenMs = laneUpdatedMs(lane);
+  const meta = whenMs ? `${ago(whenMs)} ago` : "";
   const unseen = laneUnseenCount(lane);
   const badge = unseen ? `<span class="badge">${unseen}</span>` : "";
   return `<a class="mission-rail-item${active}" data-route="lanes/${esc(lane.lane_id)}" data-gw-lane="${esc(lane.lane_id)}">
-    <span class="mission-rail-title">${esc(lane.label || lane.lane_id)}<span class="mission-rail-meta">${esc(meta)}</span></span>
+    <span class="mission-rail-title">${esc(lane.label || lane.lane_id)}${meta ? `<span class="mission-rail-meta">${esc(meta)}</span>` : ""}</span>
     ${attn}${badge}
   </a>`;
 }
@@ -5084,13 +5709,27 @@ export function railHtml(lanes, selectedId, attentionByLane, telemetryByLane, {
   const groups = groupLanesByRepository(list, repositories, folders, {
     collapsed: collapsedFolders || new Set(), nowMs,
   });
+  // ONE GROUP IS NOT AN ORGANISATION.
+  //
+  // With a single repository — the common case, and the case on a fresh install
+  // — the rail rendered an "UNATTRIBUTED 4" heading above every lane. That is the
+  // repository equivalent of prominently rendering "No folder": a grouping
+  // header that groups nothing, made of implementation vocabulary, sitting at
+  // the top of the primary navigation. When there is nothing to disambiguate,
+  // the lanes are shown directly.
+  const single = groups.length <= 1;
   const rendered = groups.map((g) => {
     const rows = g.lanes.map((lane) => railLaneRow(lane, selectedId, attentionByLane, telemetryByLane)).join("");
     // Quiet header: the repository is the boundary, not the loudest thing in the
     // rail. Its count is enough; the lane rows carry the attention.
-    return `<div class="gw-rail-repo${g.unknown ? " is-unattributed" : ""}" data-gw-rail-repo="${esc(g.repository_id)}">`
-      + `<div class="gw-rail-repo-h">${esc(g.name)}<span class="gw-rail-repo-count">${g.lane_count}</span></div>`
-      + `${rows}</div>`;
+    const head = single
+      ? ""
+      : `<div class="gw-rail-repo-h">${esc(g.name)}<span class="gw-rail-repo-count">${g.lane_count}</span></div>`;
+    // The unattributed CLASS is a treatment for the unattributed HEADER. With
+    // no header there is nothing to treat, and carrying it would keep styling a
+    // grouping the operator was never shown.
+    return `<div class="gw-rail-repo${g.unknown && !single ? " is-unattributed" : ""}" data-gw-rail-repo="${esc(g.repository_id)}">`
+      + `${head}${rows}</div>`;
   }).join("");
   return `${add}${rendered}`;
 }

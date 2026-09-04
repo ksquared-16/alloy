@@ -21,7 +21,7 @@ describe("Focus Panel Universal Card presentation", () => {
     const baseVm = minimalSettledOpportunityDrawerViewModel({
         summaries: {
             tasks: { state: "loaded", open_count: 0, open_tasks: [] },
-            active_tour_bookings: [],
+            active_tour_bookings: [], operator_relevant_tour_booking: null,
             reminders: {
                 state: "empty",
                 next_follow_up_iso: null,

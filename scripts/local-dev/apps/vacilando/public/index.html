@@ -33,6 +33,13 @@
   <symbol id="i-activity" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3 8 4-16 3 8h4"/></symbol>
   <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+  <!-- V2 primary navigation. One icon set, used by the desktop rail and the
+       mobile bar, so the two form factors cannot show different destinations. -->
+  <symbol id="nav-home" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="nav-lanes" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/><circle cx="7.5" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="18" r="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="nav-activity" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M3 12.5h3.5L9 6l3.5 12 2.5-8 1.8 2.5H21"/></symbol>
+  <symbol id="nav-needs" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M12 4a5 5 0 0 0-5 5c0 4-1.5 5.5-2 6h14c-.5-.5-2-2-2-6a5 5 0 0 0-5-5z"/><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M10.2 18a1.9 1.9 0 0 0 3.6 0"/></symbol>
+  <symbol id="nav-system" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M8 10.5h8M8 14h5"/></symbol>
 </defs></svg>
 
 <div class="app">
@@ -41,8 +48,12 @@
       <img class="brand-mark" src="vacilando-mark.png" alt="" width="900" height="413" decoding="async">
       <div class="word">Vacilando</div><div class="sub">Development Gateway</div>
     </div>
-    <nav class="nav nav-missions" id="nav" aria-label="Development Lanes">
-      <div class="nav-missions-label">Development Lanes</div>
+    <!-- PRIMARY NAVIGATION. Four destinations, rendered from View.PRIMARY_NAV.
+         The lane list below is a LANES-section affordance and is hidden on the
+         other three, where it navigates to nothing you are looking at. -->
+    <div id="primary-nav" class="rail-primary"></div>
+    <nav class="nav nav-missions" id="rail-lanes" aria-label="Development Lanes">
+      <div class="nav-missions-label">Lanes</div>
       <div id="lane-rail" class="mission-rail"></div>
       <details class="nav-more">
         <summary>More</summary>
@@ -70,12 +81,21 @@
       <button class="refreshbtn" id="refresh-btn" title="Recompute the projection from authoritative sources">↻ Refresh</button>
       <span class="livepill" id="livepill"><span class="d"></span><span id="live-label">…</span></span>
       <span class="gen" id="gen"></span>
+      <!-- GLOBAL INTERRUPT STATE. One control, top-right, every route, both form
+           factors. Quiet with nothing pending. -->
+      <div id="needs-global" class="vneeds-global"></div>
     </div>
+    <!-- The expanded surface: a right-side panel on desktop, a sheet on a phone. -->
+    <div id="needs-scrim" class="vneeds-scrim" hidden></div>
+    <aside id="needs-panel" class="vneeds-panel" role="dialog" aria-modal="false" aria-label="Needs you" hidden></aside>
     <!-- Global pending approvals. First thing in the content column on EVERY
          route, so a decision never depends on knowing which lane raised it. -->
     <div id="approvals-bar" class="gw-approvals-bar" hidden aria-live="polite"></div>
     <div class="view" id="view"><p class="gw-empty">Opening Vacilando…</p></div>
   </main>
+  <!-- MOBILE PRIMARY NAVIGATION. Not the rail squeezed narrow: a thumb-reachable
+       bar with the same four destinations and nothing else. -->
+  <div id="mobile-nav" class="rail-mobile"></div>
 </div>
 
 <script src="mission-control.js"></script>

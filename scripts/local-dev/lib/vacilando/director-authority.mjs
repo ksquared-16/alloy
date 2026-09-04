@@ -108,11 +108,24 @@ const FULL_SHA = /^[0-9a-f]{40}$/i;
 const DURABLE_BRANCH_STATES = Object.freeze([
   "reachable_from_canonical_remote", "merged", "pushed_not_merged",
 ]);
+/** Mirrors the executor's window; a gate must not read the value it authorises. */
+const PROVIDER_CEILING_WINDOW = Object.freeze({ key: "ALLOY_MAX_ACTIVE_PROVIDERS", min: 4, max: 8 });
+
 const NEVER_RETIRE = Object.freeze(["staging", "main", "master", "production"]);
 
 export const GATES = Object.freeze({
   managed_repository: (ev) => (ev.repository == null ? null : ev.managed_repository === true),
   managed_agent_branch: (ev) => (ev.branch == null ? null : MANAGED_BRANCH.test(String(ev.branch))),
+  /**
+   * Ownership proven by observation instead of by naming convention.
+   *
+   * managed_agent_branch asks whether a branch is NAMED like agent work.
+   * This asks the question the guard actually cares about: is the lane making
+   * the request the lane that holds this branch, at this exact commit. A name
+   * can be chosen; being checked out on a branch cannot be claimed.
+   */
+  branch_owned_by_requesting_lane: (ev) =>
+    (ev.branch_owned_by_requesting_lane == null ? null : ev.branch_owned_by_requesting_lane === true),
   branch_matches_originating_work: (ev) =>
     (ev.branch == null || ev.originating_branch == null ? null : String(ev.branch) === String(ev.originating_branch)),
   full_exact_sha: (ev) => (ev.source_sha == null ? null : FULL_SHA.test(String(ev.source_sha))),
@@ -124,6 +137,34 @@ export const GATES = Object.freeze({
   durability_gates_passed: (ev) => (ev.durability_gates_passed == null ? null : ev.durability_gates_passed === true),
   no_governance_exception: (ev) => (ev.governance_exception_active == null ? null : ev.governance_exception_active === false),
   no_operator_hold: (ev) => (ev.operator_hold == null ? null : ev.operator_hold === false),
+
+  /* Provider ceiling. The delegation rests on the move being small, predicted,
+   * reversible and measured — remove any one of those and it is an operator
+   * decision again. */
+  ceiling_within_experimental_window: (ev) =>
+    (ev.requested_ceiling == null || ev.expected_ceiling == null ? null
+      : [ev.requested_ceiling, ev.expected_ceiling].every(
+        (n) => Number.isInteger(n) && n >= PROVIDER_CEILING_WINDOW.min && n <= PROVIDER_CEILING_WINDOW.max)),
+  ceiling_key_is_the_managed_one: (ev) =>
+    (ev.ceiling_key == null ? null : String(ev.ceiling_key) === PROVIDER_CEILING_WINDOW.key),
+  // Compare-and-set is the difference between an experiment and a guess. An
+  // agent that has lost track of the live ceiling is precisely the one that
+  // must not write.
+  ceiling_expectation_measured: (ev) =>
+    (ev.expected_ceiling == null || ev.live_ceiling == null ? null
+      : Number(ev.expected_ceiling) === Number(ev.live_ceiling)),
+  rollback_ceiling_declared: (ev) =>
+    (ev.rollback_ceiling == null ? null
+      : Number.isInteger(ev.rollback_ceiling)
+        && ev.rollback_ceiling >= PROVIDER_CEILING_WINDOW.min
+        && ev.rollback_ceiling <= PROVIDER_CEILING_WINDOW.max),
+  // Raising capacity on a host already under pressure is how a capacity
+  // experiment becomes an outage. Unmeasured headroom escalates.
+  host_headroom_measured: (ev) => (ev.host_headroom_ok == null ? null : ev.host_headroom_ok === true),
+  // A previous experiment that left an unvalidated ceiling behind must be
+  // reconciled by a human before another one starts on top of it.
+  no_unvalidated_ceiling_active: (ev) =>
+    (ev.unvalidated_ceiling_active == null ? null : ev.unvalidated_ceiling_active === false),
   branch_pushed_to_remote: (ev) => (ev.remote_head_sha == null ? null : String(ev.remote_head_sha).toLowerCase() === String(ev.source_sha || "").toLowerCase()),
   base_is_staging: (ev) => (ev.base_branch == null ? null : String(ev.base_branch).toLowerCase() === "staging"),
   required_checks_successful: (ev) =>
@@ -182,6 +223,41 @@ export const GATES = Object.freeze({
   no_live_process_affected: (ev) => (ev.live_process_affecting == null ? null : ev.live_process_affecting === 0),
   metadata_store_known: (ev) => (ev.metadata_store_known == null ? null : ev.metadata_store_known === true),
   certification_suite_passed: (ev) => (ev.certification_suite_passed == null ? null : ev.certification_suite_passed === true),
+  // ── Toolkit convergence ──────────────────────────────────────────────────
+  // Installing the commit that is ALREADY promoted staging carries no content
+  // decision — that was taken at merge by the certified merge gates. What is
+  // left is mechanical and entirely measurable, which is what makes it routine
+  // rather than an approval. Every gate below is measured from the host and
+  // the canonical repository, never claimed by the requester.
+  install_source_is_promoted_staging: (ev) =>
+    (ev.source_is_promoted_staging == null ? null : ev.source_is_promoted_staging === true),
+  install_artifact_provenance_valid: (ev) =>
+    (ev.artifact_provenance_valid == null ? null : ev.artifact_provenance_valid === true),
+  // Rollback is only real if the tree being replaced still exists afterwards.
+  previous_toolkit_retained: (ev) =>
+    (ev.previous_toolkit_retained == null ? null : ev.previous_toolkit_retained === true),
+  gateway_restart_bounded: (ev) =>
+    (ev.gateway_restart_bounded == null ? null : ev.gateway_restart_bounded === true),
+  // Converging onto what is already installed is a no-op, and a no-op that
+  // restarts the Gateway is not free. Drift must be positively observed.
+  toolkit_drift_observed: (ev) => (ev.toolkit_drift == null ? null : ev.toolkit_drift === true),
+  // ── Cross-lane dispatch ──────────────────────────────────────────────────
+  // "One lane may instruct another" would be impersonation. What these gates
+  // bound is far smaller: an authorized capacity mission placing ONE read-only
+  // task into an idle, eligible lane. Every one is measured from lane state or
+  // from the instruction text, never asserted by the requester.
+  dispatch_purpose_allowlisted: (ev) =>
+    (ev.dispatch_purpose_allowlisted == null ? null : ev.dispatch_purpose_allowlisted === true),
+  dispatch_mission_authorized: (ev) =>
+    (ev.dispatch_mission_authorized == null ? null : ev.dispatch_mission_authorized === true),
+  dispatch_target_eligible: (ev) =>
+    (ev.dispatch_target_eligible == null ? null : ev.dispatch_target_eligible === true),
+  dispatch_instruction_read_only: (ev) =>
+    (ev.dispatch_instruction_read_only == null ? null : ev.dispatch_instruction_read_only === true),
+  dispatch_target_not_busy: (ev) =>
+    (ev.dispatch_target_not_busy == null ? null : ev.dispatch_target_not_busy === true),
+  dispatch_bound_to_measurement: (ev) =>
+    (ev.dispatch_bound_to_measurement == null ? null : ev.dispatch_bound_to_measurement === true),
 });
 
 /**
@@ -210,7 +286,7 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     // unmanaged repository, or move under an ambiguous SHA. History rewrites
     // and force pushes are a different action key and stay operator-owned.
     gates: Object.freeze([
-      "managed_repository", "managed_agent_branch", "full_exact_sha",
+      "managed_repository", "branch_owned_by_requesting_lane", "full_exact_sha",
       "not_protected_branch_write", "no_credential_material",
       "no_governance_exception", "no_operator_hold",
     ]),
@@ -229,7 +305,7 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     // the exact SHA being proposed, which is measurable and was the cause of a
     // real head_branch_not_on_remote failure in this history.
     gates: Object.freeze([
-      "managed_repository", "managed_agent_branch", "full_exact_sha",
+      "managed_repository", "branch_owned_by_requesting_lane", "full_exact_sha",
       "base_is_staging", "branch_pushed_to_remote",
       "no_governance_exception", "no_operator_hold",
     ]),
@@ -289,6 +365,35 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     ]),
   }),
   Object.freeze({
+    policy_id: "routine_provider_ceiling_experiment_v1",
+    label: "Provider capacity experiment — move one ceiling inside the tested window",
+    action_key: "capacity.set_provider_ceiling",
+    // Never staging. This changes how many providers this HOST will run; there
+    // is no deployed environment in which the setting means anything, and
+    // listing one would invite the action to be claimed under it.
+    environments: Object.freeze(["development_certification"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // WHY A CAPACITY WRITE IS DELEGABLE AT ALL. The refused predecessor was
+    // "edit a host config file", which reaches every setting on the machine.
+    // What is delegated here is one key, inside a window whose ends were both
+    // chosen by the operator, from a value the caller correctly predicted, with
+    // the restore value named in the same request. Reversal needs no cleverness
+    // and no history: it is another call with the numbers swapped.
+    //
+    // It is worth being explicit that this does NOT let the agent enlarge its
+    // own authority — the ceiling governs how many providers may run, not what
+    // any of them may do, which is why it is absent from
+    // SELF_EXPANSION_ACTION_KEYS. It does let the agent ask for more of the
+    // machine, so headroom is a measured gate rather than a courtesy.
+    gates: Object.freeze([
+      "ceiling_key_is_the_managed_one", "ceiling_within_experimental_window",
+      "ceiling_expectation_measured", "rollback_ceiling_declared",
+      "host_headroom_measured", "no_unvalidated_ceiling_active",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
     policy_id: "routine_worktree_retirement_v1",
     label: "Routine worktree retirement — disposable worktree, branch retained",
     action_key: "vacilando.retire_worktree",
@@ -317,14 +422,80 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     ]),
   }),
   Object.freeze({
+    policy_id: "routine_toolkit_convergence_v1",
+    label: "Routine toolkit convergence — install promoted staging",
+    action_key: "host.install_toolkit",
+    // Never staging: this changes what THIS HOST runs. There is no deployed
+    // environment in which installing a local toolkit means anything, and
+    // naming one would invite the action to be claimed under it.
+    environments: Object.freeze(["development_certification"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // WHY THIS IS ROUTINE. A lane sat blocked indefinitely because promoted
+    // staging held a capability the installed toolkit did not, and the only
+    // path from promoted to installed went through a human. The content
+    // decision was already taken at merge; what a human added here was a
+    // measurement — is this really staging, can we go back — which is exactly
+    // the click the attention model exists to remove.
+    //
+    // Reversibility is the whole basis and it is structural, not a promise:
+    // the layout keeps one immutable tree per commit and `current` is a
+    // symlink, so rollback is flipping it back. previous_toolkit_retained
+    // proves the target still exists rather than assuming the layout was not
+    // pruned. A failed install never replaces a healthy current, because the
+    // flip happens after the tree is built, not before.
+    gates: Object.freeze([
+      "install_source_is_promoted_staging", "install_artifact_provenance_valid",
+      "toolkit_drift_observed", "previous_toolkit_retained", "gateway_restart_bounded",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
+    policy_id: "bounded_capacity_cohort_dispatch_v1",
+    label: "Bounded capacity cohort dispatch — one read-only task into one idle lane",
+    action_key: "lane.dispatch_measurement_instruction",
+    environments: Object.freeze(["development_certification"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // WHY A CROSS-LANE ACTION IS DELEGABLE AT ALL. The refused version of this
+    // is "let a lane instruct other lanes", which is remote control and should
+    // stay refused. What is delegated is one sentence: an authorized capacity
+    // mission may place ONE bounded read-only analysis task into a lane that is
+    // idle and eligible. It cannot displace running work (the target must be
+    // idle), cannot change anything (the instruction is scanned for mutation
+    // verbs and must carry the read-only banner), cannot be reused for another
+    // purpose (allowlisted), and cannot be issued by another mission.
+    //
+    // Reversibility: the target receives a queued certification run. Nothing is
+    // committed, pushed or configured, so undoing it is cancelling a run.
+    gates: Object.freeze([
+      "dispatch_purpose_allowlisted", "dispatch_mission_authorized",
+      "dispatch_target_eligible", "dispatch_target_not_busy",
+      "dispatch_instruction_read_only", "dispatch_bound_to_measurement",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
     policy_id: "certified_staging_merge_v1",
     label: "Certified staging merge",
     action_key: "repository.merge_pull_request",
     environments: Object.freeze(["staging"]),
     consequence_class: CONSEQUENCE_CLASSES.CERTIFIED_PROMOTION,
-    // OFF until the operator turns it on. Merge is where content becomes
-    // everyone else's problem, so it does not inherit push's tier.
-    enabled: false,
+    // Merge is where content becomes everyone else's problem, so it does not
+    // inherit push's tier and never will: it carries the strictest gate set
+    // here, and every one of them is measured from GitHub rather than claimed.
+    //
+    // TURNED ON under the Director Attention Model, and the order matters.
+    // This shipped OFF because nothing collected pull-request state, so all ten
+    // gates below were unmeasured and every merge escalated. That approval was
+    // not supplying judgement — the operator was reading the same PR page the
+    // collector now reads and clicking approve, which cost an interruption and
+    // added no safety. director-evidence now measures head sha, base branch,
+    // mergeability, check counts, the certification suite and unresolved review
+    // findings directly. The safeguard was built first; only then was the
+    // approval removed. If that measurement ever regresses, these gates go
+    // unmeasured and merges escalate again on their own.
+    enabled: true,
     gates: Object.freeze([
       "managed_repository", "full_exact_sha", "base_is_staging",
       "required_checks_successful", "pull_request_mergeable", "head_sha_still_matches",

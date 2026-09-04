@@ -3,6 +3,7 @@
  */
 
 import { FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
+import { FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveLeadDrawerCommandHeaderMeta } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
@@ -257,7 +258,7 @@ function childrenCollectionItems(record: Record<string, unknown>): {
 } {
     // See {@link childrenInsight} — the collection source is decided by the normalizer, once.
     const { rows } = normalizeFocusPanelChildrenRowsFromTruth(record);
-    const visible = rows.slice(0, 3).map((row) => {
+    const visible = rows.slice(0, FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY).map((row) => {
         const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
         const status =
             formatFocusPanelDisplayLabel(row.outcome_status_label) ??
@@ -265,7 +266,7 @@ function childrenCollectionItems(record: Record<string, unknown>): {
             "In progress";
         return { label: firstName, status };
     });
-    return { items: visible, overflowCount: Math.max(0, rows.length - 3) };
+    return { items: visible, overflowCount: Math.max(0, rows.length - FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY) };
 }
 
 function statusIssuesFromVm(displayVm: OpportunityDrawerViewModel): string[] {
@@ -425,6 +426,24 @@ function healthInsight(displayVm: OpportunityDrawerViewModel): {
  * the commit-critical producer supplies the same household keys the answer carries, so this is READY
  * at commit — never a blank reserved rectangle.
  */
+/**
+ * The shell of a card that fetches its own content.
+ *
+ * Attendance and Health & Safety already build with `insight: ""` below — the case record knows
+ * nothing about a scoped child's day or their critical facts, so the card fills that in from its own
+ * read. Their commit model is therefore content-free by construction, which is precisely why it can
+ * exist before any enrichment: there is no truth to wait for, only an identity to address the read.
+ *
+ * Built through the same `card()` construction as the enriched shape, so a shell built here and the
+ * card Settlement builds are the same object — it does not change shape when the data lands.
+ */
+export function buildSelfFetchingCardShell(
+    key: FocusPanelCardKey,
+    title: string,
+): FocusPanelCardModel {
+    return card({ key, title, insight: "", tier: "work", span: 2, density: "compact" });
+}
+
 export function buildHouseholdCardModel(record: Record<string, unknown>, title: string): FocusPanelCardModel {
     return card({
         key: "household",
@@ -552,7 +571,7 @@ function schedulingCollectionItems(record: Record<string, unknown>): {
     overflowCount: number;
 } {
     const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
-    const visible = rows.slice(0, 3).map((row) => {
+    const visible = rows.slice(0, FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY).map((row) => {
         const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
         // Operational schedule assignments do not exist until enrollment/Registration;
         // at the case-grain lead stage each child reads "Needs a room" (honest state,
@@ -560,7 +579,7 @@ function schedulingCollectionItems(record: Record<string, unknown>): {
         // scheduling projection once the child is enrolled.
         return { label: firstName, status: "Needs a room" };
     });
-    return { items: visible, overflowCount: Math.max(0, rows.length - 3) };
+    return { items: visible, overflowCount: Math.max(0, rows.length - FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY) };
 }
 
 /**

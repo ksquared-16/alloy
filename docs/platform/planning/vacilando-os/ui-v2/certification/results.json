@@ -1,0 +1,1090 @@
+{
+  "captured_at": "2026-09-04T16:25:11.039Z",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 950
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844
+    },
+    "narrow": {
+      "width": 320,
+      "height": 568
+    },
+    "keyboard": {
+      "width": 390,
+      "height": 380
+    }
+  },
+  "passed": 213,
+  "failed": 0,
+  "results": [
+    {
+      "name": "desktop Home renders the five command-centre blocks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home renders no Needs You card",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home uses the width in two columns",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the interruption centre lists every genuine blocker",
+      "ok": true,
+      "detail": "Runtime Performance: Promotion into staging | Surfaces: Read-only database census"
+    },
+    {
+      "name": "each request is identified by its lane",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "each request states the ask, one line of why, and its age",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the interruption centre carries the count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home shows no invented effectiveness number",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "primary navigation carries the Needs You count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "primary navigation carries no diagnostics",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "every lane state is one of the four operator words",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home and Lanes agree about every lane they both show",
+      "ok": true,
+      "detail": "5 lanes compared"
+    },
+    {
+      "name": "the Lane header agrees with the list it was opened from",
+      "ok": true,
+      "detail": "header \"working\" vs list \"working\""
+    },
+    {
+      "name": "lane header shows breadcrumb, state and identity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "lane tabs are present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "progress qualifies the lane's status in one line",
+      "ok": true,
+      "detail": "Working · ~62% · Claude"
+    },
+    {
+      "name": "the estimate is marked as an estimate",
+      "ok": true,
+      "detail": "Working · ~62% · Claude"
+    },
+    {
+      "name": "there is no second progress subsystem",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no ETA is shown",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no standalone Current Work card",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the instruction survives as an authored YOU message, before any reply",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop keeps the conversation as the central content, not dashboard cards",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the inspector is quiet by default",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the inspector is a permanent desktop column, not a drawer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the inspector RUN block answers the six questions",
+      "ok": true,
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 9:05 AM Stop lane RUNTIME Executing"
+    },
+    {
+      "name": "a folded section opens on request",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the needs-you tray sits immediately above the composer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the tray is one line, not a card in the narrative",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "an unbuilt tab renders the shell and names its owner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "placeholder mode announces itself on the page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "every placeholder value is individually flagged",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "placeholder values are auditable in the DOM",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 · /home does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 · /lanes does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 · /lanes/lane_trustruntime01 does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 · /activity does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 · /system does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 390 ≤ 390"
+    },
+    {
+      "name": "mobile 390 bottom navigation is present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 bottom nav tap targets clear 44px",
+      "ok": true,
+      "detail": "[56,56,56,56]"
+    },
+    {
+      "name": "mobile 390 stacks Home in one column",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 keeps the same Home hierarchy",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Home has ONE page identity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Home Needs You is a summary, not a payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Home metric tiles are wide enough to read",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 the lane catalogue carries no governed payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 no \"No folder\" heading",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 several lanes are scannable at once",
+      "ok": true,
+      "detail": "10 of 10 rows in the first screen"
+    },
+    {
+      "name": "mobile 390 interaction zone fits the space it actually has",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 lane keeps the composer on screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 lane shows progress inside its status, not beside it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 carries no second progress subsystem",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 hides diagnostics from the primary lane screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 lane header is phone-scale",
+      "ok": true,
+      "detail": "header 84px of 844"
+    },
+    {
+      "name": "mobile 390 header carries no desktop actions or identity detail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 spends no height on a Current Work card",
+      "ok": true,
+      "detail": "current work nullpx"
+    },
+    {
+      "name": "mobile 390 the operator's instruction is still said, before any reply",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 conversation begins in the first screen",
+      "ok": true,
+      "detail": "first message at 124 of 844"
+    },
+    {
+      "name": "mobile 390 authorship is visually distinguishable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 a completed governed action is a system line, not a banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 a long message declares the four-line preview",
+      "ok": true,
+      "detail": "line-clamp 4"
+    },
+    {
+      "name": "mobile 390 a long message previews at four lines",
+      "ok": true,
+      "detail": "81px of text, line 20px"
+    },
+    {
+      "name": "mobile 390 a clamped message offers Show more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Show more reveals the whole message",
+      "ok": true,
+      "detail": "121px expanded vs 81px clamped"
+    },
+    {
+      "name": "mobile 390 the preview clamps, it does not truncate",
+      "ok": true,
+      "detail": "209 characters collapsed, 209 expanded"
+    },
+    {
+      "name": "mobile 390 expanding one message expands only that message",
+      "ok": true,
+      "detail": "1 expanded"
+    },
+    {
+      "name": "mobile 390 Show less collapses it again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 a short message is never given a toggle",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 the idle composer asks for one line",
+      "ok": true,
+      "detail": "textarea 41px"
+    },
+    {
+      "name": "mobile 390 the Needs You tray is one line",
+      "ok": true,
+      "detail": "tray nullpx"
+    },
+    {
+      "name": "mobile 390 Lane details opens the inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 a real provider report is long enough to be worth clamping",
+      "ok": true,
+      "detail": "1813 characters"
+    },
+    {
+      "name": "mobile 390 a long provider report previews at four lines",
+      "ok": true,
+      "detail": "84px of text, line 21px"
+    },
+    {
+      "name": "mobile 390 the long report does not own the screen",
+      "ok": true,
+      "detail": "171px of 844"
+    },
+    {
+      "name": "mobile 390 the long report offers Show more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 · /home does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 · /lanes does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 · /lanes/lane_trustruntime01 does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 · /activity does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 · /system does not scroll sideways",
+      "ok": true,
+      "detail": "scrollWidth 320 ≤ 320"
+    },
+    {
+      "name": "mobile 320 bottom navigation is present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 bottom nav tap targets clear 44px",
+      "ok": true,
+      "detail": "[56,56,56,56]"
+    },
+    {
+      "name": "mobile 320 stacks Home in one column",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 keeps the same Home hierarchy",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Home has ONE page identity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Home Needs You is a summary, not a payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Home metric tiles are wide enough to read",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 the lane catalogue carries no governed payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 no \"No folder\" heading",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 several lanes are scannable at once",
+      "ok": true,
+      "detail": "9 of 10 rows in the first screen"
+    },
+    {
+      "name": "mobile 320 interaction zone fits the space it actually has",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 lane keeps the composer on screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 lane shows progress inside its status, not beside it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 carries no second progress subsystem",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 hides diagnostics from the primary lane screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 lane header is phone-scale",
+      "ok": true,
+      "detail": "header 83px of 568"
+    },
+    {
+      "name": "mobile 320 header carries no desktop actions or identity detail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 spends no height on a Current Work card",
+      "ok": true,
+      "detail": "current work nullpx"
+    },
+    {
+      "name": "mobile 320 the operator's instruction is still said, before any reply",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 conversation begins in the first screen",
+      "ok": true,
+      "detail": "first message at -213 of 568"
+    },
+    {
+      "name": "mobile 320 authorship is visually distinguishable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 a completed governed action is a system line, not a banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 a long message declares the four-line preview",
+      "ok": true,
+      "detail": "line-clamp 4"
+    },
+    {
+      "name": "mobile 320 a long message previews at four lines",
+      "ok": true,
+      "detail": "78px of text, line 19px"
+    },
+    {
+      "name": "mobile 320 a clamped message offers Show more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Show more reveals the whole message",
+      "ok": true,
+      "detail": "155px expanded vs 78px clamped"
+    },
+    {
+      "name": "mobile 320 the preview clamps, it does not truncate",
+      "ok": true,
+      "detail": "209 characters collapsed, 209 expanded"
+    },
+    {
+      "name": "mobile 320 expanding one message expands only that message",
+      "ok": true,
+      "detail": "1 expanded"
+    },
+    {
+      "name": "mobile 320 Show less collapses it again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 a short message is never given a toggle",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 the idle composer asks for one line",
+      "ok": true,
+      "detail": "textarea 41px"
+    },
+    {
+      "name": "mobile 320 the Needs You tray is one line",
+      "ok": true,
+      "detail": "tray nullpx"
+    },
+    {
+      "name": "mobile 320 Lane details opens the inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 a real provider report is long enough to be worth clamping",
+      "ok": true,
+      "detail": "1813 characters"
+    },
+    {
+      "name": "mobile 320 a long provider report previews at four lines",
+      "ok": true,
+      "detail": "84px of text, line 21px"
+    },
+    {
+      "name": "mobile 320 the long report does not own the screen",
+      "ok": true,
+      "detail": "190px of 568"
+    },
+    {
+      "name": "mobile 320 the long report offers Show more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the composer stays reachable with the keyboard open",
+      "ok": true,
+      "detail": "{\"cBottom\":380,\"sBottom\":365,\"vh\":380}"
+    },
+    {
+      "name": "no sideways scroll with the keyboard open",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "keyboard-open lane sheds navigation chrome for the composer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "keyboard-open interaction zone bounds itself instead of pushing Send off",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 focusing the field enters compose mode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 the field opens at a third of the writing area",
+      "ok": true,
+      "detail": "133px of 380 = 35%"
+    },
+    {
+      "name": "compose 390 the field grows toward half the writing area",
+      "ok": true,
+      "detail": "171px = 45%"
+    },
+    {
+      "name": "compose 390 past its ceiling the field scrolls itself",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 the conversation keeps a readable tail",
+      "ok": true,
+      "detail": "77px, 5 messages"
+    },
+    {
+      "name": "compose 390 the field owns its own line, not a slot beside Send",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 Send and attach stay immediately reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 the provider stays reachable while writing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 orientation chrome stands down",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 no sideways scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 the composer ends at the bottom of the visual viewport",
+      "ok": true,
+      "detail": "composer bottom 380 of 380"
+    },
+    {
+      "name": "compose 390 no ancestor reserves a band under the composer",
+      "ok": true,
+      "detail": "zone:0px view:0px app:0px"
+    },
+    {
+      "name": "compose 390 blurring the field returns the lane",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 focusing the field enters compose mode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 the field opens at a third of the writing area",
+      "ok": true,
+      "detail": "105px of 300 = 35%"
+    },
+    {
+      "name": "compose 320 the field grows toward half the writing area",
+      "ok": true,
+      "detail": "128px = 43%"
+    },
+    {
+      "name": "compose 320 past its ceiling the field scrolls itself",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 the conversation keeps a readable tail",
+      "ok": true,
+      "detail": "40px, 5 messages"
+    },
+    {
+      "name": "compose 320 the field owns its own line, not a slot beside Send",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 Send and attach stay immediately reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 the provider stays reachable while writing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 orientation chrome stands down",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 no sideways scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 the composer ends at the bottom of the visual viewport",
+      "ok": true,
+      "detail": "composer bottom 300 of 300"
+    },
+    {
+      "name": "compose 320 no ancestor reserves a band under the composer",
+      "ok": true,
+      "detail": "zone:0px view:0px app:0px"
+    },
+    {
+      "name": "compose 320 blurring the field returns the lane",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy is visible on provider output without opening anything",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the report under test is genuinely clamped",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy takes the WHOLE message while it is collapsed",
+      "ok": true,
+      "detail": "1610 characters"
+    },
+    {
+      "name": "Copy preserves the report's paragraphs",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy takes no UI metadata",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy confirms itself in place",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy does not expand the message to read it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy needs no Show more first",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop /home renders no permanent Needs You content",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop /home carries exactly one global Needs You control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop /lanes renders no permanent Needs You content",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop /lanes carries exactly one global Needs You control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop the Needs You panel opens from the shell",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop opening it is not navigation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop each request names its lane, the ask, and its age",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop the governed payload stays behind Review",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop every Review link points at a lane that exists",
+      "ok": true,
+      "detail": "#/lanes/lane_runtimeperf001 #/lanes/lane_surfaces000001"
+    },
+    {
+      "name": "desktop Review opens a real lane, not \"Lane unavailable\"",
+      "ok": true,
+      "detail": "{\"hash\":\"#/lanes/lane_runtimeperf001\",\"unavailable\":false,\"panelClosed\":true}"
+    },
+    {
+      "name": "desktop Review closes the sheet on its way",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop the open flag does not impersonate the control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop a click inside the sheet is not swallowed by the control",
+      "ok": true,
+      "detail": "{\"prevented\":false}"
+    },
+    {
+      "name": "mobile390 /home renders no permanent Needs You content",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 /home carries exactly one global Needs You control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 /lanes renders no permanent Needs You content",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 /lanes carries exactly one global Needs You control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 the Needs You panel opens from the shell",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 opening it is not navigation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 each request names its lane, the ask, and its age",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 the governed payload stays behind Review",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 every Review link points at a lane that exists",
+      "ok": true,
+      "detail": "#/lanes/lane_runtimeperf001 #/lanes/lane_surfaces000001"
+    },
+    {
+      "name": "mobile390 Review opens a real lane, not \"Lane unavailable\"",
+      "ok": true,
+      "detail": "{\"hash\":\"#/lanes/lane_runtimeperf001\",\"unavailable\":false,\"panelClosed\":true}"
+    },
+    {
+      "name": "mobile390 Review closes the sheet on its way",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 the open flag does not impersonate the control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 a click inside the sheet is not swallowed by the control",
+      "ok": true,
+      "detail": "{\"prevented\":false}"
+    },
+    {
+      "name": "Home shows a bounded operational subset, not the directory",
+      "ok": true,
+      "detail": "Home 3 of 10 shown on Lanes"
+    },
+    {
+      "name": "Home names that subset for what it is",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home offers the directory rather than reproducing it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home keeps its command-centre blocks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop a lane opened from /home returns to /home",
+      "ok": true,
+      "detail": "back=\"#/home\""
+    },
+    {
+      "name": "desktop the breadcrumb names the origin, not the directory",
+      "ok": true,
+      "detail": "Home"
+    },
+    {
+      "name": "desktop a lane opened from /lanes returns to /lanes",
+      "ok": true,
+      "detail": "back=\"#/lanes\""
+    },
+    {
+      "name": "desktop the breadcrumb names the origin, not the directory",
+      "ok": true,
+      "detail": "Lanes"
+    },
+    {
+      "name": "desktop a deep-linked lane falls back to the directory",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 a lane opened from /home returns to /home",
+      "ok": true,
+      "detail": "back=\"#/home\""
+    },
+    {
+      "name": "mobile390 the breadcrumb names the origin, not the directory",
+      "ok": true,
+      "detail": "Home"
+    },
+    {
+      "name": "mobile390 a lane opened from /lanes returns to /lanes",
+      "ok": true,
+      "detail": "back=\"#/lanes\""
+    },
+    {
+      "name": "mobile390 the breadcrumb names the origin, not the directory",
+      "ok": true,
+      "detail": "Lanes"
+    },
+    {
+      "name": "mobile390 a deep-linked lane falls back to the directory",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "expanding a message keeps the message where the reader was looking",
+      "ok": true,
+      "detail": "moved 0px"
+    },
+    {
+      "name": "Show less collapses it again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "a repaint does not slam an expanded message shut",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "a repaint does not throw the thread back to the top",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "a FRESH estimate rides with the lane's state",
+      "ok": true,
+      "detail": "Working · ~62% · Claude"
+    },
+    {
+      "name": "a STALE estimate is dropped, not left attached to the lane",
+      "ok": true,
+      "detail": "Ready · Claude"
+    },
+    {
+      "name": "no estimate invents no percentage — and never 0%",
+      "ok": true,
+      "detail": "Ready · Claude"
+    },
+    {
+      "name": "no operator-facing surface says suspended — /home",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /activity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /system",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes/lane_trustruntime01",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes/lane_suspended0001",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes/lane_runtimeperf001",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the lane reports the memory its own process tree holds",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the lane says how that was attributed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "CPU is declared absent, not estimated",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "peak memory names its unwired source",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

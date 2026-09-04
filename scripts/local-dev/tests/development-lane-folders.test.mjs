@@ -248,7 +248,13 @@ test("once any folder exists, unfiled lanes get their own header", () => {
   const lanes = [laneVm("filed", { folder_id: "lfld_busy" }), laneVm("loose")];
   const html = renderLaneList(lanes, null, { folders: FOLDERS, collapsedFolders: new Set() });
   assert.ok(html.includes('data-gw-folder-toggle="__unfiled__"'), "the unfiled group is labelled");
-  assert.ok(html.includes("No folder"));
+  // THE HEADER IS STILL REQUIRED — that is the regression above, and it stands.
+  // What changed is its NAME. "No folder" made the ungrouped remainder announce
+  // an absence: a heading whose entire content was the fact that these lanes
+  // had no folder. Folders are optional organisation, and absent organisation
+  // is not a problem to report. The remainder is simply "Lanes".
+  assert.ok(html.includes(">Lanes<"), "the unfiled group is named for what it holds");
+  assert.equal(html.includes("No folder"), false, "it must not advertise an absence");
   // Unfiled is not a folder, so it cannot be renamed or deleted.
   assert.equal(html.includes('data-gw-folder-rename="__unfiled__"'), false);
   assert.equal(html.includes('data-gw-folder-delete="__unfiled__"'), false);

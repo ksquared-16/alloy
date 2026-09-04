@@ -37,7 +37,19 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
  * There is no "not_configured" member: a not-configured card is simply absent from the composition,
  * so it never reaches this map.
  */
-export type FocusPanelCardReadiness = "ready" | "reserved" | "not_applicable";
+/**
+ * A cell had two outcomes — RESERVED (blank shell) or READY (mount) — and that conflated two
+ * different questions: "is this card's content known?" and "can this card start finding out?"
+ *
+ * `self_loading` is the second question. Identity is known, so the card MOUNTS and begins its own
+ * read; its content is honestly pending until that read resolves. It is deliberately NOT a readiness
+ * claim: `ready` still means meaningful truth is available, and every readiness consumer continues to
+ * test `=== "ready"`, so `ready_count` and `card_ready` are unchanged by construction.
+ *
+ * Measured on document entry before this existed: participant identity present at ~1150ms, the card's
+ * own request not issued until ~3430ms — ~2.28s of blankness waiting for an id the answer already had.
+ */
+export type FocusPanelCardReadiness = "ready" | "self_loading" | "reserved" | "not_applicable";
 
 /**
  * Which producer built the model. DIAGNOSTIC ONLY — the grid must never branch on it.

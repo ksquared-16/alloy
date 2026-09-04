@@ -208,10 +208,30 @@ export async function createCheckpoint({
   const commitMessage = String(body).trim();
 
   // ---- ownership --------------------------------------------------------
-  const { getExecutionRun, isTerminalRunState, patchRunFields } = await import("./execution-run.mjs");
+  const { getExecutionRun, isIrreversibleRunState, patchRunFields } = await import("./execution-run.mjs");
   const run = getExecutionRun(runId, root);
   if (!run) return { ok: false, error: CHECKPOINT_REFUSALS.RUN_NOT_FOUND };
-  if (isTerminalRunState(run.state)) {
+  /*
+   * ABANDONED MAY STILL CHECKPOINT WHAT IT ALREADY FINISHED.
+   *
+   * This used to refuse on isTerminalRunState, which includes ABANDONED — and
+   * the model itself says ABANDONED "is recoverable" and "is not a claim that
+   * the work failed". The consequence was a standing trap: a lane finished an
+   * implementation, filed a governed action, the action waited for the Director,
+   * the governor collected the NEEDS_INPUT run as ABANDONED to free the lane,
+   * and the completed code became uncommittable. It then had to be recovered by
+   * content-bound adoption on the next run. That happened repeatedly, and
+   * adoption is meant to be recovery for genuinely interrupted work, not the
+   * ordinary way a governed turn ends.
+   *
+   * COMPLETE and FAILED still refuse. Those are irreversible: a run that has
+   * filed its outcome must not be able to add commits underneath it.
+   *
+   * This widens nothing else. The foreign-path guard is unchanged, so paths
+   * that were dirty BEFORE this run began — the crashed-predecessor case — are
+   * still refused unless explicitly adopted with their content fingerprint.
+   */
+  if (isIrreversibleRunState(run.state)) {
     return { ok: false, error: CHECKPOINT_REFUSALS.RUN_NOT_ACTIVE, state: run.state };
   }
   const worktreePath = run.worktree_path;

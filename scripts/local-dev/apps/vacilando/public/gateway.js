@@ -78,8 +78,28 @@ const G = {
     vapidAvailable: null,
     lastTestAt: null,
     lastTestOk: null,
+    pushEnabled: true,
   },
   notifyEndpoint: null,
+  // ---- UI V2 ----------------------------------------------------------
+  // The three standalone destinations each keep their own last payload, so
+  // switching between them repaints instantly and refetches in the background
+  // rather than flashing an empty page on every navigation.
+  page: "home",
+  laneTab: "overview",
+  home: null,
+  homeInflight: false,
+  activity: null,
+  activityInflight: false,
+  system: null,
+  systemInflight: false,
+  activityFilters: { lane: null, kind: "all", outcome: "all", provider: null },
+  usageWindow: "today",
+  placeholders: false,
+  // Which messages the operator has opened. Ids only — the text is never held
+  // here, and an id for a message that has scrolled out of the thread is
+  // harmless.
+  expandedMessages: new Set(),
 };
 
 function routeName() {
@@ -213,6 +233,7 @@ function refreshNotifyFlags() {
     origin,
     swControlling: typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller),
     vapidAvailable: G.notify?.vapidAvailable ?? null,
+    pushEnabled: G.notify?.pushEnabled !== false,
     lastTestAt: G.notify?.lastTestAt || null,
     lastTestOk: G.notify?.lastTestOk ?? null,
   };
@@ -413,6 +434,45 @@ async function fetchPushHealth() {
   } catch { /* */ }
 }
 
+/**
+ * The phone switch, read and written against the Gateway.
+ *
+ * It is deliberately SERVER state, not localStorage: the operator turning
+ * notifications off on their phone means "do not send them", and only the
+ * sender can honour that. A client-side flag would leave the Gateway happily
+ * pushing to a device that had asked it to stop.
+ */
+async function fetchPushPreferences() {
+  try {
+    const r = await gwFetch("/api/notifications/preferences");
+    const j = await r.json();
+    if (r.ok && j?.ok && j.preferences) {
+      G.notify.pushEnabled = j.preferences.push_enabled !== false;
+    }
+  } catch { /* keep the last known answer */ }
+}
+
+async function setPhonePushEnabled(enabled) {
+  const previous = G.notify.pushEnabled !== false;
+  G.notify.pushEnabled = enabled;
+  paint();
+  try {
+    const r = await gwFetch("/api/notifications/preferences", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ push_enabled: enabled }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j?.ok) throw new Error(j?.error || "preference_failed");
+    G.notify.pushEnabled = j.preferences?.push_enabled !== false;
+  } catch {
+    // The switch must never show a setting the Gateway did not accept.
+    G.notify.pushEnabled = previous;
+    G.notify.error = "Could not change notification delivery.";
+  }
+  paint();
+}
+
 async function sendTestNotification() {
   G.notify.error = null;
   await inspectDevicePush();
@@ -469,7 +529,10 @@ async function restoreGatewayNotifications() {
       G.notify.subscribed = Boolean(G.notifyEndpoint);
     }
   }
-  await fetchPushHealth();
+  // The preference is fetched alongside health, in parallel: it decides what
+  // the switch renders as, and a switch that paints its default and then flips
+  // is a switch the operator does not trust.
+  await Promise.all([fetchPushHealth(), fetchPushPreferences()]);
   refreshNotifyFlags();
   paint();
 }
@@ -562,6 +625,107 @@ async function submitGatewayLogin(e) {
   }
 }
 
+/**
+ * The V2 surface fetchers.
+ *
+ * Each is single-flight and each fails SOFT: a Home that cannot reach its
+ * projection keeps the payload it already has and the data-maturity layer
+ * renders unavailable states for anything it never had. A dashboard that
+ * blanks itself on one slow probe is worse than one that is briefly stale.
+ */
+async function fetchHome() {
+  if (G.homeInflight) return G.home;
+  G.homeInflight = true;
+  try {
+    const r = await gwFetch("/api/v2/views/home");
+    const j = await r.json();
+    if (j?.ok) G.home = j;
+    return G.home;
+  } catch {
+    return G.home;
+  } finally {
+    G.homeInflight = false;
+  }
+}
+
+async function fetchActivity() {
+  if (G.activityInflight) return G.activity;
+  G.activityInflight = true;
+  try {
+    const r = await gwFetch("/api/v2/views/activity?limit=200");
+    const j = await r.json();
+    if (j?.ok) G.activity = j;
+    return G.activity;
+  } catch {
+    return G.activity;
+  } finally {
+    G.activityInflight = false;
+  }
+}
+
+async function fetchSystem() {
+  if (G.systemInflight) return G.system;
+  G.systemInflight = true;
+  try {
+    const r = await gwFetch("/api/v2/views/system");
+    const j = await r.json();
+    if (j?.ok) G.system = j;
+    return G.system;
+  } catch {
+    return G.system;
+  } finally {
+    G.systemInflight = false;
+  }
+}
+
+/** Home's health card wants disk, which the projection reports separately. */
+function homeResources() {
+  const res = G.home?.resources || resources();
+  if (!res) return null;
+  return G.home?.disk ? { ...res, disk: G.home.disk } : res;
+}
+
+function buildHomeVm(nowMs) {
+  return View.buildHomeViewModel({
+    lanes: G.lanes || [],
+    approvals: G.home?.approvals || [],
+    resources: homeResources(),
+    capacity: G.home?.capacity || G.executionCapacity || null,
+    usage: G.home?.usage || null,
+    effectiveness: G.home?.effectiveness || null,
+    activity: (G.home?.activity || []).map(mapActivityRow),
+    laneState: (l) => View.canonicalLaneWorkState(l, { nowMs }),
+    placeholders: G.placeholders,
+    nowMs,
+  });
+}
+
+function mapActivityRow(e) {
+  return { ...e, at_ms: e.at ? Date.parse(e.at) : null };
+}
+
+function buildActivityVm(nowMs) {
+  return View.buildActivityViewModel({
+    events: (G.activity?.events || []).map(mapActivityRow),
+    lanes: G.lanes || [],
+    filters: G.activityFilters,
+    nowMs,
+  });
+}
+
+function buildSystemVm() {
+  const res = G.system?.resources || resources();
+  return View.buildSystemViewModel({
+    resources: G.system?.disk && res ? { ...res, disk: G.system.disk } : res,
+    capacity: G.system?.capacity || G.executionCapacity || null,
+    diagnostics: G.system?.diagnostics || null,
+    providers: G.providers || null,
+    usage: G.system?.usage || null,
+    history: G.system?.history || [],
+    placeholders: G.placeholders,
+  });
+}
+
 async function fetchLanes() {
   const r = await gwFetch("/api/lanes");
   const j = await r.json();
@@ -644,6 +808,39 @@ function resources() {
   return window.__vacilandoResources || null;
 }
 
+/**
+ * Paint the primary navigation into both the desktop rail and the mobile bar.
+ *
+ * ONE declaration (View.PRIMARY_NAV) feeds both, so the two form factors cannot
+ * drift into offering different destinations — which is precisely how "the
+ * mobile app" and "the desktop app" stop being the same product.
+ */
+function paintNav() {
+  // ONE COUNT, FROM THE SET THAT IS ACTUALLY RENDERED.
+  //
+  // This read `G.attentionCount` — the notification store's own actionable
+  // number — while the Needs You control, its panel heading and the rows in it
+  // all came from buildNeedsYou(). Two answers to "how much needs you", from
+  // two stores, free to disagree: a resolved request that had left the governed
+  // list could still be carried in the notification count, and the badge would
+  // insist something needed the operator while the panel it opens said nothing
+  // did. The badge now counts exactly what the panel will show.
+  const needs = needsYouCommitted().count;
+  const primary = document.getElementById("primary-nav");
+  if (primary) primary.innerHTML = View.renderPrimaryNav(G.page, { needsYou: needs });
+  const tabs = document.getElementById("mobile-nav");
+  if (tabs) tabs.innerHTML = View.renderMobileNav(G.page, { needsYou: needs });
+  // The lane rail is a LANES-section affordance. On Home, Activity or System it
+  // is not navigation to anywhere you are, so it does not compete for the eye.
+  const railLanes = document.getElementById("rail-lanes");
+  if (railLanes) railLanes.hidden = G.page !== "lanes";
+  const crumb = document.getElementById("crumb");
+  if (crumb) {
+    crumb.textContent = { home: "Home", lanes: "Development Lanes", activity: "Activity", system: "System" }[G.page] || "Vacilando";
+  }
+  document.body.dataset.vPage = G.page;
+}
+
 function paintRail() {
   const el = document.getElementById("lane-rail");
   const map = attentionMap();
@@ -711,16 +908,31 @@ function threadMessageKey() {
  * dropped the reader into the middle of a long completion; pinning to the top
  * of the whole thread showed old turns.
  */
+/**
+ * Where a lane opens.
+ *
+ * On the LATEST EXCHANGE — the top of the most recent authored message — so the
+ * operator reads the start of what was said rather than its last line. System
+ * events are skipped: landing on "development server restarted" is not why
+ * anyone opened a lane.
+ *
+ * TWO BUGS THIS FIXES, both introduced when the thread gained real authorship:
+ *
+ *   · It queried `.gw-msg-user` / `.gw-msg-assistant`. The user class no longer
+ *     exists, so the intended "position at the instruction" path was dead code.
+ *   · It used querySelector, which returns the FIRST match. With more than one
+ *     message in the thread that positions at the OLDEST — the exact behaviour
+ *     the correction was supposed to remove.
+ */
 function positionThreadForEntry() {
   const el = document.querySelector("[data-gw-thread]");
   if (!el) return;
-  const user = el.querySelector(".gw-msg-user");
-  if (user) {
-    el.scrollTop = Math.max(0, user.offsetTop - el.offsetTop);
-    return;
-  }
-  const msg = el.querySelector(".gw-msg-assistant");
-  el.scrollTop = msg ? Math.max(0, msg.offsetTop - el.offsetTop) : 0;
+  const authored = el.querySelectorAll('.vmsg-user, .vmsg-provider, .gw-msg-user, .gw-msg-assistant');
+  const latest = authored[authored.length - 1];
+  if (!latest) { el.scrollTop = el.scrollHeight; return; }
+  const target = Math.max(0, latest.offsetTop - el.offsetTop);
+  // Never scroll PAST the latest message to reach it.
+  el.scrollTop = Math.min(target, Math.max(0, el.scrollHeight - el.clientHeight));
 }
 
 /**
@@ -827,6 +1039,9 @@ function syncGatewayViewport() {
   const keyboardOpen = Boolean(vv) && h < window.innerHeight * 0.75;
   const wasKeyboardOpen = document.documentElement.hasAttribute("data-gw-keyboard");
   document.documentElement.toggleAttribute("data-gw-keyboard", keyboardOpen);
+  // The writing area is measured from the visual viewport, so a keyboard
+  // appearing, growing (autocorrect bar) or leaving all resize the field.
+  syncComposeMode();
   // Opening the keyboard is a writing gesture: show the newest content, which
   // is what a reply is about to respond to.
   const pin = keyboardOpen && !wasKeyboardOpen ? { atBottom: true } : before;
@@ -851,17 +1066,126 @@ function bindGatewayViewport() {
   }
 }
 
+/**
+ * The composer grows with what is in it.
+ *
+ * THE FLOOR USED TO BE UNCONDITIONAL: 48px on a phone whether or not anything
+ * had been typed, inside a box that then reserved ~139px of a 844px screen for
+ * an empty field. An idle composer should ask for one line; a composer being
+ * used should take what it needs.
+ */
 function autosizeInstruction(ta) {
   const el = ta || document.getElementById("gw-instruction");
   if (!el) return;
   el.style.height = "auto";
   const isMobile = window.innerWidth <= 860;
-  const cap = Math.min(isMobile ? 112 : 220, Math.round((window.visualViewport?.height || window.innerHeight) * (isMobile ? 0.18 : 0.28)));
-  el.style.height = `${Math.max(isMobile ? 48 : 72, Math.min(el.scrollHeight, cap))}px`;
+  const vvh = window.visualViewport?.height || window.innerHeight;
+  let floor;
+  let cap;
+  if (document.documentElement.hasAttribute("data-gw-compose")) {
+    // COMPOSE MODE SIZES TO THE WRITING AREA, NOT TO THE LINE COUNT.
+    //
+    // Everywhere else the field asks for one line and grows only as it is
+    // filled, because an idle composer should not reserve a screen. While the
+    // operator is actually writing that logic is backwards: the field is the
+    // task, and starting it at 44px means every real instruction is typed
+    // through a slot. It opens at ~35% of the ABOVE-KEYBOARD area — the visual
+    // viewport, which is what the keyboard leaves behind — grows to ~45%, and
+    // then scrolls itself rather than eating the conversation it is replying to.
+    floor = Math.round(vvh * 0.35);
+    cap = Math.round(vvh * 0.45);
+  } else {
+    cap = Math.min(isMobile ? 112 : 220, Math.round(vvh * (isMobile ? 0.18 : 0.28)));
+    // Idle means empty AND unfocused. Either one is a reason to hold the room.
+    const idle = !String(el.value || "").trim() && document.activeElement !== el;
+    floor = isMobile ? (idle ? 38 : 48) : 72;
+  }
+  el.style.height = `${Math.max(floor, Math.min(el.scrollHeight, cap))}px`;
   const form = document.querySelector("[data-gw-composer]");
   const stage = document.querySelector("[data-gw-stage]");
+  // A PROPORTION IS AN INTENTION; THE STAGE IS THE CONSTRAINT.
+  //
+  // 45% of the writing area is the right SHAPE, and on a 320x300 viewport it is
+  // still too much: the head, the thread's floor and the composer's own controls
+  // do not shrink with it, so the interaction zone ran 27px past the bottom of
+  // the screen and took Send with it. Measured after layout rather than
+  // predicted, because the chrome around the field is what actually varies.
+  if (document.documentElement.hasAttribute("data-gw-compose") && stage) {
+    const zone = document.querySelector(".vlane-interaction");
+    const head = document.querySelector(".vlane-head");
+    const MIN_THREAD_PX = 40;
+    if (zone) {
+      // Two constraints, and the tighter one governs: the zone must end on the
+      // screen (the visual viewport, which is what the keyboard shrinks), and
+      // it must leave the thread its floor. Bounding only by the stage left the
+      // zone 8px past the bottom of a 300px screen, because the stage's own
+      // padding and safe-area inset sit outside its client box.
+      const screenBottom = Math.round(window.visualViewport?.height || window.innerHeight);
+      const offScreen = Math.round(zone.getBoundingClientRect().bottom) - screenBottom;
+      const room = stage.clientHeight - (head?.offsetHeight || 0) - MIN_THREAD_PX;
+      const over = Math.max(offScreen, zone.offsetHeight - room);
+      if (over > 0) {
+        el.style.height = `${Math.max(72, el.offsetHeight - over)}px`;
+      }
+    }
+  }
   if (form && stage) stage.style.setProperty("--gw-composer-h", `${form.offsetHeight}px`);
 }
+
+/**
+ * COMPOSE MODE — WRITING IS A MODE, NOT A SMALLER LANE.
+ *
+ * The previous behaviour kept the whole lane composition and shrank the
+ * composer into it: tabs, header, metadata and bottom navigation all held their
+ * ground while the field the operator was typing into collapsed to a 44px slot
+ * with a 76px ceiling. That is a lane with a keyboard in front of it, not a
+ * writing surface.
+ *
+ * When the operator focuses the instruction field on a phone, composing becomes
+ * the primary task and the lane says so: orientation chrome stands down, enough
+ * recent thread stays to know what is being replied to, and the field takes the
+ * room. It is a distinct responsive state with its own composition, which is
+ * why it is an explicit attribute rather than a pile of `:focus-within` rules.
+ */
+function composeModeActive() {
+  if (window.innerWidth > 860) return false;
+  if (!document.querySelector(".gw.is-detail")) return false;
+  const ta = document.getElementById("gw-instruction");
+  if (!ta) return false;
+  // Focus is the gesture. The keyboard flag is the corroborating signal for
+  // devices that focus a field without a matching activeElement update.
+  return document.activeElement === ta
+    || document.documentElement.hasAttribute("data-gw-keyboard");
+}
+
+function syncComposeMode() {
+  const on = composeModeActive();
+  const was = document.documentElement.hasAttribute("data-gw-compose");
+  document.documentElement.toggleAttribute("data-gw-compose", on);
+  if (on === was) return;
+  // The field's floor and ceiling both change with the mode, so it must be
+  // re-measured rather than left at the other mode's height.
+  autosizeInstruction();
+  // Entering or leaving compose is a writing gesture: what the operator is
+  // replying to is the newest message, not wherever the thread happened to sit.
+  requestAnimationFrame(() => restoreThreadScroll({ atBottom: true }));
+}
+
+// Focus and blur change what "idle" means and whether composing is the task, so
+// they re-measure. Without this the composer only ever resized on input and
+// stayed at its typing height after the operator moved on.
+document.addEventListener("focusin", (e) => {
+  if (e.target instanceof HTMLElement && e.target.id === "gw-instruction") {
+    syncComposeMode();
+    autosizeInstruction(e.target);
+  }
+});
+document.addEventListener("focusout", (e) => {
+  if (e.target instanceof HTMLElement && e.target.id === "gw-instruction") {
+    syncComposeMode();
+    autosizeInstruction(e.target);
+  }
+});
 
 function statusOpenNow() {
   if (G.statusOpen != null) return G.statusOpen;
@@ -1033,7 +1357,26 @@ function paint() {
     lightbox: G.lightbox,
     providers: G.providers,
     settings: View.parseGatewayHash(location.hash).name === "settings",
+    page: G.page,
+    tab: G.laneTab,
+    placeholders: G.placeholders,
+    returnTo: readLaneOrigin(),
+    homeVm: G.page === "home" ? buildHomeVm(Date.now()) : null,
+    activityVm: G.page === "activity" ? buildActivityVm(Date.now()) : null,
+    systemVm: G.page === "system" ? buildSystemVm() : null,
   });
+  // Re-open what the operator had open. Done before scroll restoration, so the
+  // heights are settled by the time the thread is positioned.
+  for (const id of G.expandedMessages) {
+    const li = view.querySelector(`.vmsg[data-v-msg-id="${CSS.escape(id)}"]`);
+    if (!li) continue;
+    li.classList.add("is-expanded");
+    const btn = li.querySelector("[data-v-msg-more]");
+    if (btn) btn.setAttribute("aria-expanded", "true");
+  }
+  commitNeedsYou();
+  paintNav();
+  paintNeedsYou();
   paintRail();
   restoreComposer(saved);
   if (!saved) restoreThreadScroll(null);
@@ -1041,6 +1384,9 @@ function paint() {
   const count = view.querySelector("[data-gw-count]");
   const ta = document.getElementById("gw-instruction");
   if (count && ta) count.textContent = `${ta.value.length.toLocaleString()} characters`;
+  // A repaint can replace the composer, and with it the focus that put the lane
+  // into compose mode. Re-derive the mode from what is actually on screen.
+  syncComposeMode();
   autosizeInstruction(ta);
   if (G.selected && G.lane?.lane_id === G.selected) {
     markViewed(G.selected);
@@ -1201,6 +1547,8 @@ async function refreshApprovals() {
     const r = await gwFetch("/api/v2/governed-actions/pending");
     const out = await r.json().catch(() => ({}));
     G.approvals = Array.isArray(out.approvals) ? out.approvals : [];
+    // EMPTY IS AN ANSWER, NOT AN ABSENCE. See needsYouVm.
+    G.approvalsLoaded = true;
   } catch { G.approvals = G.approvals || []; }
   // THE BADGE NEEDS AN OWNER THAT ALWAYS RUNS.
   //
@@ -1224,12 +1572,124 @@ async function refreshAttentionCounts() {
   } catch { /* the next poll carries it */ }
 }
 
+/**
+ * NEEDS YOU IS THE SHELL'S JOB NOW.
+ *
+ * The permanent approvals bar is gone. It rendered the same pending requests as
+ * a 241px-per-request block at the top of the content column on EVERY route —
+ * above Home's own Needs You card, above the lane catalogue, above the lane —
+ * so one decision could occupy three surfaces at once and none of them was
+ * where the operator was looking. The governed payload it carried is not lost:
+ * Review opens it on the lane that raised it, which is the only place it can be
+ * acted on with its own context.
+ */
+/**
+ * ONE COMMITTED REVISION OF "WHAT NEEDS YOU".
+ *
+ * THE DEFECT THIS REPLACES. Three surfaces each called needsYouVm() at three
+ * different moments — the nav badge inside paint(), the control and panel inside
+ * paintNeedsYou(), and the panel AGAIN inside setNeedsYouOpen() when the sheet
+ * was opened. Each sampled G.approvals and G.lanes whenever it happened to run,
+ * so any change between the badge's paint and the operator's tap produced a
+ * badge and a panel that disagreed. Measured live: 1/1/0/0 on Lanes and 0/0/1/1
+ * on Home. Steady state always converged, which is exactly what made it easy to
+ * miss and worthless as a guarantee.
+ *
+ * The set is now COMMITTED once and every surface paints from that object. They
+ * cannot disagree, because there is only one answer in existence at a time —
+ * not because they are expected to converge.
+ */
+function commitNeedsYou(nowMs = Date.now()) {
+  const vm = needsYouVm(nowMs);
+  const items = vm.items || [];
+  G.needsYou = {
+    revision: (G.needsYou?.revision || 0) + 1,
+    loaded: Boolean(G.approvalsLoaded),
+    items,
+    // count IS the collection's length. It is never derived from a second store.
+    count: items.length,
+    nowMs,
+  };
+  return G.needsYou;
+}
+
+/** The committed set. Never recomputed by a consumer. */
+function needsYouCommitted() {
+  return G.needsYou || commitNeedsYou();
+}
+
+function needsYouVm(nowMs = Date.now()) {
+  // EMPTY IS AN ANSWER, NOT AN ABSENCE.
+  //
+  // This fell back to the Home projection whenever the canonical list was
+  // EMPTY — treating "nothing is pending" as "not loaded yet". The moment the
+  // last request is resolved the canonical list legitimately empties, and the
+  // fallback would then re-present whatever the other projection still held.
+  // That is precisely how a decided request comes back from the dead. The
+  // canonical list is authoritative once it has answered, however short its
+  // answer; Home's copy is only a seed for the first paint.
+  const approvals = G.approvalsLoaded ? (G.approvals || []) : (G.home?.approvals || []);
+  return View.buildNeedsYou({
+    lanes: G.lanes || [],
+    approvals,
+    laneState: (l) => View.canonicalLaneWorkState(l, { nowMs }),
+    nowMs,
+  });
+}
+
+function paintNeedsYou() {
+  const vm = needsYouCommitted();
+  // Every mounted host, not just the top bar's: the lane header carries one too
+  // on a phone. One model, so they cannot report different counts.
+  const markup = View.needsYouControl(vm.count);
+  document.querySelectorAll(".vneeds-global").forEach((host) => { host.innerHTML = markup; });
+  const panel = document.getElementById("needs-panel");
+  // Only repaint the panel while it is open: rewriting it underneath a closed
+  // dialog is work nobody can see, and rewriting it while the operator reads it
+  // is how a list moves out from under a tap.
+  if (panel && !panel.hidden) panel.innerHTML = View.needsYouPanel(vm);
+  if (panel) {
+    document.querySelectorAll("[data-v-needs-open]")
+      .forEach((b) => b.setAttribute("aria-expanded", panel.hidden ? "false" : "true"));
+  }
+}
+
+function setNeedsYouOpen(open) {
+  const panel = document.getElementById("needs-panel");
+  const scrim = document.getElementById("needs-scrim");
+  if (!panel) return;
+  // The sheet shows the revision the badge is already showing. Re-sampling here
+  // is what let a tap open a panel that disagreed with the number that invited it.
+  if (open) panel.innerHTML = View.needsYouPanel(needsYouCommitted());
+  panel.hidden = !open;
+  if (scrim) scrim.hidden = !open;
+  // A DIFFERENT NAME FROM THE CONTROL'S OWN HOOK, DELIBERATELY.
+  //
+  // This root flag was called `data-v-needs-open` — the same attribute the
+  // button carries. `closest("[data-v-needs-open]")` then matched <html> for
+  // EVERY click in the document while the sheet was open, so the click handler
+  // treated every click as a press of the Needs You control: it preventDefault'd
+  // the event and toggled the panel. Review could not navigate, and nothing else
+  // on the page worked either while the sheet was up. A state flag and an action
+  // hook must never share a selector.
+  document.documentElement.toggleAttribute("data-v-needs-panel-open", open);
+  const buttons = [...document.querySelectorAll("[data-v-needs-open]")];
+  buttons.forEach((b) => b.setAttribute("aria-expanded", open ? "true" : "false"));
+  if (open) panel.querySelector(".vneeds-panel-close")?.focus();
+  else buttons.find((b) => b.offsetParent !== null)?.focus();
+}
+
 function paintApprovals() {
+  // The element remains in the shell so nothing downstream has to guard for a
+  // missing node, but it never renders content again.
   const el = document.getElementById("approvals-bar");
-  if (!el) return;
-  const rows = G.approvals || [];
-  el.innerHTML = View.renderPendingApprovalsBar(rows);
-  el.hidden = rows.length === 0;
+  if (el) {
+    el.innerHTML = "";
+    el.hidden = true;
+  }
+  commitNeedsYou();
+  paintNeedsYou();
+  paintNav();
   paintAttentionBadge();
 }
 
@@ -1381,6 +1841,56 @@ async function fetchCandidates() {
   return G.connect.candidates;
 }
 
+/* ===========================================================================
+ * RETURN CONTEXT
+ *
+ * The lane used to hard-code "Back = Lanes", so Home -> lane -> Back stranded
+ * the operator on a surface they had never been on, having lost their place on
+ * the one they had. The origin is captured HERE — in navigation, the only layer
+ * that knows a journey happened — and every back affordance renders from it.
+ *
+ * Captured on the click, not on the hashchange: by the time the hash has
+ * changed the page we are leaving has already been replaced, and its scroll
+ * position with it.
+ * ======================================================================== */
+const LANE_ORIGIN_KEY = "vacilando.laneOrigin";
+
+function pageScroller() {
+  return document.querySelector(".main") || document.scrollingElement || document.documentElement;
+}
+
+function readLaneOrigin() {
+  if (G.laneOrigin) return G.laneOrigin;
+  try {
+    const raw = storage()?.getItem(LANE_ORIGIN_KEY);
+    G.laneOrigin = raw ? JSON.parse(raw) : null;
+  } catch { G.laneOrigin = null; }
+  return G.laneOrigin;
+}
+
+function writeLaneOrigin(origin) {
+  G.laneOrigin = origin;
+  try {
+    if (origin) storage()?.setItem(LANE_ORIGIN_KEY, JSON.stringify(origin));
+    else storage()?.removeItem(LANE_ORIGIN_KEY);
+  } catch { /* a private window still navigates correctly, it just forgets */ }
+}
+
+// LANE -> LANE KEEPS THE ORIGIN. Opening a second lane from the rail continues
+// the same journey; it does not start one from the lane you were reading.
+document.addEventListener("click", (e) => {
+  // Every way into a lane, not just the ones with an href: the rail navigates
+  // from `data-route` in JavaScript, so matching links alone recorded no origin
+  // for the single most common way an operator opens a lane.
+  const a = e.target instanceof Element
+    ? e.target.closest('a[href^="#/lanes/"], [data-route^="lanes/"], [data-gw-lane]')
+    : null;
+  if (!a) return;
+  if (!["home", "lanes", "activity"].includes(G.page)) return;
+  if (G.selected) return;
+  writeLaneOrigin({ page: G.page, scrollY: Math.round(pageScroller()?.scrollTop || 0) });
+}, true);
+
 async function show(r) {
   const gen = ++G.showGen;
   G.visible = true;
@@ -1388,6 +1898,55 @@ async function show(r) {
   const route = parsed.name ? parsed : (r && typeof r === "object"
     ? { name: r.name || "lanes", sub: View.decodeLaneId(r.sub) }
     : parsed);
+  G.page = View.primaryNavKey(route.name) === "lanes" ? "lanes" : View.primaryNavKey(route.name);
+  G.laneTab = route.tab || "overview";
+  G.placeholders = View.readPlaceholderMode(storage(), location.search || location.hash);
+
+  // ARRIVING BACK where the lane was opened from — Home, Lanes or Activity —
+  // puts the operator where they were, not at the top of a page they had
+  // already scrolled through. The origin is spent on arrival: it describes one
+  // journey, and the next one records its own.
+  if (!route.sub) {
+    const origin = readLaneOrigin();
+    if (origin && origin.page === G.page) {
+      const to = Number(origin.scrollY) || 0;
+      writeLaneOrigin(null);
+      requestAnimationFrame(() => {
+        const sc = pageScroller();
+        if (sc) sc.scrollTop = to;
+      });
+    }
+  }
+
+  // HOME / ACTIVITY / SYSTEM.
+  //
+  // Each paints from whatever it already holds FIRST and refetches after, so a
+  // navigation is instant even on a cold projection. The lane list is still
+  // fetched because Home and Activity both label events by lane, and a feed of
+  // opaque lane ids is not a product.
+  if (["home", "activity", "system"].includes(G.page)) {
+    G.selected = null;
+    G.lane = null;
+    G.loading = false;
+    stopOutputPoll();
+    stopTelemetryPoll();
+    paint();
+    startListPoll();
+    const jobs = [];
+    if (!G.listReady) jobs.push(fetchLanes().then(() => { G.listReady = true; }).catch(() => { G.lanes = G.lanes || []; }));
+    if (G.page === "home") jobs.push(fetchHome().catch(() => {}));
+    if (G.page === "activity") jobs.push(fetchActivity().catch(() => {}));
+    if (G.page === "system") {
+      jobs.push(fetchSystem().catch(() => {}));
+      if (!G.providers && !G.providersInflight) jobs.push(fetchProviders().catch(() => {}));
+    }
+    await Promise.allSettled(jobs);
+    if (gen !== G.showGen) return;
+    paint();
+    refreshApprovals().catch(() => {});
+    return;
+  }
+
   if (route.name === "settings") {
     G.selected = null;
     G.lane = null;
@@ -1862,6 +2421,15 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     if (enable.disabled) return;
     await enableGatewayNotifications();
+    return;
+  }
+  const pushToggle = e.target?.closest?.("[data-gw-push-toggle]");
+  if (pushToggle) {
+    // Do NOT preventDefault — the checkbox has already flipped and that is the
+    // operator seeing their own action land. The request confirms it; a failure
+    // puts it back rather than leaving the switch lying about the server.
+    e.stopPropagation();
+    await setPhonePushEnabled(Boolean(pushToggle.checked));
     return;
   }
   const testPush = e.target?.closest?.("[data-gw-notify-test]");
@@ -2852,7 +3420,14 @@ async function wizardCreate() {
       repository_id: d.repository_id,
       workspace_mode: d.workspace_mode,
     };
-    if (d.workspace_mode === "new_worktree" && d.branch_suffix) body.branch = d.branch_suffix;
+    // Send the branch the review screen SHOWED, prefix and all. Sending the
+    // bare suffix asked for a branch called `vui` under a review that promised
+    // `agent/vui`, because the server treats `branch` as the whole name.
+    if (d.workspace_mode === "new_worktree") {
+      const repo = (G.repositories || []).find((x) => x.repository_id === d.repository_id);
+      const branch = View.previewBranch(repo, d.name, d.branch_suffix);
+      if (branch) body.branch = branch;
+    }
     if (d.workspace_mode === "connect_existing") body.worktree_path = d.worktree_path;
     const r = await gwFetch("/api/lanes/create", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
@@ -2860,7 +3435,19 @@ async function wizardCreate() {
     const j = await r.json();
     if (!j.ok) {
       w.error = j.error;
-      w.errorText = View.repositoryErrorText(j.error, j);
+      w.errorText = View.laneCreateErrorText(j.error, j);
+      w.submitting = false;
+      paint();
+      return;
+    }
+    // A lane whose workspace did not materialise is not a created lane. Landing
+    // in its chat would hand the operator a lane that cannot run and no reason
+    // why — the Financials failure, one screen earlier.
+    const ws = j.workspace || null;
+    if (ws && ws.mode !== "planning" && ws.provisioned === false) {
+      w.error = ws.error || "workspace_not_provisioned";
+      w.errorText = View.workspaceFailureText(ws);
+      w.createdLaneId = j.lane?.lane_id || null;
       w.submitting = false;
       paint();
       return;
@@ -2956,6 +3543,188 @@ document.addEventListener("click", async (e) => {
   if (hit("[data-gw-wiz-create]")) { e.preventDefault(); await wizardCreate(); return; }
 });
 
+/* ===========================================================================
+ * UI V2 interactions.
+ *
+ * Kept in one listener so the V2 surfaces have a single, readable place where
+ * their behaviour lives, rather than growing branches inside the three existing
+ * lane listeners.
+ * =========================================================================== */
+
+/** Clipboard fallback for non-secure contexts, where navigator.clipboard is absent. */
+function legacyCopyText(text) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none;";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+document.addEventListener("click", async (e) => {
+  const hit = (sel) => (e.target instanceof Element ? e.target.closest(sel) : null);
+
+  // MESSAGE EXPANSION IS OWNED BY THE DOM, NOT BY APP STATE.
+  //
+  // Expansion toggles a class on the one message and nothing else. It is
+  // deliberately not held in G: a live provider message repaints on every poll,
+  // and a repaint that re-derived expansion from state would slam the message
+  // shut while the operator was reading it. paint() re-applies the open set
+  // from the ids it recorded, so scroll position and the reader's choice both
+  // survive an update.
+  const more = hit("[data-v-msg-more]");
+  if (more) {
+    e.preventDefault();
+    const li = more.closest(".vmsg");
+    if (!li) return;
+    const id = li.getAttribute("data-v-msg-id");
+    const open = li.classList.toggle("is-expanded");
+    more.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) G.expandedMessages.add(id); else G.expandedMessages.delete(id);
+    return;
+  }
+
+  // COPY IS DOM-OWNED, LIKE EXPANSION, AND FOR THE SAME REASON.
+  //
+  // "Copied" is transient feedback on one button. Routing it through state and
+  // paint() would repaint a live thread — moving scroll, and re-collapsing
+  // nothing but costing the reader their place — to acknowledge a clipboard
+  // write. It writes the text, swaps the label, and puts the label back.
+  const copyMsg = hit("[data-v-msg-copy]");
+  if (copyMsg) {
+    e.preventDefault();
+    e.stopPropagation();
+    const text = copyMsg.getAttribute("data-v-copy-text") || "";
+    const label = copyMsg.querySelector(".vmsg-copy-label");
+    const mark = copyMsg.querySelector(".vmsg-copy-mark");
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      // Clipboard access is refused outside a secure context and in some
+      // embedded webviews. A textarea + execCommand still works there, and
+      // failing silently would look like the button did nothing.
+      ok = legacyCopyText(text);
+    }
+    if (copyMsg.dataset.copyTimer) clearTimeout(Number(copyMsg.dataset.copyTimer));
+    copyMsg.classList.toggle("is-copied", ok);
+    copyMsg.classList.toggle("is-failed", !ok);
+    if (label) label.textContent = ok ? "Copied" : "Copy failed";
+    if (mark) mark.textContent = ok ? "\u2713" : "\u29c9";
+    const t = setTimeout(() => {
+      copyMsg.classList.remove("is-copied", "is-failed");
+      if (label) label.textContent = "Copy";
+      if (mark) mark.textContent = "\u29c9";
+      delete copyMsg.dataset.copyTimer;
+    }, 1800);
+    copyMsg.dataset.copyTimer = String(t);
+    return;
+  }
+
+  // THE GLOBAL INTERRUPTION CENTRE.
+  //
+  // Opening it is not navigation — the operator stays exactly where they were,
+  // which is the entire point of putting interruptions in the shell instead of
+  // in the content. Review IS navigation, and it closes the panel on the way.
+  if (hit("[data-v-needs-open]")) {
+    e.preventDefault();
+    const panel = document.getElementById("needs-panel");
+    setNeedsYouOpen(Boolean(panel?.hidden));
+    return;
+  }
+  if (hit("[data-v-needs-close]") || hit("#needs-scrim")) {
+    e.preventDefault();
+    setNeedsYouOpen(false);
+    return;
+  }
+  if (hit("[data-v-needs-review-link]")) {
+    // The href does the navigating; the panel must not still be over the lane
+    // the operator just asked to see.
+    setNeedsYouOpen(false);
+    return;
+  }
+
+  // Placeholder mode is turned OFF from the banner it paints. There is
+  // deliberately no way to turn it on by accident.
+  if (hit("[data-v-placeholders-off]")) {
+    e.preventDefault();
+    G.placeholders = View.writePlaceholderMode(false, storage());
+    paint();
+    return;
+  }
+
+  const win = hit("[data-v-usage-window]");
+  if (win) {
+    e.preventDefault();
+    G.usageWindow = win.getAttribute("data-v-usage-window") || "today";
+    // The runtime aggregates today only. Rather than silently show today's
+    // numbers under a "30 days" heading, the view model marks the window
+    // unsupported and the card says so.
+    if (G.home?.usage) G.home = { ...G.home, usage: { ...G.home.usage, window: G.usageWindow } };
+    paint();
+    return;
+  }
+
+  // The lane tray's Review opens the lane's details, where the governed action
+  // and its evidence live. Authorize routes to the same decision surface the
+  // approvals bar already owns — the tray never approves anything by itself.
+  // REVIEW OPENS THE DECISION, IT DOES NOT MAKE IT.
+  //
+  // The tray is one line and states only what is waiting. Review brings the
+  // operator to the canonical governed surface — the decision bar the
+  // governed-action owner renders, with its proposal and its approve/deny — and
+  // focuses it. It never approves anything itself.
+  const review = hit("[data-v-needs-review]");
+  if (review) {
+    e.preventDefault();
+    const bar = document.querySelector("[data-gw-decision-bar]");
+    if (bar instanceof HTMLElement) {
+      bar.scrollIntoView({ block: "center", behavior: "smooth" });
+      const approve = bar.querySelector("[data-gw-governed-approve]");
+      if (approve instanceof HTMLElement) approve.focus({ preventScroll: true });
+      return;
+    }
+    setAsideOpen(true, { restoreFocus: false });
+    return;
+  }
+  const authorize = hit("[data-v-needs-authorize]");
+  if (authorize) {
+    e.preventDefault();
+    // The tray never approves anything itself. It focuses the canonical
+    // approve control — the one the governed-action owner renders — wherever it
+    // is on the page. Scroll-and-focus rather than click: authorizing is the
+    // operator's act, and a tray button must not perform it for them.
+    const approve = document.querySelector("[data-gw-governed-approve]");
+    if (approve instanceof HTMLElement) {
+      approve.scrollIntoView({ block: "center", behavior: "smooth" });
+      approve.focus({ preventScroll: true });
+      return;
+    }
+    setAsideOpen(true, { restoreFocus: false });
+    return;
+  }
+});
+
+document.addEventListener("change", (e) => {
+  const sel = e.target instanceof Element ? e.target.closest("[data-v-filter]") : null;
+  if (!sel) return;
+  const key = sel.getAttribute("data-v-filter");
+  const value = sel.value || null;
+  G.activityFilters = {
+    ...G.activityFilters,
+    [key]: key === "lane" || key === "provider" ? (value || null) : (value || "all"),
+  };
+  paint();
+});
+
 /**
  * Poll for a blocking dialog on the open lane.
  *
@@ -2973,3 +3742,10 @@ async function refreshBlockingScreen(laneId) {
     // A failed read must not erase a dialog the operator is looking at.
   }
 }
+
+// A dialog that cannot be dismissed from the keyboard is a trap on desktop.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const panel = document.getElementById("needs-panel");
+  if (panel && !panel.hidden) setNeedsYouOpen(false);
+});

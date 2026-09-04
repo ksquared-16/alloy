@@ -18,6 +18,11 @@ import {
   validateClosePullRequestInputs,
   validateDeleteRemoteBranchInputs,
 } from "./trusted-host-repository-housekeeping.mjs";
+import {
+  validateProviderCeilingInputs, CEILING_MIN, CEILING_MAX, MANAGED_KEY as PROVIDER_CEILING_KEY,
+} from "./trusted-host-provider-ceiling.mjs";
+import { validateInstallToolkitInputs, CONVERGENCE_REF } from "./toolkit-convergence.mjs";
+import { validateLaneDispatchInputs, DISPATCH_PURPOSES } from "./lane-dispatch.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -32,6 +37,9 @@ export const ACTION_TYPES = Object.freeze({
   REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
   VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
   VACILANDO_RETIRE_WORKTREE: "vacilando.retire_worktree",
+  CAPACITY_SET_PROVIDER_CEILING: "capacity.set_provider_ceiling",
+  HOST_INSTALL_TOOLKIT: "host.install_toolkit",
+  LANE_DISPATCH_MEASUREMENT_INSTRUCTION: "lane.dispatch_measurement_instruction",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -197,7 +205,17 @@ function defineDatabaseReadCensus() {
           actualHash: hash,
         };
       }
-      const target = inputs.databaseTarget || inputs.database_target || DEFAULT_TARGET;
+      // THE DATABASE IS NAMED, NEVER ASSUMED.
+      //
+      // This fell back to DEFAULT_TARGET, so a census that named no database
+      // still ran — against the deployed primary. Only one target is supported
+      // today, which is exactly why the default looked harmless: the moment a
+      // second one exists, silence would pick the privileged one. A privileged
+      // read must say what it is reading.
+      const target = inputs.databaseTarget || inputs.database_target;
+      if (!target) {
+        return { ok: false, code: "missing_database_target", detail: "databaseTarget required" };
+      }
       if (target !== DEFAULT_TARGET && target !== "alloy_deployed_primary") {
         return { ok: false, code: "wrong_database_target", detail: `Unsupported target: ${target}` };
       }
@@ -428,6 +446,117 @@ function defineRepositoryDeleteRemoteBranch() {
   };
 }
 
+/**
+ * Move the provider ceiling — and nothing else.
+ *
+ * The predecessor of this action was "let the agent edit a host config file",
+ * which the permission boundary refused, correctly: that capability reaches
+ * every setting on the machine and records nothing about why a number moved.
+ * The effect below is small enough to be read in one sentence and therefore
+ * small enough to be approved or refused on its merits.
+ *
+ * The managed key is NOT an input. As a parameter this becomes a general host
+ * config writer wearing a narrow name, and the whole distinction that makes it
+ * approvable collapses.
+ */
+function defineCapacitySetProviderCeiling() {
+  return {
+    actionType: ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING,
+    version: 1,
+    title: `Move ${PROVIDER_CEILING_KEY} within ${CEILING_MIN}-${CEILING_MAX}`,
+    requiredCapability: "trusted_host.capacity.set_provider_ceiling",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    // Never retried. A compare-and-set that failed because the live value moved
+    // must be re-measured by the caller, not re-attempted against a prediction
+    // already known to be stale.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["expected_ceiling", "requested_ceiling", "rollback_ceiling", "reason"],
+    },
+    outputSchema: { key: "string", previous_value: "number", new_value: "number", readback_verified: "boolean" },
+    evidenceSchema: [
+      "key", "expected_ceiling", "requested_ceiling", "rollback_ceiling",
+      "previous_value", "new_value", "readback_verified", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateProviderCeilingInputs(inputs);
+    },
+  };
+}
+
+/**
+ * Converge the installed toolkit onto promoted staging.
+ *
+ * The ref is NOT an input. As a parameter this becomes "install any commit
+ * onto this host", which is a far larger capability wearing a narrow name —
+ * the same trap the provider ceiling avoided by refusing to accept its key.
+ *
+ * Not retried. A compare-and-set that failed because staging moved must be
+ * re-measured by the caller; re-attempting against a prediction already known
+ * to be stale is how a host ends up running a commit nobody chose.
+ */
+function defineHostInstallToolkit() {
+  return {
+    actionType: ACTION_TYPES.HOST_INSTALL_TOOLKIT,
+    version: 1,
+    title: `Install the promoted ${CONVERGENCE_REF} toolkit`,
+    requiredCapability: "trusted_host.host.install_toolkit",
+    riskClass: "privileged_write",
+    timeoutMs: 300_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["expected_staging_sha", "reason"],
+    },
+    outputSchema: {
+      installed_sha: "string", previous_sha: "string",
+      already_converged: "boolean", readback_verified: "boolean",
+    },
+    evidenceSchema: [
+      "installed_toolkit_sha", "promoted_staging_sha", "toolkit_drift",
+      "artifact_provenance_valid", "previous_toolkit_retained",
+      "gateway_restart_bounded", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateInstallToolkitInputs(inputs);
+    },
+  };
+}
+
+/**
+ * Place ONE bounded read-only certification task into ONE idle lane.
+ *
+ * The purpose is an allowlisted enum rather than free text, for the same reason
+ * the ceiling key is not an input: as an open field this becomes "instruct any
+ * lane to do anything", which is remote control wearing a narrow name.
+ */
+function defineLaneDispatchMeasurementInstruction() {
+  return {
+    actionType: ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION,
+    version: 1,
+    title: `Dispatch a bounded ${DISPATCH_PURPOSES[0]} task to one lane`,
+    requiredCapability: "trusted_host.lane.dispatch_measurement_instruction",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["purpose", "target_lane_id", "measurement_id", "source_mission_id", "instruction"],
+    },
+    outputSchema: {
+      target_lane_id: "string", run_id: "string",
+      measurement_id: "string", mutated_target_state: "boolean",
+    },
+    evidenceSchema: [
+      "dispatch_purpose_allowlisted", "dispatch_mission_authorized",
+      "dispatch_target_eligible", "dispatch_target_not_busy",
+      "dispatch_instruction_read_only", "dispatch_bound_to_measurement", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateLaneDispatchInputs(inputs);
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -543,6 +672,9 @@ const REGISTRY = new Map([
   [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
   [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
+  [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
+  [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
+  [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, defineLaneDispatchMeasurementInstruction()],
 ]);
 
 export function listRegisteredActions() {

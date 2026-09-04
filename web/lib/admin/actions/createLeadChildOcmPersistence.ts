@@ -6,7 +6,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
-import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -189,36 +190,51 @@ export async function applyCreateLeadChildParticipationFromIdentity(
             programKey: params.ocm.program_key,
         }));
 
-    // OCM bridge write REMOVED. process_instances is the sole runtime owner of child participation at
-    // Create Lead: participation facts ride the PI metadata below; waitlist placement + participation
-    // editing + Focus Panel display all source from process_instances (OCM is legacy-only, read behind
-    // an explicit flag for old data). No opportunity_customer_members row is created.
-
-    // process_instances is the runtime owner of child participation. Create the Enrollment process
-    // instance for this child on this lead; participation facts ride the PI metadata (draft inputs).
-    const piResult = await createEnrollmentProcessInstance(supabase, {
+    /*
+     * ── THE ENROLLMENT PARTICIPATION IS ESTABLISHED HERE ──
+     *
+     * This deliberately REVERSES the earlier "OCM bridge write REMOVED" position, and it is worth
+     * saying why rather than quietly editing it. That decision treated `process_instances` as the
+     * sole runtime owner of child participation and OCM as legacy. REAL ENROLLMENT V1 settled the
+     * opposite: `opportunity_customer_members` is the durable owner of a child's Enrollment state,
+     * and a journey ANCHORS to it (`context_type = enrollment_participation`).
+     *
+     * Start Enrollment was converged to that model; this path was not. The consequence was provable
+     * and not theoretical: a child arriving through acquisition got a journey anchored to the
+     * OPPORTUNITY, so the canonical anchor never existed for them, and Start Enrollment later reused
+     * that legacy-shaped journey rather than creating a canonical one. Two symptoms, one root.
+     *
+     * The participation is created through the canonical find-or-create the rest of Enrollment uses,
+     * never a direct insert — so this makes exactly one OCM, carries the acquisition Opportunity on
+     * it, and is idempotent under a repeated Create Lead.
+     */
+    const participation = await ensureOpportunityCustomerMemberParticipation({
+        supabase,
         orgId: params.orgId,
-        subjectId: customerMemberId,     // child = customer_member
-        contextId: params.opportunityId, // lead = opportunity (context)
-        stageKey: null,                  // rides the family track until a decision creates the child journey
-        state: null,                     // no enrollment outcome at intake
-        participation: {
-            start_date: params.ocm.start_date,
-            schedule_type: params.ocm.schedule_type,
-            program_category_id: programCategoryId,
-            location_id: params.ocm.location_id,
-            program_room_cohort_key: params.ocm.program_room_cohort_key,
-            notes: params.ocm.notes,
-        },
+        opportunityId: params.opportunityId,
+        customerMemberId,
+        source: "create_lead",
+        outcomeStatusKey: NEW_LEAD_STATUS_KEY,
     });
-    if (piResult.error) {
-        throw new Error(`Could not create Enrollment process instance for child: ${piResult.error}`);
-    }
+
+    /*
+     * NO CHILD ENROLLMENT PROCESS INSTANCE HERE.
+     *
+     * Intake owns family acquisition and the child's durable participation bridge. It does NOT own
+     * the decision that the child is entering Enrollment. Creating a journey here put a CHILD
+     * instance into the FAMILY-grain `lead` stage, which is why an acquisition child reported
+     * "Stage lead requires no Forms" and could never realize a participant objective.
+     *
+     * The child rides the family acquisition track on the Opportunity until the governed
+     * `decision → Continue to Enrolling` outcome, which creates the child journey at the CHILD
+     * stage `enrollment`. The OCM above is identity, not evidence that execution has begun.
+     */
 
     return {
         customer_member_id: customerMemberId,
-        ocm_id: null, // OCM bridge no longer written at Create Lead
-        process_instance_id: piResult.id,
+        ocm_id: participation.ocmId,
+        // Intake creates no child journey; the Enrollment-entry outcome does.
+        process_instance_id: null,
     };
 }
 

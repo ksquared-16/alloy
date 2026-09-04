@@ -98,12 +98,13 @@ function ReservedFocusPanelCell({ typeKey, settled }: { typeKey: FocusPanelCardK
                     {title}
                 </span>
             ) : null}
-            {settled ? null : (
-                <div className="mt-3 space-y-2" aria-hidden="true">
-                    <span className="block h-2 w-1/2 rounded-full bg-alloy-stone/12" />
-                    <span className="block h-2 w-1/3 rounded-full bg-alloy-stone/[0.08]" />
-                </div>
-            )}
+            {/*
+              * No stand-in bars. Two grey rectangles are a guess at a shape the card may not have, and
+              * in a cell stretched to a full published rowSpan they sit marooned at the top of a large
+              * empty area — which reads as a card that failed rather than one that is arriving. The
+              * identity above is the honest statement (this cell belongs to this card, its detail is
+              * settling) and the receded surface carries "not yet" without inventing content.
+              */}
         </div>
     );
 }
@@ -702,7 +703,15 @@ export default function OpportunityFocusPanelModeGrid({
                     // fills in place) and NEVER remove it.
                     const readiness = cardReadiness.get(typeKey) ?? "reserved";
                     const baseModel = cards.get(typeKey);
-                    if (readiness !== "ready" || !baseModel) {
+                    /*
+                     * `self_loading` mounts as well as `ready`. The card has its identity and owns its
+                     * own read, so holding it behind a blank reserve only delays a request it can
+                     * already make. It is NOT a readiness claim: the visible-ready sets above and the
+                     * readiness telemetry both still test `=== "ready"`, so nothing counts it as ready
+                     * and the card shows its own honest pending until its data lands.
+                     */
+                    const mountable = readiness === "ready" || readiness === "self_loading";
+                    if (!mountable || !baseModel) {
                         // Once the surface declares `phase === "settled"`, any card still not ready —
                         // `not_applicable`, or simply never produced for this record — is RESOLVED-empty,
                         // not loading. In the `commit` phase a not-ready card is genuinely still settling →

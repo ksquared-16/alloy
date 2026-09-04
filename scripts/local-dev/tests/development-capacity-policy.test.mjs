@@ -322,6 +322,163 @@ await test("every constrained axis explains itself", () => {
   }
 });
 
+// ── normal / burst / measured knee ──────────────────────────────────────────
+//
+// The dev-server ceiling used to be min(slots, RAM / 8 GB-per-server). On the
+// 48 GB mini that produced SIX while the host demonstrably ran EIGHT under
+// authenticated compilation, a brokered typecheck and two browser
+// certifications with zero swap. The 8 GB figure was what a heavily exercised
+// UI server reaches after hours, not what a server costs: fresh ones measured
+// 390-440 MB, and eight under real load totalled 11-14 GB.
+//
+// The staircase then found the envelope directly — 8, 9 and 10 held zero swap;
+// 11 was where swap appeared and grew; 12 accelerated to ~2.3 GB with macOS
+// expanding the swapfile. These lock that in so the numbers cannot drift back
+// to an assumption.
+// Injected policy, so these assert the FORMULA rather than whatever topology
+// this machine happens to have configured. Reading managedSlotCount() here made
+// the result depend on ambient environment — a stale VACILANDO_PORT in one shell
+// silently moved the slot bound and failed these for the wrong reason.
+const DETERMINISTIC = Object.freeze({
+  ...P.CAPACITY_POLICY_V1,
+  dev_server_slots: 12,
+});
+const devCap = (o) => {
+  const out = P.computeCapacityPolicy(host(o), { policy: DETERMINISTIC });
+  const find = (x) => { for (const k of Object.keys(x || {})) {
+    if (k === "dev_server_capacity") return x[k];
+    if (x[k] && typeof x[k] === "object") { const r = find(x[k]); if (r) return r; }
+  } };
+  return find(out);
+};
+
+test("a big host offers the measured NORMAL ceiling, not an assumed one", () => {
+  const d = devCap({ logical_cores: 12, memory_total_gb: 48, dev_servers: 0 });
+  assert.equal(d.normal_ceiling, 8, "8 is the certified heavy-use baseline");
+  assert.equal(d.ceiling, 8, "the headline ceiling is the normal one");
+});
+
+test("burst is offered above normal but stops below the measured knee", () => {
+  const d = devCap({ logical_cores: 12, memory_total_gb: 48, dev_servers: 0 });
+  assert.equal(d.burst_ceiling, 10, "10 was the highest level with zero swap");
+  assert.equal(d.measured_knee, 11, "11 is where swap first appeared");
+  assert.ok(d.burst_ceiling < d.measured_knee, "burst must never reach the knee");
+});
+
+test("burst state and headroom are reported, not recomputed by consumers", () => {
+  const at6 = devCap({ logical_cores: 12, memory_total_gb: 48, dev_servers: 6 });
+  assert.equal(at6.using_burst, false);
+  assert.equal(at6.normal_remaining, 2);
+  assert.equal(at6.burst_remaining, 4);
+  const at9 = devCap({ logical_cores: 12, memory_total_gb: 48, dev_servers: 9 });
+  assert.equal(at9.using_burst, true, "nine is above normal, so it is burst");
+  assert.equal(at9.normal_remaining, 0);
+  assert.equal(at9.burst_remaining, 1);
+});
+
+test("a small host is still bounded by its own second axis", () => {
+  // POSITIVE CONTROL. Without this, raising the measured ceilings would silently
+  // offer eight servers on a laptop that cannot hold them, and every assertion
+  // above would still pass.
+  const d = devCap({ logical_cores: 4, memory_total_gb: 8, dev_servers: 0 });
+  assert.ok(d.normal_ceiling <= 4, `small host must stay small, got ${d.normal_ceiling}`);
+  assert.ok(d.burst_ceiling <= d.by_memory || d.burst_ceiling <= d.by_slots,
+    "burst is clamped by the same two axes as normal");
+});
+
+test("the measured working set replaced the assumption", () => {
+  assert.equal(P.CAPACITY_POLICY_V1.dev_server_memory_gb_each, 2,
+    "2 GB is the measured steady-state working set; 8 GB was a worst-case mistaken for a cost");
+});
+
+// ── burst admission, and the historical-swap trap ───────────────────────────
+//
+// The first implementation keyed burst on absolute swap used. That is wrong in
+// a way the memory manager had already written down in its own header: macOS
+// keeps swap allocated long after pressure normalises, so "has ever swapped" is
+// not "is constrained now". MEASURED on this host after the 11/12-server
+// staircase: swap_pct 66 with kernel pressure level 1 and thrashing false — a
+// fully recovered machine the absolute rule would have denied burst until the
+// next reboot, making the measured headroom permanently unusable.
+//
+// Pressure is injected in every case, so none of this depends on the host these
+// tests happen to run on.
+const RECOVERED = { thrashing: false, level: 1, level_label: "normal", swap_pct: 66, readable: true };
+const WARN      = { thrashing: false, level: 2, level_label: "warn", swap_pct: 90, readable: true };
+const THRASHING = { thrashing: true, level: 4, level_label: "critical", swap_pct: 95, readable: true };
+const BLIND     = { thrashing: false, level: null, level_label: "unknown", swap_pct: 0, readable: false };
+const admit = (running, pressure) =>
+  P.serverAdmissionDecision({ running, normalCeiling: 8, pressure });
+
+test("retained swap on a recovered host does NOT block burst", () => {
+  // The exact live condition: 2 GB still allocated, kernel says normal.
+  assert.equal(admit(8, RECOVERED).allow, true, "server 9 must be admissible");
+  assert.equal(admit(8, RECOVERED).tier, "burst");
+  assert.equal(admit(9, RECOVERED).allow, true, "server 10 must be admissible");
+});
+
+test("under the normal ceiling, admission is normal and not burst", () => {
+  const d = admit(7, RECOVERED);
+  assert.equal(d.allow, true);
+  assert.equal(d.tier, "normal");
+  assert.equal(d.state, "normal");
+});
+
+test("actual kernel pressure withholds burst", () => {
+  assert.equal(admit(8, WARN).allow, false, "warn is not a healthy host");
+  assert.equal(admit(8, WARN).state, "pressure_constrained");
+  assert.equal(admit(8, THRASHING).allow, false, "thrashing is not a healthy host");
+});
+
+test("an unreadable probe is never mistaken for a calm host", () => {
+  const d = admit(8, BLIND);
+  assert.equal(d.allow, false, "fail closed");
+  assert.match(d.reason, /could not be read/);
+  assert.equal(admit(8, null).allow, false, "absent pressure also fails closed");
+});
+
+test("server 11 is refused even on a perfectly healthy host", () => {
+  const d = admit(10, RECOVERED);
+  assert.equal(d.allow, false, "the measured knee is 11 and nothing starts one");
+  assert.equal(d.state, "burst_exhausted");
+  assert.equal(d.measured_knee, 11);
+  assert.match(d.reason, /knee is 11/);
+});
+
+test("the reason names all three numbers an operator needs", () => {
+  const d = admit(10, RECOVERED);
+  assert.equal(d.normal_ceiling, 8);
+  assert.equal(d.burst_ceiling, 10);
+  assert.equal(d.measured_knee, 11);
+});
+
+test("burst can never exceed the slots that exist", () => {
+  // POSITIVE CONTROL. Burst headroom is still bounded by topology, so a host
+  // with fewer slots than the burst ceiling cannot be talked into overcommitting.
+  const d = P.serverAdmissionDecision({ running: 5, normalCeiling: 8, pressure: RECOVERED, slotBound: 6 });
+  assert.equal(d.burst_ceiling, 6, "six slots cannot offer ten servers");
+});
+
+test("a provider costs what a provider costs, not what someone feared", () => {
+  // MEASURED 2026-09-04: five resident providers at 344, 566, 597, 671 and
+  // 739 MB — 2.9 GB total, mean 583 MB, max under 0.75 GB. The policy claimed
+  // 6 GB each, which made 48 GB of RAM imply eight providers and made memory
+  // look like a real constraint. It is not: cores and upstream throughput are.
+  assert.ok(P.CAPACITY_POLICY_V1.provider_memory_gb_each <= 1,
+    "6 GB per provider is roughly ten times the measured cost");
+  const cap = { cores: 12, memory_total_gb: 48 };
+  const axis = P.computeCapacityPolicy(cap).axes.provider_capacity;
+  assert.equal(axis.bounded_by, "cores", "memory must no longer be the binding axis");
+  assert.ok(axis.by_memory >= 24, `memory should allow many providers, got ${axis.by_memory}`);
+});
+
+test("the provider ceiling is still bounded, not unbounded", () => {
+  // Correcting the memory input must not remove the ceiling — cores still bind.
+  const axis = P.computeCapacityPolicy({ cores: 12, memory_total_gb: 48 }).axes.provider_capacity;
+  assert.equal(axis.ceiling, Math.min(axis.by_cores, axis.by_memory));
+  assert.ok(axis.ceiling >= P.CAPACITY_POLICY_V1.provider_floor);
+});
+
 await Promise.all(started);
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

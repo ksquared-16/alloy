@@ -106,6 +106,43 @@ export function gatewayPort(env = process.env) {
 }
 
 /**
+ * The Gateway port as a matter of HOST FACT, for callers deciding topology.
+ *
+ * TWO DIFFERENT QUESTIONS SHARED ONE ANSWER. `gatewayPort` answers "what port
+ * should THIS process serve on", and VACILANDO_PORT is a legitimate input to
+ * that: launchd passes it to the Gateway, the installer accepts it as an
+ * explicit operator override, and `alloy-vacilando-app --port` forwards it.
+ * That contract is deliberate and is left alone.
+ *
+ * Topology asks something else entirely — "which ports are reserved, so how many
+ * managed slots are safe" — and that must not depend on whoever happens to be
+ * invoking a CLI. MEASURED: a shell carrying a stale VACILANDO_PORT=3020 from
+ * the Gateway's previous port made resolveManagedSlotCount report NINE slots
+ * instead of twelve, via a phantom reserved-port conflict on slot 10, while the
+ * Gateway was demonstrably serving 3030 and a clean environment resolved twelve.
+ * It misled three separate investigations in one day.
+ *
+ * So this reads the durable configuration and the default, and deliberately
+ * ignores an ambient caller environment. An explicit caller can still pass a
+ * value — tests must, so their outcome never depends on the invoking shell —
+ * but it has to be handed over on purpose rather than inherited by accident.
+ */
+export function authoritativeGatewayPort(env = process.env, { explicit = null } = {}) {
+  if (Number.isInteger(explicit) && explicit > 0) return explicit;
+  // The line is AMBIENT vs DELIBERATE, not environment vs config. An env object
+  // a caller constructed and handed over is an explicit injection and is
+  // honoured — that is how the topology tests state which port the Gateway is
+  // on. process.env is what a shell happened to be carrying, and that is the
+  // only thing ignored here.
+  if (env && env !== process.env) {
+    const supplied = Number(env.VACILANDO_PORT ?? configuredNumber("VACILANDO_PORT", env));
+    if (Number.isInteger(supplied) && supplied > 0) return supplied;
+  }
+  const n = Number(configuredNumber("VACILANDO_PORT", env || process.env));
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_GATEWAY_PORT;
+}
+
+/**
  * Ports no managed slot may ever be given. The Gateway is the one that bit us;
  * the canonical app port is included because a lane bound to it would shadow
  * the very app the fleet serves.
@@ -114,7 +151,8 @@ export function reservedControlPlanePorts(env = process.env) {
   const raw = env.ALLOY_CANONICAL_PORT ?? configuredNumber("ALLOY_CANONICAL_PORT", env);
   const canonical = Number(raw);
   return new Set([
-    gatewayPort(env),
+    // Host fact, not caller convenience — see authoritativeGatewayPort.
+    authoritativeGatewayPort(env),
     ...(Number.isInteger(canonical) && canonical > 0 ? [canonical] : [3000]),
   ]);
 }

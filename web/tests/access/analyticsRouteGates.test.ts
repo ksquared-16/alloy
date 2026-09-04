@@ -326,6 +326,25 @@ const ANALYTICS_FAMILY_DIRS = [
  * `requireAdminOrOps` qualifies through `getAdminOrgContextLightCached`, which returns null unless
  * `bundle.portalEligible` (`lib/adminAuth.ts:43-45`). `getAdminContextCached` returns 403 on the
  * same condition. `requireAnalyticsV2Admin*` wrap the latter.
+ *
+ * **Known incomplete, 2026-09-04 (sixth issuance) — and deliberately not widened.** `lib/adminAuth.ts`
+ * exports two further gates that enforce portal eligibility and are absent from this list:
+ * `getAdminAuthCached` (returns null unless `bundle.ok && bundle.portalEligible`, `:43-45`) with its
+ * `@deprecated` alias `getAdminAuth` (`:92`), and `requireAdmin` (`:98-107`, strictly stronger —
+ * portal **and** `role === "admin"`).
+ *
+ * This is the alias lock's own gap one level up. That lock asks whether an alias of an **already
+ * listed** symbol is listed; it cannot notice a module exporting a wholly new gate, so `getAdminAuth`
+ * is found by `exportedAliases` and correctly not flagged, because its target was never listed either.
+ *
+ * The omission is in the **noisy, not unsafe** direction — an unlisted *gate* flags a correctly gated
+ * route, it never hides an exposure — and it has **zero live victims**: every one of the 103 routes in
+ * the class-wide subject calls a gate that IS listed. It is left unlisted on purpose. Adding entries
+ * to this list is the *permissive* direction, and widening a lock speculatively, against no observed
+ * failure and without the ability to execute the suite, is how a lock quietly stops locking. The
+ * durable repair is the same change of question applied once more — require every export of
+ * `ACCESS_PRIMITIVE_MODULES` to be classified as gate, raw resolution, or reviewed non-gate, so a new
+ * export forces a decision instead of landing unlisted. That belongs with a run that can prove it red.
  */
 const SUFFICIENT_GATES = [
     "requireAnalyticsReadAccess",
@@ -517,11 +536,24 @@ describe("W-1 — no route in web/app/api gates on a raw access resolution alone
     );
 
     it("selects the routes that hold the G2 primitive, and finds enough of them to be meaningful", () => {
-        // 92 of 570 route files on 2026-08-06; 91 on 2026-08-07 after W-8.
+        // 92 of 570 route files on 2026-08-06; 91 on 2026-08-07 after W-8; **103 of 603 on
+        // 2026-09-04**, the sixth issuance, across an interval of 995 web commits.
         //
         // A floor, ratcheted to the live count: if the selector silently stopped matching, this
         // fails rather than passing on an empty subject. Lowering it is therefore a decision, not
         // a retune — recorded here because a floor that drifts down quietly locks nothing.
+        //
+        // **The 2026-09-04 ratchet was derived statically, not from a green run.** This worktree
+        // has no installed dependencies, so neither `npx vitest` nor `vac run test` could execute
+        // the suite (the latter exits `rc=1 class=config` — the command never ran). The count was
+        // re-derived by replicating `callsAny` over the same file set and separately proving that
+        // comment-stripping is a no-op on this corpus: **zero** raw-resolution calls appear in a
+        // comment, in either the line or the block form. Every divergence between that derivation
+        // and this predicate runs one way — `codeOnly` can join a match across a stripped block
+        // comment, `\s*` can span a newline, and `readdirSync` sees files ripgrep's gitignore
+        // filter does not — so the executed count is **≥ 103**, never below. Raising the floor can
+        // therefore only fail loudly, which this repository prefers to slack that fails silently.
+        // The next runner that can execute the suite should confirm the exact figure.
         //
         // W-8 removed the one route that left: `app/api/admin/departments/route.ts` called
         // `getAdminAccessContextCached` *only* to read `roleKeys` for
@@ -530,7 +562,7 @@ describe("W-1 — no route in web/app/api gates on a raw access resolution alone
         // still runs `loadAdminRouteGate` and POST `getAdminContextCached`, both of which require
         // portal eligibility. It resolves less because it needs less, which is the direction G2
         // wants; the count fell for the reason the lock exists to produce.
-        expect(subject.length).toBeGreaterThanOrEqual(91);
+        expect(subject.length).toBeGreaterThanOrEqual(103);
         expect(subject).not.toContain("app/api/admin/departments/route.ts");
         expect(subject).toContain("app/api/admin/configuration/programs/route.ts");
         expect(subject).toContain("app/api/admin/lifecycle-catalog/repair/route.ts");

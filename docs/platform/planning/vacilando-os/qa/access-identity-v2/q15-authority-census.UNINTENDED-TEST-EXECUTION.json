@@ -1,0 +1,1117 @@
+{
+  "INCIDENT": "UNINTENDED TEST EXECUTION — DO NOT USE AS CERTIFICATION OR PROGRAM EVIDENCE",
+  "what_happened": "A database.read_census was filed as a Needs You lifecycle test subject (gar_a1d647be39e8b6) with NO artifact_refs. The runtime substituted the Q15 census artifact and the request was approved and EXECUTED against alloy_deployed_primary. Its output overwrote the committed q15-authority-census.results.json from cfa6f6485.",
+  "filed_by": "claude, lane_9b9082778292, during erun_1ccaba4e990e3b29",
+  "intent_at_filing": "The request was described in code as one that would be denied and never execute. That was wrong, and prior evidence in this session already said so.",
+  "read_only": true,
+  "business_data_changed": false,
+  "not_to_be_used_for": [
+    "W-0",
+    "W-7",
+    "certification",
+    "product decisions",
+    "security decisions",
+    "any workstream evidence"
+  ],
+  "interpreted": false,
+  "interpretation_note": "The result was NOT read or interpreted. It is retained only so the audit lineage is complete.",
+  "governed_request_id": "gar_a1d647be39e8b6",
+  "preserved_output": {
+    "trusted_host_action_id": "tha_e1d6bbd4b62a79",
+    "query_hash": "e958227e9b3e538717195f877947ef2e51ec13814703d037ca2e7cc3f6bca56f",
+    "query_artifact": "docs/platform/planning/vacilando-os/qa/access-identity-v2/q15-authority-census.json",
+    "results": {
+      "format": "q15_labeled_rows",
+      "census_run_at": "2026-09-04T14:59:21.871Z",
+      "question_ids": [
+        "Q15-A1",
+        "Q15-A2",
+        "Q15-A3",
+        "Q15-A4",
+        "Q15-B1",
+        "Q15-B2",
+        "Q15-B3",
+        "Q15-B4",
+        "Q15-C1",
+        "Q15-D1"
+      ],
+      "questions": {
+        "Q15-A1": {
+          "question_id": "Q15-A1",
+          "row_count": 0,
+          "rows": []
+        },
+        "Q15-A2": {
+          "question_id": "Q15-A2",
+          "row_count": 0,
+          "rows": []
+        },
+        "Q15-A3": {
+          "question_id": "Q15-A3",
+          "row_count": 0,
+          "rows": []
+        },
+        "Q15-A4": {
+          "question_id": "Q15-A4",
+          "row_count": 1,
+          "rows": [
+            {
+              "legacy_only_principals": 0,
+              "legacy_row_without_org": 0
+            }
+          ]
+        },
+        "Q15-B1": {
+          "question_id": "Q15-B1",
+          "row_count": 4,
+          "rows": [
+            {
+              "orgs": 1,
+              "role_key": "ops",
+              "memberships": 2
+            },
+            {
+              "orgs": 1,
+              "role_key": "regional_lead",
+              "memberships": 1
+            },
+            {
+              "orgs": 1,
+              "role_key": "school_director",
+              "memberships": 1
+            },
+            {
+              "orgs": 2,
+              "role_key": "admin",
+              "memberships": 9
+            }
+          ]
+        },
+        "Q15-B2": {
+          "question_id": "Q15-B2",
+          "row_count": 88,
+          "rows": [
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "admin.roles.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "admin.roles.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "admin.users.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "admin.users.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "fin.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "fin.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.contacts.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.contacts.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.customers.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.customers.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.jobs.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.jobs.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.locations.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.locations.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.messaging.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.messaging.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.opportunities.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.opportunities.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.schedules.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 1,
+              "permission_key": "ops.schedules.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "ai.enrichment.use",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "billing.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "billing.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "communications.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "communications.send",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "config_assist.apply",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "config_assist.generate",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "config_assist.review",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "crm.customers.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "crm.customers.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "crm.opportunities.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "crm.opportunities.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "data_quality.view",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "documents.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "documents.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "enrollment.requirement_exception.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "fields.editability.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "fields.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "fields.requirements.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "health.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "health.view",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "layouts.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "operational_expectations.author",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "operational_expectations.authority.assign",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "operational_expectations.authority.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "operational_expectations.ratify",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "ops.workflows.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "ops.workflows.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "option_sets.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "reports.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "reports.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "scheduling.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "scheduling.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "sections.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "settings.manage",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "settings.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "settings.users_roles.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "admin",
+              "orgs_granting": 2,
+              "permission_key": "settings.users_roles",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.contacts.read",
+              "orgs_defining_role": 1
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.customers.read",
+              "orgs_defining_role": 1
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.jobs.read",
+              "orgs_defining_role": 1
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.locations.read",
+              "orgs_defining_role": 1
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.messaging.read",
+              "orgs_defining_role": 1
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.opportunities.read",
+              "orgs_defining_role": 1
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.schedules.read",
+              "orgs_defining_role": 1
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.workflows.read",
+              "orgs_defining_role": 1
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "admin.roles.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "admin.users.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "fin.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "fin.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.contacts.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.contacts.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.customers.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.customers.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.jobs.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.jobs.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.locations.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.locations.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.messaging.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.messaging.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.opportunities.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.opportunities.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.schedules.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.schedules.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.workflows.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 1,
+              "permission_key": "ops.workflows.write",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 2,
+              "permission_key": "reports.read",
+              "orgs_defining_role": 2
+            },
+            {
+              "role_key": "ops",
+              "orgs_granting": 2,
+              "permission_key": "settings.users_roles.read",
+              "orgs_defining_role": 2
+            }
+          ]
+        },
+        "Q15-B3": {
+          "question_id": "Q15-B3",
+          "row_count": 8,
+          "rows": [
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.contacts.read",
+              "memberships_holding_role": 0
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.customers.read",
+              "memberships_holding_role": 0
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.jobs.read",
+              "memberships_holding_role": 0
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.locations.read",
+              "memberships_holding_role": 0
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.messaging.read",
+              "memberships_holding_role": 0
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.opportunities.read",
+              "memberships_holding_role": 0
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.schedules.read",
+              "memberships_holding_role": 0
+            },
+            {
+              "role_key": "director",
+              "orgs_granting": 1,
+              "permission_key": "ops.workflows.read",
+              "memberships_holding_role": 0
+            }
+          ]
+        },
+        "Q15-B4": {
+          "question_id": "Q15-B4",
+          "row_count": 80,
+          "rows": [
+            {
+              "role_key": "admin",
+              "permission_key": "admin.roles.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "admin.roles.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "admin.users.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "admin.users.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ai.provider.config.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ai.telemetry.review",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "fin.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "fin.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.contacts.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.contacts.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.customers.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.customers.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.jobs.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.jobs.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.locations.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.locations.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.messaging.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.messaging.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.opportunities.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.opportunities.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.schedules.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "admin",
+              "permission_key": "ops.schedules.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "admin.roles.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "admin.roles.write",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "admin.users.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "admin.users.write",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ai.enrichment.use",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ai.provider.config.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ai.telemetry.review",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "billing.read",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "billing.write",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "communications.read",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "communications.send",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "config_assist.apply",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "config_assist.generate",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "config_assist.review",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "crm.customers.read",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "crm.customers.write",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "crm.opportunities.read",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "crm.opportunities.write",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "data_quality.view",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "documents.read",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "documents.write",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "enrollment.requirement_exception.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "fields.editability.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "fields.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "fields.requirements.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "fin.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "fin.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "health.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "health.view",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "layouts.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "operational_expectations.author",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "operational_expectations.authority.assign",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "operational_expectations.authority.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "operational_expectations.ratify",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.contacts.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.contacts.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.customers.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.customers.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.jobs.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.jobs.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.locations.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.locations.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.messaging.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.messaging.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.opportunities.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.opportunities.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.schedules.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.schedules.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.workflows.read",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "ops.workflows.write",
+              "orgs_defining_role_without_grant": 1
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "option_sets.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "reports.write",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "scheduling.read",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "scheduling.write",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "sections.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "settings.manage",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "settings.read",
+              "orgs_defining_role_without_grant": 2
+            },
+            {
+              "role_key": "ops",
+              "permission_key": "settings.users_roles",
+              "orgs_defining_role_without_grant": 2
+            }
+          ]
+        },
+        "Q15-C1": {
+          "question_id": "Q15-C1",
+          "row_count": 0,
+          "rows": []
+        },
+        "Q15-D1": {
+          "question_id": "Q15-D1",
+          "row_count": 1,
+          "rows": [
+            {
+              "memberships": 13,
+              "site_restricted": 4,
+              "department_restricted": 2,
+              "without_access_profile": 5
+            }
+          ]
+        }
+      },
+      "row_count": 192
+    },
+    "status": "executed",
+    "execution": {
+      "executed": true,
+      "executed_at": "2026-09-04T14:59:20.957Z",
+      "executed_by": "trusted_host_action",
+      "trusted_host_action_id": "tha_45408277e8c257",
+      "authorization_id": "grnt_e6e271d0e4d54fba",
+      "query_hash": "e958227e9b3e538717195f877947ef2e51ec13814703d037ca2e7cc3f6bca56f",
+      "database_target": "alloy_deployed_primary",
+      "database_target_fingerprint": "b15dad2c6d030ed4",
+      "blocker": null
+    }
+  }
+}

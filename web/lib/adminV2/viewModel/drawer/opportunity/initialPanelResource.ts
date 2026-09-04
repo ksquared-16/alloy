@@ -51,6 +51,7 @@ import {
     headerActionsFromFirstPaintData,
     remindersFromFirstPaintData,
     resolveOpportunityDrawerFirstPaintDependencies,
+    operatorRelevantTourBookingFromFirstPaintData,
     tourBookingsFromFirstPaintData,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityDrawerFirstPaintDependencies";
 import { loadOpportunityActivityEvents } from "@/lib/admin/loadOpportunityRelatedActivityEvents";
@@ -283,6 +284,8 @@ export async function buildInitialPanelResource(
         summaries: {
             tasks_raw: parseInquirySummaryTasksFromRecord(record),
             active_tour_bookings: activeTourBookings,
+            // Terminal states included: a finished or cancelled tour is operator-relevant truth.
+            operator_relevant_tour_booking: operatorRelevantTourBookingFromFirstPaintData(resolved.data),
             reminders,
             bos: buildOpportunityDrawerBosSummary(record),
             attention: buildOpportunityDrawerAttentionSummary(attentionRaw),

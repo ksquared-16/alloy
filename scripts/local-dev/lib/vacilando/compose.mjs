@@ -21,8 +21,21 @@ import { projectRepository } from "./repository.mjs";
 import { projectApprovals } from "./approval.mjs";
 import { projectActivity } from "./activity.mjs";
 import { reviewDispositions } from "./commands/review.mjs";
+import { managedSlots } from "./managed-slots.mjs";
 
-const PERMANENT_SLOTS = 6;
+/**
+ * How many slots the headline counts against.
+ *
+ * This was the literal 6. It was correct on the six-slot host and became a
+ * quietly wrong denominator the moment topology moved to twelve — the headline
+ * would report eight occupied slots out of six. A display that disagrees with
+ * the policy being enforced teaches operators to distrust the display, and it
+ * is the same stale six-slot doctrine that produced the asSlot defect.
+ *
+ * Read per call rather than captured at module load, so changing topology does
+ * not require a Gateway restart to be reflected here.
+ */
+const permanentSlots = () => managedSlots().length;
 
 /** Enrich one occupied slot (an agent-status record) with the remaining reads. */
 async function enrichSlot(agent, ctx) {
@@ -84,7 +97,7 @@ export async function composeSnapshot(opts = {}) {
   const activity = projectActivity(sprintsCtx);
   const project = projectProject({ root: raw.root, base }, sprints);
 
-  const headline = composeHeadline({ sprints, workers, approvals, repository, maxSlots: PERMANENT_SLOTS });
+  const headline = composeHeadline({ sprints, workers, approvals, repository, maxSlots: permanentSlots() });
   const gaps = collectGaps(project, sprints, sourcesHealthy(raw));
 
   return {

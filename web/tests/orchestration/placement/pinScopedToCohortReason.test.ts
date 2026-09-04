@@ -48,9 +48,9 @@ describe("R12 — pin_scoped_to_cohort", () => {
         assignWaitlistCandidateRuntimePositions(rows, false, null);
         expect(proj(rows[1]!).runtime_position).toBe(2);
         expect(reasonOf(rows[1]!)).toBe("pin_scoped_to_cohort");
-        expect(waitlistPrecedenceReasonCopy(reasonOf(rows[1]!) as string)).toBe(
-            "Pinned within this group. Groups are ordered separately.",
-        );
+        // The reason code is still emitted and still typed; it simply carries no operator prose.
+        // The row shows no helper sentence — scope is stated by the control's field label instead.
+        expect(waitlistPrecedenceReasonCopy(reasonOf(rows[1]!) as string)).toBeNull();
     });
 
     it("3 + 6: a pin behind ANOTHER row of its own cohort is not a cohort-scope case", () => {
@@ -87,7 +87,10 @@ describe("R12 — pin_scoped_to_cohort", () => {
         assignWaitlistCandidateRuntimePositions(a, false, null);
         assignWaitlistCandidateRuntimePositions(b, false, null);
         expect(reasonOf(a[1]!)).toBe(reasonOf(b[1]!));
-        const copy = waitlistPrecedenceReasonCopy(reasonOf(a[1]!) as string)!;
+        // The reason now carries no operator prose at all, so there is trivially nothing to leak.
+        // The assertion is kept in the stronger form — whatever copy a future surface attaches must
+        // still name no neighbouring row, cohort or child.
+        const copy = waitlistPrecedenceReasonCopy(reasonOf(a[1]!) as string) ?? "";
         for (const leak of ["contested-passa", "some-other-child", "infant_0_18_months", "infant"]) {
             expect(copy).not.toContain(leak);
         }

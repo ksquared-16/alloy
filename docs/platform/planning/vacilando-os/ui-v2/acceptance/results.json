@@ -1,0 +1,403 @@
+{
+  "accepted_at": "2026-09-04T03:27:33.449Z",
+  "base": "http://127.0.0.1:3030",
+  "installed_toolkit": [
+    "source_repo=/Users/vacilando/Alloy",
+    "source_ref=origin/staging",
+    "source_commit=4ee65145b96b8d576f958b54aae5b441c0fa254e",
+    "source_commit_short=4ee65145b96b",
+    "source_subdir=scripts/local-dev",
+    "installed_at=2026-09-04T03:26:02Z",
+    "installed_by=alloy-toolkit",
+    "command_count=84"
+  ],
+  "passed": 77,
+  "failed": 0,
+  "results": [
+    {
+      "name": "running gateway serves /api/v2/views/home (promoted route)",
+      "ok": true,
+      "detail": "status 200 {\"ok\":true,\"approvals\":[],\"resources\":{\"workers\":[{\"slot\":2,\"worktree\":\"financials\",\"server\":\"stopped\",\"port\":\"3012\",\"server_process\":null,\""
+    },
+    {
+      "name": "running gateway serves /api/v2/views/system",
+      "ok": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "running gateway serves /api/v2/views/activity",
+      "ok": true,
+      "detail": "25 events from the real run/scm/governed logs"
+    },
+    {
+      "name": "running gateway lists real lanes",
+      "ok": true,
+      "detail": "9 lanes"
+    },
+    {
+      "name": "installed CLI advertises the progress flags",
+      "ok": true,
+      "detail": "vac run-status <run_id> [<state>] --progress <0-100> [--progress-confidence low|medium|high]"
+    },
+    {
+      "name": "installed CLI documents progress as milestone-reported, not per message",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed CLI accepts a progress-only report with no state argument",
+      "ok": true,
+      "detail": "erun_f60eb760772a2e7b lane_9b9082778292 EXECUTING | progress ~62% (medium confidence, provider_estimate) — Installed-runtime acceptance: driving the live Gateway"
+    },
+    {
+      "name": "the running Gateway projects the estimate to the UI",
+      "ok": true,
+      "detail": "{\"percent\":62,\"confidence\":\"medium\",\"summary\":\"Installed-runtime acceptance: driving the live Gateway\",\"remaining_work\":\"mobile acceptance and terminal-state proof\",\"source\":\"provider_estimate\",\"updated_at\":\"2026-09-04T03:26:29.246Z\"}"
+    },
+    {
+      "name": "installed module: a run can be created for the terminal-state proof",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed module: estimate persists on the run",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed module: COMPLETE becomes a MEASURED 100%",
+      "ok": true,
+      "detail": "{\"percent\":100,\"confidence\":\"high\",\"summary\":\"midway\",\"remaining_work\":null,\"source\":\"deterministic\",\"updated_at\":\"2026-09-04T03:26:29.474Z\"}"
+    },
+    {
+      "name": "installed module: FAILED removes the estimate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed module: ABANDONED removes the estimate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed module: an estimate older than 30m is stale",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed UI: a stale estimate renders 'Progress estimate unavailable'",
+      "ok": true,
+      "detail": "Progress estimate unavailable"
+    },
+    {
+      "name": "installed UI: an absent estimate renders unavailable, not 0%",
+      "ok": true,
+      "detail": "Progress estimate unavailable"
+    },
+    {
+      "name": "browser session authenticates against the live Gateway",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: Home renders the V2 shell",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: primary navigation is Home / Lanes / Activity / System",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: logo and navigation share one ground",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: no placeholder/demo value is presented as truth",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: unavailable fields use governed copy, not a number",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: data maturity remains inspectable",
+      "ok": true,
+      "detail": "24 annotated fields"
+    },
+    {
+      "name": "LIVE desktop: Activity renders real runtime history",
+      "ok": true,
+      "detail": "200 rows"
+    },
+    {
+      "name": "LIVE desktop: System renders host telemetry from the running host",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: lane uses the V2 layout",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: no ETA field in the product chrome",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: progress renders from the installed contract",
+      "ok": true,
+      "detail": "Provider estimate: ~62% complete"
+    },
+    {
+      "name": "LIVE desktop: no misleading empty/0% bar when there is no estimate",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: inspector is quiet by default",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE desktop: the lane body is a conversation, not dashboard cards",
+      "ok": true,
+      "detail": "You, Claude"
+    },
+    {
+      "name": "LIVE desktop: Needs You absent because nothing needs the operator",
+      "ok": true,
+      "detail": "no pending blocker on this lane — the tray correctly renders nothing"
+    },
+    {
+      "name": "LIVE mobile 390: bottom navigation matches the V2 IA",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: Home does not scroll sideways",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "LIVE mobile 390: Home has exactly one identity",
+      "ok": true,
+      "detail": "title \"Home\", crumb shown false, \"Home\" x1"
+    },
+    {
+      "name": "LIVE mobile 390: Home Needs You is a summary",
+      "ok": true,
+      "detail": "row heights [92]"
+    },
+    {
+      "name": "LIVE mobile 390: Home stacks and its tiles are readable",
+      "ok": true,
+      "detail": "home 1 col, health tiles 2 across"
+    },
+    {
+      "name": "LIVE mobile 390: the catalogue carries no governed payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: no \"No folder\" heading",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: folder names are not clipped against controls",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: lane rows are compact and scannable",
+      "ok": true,
+      "detail": "16 of 18 rows visible, median row 78px"
+    },
+    {
+      "name": "LIVE mobile 390: lane usable at phone width",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "LIVE mobile 390: composer on screen and no approvals surface pushes Send off",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: diagnostics are not dumped into the primary lane view",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: lane header is phone-scale",
+      "ok": true,
+      "detail": "header 84px of 844"
+    },
+    {
+      "name": "LIVE mobile 390: header keeps Details, sheds Stop lane and identity detail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: Current Work is an orientation summary",
+      "ok": true,
+      "detail": "238px — \"MOBILE VISUAL CORRECTION — AUTHORIZED FOR PROMOTION + LIVE V\""
+    },
+    {
+      "name": "LIVE mobile 390: conversation begins within one screen of the lane top",
+      "ok": true,
+      "detail": "conversation starts 263px into the lane body (viewport 844)"
+    },
+    {
+      "name": "LIVE mobile 390: conversation content is actually on screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: the thread carries explicit bylines",
+      "ok": true,
+      "detail": "5 entries: You, Claude"
+    },
+    {
+      "name": "LIVE mobile 390: idle composer is compact",
+      "ok": true,
+      "detail": "textarea 41px"
+    },
+    {
+      "name": "LIVE mobile 390: no page-level sideways scrolling",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 390: a long thread opens at the latest message, not the oldest",
+      "ok": true,
+      "detail": "latest message visible=true, scrollTop 5946 of 5946"
+    },
+    {
+      "name": "LIVE mobile 390: Details opens the compact Lane Inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: bottom navigation matches the V2 IA",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: Home does not scroll sideways",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "LIVE mobile 320: Home has exactly one identity",
+      "ok": true,
+      "detail": "title \"Home\", crumb shown false, \"Home\" x1"
+    },
+    {
+      "name": "LIVE mobile 320: Home Needs You is a summary",
+      "ok": true,
+      "detail": "row heights [92]"
+    },
+    {
+      "name": "LIVE mobile 320: Home stacks and its tiles are readable",
+      "ok": true,
+      "detail": "home 1 col, health tiles 2 across"
+    },
+    {
+      "name": "LIVE mobile 320: the catalogue carries no governed payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: no \"No folder\" heading",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: folder names are not clipped against controls",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: lane rows are compact and scannable",
+      "ok": true,
+      "detail": "13 of 18 rows visible, median row 78px"
+    },
+    {
+      "name": "LIVE mobile 320: lane usable at phone width",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "LIVE mobile 320: composer on screen and no approvals surface pushes Send off",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: diagnostics are not dumped into the primary lane view",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: lane header is phone-scale",
+      "ok": true,
+      "detail": "header 83px of 568"
+    },
+    {
+      "name": "LIVE mobile 320: header keeps Details, sheds Stop lane and identity detail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: Current Work is an orientation summary",
+      "ok": true,
+      "detail": "211px — \"MOBILE VISUAL CORRECTION — AUTHORIZED FOR PROMOTION + LIVE V\""
+    },
+    {
+      "name": "LIVE mobile 320: conversation begins within one screen of the lane top",
+      "ok": true,
+      "detail": "conversation starts 236px into the lane body (viewport 568)"
+    },
+    {
+      "name": "LIVE mobile 320: conversation content is actually on screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: the thread carries explicit bylines",
+      "ok": true,
+      "detail": "5 entries: You, Claude"
+    },
+    {
+      "name": "LIVE mobile 320: idle composer is compact",
+      "ok": true,
+      "detail": "textarea 41px"
+    },
+    {
+      "name": "LIVE mobile 320: no page-level sideways scrolling",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile 320: a long thread opens at the latest message, not the oldest",
+      "ok": true,
+      "detail": "latest message visible=true, scrollTop 6746 of 6746"
+    },
+    {
+      "name": "LIVE mobile 320: Details opens the compact Lane Inspector",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "LIVE mobile: composer usable with the keyboard open",
+      "ok": true,
+      "detail": "viewport 380, Send bottom 346"
+    }
+  ]
+}

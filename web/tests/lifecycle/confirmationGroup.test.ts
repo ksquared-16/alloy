@@ -40,6 +40,9 @@ function need(input: {
             canonical_key: input.key,
             shared_value_key: input.key,
             entity_type: input.entity ?? null,
+            // Required by EnrollmentNeedIdentity. Absent here, the cast had
+            // insufficient overlap and the whole literal stopped type-checking.
+            subject_entity_type: null,
             field_key: input.key.split(":").pop() ?? null,
             basis: input.key.includes(":") ? "canonical" : "shared_alias",
             artifact_specific: false,
@@ -68,6 +71,9 @@ function need(input: {
         has_value: true,
         current_value: input.value ?? "x",
         value_source: "canonical_prefill",
+        // Required by EnrollmentInformationNeed and nullable, so null is the
+        // exact value for a fixture that asserts nothing about origin.
+        value_origin: null,
         requires_participant_action: (input.state ?? "known_requires_confirmation") === "known_requires_confirmation",
     } as EnrollmentInformationNeed;
 }

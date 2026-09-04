@@ -40,6 +40,8 @@ import {
 import {
   findAuthorization,
   grantMissionAuthorization,
+  standingGrantEligible,
+  SUBJECT_SCOPES,
   grantExactRequestAuthorization,
   revokeAuthorization,
 } from "./trusted-host-authz.mjs";
@@ -56,6 +58,9 @@ import {
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
+  fulfillSetProviderCeilingForMission,
+  fulfillInstallToolkitForMission,
+  fulfillLaneDispatchForMission,
   previewTrustedHostAuthorization,
 } from "./trusted-host-actions.mjs";
 import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
@@ -90,7 +95,7 @@ import {
   releaseMissionDelegation,
   reserveMissionDelegation,
 } from "./mission-delegation.mjs";
-import { classForGovernedStatus, upsertNotification } from "./lane-notifications.mjs";
+import { classForGovernedStatus, isRoutineProgress, upsertNotification } from "./lane-notifications.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -750,6 +755,18 @@ export function operatorLabel(rec) {
     if (work) return `Delete ${work} branch`;
     return b ? `Delete remote branch ${b}` : "Delete a remote branch";
   }
+  if (key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    const from = inputs.expected_ceiling ?? inputs.expectedCeiling;
+    const to = inputs.requested_ceiling ?? inputs.requestedCeiling;
+    const back = inputs.rollback_ceiling ?? inputs.rollbackCeiling;
+    // The operator is approving a specific transition, so the numbers belong in
+    // the sentence. "Change the provider ceiling" hides the only detail that
+    // decides whether this is routine or alarming.
+    if (from != null && to != null) {
+      return `Set provider ceiling ${from} to ${to}${back != null ? ` (rollback ${back})` : ""}`;
+    }
+    return "Set the provider capacity ceiling";
+  }
   if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
     if (work) return `Read-only census — ${work}`;
     return `Read-only database census on ${target}`;
@@ -979,11 +996,41 @@ export function pendingGovernedActionForRun(runId, root = runtimeRoot()) {
   return newestPending(readGovernedActionStore(root).requests.filter((r) => r.run_id === runId));
 }
 
+/** Statuses after which a request will never need the operator again. */
+export const SETTLED_GOVERNED_STATUSES = Object.freeze(["complete", "failed"]);
+const SETTLED = new Set(SETTLED_GOVERNED_STATUSES);
+
+/**
+ * Retention that cannot evict an unanswered request.
+ *
+ * This was `slice(-200)`, which keeps the newest 200 records whatever state
+ * they are in — so a request still awaiting the Director could be dropped by
+ * 200 unrelated requests arriving after it. The card then disappears from the
+ * queue, and a pending approval that vanishes is indistinguishable from one
+ * that was resolved: the lane waits on a decision nobody can see any more.
+ *
+ * Only settled records are disposable, so only settled records are counted
+ * against the cap. Unsettled ones are kept regardless of age and of how many
+ * there are — an unbounded backlog is a problem to SHOW the operator, never
+ * one to fix by forgetting the oldest of it.
+ */
+export function retainGovernedRequests(requests, cap = 200) {
+  if (!Array.isArray(requests) || requests.length <= cap) return requests;
+  const unsettled = requests.filter((r) => !SETTLED.has(r.status));
+  const settled = requests.filter((r) => SETTLED.has(r.status));
+  // Budget can be zero once the unsettled backlog alone fills the cap, and
+  // `slice(-0)` is `slice(0)` — it returns EVERYTHING. Guard the zero case
+  // explicitly rather than letting a negative-index idiom decide it.
+  const budget = Math.max(0, cap - unsettled.length);
+  const keep = new Set(budget === 0 ? [] : settled.slice(-budget).map((r) => r.request_id));
+  return requests.filter((r) => !SETTLED.has(r.status) || keep.has(r.request_id));
+}
+
 function putRequest(store, rec) {
   const idx = store.requests.findIndex((r) => r.request_id === rec.request_id);
   if (idx >= 0) store.requests[idx] = rec;
   else store.requests.push(rec);
-  if (store.requests.length > 200) store.requests = store.requests.slice(-200);
+  store.requests = retainGovernedRequests(store.requests);
   return store;
 }
 
@@ -1068,27 +1115,65 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
   try {
     const cls = classForGovernedStatus(rec.status);
     if (cls) {
-      upsertNotification({
+      // ROUTINE PROGRESS DOES NOT OPEN A RECORD.
+      //
+      // Measured on this host: `governed_action_worker_resumed` was 232 of the
+      // 500 records in the store and pushed zero times — pure feed noise from
+      // actions running inside policy. It is suppressed at CREATION only. If a
+      // record for this request already exists it is still updated, because the
+      // completion of an approved action is what resolves the approval that
+      // opened it.
+      const noted = upsertNotification({
         subjectKey: `governed:${rec.request_id}`,
         requestId: rec.request_id,
         laneId: rec.lane_id || null,
         eventType: type,
         state: rec.status || null,
         attentionClass: cls,
+        createIfMissing: !isRoutineProgress(type),
         summary: title || rec.title || rec.action_key,
         path: rec.mission_id
           ? `/#/missions/${encodeURIComponent(rec.mission_id)}`
           : (rec.lane_id ? `/#/lanes/${encodeURIComponent(rec.lane_id)}` : "/#/lanes"),
         root,
       });
+      // Delivery is a projection of the record and must never be able to
+      // block, slow or fail the governed action itself — the same
+      // fire-and-forget contract run outcomes already use. Only a record that
+      // was just OPENED, or that has become a live demand again, is announced;
+      // an update that merely resolves one is not news.
+      if (noted?.record && (noted.created || noted.record.seen_at === null)) {
+        import("./lane-push.mjs")
+          .then((mod) => mod.pushGovernedNotification(noted.record, { root }))
+          .catch(() => { /* push is best-effort; the record is the truth */ });
+      }
     }
   } catch { /* the canonical record is best-effort too; never break the action */ }
   return event;
 }
 
-function artifactPathFrom(refs = []) {
+/**
+ * THE QUERY A CENSUS RUNS IS NEVER INFERRED.
+ *
+ * THE INCIDENT THIS CLOSES. This returned Q15_CENSUS_ARTIFACT when a request
+ * carried no artifact_refs, so a census filed WITHOUT naming a query silently
+ * became the Q15 authority census and ran it against the deployed primary. The
+ * substitution was then written into the request record, so the store showed a
+ * query the filer had never asked for. Observed for real: gar_a1d647be39e8b6
+ * was filed with no refs and executed q15-authority-census.json.
+ *
+ * A privileged read whose SUBJECT is guessed is not a governed action; it is an
+ * unreviewed one wearing a governed action's record. Absence now returns null,
+ * which validateInputs turns into `missing_query_artifact`, and the request
+ * fails closed before any database is touched. Every legitimate census in the
+ * store already names its own artifact, so nothing that was explicit changes.
+ *
+ * `fallback` exists for the two DISPLAY callers — a label and a filename in a
+ * summary — which want a readable string and can never cause execution.
+ */
+function artifactPathFrom(refs = [], { fallback = null } = {}) {
   const first = Array.isArray(refs) ? refs.find(Boolean) : refs;
-  return first ? String(first) : Q15_CENSUS_ARTIFACT;
+  return first ? String(first) : fallback;
 }
 
 /**
@@ -1134,7 +1219,7 @@ function identityFromInputs(input = {}) {
   const versions = Array.isArray(inputs.migrations)
     ? inputs.migrations.map((m) => m.version || m.prefix || m.path || "").join(",")
     : "";
-  return [pr, sha, versions].filter(Boolean).join(":") || artifactPathFrom(input.artifact_refs);
+  return [pr, sha, versions].filter(Boolean).join(":") || artifactPathFrom(input.artifact_refs, { fallback: "" });
 }
 
 function dedupeKey(input) {
@@ -1410,6 +1495,7 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) return "other";
+  if (actionKey === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) return "other";
   return "read_only";
 }
 
@@ -1634,8 +1720,9 @@ function policyDecision(rec, { nowMs } = {}) {
   // Same identity the mint and the execution boundary use — including the
   // environment, which this call used to leave out entirely while passing
   // `rec.target` as the database target.
+  const identity = authorizationIdentityFor(rec);
   const auth = findAuthorization({
-    ...authorizationIdentityFor(rec).lookup,
+    ...identity.lookup,
     nowMs: nowMs ?? Date.now(),
   });
   if (auth) {
@@ -1645,6 +1732,31 @@ function policyDecision(rec, { nowMs } = {}) {
       authorization_id: auth.authorizationId,
       reason: "existing_mission_authorization",
     };
+  }
+  // STANDING AUTHORITY THIS LANE ALREADY HOLDS.
+  //
+  // A separate probe rather than a widening of the one above, deliberately.
+  // The lookup above is filed under mission-or-repository; reordering it to
+  // prefer the lane would have re-homed every existing grant. This asks a
+  // strictly narrower question — "has the operator already approved THIS
+  // capability for THIS lane, in this repository and environment?" — and can
+  // only ever match a grant that was minted with an explicitly declared
+  // wildcard subject scope, for one of STANDING_ELIGIBLE_ACTIONS.
+  const standingScope = standingScopeFor(rec);
+  if (standingScope && standingGrantEligible(rec.action_key, { environment: identity.environment })) {
+    const standing = findAuthorization({
+      ...identity.lookup,
+      missionId: standingScope,
+      nowMs: nowMs ?? Date.now(),
+    });
+    if (standing) {
+      return {
+        auto_execute: true,
+        operator_approval_required: false,
+        authorization_id: standing.authorizationId,
+        reason: "existing_lane_standing_authorization",
+      };
+    }
   }
   // Production / deployed-primary reads require an operator grant.
   if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS && rec.target === DEFAULT_TARGET) {
@@ -2010,7 +2122,7 @@ export function governedActionSubjectKey(rec) {
     return `migration:${versions.join(",")}`;
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS) {
-    const artifact = artifactPathFrom(rec.artifact_refs) || "";
+    const artifact = artifactPathFrom(rec.artifact_refs, { fallback: "" }) || "";
     if (!rec.target) return null;
     return `census:${rec.target}:${artifact.split("/").pop()}`;
   }
@@ -2133,7 +2245,7 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
         rec.purpose,
         "",
         "Artifact:",
-        artifactPathFrom(rec.artifact_refs).split("/").pop(),
+        String(artifactPathFrom(rec.artifact_refs, { fallback: "" }) || "").split("/").pop(),
         "",
         "Data mode:",
         rec.requested_mode === "read_only" ? "Read-only" : rec.requested_mode,
@@ -2281,6 +2393,26 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
  */
 function authorityScopeFor(rec) {
   return rec?.mission_id || rec?.authority?.repository_id || null;
+}
+
+/**
+ * THE SCOPE A STANDING GRANT IS FILED AND FOUND UNDER — THE LANE, AND ONLY THE LANE.
+ *
+ * The first attempt reused `authorityScopeFor`, and a certification caught it:
+ * that resolver falls back to `authority.repository_id`, so one lane's approved
+ * push minted a grant every OTHER lane on the same repository could inherit.
+ * The test that failed was "the requesting lane cannot approve its own push" —
+ * a fresh lane was auto-executing on authority nobody had given it.
+ *
+ * A repository is not an owner; it is a shared resource. The lane is the
+ * narrowest thing that owns work and outlives a single request, so a standing
+ * grant is filed under the lane and found under the lane. A request with no
+ * lane gets no standing grant at all, because there would be nothing to bound
+ * it to and "unbounded" is not a scope.
+ */
+function standingScopeFor(rec) {
+  const lane = String(rec?.lane_id || "").trim();
+  return lane || null;
 }
 
 /**
@@ -2460,6 +2592,52 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   }
   if (rec.action_key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
     return fulfillClosePullRequestForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  /*
+   * THE MISSING BRANCH. capacity.set_provider_ceiling was registered, mode-mapped,
+   * policy-covered, capability-granted and operator-APPROVED — and still failed
+   * `action_unavailable`, because execution fell through to the guard below.
+   * fulfillSetProviderCeilingForMission already existed in trusted-host-actions;
+   * it was simply never imported or dispatched, so the action has never been
+   * executable since it shipped. This is the exact failure the comment on that
+   * fallthrough describes: the action existed everywhere except in this dispatch,
+   * and the error names the registry rather than the missing branch.
+   */
+  if (rec.action_key === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
+    return fulfillLaneDispatchForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
+    return fulfillInstallToolkitForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    return fulfillSetProviderCeilingForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},
@@ -3290,6 +3468,41 @@ export async function approveGovernedAction(requestId, {
   // Director never saw. It gets a single-use grant pinned to this exact
   // proposal instead: this PR, this head SHA, this target, this method, this
   // run. A different SHA is a different decision.
+  // A STANDING GRANT FOR A NARROW ALLOWLIST — the reason the operator was asked
+  // 153 redundant times in 17 hours.
+  //
+  // Approving a bounded, repeatable capability granted authority over ONE
+  // content fingerprint, so the next identical push, PR or session restore
+  // asked again. The authorization model already had MISSION_STANDING with an
+  // explicit subject scope and nothing ever minted one. This routes it, for the
+  // three capabilities STANDING_ELIGIBLE_ACTIONS justifies and no others.
+  //
+  // The grant is scoped to the SAME identity the lookup uses — capability,
+  // repository, environment, and the lane or mission that owns it — so it
+  // cannot reach another lane, another repository or another environment. It
+  // expires, it is auditable, and it is revocable. Everything not on that
+  // allowlist keeps the single-use grant pinned to this exact proposal.
+  const standingScope = standingScopeFor(rec);
+  const sIdentity = authorizationIdentityFor(rec);
+  if (standingScope && standingGrantEligible(rec.action_key, { environment: sIdentity.environment })) {
+    grantMissionAuthorization({
+      // The LANE. Never the mission and never the repository: a grant filed
+      // under a shared resource is inheritable by everything sharing it.
+      missionId: standingScope,
+      actionType: rec.action_key,
+      databaseTarget: sIdentity.databaseTarget || rec.target,
+      actor,
+      // Explicitly reusable for any subject of THIS capability inside THIS
+      // scope. Declared, never inferred: absence is not a wildcard.
+      subjectScope: SUBJECT_SCOPES.ANY_WITHIN_MISSION,
+      repository: sIdentity.repository || null,
+      environment: sIdentity.environment || null,
+      sourceDecisionId: rec.decision_id,
+      note: `Operator approved ${rec.action_key}; standing for this lane, repository and environment.`,
+      nowMs,
+    });
+  }
+
   if (rec.mission_id) {
     // Subject and target from the SAME resolver the lookup uses. This site kept
     // `actionQueryHash` and `rec.target`, a fourth spelling of a subject key

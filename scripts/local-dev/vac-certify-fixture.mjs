@@ -18,10 +18,12 @@ import {
 } from "./lib/vacilando/certification-fixture.mjs";
 
 function usage(code = 2) {
-  process.stderr.write(`Usage: vac certify-fixture <fixture> <operation> --lane <lane_id> [--identity-decision <d>] [--org <uuid>] [--json]
+  process.stderr.write(`Usage: vac certify-fixture <fixture> <operation> --lane <lane_id> [--identity-decision <d>] [--org <uuid>] [--phases <a,b>] [--json]
        vac certify-fixture --list
 
 Operations are allowlisted per fixture. Credentials never enter the worktree.
+--phases is accepted only by a fixture that declares one, and only from its own
+closed vocabulary; --list shows it.
 `);
   process.exit(code);
 }
@@ -41,6 +43,7 @@ if (!fixture || !operation || fixture.startsWith("-") || operation.startsWith("-
 let lane = null;
 let identityDecision = null;
 let orgId = null;
+let phases = null;
 let asJson = false;
 while (args.length) {
   const a = args.shift();
@@ -50,6 +53,8 @@ while (args.length) {
   else if (a.startsWith("--identity-decision=")) identityDecision = a.slice(20);
   else if (a === "--org") orgId = args.shift() || "";
   else if (a.startsWith("--org=")) orgId = a.slice(6);
+  else if (a === "--phases") phases = args.shift() || "";
+  else if (a.startsWith("--phases=")) phases = a.slice(9);
   else if (a === "--json") asJson = true;
   else usage();
 }
@@ -62,6 +67,7 @@ const out = await runCertificationFixture({
   cwd: resolve(process.cwd()),
   identityDecision,
   orgId,
+  phases,
 });
 
 if (asJson) {
@@ -80,6 +86,7 @@ if (!out.ok) {
 }
 
 process.stdout.write(`${out.fixture} ${out.operation} ok · namespace ${out.reserved_namespace}\n`);
+if (out.phases) process.stdout.write(`  phases: ${out.phases.join(", ")}\n`);
 const ids = out.ids || {};
 for (const [k, v] of Object.entries(ids)) {
   if (Array.isArray(v) ? v.length : v) process.stdout.write(`  ${k}: ${Array.isArray(v) ? v.join(", ") : v}\n`);

@@ -104,8 +104,9 @@ graph — a journey that never leaves its entry stage does so because no transit
 `createEnrollmentProcessInstance` continues to write `stage_key = NULL`. It is not stamped at
 creation.
 
-Both existing creators — Start Enrollment and Create Lead child persistence — pass `stageKey: null`
-deliberately, and `stage_entered_at` is stamped only when a stage is present. Writing an entry stage
+All three creators — Start Enrollment, Create Lead child persistence, and the family decision
+handoff (`enter_child_enrollment`) — pass `stageKey: null` deliberately, and `stage_entered_at` is
+stamped only when a stage is present. Writing an entry stage
 at creation would mean a journey had *entered* a stage without any transition firing, would stamp an
 entry timestamp for a movement that never happened, and would change which work views the child
 appears in. That is a change to lifecycle meaning made for the convenience of a downstream reader.
@@ -121,6 +122,28 @@ effective stage = process_instances.stage_key ?? entry_points_v1.by_intent[inten
 the journey actually is. Both `resolveEnrollmentParticipantProgress` and the participant launch read
 through it, so an unmoved journey projects the requirements that genuinely govern it instead of
 projecting nothing until an operator happens to move the child.
+
+## The family decision is a third door, not a third intent
+
+`family_enrolling` on the family `decision` stage carries a child-grain target, `enter_child_enrollment`,
+which begins the child's Enrollment. It writes `metadata.source = "enrollment_start"` and no stage.
+
+It is deliberately **not** a new entry intent. A family deciding to enrol a child *is* an enrollment
+start; the only difference is who pressed the button. Minting a third intent would have required a
+third `by_intent` mapping in every tenant, and a tenant that configured two of the three would get a
+child governed by a stage nobody chose.
+
+This was got wrong once, and the failure is worth keeping. The target originally stamped a literal
+`stage_key: "enrollment"` and an invented `source: "family_enrollment_decision"`. A persisted stage
+always beats the declaration, so the journey sat on `enrollment` — a stage **no published revision in
+the tenant defines** — while Start Enrollment, which stamps nothing, resolved `enrolling` and realized
+its packet. Two symptoms (a stage that does not exist, and a participant with no requirements) from
+one cause: naming a stage that configuration had already named.
+
+There is no child-grain `enrollment` stage in the deployed configuration. The default operating plans
+in this repository describe one; the tenant's published revisions declare `enrollment_start → enrolling`
+and stop there. **Code must not reconcile that difference by naming a stage.** Whichever stage a tenant
+declares is the entry stage, for every door.
 
 ## Not a competing authority: `resolveCreateLeadEntryStageKey`
 
@@ -142,3 +165,8 @@ structurally impossible; the mapping surviving a serialize/parse round trip, whi
 immutable in a revision and restorable by rollback; and the Create Lead regression — a `create_lead`
 journey resolving `lead` and projecting no participant Form requirement, while a Start Enrollment
 journey in the same tenant resolves `enrolling` and realizes its packet.
+
+`tests/lifecycle/acquisitionToEnrollmentHandoff.test.ts` — the family decision target naming no
+stage; the journey being created with `stageKey: null` and the `enrollment_start` intent, pinned
+against the literal Start Enrollment writes; both intake seams creating a participation but no child
+journey; and the handoff refusing rather than advancing siblings when a family has none or several.

@@ -19,6 +19,7 @@ SUITES=(
   "development-execution-run.test.mjs"
   "development-gateway-run-recovery-ui.test.mjs"
   "development-gateway-ui.test.mjs"
+  "development-gateway-ui-v2.test.mjs"
   "development-provider-health.test.mjs"
   "development-prompt-readiness.test.mjs"
   "development-agent-report.test.mjs"

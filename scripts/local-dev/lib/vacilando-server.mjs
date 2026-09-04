@@ -27,6 +27,7 @@
  *   GET  /api/attachments/:id → the image bytes, same auth as the conversation
  *   GET  /api/notifications   → durable notification records + unseen counts
  *   POST /api/notifications/seen → acknowledge by notification_id | lane_id | all
+ *   GET/POST /api/notifications/preferences → the operator phone-push switch
  *   GET  /api/lane-folders    → lane folders (organisation only; never a lifecycle)
  *   POST /api/lane-folders/create|:id/rename|:id/delete → folder CRUD (delete unfiles, never deletes lanes)
  *   POST /api/lanes/:id/folder → file a lane into a folder (folder_id: null unfiles)
@@ -2008,6 +2009,15 @@ export function createVacilandoServer() {
           const withComplete = await applyIdleTurnCompletions(withActivity);
           for (let i = 0; i < lanes.length; i += 1) lanes[i] = withComplete[i];
         } catch { /* status still renders from the run alone */ }
+        // WHICH LANE IS HOLDING THE MACHINE. Joined from canonical owners —
+        // seat from provider-capacity, tree from process-attribution ancestry,
+        // resident memory from health-probes. Secondary to discovery, like every
+        // other attacher here: a slow `ps` must never fail the lane list.
+        try {
+          const { attachLaneResourceUse } = await import("./vacilando/lane-resource-use.mjs");
+          const withResources = await attachLaneResourceUse(lanes);
+          for (let i = 0; i < lanes.length; i += 1) lanes[i] = withResources[i];
+        } catch { /* a lane without a resource reading still renders */ }
         let repositories = [];
         try {
           const R = await import("./vacilando/repository-registry.mjs");
@@ -2085,6 +2095,32 @@ export function createVacilandoServer() {
         } catch (e) {
           return sendJson(res, 500, { ok: false, error: "attachment_list_failed", detail: String(e && e.message || e) });
         }
+      }
+    }
+    // THE OPERATOR'S PHONE SWITCH.
+    //
+    // GET reports it; POST sets it. It is deliberately its own endpoint rather
+    // than a field on the push-subscription record: unsubscribing a device is
+    // a different act from asking not to be interrupted, and conflating them
+    // means "notifications off" silently uninstalls the ability to turn them
+    // back on from that device.
+    if (path === "/api/notifications/preferences") {
+      try {
+        const prefs = await import("./vacilando/notification-preferences.mjs");
+        if (req.method === "GET") {
+          return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
+        }
+        if (req.method === "POST") {
+          const body = await readJsonBody(req);
+          if (typeof body?.push_enabled !== "boolean") {
+            return sendJson(res, 400, { ok: false, error: "push_enabled_required" });
+          }
+          prefs.setPushEnabled(body.push_enabled);
+          return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
+        }
+        return sendJson(res, 405, { ok: false, error: "method_not_allowed" });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "preferences_failed", detail: String(e && e.message || e) });
       }
     }
     if (path === "/api/notifications") {

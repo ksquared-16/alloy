@@ -490,8 +490,44 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       expectedLaneId: laneId,
       checkpoint_ready: v.checkpoint_ready,
       checkpoint_summary: v.checkpoint_summary || null,
+      progress_percent: v.progress_percent ?? v.progressPercent ?? null,
+      progress_confidence: v.progress_confidence ?? v.progressConfidence ?? null,
+      progress_summary: v.progress_summary ?? v.progressSummary ?? null,
+      progress_source: v.progress_source ?? v.progressSource ?? null,
+      remaining_work: v.remaining_work ?? v.remainingWork ?? null,
     });
     const status = out.ok ? 200 : (out.error === "illegal_transition" || out.error === "worktree_mismatch" || out.error === "lane_mismatch" ? 409 : 400);
+    return { status, body: out };
+  }
+
+  // PROVIDER PROGRESS CONTRACT — the HTTP form of `vac run-status --progress`.
+  //
+  // Same owner (execution-run.mjs), same normalization, same staleness rule. It
+  // exists so a provider integration that is not a shell can report the same
+  // milestone estimate; it is deliberately NOT a second progress system.
+  if (path === "/api/v2/lane/run/progress" || path === "/api/v2/lanes/run/progress") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { getDevelopmentLane } = await import("./lanes.mjs");
+    const { reportRunState, activeRunForLane } = await import("./execution-run.mjs");
+    const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
+    if (!found.ok) {
+      const status = found.error === "invalid_lane_id" ? 400 : 404;
+      return { status, body: { ok: false, error: found.error } };
+    }
+    const runId = v.run_id || v.runId || activeRunForLane(laneId)?.run_id;
+    if (!runId) return { status: 404, body: { ok: false, error: "run_not_found" } };
+    const out = reportRunState(runId, v.state || null, {
+      origin: "agent",
+      cwd: found.lane?.worktree?.path || null,
+      expectedLaneId: laneId,
+      progress_percent: v.progress_percent ?? v.progressPercent ?? v.percent ?? null,
+      progress_confidence: v.progress_confidence ?? v.progressConfidence ?? v.confidence ?? null,
+      progress_summary: v.progress_summary ?? v.progressSummary ?? v.summary ?? null,
+      progress_source: v.progress_source ?? v.progressSource ?? v.source ?? null,
+      remaining_work: v.remaining_work ?? v.remainingWork ?? null,
+    });
+    const status = out.ok ? 200 : (out.error === "run_not_found" ? 404 : 400);
     return { status, body: out };
   }
 
@@ -1704,6 +1740,27 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
   if (path === "/api/v2/lane-folders") {
     const { listLaneFolders } = await import("./lane-folders.mjs");
     return { status: 200, body: { ok: true, folders: listLaneFolders() } };
+  }
+
+  // ---- UI V2 surfaces --------------------------------------------------
+  // Projections over the owners listed in ui-v2-views.mjs. They compose; they
+  // do not measure. A field the platform does not collect is ABSENT from the
+  // body, and the browser renders the governed unavailable state for it.
+  if (path === "/api/v2/views/home") {
+    const { projectHome } = await import("./ui-v2-views.mjs");
+    return { status: 200, body: await projectHome({}) };
+  }
+  if (path === "/api/v2/views/activity") {
+    const { projectActivityFeed } = await import("./ui-v2-views.mjs");
+    const rawLimit = q("limit");
+    const limit = rawLimit != null && /^\d+$/.test(String(rawLimit))
+      ? Math.min(500, Math.max(1, Number(rawLimit)))
+      : undefined;
+    return { status: 200, body: await projectActivityFeed(limit ? { limit } : {}) };
+  }
+  if (path === "/api/v2/views/system") {
+    const { projectSystemSnapshot } = await import("./ui-v2-views.mjs");
+    return { status: 200, body: await projectSystemSnapshot({}) };
   }
   if (path === "/api/v2/lanes/candidates" || path === "/api/v2/lane/candidates") {
     const { listAdoptionCandidates } = await import("./lane-identity-api.mjs");

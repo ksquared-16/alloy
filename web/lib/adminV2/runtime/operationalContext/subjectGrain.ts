@@ -38,7 +38,12 @@ import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/
  */
 export type OperationalSubjectType = "opportunity" | "child" | "person" | "household";
 
-const OPERATIONAL_SUBJECT_TYPES: readonly OperationalSubjectType[] = [
+/**
+ * Every subject grain the runtime has. Exported because "what grains exist" is a question with ONE
+ * answer, and a caller that enumerates grains (composition participation, for one) must not restate
+ * the list — a grain added here would otherwise be silently missed by every private copy.
+ */
+export const OPERATIONAL_SUBJECT_TYPES: readonly OperationalSubjectType[] = [
     "opportunity",
     "child",
     "person",

@@ -9,6 +9,11 @@ source "${SCRIPT_DIR}/lib/common.sh"
 usage() {
   cat <<'EOF'
 Usage: alloy-worktree-remove <worktree-name>
+       alloy-worktree-remove <worktree-name> --orphaned <expected-branch>
+
+  --orphaned  retire a worktree whose registration is already gone. The branch
+              must be named and must match the worktree HEAD, because with no
+              metadata there is no recorded branch to check against.
 
 Requires an explicit interactive confirmation.
 Uses git worktree remove (never --force) and git branch -d (never -D).
@@ -20,18 +25,51 @@ main() {
     usage
     exit 0
   fi
-  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+  local name="" orphan_branch=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      # A WORKTREE WITHOUT METADATA STILL HAS TO BE RETIRABLE.
+      #
+      # This command loads metadata first and dies "unknown worktree metadata"
+      # if it is missing, so a worktree whose registration is gone has NO
+      # canonical retirement path and the operator is pushed to raw
+      # `git worktree remove`. That is not hypothetical: registration is
+      # host-local state that no backup carries (see alloy-worktree-adopt), and
+      # a retirement that deletes metadata before calling this command produces
+      # exactly the same orphan. It happened during capacity certification.
+      #
+      # The safety property is NOT the metadata file — it is that we never
+      # remove a worktree whose identity we cannot confirm. With no registration
+      # there is no recorded branch to compare against, so the caller must NAME
+      # the branch and it must match the worktree's actual HEAD. The check is
+      # preserved, only its source moves from the registry to the caller.
+      --orphaned) orphan_branch="${2:-}"; shift 2 ;;
+      -*) usage >&2; exit 2 ;;
+      *) name="$1"; shift ;;
+    esac
+  done
+  [[ -n "$name" ]] || { usage >&2; exit 2; }
 
-  local name="$1"
   alloy_load_config
   alloy_ensure_runtime_dirs
   alloy_require_cmd git
   alloy_verify_canonical_repo
-  alloy_load_metadata "$name"
 
-  local path="$ALLOY_WORKTREE_PATH"
-  local branch="$ALLOY_WORKTREE_BRANCH"
-  local port="$PORT"
+  local path branch port
+  if [[ -n "$orphan_branch" ]]; then
+    [[ -f "$(alloy_metadata_path "$name")" ]] && \
+      alloy_die "$name IS registered — retire it normally; --orphaned is only for a worktree whose metadata is already gone."
+    path="${ALLOY_WORKTREE_ROOT}/${name}"
+    branch="$orphan_branch"
+    port=""
+    [[ -d "${path}/.git" || -f "${path}/.git" ]] || \
+      alloy_die "not a git worktree: ${path}. No data removed."
+  else
+    alloy_load_metadata "$name"
+    path="$ALLOY_WORKTREE_PATH"
+    branch="$ALLOY_WORKTREE_BRANCH"
+    port="$PORT"
+  fi
   local meta_path pid_path log_path pid
   meta_path="$(alloy_metadata_path "$name")"
   pid_path="$(alloy_pid_path "$name")"
@@ -42,7 +80,7 @@ main() {
   local current
   current="$(alloy_current_branch "$path")"
   [[ "$current" == "$branch" ]] || \
-    alloy_die "metadata/branch disagree: expected '$branch', found '$current'. No data removed."
+    alloy_die "${orphan_branch:+--orphaned }branch disagree: expected '$branch', found '$current'. No data removed."
 
   if alloy_worktree_is_dirty "$path"; then
     alloy_die "worktree is dirty; commit or discard changes manually first. No data removed."

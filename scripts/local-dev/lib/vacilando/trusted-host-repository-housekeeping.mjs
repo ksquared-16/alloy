@@ -135,6 +135,89 @@ export function measureClosePullRequestGates(n, { gh = defaultGh } = {}) {
   };
 }
 
+/**
+ * Measure what a staging merge is actually allowed to rely on.
+ *
+ * WHY THIS EXISTS. The merge policy has always listed the right gates, and
+ * nothing measured them — so every merge escalated to the operator, who then
+ * approved it by reading the same GitHub page this function reads. The human
+ * click was standing in for a missing measurement rather than supplying a
+ * judgement, which is the worst of both: it cost an interruption and added no
+ * safety. Building the measurement is what makes removing the click honest.
+ *
+ * Every failure to read is null, never false, and a null gate escalates. An
+ * incomplete measurement here can only produce MORE operator approvals.
+ */
+export function measureMergePullRequestGates(n, { gh = defaultGh } = {}) {
+  const out = gh(["api", `repos/${n.repository}/pulls/${n.pullRequestNumber}`,
+    "--jq", "{state:.state,merged:.merged,draft:.draft,mergeable:.mergeable,mergeable_state:.mergeable_state,"
+      + "head_sha:.head.sha,head_ref:.head.ref,base_ref:.base.ref,head_repo:.head.repo.full_name}"]);
+  if (out.status !== 0) {
+    return { pull_request_readable: false, detail: String(out.stderr || "").split("\n")[0].slice(0, 200) };
+  }
+  const pr = parseJson(out.stdout);
+  if (!pr) return { pull_request_readable: false, detail: "unparseable pull request response" };
+
+  const ev = {
+    pull_request_readable: true,
+    pull_request_exists: true,
+    pull_request_open: lower(pr.state) === "open",
+    pull_request_not_merged: pr.merged === false,
+    pull_request_head_sha: norm(pr.head_sha),
+    base_branch: norm(pr.base_ref),
+    head_branch: norm(pr.head_ref),
+    // GitHub reports mergeability as a tri-state and computes it lazily: null
+    // means "ask again", NOT "no". Treating an uncomputed answer as mergeable
+    // is how a conflicted merge gets auto-approved, so null stays null.
+    pull_request_mergeable: pr.mergeable == null
+      ? null
+      : (pr.mergeable === true && !pr.draft && lower(pr.mergeable_state) !== "dirty"),
+    observed: {
+      state: pr.state, merged: pr.merged, draft: pr.draft,
+      mergeable: pr.mergeable, mergeable_state: pr.mergeable_state,
+      head_sha: pr.head_sha, base_ref: pr.base_ref,
+    },
+  };
+
+  // Checks. A PR with zero checks is not "all checks passed" — the gate
+  // requires total > 0, so an unchecked PR escalates rather than sails through.
+  const checks = gh(["pr", "checks", String(n.pullRequestNumber), "--repo", n.repository,
+    "--json", "name,state,bucket"]);
+  if (checks.status !== 0 && !String(checks.stdout || "").trim()) {
+    ev.required_checks_total = null;
+  } else {
+    const rows = parseJson(checks.stdout) || [];
+    // "skipping" is neither a pass nor a failure: a skipped check has asserted
+    // nothing, so it is excluded from the denominator rather than counted as
+    // green. Counting it green is how a suite that never ran looks certified.
+    const counted = rows.filter((r) => lower(r.bucket) !== "skipping" && lower(r.state) !== "skipped");
+    const bucketOf = (r) => lower(r.bucket) || lower(r.state);
+    ev.required_checks_total = counted.length;
+    ev.required_checks_passing = counted.filter((r) => ["pass", "success"].includes(bucketOf(r))).length;
+    ev.required_checks_failing = counted.filter((r) => ["fail", "failure", "cancel", "cancelled", "timed_out", "action_required"].includes(bucketOf(r))).length;
+    ev.required_checks_pending = counted.filter((r) => ["pending", "queued", "in_progress", "waiting"].includes(bucketOf(r))).length;
+    // The certification suite specifically, not the deploy previews.
+    const certs = counted.filter((r) => /certification/i.test(String(r.name || "")));
+    ev.certification_suite_passed = certs.length === 0
+      ? null
+      : certs.every((r) => ["pass", "success"].includes(bucketOf(r)));
+  }
+
+  // Anything a human explicitly raised and has not resolved. Changes requested
+  // is a governance finding whatever the checks say.
+  const rev = gh(["pr", "view", String(n.pullRequestNumber), "--repo", n.repository,
+    "--json", "reviewDecision,reviews"]);
+  if (rev.status !== 0) {
+    ev.unresolved_governance_findings = null;
+  } else {
+    const v = parseJson(rev.stdout);
+    ev.unresolved_governance_findings = v == null
+      ? null
+      : (lower(v.reviewDecision) === "changes_requested" ? 1 : 0);
+  }
+  return ev;
+}
+
 export function measureDeleteRemoteBranchGates(n, { gh = defaultGh } = {}) {
   const ev = { branch_never_protected_name: !isNeverDeletable(n.branch) };
 

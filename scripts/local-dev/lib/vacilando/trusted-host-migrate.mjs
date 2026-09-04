@@ -597,6 +597,91 @@ export function validateMigrationInputs(inputs = {}, {
   };
 }
 
+/**
+ * A migration's DURABLE POSTCONDITION -- the evidence that it actually ran.
+ *
+ * ── WHY A LEDGER ROW IS NOT PROOF ──
+ *
+ * The executor treated "the version string is in schema_migrations" as "this migration is applied",
+ * and skipped it as idempotent. A certification database was found recording five Enrollment
+ * migrations while three of their effects were absent: the indexes did not exist and the anchor
+ * backfill had left no trace. Every apply reported ok:true and did nothing, which is the worst
+ * possible shape -- silent, and confidently wrong.
+ *
+ * So a recorded version is now CHECKED against something only a successful run could have produced.
+ * These are deliberately EXPLICIT per migration rather than generic SQL inference: a generic guess
+ * about what a migration "should" have done is another thing that can be wrong quietly, and the
+ * author of a migration is the one who knows its postcondition.
+ *
+ * Each entry returns a single boolean column. Absent from this map = unverifiable, and an
+ * unverifiable migration keeps the old behaviour (a recorded version is trusted) rather than
+ * blocking every migration the platform has ever applied.
+ */
+export const MIGRATION_POSTCONDITIONS = {
+  // The acquisition Opportunity became optional on the participation.
+  "20260827160000": {
+    describe: "opportunity_customer_members.opportunity_id is nullable",
+    sql: `SELECT (NOT a.attnotnull) FROM pg_attribute a
+            JOIN pg_class c ON c.oid = a.attrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE n.nspname='public' AND c.relname='opportunity_customer_members'
+             AND a.attname='opportunity_id' AND a.attnum>0 AND NOT a.attisdropped;`,
+  },
+  // The episode-scoped context-free uniqueness index exists (either the original name or the
+  // successor that narrowed its predicate -- both satisfy this migration's intent).
+  "20260827170000": {
+    describe: "a context-free participation uniqueness index exists",
+    sql: `SELECT EXISTS (
+            SELECT 1 FROM pg_class i
+             WHERE i.relname IN ('uq_ocm_active_context_free_participation','uq_ocm_active_context_free_episode')
+          );`,
+  },
+  /*
+   * The backfill's guarantee is NOT "some journey is anchored" -- it is "no OPEN journey is left
+   * unanchored". Real data caught the difference: this tenant has 25 enrollment journeys of which
+   * every unanchored one is already concluded, so a legitimate re-run anchors nothing. Asserting
+   * that an anchored journey EXISTS would have reported ledger_mismatch forever after a correct
+   * no-op apply -- a verifier that cries wolf is worse than none, because the next real mismatch
+   * gets waved through.
+   *
+   * Concluded journeys are deliberately excluded: the migration leaves them alone on purpose, so
+   * that a past episode is never re-filed under a current participation.
+   */
+  "20260827180000": {
+    describe: "no OPEN enrollment journey remains unanchored",
+    sql: `SELECT NOT EXISTS (
+            SELECT 1 FROM public.process_instances
+             WHERE process_key='enrollment' AND subject_type='child'
+               AND context_id IS NULL
+               AND COALESCE(state,'') NOT IN ('enrolled','withdrawn','not_enrolling')
+          );`,
+  },
+  // The governed requirement exception owner, with the index that makes it idempotent.
+  "20260901120000": {
+    describe: "enrollment_requirement_exceptions exists with its active-unique index",
+    sql: `SELECT (
+            to_regclass('public.enrollment_requirement_exceptions') IS NOT NULL
+            AND EXISTS (SELECT 1 FROM pg_class WHERE relname='uq_enrollment_requirement_exception_active')
+          );`,
+  },
+  // Enrolled releases the active context-free slot.
+  "20260902090000": {
+    describe: "uq_ocm_active_context_free_episode exists",
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname='uq_ocm_active_context_free_episode');`,
+  },
+};
+
+/** The postcondition probe for a version, or null when the migration declares none. */
+export function migrationPostconditionSql(version) {
+  const entry = MIGRATION_POSTCONDITIONS[String(version || "").trim()];
+  return entry ? entry.sql : null;
+}
+
+export function migrationPostconditionDescription(version) {
+  const entry = MIGRATION_POSTCONDITIONS[String(version || "").trim()];
+  return entry ? entry.describe : null;
+}
+
 export function ledgerLookupSql(version) {
   const v = String(version || "").replace(/'/g, "");
   return `SELECT version FROM supabase_migrations.schema_migrations WHERE version = '${v}';`;

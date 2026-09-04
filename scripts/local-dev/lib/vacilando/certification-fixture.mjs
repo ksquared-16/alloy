@@ -58,6 +58,78 @@ export const CERTIFICATION_FIXTURES = Object.freeze({
       reset: Object.freeze({ args: ["--remove"], mutating: true }),
     }),
   }),
+  enrollment_certification: Object.freeze({
+    fixture: "enrollment_certification",
+    npm_script: "dev:seed:enrollment-certification",
+    // RFC-2606 reserved, so it can never collide with a real address.
+    reserved_namespace: "enrollment-cert.alloy.invalid",
+    description:
+      "REAL ENROLLMENT V1 certification families: Certfree (context-free, acquisition concluded) "
+      + "and Certopp (Opportunity-backed), each with one child and a started Enrollment journey.",
+    operations: Object.freeze({
+      ensure: Object.freeze({ args: [], mutating: true }),
+      verify: Object.freeze({ args: ["--verify"], mutating: false }),
+      reset: Object.freeze({ args: ["--remove"], mutating: true }),
+    }),
+  }),
+  /*
+   * THE E2E DRIVER, and it is a different KIND of entry to the two above.
+   *
+   * Those seed a fixture. This one RUNS the REAL ENROLLMENT V1 certification driver against the
+   * fixture they seeded. It is here rather than in a parallel execution path because the property
+   * that makes this safe is the property this registry already enforces: a caller names a fixture
+   * and an operation, and the pair resolves to a fixed npm script and a fixed argument vector it
+   * cannot influence. A second executor would have to re-earn that, and would drift.
+   *
+   * `run` is deliberately NOT `ensure`/`verify`/`reset`. The operation names are matched per
+   * fixture, so `enrollment_e2e_certification reset` and `enrollment_certification run` are both
+   * refused — adding an operation to one fixture must not widen another.
+   *
+   * PHASES ARE VALIDATED HERE BECAUSE THE DRIVER CANNOT REFUSE THEM. `selectPhaseChain` looks a
+   * requested key up and RETURNS SILENTLY when it misses, so an unknown selector does not fail —
+   * it quietly runs bootstrap alone and reports a green subset that proves nothing. A typo would
+   * be indistinguishable from a pass. So the closed vocabulary is restated here and an unknown
+   * phase is refused before any process starts.
+   *
+   * The list mirrors REAL_ENROLLMENT_V1_PHASES in the product worktree. It is duplicated on
+   * purpose, exactly as the fixture list is restated in the bash runner: this boundary must be
+   * able to refuse without loading product code it does not own. Adding a phase to the driver
+   * without adding it here fails CLOSED — the phase is refused, never silently skipped.
+   */
+  enrollment_e2e_certification: Object.freeze({
+    fixture: "enrollment_e2e_certification",
+    npm_script: "dev:certify:enrollment-e2e",
+    // The driver drives the enrollment_certification fixture, so it operates inside that
+    // fixture's reserved namespace rather than claiming one of its own.
+    reserved_namespace: "enrollment-cert.alloy.invalid",
+    description:
+      "REAL ENROLLMENT V1 end-to-end certification driver: runs the declared phase suite against "
+      + "the certification tenant and returns the phase report.",
+    operations: Object.freeze({
+      run: Object.freeze({ args: [], mutating: true }),
+    }),
+    phase_ids: Object.freeze([
+      "A_bootstrap",
+      "B_entry",
+      "R1_path_a_stays_context_free",
+      "R2_no_duplicate_episode",
+      "L_sufficiency",
+      "C_participant_entry",
+      "D_confirmation",
+      "E_collection",
+      "M_exception",
+      "G_evidence",
+      "K_participant_complete",
+      "N_complete_enrollment",
+      "Q_next_episode",
+      "F_parties",
+      "H_artifacts",
+      "I_correction",
+      "J_signature",
+      "P_handoff",
+      "S_responsive",
+    ]),
+  }),
 });
 
 /**
@@ -78,6 +150,7 @@ export const FIXTURE_REFUSALS = Object.freeze({
   UNKNOWN_FIXTURE: "fixture_not_allowlisted",
   UNKNOWN_OPERATION: "operation_not_allowlisted",
   BAD_IDENTITY_DECISION: "identity_decision_not_allowlisted",
+  BAD_PHASE: "phase_not_allowlisted",
   LANE_NOT_FOUND: "lane_not_found",
   LANE_NOT_OWNED: "worktree_not_owned_by_lane",
   WORKTREE_MISSING: "worktree_missing",
@@ -93,11 +166,12 @@ export function listCertificationFixtures() {
     description: f.description,
     reserved_namespace: f.reserved_namespace,
     operations: Object.keys(f.operations),
+    ...(f.phase_ids ? { phases: [...f.phase_ids] } : {}),
   }));
 }
 
 /** Is this a fixture and an operation this host will run at all? */
-export function validateFixtureRequest({ fixture, operation, identityDecision = null, orgId = null } = {}) {
+export function validateFixtureRequest({ fixture, operation, identityDecision = null, orgId = null, phases = null } = {}) {
   const def = CERTIFICATION_FIXTURES[String(fixture || "")];
   if (!def) {
     return {
@@ -129,7 +203,45 @@ export function validateFixtureRequest({ fixture, operation, identityDecision = 
       allowlisted: [...IDENTITY_DECISIONS],
     };
   }
-  return { ok: true, definition: def, operation: op };
+  /*
+   * PHASE SELECTION. Accepted only for a fixture that DECLARES a closed vocabulary, and then only
+   * from inside it. A fixture with no `phase_ids` refuses the parameter outright rather than
+   * ignoring it — silently dropping a selector the caller believed in is how a targeted run
+   * becomes a full mutating run nobody asked for.
+   */
+  const requestedPhases = normalizePhases(phases);
+  if (requestedPhases.length) {
+    if (!def.phase_ids) {
+      return {
+        ok: false,
+        error: FIXTURE_REFUSALS.BAD_PHASE,
+        detail: `${def.fixture} does not take a phase selection`,
+        allowlisted: [],
+      };
+    }
+    const unknown = requestedPhases.filter((k) => !def.phase_ids.includes(k));
+    if (unknown.length) {
+      return {
+        ok: false,
+        error: FIXTURE_REFUSALS.BAD_PHASE,
+        detail: `not a declared phase of ${def.fixture}: ${unknown.join(", ")}`,
+        allowlisted: [...def.phase_ids],
+      };
+    }
+  }
+  return { ok: true, definition: def, operation: op, phases: requestedPhases };
+}
+
+/**
+ * A phase selection, as a list of trimmed non-empty keys.
+ *
+ * Accepts an array or a comma-separated string because a CLI supplies one and a caller the other,
+ * and normalizes to the same shape so there is one thing to validate. Anything that is neither is
+ * an empty selection, which means "run everything" — the same as omitting it.
+ */
+export function normalizePhases(phases) {
+  const raw = Array.isArray(phases) ? phases : (typeof phases === "string" ? phases.split(",") : []);
+  return [...new Set(raw.map((k) => String(k || "").trim()).filter(Boolean))];
 }
 
 /**
@@ -306,11 +418,12 @@ export async function runCertificationFixture({
   cwd = process.cwd(),
   identityDecision = null,
   orgId = null,
+  phases = null,
   root = undefined,
   runner = runRunner,
   loadLane = null,
 } = {}) {
-  const shape = validateFixtureRequest({ fixture, operation, identityDecision, orgId });
+  const shape = validateFixtureRequest({ fixture, operation, identityDecision, orgId, phases });
   if (!shape.ok) return shape;
 
   const local = assertLocalEnvironment();
@@ -337,6 +450,8 @@ export async function runCertificationFixture({
     owned.worktree_path,
     ...(identityDecision ? ["--identity-decision", identityDecision] : []),
     ...(orgId ? ["--org", orgId] : []),
+    // Already validated against the fixture's own closed vocabulary. The runner re-checks it.
+    ...(shape.phases.length ? ["--phases", shape.phases.join(",")] : []),
   ];
 
   const out = await runner(argv, { cwd: owned.worktree_path });
@@ -356,6 +471,7 @@ export async function runCertificationFixture({
     lane_id: lane.lane_id,
     identity_decision: identityDecision,
     org_id: orgId || null,
+    phases: shape.phases.length ? shape.phases : null,
     needs_operator: Boolean(!out.ok && conflict),
     exit_code: out.code,
     ...parsed,

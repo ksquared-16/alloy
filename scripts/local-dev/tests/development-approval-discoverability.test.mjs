@@ -91,22 +91,47 @@ await test("6 — the lane list says what is being approved, not just that somet
 });
 
 await test("7 — pending approvals are reachable WITHOUT knowing a lane", () => {
-  const bar = V.renderPendingApprovalsBar([G.publicGovernedAction(MERGE)]);
-  assert.match(bar, /data-gw-approvals/);
-  assert.match(bar, /Merge Governed Approval UI — PR #563/);
-  assert.match(bar, /data-gw-governed-approve/);
-  assert.match(bar, /data-gw-governed-deny/);
-  // Carries the fingerprint, so a decision from the bar is bound to content.
-  assert.match(bar, /data-content-fingerprint="[0-9a-f]{32}"/);
+  // THE INVARIANT SURVIVED ITS SURFACE. This used to assert a permanent bar
+  // above every route. That bar was removed — it rendered the same decisions in
+  // three places at once — and the requirement it existed for is unchanged: a
+  // pending decision must be reachable without already knowing which lane
+  // raised it. The global interruption centre is where that now lives.
+  const ga = G.publicGovernedAction(MERGE);
+  const model = V.buildNeedsYou({ lanes: [], approvals: [ga] });
+  assert.equal(model.count, 1);
+  const panel = V.needsYouPanel(model);
+  assert.match(panel, /Merge Governed Approval UI — PR #563/,
+    "found without knowing which lane raised it — that is the invariant");
+  // A WAY IN EXISTS WHERE THERE IS SOMEWHERE TO GO. This fixture names no lane,
+  // and a request whose lane reference resolves to nothing is offered no route:
+  // sending the operator to "Lane unavailable" is worse than telling them
+  // plainly that this one cannot be opened from here. The row still states the
+  // ask, which is what "reachable" means.
+  assert.match(panel, /vneeds-row-unresolved/);
+  assert.equal(/data-v-needs-review-link/.test(panel), false);
+  // And when the lane IS known, the way in is there.
+  const withLane = V.needsYouPanel(V.buildNeedsYou({
+    lanes: [{ lane_id: "lane_x", label: "Trust Runtime" }],
+    approvals: [{ ...ga, lane_id: "lane_x" }],
+  }));
+  assert.match(withLane, /data-v-needs-review-link/, "a way in, from anywhere");
+  assert.match(withLane, /href="#\/lanes\/lane_x"/);
+  // The DECISION itself is bound to content on the lane it belongs to, which is
+  // the only place it carries its own evidence. The global list summarises.
+  assert.equal(/data-gw-governed-approve|data-gw-governed-deny/.test(panel), false);
   // Nothing at all when there is nothing to decide.
-  assert.equal(V.renderPendingApprovalsBar([]), "");
+  assert.match(V.needsYouPanel({ items: [] }), /Nothing needs you/);
+  assert.equal(V.needsYouControl(0).includes("vneeds-ctl-badge"), false);
 });
 
-await test("8 — the bar is mounted on every route, not inside a lane view", () => {
+await test("8 — the control is mounted in the shell, not inside a routed view", () => {
   const html = readFileSync(new URL("../apps/vacilando/public/index.html", import.meta.url), "utf8");
-  assert.match(html, /id="approvals-bar"/);
-  assert.ok(html.indexOf('id="approvals-bar"') < html.indexOf('id="view"'),
-    "the bar must precede the routed view so it shows regardless of route");
+  // In the shell's top bar, before the routed view, so it is present on every
+  // route rather than re-rendered by each one.
+  assert.match(html, /id="needs-global"/);
+  assert.match(html, /id="needs-panel"/);
+  assert.ok(html.indexOf('id="needs-global"') < html.indexOf('id="view"'),
+    "the control must precede the routed view so it shows regardless of route");
   const client = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url), "utf8");
   assert.match(client, /\/api\/v2\/governed-actions\/pending/);
   assert.match(client, /refreshApprovals\(\)\.catch/, "must paint on first show, not only on the next poll");

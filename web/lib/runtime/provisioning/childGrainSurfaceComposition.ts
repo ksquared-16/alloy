@@ -69,6 +69,12 @@ export type ChildFamilyContext = {
     opportunityId: string;
     /** The family's operator-facing name, when the in-scope rows carry one. Never invented. */
     name: string | null;
+    /**
+     * `opportunities.customer_id` — the household ACCOUNT behind the case, as the row already read it.
+     * This is the family's, not the child's: a child has no customer of their own, so an account-scoped
+     * card on a child surface is asking about this. Null stays null; nothing is derived to fill it.
+     */
+    customerId: string | null;
 };
 
 export type ChildSurfaceComposition = {
@@ -165,7 +171,11 @@ export function composeChildGrainSurface(params: {
     }
 
     const family: ChildFamilyContext | null = row.contextId
-        ? { opportunityId: row.contextId, name: params.familyNamesByOpportunityId?.get(row.contextId) ?? null }
+        ? {
+              opportunityId: row.contextId,
+              name: params.familyNamesByOpportunityId?.get(row.contextId) ?? null,
+              customerId: row.familyCustomerId ?? null,
+          }
         : null;
 
     return {

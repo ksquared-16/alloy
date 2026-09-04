@@ -97,16 +97,29 @@ test("the mark is decorative, so it is not announced twice to a screen reader", 
 test("the rail mark sits on a deliberate light ground", () => {
   // MEASURED: dropped straight onto juniper the pine reads at 1.11:1 and the
   // river at 1.55:1 — the artwork is drawn for a light background.
+  //
+  // UI V2 CHANGED HOW THAT LIGHT GROUND IS PROVIDED, not whether it exists.
+  // The mark used to paint its own cream plate inside a WHITE rail, so the
+  // logo sat on a visibly different ground from the navigation containing it
+  // — a cream rectangle floating in white. The rail is now the cream canvas
+  // itself, so the mark needs no plate and the seam is gone. The contract that
+  // matters is unchanged: the artwork must never end up on a dark ground.
   const rule = css.match(/\.brand-mark\{[^}]*\}/);
   assert.ok(rule, "no .brand-mark rule");
-  assert.match(rule[0], /background:var\(--bg\)/);
+  const rail = css.match(/\n\.rail\{[^}]*\}/)?.[0] || "";
+  assert.match(rail, /background:var\(--bg\)/, "the rail must be the light canvas the mark was drawn for");
+  // And the mark must not reintroduce a competing plate on top of it.
+  assert.match(rule[0], /background:transparent/);
+  for (const dark of ["--rail-0", "--rail-1", "--rail-2", "--vacilando-juniper", "--vacilando-navy"]) {
+    assert.equal(rail.includes(dark), false, `the rail must not paint ${dark} behind the mark`);
+  }
 });
 
 test("theme colours are the brand's, not the retired forest green", () => {
   assert.match(html, /<meta name="theme-color" content="#365C4A">/);
   assert.equal(html.includes("#15402c"), false, "the retired rail colour is gone");
   assert.equal(manifest.theme_color, "#365C4A");
-  assert.equal(manifest.background_color, "#f6f2ea");
+  assert.equal(manifest.background_color, "#f4efe6", "the manifest ground must track the V2 canvas token --bg");
 });
 
 test("the icon vector source is the approved artwork, not the retired scene", () => {

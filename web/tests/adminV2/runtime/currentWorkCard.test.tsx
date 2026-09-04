@@ -91,7 +91,7 @@ function context(runtime?: StageWorkRuntimeProjection | null): OperationalContex
                 nextActionLabel: null,
             },
             attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-            tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+            tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
             communications: {
                 scheduledSendCount: 0,
                 nextFollowUpAt: null,

@@ -11,7 +11,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
-import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { upsertCustomerMemberConfigFieldValues } from "@/lib/admin/customerMemberPatch";
 
 export type PortContext = {
@@ -328,14 +329,33 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async createProcessParticipation(ctx, input) {
-            return createEnrollmentProcessInstance(ctx.supabase, {
+            /*
+             * INTAKE ESTABLISHES THE PARTICIPATION, NOT THE ENROLLMENT EXECUTION.
+             *
+             * This used to create a child Enrollment Process Instance during Create Lead. The
+             * configured operating plans are explicit that `lead` is a FAMILY-grain stage, so that
+             * put a CHILD journey into a family stage — cross-grain impersonation — and it is why an
+             * acquisition child reported "Stage lead requires no Forms" and could never realize a
+             * participant objective.
+             *
+             * What intake legitimately owns is the child's durable Enrollment Participation bridge:
+             * the OCM, carrying the acquisition Opportunity. That is identity, and it is kept. What
+             * it does not own is the decision that the child is ENTERING Enrollment — that is the
+             * governed family `decision → Continue to Enrolling` outcome, which creates the child
+             * journey at the CHILD stage `enrollment`.
+             *
+             * So the OCM id is what this returns. "Participation" was always the OCM; the command
+             * had merely been returning the journey it should not have been creating.
+             */
+            const participation = await ensureOpportunityCustomerMemberParticipation({
+                supabase: ctx.supabase,
                 orgId: ctx.orgId,
-                subjectId: input.child_id,
-                contextId: input.lead_id,
-                stageKey: input.stage_key,
-                state: (input.state as never) ?? null,
-                participation: input.participation,
+                opportunityId: input.lead_id,
+                customerMemberId: input.child_id,
+                source: "create_lead_ingest",
+                outcomeStatusKey: NEW_LEAD_STATUS_KEY,
             });
+            return { id: participation.ocmId };
         },
 
         async updateProcessParticipation(ctx, input) {
