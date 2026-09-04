@@ -1502,6 +1502,8 @@ async function refreshApprovals() {
     const r = await gwFetch("/api/v2/governed-actions/pending");
     const out = await r.json().catch(() => ({}));
     G.approvals = Array.isArray(out.approvals) ? out.approvals : [];
+    // EMPTY IS AN ANSWER, NOT AN ABSENCE. See needsYouVm.
+    G.approvalsLoaded = true;
   } catch { G.approvals = G.approvals || []; }
   // THE BADGE NEEDS AN OWNER THAT ALWAYS RUNS.
   //
@@ -1537,7 +1539,16 @@ async function refreshAttentionCounts() {
  * acted on with its own context.
  */
 function needsYouVm(nowMs = Date.now()) {
-  const approvals = (G.approvals && G.approvals.length) ? G.approvals : (G.home?.approvals || []);
+  // EMPTY IS AN ANSWER, NOT AN ABSENCE.
+  //
+  // This fell back to the Home projection whenever the canonical list was
+  // EMPTY — treating "nothing is pending" as "not loaded yet". The moment the
+  // last request is resolved the canonical list legitimately empties, and the
+  // fallback would then re-present whatever the other projection still held.
+  // That is precisely how a decided request comes back from the dead. The
+  // canonical list is authoritative once it has answered, however short its
+  // answer; Home's copy is only a seed for the first paint.
+  const approvals = G.approvalsLoaded ? (G.approvals || []) : (G.home?.approvals || []);
   return View.buildNeedsYou({
     lanes: G.lanes || [],
     approvals,

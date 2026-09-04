@@ -935,3 +935,18 @@ test("the badge counts exactly what the panel renders", () => {
   assert.match(gwSrc, /const needs = needsYouVm\(\)\.count;/,
     "the nav badge must count the rendered set, not a second store");
 });
+
+test("an emptied canonical list is an answer, not a missing one", () => {
+  // THE HAZARD THIS CLOSES. needsYouVm fell back to the Home projection whenever
+  // the canonical pending list was EMPTY — treating "nothing is pending" as "not
+  // loaded yet". The moment the last request is resolved that list legitimately
+  // empties, and the fallback would re-present whatever the other projection
+  // still held: a decided request, back from the dead, on the one surface whose
+  // whole job is to say what is still open.
+  const gwSrc = readFileSync(join(PUB, "gateway.js"), "utf8");
+  assert.match(gwSrc, /const approvals = G\.approvalsLoaded \? \(G\.approvals \|\| \[\]\) : \(G\.home\?\.approvals \|\| \[\]\);/,
+    "the canonical list is authoritative once it has answered, however short the answer");
+  assert.equal(/G\.approvals && G\.approvals\.length\) \? G\.approvals/.test(gwSrc), false,
+    "length must never stand in for loadedness");
+  assert.match(gwSrc, /G\.approvalsLoaded = true;/, "the fetch must record that it answered");
+});
