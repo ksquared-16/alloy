@@ -2,7 +2,51 @@
  * Vacilando Gateway V2 — pure view/helpers for Development Lanes.
  * No fetch, no timers, no tmux. The controller owns I/O.
  */
-export const GATEWAY_HOME = "#/lanes";
+import {
+  ago as kitAgo,
+  esc as kitEsc,
+  laneRowV2,
+  needsYouTray,
+  placeholderBanner,
+  progress as renderProgress,
+  renderActivity,
+  renderHome,
+  renderMobileNav,
+  renderPrimaryNav,
+  renderSystem,
+  healthDot,
+  maturityLegend,
+  metricRow,
+  surface as vSurface,
+  stateDot,
+  emptyState as vEmptyState,
+  pageHeader as vPageHeader,
+} from "./vacilando-ui-kit.mjs";
+import {
+  buildActivityViewModel,
+  buildHomeViewModel,
+  buildSystemViewModel,
+  laneProgress,
+  readPlaceholderMode,
+  writePlaceholderMode,
+} from "./vacilando-ui-model.mjs";
+
+// The V2 kit and model are re-exported through the canonical view module so
+// the controller has exactly one import surface and there is no second place to
+// look for "the view layer".
+export * from "./vacilando-ui-kit.mjs";
+export * from "./vacilando-ui-model.mjs";
+
+/**
+ * HOME IS HOME.
+ *
+ * The gateway used to open on the lane list because the lane list was the only
+ * thing that existed. With a real Home the default destination is the question
+ * the operator actually arrives with — what needs me, what is running, is the
+ * machine healthy — not a directory of lanes.
+ */
+export const GATEWAY_HOME = "#/home";
+export const GATEWAY_LANES = "#/lanes";
 export const LANE_INSTRUCTION_MAX = 24000;
 export const OUTPUT_POLL_MS = 8000;
 export const OUTPUT_BURST_POLL_MS = 2000;
@@ -33,19 +77,51 @@ export function decodeLaneId(value) {
   try { return decodeURIComponent(raw); } catch { return raw; }
 }
 
+/**
+ * The canonical lane tabs.
+ *
+ * Not every tab has a product underneath it yet, and that is deliberate: the
+ * SHELL is what this phase establishes, and each tab states its own maturity
+ * rather than being hidden until its backend exists. See the data contract.
+ */
+export const LANE_TABS = Object.freeze([
+  { key: "overview", label: "Overview" },
+  { key: "activity", label: "Activity" },
+  { key: "files", label: "Files" },
+  { key: "commits", label: "Commits" },
+  { key: "runs", label: "Runs" },
+  { key: "settings", label: "Settings" },
+]);
+
+export const LANE_TAB_KEYS = Object.freeze(LANE_TABS.map((t) => t.key));
+
 export function parseGatewayHash(hash) {
   const raw = String(hash || "").replace(/^#\/?/, "");
   const [pathPart] = raw.split("?");
   const p = (pathPart || "").split("/").filter(Boolean).map((seg) => decodeLaneId(seg) || seg);
-  const name = p[0] || "lanes";
+  const name = p[0] || "home";
   const sub = p[1] || null;
   if (name === "lanes" && sub === "connect") {
-    return { name: "lanes", sub: "connect", candidateId: p[2] || null };
+    return { name: "lanes", sub: "connect", candidateId: p[2] || null, tab: "overview" };
   }
   if (name === "lanes" && sub === "create") {
-    return { name: "lanes", sub: "create" };
+    return { name: "lanes", sub: "create", tab: "overview" };
   }
-  return { name, sub };
+  // #/lanes/:id/:tab — the tab is part of the address so a lane view is
+  // linkable and survives a reload on the tab the operator was reading.
+  if (name === "lanes" && sub) {
+    const tab = LANE_TAB_KEYS.includes(p[2]) ? p[2] : "overview";
+    return { name, sub, tab };
+  }
+  return { name, sub, tab: "overview" };
+}
+
+/** Which primary destination is highlighted for this hash? */
+export function primaryNavKey(name) {
+  if (name === "activity") return "activity";
+  if (name === "system") return "system";
+  if (name === "lanes" || name === "settings") return "lanes";
+  return "home";
 }
 
 /**
@@ -64,36 +140,32 @@ export function detailViewKind({ selectedId, lanes, lane, loading, listReady } =
   return "missing";
 }
 
+export const GATEWAY_ROUTES = Object.freeze(["home", "lanes", "activity", "system", "settings"]);
+
 export function isGatewayRoute(name) {
-  return name === "lanes" || name === "settings";
+  return GATEWAY_ROUTES.includes(name);
 }
 
 export function isPrimaryGatewayHash(hash) {
   const h = String(hash || "");
-  return !h || h === "#" || h === "#/" || h === "#/lanes" || h.startsWith("#/lanes/")
-    || h === "#/settings" || h.startsWith("#/settings");
+  if (!h || h === "#" || h === "#/") return true;
+  return GATEWAY_ROUTES.some((r) => h === `#/${r}` || h.startsWith(`#/${r}/`));
 }
 
 export function defaultGatewayHash() {
   return GATEWAY_HOME;
 }
 
-export function laneDetailHash(laneId) {
-  return `#/lanes/${encodeURIComponent(laneId)}`;
+export function laneDetailHash(laneId, tab = null) {
+  const base = `#/lanes/${encodeURIComponent(laneId)}`;
+  return tab && tab !== "overview" && LANE_TAB_KEYS.includes(tab) ? `${base}/${tab}` : base;
 }
 
-export function esc(s) {
-  return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
-
-export function ago(ms, nowMs = Date.now()) {
-  if (!ms) return null;
-  const s = Math.max(0, (nowMs - Number(ms)) / 1000);
-  if (s < 60) return `${s | 0}s`;
-  if (s < 3600) return `${(s / 60) | 0}m`;
-  if (s < 86400) return `${(s / 3600) | 0}h`;
-  return `${(s / 86400) | 0}d`;
-}
+// esc() and ago() are defined ONCE, in the kit, and used from here. They were
+// duplicated the moment a second view module existed, which is exactly how two
+// surfaces start rendering the same timestamp differently.
+export const esc = kitEsc;
+export const ago = kitAgo;
 
 export function gitLine(git, sourceControl) {
   if (sourceControl?.posture === "CONFLICT") return "Conflict";
@@ -4808,6 +4880,355 @@ export function renderCandidateList(candidates, loading) {
   }).join("")}</div>`;
 }
 
+/* ===========================================================================
+ * LANE V2
+ *
+ * The lane is the surface the operator spends their day on, and until now it
+ * was a chat thread with an ever-growing pile of diagnostic cards stacked
+ * beside and below it. The V2 anatomy is deliberate and fixed:
+ *
+ *   HEADER      breadcrumb · identity · state · provider/slot/started · controls
+ *   TABS        Overview · Activity · Files · Commits · Runs · Settings
+ *   OVERVIEW    CURRENT WORK (with progress) · LATEST AGENT OUTPUT
+ *   TRAY        Needs you — anchored at the composer, never mid-narrative
+ *   COMPOSER    the human interaction boundary
+ *   INSPECTOR   RUN, then Environment / Git / Browser / Diagnostics, collapsed
+ *
+ * The ordering rule that drove all of it: the further a thing is from the
+ * operator's decision, the further down and further folded it goes.
+ * =========================================================================== */
+
+/**
+ * The secondary metadata line: who is working, on which slot, since when.
+ *
+ * These facts were previously scattered across the rail, the row and three
+ * cards. They are identity, so they sit under the name — and they are NOT in
+ * the lane list, because none of them changes which lane you open.
+ */
+export function laneIdentityMeta(lane, telemetry, { nowMs = Date.now() } = {}) {
+  const bits = [];
+  const who = laneProviderLabel(lane);
+  const model = telemetry?.agent?.model || telemetry?.model || null;
+  bits.push(model ? `${who} · ${model}` : who);
+  const slot = Number(lane?.slot ?? lane?.binding?.slot);
+  if (Number.isInteger(slot)) bits.push(`Slot ${slot}`);
+  const startedMs = lane?.execution_run?.started_at ? Date.parse(lane.execution_run.started_at) : NaN;
+  if (Number.isFinite(startedMs)) {
+    const clock = new Date(startedMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    bits.push(`Started ${clock}`);
+  }
+  return bits.filter(Boolean).join(" · ");
+}
+
+export function renderLaneTabs(laneId, active = "overview") {
+  const cur = LANE_TAB_KEYS.includes(active) ? active : "overview";
+  return `<nav class="vtabs-lane" role="tablist" aria-label="Lane sections">${LANE_TABS.map((t) => `
+    <a class="vtab-lane${t.key === cur ? " is-active" : ""}" role="tab"
+      aria-selected="${t.key === cur ? "true" : "false"}"
+      href="${esc(laneDetailHash(laneId, t.key))}" data-v-lane-tab="${t.key}">${esc(t.label)}</a>`).join("")}</nav>`;
+}
+
+export function renderLaneHeaderV2(lane, {
+  selectedId = null,
+  work = null,
+  telemetry = null,
+  tab = "overview",
+  nowMs = Date.now(),
+  asideOpen = false,
+} = {}) {
+  const laneId = lane?.lane_id || selectedId;
+  const label = lane?.label || laneId;
+  const st = work || canonicalLaneWorkState(lane, { nowMs });
+  const meta = laneIdentityMeta(lane, telemetry, { nowMs });
+  const canStop = Boolean(lane?.execution_run && !["COMPLETE", "FAILED", "ABANDONED"].includes(lane.execution_run.state));
+  return `<header class="vlane-head" data-gw-chat-head>
+    <div class="vlane-head-top">
+      <a class="gw-back vlane-back" data-gw-back href="#/lanes" aria-label="Back to lanes">←</a>
+      <nav class="vcrumb vlane-crumb" aria-label="Breadcrumb">
+        <a href="#/lanes">Lanes</a><span class="vcrumb-sep" aria-hidden="true">/</span><span aria-current="page">${esc(label)}</span>
+      </nav>
+    </div>
+    <div class="vlane-head-row">
+      <div class="vlane-head-id">
+        <h1 class="vlane-title">${esc(label)}</h1>
+        <div class="vlane-head-state" data-gw-stage-status>${stateDot(st.label, { tone: st.tone, live: st.live })}</div>
+        ${meta ? `<p class="vlane-head-meta">${esc(meta)}</p>` : ""}
+      </div>
+      <div class="vlane-head-acts">
+        ${canStop ? `<button type="button" class="btn sm" data-gw-cancel-run data-lane-id="${esc(laneId)}">Stop lane</button>` : ""}
+        <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
+          aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Lane details</button>
+      </div>
+    </div>
+    ${renderLaneTabs(laneId, tab)}
+  </header>`;
+}
+
+/**
+ * CURRENT WORK — the first thing in Overview.
+ *
+ * Mission, one line of description, the provider's progress estimate, and the
+ * status. NO ETA: there is no estimator in this product, and deriving one from
+ * a percentage would be inventing a schedule out of a guess. If an estimator is
+ * ever built, it gets its own field and its own maturity row.
+ */
+export function renderLaneCurrentWork(lane, { nowMs = Date.now(), cancelPending = false } = {}) {
+  const run = lane?.execution_run || null;
+  const prog = laneProgress(run, { nowMs });
+  if (!run?.state) {
+    return vSurface({
+      title: "Current work",
+      className: "vcard-work",
+      body: vEmptyState({
+        title: "No active work",
+        // The same words the inspector uses. One phrase for one state: two
+        // renderers describing an idle lane differently is how a product starts
+        // sounding like two products.
+        body: "Ready for instruction — write one below to start.",
+      }),
+    });
+  }
+  const work = canonicalLaneWorkState(lane, { nowMs });
+  const instruction = run.instruction ? String(run.instruction) : "";
+  const title = instruction.split("\n").find((l) => l.trim()) || work.label;
+  const rest = instruction.split("\n").slice(1).join(" ").trim();
+  const summary = run.completion_report?.summary || run.latest_progress?.summary || null;
+  return vSurface({
+    title: "Current work",
+    className: "vcard-work",
+    actions: stateDot(work.label, { tone: work.tone, live: work.live }),
+    body: `
+      <h3 class="vwork-title">${esc(title.slice(0, 160))}</h3>
+      ${rest ? `<p class="vwork-desc">${esc(rest.slice(0, 240))}</p>` : ""}
+      ${renderProgress(prog)}
+      <div class="vwork-status">
+        <span class="vwork-status-k">Status</span>
+        <span class="vwork-status-v">${esc(work.label)}</span>
+      </div>
+      ${summary && summary !== prog.summary ? `<p class="vwork-summary">${esc(summary)}</p>` : ""}
+      ${renderCancelControl(run, { pending: cancelPending })}`,
+  });
+}
+
+/**
+ * The genuine blockers on THIS lane, in the shape the tray consumes.
+ *
+ * "Genuine" is doing work here. A lane that is running, queued, validating or
+ * finished has nothing for the operator to do and produces nothing. Only an
+ * unresolved governed action or a run that asked a question does.
+ */
+export function laneNeedsYouItems(lane) {
+  const items = [];
+  const ga = lane?.execution_run?.governed_action || lane?.governed_action || null;
+  if (ga && (ga.status === "awaiting_operator" || ga.status === "pending")) {
+    items.push({
+      kind: "governed_action",
+      lane_id: lane.lane_id,
+      request: ga.title || ga.action_key || "Authorization required",
+      detail: ga.reason_worker_cannot_execute || null,
+    });
+  }
+  const run = lane?.execution_run;
+  if (run?.state === "NEEDS_INPUT") {
+    items.push({
+      kind: "needs_input",
+      lane_id: lane.lane_id,
+      request: run.state_reason || "The agent asked a question",
+      detail: null,
+    });
+  }
+  return items;
+}
+
+/**
+ * LANE INSPECTOR.
+ *
+ * RUN is open. Everything else is folded.
+ *
+ * That is the whole design: a healthy lane shows six facts and a Stop button,
+ * and the operator has to ASK for the rest. The previous right-hand column
+ * rendered the session callout, runtime controls, context refresh, localhost,
+ * current work, previous work, output chrome, run status, provider health,
+ * context line, system activity, raw terminal and the machine status panel — in
+ * one scroll, always, healthy or not. Complexity now arrives when something
+ * fails or when it is asked for.
+ */
+export function renderLaneInspector(lane, {
+  selectedId = null,
+  telemetry = null,
+  resources = null,
+  output = null,
+  outputText = "",
+  nowMs = Date.now(),
+  asideInert = true,
+  work = null,
+  cap = null,
+  developmentResources = null,
+  lanes = [],
+  executionCapacity = null,
+  folders = [],
+  repositories = [],
+  notify = null,
+  pending = false,
+  bodyText = "",
+  statusOpen = false,
+} = {}) {
+  const laneId = lane?.lane_id || selectedId;
+  const st = work || canonicalLaneWorkState(lane, { nowMs });
+  const posture = cap || deriveLaneExecutionPosture(lane);
+  const run = lane?.execution_run || null;
+  const startedMs = run?.started_at ? Date.parse(run.started_at) : NaN;
+  const activeFor = Number.isFinite(startedMs) ? ago(startedMs, nowMs) : null;
+  const slot = Number(lane?.slot ?? lane?.binding?.slot);
+  const slotTotal = executionCapacity?.total ?? null;
+  const ctxPct = telemetry?.context?.percent_used;
+  const started = Number.isFinite(startedMs)
+    ? new Date(startedMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    : null;
+  const model = telemetry?.agent?.model || null;
+  const canStop = Boolean(run && !["COMPLETE", "FAILED", "ABANDONED"].includes(run.state));
+
+  // Actions that GATE PROGRESS stay in the always-visible RUN block. A control
+  // the operator cannot find is the same as no control, and these three —
+  // session recovery, runtime hold/release, context refresh — are each the
+  // difference between a lane that can keep working and one that cannot.
+  const actions = [
+    renderLaneSessionCallout(lane, { executionCapacity }),
+    renderLaneRuntimeControls(lane, posture, { capacity: executionCapacity }),
+    renderContextRefreshButton(lane),
+  ].filter((h) => String(h || "").trim()).join("\n");
+
+  const section = (key, title, body, { open = false, badge = null } = {}) => {
+    if (!String(body || "").trim()) return "";
+    return `<details class="vinsp-sec" data-v-inspector="${key}"${open ? " open" : ""}>
+      <summary class="vinsp-sum">${esc(title)}${badge ? `<span class="vinsp-badge">${esc(badge)}</span>` : ""}</summary>
+      <div class="vinsp-body">${body}</div>
+    </details>`;
+  };
+
+  const git = [
+    renderSourceControl(lane),
+    (() => {
+      const line = gitLine(lane?.git, lane?.source_control);
+      const branch = lane?.git?.branch || lane?.binding?.branch || null;
+      return `<div class="vrows">
+        ${branch ? `<div class="vrow"><span class="vrow-label">Branch</span><span class="vrow-value">${esc(branch)}</span></div>` : ""}
+        ${line ? `<div class="vrow"><span class="vrow-label">State</span><span class="vrow-value">${esc(line)}</span></div>` : ""}
+        ${lane?.git?.head_short ? `<div class="vrow"><span class="vrow-label">Latest commit</span><span class="vrow-value">${esc(lane.git.head_short)}</span></div>` : ""}
+      </div>`;
+    })(),
+  ].filter(Boolean).join("\n");
+
+  const environment = [
+    renderLaneLocalhost(lane),
+    renderProviderHealth(output?.provider_health),
+  ].filter((h) => String(h || "").trim()).join("\n");
+
+  const browser = renderBrowserAuthRecovery(lane);
+
+  const diagnostics = [
+    renderClaudeRunStatus(lane, telemetry),
+    renderOutputChrome(output, { lane, lastInstruction: lane?.last_instruction }),
+    renderRecentSystemActivity(lane?.recent_system_activity),
+    renderPreviousWork(lane?.previous_run),
+    renderTerminalDiagnostics(bodyText, { pending, output }),
+    renderStatus(lane, resources, {
+      open: Boolean(statusOpen),
+      summary: statusSummaryLine(lane, telemetry),
+      sessionLine: st.headline,
+      telemetry,
+      developmentResources,
+      lanes,
+      executionCapacity,
+    }),
+  ].filter((h) => String(h || "").trim()).join("\n");
+
+  return `<aside class="gw-lane-aside vinsp" data-gw-aside id="gw-details-panel"${asideInert ? ' aria-hidden="true" inert' : ""}>
+    <div class="gw-aside-head">
+      <div class="gw-aside-title">Lane details</div>
+      <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
+    </div>
+    <div class="gw-aside-body">
+      <section class="vinsp-run">
+        <h2 class="vinsp-run-h">Run</h2>
+        <p class="vinsp-run-state" data-gw-presence>${stateDot(st.label, { tone: st.tone, live: st.live })}${activeFor ? `<span class="vinsp-run-age"> · ${esc(activeFor)} active</span>` : ""}</p>
+        <div class="vrows">
+          <div class="vrow"><span class="vrow-label">Agent</span><span class="vrow-value">${esc(laneProviderLabel(lane))}${model ? ` / ${esc(model)}` : ""}</span></div>
+          <div class="vrow"><span class="vrow-label">Slot</span><span class="vrow-value">${Number.isInteger(slot) ? esc(slotTotal ? `${slot} / ${slotTotal}` : String(slot)) : "Not bound"}</span></div>
+          <div class="vrow" data-gw-context><span class="vrow-label">Context</span><span class="vrow-value">${Number.isFinite(ctxPct) ? `${Math.round(ctxPct)}%` : "Not reported"}</span></div>
+          <div class="vrow"><span class="vrow-label">Started</span><span class="vrow-value">${started ? esc(started) : "—"}</span></div>
+        </div>
+        ${canStop ? `<button type="button" class="btn sm vinsp-stop" data-gw-cancel-run data-lane-id="${esc(laneId)}">Stop lane</button>` : ""}
+        ${actions ? `<div class="vinsp-actions">${actions}</div>` : ""}
+      </section>
+      ${/*
+        ORGANISATION IS NOT LANE STATE.
+        Rename, folder and repository used to sit in the always-visible part of
+        the panel, which meant a lane with no folder and no repository shouted
+        "No folder" and "Not attributed" — in red — every time the operator
+        opened it. Folders are OPTIONAL organisation; absent organisation is not
+        a problem to report. They live on the Settings tab, which is where an
+        operator goes to change them, and are folded here.
+      */ ""}
+      ${section("organisation", "Organisation", `
+        <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(laneId)}">Rename lane</button>
+        ${renderLaneFolderPicker(lane, folders, selectedId)}
+        ${renderLaneRepository(lane, repositories)}`)}
+      ${section("environment", "Environment", environment)}
+      ${section("git", "Git", git)}
+      ${section("browser", "Browser session", browser, { open: Boolean(browser) })}
+      ${section("diagnostics", "Diagnostics", diagnostics)}
+      ${section("notifications", "Notifications", renderNotificationControls(notify || {}))}
+    </div>
+  </aside>`;
+}
+
+/**
+ * Tabs whose product does not exist yet.
+ *
+ * They render the shell and SAY SO. Hiding them would hide the intended shape;
+ * faking them would be worse. Each names the owner that will fill it.
+ */
+export const LANE_TAB_MATURITY = Object.freeze({
+  activity: {
+    title: "Lane activity",
+    body: "Run transitions, checkpoints and governed decisions for this lane.",
+    status: "Shell only — the global Activity feed is wired; the lane-scoped filter is not.",
+    owner: "ui-v2-views.projectActivityFeed, filtered by lane_id",
+  },
+  files: {
+    title: "Files",
+    body: "The files this run has changed in the lane worktree.",
+    status: "Not implemented — no file-change projection exists.",
+    owner: "source-control.mjs checkpoint readiness already attributes changed paths",
+  },
+  commits: {
+    title: "Commits",
+    body: "Commits produced on this lane's branch.",
+    status: "Not implemented — commits are observed but not projected for the UI.",
+    owner: "source-control.mjs",
+  },
+  runs: {
+    title: "Runs",
+    body: "Every Execution Run this lane has had, and how each ended.",
+    status: "Not implemented — the run store keeps the history; nothing lists it.",
+    owner: "execution-run.mjs listExecutionRunsForLane()",
+  },
+});
+
+export function renderLaneTabShell(tab, lane) {
+  const m = LANE_TAB_MATURITY[tab];
+  if (!m) return "";
+  return vSurface({
+    title: m.title,
+    className: "vcard-tabshell",
+    body: `<p class="vtabshell-body">${esc(m.body)}</p>
+      <p class="vtabshell-status">${esc(m.status)}</p>
+      <p class="vtabshell-owner">Owner: <code>${esc(m.owner)}</code></p>
+      <p class="vtabshell-link">Maturity is tracked in the Vacilando UI V2 data contract.</p>`,
+  });
+}
+
 export function renderGatewayShell({
   lanes,
   selectedId,
@@ -4857,8 +5278,27 @@ export function renderGatewayShell({
   settings = false,
   blockingScreen = null,
   screenPending = null,
+  // V2 destinations. `page` is the primary route; the lane branches below are
+  // reached only when page === "lanes".
+  page = "lanes",
+  tab = "overview",
+  homeVm = null,
+  activityVm = null,
+  systemVm = null,
+  placeholders = false,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
+  // The three standalone destinations render before any lane logic runs: they
+  // are not a mode of the lane view, they are their own surfaces.
+  if (page === "home") {
+    return `<div class="gw is-page" data-gw data-gw-mode="home">${placeholderBanner(placeholders)}${renderHome(homeVm, { nowMs })}</div>`;
+  }
+  if (page === "activity") {
+    return `<div class="gw is-page" data-gw data-gw-mode="activity">${placeholderBanner(placeholders)}${renderActivity(activityVm, { nowMs })}</div>`;
+  }
+  if (page === "system") {
+    return `<div class="gw is-page" data-gw data-gw-mode="system">${placeholderBanner(placeholders)}${renderSystem(systemVm)}</div>`;
+  }
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders, repositories });
   // A sheet owns the screen while it is open: it is a decision the operator is
   // in the middle of, and the lane list behind it must not steal the tap.
@@ -4946,16 +5386,6 @@ export function renderGatewayShell({
   }
   const work = canonicalLaneWorkState(lane, { output: output || { text: outputText }, nowMs });
   const pending = Boolean(outputPending) && !(outputText && String(outputText).trim());
-  const ctxLine = contextCompact(telemetry);
-  const statusHtml = renderStatus(lane, resources, {
-    open: Boolean(statusOpen),
-    summary: statusSummaryLine(lane, telemetry),
-    sessionLine: work.headline,
-    telemetry,
-    developmentResources,
-    lanes,
-    executionCapacity,
-  });
   const copyText = copyableOutputText({
     selectedId: lane?.lane_id || selectedId,
     output,
@@ -4970,109 +5400,82 @@ export function renderGatewayShell({
   const liveMark = work.live
     ? `<span class="gw-live-dot" data-gw-live-dot>${work.stale ? "Stale" : "Working"}</span>`
     : "";
-  // ONE details panel. Everything that is not the conversation lives here — it
-  // used to be split between an inline <details> under the thread and a second
-  // "Lane details" fold in the aside, so the same lane facts appeared twice and
-  // neither place was complete.
-  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideInert ? ' aria-hidden="true" inert' : ""}>
-        <div class="gw-aside-head">
-          <div class="gw-aside-title">Details</div>
-          <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
-        </div>
-        <div class="gw-aside-body">
-          <div class="gw-aside-id">
-            <h1>${esc(lane?.label || selectedId)}</h1>
-            <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
-            <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
-            ${renderLaneFolderPicker(lane, folders, selectedId)}
-            ${renderLaneRepository(lane, repositories)}
-          </div>
-          ${renderNotificationControls(notify || {})}
-          ${renderBrowserAuthRecovery(lane)}
-          ${/*
-            ONE runtime section, directly below the conversation. These were three
-            separate cards stacked in sequence, which read as three unrelated
-            things; they are one subject — whether this lane can keep working.
-          */ ""}
-          ${(() => {
-            const parts = [
-              renderLaneSessionCallout(lane, { executionCapacity }),
-              renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity }),
-              renderContextRefreshButton(lane),
-            ].filter((html) => String(html || "").trim());
-            if (!parts.length) return "";
-            return `<section class="gw-runtime-section" data-gw-runtime-section>
-              <h2 class="gw-runtime-section-h">Runtime</h2>
-              ${parts.join("\n")}
-            </section>`;
-          })()}
-          ${renderLaneLocalhost(lane)}
-          ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending, activity: lane?.provider_activity?.activity })}${renderPreviousWork(lane?.previous_run)}
-          ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
-          ${renderClaudeRunStatus(lane, telemetry)}
-          ${renderProviderHealth(output?.provider_health)}
-          ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
-          ${renderRecentSystemActivity(lane?.recent_system_activity)}
-          ${renderTerminalDiagnostics(bodyText, { pending, output })}
-          ${statusHtml}
-        </div>
-      </aside>`;
-  // The chat status line is ONE line: canonical state, then who is on the lane.
-  const providerBit = laneProviderLabel(lane);
-  const statusLine = [work.label, providerBit].filter(Boolean).join(" · ");
-  return `<div class="gw is-detail${asideOpen ? " is-aside-open" : ""}" data-gw data-gw-mode="detail" data-lane-id="${esc(lane?.lane_id || selectedId)}">
-    ${list}
-    <section class="gw-main">
-      <div class="gw-lane-stage" data-gw-stage>
-        <header class="gw-chat-head" data-gw-chat-head>
-          <a class="gw-back" data-gw-back href="#/lanes" aria-label="Back to lanes">← Lanes</a>
-          <div class="gw-chat-id">
-            <h1 class="gw-chat-title">${esc(lane?.label || selectedId)}</h1>
-            <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}" data-gw-stage-status>${esc(statusLine)}</span>
-          </div>
-          <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
-            aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
-        </header>
-        <div class="gw-thread" data-gw-thread>
-          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, {
-            expanded: Boolean(userMessageExpanded),
-            // The run owns its attachments, so reopening the lane restores them
-            // from the same projection that restores the prompt text.
-            attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
-          })}
-          <article class="gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">
-            <div class="gw-msg-tools">
+  const laneId = lane?.lane_id || selectedId;
+  const activeTab = LANE_TAB_KEYS.includes(tab) ? tab : "overview";
+
+  // ONE inspector. Everything that is not the work itself lives here, folded.
+  const detailsPanel = renderLaneInspector(lane, {
+    selectedId, telemetry, resources, output, outputText, nowMs,
+    asideInert, work, cap, developmentResources, lanes, executionCapacity,
+    folders, repositories, notify, pending, bodyText, statusOpen,
+  });
+
+  // NEEDS YOU IS AN INTERRUPTION, NOT A SECTION.
+  //
+  // It is rendered immediately above the composer — at the boundary where the
+  // human already is — so a request for authorization never lands in the middle
+  // of the work narrative between Current Work and the agent's output.
+  const needsItems = laneNeedsYouItems(lane);
+  const tray = needsYouTray(needsItems, { laneId });
+
+  const overview = `
+        ${renderLaneCurrentWork(lane, { nowMs, cancelPending })}
+        <section class="vcard vcard-output" data-gw-thread>
+          <div class="vcard-head">
+            <div class="vcard-headings"><h2 class="vcard-title">Latest agent output</h2></div>
+            <div class="vcard-actions">
               ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
               ${liveMark}
             </div>
-            ${renderAssistantMessage(assistant, { pending })}
-          </article>
+          </div>
+          <div class="vcard-body">
+            ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, {
+              expanded: Boolean(userMessageExpanded),
+              attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
+            })}
+            <article class="gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">
+              ${renderAssistantMessage(assistant, { pending })}
+            </article>
+          </div>
+        </section>`;
+
+  const tabBody = activeTab === "overview"
+    ? overview
+    : (activeTab === "settings"
+      ? `<section class="vcard vcard-lane-settings"><div class="vcard-body">
+          <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(laneId)}">Rename lane</button>
+          ${renderLaneFolderPicker(lane, folders, selectedId)}
+          ${renderLaneRepository(lane, repositories)}
+          ${renderNotificationControls(notify || {})}
+        </div></section>`
+      : renderLaneTabShell(activeTab, lane));
+
+  return `<div class="gw is-detail${asideOpen ? " is-aside-open" : ""}" data-gw data-gw-mode="detail" data-lane-id="${esc(laneId)}" data-gw-tab="${esc(activeTab)}">
+    ${list}
+    <section class="gw-main">
+      <div class="gw-lane-stage" data-gw-stage>
+        ${renderLaneHeaderV2(lane, { selectedId, work, telemetry, tab: activeTab, nowMs, asideOpen })}
+        <div class="vlane-body" data-gw-lane-body>
+          ${tabBody}
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
-        ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
-        ${/*
-          ACTIONS BELONG WHERE THE CONVERSATION IS.
-          These three were in the details rail: the session callout that says
-          Claude's session failed, the runtime controls that keep or release the
-          lane, and the context refresh. Each one gates progress, and the rail is
-          the wrong home for anything that does — it is a reference column the
-          Director may have collapsed, it is the first thing to run out of room,
-          and while it was inert it could not be scrolled or clicked at all. An
-          action the operator cannot reach is the same as no action.
-        */ ""}
-        ${renderGovernedOutcome(lane)}
-        ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
-        ${renderUnanswerableScreen(blockingScreen, { laneId: lane?.lane_id || selectedId })}
-        ${renderComposer({
-          ...(composer || {}),
-          idleStart: cap.state === "IDLE",
-          queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
-          provider: lane?.preferred_provider || "claude",
-          cursorSendAvailable: cursorComposerAvailable({ lane, providers }),
-          attachments,
-          attachmentsUploading,
-          attachmentError,
-        })}
+        <div class="vlane-interaction">
+          ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
+          ${renderGovernedOutcome(lane)}
+          ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
+          ${renderUnanswerableScreen(blockingScreen, { laneId })}
+          ${tray}
+          ${renderComposer({
+            ...(composer || {}),
+            idleStart: cap.state === "IDLE",
+            queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
+            provider: lane?.preferred_provider || "claude",
+            cursorSendAvailable: cursorComposerAvailable({ lane, providers }),
+            attachments,
+            attachmentsUploading,
+            attachmentError,
+          })}
+        </div>
       </div>
       ${renderAttachmentLightbox(lightbox)}
       <div class="gw-aside-scrim" data-gw-aside-close aria-hidden="true"></div>
@@ -5080,7 +5483,6 @@ export function renderGatewayShell({
     </section>
   </div>`;
 }
-
 /**
  * ONE ROW, LEFT-ALIGNED, INSIDE ITS REPOSITORY.
  *
@@ -5116,14 +5518,27 @@ export function railLaneRow(lane, selectedId, attentionByLane, telemetryByLane) 
   else if (runState === "WAITING_RESOURCE" && !wait?.ready_to_resume && wait?.queue_position) queue = ` · #${wait.queue_position} in queue`;
   else if (runState === "VALIDATING" && wait?.resource_key === "runtime_timing_certification") queue = " · Exclusive timing window";
   else if (runState === "VALIDATING" && wait?.label) queue = ` · ${wait.label}`;
-  const attn = `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}${esc(queue)}</span>`;
-  const ctx = contextCompact(telemetryByLane?.[lane.lane_id]);
-  const who = agentLabel(lane);
-  const meta = ctx ? `${who} · ${ctx}` : who;
+  // READ-ONLY IS A STATE, NOT A PROVIDER INTERNAL.
+  //
+  // An observation-only lane cannot be sent an instruction, so "Ready" alone is
+  // a promise the lane cannot keep. This is the one qualifier navigation carries
+  // beyond the canonical state, and it earns its place by the same test
+  // everything else failed: it changes what the operator can DO.
+  const readOnly = cursorObservationOnly(lane) ? " · read-only" : "";
+  const attn = `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}${esc(queue)}${esc(readOnly)}</span>`;
+  // NAVIGATION CARRIES NAME, STATE, RECENCY AND A GENUINE BLOCKER COUNT.
+  //
+  // It used to carry the provider and the Claude context percentage too. Neither
+  // changes WHICH LANE YOU OPEN, which is the only question navigation answers,
+  // and "Claude · Context 38%" beside every row is diagnostic noise in the one
+  // place that has to stay scannable. Both are one click away in the lane's
+  // Inspector, where lane facts belong.
+  const whenMs = laneUpdatedMs(lane);
+  const meta = whenMs ? `${ago(whenMs)} ago` : "";
   const unseen = laneUnseenCount(lane);
   const badge = unseen ? `<span class="badge">${unseen}</span>` : "";
   return `<a class="mission-rail-item${active}" data-route="lanes/${esc(lane.lane_id)}" data-gw-lane="${esc(lane.lane_id)}">
-    <span class="mission-rail-title">${esc(lane.label || lane.lane_id)}<span class="mission-rail-meta">${esc(meta)}</span></span>
+    <span class="mission-rail-title">${esc(lane.label || lane.lane_id)}${meta ? `<span class="mission-rail-meta">${esc(meta)}</span>` : ""}</span>
     ${attn}${badge}
   </a>`;
 }
@@ -5145,13 +5560,27 @@ export function railHtml(lanes, selectedId, attentionByLane, telemetryByLane, {
   const groups = groupLanesByRepository(list, repositories, folders, {
     collapsed: collapsedFolders || new Set(), nowMs,
   });
+  // ONE GROUP IS NOT AN ORGANISATION.
+  //
+  // With a single repository — the common case, and the case on a fresh install
+  // — the rail rendered an "UNATTRIBUTED 4" heading above every lane. That is the
+  // repository equivalent of prominently rendering "No folder": a grouping
+  // header that groups nothing, made of implementation vocabulary, sitting at
+  // the top of the primary navigation. When there is nothing to disambiguate,
+  // the lanes are shown directly.
+  const single = groups.length <= 1;
   const rendered = groups.map((g) => {
     const rows = g.lanes.map((lane) => railLaneRow(lane, selectedId, attentionByLane, telemetryByLane)).join("");
     // Quiet header: the repository is the boundary, not the loudest thing in the
     // rail. Its count is enough; the lane rows carry the attention.
-    return `<div class="gw-rail-repo${g.unknown ? " is-unattributed" : ""}" data-gw-rail-repo="${esc(g.repository_id)}">`
-      + `<div class="gw-rail-repo-h">${esc(g.name)}<span class="gw-rail-repo-count">${g.lane_count}</span></div>`
-      + `${rows}</div>`;
+    const head = single
+      ? ""
+      : `<div class="gw-rail-repo-h">${esc(g.name)}<span class="gw-rail-repo-count">${g.lane_count}</span></div>`;
+    // The unattributed CLASS is a treatment for the unattributed HEADER. With
+    // no header there is nothing to treat, and carrying it would keep styling a
+    // grouping the operator was never shown.
+    return `<div class="gw-rail-repo${g.unknown && !single ? " is-unattributed" : ""}" data-gw-rail-repo="${esc(g.repository_id)}">`
+      + `${head}${rows}</div>`;
   }).join("");
   return `${add}${rendered}`;
 }

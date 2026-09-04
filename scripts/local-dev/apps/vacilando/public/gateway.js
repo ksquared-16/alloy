@@ -80,6 +80,21 @@ const G = {
     lastTestOk: null,
   },
   notifyEndpoint: null,
+  // ---- UI V2 ----------------------------------------------------------
+  // The three standalone destinations each keep their own last payload, so
+  // switching between them repaints instantly and refetches in the background
+  // rather than flashing an empty page on every navigation.
+  page: "home",
+  laneTab: "overview",
+  home: null,
+  homeInflight: false,
+  activity: null,
+  activityInflight: false,
+  system: null,
+  systemInflight: false,
+  activityFilters: { lane: null, kind: "all", outcome: "all", provider: null },
+  usageWindow: "today",
+  placeholders: false,
 };
 
 function routeName() {
@@ -562,6 +577,107 @@ async function submitGatewayLogin(e) {
   }
 }
 
+/**
+ * The V2 surface fetchers.
+ *
+ * Each is single-flight and each fails SOFT: a Home that cannot reach its
+ * projection keeps the payload it already has and the data-maturity layer
+ * renders unavailable states for anything it never had. A dashboard that
+ * blanks itself on one slow probe is worse than one that is briefly stale.
+ */
+async function fetchHome() {
+  if (G.homeInflight) return G.home;
+  G.homeInflight = true;
+  try {
+    const r = await gwFetch("/api/v2/views/home");
+    const j = await r.json();
+    if (j?.ok) G.home = j;
+    return G.home;
+  } catch {
+    return G.home;
+  } finally {
+    G.homeInflight = false;
+  }
+}
+
+async function fetchActivity() {
+  if (G.activityInflight) return G.activity;
+  G.activityInflight = true;
+  try {
+    const r = await gwFetch("/api/v2/views/activity?limit=200");
+    const j = await r.json();
+    if (j?.ok) G.activity = j;
+    return G.activity;
+  } catch {
+    return G.activity;
+  } finally {
+    G.activityInflight = false;
+  }
+}
+
+async function fetchSystem() {
+  if (G.systemInflight) return G.system;
+  G.systemInflight = true;
+  try {
+    const r = await gwFetch("/api/v2/views/system");
+    const j = await r.json();
+    if (j?.ok) G.system = j;
+    return G.system;
+  } catch {
+    return G.system;
+  } finally {
+    G.systemInflight = false;
+  }
+}
+
+/** Home's health card wants disk, which the projection reports separately. */
+function homeResources() {
+  const res = G.home?.resources || resources();
+  if (!res) return null;
+  return G.home?.disk ? { ...res, disk: G.home.disk } : res;
+}
+
+function buildHomeVm(nowMs) {
+  return View.buildHomeViewModel({
+    lanes: G.lanes || [],
+    approvals: G.home?.approvals || [],
+    resources: homeResources(),
+    capacity: G.home?.capacity || G.executionCapacity || null,
+    usage: G.home?.usage || null,
+    effectiveness: G.home?.effectiveness || null,
+    activity: (G.home?.activity || []).map(mapActivityRow),
+    laneState: (l) => View.canonicalLaneWorkState(l, { nowMs }),
+    placeholders: G.placeholders,
+    nowMs,
+  });
+}
+
+function mapActivityRow(e) {
+  return { ...e, at_ms: e.at ? Date.parse(e.at) : null };
+}
+
+function buildActivityVm(nowMs) {
+  return View.buildActivityViewModel({
+    events: (G.activity?.events || []).map(mapActivityRow),
+    lanes: G.lanes || [],
+    filters: G.activityFilters,
+    nowMs,
+  });
+}
+
+function buildSystemVm() {
+  const res = G.system?.resources || resources();
+  return View.buildSystemViewModel({
+    resources: G.system?.disk && res ? { ...res, disk: G.system.disk } : res,
+    capacity: G.system?.capacity || G.executionCapacity || null,
+    diagnostics: G.system?.diagnostics || null,
+    providers: G.providers || null,
+    usage: G.system?.usage || null,
+    history: G.system?.history || [],
+    placeholders: G.placeholders,
+  });
+}
+
 async function fetchLanes() {
   const r = await gwFetch("/api/lanes");
   const j = await r.json();
@@ -642,6 +758,30 @@ async function fetchTelemetry(id) {
 
 function resources() {
   return window.__vacilandoResources || null;
+}
+
+/**
+ * Paint the primary navigation into both the desktop rail and the mobile bar.
+ *
+ * ONE declaration (View.PRIMARY_NAV) feeds both, so the two form factors cannot
+ * drift into offering different destinations — which is precisely how "the
+ * mobile app" and "the desktop app" stop being the same product.
+ */
+function paintNav() {
+  const needs = Number(G.attentionCount) || (G.home?.approvals?.length || 0);
+  const primary = document.getElementById("primary-nav");
+  if (primary) primary.innerHTML = View.renderPrimaryNav(G.page, { needsYou: needs });
+  const tabs = document.getElementById("mobile-nav");
+  if (tabs) tabs.innerHTML = View.renderMobileNav(G.page, { needsYou: needs });
+  // The lane rail is a LANES-section affordance. On Home, Activity or System it
+  // is not navigation to anywhere you are, so it does not compete for the eye.
+  const railLanes = document.getElementById("rail-lanes");
+  if (railLanes) railLanes.hidden = G.page !== "lanes";
+  const crumb = document.getElementById("crumb");
+  if (crumb) {
+    crumb.textContent = { home: "Home", lanes: "Development Lanes", activity: "Activity", system: "System" }[G.page] || "Vacilando";
+  }
+  document.body.dataset.vPage = G.page;
 }
 
 function paintRail() {
@@ -1033,7 +1173,14 @@ function paint() {
     lightbox: G.lightbox,
     providers: G.providers,
     settings: View.parseGatewayHash(location.hash).name === "settings",
+    page: G.page,
+    tab: G.laneTab,
+    placeholders: G.placeholders,
+    homeVm: G.page === "home" ? buildHomeVm(Date.now()) : null,
+    activityVm: G.page === "activity" ? buildActivityVm(Date.now()) : null,
+    systemVm: G.page === "system" ? buildSystemVm() : null,
   });
+  paintNav();
   paintRail();
   restoreComposer(saved);
   if (!saved) restoreThreadScroll(null);
@@ -1388,6 +1535,39 @@ async function show(r) {
   const route = parsed.name ? parsed : (r && typeof r === "object"
     ? { name: r.name || "lanes", sub: View.decodeLaneId(r.sub) }
     : parsed);
+  G.page = View.primaryNavKey(route.name) === "lanes" ? "lanes" : View.primaryNavKey(route.name);
+  G.laneTab = route.tab || "overview";
+  G.placeholders = View.readPlaceholderMode(storage(), location.search || location.hash);
+
+  // HOME / ACTIVITY / SYSTEM.
+  //
+  // Each paints from whatever it already holds FIRST and refetches after, so a
+  // navigation is instant even on a cold projection. The lane list is still
+  // fetched because Home and Activity both label events by lane, and a feed of
+  // opaque lane ids is not a product.
+  if (["home", "activity", "system"].includes(G.page)) {
+    G.selected = null;
+    G.lane = null;
+    G.loading = false;
+    stopOutputPoll();
+    stopTelemetryPoll();
+    paint();
+    startListPoll();
+    const jobs = [];
+    if (!G.listReady) jobs.push(fetchLanes().then(() => { G.listReady = true; }).catch(() => { G.lanes = G.lanes || []; }));
+    if (G.page === "home") jobs.push(fetchHome().catch(() => {}));
+    if (G.page === "activity") jobs.push(fetchActivity().catch(() => {}));
+    if (G.page === "system") {
+      jobs.push(fetchSystem().catch(() => {}));
+      if (!G.providers && !G.providersInflight) jobs.push(fetchProviders().catch(() => {}));
+    }
+    await Promise.allSettled(jobs);
+    if (gen !== G.showGen) return;
+    paint();
+    refreshApprovals().catch(() => {});
+    return;
+  }
+
   if (route.name === "settings") {
     G.selected = null;
     G.lane = null;
@@ -2973,6 +3153,77 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (hit("[data-gw-wiz-create]")) { e.preventDefault(); await wizardCreate(); return; }
+});
+
+/* ===========================================================================
+ * UI V2 interactions.
+ *
+ * Kept in one listener so the V2 surfaces have a single, readable place where
+ * their behaviour lives, rather than growing branches inside the three existing
+ * lane listeners.
+ * =========================================================================== */
+
+document.addEventListener("click", async (e) => {
+  const hit = (sel) => (e.target instanceof Element ? e.target.closest(sel) : null);
+
+  // Placeholder mode is turned OFF from the banner it paints. There is
+  // deliberately no way to turn it on by accident.
+  if (hit("[data-v-placeholders-off]")) {
+    e.preventDefault();
+    G.placeholders = View.writePlaceholderMode(false, storage());
+    paint();
+    return;
+  }
+
+  const win = hit("[data-v-usage-window]");
+  if (win) {
+    e.preventDefault();
+    G.usageWindow = win.getAttribute("data-v-usage-window") || "today";
+    // The runtime aggregates today only. Rather than silently show today's
+    // numbers under a "30 days" heading, the view model marks the window
+    // unsupported and the card says so.
+    if (G.home?.usage) G.home = { ...G.home, usage: { ...G.home.usage, window: G.usageWindow } };
+    paint();
+    return;
+  }
+
+  // The lane tray's Review opens the lane's details, where the governed action
+  // and its evidence live. Authorize routes to the same decision surface the
+  // approvals bar already owns — the tray never approves anything by itself.
+  const review = hit("[data-v-needs-review]");
+  if (review) {
+    e.preventDefault();
+    setAsideOpen(true, { restoreFocus: false });
+    return;
+  }
+  const authorize = hit("[data-v-needs-authorize]");
+  if (authorize) {
+    e.preventDefault();
+    // The tray never approves anything itself. It focuses the canonical
+    // approve control — the one the governed-action owner renders — wherever it
+    // is on the page. Scroll-and-focus rather than click: authorizing is the
+    // operator's act, and a tray button must not perform it for them.
+    const approve = document.querySelector("[data-gw-governed-approve]");
+    if (approve instanceof HTMLElement) {
+      approve.scrollIntoView({ block: "center", behavior: "smooth" });
+      approve.focus({ preventScroll: true });
+      return;
+    }
+    setAsideOpen(true, { restoreFocus: false });
+    return;
+  }
+});
+
+document.addEventListener("change", (e) => {
+  const sel = e.target instanceof Element ? e.target.closest("[data-v-filter]") : null;
+  if (!sel) return;
+  const key = sel.getAttribute("data-v-filter");
+  const value = sel.value || null;
+  G.activityFilters = {
+    ...G.activityFilters,
+    [key]: key === "lane" || key === "provider" ? (value || null) : (value || "all"),
+  };
+  paint();
 });
 
 /**

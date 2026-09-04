@@ -109,9 +109,19 @@ test("every lane row has one left edge, whatever its state", () => {
   assert.ok(!/margin/.test(active));
 });
 
-test("the navigation rail is white and states are row treatments", () => {
+test("the navigation rail is the canvas and states are row treatments", () => {
+  // THE ORIGINAL FAILURE THIS ENCODES IS UNCHANGED: the rail was once a
+  // full-height juniper gradient, so every state it expressed had to be another
+  // green and the whole surface competed with the content it navigates to.
+  //
+  // UI V2 MOVED THE GROUND ONE STEP FURTHER. The rail was card WHITE, and the
+  // brand mark inside it painted its own cream plate — the logo on a visibly
+  // different ground from the navigation around it. The rail is now the warm
+  // canvas, which removes that seam and frees white to mean exactly one thing
+  // in the product: an elevated working surface. States are still row
+  // treatments, never a tint of the whole rail.
   const rail = CSS.match(/\n\.rail\{[^}]*\}/)?.[0] || "";
-  assert.ok(rail.includes("background:var(--card)"), "the rail ground is card white");
+  assert.ok(rail.includes("background:var(--bg)"), "the rail ground is the application canvas");
   assert.ok(!/linear-gradient/.test(rail), "no full-rail tint");
   // Every state the audit named still exists, on the row.
   assert.ok(/\.mission-rail-item:hover\{[^}]*background:var\(--card-2\)/.test(CSS));

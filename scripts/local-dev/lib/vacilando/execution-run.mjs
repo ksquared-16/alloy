@@ -30,6 +30,86 @@ export const EXECUTION_RUN_MAX_TRANSITIONS = 40;
 export const EXECUTION_RUN_SUMMARY_MAX = 2000;
 export const EXECUTION_RUN_REASON_MAX = 500;
 
+/**
+ * PROVIDER PROGRESS CONTRACT.
+ *
+ * The run already carried `latest_progress` — a worker-reported *sentence*. It
+ * answered "what is happening" and never "how far along". The operator could
+ * read a lane for twenty minutes and still not know whether it was starting or
+ * finishing, which is the single question the Lane surface exists to answer.
+ *
+ * This extends the SAME field family rather than opening a second progress
+ * system: `latest_progress` keeps its meaning, and `progress_estimate` carries
+ * the bounded estimate beside it.
+ *
+ * It is deliberately an ESTIMATE. The provider is the only party that knows how
+ * much of its own plan remains, and it knows that only approximately. Every
+ * consumer must render it as an estimate and must never derive an ETA from it —
+ * there is no estimator, and a percentage divided by elapsed time is a lie with
+ * a decimal point on it.
+ */
+export const PROGRESS_CONFIDENCES = Object.freeze(["low", "medium", "high"]);
+
+export const PROGRESS_SOURCES = Object.freeze([
+  "provider_estimate",
+  "deterministic",
+  "operator",
+  "derived",
+]);
+
+/**
+ * Progress is reported at MILESTONES, not per message. A worker that has not
+ * reported inside this window is not "62% and frozen" — it is unknown, and the
+ * UI is required to say so rather than keep painting a stale bar.
+ */
+export const PROGRESS_STALE_MS = 30 * 60 * 1000;
+
+export const PROGRESS_SUMMARY_MAX = 240;
+export const PROGRESS_REMAINING_MAX = 480;
+
+/**
+ * Normalise a reported estimate. Returns null when there is nothing usable —
+ * an absent estimate is a legitimate, renderable state ("Progress estimate
+ * unavailable"), so this never invents a value to avoid returning null.
+ */
+export function normalizeProgressEstimate({
+  percent = null,
+  confidence = null,
+  summary = null,
+  source = null,
+  remaining_work = null,
+  nowMs = Date.now(),
+} = {}) {
+  const pct = percent === null || percent === undefined || percent === ""
+    ? null
+    : Number(percent);
+  const hasPct = Number.isFinite(pct);
+  const conf = String(confidence || "").trim().toLowerCase();
+  const src = String(source || "").trim().toLowerCase();
+  const sum = bound(summary, PROGRESS_SUMMARY_MAX);
+  const rem = bound(remaining_work, PROGRESS_REMAINING_MAX);
+  if (!hasPct && !sum && !rem) return null;
+  return {
+    percent: hasPct ? Math.max(0, Math.min(100, Math.round(pct))) : null,
+    confidence: PROGRESS_CONFIDENCES.includes(conf) ? conf : "low",
+    summary: sum,
+    remaining_work: rem,
+    source: PROGRESS_SOURCES.includes(src) ? src : "provider_estimate",
+    updated_at: iso(nowMs),
+  };
+}
+
+/**
+ * Is this estimate still worth showing? Separated from rendering so the server,
+ * the view and the tests all agree on one answer.
+ */
+export function progressEstimateIsStale(estimate, { nowMs = Date.now(), staleMs = PROGRESS_STALE_MS } = {}) {
+  if (!estimate?.updated_at) return true;
+  const at = Date.parse(estimate.updated_at);
+  if (!Number.isFinite(at)) return true;
+  return nowMs - at > staleMs;
+}
+
 export const RUN_STATES = Object.freeze([
   "QUEUED",
   "EXECUTING",
@@ -309,13 +389,14 @@ function appendTransition(run, { from, to, reason, origin, nowMs }) {
  * on an already-EXECUTING run was discarded as a noop, so a working agent left
  * no evidence at all and the governor read it as an orphan.
  */
-function touchWorkerLiveness(run, { nowMs, origin, progress = null }) {
+function touchWorkerLiveness(run, { nowMs, origin, progress = null, progressEstimate = null }) {
   if (origin !== "agent") return false;
   run.last_worker_report_at = iso(nowMs);
   run.worker_report_count = (Number(run.worker_report_count) || 0) + 1;
   if (progress) {
     run.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
   }
+  if (progressEstimate) run.progress_estimate = progressEstimate;
   return true;
 }
 
@@ -416,6 +497,10 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     worktree_path: run.worktree_path || null,
     node_id: run.node_id || null,
     latest_progress: run.latest_progress || null,
+    // The bounded provider estimate. Projected verbatim, including its
+    // updated_at, so the consumer — not the store — decides whether it is still
+    // fresh enough to draw.
+    progress_estimate: run.progress_estimate || null,
     completion_report: run.completion_report || null,
     git_baseline: run.git_baseline || null,
     checkpoint_readiness: run.checkpoint_readiness || null,
@@ -594,6 +679,7 @@ export function createQueuedRun({
     state_reason: null,
     origin: resolvedOrigin,
     latest_progress: null,
+    progress_estimate: null,
     completion_report: null,
     agent_session_id: null,
     resource_wait: null,
@@ -636,6 +722,8 @@ export function transitionExecutionRun(runId, toState, {
   root = runtimeRoot(),
   phase = undefined,
   progress = null,
+  // The bounded provider progress estimate, already normalized by the caller.
+  progress_estimate = null,
   completion_report = null,
   resource_wait = null,
   fingerprint = null,
@@ -657,11 +745,16 @@ export function transitionExecutionRun(runId, toState, {
   if (found.state === to) {
     // Same-state report. Not a transition, but still liveness evidence: persist
     // it so the stale governor can tell a working agent from an orphan.
-    const touched = touchWorkerLiveness(found, { nowMs, origin, progress });
-    if (touched || progress) {
+    const touched = touchWorkerLiveness(found, { nowMs, origin, progress, progressEstimate: progress_estimate });
+    if (touched || progress || progress_estimate) {
       if (progress && !touched) {
         found.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
       }
+      // An estimate is worth persisting whoever reported it. A same-state
+      // report is the ONLY moment most estimates arrive — a worker at 62% is
+      // by definition still EXECUTING — so dropping it here would have made
+      // the whole contract unreachable in practice.
+      if (progress_estimate && !touched) found.progress_estimate = progress_estimate;
       found.updated_at = iso(nowMs);
       if (phase !== undefined) found.current_phase = bound(phase, 80);
       writeStore(putRun(store, found), root);
@@ -717,6 +810,20 @@ export function transitionExecutionRun(runId, toState, {
   if (to === "COMPLETE" || to === "FAILED" || to === "ABANDONED") found.completed_at = iso(nowMs);
   if (progress) {
     found.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
+  }
+  if (progress_estimate) found.progress_estimate = progress_estimate;
+  // A run that has ENDED has no estimate to make. Leaving 62% on a COMPLETE run
+  // is the exact false precision this contract exists to refuse.
+  if (to === "COMPLETE") {
+    found.progress_estimate = normalizeProgressEstimate({
+      percent: 100,
+      confidence: "high",
+      summary: found.progress_estimate?.summary || null,
+      source: "deterministic",
+      nowMs,
+    });
+  } else if (to === "FAILED" || to === "ABANDONED") {
+    found.progress_estimate = null;
   }
   if (completion_report) {
     found.completion_report = {
@@ -805,6 +912,10 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
     if (fields.state_reason !== undefined) found.state_reason = fields.state_reason == null ? null : bound(fields.state_reason, EXECUTION_RUN_REASON_MAX);
     if (fields.governed_action !== undefined) found.governed_action = fields.governed_action || null;
     if (fields.recovery_state !== undefined) found.recovery_state = fields.recovery_state || null;
+    // Allowlisted like every other patchable field. The value is normalized by
+    // normalizeProgressEstimate before it reaches here, so what lands is always
+    // bounded, clamped 0-100 and carries its own source and timestamp.
+    if (fields.progress_estimate !== undefined) found.progress_estimate = fields.progress_estimate || null;
     if (fields.recovered_count !== undefined) found.recovered_count = Number(fields.recovered_count) || 0;
     if (fields.completed_at !== undefined) found.completed_at = fields.completed_at || null;
     if (fields.instruction !== undefined) {
@@ -1079,6 +1190,13 @@ export function reportRunState(runId, state, {
   checkpoint_ready = false,
   checkpoint_summary = null,
   payload = null,
+  // Provider progress. Reported alongside a state report because that is the
+  // path workers already use; see PROGRESS_SOURCES.
+  progress_percent = null,
+  progress_confidence = null,
+  progress_summary = null,
+  progress_source = null,
+  remaining_work = null,
 } = {}) {
   const found = root
     ? { run: getExecutionRun(runId, root), root }
@@ -1111,6 +1229,14 @@ export function reportRunState(runId, state, {
     autoRecovered = rec.recovered ? rec.ownership_proof : null;
     Object.assign(run, getExecutionRun(run.run_id, storeRoot) || run);
   }
+  const estimate = normalizeProgressEstimate({
+    percent: progress_percent,
+    confidence: progress_confidence,
+    summary: progress_summary,
+    source: progress_source,
+    remaining_work,
+    nowMs,
+  });
   const ready = checkpoint_ready === true || String(checkpoint_ready).toLowerCase() === "true" || String(checkpoint_ready) === "1";
   if (ready) {
     patchRunFields(run.run_id, {
@@ -1118,12 +1244,27 @@ export function reportRunState(runId, state, {
       checkpoint_summary: checkpoint_summary || summary,
     }, { nowMs, root: storeRoot });
   }
+  // A PROGRESS-ONLY REPORT IS LEGAL.
+  //
+  // "I am 62% through" is not a state change, and forcing the worker to restate
+  // EXECUTING to carry it would make every milestone a transition report. This
+  // writes the estimate on its own and returns, without touching state.
+  if (estimate) {
+    patchRunFields(run.run_id, { progress_estimate: estimate }, { nowMs, root: storeRoot });
+    Object.assign(run, getExecutionRun(run.run_id, storeRoot) || run);
+  }
   const to = state ? normalizeReportedState(state) : null;
   if (!to && ready) {
     return afterCheckpointReport({
       ok: true,
       run: getExecutionRun(run.run_id, storeRoot) || run,
     }, run.lane_id, storeRoot, nowMs, summary || checkpoint_summary);
+  }
+  // Progress alone, with no state argument, is a complete report. It was
+  // already persisted above; returning invalid_state here would have made the
+  // milestone form of the contract unusable.
+  if (!to && estimate) {
+    return { ok: true, run: getExecutionRun(run.run_id, storeRoot) || run, progress_only: true };
   }
   if (!to || !REPORT_STATES.has(to)) return { ok: false, error: "invalid_state" };
   // A completion may only close an instruction that was actually delivered.
@@ -1147,6 +1288,7 @@ export function reportRunState(runId, state, {
     root: storeRoot,
     phase: to === "VALIDATING" ? "validation" : (to === "WAITING_RESOURCE" ? "resource_wait" : undefined),
     progress,
+    progress_estimate: estimate,
     completion_report: completion,
     resource_wait: resource ? {
       resource_key: resource,
