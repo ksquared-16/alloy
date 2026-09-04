@@ -312,6 +312,26 @@ family could be charged and could never pay.
   received; Stripe collection stays with `POST /admin/payments/run` and its own executor. Provider
   status is not financial truth — `status = 'posted'` is. Making collection a prerequisite would mean
   a family who pays by cash or check cannot be recorded as having paid.
+- **Money received and money applied are different facts, and the gap between them is a real state.**
+  `payment.record` and the application are separate writes precisely so that a family may pay before
+  anyone decides which obligation the money settles. The unapplied remainder is **derived, never
+  stored** — the receipt's amount minus its active applications minus what has been refunded, by
+  `readPaymentUnappliedCents`. A stored credit balance would be a second answer to "what is still
+  available", and the first reversed application would make the two disagree, for the same reason
+  `charges.status` is never advanced. Refunds are subtracted because a full refund reverses the
+  applications, which by itself would make the whole receipt look freshly available to apply again;
+  the money left the building, and only the un-refunded part of it can be assigned to anything.
+- **What this deliberately leaves as a seam, and where.** Stripe collection stays behind
+  `POST /admin/payments/run` and keeps its own executor, so an automated collection becomes a
+  `payment.record` caller rather than a second money path. Payer responsibility and split billing
+  attach to the **application**, not the receipt: `payment_allocations` already carries one row per
+  obligation, so a split is more rows and not a new table. Subsidy is a payer whose money is recorded
+  the same way and told apart by `payments.billable_source_type` plus its own source. Accounting and
+  GL writes on the childcare path hang off the application as the posting event, alongside the
+  `ledger_transactions` / `gl_journal_lines` generalization P3.1 already did. The Financials
+  workspace reads this contract through `buildFinancialsCardVM`, which quotes the balance rule rather
+  than re-deriving it — a workspace surface is a new reader of the same projection, never a new
+  balance calculation.
 
 ---
 
@@ -328,6 +348,7 @@ family could be charged and could never pay.
 - Do not allow broad `authenticated` client writes for childcare money; writes are server-side + `has_org_role` (P3.1 gate 3).
 - Do not write a childcare money guarantee against the `'enrollment_agreement'` literal; quantify over `CHILDCARE_BILLABLE_SOURCE_TYPES`, or the next source admitted escapes it silently.
 - Do not raise on a repeated post — posting is idempotent and a retry reports the existing posting.
+- Do not store a family's unapplied credit as a column or a row; it is the receipt minus its active applications minus its refunds, derived on read.
 - Do not leave a correction unbounded; a posted charge admits ONE live reversal and no further correction after it, and a correction is never itself corrected.
 - Do not enforce a money-uniqueness rule with a read-then-write in the service; two concurrent reversals both pass it. State it as a constraint and mirror it in the service for the message.
 - Do not write a childcare constraint whose predicate omits the childcare sources — a partial index naming only `correction_kind` governs job billing too, which is the job-vertical regression P3.1 forbids. Certify constraints against a real database; a mock has no index.
