@@ -100,8 +100,22 @@ await test("7 — pending approvals are reachable WITHOUT knowing a lane", () =>
   const model = V.buildNeedsYou({ lanes: [], approvals: [ga] });
   assert.equal(model.count, 1);
   const panel = V.needsYouPanel(model);
-  assert.match(panel, /Merge Governed Approval UI — PR #563/);
-  assert.match(panel, /data-v-needs-review-link/, "and a way in, from anywhere");
+  assert.match(panel, /Merge Governed Approval UI — PR #563/,
+    "found without knowing which lane raised it — that is the invariant");
+  // A WAY IN EXISTS WHERE THERE IS SOMEWHERE TO GO. This fixture names no lane,
+  // and a request whose lane reference resolves to nothing is offered no route:
+  // sending the operator to "Lane unavailable" is worse than telling them
+  // plainly that this one cannot be opened from here. The row still states the
+  // ask, which is what "reachable" means.
+  assert.match(panel, /vneeds-row-unresolved/);
+  assert.equal(/data-v-needs-review-link/.test(panel), false);
+  // And when the lane IS known, the way in is there.
+  const withLane = V.needsYouPanel(V.buildNeedsYou({
+    lanes: [{ lane_id: "lane_x", label: "Trust Runtime" }],
+    approvals: [{ ...ga, lane_id: "lane_x" }],
+  }));
+  assert.match(withLane, /data-v-needs-review-link/, "a way in, from anywhere");
+  assert.match(withLane, /href="#\/lanes\/lane_x"/);
   // The DECISION itself is bound to content on the lane it belongs to, which is
   // the only place it carries its own evidence. The global list summarises.
   assert.equal(/data-gw-governed-approve|data-gw-governed-deny/.test(panel), false);

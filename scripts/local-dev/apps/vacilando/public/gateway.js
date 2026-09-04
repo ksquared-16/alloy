@@ -781,7 +781,7 @@ function paintNav() {
   // list could still be carried in the notification count, and the badge would
   // insist something needed the operator while the panel it opens said nothing
   // did. The badge now counts exactly what the panel will show.
-  const needs = needsYouVm().count;
+  const needs = needsYouCommitted().count;
   const primary = document.getElementById("primary-nav");
   if (primary) primary.innerHTML = View.renderPrimaryNav(G.page, { needsYou: needs });
   const tabs = document.getElementById("mobile-nav");
@@ -1330,6 +1330,7 @@ function paint() {
     const btn = li.querySelector("[data-v-msg-more]");
     if (btn) btn.setAttribute("aria-expanded", "true");
   }
+  commitNeedsYou();
   paintNav();
   paintNeedsYou();
   paintRail();
@@ -1538,6 +1539,41 @@ async function refreshAttentionCounts() {
  * Review opens it on the lane that raised it, which is the only place it can be
  * acted on with its own context.
  */
+/**
+ * ONE COMMITTED REVISION OF "WHAT NEEDS YOU".
+ *
+ * THE DEFECT THIS REPLACES. Three surfaces each called needsYouVm() at three
+ * different moments — the nav badge inside paint(), the control and panel inside
+ * paintNeedsYou(), and the panel AGAIN inside setNeedsYouOpen() when the sheet
+ * was opened. Each sampled G.approvals and G.lanes whenever it happened to run,
+ * so any change between the badge's paint and the operator's tap produced a
+ * badge and a panel that disagreed. Measured live: 1/1/0/0 on Lanes and 0/0/1/1
+ * on Home. Steady state always converged, which is exactly what made it easy to
+ * miss and worthless as a guarantee.
+ *
+ * The set is now COMMITTED once and every surface paints from that object. They
+ * cannot disagree, because there is only one answer in existence at a time —
+ * not because they are expected to converge.
+ */
+function commitNeedsYou(nowMs = Date.now()) {
+  const vm = needsYouVm(nowMs);
+  const items = vm.items || [];
+  G.needsYou = {
+    revision: (G.needsYou?.revision || 0) + 1,
+    loaded: Boolean(G.approvalsLoaded),
+    items,
+    // count IS the collection's length. It is never derived from a second store.
+    count: items.length,
+    nowMs,
+  };
+  return G.needsYou;
+}
+
+/** The committed set. Never recomputed by a consumer. */
+function needsYouCommitted() {
+  return G.needsYou || commitNeedsYou();
+}
+
 function needsYouVm(nowMs = Date.now()) {
   // EMPTY IS AN ANSWER, NOT AN ABSENCE.
   //
@@ -1558,8 +1594,7 @@ function needsYouVm(nowMs = Date.now()) {
 }
 
 function paintNeedsYou() {
-  const vm = needsYouVm();
-  G.needsYou = vm;
+  const vm = needsYouCommitted();
   // Every mounted host, not just the top bar's: the lane header carries one too
   // on a phone. One model, so they cannot report different counts.
   const markup = View.needsYouControl(vm.count);
@@ -1579,7 +1614,9 @@ function setNeedsYouOpen(open) {
   const panel = document.getElementById("needs-panel");
   const scrim = document.getElementById("needs-scrim");
   if (!panel) return;
-  if (open) panel.innerHTML = View.needsYouPanel(needsYouVm());
+  // The sheet shows the revision the badge is already showing. Re-sampling here
+  // is what let a tap open a panel that disagreed with the number that invited it.
+  if (open) panel.innerHTML = View.needsYouPanel(needsYouCommitted());
   panel.hidden = !open;
   if (scrim) scrim.hidden = !open;
   // A DIFFERENT NAME FROM THE CONTROL'S OWN HOOK, DELIBERATELY.
@@ -1606,7 +1643,9 @@ function paintApprovals() {
     el.innerHTML = "";
     el.hidden = true;
   }
+  commitNeedsYou();
   paintNeedsYou();
+  paintNav();
   paintAttentionBadge();
 }
 
