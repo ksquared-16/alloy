@@ -391,6 +391,36 @@ export function activeRunForLane(laneId, root = runtimeRoot()) {
   return run;
 }
 
+/**
+ * States in which the lane's current run OCCUPIES its provider.
+ *
+ * QUEUED is deliberately absent, and that absence is the whole point: a queued
+ * run is work waiting to be HANDED to a provider, not work the provider is
+ * doing. Treating it as occupancy is what let an idle resident session refuse
+ * the very run it was supposed to pick up.
+ *
+ * Everything else non-terminal is occupancy, including the blocked states. A
+ * provider parked on NEEDS_INPUT or WAITING_RESOURCE looks idle by CPU and is
+ * not free: someone is waiting on that run, and delivering a different one over
+ * it would silently displace them.
+ */
+export const OCCUPYING_RUN_STATES = Object.freeze([
+  "EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING",
+]);
+
+/**
+ * The run that makes this lane genuinely busy, or null when its provider is
+ * resident-but-free.
+ *
+ * "Does a session exist" and "does this lane have conflicting productive work"
+ * are different questions. Admission needs the second one, and this is it.
+ */
+export function occupyingRunForLane(laneId, root = runtimeRoot()) {
+  const run = activeRunForLane(laneId, root);
+  if (!run) return null;
+  return OCCUPYING_RUN_STATES.includes(String(run.state)) ? run : null;
+}
+
 export function getExecutionRun(runId, root = runtimeRoot()) {
   const id = String(runId || "").trim();
   if (!id) return null;

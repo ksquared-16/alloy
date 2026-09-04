@@ -23,6 +23,7 @@ import {
   findExecutionRun,
   getExecutionRun,
   isTerminalRunState,
+  occupyingRunForLane,
   progressSolicitationDue,
   transitionExecutionRun,
 } from "./execution-run.mjs";
@@ -1732,9 +1733,60 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     }
     let sess = activeAgentSessionForLane(found.lane_id, root);
     if (sess) {
+      /*
+       * A RESIDENT SESSION IS NOT A BUSY LANE.
+       *
+       * This returned `agent_already_running` for any active session, which
+       * conflated "a provider session record exists" with "this lane already has
+       * conflicting productive work". They are different questions, and the
+       * second is the one admission actually needs answered.
+       *
+       * The cost was measured: 26 dispatched runs were refused across
+       * Troubleshooting, Payments and Communications while those providers sat
+       * resident at ~0.4% CPU with their current run merely QUEUED. That is a
+       * deadlock by construction — the queued run needs this session to pick it
+       * up, and this guard refused to hand it over precisely because the session
+       * existed. Productive concurrency was capped by session bookkeeping rather
+       * than by the host, which had 9.4% of memory in use at the time.
+       *
+       * REUSE BEFORE PROVISION. When the resident session holds no occupying run
+       * the correct answer is to hand it the new one, not to refuse and not to
+       * spawn a second provider beside it.
+       *
+       * Identity is already proven above before we get here: the worktree binding
+       * was validated, a different owning lane returns `already_connected`, and
+       * more than one Claude on the lane returns `duplicate_claude`. What remains
+       * is the occupancy question, and it FAILS CLOSED: only a QUEUED or terminal
+       * current run counts as unoccupied. A run that is EXECUTING, VALIDATING,
+       * NEEDS_INPUT, WAITING_RESOURCE or RECOVERING still owns this provider, and
+       * delivering over it would displace work someone is waiting on.
+       */
+      const occupying = occupyingRunForLane(found.lane_id, root);
+      if (occupying) {
+        return {
+          ok: false,
+          error: "agent_already_running",
+          agent_session_id: sess.agent_session_id,
+          occupying_run_id: occupying.run_id,
+          occupying_run_state: occupying.state,
+          start_session_implemented: true,
+        };
+      }
+      if (sess.state !== "ACTIVE") {
+        // STARTING/RESTARTING/VERIFYING/HANDOFF are handled below as "becoming
+        // ready". Reuse is only claimed for a session that is actually up.
+        return {
+          ok: false,
+          error: "agent_already_running",
+          agent_session_id: sess.agent_session_id,
+          session_state: sess.state,
+          start_session_implemented: true,
+        };
+      }
       return {
-        ok: false,
-        error: "agent_already_running",
+        ok: true,
+        reused: true,
+        provider: "claude",
         agent_session_id: sess.agent_session_id,
         start_session_implemented: true,
       };
