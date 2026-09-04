@@ -1,8 +1,8 @@
 {
-  "captured_at": "2026-09-04T12:22:46.568Z",
+  "captured_at": "2026-09-04T13:03:39.427Z",
   "base": "http://127.0.0.1:3030",
-  "passed": 82,
-  "failed": 2,
+  "passed": 86,
+  "failed": 0,
   "results": [
     {
       "name": "mobile Home: a global Needs You control exists",
@@ -241,8 +241,8 @@
     },
     {
       "name": "there is no thread-level Copy anywhere",
-      "ok": false,
-      "detail": "1 found"
+      "ok": true,
+      "detail": "0 found"
     },
     {
       "name": "user message owns a Copy control",
@@ -266,11 +266,21 @@
     },
     {
       "name": "provider message defaults to about four lines",
-      "ok": false,
-      "detail": "6 lines"
+      "ok": true,
+      "detail": "5 lines"
     },
     {
       "name": "provider long message offers See more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "expanding the user message expands only that message",
+      "ok": true,
+      "detail": "1 expanded"
+    },
+    {
+      "name": "Show less collapses the user message again",
       "ok": true,
       "detail": ""
     },

@@ -170,7 +170,7 @@ try {
       return {
         clampable: li.classList.contains("is-clampable"),
         expanded: li.classList.contains("is-expanded"),
-        lines: Math.round((clamp?.getBoundingClientRect().height || 0) / lh),
+        lines: +(((clamp?.getBoundingClientRect().height || 0) / lh).toFixed(2)),
         hasCopy: Boolean(li.querySelector("[data-v-msg-copy]")),
         copyVisible: (li.querySelector("[data-v-msg-copy]")?.getBoundingClientRect().height || 0) > 0,
         hasMore: Boolean(li.querySelector("[data-v-msg-more]")),
@@ -188,12 +188,36 @@ try {
     if (!r) { check(`${role} message present in a live lane`, false); continue; }
     check(`${role} message owns a Copy control`, r.hasCopy && r.copyVisible);
     if (r.clampable) {
-      check(`${role} message defaults to about four lines`, r.lines <= 5 && r.lines >= 3, `${r.lines} lines`);
+      // FOUR, not "about four". A tolerance of 3-5 accepted a message that
+      // rendered 4.8 lines and cut the fifth through the middle of its letters.
+      check(`${role} message defaults to four lines`, r.lines <= 4.4 && r.lines >= 3.4, `${r.lines} lines`);
       check(`${role} long message offers See more`, r.hasMore === true);
     } else {
       check(`${role} short message needs no See more but keeps Copy`, r.hasMore === false && r.hasCopy);
     }
   }
+  // §14 item 5 — the SAME user message, expanded. A screenshot of a collapsed
+  // message proves a clamp; only the pair proves the toggle.
+  const userLi = m.locator('.vmsg[data-v-role="user"]').first();
+  if (await userLi.locator("[data-v-msg-more]").count()) {
+    await userLi.locator("[data-v-msg-more]").click();
+    await m.waitForTimeout(350);
+    await shot(m, "live-05-mobile-user-expanded");
+    const ex = await m.evaluate(() => {
+      const li = document.querySelector('.vmsg[data-v-role="user"]');
+      const others = [...document.querySelectorAll(".vmsg.is-expanded")].length;
+      return { expanded: li.classList.contains("is-expanded"), expandedCount: others };
+    });
+    check("expanding the user message expands only that message",
+      ex.expanded === true && ex.expandedCount === 1, `${ex.expandedCount} expanded`);
+    await userLi.locator("[data-v-msg-more]").click();
+    await m.waitForTimeout(300);
+    check("Show less collapses the user message again",
+      await m.evaluate(() => !document.querySelector('.vmsg[data-v-role="user"]').classList.contains("is-expanded")));
+  } else {
+    await shot(m, "live-05-mobile-user-expanded");
+  }
+
   // Expand the provider message, then copy it while collapsed and expanded.
   const providerLi = m.locator('.vmsg[data-v-role="provider"]').first();
   if (await providerLi.locator("[data-v-msg-more]").count()) {

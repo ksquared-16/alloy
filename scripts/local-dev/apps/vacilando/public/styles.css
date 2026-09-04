@@ -3342,6 +3342,17 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
    The child is an ordinary block inside a block, so it is never blockified. */
 .vmsg:not(.vmsg-provider).is-clampable:not(.is-expanded) .vmsg-clamp > *{
   display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+  /* AND A HEIGHT THE CLAMP CANNOT LOSE AN ARGUMENT WITH.
+     Measured on the installed product: the collapsed operator message rendered
+     4.8 lines and cut the fifth through the middle of its letters. The body also
+     carries `.gw-last-text`, whose `max-height:7.5em` survives from the legacy
+     last-message card — the line-clamp declares no max-height of its own, so
+     that one governed and the clamp did not. Clearing it lets the line-clamp be
+     the only thing deciding, which is the whole point of declaring a clamp.
+     Restating the height in em or lh was tried first and both over-clamped: the
+     ratio and the line box are not what this element's max-height was measured
+     against. Do not put a number back here. */
+  max-height:none;
 }
 /* A PROVIDER REPORT IS NOT A PARAGRAPH, SO THE CLAMP GOES DEEPER.
    Its body is `.gw-report-body` inside `.gw-report`, and clamping the outer
