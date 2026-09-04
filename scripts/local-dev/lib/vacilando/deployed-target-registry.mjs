@@ -155,3 +155,55 @@ export function deployedAuthStoragePath(key, { authRoot }) {
 export function isDeployedStoragePath(path) {
   return new RegExp(`/${DEPLOYED_STORAGE_NAMESPACE}/[^/]+/storage-state\\.json$`).test(String(path || ""));
 }
+
+/**
+ * Does the trusted env this target points at actually back this deployment?
+ *
+ * WHY THIS IS A GATE AND NOT AN ASSUMPTION. The registry says which trusted env
+ * holds a target's credentials, but nothing in the registry can prove that env
+ * belongs to that deployment — the two are configured in different places by
+ * different people. Minting from the wrong project fails in one of two ways,
+ * and the second is worse: either the session simply does not authenticate, or
+ * it authenticates against a DIFFERENT environment that happens to share the
+ * identity, and a tester then certifies the wrong system.
+ *
+ * So the project is compared explicitly. The comparison uses the project ref
+ * only — the subdomain of the Supabase URL, which is public by design and
+ * appears in every browser bundle. No key, no secret, and the value is never
+ * logged by this function.
+ *
+ * `observedProjectRef` must be read from the DEPLOYMENT (its public config),
+ * and `envProjectRef` from the trusted env. Passing the same source for both
+ * would make this check vacuous, which is why they are separate parameters and
+ * why a null on either side refuses rather than passes.
+ */
+export function verifyDeployedProjectMatch({ envProjectRef = null, observedProjectRef = null } = {}) {
+  const a = String(envProjectRef ?? "").trim().toLowerCase();
+  const b = String(observedProjectRef ?? "").trim().toLowerCase();
+  if (!a || !b) {
+    return {
+      ok: false,
+      error: "deployed_project_unverified",
+      detail: "both the trusted env project and the deployment's own project must be observed; an unmeasured match is not a match",
+    };
+  }
+  if (a !== b) {
+    return {
+      ok: false,
+      error: "deployed_project_mismatch",
+      detail: "the trusted env's Supabase project is not the one backing this deployed target",
+    };
+  }
+  return { ok: true, project_ref: a };
+}
+
+/** The public project ref inside a Supabase URL, or null. Never a secret. */
+export function projectRefFromSupabaseUrl(url) {
+  try {
+    const host = new URL(String(url)).hostname;
+    const ref = host.split(".")[0];
+    return /^[a-z0-9]{16,32}$/.test(ref) ? ref : null;
+  } catch {
+    return null;
+  }
+}

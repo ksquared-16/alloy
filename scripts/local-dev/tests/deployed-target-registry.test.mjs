@@ -108,3 +108,34 @@ test("deployed storage cannot collide with a slot session", () => {
 test("an unknown target yields no storage path at all", () => {
   assert.equal(R.deployedAuthStoragePath("whatever", { authRoot: AUTH_ROOT }), null);
 });
+
+/* ── the project backing the target must be PROVEN, not assumed ──────────── */
+
+test("a project match must be observed on both sides", () => {
+  // Minting from the wrong project fails in one of two ways, and the second is
+  // worse: it authenticates against a DIFFERENT environment that shares the
+  // identity, and a tester then certifies the wrong system.
+  assert.equal(R.verifyDeployedProjectMatch({ envProjectRef: "abc", observedProjectRef: null }).ok, false);
+  assert.equal(R.verifyDeployedProjectMatch({ envProjectRef: null, observedProjectRef: "abc" }).ok, false);
+  assert.equal(R.verifyDeployedProjectMatch({}).error, "deployed_project_unverified");
+});
+
+test("a mismatched project is refused and the detail names no value", () => {
+  const out = R.verifyDeployedProjectMatch({ envProjectRef: "aaaa", observedProjectRef: "bbbb" });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, "deployed_project_mismatch");
+  assert.doesNotMatch(out.detail, /aaaa|bbbb/, "a refusal must not echo the values it compared");
+});
+
+test("a matching project passes", () => {
+  const out = R.verifyDeployedProjectMatch({ envProjectRef: "Abc123", observedProjectRef: "abc123" });
+  assert.equal(out.ok, true);
+  assert.equal(out.project_ref, "abc123");
+});
+
+test("the project ref is extracted from a Supabase URL, and only that", () => {
+  assert.equal(R.projectRefFromSupabaseUrl("https://ikaxilmwmrmbagoidedu.supabase.co"), "ikaxilmwmrmbagoidedu");
+  for (const bad of ["", "not a url", "https://supabase.co", "https://x.supabase.co"]) {
+    assert.equal(R.projectRefFromSupabaseUrl(bad), null, `${bad} yields no ref`);
+  }
+});
