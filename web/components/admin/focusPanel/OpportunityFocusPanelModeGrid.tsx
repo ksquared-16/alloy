@@ -98,12 +98,13 @@ function ReservedFocusPanelCell({ typeKey, settled }: { typeKey: FocusPanelCardK
                     {title}
                 </span>
             ) : null}
-            {settled ? null : (
-                <div className="mt-3 space-y-2" aria-hidden="true">
-                    <span className="block h-2 w-1/2 rounded-full bg-alloy-stone/12" />
-                    <span className="block h-2 w-1/3 rounded-full bg-alloy-stone/[0.08]" />
-                </div>
-            )}
+            {/*
+              * No stand-in bars. Two grey rectangles are a guess at a shape the card may not have, and
+              * in a cell stretched to a full published rowSpan they sit marooned at the top of a large
+              * empty area — which reads as a card that failed rather than one that is arriving. The
+              * identity above is the honest statement (this cell belongs to this card, its detail is
+              * settling) and the receded surface carries "not yet" without inventing content.
+              */}
         </div>
     );
 }

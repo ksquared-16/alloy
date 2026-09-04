@@ -10249,3 +10249,44 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   line-height: 1.45;
   color: var(--alloy-os-text-muted, rgba(15, 23, 42, 0.62));
 }
+
+/* ── RESERVED CELL: SPACE HELD, NOT A CARD DRAWN ─────────────────────────────
+ *
+ * A reserved cell keeps its published footprint so Settlement fills it IN PLACE with no reflow. It
+ * was doing that by painting a FULL universal card — solid surface, full border, card shadow —
+ * stretched across the whole rowSpan. Measured on document entry, Business Process holds that
+ * footprint for ~2.7s, and a large solid white rectangle with a title in the corner does not read as
+ * "arriving"; it reads as broken. The operator watches the panel assemble through several of these.
+ *
+ * So the reserve RECEDES rather than asserting a card it cannot yet be. Geometry is untouched, so
+ * nothing moves when the real card lands — what changes is that empty space stops competing with the
+ * cards that actually have something to say. No animation is added: a pulsing skeleton decorates
+ * latency instead of reducing it.
+ *
+ * ── WHY THE SELECTOR IS SHAPED LIKE THIS ──
+ * The surface is owned by `.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+ * .alloy-os-ucard` (0,3,0), not by the bare `.alloy-os-ucard` rule. A first attempt used
+ * `.alloy-os-ucard[data-focus-panel-cell-reserved="true"]` (0,2,0), which MATCHED the element and
+ * still lost every declaration to that grid-scoped rule. The owner was found with the browser's own
+ * matched-rule ownership (CDP `CSS.getMatchedStylesForNode`), not by reading filenames. Mirroring the
+ * owner's scope and adding the state attribute makes this (0,4,0), so it wins on specificity rather
+ * than on source order.
+ */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-focus-panel-cell-reserved="true"],
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-focus-panel-cell-not-applicable="true"] {
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+/* A reserve exposes no controls, so the shared hover lift must not apply to it either. */
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-focus-panel-cell-reserved="true"]:hover,
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)
+  .alloy-os-ucard[data-focus-panel-cell-not-applicable="true"]:hover {
+  box-shadow: none;
+}
