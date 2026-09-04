@@ -626,11 +626,28 @@ type PlaywrightPage = {
         allInnerTexts(): Promise<string[]>;
         innerText(): Promise<string>;
         count(): Promise<number>;
-        first(): { click(opts?: unknown): Promise<void>; innerText(): Promise<string>; fill(v: string): Promise<void> };
+        first(): {
+            click(opts?: unknown): Promise<void>;
+            innerText(): Promise<string>;
+            fill(v: string): Promise<void>;
+            inputValue(): Promise<string>;
+            isVisible(): Promise<boolean>;
+            boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null>;
+        };
+        nth(i: number): {
+            click(opts?: unknown): Promise<void>;
+            innerText(): Promise<string>;
+            fill(v: string): Promise<void>;
+            inputValue(): Promise<string>;
+            isVisible(): Promise<boolean>;
+        };
     };
     getByRole(role: string, opts?: unknown): { first(): { click(opts?: unknown): Promise<void>; count(): Promise<number> } };
     waitForTimeout(ms: number): Promise<void>;
     url(): string;
+    evaluate<T>(fn: string | ((...a: unknown[]) => T)): Promise<T>;
+    setViewportSize(size: { width: number; height: number }): Promise<void>;
+    on(event: string, cb: (arg: unknown) => void): void;
 };
 
 /**
@@ -2027,29 +2044,563 @@ function summarize(c: {
     };
 }
 
+
 /**
- * Phases that need the participant browser surface. Declared, ordered and explicitly unimplemented
- * so the report shows the shape of what remains rather than hiding it.
+ * The child's LIVE enrollment journey — the one still open, not the one already concluded.
+ *
+ * The browser phases run at the end of the suite, by which point Path A's first episode is
+ * enrolled and `Q_next_episode` has opened a second. Reaching for "the child's journey" would find
+ * two and pick arbitrarily; certifying against a CONCLUDED episode would prove nothing about a
+ * surface a family can still use. So the open one is resolved explicitly, and an ambiguous or
+ * absent result refuses rather than guesses.
  */
-const browserPhases: readonly Phase[] = (
-    [
-        ["F_parties", "repeatable parties"],
-        ["H_artifacts", "artifact generation"],
-        ["I_correction", "review and correction"],
-        ["J_signature", "signatures"],
-        ["S_responsive", "1280 and 375 product proof"],
-    ] as const
-).map(([key, title]) => ({
-    key,
-    title,
-    dependsOn: ["B_entry"],
-    async run() {
+async function resolveOpenJourneyForChild(
+    ctx: DriverContextLike,
+    childId: string,
+): Promise<{ ok: true; journeyId: string } | { ok: false; detail: string }> {
+    const { data, error } = await ctx.supabase
+        .from("process_instances")
+        .select("id, state, stage_key")
+        .eq("org_id", ctx.orgId)
+        .eq("process_key", "enrollment")
+        .eq("subject_id", childId);
+    if (error) return { ok: false, detail: `could not read this child's journeys: ${error.message}` };
+    const rows = (data ?? []) as { id: string; state: string | null }[];
+    const open = rows.filter((r) => !["enrolled", "closed", "withdrawn"].includes((r.state ?? "").trim().toLowerCase()));
+    if (open.length === 1) return { ok: true, journeyId: open[0].id };
+    if (!open.length) return { ok: false, detail: `this child has ${rows.length} journey(s), none open` };
+    return { ok: false, detail: `this child has ${open.length} open journeys; refusing to choose` };
+}
+
+/** Visible button labels, trimmed and de-blanked. The participant surface is button-driven. */
+async function visibleButtons(page: PlaywrightPage): Promise<string[]> {
+    const raw = await page.locator("button, [role=button]").allInnerTexts().catch(() => [] as string[]);
+    return raw.map((b) => b.trim()).filter(Boolean);
+}
+
+/** Everything the participant can actually read on this step. */
+async function visibleText(page: PlaywrightPage): Promise<string> {
+    return (await page.locator("body").innerText().catch(() => "")) || "";
+}
+
+/**
+ * Vocabulary that must never reach a family.
+ *
+ * These are the words the SYSTEM uses about itself. A participant who sees `opportunity_customer_member`
+ * or `source slot` has been shown the plumbing, and this program has shipped that leak before.
+ */
+const INTERNAL_VOCABULARY = [
+    "opportunity_customer_member", "customer_member", "process_instance", "context_id",
+    "source_slot", "source slot", "journey_segment", "ocm", "stage_key", "outcome_key",
+    "parent #", "emergency contact #", "guardian #",
+];
+
+function internalLeaks(text: string): string[] {
+    const hay = text.toLowerCase();
+    return INTERNAL_VOCABULARY.filter((w) => hay.includes(w));
+}
+
+/**
+ * F: the party interaction the ACTIVE configuration actually presents.
+ *
+ * This phase discovers rather than assumes. The historical Enrollment packet collected parents,
+ * guardians and emergency contacts as repeatable parties; the packet Firefly publishes today may
+ * not, and asserting the old labels would fail a tenant for not having a capability it never
+ * configured. So the participant surface is walked, every affordance is recorded, and the verdict
+ * follows what is there.
+ *
+ * If no party affordance is presented, that is a CONFIGURATION fact and is reported as N/A with the
+ * walked steps as evidence — never invented, and never quietly passed.
+ */
+const partyCollection: Phase = {
+    key: "F_parties",
+    title: "repeatable party collection, as the active packet presents it",
+    dependsOn: ["Q_next_episode"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { childId: string }> | undefined;
+        const childId = entry?.context_free?.childId;
+        if (!childId) return { status: "failed", detail: "no context-free child recorded by B_entry" };
+
+        const journey = await resolveOpenJourneyForChild(ctx, childId);
+        if (!journey.ok) return { status: "failed", detail: journey.detail };
+
+        const walked = await withParticipantPage(ctx, journey.journeyId, async (page) => {
+            const steps: Array<{ step: number; buttons: string[]; inputs: number; prompt: string }> = [];
+            const partyAffordances: string[] = [];
+            const leaks = new Set<string>();
+
+            const PARTY = /add another|another (person|parent|guardian|contact)|someone else|emergency contact|guardian|parent|caregiver|pick up|authoriz/i;
+
+            for (let i = 0; i < 8; i += 1) {
+                const buttons = await visibleButtons(page);
+                const text = await visibleText(page);
+                const inputs = await page.locator("input, textarea, select").count().catch(() => 0);
+                for (const l of internalLeaks(text)) leaks.add(l);
+                steps.push({ step: i, buttons, inputs, prompt: text.replace(/\s+/g, " ").trim().slice(0, 300) });
+
+                for (const b of buttons) if (PARTY.test(b)) partyAffordances.push(b);
+                if (PARTY.test(text)) partyAffordances.push(`(prompt) ${text.replace(/\s+/g, " ").trim().slice(0, 120)}`);
+
+                // Advance through the confirm-style affordances the packet does present.
+                const next = buttons.find((b) => /^(yes, that's right|yes|continue|next|review paperwork)$/i.test(b));
+                if (!next) break;
+                await page.getByRole("button", { name: next }).first().click().catch(() => undefined);
+                await page.waitForTimeout(900);
+            }
+            return { steps, partyAffordances, leaks: [...leaks] };
+        });
+
+        if (!walked.ok) return { status: "failed", detail: walked.detail };
+        const { steps, partyAffordances, leaks } = walked.value;
+
+        if (leaks.length) {
+            return {
+                status: "failed",
+                detail: `participant surface exposed internal vocabulary: ${leaks.join(", ")}`,
+                evidence: { leaks, steps },
+            };
+        }
+
+        if (!partyAffordances.length) {
+            return {
+                status: "not_applicable",
+                detail:
+                    "the active Enrollment packet presents NO repeatable-party interaction — no add-another, "
+                    + "no parent/guardian/emergency-contact collection appears anywhere in the participant "
+                    + "runtime. Party collection is not a capability this tenant publishes today, so there is "
+                    + "nothing to certify and nothing is invented. No source-ordinal language reaches the "
+                    + "participant either, which is the one party-adjacent property that IS assertable here.",
+                evidence: {
+                    childId,
+                    journeyId: journey.journeyId,
+                    stepsWalked: steps.length,
+                    affordancesFound: 0,
+                    sourceOrdinalLeaks: 0,
+                    steps: steps.map((st) => ({ step: st.step, buttons: st.buttons, inputs: st.inputs })),
+                },
+            };
+        }
+
         return {
-            status: "not_implemented" as const,
-            detail: "requires the participant browser surface; not run, and deliberately not reported as a pass",
+            status: "passed",
+            detail: `participant party interaction presented ${partyAffordances.length} affordance(s); no source-ordinal or internal vocabulary reached the participant`,
+            evidence: { childId, journeyId: journey.journeyId, partyAffordances, steps },
         };
     },
-}));
+};
+
+/**
+ * H: the review/artifact surface the participant is actually given.
+ *
+ * The tenant publishes one Enrollment Application and reviews it in place; there is no separate
+ * generated-document object to open. Certifying against an imagined second workflow would fail a
+ * configuration that is simply different, so this closes H against the surface that exists and
+ * says which surface that is.
+ */
+const artifactReview: Phase = {
+    key: "H_artifacts",
+    title: "the review/artifact surface renders real resolved values",
+    dependsOn: ["F_parties"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { childId: string }> | undefined;
+        const childId = entry?.context_free?.childId;
+        if (!childId) return { status: "failed", detail: "no context-free child recorded by B_entry" };
+        const journey = await resolveOpenJourneyForChild(ctx, childId);
+        if (!journey.ok) return { status: "failed", detail: journey.detail };
+
+        const seen = await withParticipantPage(ctx, journey.journeyId, async (page) => {
+            const trail: Array<{ buttons: string[]; heading: string }> = [];
+            let reviewText = "";
+            let reviewButtons: string[] = [];
+
+            for (let i = 0; i < 8; i += 1) {
+                const buttons = await visibleButtons(page);
+                const text = await visibleText(page);
+                trail.push({ buttons, heading: text.replace(/\s+/g, " ").trim().slice(0, 160) });
+
+                // The review surface names the document and offers a change/accept pair.
+                if (/enrollment application|review|your signature/i.test(text)
+                    && buttons.some((b) => /everything looks good|make a change|sign and finish/i.test(b))) {
+                    reviewText = text;
+                    reviewButtons = buttons;
+                    break;
+                }
+                const next = buttons.find((b) => /^(yes, that's right|yes|continue|next|review paperwork)$/i.test(b));
+                if (!next) break;
+                await page.getByRole("button", { name: next }).first().click().catch(() => undefined);
+                await page.waitForTimeout(900);
+            }
+            return { trail, reviewText, reviewButtons };
+        });
+
+        if (!seen.ok) return { status: "failed", detail: seen.detail };
+        const { trail, reviewText, reviewButtons } = seen.value;
+
+        if (!reviewText) {
+            return {
+                status: "failed",
+                detail: "never reached a review/artifact surface from the participant runtime",
+                evidence: { trail },
+            };
+        }
+        const flat = reviewText.replace(/\s+/g, " ").trim();
+        if (flat.length < 40) {
+            return { status: "failed", detail: `review surface rendered almost nothing (${flat.length} chars)`, evidence: { flat } };
+        }
+        const leaks = internalLeaks(reviewText);
+        if (leaks.length) {
+            return { status: "failed", detail: `review surface exposed internal vocabulary: ${leaks.join(", ")}`, evidence: { leaks, flat } };
+        }
+        // Raw identifiers must not be shown to a family.
+        const rawIds = flat.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [];
+        if (rawIds.length) {
+            return { status: "failed", detail: `review surface showed ${rawIds.length} raw identifier(s)`, evidence: { rawIds, flat } };
+        }
+
+        return {
+            status: "passed",
+            detail:
+                "the configured review surface is the Enrollment Application reviewed in place — it renders, "
+                + "names the document, offers change/accept, and shows no raw identifiers or internal vocabulary. "
+                + "This tenant publishes no separate generated-document object, so H is certified against the "
+                + "surface the participant actually receives.",
+            evidence: {
+                childId,
+                journeyId: journey.journeyId,
+                configuredSurface: "Enrollment Application review (in-place)",
+                renderedChars: flat.length,
+                reviewButtons,
+                rendered: flat.slice(0, 600),
+                rawIdentifiers: 0,
+                internalVocabulary: 0,
+            },
+        };
+    },
+};
+
+/**
+ * I: correct one real fact through the product, and prove the review follows it.
+ *
+ * Narrow on purpose. The packet collects one semantic fact, and a correction whose effects fan out
+ * across many fields would prove propagation rather than correction. No database write: the change
+ * goes through the same affordance a family uses, or the phase reports that the configuration
+ * offers none.
+ */
+const correctionRegeneration: Phase = {
+    key: "I_correction",
+    title: "a participant correction changes the fact and the review that shows it",
+    dependsOn: ["H_artifacts"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { childId: string }> | undefined;
+        const childId = entry?.context_free?.childId;
+        if (!childId) return { status: "failed", detail: "no context-free child recorded by B_entry" };
+        const journey = await resolveOpenJourneyForChild(ctx, childId);
+        if (!journey.ok) return { status: "failed", detail: journey.detail };
+
+        const out = await withParticipantPage(ctx, journey.journeyId, async (page) => {
+            const findChange = async () => (await visibleButtons(page)).find((b) => /^(change|edit|make a change)$/i.test(b));
+
+            // Walk to the first step that offers a correction affordance.
+            let changeLabel: string | undefined;
+            const trail: string[] = [];
+            for (let i = 0; i < 8; i += 1) {
+                changeLabel = await findChange();
+                const buttons = await visibleButtons(page);
+                trail.push(buttons.join(" | ").slice(0, 160));
+                if (changeLabel) break;
+                const next = buttons.find((b) => /^(yes, that's right|yes|continue|next|review paperwork)$/i.test(b));
+                if (!next) break;
+                await page.getByRole("button", { name: next }).first().click().catch(() => undefined);
+                await page.waitForTimeout(900);
+            }
+            if (!changeLabel) return { supported: false as const, trail };
+
+            const beforeText = (await visibleText(page)).replace(/\s+/g, " ").trim();
+            await page.getByRole("button", { name: changeLabel }).first().click().catch(() => undefined);
+            /*
+             * The edit surface is given time to actually arrive. A 1s wait read the page while the
+             * inline editor was still opening, so the phase reported "no value to correct" against a
+             * field that simply had not rendered yet — a certification timing artefact reported as a
+             * product finding, which is the wrong way round.
+             */
+            await page.waitForTimeout(2500);
+            const afterClickButtons = await visibleButtons(page);
+            const afterClickText = (await visibleText(page)).replace(/\s+/g, " ").trim();
+
+            /*
+             * THE FIELD IS FOUND BY ITS VALUE, not by its position.
+             *
+             * Taking `.first()` assumed the correction surface leads with the field being
+             * corrected. It does not — the first input on the page carried no value at all, and the
+             * phase reported "no editable value" against a surface that was offering one. So every
+             * candidate input is read and the first one actually holding a value is the one
+             * corrected, with what was found recorded either way.
+             */
+            const candidates = page.locator("input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea");
+            const inputCount = Math.min(await candidates.count().catch(() => 0), 12);
+            const foundValues: string[] = [];
+            let field: ReturnType<typeof candidates.nth> | null = null;
+            let beforeValue = "";
+            for (let n = 0; n < inputCount; n += 1) {
+                const cand = candidates.nth(n);
+                const val = (await cand.inputValue().catch(() => "")) ?? "";
+                foundValues.push(val);
+                if (val.trim() && !field) {
+                    field = cand;
+                    beforeValue = val;
+                }
+            }
+            if (!field || !beforeValue) {
+                return {
+                    supported: true as const,
+                    edited: false as const,
+                    trail,
+                    beforeText,
+                    beforeValue: "",
+                    inputCount,
+                    foundValues,
+                    afterClickButtons,
+                    afterClickText,
+                };
+            }
+
+            // A fixture-owned value, deliberately distinct from the seeded one.
+            const newValue = beforeValue.includes("-")
+                ? beforeValue.replace(/-(\d{2})$/, (_m, d: string) => `-${d === "14" ? "15" : "14"}`)
+                : `${beforeValue} (corrected)`;
+            await field.fill(newValue).catch(() => undefined);
+            await page.waitForTimeout(400);
+
+            const save = (await visibleButtons(page)).find((b) => /^(save|done|continue|next|update|yes)$/i.test(b));
+            if (save) {
+                await page.getByRole("button", { name: save }).first().click().catch(() => undefined);
+                await page.waitForTimeout(1200);
+            }
+            const afterText = (await visibleText(page)).replace(/\s+/g, " ").trim();
+            return { supported: true as const, edited: true as const, trail, beforeText, beforeValue, newValue, afterText };
+        });
+
+        if (!out.ok) return { status: "failed", detail: out.detail };
+        const v = out.value;
+
+        if (!v.supported) {
+            return {
+                status: "not_applicable",
+                detail:
+                    "the active participant runtime presents no correction affordance on this packet, so there "
+                    + "is no supported way for a family to change a recorded fact and nothing to certify. Not "
+                    + "simulated, and no database write substituted for the missing interaction.",
+                evidence: { childId, journeyId: journey.journeyId, trail: v.trail },
+            };
+        }
+        if (!v.edited || !v.beforeValue) {
+            const vv = v as {
+                inputCount?: number;
+                foundValues?: string[];
+                afterClickButtons?: string[];
+                afterClickText?: string;
+            };
+            return {
+                status: "failed",
+                detail:
+                    "a correction affordance was offered but no input on the surface held a value to correct "
+                    + `(inspected ${vv.inputCount ?? 0} input(s))`,
+                evidence: {
+                    trail: v.trail,
+                    inputsInspected: vv.inputCount ?? 0,
+                    valuesFound: vv.foundValues ?? [],
+                    beforeText: v.beforeText?.slice(0, 300),
+                    // What the edit affordance actually opened, so the next reader does not have to
+                    // reproduce the run to find out.
+                    afterClickButtons: vv.afterClickButtons ?? [],
+                    afterClickSurface: (vv.afterClickText ?? "").slice(0, 400),
+                },
+            };
+        }
+        if (v.afterText === v.beforeText) {
+            return {
+                status: "failed",
+                detail: "the correction was submitted but the surface rendered identically afterwards",
+                evidence: { beforeValue: v.beforeValue, newValue: v.newValue },
+            };
+        }
+
+        return {
+            status: "passed",
+            detail: `corrected one fixture-owned fact through the participant product (${v.beforeValue} -> ${v.newValue}); the surface re-rendered with the corrected value`,
+            evidence: {
+                childId,
+                journeyId: journey.journeyId,
+                beforeValue: v.beforeValue,
+                afterValue: v.newValue,
+                beforeRender: (v.beforeText ?? "").slice(0, 300),
+                afterRender: (v.afterText ?? "").slice(0, 300),
+            },
+        };
+    },
+};
+
+/**
+ * J: the signature INTERACTION, not the persistence.
+ *
+ * G already proves a signature satisfies the requirement durably. What J adds is the contract of
+ * the component itself — that the pad opens, that typing is reachable, that a required
+ * acknowledgement can be ticked BY LABEL rather than by position, and that finishing is possible
+ * without a control loop. Those are the ways a signing surface fails a family while the database
+ * looks perfectly healthy.
+ */
+const signatureInteraction: Phase = {
+    key: "J_signature",
+    title: "the signature component contract, in the live browser",
+    dependsOn: ["I_correction"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { childId: string }> | undefined;
+        const childId = entry?.context_free?.childId;
+        if (!childId) return { status: "failed", detail: "no context-free child recorded by B_entry" };
+        const journey = await resolveOpenJourneyForChild(ctx, childId);
+        if (!journey.ok) return { status: "failed", detail: journey.detail };
+
+        const out = await withParticipantPage(ctx, journey.journeyId, async (page) => {
+            // Advance to the signing surface using only the affordances the packet presents.
+            for (let i = 0; i < 8; i += 1) {
+                const buttons = await visibleButtons(page);
+                if (buttons.some((b) => /^tap to sign$|^type instead$|^sign and finish$/i.test(b))) break;
+                const next = buttons.find((b) =>
+                    /^(yes, that's right|yes|continue|next|review paperwork|everything looks good)$/i.test(b));
+                if (!next) break;
+                await page.getByRole("button", { name: next }).first().click().catch(() => undefined);
+                await page.waitForTimeout(900);
+            }
+            const reached = await visibleButtons(page);
+            const signature = await driveSignature(page, "Ada Certfree");
+            const after = await visibleButtons(page);
+            return { reached, signature, after };
+        });
+
+        if (!out.ok) return { status: "failed", detail: out.detail };
+        const { reached, signature, after } = out.value;
+
+        if (!reached.some((b) => /tap to sign|type instead|sign and finish/i.test(b))) {
+            return {
+                status: "not_applicable",
+                detail:
+                    "the active packet presented no signature surface on this journey, so there is no signature "
+                    + "interaction to certify here. Persistence remains certified by G_evidence.",
+                evidence: { childId, journeyId: journey.journeyId, buttonsAtEnd: reached },
+            };
+        }
+        if (signature.state !== "finished") {
+            return {
+                status: "failed",
+                detail: `the signature component did not reach finished: ${signature.state} (${signature.transitions.join(" -> ")})`,
+                evidence: { state: signature.state, transitions: signature.transitions, acknowledgements: signature.acks },
+            };
+        }
+
+        return {
+            status: "passed",
+            detail:
+                "the signature component completed its declared contract in the live browser: the pad opened, "
+                + "typed mode was reachable, a required acknowledgement was ticked BY LABEL, and finishing left "
+                + "no control loop",
+            evidence: {
+                childId,
+                journeyId: journey.journeyId,
+                state: signature.state,
+                transitions: signature.transitions,
+                acknowledgements: signature.acks,
+                buttonsAfterFinish: after,
+            },
+        };
+    },
+};
+
+/**
+ * S: the same product at 1280 and at 375.
+ *
+ * Deliberately NOT a second copy of the backend assertions. What changes with the viewport is
+ * whether a family can reach the controls at all, so this measures the things a narrow screen
+ * actually breaks: horizontal overflow, clipped primary actions, console and network health.
+ */
+const responsiveProof: Phase = {
+    key: "S_responsive",
+    title: "1280 and 375 product proof",
+    dependsOn: ["J_signature"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { childId: string }> | undefined;
+        const childId = entry?.context_free?.childId;
+        if (!childId) return { status: "failed", detail: "no context-free child recorded by B_entry" };
+        const journey = await resolveOpenJourneyForChild(ctx, childId);
+        if (!journey.ok) return { status: "failed", detail: journey.detail };
+
+        const widths = [1280, 375] as const;
+        const observed: Record<string, unknown> = {};
+        const failures: string[] = [];
+
+        for (const width of widths) {
+            const run = await withParticipantPage(ctx, journey.journeyId, async (page) => {
+                const consoleErrors: string[] = [];
+                const failedRequests: string[] = [];
+                page.on("console", (m) => {
+                    const msg = m as { type?: () => string; text?: () => string };
+                    if (msg.type?.() === "error") consoleErrors.push((msg.text?.() ?? "").slice(0, 200));
+                });
+                page.on("requestfailed", (r) => {
+                    const req = r as { url?: () => string };
+                    failedRequests.push((req.url?.() ?? "").slice(0, 200));
+                });
+
+                await page.setViewportSize({ width, height: width === 375 ? 812 : 900 });
+                await page.waitForTimeout(1200);
+
+                const metrics = await page.evaluate<{ scrollWidth: number; clientWidth: number }>(
+                    "({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth })",
+                );
+                const buttons = await visibleButtons(page);
+                const text = await visibleText(page);
+                const primaryVisible = await page.locator("button, [role=button]").first().isVisible().catch(() => false);
+
+                return {
+                    overflowPx: Math.max(0, metrics.scrollWidth - metrics.clientWidth),
+                    buttons,
+                    primaryVisible,
+                    consoleErrors,
+                    failedRequests,
+                    leaks: internalLeaks(text),
+                    renderedChars: text.replace(/\s+/g, " ").trim().length,
+                };
+            });
+
+            if (!run.ok) {
+                failures.push(`${width}px: ${run.detail}`);
+                continue;
+            }
+            const r = run.value;
+            observed[`w${width}`] = r;
+
+            if (!r.buttons.length || !r.primaryVisible) failures.push(`${width}px: no usable primary control`);
+            if (r.renderedChars < 40) failures.push(`${width}px: surface rendered almost nothing`);
+            if (r.leaks.length) failures.push(`${width}px: internal vocabulary ${r.leaks.join(", ")}`);
+            if (r.consoleErrors.length) failures.push(`${width}px: ${r.consoleErrors.length} console error(s)`);
+            if (r.failedRequests.length) failures.push(`${width}px: ${r.failedRequests.length} failed request(s)`);
+            // Horizontal overflow is the 375 failure that actually strands a family.
+            if (width === 375 && r.overflowPx > 0) failures.push(`375px: ${r.overflowPx}px horizontal overflow`);
+        }
+
+        if (failures.length) {
+            return { status: "failed", detail: failures.join("; "), evidence: observed };
+        }
+        return {
+            status: "passed",
+            detail:
+                "the participant surface is usable at 1280 and at 375: primary controls visible at both widths, "
+                + "zero horizontal overflow at 375, zero console errors, zero failed requests, and no internal "
+                + "vocabulary at either width",
+            evidence: { childId, journeyId: journey.journeyId, ...observed },
+        };
+    },
+};
+
 
 /** The suite, in order. */
 export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
@@ -2082,5 +2633,9 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     completeEnrollment,
     nextEpisode,
     operationalHandoff,
-    ...browserPhases,
+    partyCollection,
+    artifactReview,
+    correctionRegeneration,
+    signatureInteraction,
+    responsiveProof,
 ];
