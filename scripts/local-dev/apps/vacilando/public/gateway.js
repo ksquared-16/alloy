@@ -1281,6 +1281,7 @@ function paint() {
     page: G.page,
     tab: G.laneTab,
     placeholders: G.placeholders,
+    returnTo: readLaneOrigin(),
     homeVm: G.page === "home" ? buildHomeVm(Date.now()) : null,
     activityVm: G.page === "activity" ? buildActivityVm(Date.now()) : null,
     systemVm: G.page === "system" ? buildSystemVm() : null,
@@ -1295,6 +1296,7 @@ function paint() {
     if (btn) btn.setAttribute("aria-expanded", "true");
   }
   paintNav();
+  paintNeedsYou();
   paintRail();
   restoreComposer(saved);
   if (!saved) restoreThreadScroll(null);
@@ -1488,12 +1490,68 @@ async function refreshAttentionCounts() {
   } catch { /* the next poll carries it */ }
 }
 
+/**
+ * NEEDS YOU IS THE SHELL'S JOB NOW.
+ *
+ * The permanent approvals bar is gone. It rendered the same pending requests as
+ * a 241px-per-request block at the top of the content column on EVERY route —
+ * above Home's own Needs You card, above the lane catalogue, above the lane —
+ * so one decision could occupy three surfaces at once and none of them was
+ * where the operator was looking. The governed payload it carried is not lost:
+ * Review opens it on the lane that raised it, which is the only place it can be
+ * acted on with its own context.
+ */
+function needsYouVm(nowMs = Date.now()) {
+  const approvals = (G.approvals && G.approvals.length) ? G.approvals : (G.home?.approvals || []);
+  return View.buildNeedsYou({
+    lanes: G.lanes || [],
+    approvals,
+    laneState: (l) => View.canonicalLaneWorkState(l, { nowMs }),
+    nowMs,
+  });
+}
+
+function paintNeedsYou() {
+  const vm = needsYouVm();
+  G.needsYou = vm;
+  // Every mounted host, not just the top bar's: the lane header carries one too
+  // on a phone. One model, so they cannot report different counts.
+  const markup = View.needsYouControl(vm.count);
+  document.querySelectorAll(".vneeds-global").forEach((host) => { host.innerHTML = markup; });
+  const panel = document.getElementById("needs-panel");
+  // Only repaint the panel while it is open: rewriting it underneath a closed
+  // dialog is work nobody can see, and rewriting it while the operator reads it
+  // is how a list moves out from under a tap.
+  if (panel && !panel.hidden) panel.innerHTML = View.needsYouPanel(vm);
+  if (panel) {
+    document.querySelectorAll("[data-v-needs-open]")
+      .forEach((b) => b.setAttribute("aria-expanded", panel.hidden ? "false" : "true"));
+  }
+}
+
+function setNeedsYouOpen(open) {
+  const panel = document.getElementById("needs-panel");
+  const scrim = document.getElementById("needs-scrim");
+  if (!panel) return;
+  if (open) panel.innerHTML = View.needsYouPanel(needsYouVm());
+  panel.hidden = !open;
+  if (scrim) scrim.hidden = !open;
+  document.documentElement.toggleAttribute("data-v-needs-open", open);
+  const buttons = [...document.querySelectorAll("[data-v-needs-open]")];
+  buttons.forEach((b) => b.setAttribute("aria-expanded", open ? "true" : "false"));
+  if (open) panel.querySelector(".vneeds-panel-close")?.focus();
+  else buttons.find((b) => b.offsetParent !== null)?.focus();
+}
+
 function paintApprovals() {
+  // The element remains in the shell so nothing downstream has to guard for a
+  // missing node, but it never renders content again.
   const el = document.getElementById("approvals-bar");
-  if (!el) return;
-  const rows = G.approvals || [];
-  el.innerHTML = View.renderPendingApprovalsBar(rows);
-  el.hidden = rows.length === 0;
+  if (el) {
+    el.innerHTML = "";
+    el.hidden = true;
+  }
+  paintNeedsYou();
   paintAttentionBadge();
 }
 
@@ -1645,6 +1703,56 @@ async function fetchCandidates() {
   return G.connect.candidates;
 }
 
+/* ===========================================================================
+ * RETURN CONTEXT
+ *
+ * The lane used to hard-code "Back = Lanes", so Home -> lane -> Back stranded
+ * the operator on a surface they had never been on, having lost their place on
+ * the one they had. The origin is captured HERE — in navigation, the only layer
+ * that knows a journey happened — and every back affordance renders from it.
+ *
+ * Captured on the click, not on the hashchange: by the time the hash has
+ * changed the page we are leaving has already been replaced, and its scroll
+ * position with it.
+ * ======================================================================== */
+const LANE_ORIGIN_KEY = "vacilando.laneOrigin";
+
+function pageScroller() {
+  return document.querySelector(".main") || document.scrollingElement || document.documentElement;
+}
+
+function readLaneOrigin() {
+  if (G.laneOrigin) return G.laneOrigin;
+  try {
+    const raw = storage()?.getItem(LANE_ORIGIN_KEY);
+    G.laneOrigin = raw ? JSON.parse(raw) : null;
+  } catch { G.laneOrigin = null; }
+  return G.laneOrigin;
+}
+
+function writeLaneOrigin(origin) {
+  G.laneOrigin = origin;
+  try {
+    if (origin) storage()?.setItem(LANE_ORIGIN_KEY, JSON.stringify(origin));
+    else storage()?.removeItem(LANE_ORIGIN_KEY);
+  } catch { /* a private window still navigates correctly, it just forgets */ }
+}
+
+// LANE -> LANE KEEPS THE ORIGIN. Opening a second lane from the rail continues
+// the same journey; it does not start one from the lane you were reading.
+document.addEventListener("click", (e) => {
+  // Every way into a lane, not just the ones with an href: the rail navigates
+  // from `data-route` in JavaScript, so matching links alone recorded no origin
+  // for the single most common way an operator opens a lane.
+  const a = e.target instanceof Element
+    ? e.target.closest('a[href^="#/lanes/"], [data-route^="lanes/"], [data-gw-lane]')
+    : null;
+  if (!a) return;
+  if (!["home", "lanes", "activity"].includes(G.page)) return;
+  if (G.selected) return;
+  writeLaneOrigin({ page: G.page, scrollY: Math.round(pageScroller()?.scrollTop || 0) });
+}, true);
+
 async function show(r) {
   const gen = ++G.showGen;
   G.visible = true;
@@ -1655,6 +1763,22 @@ async function show(r) {
   G.page = View.primaryNavKey(route.name) === "lanes" ? "lanes" : View.primaryNavKey(route.name);
   G.laneTab = route.tab || "overview";
   G.placeholders = View.readPlaceholderMode(storage(), location.search || location.hash);
+
+  // ARRIVING BACK where the lane was opened from — Home, Lanes or Activity —
+  // puts the operator where they were, not at the top of a page they had
+  // already scrolled through. The origin is spent on arrival: it describes one
+  // journey, and the next one records its own.
+  if (!route.sub) {
+    const origin = readLaneOrigin();
+    if (origin && origin.page === G.page) {
+      const to = Number(origin.scrollY) || 0;
+      writeLaneOrigin(null);
+      requestAnimationFrame(() => {
+        const sc = pageScroller();
+        if (sc) sc.scrollTop = to;
+      });
+    }
+  }
 
   // HOME / ACTIVITY / SYSTEM.
   //
@@ -3358,6 +3482,29 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
+  // THE GLOBAL INTERRUPTION CENTRE.
+  //
+  // Opening it is not navigation — the operator stays exactly where they were,
+  // which is the entire point of putting interruptions in the shell instead of
+  // in the content. Review IS navigation, and it closes the panel on the way.
+  if (hit("[data-v-needs-open]")) {
+    e.preventDefault();
+    const panel = document.getElementById("needs-panel");
+    setNeedsYouOpen(Boolean(panel?.hidden));
+    return;
+  }
+  if (hit("[data-v-needs-close]") || hit("#needs-scrim")) {
+    e.preventDefault();
+    setNeedsYouOpen(false);
+    return;
+  }
+  if (hit("[data-v-needs-review-link]")) {
+    // The href does the navigating; the panel must not still be over the lane
+    // the operator just asked to see.
+    setNeedsYouOpen(false);
+    return;
+  }
+
   // Placeholder mode is turned OFF from the banner it paints. There is
   // deliberately no way to turn it on by accident.
   if (hit("[data-v-placeholders-off]")) {
@@ -3448,3 +3595,10 @@ async function refreshBlockingScreen(laneId) {
     // A failed read must not erase a dialog the operator is looking at.
   }
 }
+
+// A dialog that cannot be dismissed from the keyboard is a trap on desktop.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const panel = document.getElementById("needs-panel");
+  if (panel && !panel.hidden) setNeedsYouOpen(false);
+});

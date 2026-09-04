@@ -3501,3 +3501,107 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
      survives compose mode — as one compact line, not a panel. */
   :root[data-gw-compose] .vneeds-tray{flex:0 0 auto;padding:5px 9px;font-size:12px;}
 }
+
+/* ===========================================================================
+   NEEDS YOU — THE GLOBAL INTERRUPTION CENTRE
+
+   MEASURED, before: three pending requests rendered as the first and largest
+   block of Home (a card per request, above the fold), AND as a bar pinned to
+   the top of the content column on every other route, AND above the lane
+   catalogue. One decision, three simultaneous renderings, none of them where
+   the operator happened to be looking — and all of them permanent, so the
+   application read as perpetually alarmed even when nothing was wrong.
+
+   An interruption is not page content. It is a property of the whole
+   application: either something is blocked on a human or nothing is. So it
+   lives in the shell, in one fixed place, and says nothing at all until it has
+   something to say.
+   =========================================================================== */
+.vneeds-global{display:flex;align-items:center;margin-left:8px;}
+
+.vneeds-ctl{
+  display:inline-flex;align-items:center;gap:7px;
+  font:inherit;font-size:12.5px;font-weight:600;color:var(--ink-2);
+  background:transparent;border:1px solid var(--line);border-radius:var(--pill);
+  padding:5px 11px;min-height:32px;cursor:pointer;
+}
+.vneeds-ctl:hover{background:var(--bg-tint);color:var(--ink);}
+.vneeds-ctl:focus-visible{outline:2px solid var(--juniper);outline-offset:2px;}
+.vneeds-ctl-ico{width:15px;height:15px;flex:0 0 auto;}
+/* QUIET WHEN QUIET. With nothing pending this is a label, not an alert: no
+   terracotta, no badge, no pulse. The colour is the signal, so it may only
+   appear when the signal is real. */
+.vneeds-ctl.has-items{border-color:var(--attn);color:var(--attn-ink);}
+.vneeds-ctl-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;border-radius:var(--pill);
+  background:var(--attn);color:#fff;font-size:11px;font-weight:700;line-height:1;
+}
+
+.vneeds-scrim{position:fixed;inset:0;z-index:60;background:rgba(31,42,36,.18);}
+.vneeds-scrim[hidden]{display:none;}
+
+/* Desktop: a right-side panel, anchored under the top bar. It overlays rather
+   than reflows — opening your interruptions must not move the work underneath
+   them. */
+.vneeds-panel{
+  position:fixed;z-index:61;top:56px;right:16px;width:min(380px, calc(100vw - 32px));
+  max-height:min(72vh, 560px);display:flex;flex-direction:column;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.vneeds-panel[hidden]{display:none;}
+.vneeds-panel-head{
+  display:flex;align-items:center;gap:9px;padding:11px 14px;
+  border-bottom:1px solid var(--line);flex:0 0 auto;
+}
+.vneeds-panel-title{margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);}
+.vneeds-panel-count{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;border-radius:var(--pill);
+  background:var(--attn);color:#fff;font-size:11px;font-weight:700;
+}
+.vneeds-panel-close{
+  margin-left:auto;font:inherit;font-size:18px;line-height:1;color:var(--ink-3);
+  background:transparent;border:0;cursor:pointer;min-width:32px;min-height:32px;border-radius:var(--radius-sm);
+}
+.vneeds-panel-close:hover{background:var(--bg-tint);color:var(--ink);}
+.vneeds-panel-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px 14px 12px;}
+/* One line of WHY, under what is being asked. The proposal itself — inputs,
+   fingerprint, escalation, approve/deny — is what Review opens, on the lane
+   that raised it, because that is the only place it has its context. */
+.vneeds-row-why{
+  display:block;font-size:12px;color:var(--ink-3);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+
+@media (max-width:860px){
+  /* A phone gets a sheet, thumb-reachable, rather than a panel pinned to a
+     corner it has to stretch for. */
+  .vneeds-panel{
+    top:auto;bottom:0;right:0;left:0;width:auto;
+    max-height:min(78dvh, 620px);
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  .vneeds-ctl-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
+  .vneeds-ctl{min-height:36px;padding:6px 10px;}
+  .vneeds-panel-close{min-width:44px;min-height:44px;}
+  .vneeds-panel-list .btn{min-height:40px;}
+}
+
+/* Compose mode owns the screen; an interruption centre is not what the operator
+   is doing while typing, and its control is inside the chrome that stands down. */
+@media (max-width:860px){
+  :root[data-gw-compose] .vneeds-panel,
+  :root[data-gw-compose] .vneeds-scrim{display:none;}
+}
+
+/* EXACTLY ONE CONTROL IS VISIBLE AT ANY WIDTH. The lane-header mount exists for
+   the mobile lane, where the top bar stands down; on desktop the top bar's
+   control is the one, and this one is not rendered at all. */
+.vneeds-global-lane{display:none;}
+@media (max-width:860px){
+  .app:has(.gw.is-detail) .vneeds-global-lane{display:flex;margin-left:0;}
+  .app:has(.gw.is-detail) .vneeds-global-lane .vneeds-ctl{padding:5px 9px;min-height:32px;}
+}

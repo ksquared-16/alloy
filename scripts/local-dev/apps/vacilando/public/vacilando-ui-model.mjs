@@ -358,6 +358,9 @@ export function buildHomeViewModel({
     needsYou: buildNeedsYou({ lanes, approvals, laneState, nowMs }),
     health: buildSystemHealth({ resources, capacity, placeholders }),
     lanes: buildLaneSummaries({ lanes, laneState, nowMs }),
+    // HOME IS A COMMAND CENTRE, NOT A SECOND LANE DIRECTORY. See
+    // operationalLanes: the full catalogue is what Lanes is for.
+    activeLanes: operationalLanes(buildLaneSummaries({ lanes, laneState, nowMs })),
     usage: buildUsageModel({ usage, placeholders }),
     effectiveness: buildEffectivenessModel({ effectiveness, placeholders }),
     activity: Array.isArray(activity) ? activity.slice(0, 8) : [],
@@ -414,6 +417,56 @@ export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => nu
 
   items.sort((a, b) => (a.at_ms || 0) - (b.at_ms || 0));
   return { items, count: items.length, nowMs };
+}
+
+/**
+ * HOME SHOWS WHAT IS HAPPENING; LANES SHOWS WHAT EXISTS.
+ *
+ * Home reproduced the entire lane directory, which is why the two surfaces read
+ * as the same page twice. The operational subset is the lanes that are DOING
+ * something or WAITING on someone — the ones that answer "what is running?".
+ * A lane that is merely Ready exists; it is not news, and finding it is the
+ * directory's job.
+ *
+ * Attention first, then most recently moved, then capped: Home is scanned, and
+ * a list you scroll is a list you stopped scanning.
+ */
+/**
+ * RETURN CONTEXT — ONE MECHANISM, NOT A RENDERER-SPECIFIC HACK.
+ *
+ * "Back" was the literal string `#/lanes`, written into six templates. So Home
+ * -> Trust Runtime -> Back landed on Lanes: a place the operator had not been,
+ * losing the command centre they were reading and the position they were at in
+ * it. A lane does not know where it should return to, and it should not: the
+ * NAVIGATION knows, because it is the thing that moved.
+ *
+ * The origin is recorded when the operator leaves a primary surface for a lane
+ * and is what every back affordance renders from. Lane -> lane keeps the
+ * original origin, because opening a second lane from the rail is not a new
+ * journey. A deep link has no origin and falls back to the directory.
+ */
+export const LANE_RETURN_TARGETS = Object.freeze({
+  home: { page: "home", hash: "#/home", label: "Home" },
+  lanes: { page: "lanes", hash: "#/lanes", label: "Lanes" },
+  activity: { page: "activity", hash: "#/activity", label: "Activity" },
+});
+
+export function laneReturnTarget(origin) {
+  const t = LANE_RETURN_TARGETS[origin?.page];
+  return t ? { ...t, scrollY: Number(origin?.scrollY) || 0 } : { ...LANE_RETURN_TARGETS.lanes, scrollY: 0 };
+}
+
+export const HOME_LANE_LIMIT = 5;
+
+export function operationalLanes(summaries = [], { limit = HOME_LANE_LIMIT } = {}) {
+  const rank = { needs_you: 0, failed: 1, working: 2 };
+  return (Array.isArray(summaries) ? summaries : [])
+    .filter((l) => l.state_key && l.state_key !== OPERATOR_STATE.READY)
+    .sort((a, b) => {
+      const r = (rank[a.state_key] ?? 9) - (rank[b.state_key] ?? 9);
+      return r || (b.at_ms || 0) - (a.at_ms || 0);
+    })
+    .slice(0, limit);
 }
 
 export function buildSystemHealth({ resources = null, capacity = null, placeholders = false } = {}) {

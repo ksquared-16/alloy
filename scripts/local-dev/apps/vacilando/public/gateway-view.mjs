@@ -32,6 +32,7 @@ import {
   buildSystemViewModel,
   laneOperatorStatus,
   laneProgress,
+  laneReturnTarget,
   operatorStatusLine,
   readPlaceholderMode,
   writePlaceholderMode,
@@ -4933,6 +4934,13 @@ export function laneIdentityMeta(lane, telemetry, { nowMs = Date.now() } = {}) {
   return bits.filter(Boolean).join(" · ");
 }
 
+/** Every back affordance on a lane, rendered from the recorded origin. */
+export function renderLaneBack(returnTo, { withLabel = false } = {}) {
+  const t = laneReturnTarget(returnTo);
+  return `<a class="gw-back vlane-back" data-gw-back data-v-return="${esc(t.page)}" href="${esc(t.hash)}"
+    aria-label="Back to ${esc(t.label)}">\u2190${withLabel ? ` ${esc(t.label)}` : ""}</a>`;
+}
+
 export function renderLaneTabs(laneId, active = "overview") {
   const cur = LANE_TAB_KEYS.includes(active) ? active : "overview";
   return `<nav class="vtabs-lane" role="tablist" aria-label="Lane sections">${LANE_TABS.map((t) => `
@@ -4948,6 +4956,7 @@ export function renderLaneHeaderV2(lane, {
   tab = "overview",
   nowMs = Date.now(),
   asideOpen = false,
+  returnTo = null,
 } = {}) {
   const laneId = lane?.lane_id || selectedId;
   const label = lane?.label || laneId;
@@ -4959,9 +4968,13 @@ export function renderLaneHeaderV2(lane, {
   const canStop = Boolean(lane?.execution_run && !["COMPLETE", "FAILED", "ABANDONED"].includes(lane.execution_run.state));
   return `<header class="vlane-head" data-gw-chat-head>
     <div class="vlane-head-top">
-      <a class="gw-back vlane-back" data-gw-back href="#/lanes" aria-label="Back to lanes">←</a>
+      ${renderLaneBack(returnTo)}
+      ${/*
+        THE BREADCRUMB NAMES WHERE YOU CAME FROM, because that is what "up"
+        means to the person who walked here. It used to say "Lanes /" always.
+      */ ""}
       <nav class="vcrumb vlane-crumb" aria-label="Breadcrumb">
-        <a href="#/lanes">Lanes</a><span class="vcrumb-sep" aria-hidden="true">/</span><span aria-current="page">${esc(label)}</span>
+        <a href="${esc(laneReturnTarget(returnTo).hash)}">${esc(laneReturnTarget(returnTo).label)}</a><span class="vcrumb-sep" aria-hidden="true">/</span><span aria-current="page">${esc(label)}</span>
       </nav>
     </div>
     ${/*
@@ -4989,6 +5002,14 @@ export function renderLaneHeaderV2(lane, {
         ${meta ? `<p class="vlane-head-meta">${esc(meta)}</p>` : ""}
       </div>
       <div class="vlane-head-acts">
+        ${/*
+          THE INTERRUPTION CENTRE FOLLOWS THE OPERATOR ONTO THE LANE.
+          On a phone the top bar is hidden on a lane to give the conversation
+          the screen, which would strand the one global control. It is mounted
+          here as well and painted from the same model; CSS shows exactly one of
+          the two at any width, so there is never a second count to disagree.
+        */ ""}
+        <div class="vneeds-global vneeds-global-lane"></div>
         ${canStop ? `<button type="button" class="btn sm vlane-stop" data-gw-cancel-run data-lane-id="${esc(laneId)}">Stop lane</button>` : ""}
         <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
           aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
@@ -5062,8 +5083,16 @@ export function laneNeedsYouItems(lane) {
       detail: ga.reason_worker_cannot_execute || null,
     });
   }
+  // ONE BLOCKER IS ONE REQUEST.
+  //
+  // A run sits in NEEDS_INPUT *because* its governed action is awaiting the
+  // operator — they are the same interruption seen from the run and from the
+  // request. Counting both made the lane tray say "2 requests" for the single
+  // decision the global interruption centre counted once, which is precisely
+  // the cross-surface disagreement the one-resolver rule exists to prevent.
+  // buildNeedsYou already dedupes this; so does the tray.
   const run = lane?.execution_run;
-  if (run?.state === "NEEDS_INPUT") {
+  if (run?.state === "NEEDS_INPUT" && !items.length) {
     items.push({
       kind: "needs_input",
       lane_id: lane.lane_id,
@@ -5289,6 +5318,7 @@ export function renderGatewayShell({
   latestResponse = null,
   newUpdate = false,
   asideOpen = false,
+  returnTo = null,
   // INERT IS NOT THE SAME AS CLOSED. On desktop the details pane is a permanent
   // grid column — no rule hides it, and the fold preference changes nothing you
   // can see. Marking it inert whenever it was "closed" therefore left a pane
@@ -5397,7 +5427,7 @@ export function renderGatewayShell({
     return `<div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="${esc(selectedId)}" data-gw-loading>
       ${list}
       <section class="gw-main">
-        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+        ${renderLaneBack(returnTo, { withLabel: true })}
         <h1>${esc(selectedId)}</h1>
         <p class="gw-lead">Loading lane…</p>
       </section>
@@ -5411,7 +5441,7 @@ export function renderGatewayShell({
       : "This Development Lane could not be resolved.";
     return `<div class="gw is-detail" data-gw data-gw-mode="detail">${list}
       <section class="gw-main">
-        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+        ${renderLaneBack(returnTo, { withLabel: true })}
         <h1>${title}</h1>
         <p class="gw-lead">${lead}</p>
       </section>
@@ -5513,7 +5543,7 @@ export function renderGatewayShell({
     ${list}
     <section class="gw-main">
       <div class="gw-lane-stage" data-gw-stage>
-        ${renderLaneHeaderV2(lane, { selectedId, work, telemetry, tab: activeTab, nowMs, asideOpen })}
+        ${renderLaneHeaderV2(lane, { selectedId, work, telemetry, tab: activeTab, nowMs, asideOpen, returnTo })}
         <div class="vlane-body" data-gw-lane-body data-gw-thread>
           ${tabBody}
         </div>
