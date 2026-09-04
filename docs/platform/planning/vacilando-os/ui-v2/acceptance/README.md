@@ -118,3 +118,36 @@ keyboard closes.
 
 A check that cannot see what it is checking, or that fails on correct output, is
 worse than no check.
+
+## Final result
+
+**Installed-runtime acceptance: 44 checks, 44 passed, 0 failed**
+(`results.json`, 2026-09-04T00:42:42Z, against `http://127.0.0.1:3030`).
+
+Final installed toolkit: `e5d80d15edb27d07acb282d4c539326303711025`
+(`origin/staging`), Gateway host pid 21569 → `toolkit/e5d80d15edb2`.
+
+### Regression, measured under matched conditions
+
+The accepted baseline named four failing durability suites. A fifth,
+`development-provider-lifecycle`, appeared in the final run — so the baseline was
+re-measured **at the pre-promotion commit `b422578b4`, on the same host, at the
+same time**, rather than trusting an earlier number taken under different
+conditions:
+
+| Tree | Result | Failing suites |
+|---|---|---|
+| `b422578b4` (pre-promotion staging) | PASS=78 FAIL=5 | gateway-ui, provider-lifecycle, lane-provisioning, certification-fixture, director-execution-bridge |
+| `e5d80d15e` (promoted) | PASS=79 FAIL=5 | *the same five* |
+
+`development-provider-lifecycle` fails identically and reproducibly at the
+baseline commit — three consecutive standalone runs — and none of the promoted
+commits touch `assessProviderCapacity` or anything it reads. It is a pre-existing
+staging failure whose appearance depends on host conditions, not a regression.
+
+The promoted tree adds one passing suite (`development-gateway-ui-v2`, 43 checks)
+and introduces no new failure.
+
+A baseline number carried over from an earlier moment is not a baseline. Each
+comparison in this record was measured against the other side under the same
+conditions.
