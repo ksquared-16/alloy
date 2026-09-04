@@ -33,11 +33,31 @@ independently verified against `origin/staging` before reporting.
 
 ## Observed instances
 
-At least **five** occurrences in lane `lane_9b9082778292`. Two are documented
-here in full; both are `repository.push` failures, and neither went anywhere
-near a merge.
+At least **six** occurrences in lane `lane_9b9082778292`. Three are documented
+here in full. Two are `repository.push` failures that never went near a merge;
+the third is a merge that was **explicitly refused**, which is the strongest
+evidence of all — the notice announced success for an operation the same
+message said had failed.
 
-### Instance A — `gar_069e7c22bf39c4`
+### Instance A — `gar_ced1afe4dec89c` (a refused merge)
+
+| | |
+|---|---|
+| Action | `repository.merge_pull_request`, PR #704 |
+| Reported failure | `execution_failed` / `required_checks_pending` |
+| Notice also claimed | "The merge into staging already succeeded. Do not retry the merge." |
+| Actual `origin/staging` | `6994ec6038deb84d9e7d29a2c2a194c512744cc8` |
+| Candidate commits present | **3 of 4 absent** (`48d35af59`, `5bd67ae8c`, `d2e1cb6d2`) |
+
+`required_checks_pending` means the merge was **declined** because its checks had
+not finished. The same message then reported it as already succeeded. A stale
+read cannot explain this: there was no merge to read.
+
+The same PR merged cleanly minutes later as `gar_b0d80e519d36d1`
+(`merge_sha 15a1167e9420f2262c296b635830f4171dd2afe9`, verified by ancestry), so
+the failure was real and transient — only the remediation text was false.
+
+### Instance B — `gar_069e7c22bf39c4`
 
 | | |
 |---|---|
@@ -51,7 +71,7 @@ near a merge.
 `head_drift` means the push was refused for a stale expected SHA. The remote
 branch did not move. No merge was attempted, requested, or possible.
 
-### Instance B — `gar_dd80251b477976`
+### Instance C — `gar_dd80251b477976`
 
 | | |
 |---|---|
