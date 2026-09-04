@@ -17,7 +17,7 @@
   "prepared_at": "2026-07-31T15:23:43Z",
   "prepared_by": "claude (Vacilando managed slot 6)",
   "last_execution_attempt_at": "2026-08-04T17:00:23Z",
-  "status": "executed",
+  "status": "executed (run 4, 2026-09-04 — drifted)",
   "execution": {
     "executed": true,
     "executed_at": "2026-08-07T17:24:16.951Z",
@@ -219,12 +219,24 @@
       "query_changed": true,
       "note": "THE AMENDED QUERY'S FIRST EXECUTION, and the first census that proves its own target. Authored 2026-08-06, promoted into combined_query 2026-08-07 by asg_f34761f0f418ee, executed 2026-08-07 under this mission. Query hash CHANGES here (743cd63b… → a3982ca5…) — that is expected and correct, not drift: the only change is the added target_identity key. Every Q1–Q6 expression is byte-identical to runs 1 and 2, so the counts remain directly comparable, and all of them returned unchanged for a third time. See drift_run_2_to_run_3 and target_identity_resolved.",
       "history_entry_added_by": "asg_86eb0e4a95142e. The Director's merge-back (trusted-host-actions.mjs) rewrites only status, query_hash, execution and results — it does NOT append to run_history, exactly as runs_1_2_query_provenance.what_the_directors_merge_back_will_do predicted. This entry was written by hand afterwards; the next run will need the same."
+    },
+    {
+      "run": 4,
+      "executed_at": "2026-09-04T11:28:53Z",
+      "census_run_at": "2026-09-04T11:28:53.506411+00:00",
+      "mission_id": null,
+      "assignment_id": "asg_45a7990a10e28c",
+      "trusted_host_action_id": "tha_836b248cacf951",
+      "request_id": "gar_c834cb05ce8425",
+      "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+      "query_changed": false,
+      "note": "THE FIRST RUN THAT DRIFTED. Same committed query (a3982ca5…) and same target fingerprint (ab7e5dde…) as run 3, so the movement is in the DATA, not the instrument. Q4 grew for the first time across four runs — exactly the growth run 3's own caution predicted would arrive 'the moment the product starts being used in earnest'. Every other consequence-bearing count is unchanged."
     }
   ],
   "drift_since_previous_run": {
-    "compared": "2026-07-31T15:48:45Z (run 1) vs 2026-08-04T17:00:21Z (run 2)",
-    "elapsed": "~4 days",
-    "verdict": "ZERO DRIFT on every consequence-bearing count. All six queries returned exactly what they returned on 2026-07-31, so every §4 rule outcome stands re-confirmed rather than merely re-asserted.",
+    "compared": "2026-08-07T17:24:15Z (run 3) vs 2026-09-04T11:28:53Z (run 4)",
+    "elapsed": "~28 days",
+    "verdict": "DRIFT, and it is the drift this file predicted. Q4 moved for the first time across four runs; every other consequence-bearing count is unchanged. Same query hash (a3982ca5…) and same org fingerprint (ab7e5dde…) as run 3, so this is movement in the tenant, not in the instrument.",
     "unchanged": {
       "org_count": 2,
       "q1_handle_new_user_defined": 1,
@@ -232,9 +244,6 @@
       "q2_principals_without_membership": 0,
       "q2_legacy_only_authorized": 0,
       "q3_undefined_membership_rows": 0,
-      "q4_membership_rows": 8,
-      "q4_distinct_user_org_pairs": 6,
-      "q4_pairs_without_profile": 2,
       "q4_profiles_without_membership": 0,
       "q5_admin_ops_org_role_pairs": 3,
       "q5_pairs_with_no_definition": 0,
@@ -244,14 +253,32 @@
     },
     "changed": [
       {
+        "field": "q4_membership_rows",
+        "from": 8,
+        "to": 13,
+        "consequence": "The tenant stopped being idle. Five memberships were created since 2026-08-07."
+      },
+      {
+        "field": "q4_distinct_user_org_pairs",
+        "from": 6,
+        "to": 11,
+        "consequence": "The exhaustively-enumerable population grew from 6 pairs to 11. Run 3's recommendation — satisfy the §2 'prove zero' step by enumerating every pair rather than by observing a traffic window — still holds at 11, but it is now a moving target and should be re-counted at switch time, not carried from this file."
+      },
+      {
+        "field": "q4_pairs_without_profile",
+        "from": 2,
+        "to": 5,
+        "consequence": "M1's backfill MUST BE RE-SIZED from 2 rows to 5. This is the one number in this census that another workstream consumes as a quantity rather than as a yes/no, and W-7 is a FAIL-CLOSED switch gated behind M1: shipping M1 at its recorded size of 2 would leave 3 principals without an access profile at the moment the switch flips — three lockouts, which is precisely the class of defect W-0 exists to prevent."
+      },
+      {
         "field": "q1_auth_users_triggers",
-        "from": "54 triggers on auth.users",
-        "to": "62 triggers on auth.users",
-        "consequence": "NONE. All 62 are tgisinternal = true referential-integrity triggers (RI_FKey_setnull_del / RI_FKey_noaction_upd); application_triggers is still 0. The 8 new rows are the FK triggers created by the migrations added since the last run — the deployed schema grew new foreign keys referencing auth.users. Q1's verdict is unchanged: handle_new_user() remains DEFINED BUT NOT ATTACHED, so G1 stays latent and W-20 stays in wave 5."
+        "from": "62 triggers on auth.users",
+        "to": "74 triggers on auth.users",
+        "consequence": "NONE. All 74 are tgisinternal referential-integrity triggers; application_triggers is still 0, so handle_new_user() remains DEFINED BUT NOT ATTACHED. G1 stays latent and W-20 stays in wave 5."
       }
     ],
-    "why_q4_did_not_grow": "Q4 was the count expected to drift, because W-5 has not landed — POST /api/admin/users still inserts into user_roles alone (web/app/api/admin/users/route.ts:101-105), so every membership the product creates adds a fail-open pair. It held at 2 because q4_membership_rows also held at 8: no membership was created through the product in this window. That is an absence of activity, NOT a repaired defect. The moment the product is used in earnest the number moves, which is precisely W-5's argument.",
-    "what_this_does_and_does_not_license": "It licenses M1 being sized at 2 TODAY and the L2/L3/L4 remediation sets being empty TODAY. It does not convert any count into an invariant: residual_risks[0] stands unchanged, and each §11 preflight must still re-run the census rather than cite run 2."
+    "why_q4_grew_this_time": "Run 3 recorded why it had NOT grown: W-5 has not landed, so POST /api/admin/users still inserts into user_roles alone and every membership the product creates is a fail-open pair. Q4 held at 2 only because no membership was being created. Five were created in this window and THREE of them arrived without a profile — a 60% defect rate on new rows against 33% on the standing population. The create path is still writing memberships without profiles. W-5 is not merely still open; it is now actively accumulating the backlog M1 has to clear.",
+    "what_this_says_about_re_running": "Three consecutive identical runs made re-running look ceremonial. It was not: the fourth run is the one that moved, and it moved the single count another workstream consumes as a quantity. Re-run this census immediately before any lockout-class switch, and size M1 from that run rather than from this file."
   },
   "target": {
     "expected_project_ref": "ikaxilmwmrmbagoidedu",
@@ -306,8 +333,14 @@
     "resolved_by": "run 3 (tha_67f9c69f628d1a), assignment asg_86eb0e4a95142e",
     "summary": "For the first time in three runs, the census output identifies the database it hit. The improvement recorded at target.improvement_for_next_run on 2026-07-31 — and carried unadopted through run 2 — has executed and returned data.",
     "returned": {
-      "org_ids": ["7803388d-cdee-4afb-89cf-23a137f39423", "93667019-bd28-49b5-a688-acc9bb1e0a19"],
-      "org_slugs": ["alloy-bend", "demo-childcare-co-c144769f"],
+      "org_ids": [
+        "7803388d-cdee-4afb-89cf-23a137f39423",
+        "93667019-bd28-49b5-a688-acc9bb1e0a19"
+      ],
+      "org_slugs": [
+        "alloy-bend",
+        "demo-childcare-co-c144769f"
+      ],
       "org_fingerprint": "ab7e5dde2e229d5c46e251456e4d9534",
       "server_addr": "2600:1f13:838:6e21:288f:4aa6:65bf:f446/128",
       "server_version": "17.6",
@@ -638,7 +671,7 @@
   "results": {
     "database": "postgres",
     "org_count": 2,
-    "census_run_at": "2026-08-07T17:24:15.663653+00:00",
+    "census_run_at": "2026-09-04T11:28:53.506411+00:00",
     "target_identity": {
       "org_ids": [
         "7803388d-cdee-4afb-89cf-23a137f39423",
@@ -654,7 +687,7 @@
       "org_fingerprint": "ab7e5dde2e229d5c46e251456e4d9534"
     },
     "q2_via_app_users": 0,
-    "q4_membership_rows": 8,
+    "q4_membership_rows": 13,
     "q2_via_user_profiles": 0,
     "q1_auth_users_triggers": [
       {
@@ -1028,12 +1061,84 @@
         "tgenabled": "O",
         "tgisinternal": true,
         "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53336",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53337",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53887",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53888",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53897",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53898",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54030",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54031",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54035",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54036",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54045",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54046",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
       }
     ],
-    "q4_pairs_without_profile": 2,
+    "q4_pairs_without_profile": 5,
     "q2_legacy_only_authorized": 0,
     "q1_handle_new_user_defined": 1,
-    "q4_distinct_user_org_pairs": 6,
+    "q4_distinct_user_org_pairs": 11,
     "q3_distinct_undefined_roles": [],
     "q5_admin_ops_org_role_pairs": 3,
     "q5_pairs_with_no_definition": 0,
@@ -1073,8 +1178,8 @@
       }
     ],
     "applied_at": "2026-07-31",
-    "reconfirmed_at": "2026-08-04",
-    "reconfirmation_note": "Run 2 returned identical values for all six rules, so every outcome below is re-confirmed against live data rather than carried forward on the run-1 snapshot. No outcome changed; nothing was re-applied because nothing moved.",
+    "reconfirmed_at": "2026-09-04 (run 4 — first run to change an outcome)",
+    "reconfirmation_note": "Runs 2 and 3 returned identical values for all six rules. RUN 4 DID NOT: q4_pairs_without_profile moved 2 -> 5, so the q4 rule's outcome is re-applied with a new size. The other five rules are unchanged and stand re-confirmed against 2026-09-04 data.",
     "applied": [
       {
         "rule": "q1 shows a non-internal, enabled trigger running handle_new_user",
@@ -1097,8 +1202,30 @@
       {
         "rule": "q4_pairs_without_profile > 0",
         "fired": true,
-        "observed": 2,
-        "outcome": "M1 sized at exactly 2 rows. W-7 gated behind M1."
+        "observed": 5,
+        "outcome": "M1 sized at exactly 5 rows as of run 4 (was 2 for runs 1-3). W-7 gated behind M1. RE-SIZE M1 BEFORE SHIPPING IT: the recorded size of 2 is stale by 3 rows, and W-7 fails closed.",
+        "observed_history": [
+          {
+            "run": 1,
+            "at": "2026-07-31",
+            "value": 2
+          },
+          {
+            "run": 2,
+            "at": "2026-08-04",
+            "value": 2
+          },
+          {
+            "run": 3,
+            "at": "2026-08-07",
+            "value": 2
+          },
+          {
+            "run": 4,
+            "at": "2026-09-04",
+            "value": 5
+          }
+        ]
       },
       {
         "rule": "q5_pairs_with_no_definition > 0",
@@ -1119,7 +1246,9 @@
     "reconfirmed_2026_08_04": "An independent re-run four days later returned every one of these numbers unchanged. The finding is now twice-measured rather than once-measured — but see drift_since_previous_run.why_q4_did_not_grow: the stability reflects an idle tenant, not a fixed defect.",
     "scale": "The target database holds 2 orgs, 8 membership rows and 6 distinct (user, org) pairs. This is a pre-production-scale tenant.",
     "implication_for_the_ritual": "The §2 four-step switch ritual — seed, dual-read, prove zero across an observation window, switch — was designed for an UNKNOWN blast radius. At 6 pairs the blast radius is not merely known, it is exhaustively enumerable. A traffic-based observation window is the weaker instrument here: with this little traffic, 'zero divergences observed' is mostly evidence that nobody logged in. RECOMMENDATION: for this tenant, satisfy step 3 ('prove zero') by exhaustive enumeration of all 6 pairs — computing both the old and new answers for every one — rather than by observing divergences over a window. That is a stronger proof AND a cheaper one, and it dissolves the 'observation window is unspecified' limit recorded in plan §14.3 item 5. This is a recommendation to the workstream owners, not a unilateral change to the ritual.",
-    "caution": "Small numbers reduce blast radius; they do not make the defects less real. The 2 fail-open pairs and the 1 silently-unrestricted admin are genuine, and the same code ships to any tenant that grows. W-5 (create path writes a profile) matters MORE at this scale, not less: it is what stops Q4 from growing the moment the product starts being used in earnest. Re-running this census before each lockout-class switch is cheap and is now a solved operation."
+    "caution": "Small numbers reduce blast radius; they do not make the defects less real. The 2 fail-open pairs and the 1 silently-unrestricted admin are genuine, and the same code ships to any tenant that grows. W-5 (create path writes a profile) matters MORE at this scale, not less: it is what stops Q4 from growing the moment the product starts being used in earnest. Re-running this census before each lockout-class switch is cheap and is now a solved operation.",
+    "run_4_2026_09_04": "THE PREDICTED GROWTH ARRIVED. This file's own caution — 'the 2 fail-open pairs are genuine, and W-5 is what stops Q4 from growing the moment the product starts being used in earnest' — is now measured rather than argued. The tenant went from 8 memberships over 6 pairs to 13 over 11, and pairs without an access profile went 2 -> 5. Three of the five new pairs arrived fail-open, so the create path is still not writing profiles and W-5 is accumulating the very backlog M1 must clear. Everything else held: no application trigger on auth.users, no legacy-only principals, no undefined roles, no undefined admin/ops definitions. The scale claim in `scale` above (2 orgs, 8 rows, 6 pairs) is superseded by run 4: 2 orgs, 13 rows, 11 pairs.",
+    "superseded_scale_note": "`scale` and `reconfirmed_2026_08_04` describe runs 1-3 and are kept as the record of what was true then. Run 4 supersedes their counts; it does not supersede their reasoning."
   },
   "exit_criteria": {
     "committed_evidence_file": true,
@@ -1172,5 +1301,30 @@
     "runs_1_2_remain_verifiable": "Runs 1 and 2 stay fully verifiable, against a STRONGER anchor than a duplicated copy in this file. Their exact query bytes — together with their `results` block — are immutable in git at blob f95f89302bbd92f3e24e8c4a93dbb0231f0a664e, this file's content at commit 7dc06920a (the last commit before this edit). Recover and re-verify with: `git cat-file blob f95f89302bbd92f3e24e8c4a93dbb0231f0a664e`. That blob's `combined_query` is the text whose sha256 is the 743cd63b… recorded above, and it is the text runs 1 and 2 actually executed. A transcribed second copy inside this file would have been weaker: it could be mistyped, and a mistyped copy would silently fail to hash to 743cd63b… while looking authoritative.",
     "what_the_directors_merge_back_will_do": "On a successful run 3 the Director rewrites this file (trusted-host-actions.mjs:385-406) with `{...prior, status, query_hash, execution, results}`. Two consequences to expect rather than be surprised by: (1) a top-level `query_hash` REAPPEARS, holding run 3's hash — correct, and it must not be confused with the 743cd63b… above; (2) `results` is OVERWRITTEN, so run 2's raw result object is replaced in place. Run 2's counts survive in queries[].result and drift_since_previous_run, and its full raw block survives in the git blob named above. Every other key in this file, including these provenance keys, survives the spread untouched."
   },
-  "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42"
+  "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+  "run_4_root_cause_analysis": {
+    "what_the_arithmetic_fixes": "Membership rows and distinct (user, org) pairs BOTH grew by exactly 5 (8->13 and 6->11). Because the two moved together, every new membership row is a new (user, org) pair: five principals gained a first role in an org, and nobody gained a second role in an org they already held. Of those five pairs, THREE arrived without an access profile and two did not.",
+    "what_that_rules_out": "The product's own create path can no longer produce a fail-open pair. POST /api/admin/users calls createMembershipWithAccessProfile (web/app/api/admin/users/route.ts:176-180), which RPCs create_membership_with_access_profile (web/lib/admin/membershipWithProfile.ts:46) — membership and profile in one transaction. The route no longer inserts into user_roles at all. So the three fail-open pairs were NOT created through the admin API on this branch.",
+    "what_still_writes_user_roles_directly": [
+      {
+        "path": "web/scripts/seedRealisticChildcareDemoData.ts:1310",
+        "fn": "ensureUserRoleIfAbsent",
+        "note": "Inserts into user_roles with no profile. Called 5x (lines 1978-1988) for three demo principals. The same script DOES upsert user_access_profiles elsewhere (wireDemoUserScopes, line 2257), so principals it wires get a profile and principals it only role-stamps do not. The census target carries the org slug 'demo-childcare-co-c144769f', which is this script's tenant."
+      },
+      {
+        "path": "web/scripts/seedAccessValidationDemo.ts:536",
+        "fn": "direct insert",
+        "note": "Inserts into user_roles with no profile."
+      },
+      {
+        "path": "web/scripts/qa/employmentNegativeControls.sh:76",
+        "fn": "deliberate negative control",
+        "note": "Inserts a user_roles row with no profile ON PURPOSE, to prove a control fails open. If this ran against the census target it would produce exactly this signature."
+      }
+    ],
+    "what_this_census_CANNOT_say": "Which of those paths created the three rows. Q4 reports counts, not rows, so attribution is beyond what was asked. Nor does this analysis establish what is DEPLOYED to the census target: W-5's closure is verified in this branch's source, and the target is alloy_deployed_primary. A branch that has W-5 and a deployment that does not would produce the same numbers.",
+    "the_correction_to_the_earlier_diagnosis": "Run 3's why_q4_did_not_grow blamed POST /api/admin/users ('still inserts into user_roles alone, route.ts:101-105'). That is no longer true of this branch — the fail-open insert is gone from the route. The mechanism that keeps Q4 refilling is therefore NOT the product create path but the seeding and QA tooling, which W-5 never covered and which M1 empties only until the next seed run. That is a different remediation from the one the plan currently carries.",
+    "recommended_next_census": "Add row-level attribution for the failing population only — (user_id, org_id, created_at, role) for pairs lacking a profile. Still read-only, still bounded, and it answers 'which path and when' in one run instead of by inference.",
+    "recommended_workstream_change": "W-5's scope should be read as 'no path creates a membership without a profile', not 'the admin API does not'. Either the seed/QA scripts adopt create_membership_with_access_profile, or the invariant is enforced in the database (a trigger, or the NOT NULL/FK that M9 contemplates) so that no writer can bypass it. Until one of those lands, M1 is a broom, not a fix."
+  }
 }
