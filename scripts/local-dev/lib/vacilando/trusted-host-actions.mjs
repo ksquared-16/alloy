@@ -51,6 +51,7 @@ import { executeRestoreQaSessionSync } from "./qa-session-restore-action.mjs";
 import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
 import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
+import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
 import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
@@ -647,6 +648,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) {
     return executeRetireWorktreeTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    return executeSetProviderCeilingTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -1625,6 +1629,78 @@ export function executeRetireWorktreeTrustedHostAction(action, { actor = "direct
     postconditions: out.postconditions, removal_method: out.removal_method,
     branch_deleted: out.branch_deleted, credentialsExposed: false,
   }, { nowMs });
+}
+
+/**
+ * Execute the ceiling move by invoking the canonical command.
+ *
+ * This function adds authority and an audit trail. It adds NO behaviour: the
+ * constant key, the range, compare-and-set, readback verification and the
+ * change log all belong to `vac capacity set-provider-ceiling`. Re-implementing
+ * any of them here would create a second path to the same file that the tests
+ * for the first path do not cover, and the more permissive of two such paths is
+ * the one that eventually gets used.
+ */
+export function executeSetProviderCeilingTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    out = executeProviderCeiling({
+      expected: Number(i.expected_ceiling ?? i.expectedCeiling),
+      requested: Number(i.requested_ceiling ?? i.requestedCeiling),
+      rollbackTo: Number(i.rollback_ceiling ?? i.rollbackCeiling),
+      reason: i.reason,
+      experimentId: i.experiment_id ?? i.experimentId ?? null,
+    }, { vacPath: i.vacPath || null });
+  } catch (e) {
+    return failTrustedAction(action, "ceiling_change_failed", String(e?.message || e), { nowMs });
+  }
+  if (!out.ok) {
+    return failTrustedAction(action, out.error || "ceiling_change_refused",
+      out.detail || `provider ceiling change refused: ${out.error}`, { nowMs });
+  }
+  // A write reported without a readback is exactly the uncertainty this whole
+  // capability exists to remove, so it fails rather than reporting success.
+  if (out.readback_verified !== true) {
+    return failTrustedAction(action, "readback_not_verified",
+      `config did not read back as ${i.requested_ceiling}`, { nowMs });
+  }
+  return completeTrustedAction(action, {
+    key: out.key,
+    previous_value: out.previous_value,
+    new_value: out.new_value,
+    rollback_value: out.rollback_value,
+    readback_verified: true,
+    reason: out.reason,
+    experiment_id: out.experiment_id,
+    audited_at: out.audited_at,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+export function fulfillSetProviderCeilingForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillRetireWorktreeForMission(missionId, {

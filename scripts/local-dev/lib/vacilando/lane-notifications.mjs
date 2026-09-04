@@ -152,6 +152,108 @@ export function classForGovernedStatus(status) {
   return null;
 }
 
+/**
+ * THE DIRECTOR'S FOUR QUESTIONS.
+ *
+ * The notification stream answers exactly one thing: do I need to know, or do
+ * something? Everything the Director is shown resolves to one of these, and
+ * anything that resolves to none of them is not a notification — it is
+ * activity, and belongs in the lane history and the audit log.
+ *
+ * These are deliberately about the OPERATOR'S OBLIGATION rather than about
+ * what the system did. "Governed action executed" describes the system;
+ * "nothing is required of you" describes the obligation, and only the second
+ * one helps someone decide whether to look.
+ */
+export const DIRECTOR_CATEGORIES = Object.freeze([
+  "needs_answer",  // a decision or missing information only the Director has
+  "stuck",         // cannot continue autonomously
+  "attention",     // state looks unhealthy and cannot safely self-reconcile
+  "completed",     // meaningful work finished
+]);
+
+/**
+ * Routine progress that must NEVER page the Director.
+ *
+ * Each of these was a real notification before the Director Attention Model,
+ * and not one of them asked anything of anybody. A push completing is the
+ * system working; being told about it is the system interrupting.
+ *
+ * Note what is NOT here: nothing that failed, and nothing awaiting an
+ * operator. Suppression covers success and progress only.
+ */
+const ROUTINE_PROGRESS_EVENTS = Object.freeze([
+  "pull_request_opened", "push_completed", "authorization_satisfied",
+  "governed_action_started", "governed_action_approved", "toolkit_install_started",
+  "lane_queued", "lane_admitted", "server_restarted", "reconciliation_completed",
+  "provider_seat_released", "capacity_decision_succeeded",
+]);
+
+/**
+ * Does this event deserve the Director's attention at all?
+ *
+ * Auto-authorisation is the case that matters. Once routine actions execute
+ * inside policy they never reach `awaiting_operator`, so the approval flood
+ * disappears by construction rather than by filtering — but a governed action
+ * that ran automatically still must not announce itself on the way past.
+ */
+export function isRoutineProgress(event) {
+  return ROUTINE_PROGRESS_EVENTS.includes(String(event || "").toLowerCase());
+}
+
+/**
+ * Collapse related events onto ONE finding.
+ *
+ * A stale Payments run holding a provider seat while Surfaces waits behind it
+ * is one problem with three symptoms. Notifying per symptom pages the Director
+ * three times about a single thing and hides the causal link, which is the
+ * only part that helps. When an issue key is known, the notification is keyed
+ * on the ISSUE, so the follow-on symptoms update that finding in place —
+ * diagnosed, recovering, resolved — instead of stacking beside it.
+ *
+ * Falls back to the run when no issue is named, which preserves the existing
+ * one-notification-per-prompt behaviour exactly.
+ */
+export function collapseKeyFor({ issueKey = null, runId = null } = {}) {
+  const issue = String(issueKey || "").trim();
+  if (issue) return `issue:${issue}`;
+  const run = String(runId || "").trim();
+  return run ? `run:${run}` : null;
+}
+
+/**
+ * Map a run state to the Director's obligation.
+ *
+ * FAILED and ABANDONED are deliberately different. A failure is "stuck": the
+ * work wanted to continue and could not, and somebody has to unblock it. An
+ * abandoned run is "attention": nothing is asking to proceed, but the state is
+ * not something the system could settle by itself.
+ */
+export function directorCategoryForRunState(state) {
+  const s = String(state || "").toUpperCase();
+  if (s === "NEEDS_INPUT") return "needs_answer";
+  if (s === "FAILED") return "stuck";
+  if (s === "ABANDONED") return "attention";
+  if (s === "COMPLETE") return "completed";
+  return null;
+}
+
+/**
+ * Map a governed-action status to the Director's obligation.
+ *
+ * `awaiting_operator` survives as "needs_answer" because it is now RARE and
+ * therefore meaningful: under the attention model it is reached only by
+ * something a policy genuinely does not cover, or whose gates could not be
+ * measured. Every routine status returns null — not a quieter notification, no
+ * notification.
+ */
+export function directorCategoryForGovernedStatus(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "awaiting_operator") return "needs_answer";
+  if (s === "failed") return "stuck";
+  return null;
+}
+
 export function isNotifyingState(state) {
   return NOTIFY_STATES.includes(String(state || "").toUpperCase());
 }
@@ -255,6 +357,7 @@ export function recordRunNotification(run, {
   laneName = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
+  issueKey = null,
 } = {}) {
   const state = String(run?.state || "").toUpperCase();
   if (!run?.run_id) return { ok: false, error: "missing_run", created: false };
@@ -270,13 +373,17 @@ export function recordRunNotification(run, {
   // needed. It is still one notification per prompt — it now stops demanding
   // attention when the prompt stops needing it.
   const out = upsertNotification({
-    subjectKey: `run:${run.run_id}`,
+    subjectKey: collapseKeyFor({ issueKey, runId: run.run_id }),
     runId: run.run_id,
     laneId: laneId || null,
     laneName,
     eventType: eventTypeForState(state),
     state,
     attentionClass: classForRunState(state) || "informational",
+    // What the Director is actually being asked for, alongside the older
+    // class. The class says how loud; this says which of the four questions
+    // it answers, which is what decides whether it is worth looking at.
+    directorCategory: directorCategoryForRunState(state),
     summary: summaryForRun(run, state),
     path: laneId ? `/#/lanes/${encodeURIComponent(laneId)}` : "/#/lanes",
     nowMs,

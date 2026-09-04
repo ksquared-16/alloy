@@ -750,6 +750,18 @@ export function operatorLabel(rec) {
     if (work) return `Delete ${work} branch`;
     return b ? `Delete remote branch ${b}` : "Delete a remote branch";
   }
+  if (key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    const from = inputs.expected_ceiling ?? inputs.expectedCeiling;
+    const to = inputs.requested_ceiling ?? inputs.requestedCeiling;
+    const back = inputs.rollback_ceiling ?? inputs.rollbackCeiling;
+    // The operator is approving a specific transition, so the numbers belong in
+    // the sentence. "Change the provider ceiling" hides the only detail that
+    // decides whether this is routine or alarming.
+    if (from != null && to != null) {
+      return `Set provider ceiling ${from} to ${to}${back != null ? ` (rollback ${back})` : ""}`;
+    }
+    return "Set the provider capacity ceiling";
+  }
   if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
     if (work) return `Read-only census — ${work}`;
     return `Read-only database census on ${target}`;
@@ -1410,6 +1422,7 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) return "other";
+  if (actionKey === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) return "other";
   return "read_only";
 }
 

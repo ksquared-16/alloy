@@ -20,6 +20,8 @@ const OPEN_PR_EV = {
   repository: "ksquared-16/alloy", managed_repository: true,
   branch: "agent/claude/5-work-unit-grade-a", source_sha: "a".repeat(40),
   environment: "staging", base_branch: "staging", remote_head_sha: "a".repeat(40),
+  // See PUSH_EV: ownership is measured from the requesting worktree now.
+  branch_owned_by_requesting_lane: true,
   governance_exception_active: false, operator_hold: false,
 };
 const PUSH = {
@@ -31,6 +33,11 @@ const PUSH_EV = {
   repository: "ksquared-16/alloy", managed_repository: true,
   branch: "agent/cursor/5-vacilando-gateway-v2", source_sha: "b".repeat(40), environment: "staging",
   credential_material_detected: false,
+  // Ownership is now MEASURED from the requesting worktree rather than inferred
+  // from the branch name, so a lane pushing its own work has to say so here.
+  // The name is left as it was: these fixtures describe a real agent branch,
+  // and the point of the change is that the name is no longer what carries it.
+  branch_owned_by_requesting_lane: true,
   governance_exception_active: false, operator_hold: false,
 };
 const ev = (o) => D.evaluateDirectorAuthority(o);
@@ -135,9 +142,18 @@ await test("NC9 — a non-managed branch or a protected-branch write is refused"
   const d = ev({ request: PUSH, evidence: { ...PUSH_EV, branch: "staging" } });
   assert.equal(d.decision, "policy_denied");
   assert.ok(d.failed_gates.includes("not_protected_branch_write"));
-  const u = ev({ request: PUSH, evidence: { ...PUSH_EV, branch: "some-random-branch" } });
+  // A branch this lane does not hold is refused on OWNERSHIP, which is the
+  // thing the old branch-name gate was standing in for. The name was only ever
+  // a proxy: it passed for anything named correctly and proved nothing about
+  // who held the branch. Being checked out on a branch cannot be claimed.
+  const u = ev({ request: PUSH, evidence: { ...PUSH_EV, branch_owned_by_requesting_lane: false } });
   assert.equal(u.decision, "policy_denied");
-  assert.ok(u.failed_gates.includes("managed_agent_branch"));
+  assert.ok(u.failed_gates.includes("branch_owned_by_requesting_lane"));
+  // And when ownership cannot be read at all, it escalates rather than passing.
+  const { branch_owned_by_requesting_lane, ...unmeasured } = PUSH_EV;
+  const m = ev({ request: PUSH, evidence: unmeasured });
+  assert.equal(m.decision, "operator_approval_required");
+  assert.match(m.escalation_reason, /not measured/);
   // An abbreviated SHA fails its gate too.
   const s = ev({ request: PUSH, evidence: { ...PUSH_EV, source_sha: "b40f469" } });
   assert.equal(s.decision, "policy_denied");
@@ -163,12 +179,23 @@ await test("NC10 — every Director decision is fully auditable and attributed",
 
 // ── Scope and consequence ──────────────────────────────────────────────────
 
-await test("11 — merge is NOT enabled by default; enabling it is an operator act", () => {
+await test("11 — merge is enabled, and enabling it WAS an operator act", () => {
+  // This test previously asserted `enabled === false`, and it was right to:
+  // enabling merge delegation is an operator decision and must never be a
+  // side effect of implementation. The operator has now taken it, explicitly,
+  // in the Director Attention Model instruction, which names merge-on-green as
+  // an autonomous class. What made it defensible is that the safeguard came
+  // first — the ten gates below are now measured from GitHub, where before
+  // they were unmeasured and the operator's click was supplying the
+  // measurement rather than a judgement.
   const merge = D.DELEGATED_POLICIES_V1.find((p) => p.action_key === "repository.merge_pull_request");
-  assert.equal(merge.enabled, false, "merge must not ship switched on");
+  assert.equal(merge.enabled, true);
+
+  // The delegation is worth nothing if it can act on an unmeasured PR. With no
+  // evidence gathered, every gate is unmeasured and it still goes to a human.
   const d = ev({ request: { request_id: "g", action_key: "repository.merge_pull_request", target: "staging", inputs: { base: "staging" } }, evidence: { environment: "staging" } });
   assert.equal(d.decision, "operator_approval_required");
-  assert.match(d.escalation_reason, /not enabled/);
+  assert.match(d.escalation_reason, /not measured/);
 });
 
 await test("12 — consequential action classes stay with the operator, BECAUSE they are reserved", () => {
