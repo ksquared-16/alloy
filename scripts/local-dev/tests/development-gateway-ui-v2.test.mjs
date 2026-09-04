@@ -38,6 +38,8 @@ import {
   healthDot,
   laneProgress,
   metric,
+  GOVERNED_ACTIONABLE_STATUSES,
+  isActionableGovernedAction,
   laneReturnTarget,
   messageRow,
   resolveApprovalLane,
@@ -865,4 +867,71 @@ test("compose mode reserves the bottom safe-area inset exactly zero times", () =
   // app ends short of the viewport and the gap reopens from the other side.
   assert.match(composeRules, /:root\[data-gw-compose\] \.app\{[^}]*height:calc\(var\(--gw-vvh[^}]*\)/);
   assert.equal(/:root\[data-gw-compose\] \.app\{[^}]*safe-area-inset-bottom/.test(composeRules), false);
+});
+
+test("a resolved governed action can never re-enter Needs You", () => {
+  // THE DEFECT THIS ENCODES. A lane payload carries a SNAPSHOT of its governed
+  // action, so a decided one stays embedded in the record long after the
+  // decision. The UI had its own idea of what "still needs you" meant —
+  // `awaiting_operator || pending` — where `pending` is a status the governed
+  // lifecycle never produces, and the three states that genuinely precede an
+  // operator decision were missing. A whitelist keeps terminal states out by
+  // construction rather than by remembering to list them.
+  assert.deepEqual([...GOVERNED_ACTIONABLE_STATUSES], [
+    "requested", "awaiting_director", "awaiting_control_plane_refresh", "awaiting_operator",
+  ]);
+  for (const status of ["complete", "failed", "denied", "cancelled", "expired", "superseded", "executing"]) {
+    assert.equal(isActionableGovernedAction({ status }), false, `${status} must not be actionable`);
+  }
+  for (const status of GOVERNED_ACTIONABLE_STATUSES) {
+    assert.equal(isActionableGovernedAction({ status }), true, `${status} must be actionable`);
+  }
+  assert.equal(isActionableGovernedAction(null), false);
+  assert.equal(isActionableGovernedAction({}), false);
+  // `pending` was invented by the old UI check and is not a real status.
+  assert.equal(isActionableGovernedAction({ status: "pending" }), false);
+
+  // And end to end: a lane whose run still carries the DENIED census must not
+  // appear, while the same lane with it still awaiting must.
+  const denied = {
+    lane_id: "l1", label: "UI-Vac",
+    execution_run: { state: "EXECUTING", governed_action: { request_id: "gar_x", status: "failed", action_key: "database.read_census" } },
+  };
+  const awaiting = {
+    lane_id: "l1", label: "UI-Vac",
+    execution_run: { state: "EXECUTING", governed_action: { request_id: "gar_x", status: "awaiting_operator", action_key: "database.read_census" } },
+  };
+  const state = () => ({ key: "executing", group: "active", live: true });
+  assert.equal(buildNeedsYou({ lanes: [denied], approvals: [], laneState: state }).count, 0,
+    "a decided request must leave Needs You");
+  assert.equal(buildNeedsYou({ lanes: [awaiting], approvals: [], laneState: state }).count, 1,
+    "and an undecided one must still be there");
+});
+
+test("the badge counts exactly what the panel renders", () => {
+  // The nav badge read the notification store's own actionable number while the
+  // control, the panel heading and the rows came from buildNeedsYou. Two stores,
+  // free to disagree — a badge insisting something needs you over a panel that
+  // says nothing does. paintNav now reads needsYouVm().count; this asserts the
+  // three numbers a reader can see all come from the one model.
+  const model = buildNeedsYou({
+    lanes: [],
+    approvals: [
+      { lane_id: "l1", action_key: "repository.push", status: "awaiting_operator", requested_at: new Date().toISOString() },
+      { lane_id: "l2", action_key: "database.read_census", status: "awaiting_operator", requested_at: new Date().toISOString() },
+    ],
+  });
+  const panel = needsYouPanel(model);
+  // `vneeds-row-mark`, `-copy`, `-lane` … all start with the row's own class,
+  // so count the list items rather than any element whose name begins with it.
+  const rendered = (panel.match(/<li class="vneeds-row /g) || []).length;
+  const heading = panel.match(/vneeds-panel-count">(\d+)</)?.[1];
+  const badge = needsYouControl(model.count).match(/vneeds-ctl-badge">(\d+)</)?.[1];
+  assert.equal(model.count, 2);
+  assert.equal(rendered, 2, "rows rendered");
+  assert.equal(heading, "2", "panel heading");
+  assert.equal(badge, "2", "global badge");
+  const gwSrc = readFileSync(join(PUB, "gateway.js"), "utf8");
+  assert.match(gwSrc, /const needs = needsYouVm\(\)\.count;/,
+    "the nav badge must count the rendered set, not a second store");
 });
