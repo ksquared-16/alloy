@@ -116,6 +116,34 @@ quiet "Lanes" group **inside** the repository rather than a red "No folder".
 All of it landed in earlier work on this lane and is covered by 9 passing rail
 tests. Verified rather than reimplemented; Home vs Lanes is unchanged.
 
+## Live acceptance on the installed runtime
+
+**OBSERVED.** Toolkit `15a1167e9420` (the merged staging SHA) installed via
+`alloy-toolkit install`, which extracts with `git archive` from the object store
+and never reads the canonical working tree. Canonical checkout proven identical
+before and after, twice, by HEAD + unpushed commit + `a.md` and
+`browser-cert-lease.sh` SHA *and* mtime + stash count. Gateway pid 8872, with
+`lsof` showing exactly one toolkit open and no reference to any prior version.
+
+| check | result |
+|---|---|
+| Phone toggle over HTTP | POST persists; categories independent of the master switch; non-boolean refused 400 |
+| Completion push | suppressed, `push_category_off:completions`, 0 transport calls |
+| Needs You / failure / abandoned push | delivered, 4 subscriptions each |
+| Phone OFF | everything suppressed, 0 transport calls |
+| Records touched by any delivery decision | **0** — OFF gates delivery only |
+| Progress rendering | `Working · ~95% · ~7m left · Claude` from a real reported estimate |
+| Finish gate | present only for EXECUTING/VALIDATING/RECOVERING; dropped for NEEDS_INPUT, WAITING_RESOURCE, FAILED, COMPLETE |
+| Nav | repository → "Lanes" (unfiled, inside the repository) → strict `last_activity_at` DESC |
+
+**Progress coverage, honestly:** 5 active lanes, 1 with a fresh estimate, 4
+supplying nothing, 0 fake zeroes. The rendering is correct and adoption is
+almost nil — no provider volunteers an estimate today. That is what the
+solicitation path exists to change, and it is a real gap, not a passing grade.
+
+**Nav caveat:** this host has 1 repository and 0 folders, so multi-repository
+separation and folder display are covered by fixtures, not by live data.
+
 ## Test position
 
 788 → 830 tests. The same 18 failures present on `origin/staging` before this
