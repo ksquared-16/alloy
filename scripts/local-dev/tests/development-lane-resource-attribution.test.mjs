@@ -10,6 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { laneResourceUse, descendantPids, buildProcessIndex } from "../lib/vacilando/process-attribution.mjs";
+import { attachLaneResourceUse, resetLaneResourceCache } from "../lib/vacilando/lane-resource-use.mjs";
 
 // seat 100 -> 200 -> 300, and an unrelated tree under 900.
 const PROCESSES = [
@@ -109,4 +110,28 @@ await test("the descendant walk is cycle-safe", () => {
   const kids = descendantPids(10, buildProcessIndex(cyclic));
   assert.equal(kids.has(10), false, "a cycle must not make a process its own descendant");
   assert.ok(kids.has(11));
+});
+
+await test("the attacher joins onto lanes and leaves unattributed lanes alone", async () => {
+  resetLaneResourceCache();
+  const lanes = [{ lane_id: "lane_a", label: "A" }, { lane_id: "lane_z", label: "Z" }];
+  const out = await attachLaneResourceUse(lanes, {
+    observeSeats: async () => [{ pid: 100, lane_id: "lane_a" }],
+    readProcessTable: async () => PROCESSES.map((r) => `${r.pid} ${r.ppid} ${r.command}`).join("\n"),
+    readProcessMemory: async () => MEM,
+  });
+  assert.equal(out[0].resource_use.memory_mb, 175);
+  assert.equal(out[0].resource_use.schema_version, "vacilando.lane_resource_use.v1");
+  assert.equal("resource_use" in out[1], false, "a lane with no seat carries no reading at all");
+});
+
+await test("a failed probe degrades the field, never the lane list", async () => {
+  resetLaneResourceCache();
+  const lanes = [{ lane_id: "lane_a", label: "A" }];
+  const out = await attachLaneResourceUse(lanes, {
+    observeSeats: async () => { throw new Error("tmux is not answering"); },
+    readProcessTable: async () => "100 1 claude.exe",
+    readProcessMemory: async () => MEM,
+  });
+  assert.deepEqual(out, lanes, "discovery must survive a resource probe that cannot answer");
 });

@@ -29,6 +29,24 @@ import { laneResourceUse } from "./process-attribution.mjs";
 export const LANE_RESOURCE_SCHEMA = "vacilando.lane_resource_use.v1";
 
 /**
+ * A SHORT MEMO, BECAUSE THE LANE LIST POLLS.
+ *
+ * This attacher costs two `ps -A` sweeps, and observeLiveSeats already runs a
+ * third of its own. At poll frequency that is three full process-table reads a
+ * second on a Mac mini whose capacity history includes a load average of 54.
+ * Resource use does not change meaningfully inside a few seconds, and this is a
+ * READING, not a control input — so it is computed at most once per window and
+ * shared by every poll inside it.
+ */
+export const LANE_RESOURCE_TTL_MS = 5000;
+let memo = { at: 0, rows: null };
+
+/** Certification and tests need a deterministic starting point. */
+export function resetLaneResourceCache() {
+  memo = { at: 0, rows: null };
+}
+
+/**
  * Attach `resource_use` to each lane. Never throws: resource visibility is
  * secondary to lane discovery, and a lane list that fails because `ps` was slow
  * is a worse product than a lane list with one field missing.
@@ -41,15 +59,21 @@ export async function attachLaneResourceUse(lanes = [], {
 } = {}) {
   const list = Array.isArray(lanes) ? lanes : [];
   if (!list.length) return list;
+  const fresh = memo.rows && (nowMs - memo.at) < LANE_RESOURCE_TTL_MS;
+  if (fresh && !observeSeats && !readProcessTable && !readProcessMemory) {
+    return applyRows(list, memo.rows);
+  }
   try {
     const { probeProcessTable, probeProcessMemory } = await import("./health-probes.mjs");
     const { parseProcessTable } = await import("./process-attribution.mjs");
 
-    const text = readProcessTable ? await readProcessTable() : await probeProcessTable({});
+    // The two reads are independent; run them together rather than in series.
+    const [text, memoryByPid] = await Promise.all([
+      readProcessTable ? readProcessTable() : probeProcessTable({}),
+      readProcessMemory ? readProcessMemory() : probeProcessMemory({}),
+    ]);
     if (!text) return list;
     const processes = parseProcessTable(text);
-
-    const memoryByPid = readProcessMemory ? await readProcessMemory() : await probeProcessMemory({});
 
     // observeLiveSeats is the entry point that GATHERS: it reads tmux panes,
     // agent sessions and run state, then correlates. observeProviderSeats is
@@ -66,12 +90,17 @@ export async function attachLaneResourceUse(lanes = [], {
     }
 
     const rows = laneResourceUse({ seats, processes, memoryByPid, nowMs });
-    const byLane = new Map(rows.map((r) => [r.lane_id, r]));
-    return list.map((l) => {
-      const r = byLane.get(l?.lane_id);
-      return r ? { ...l, resource_use: { schema_version: LANE_RESOURCE_SCHEMA, ...r } } : l;
-    });
+    memo = { at: nowMs, rows };
+    return applyRows(list, rows);
   } catch {
     return list;
   }
+}
+
+function applyRows(lanes, rows) {
+  const byLane = new Map(rows.map((r) => [r.lane_id, r]));
+  return lanes.map((l) => {
+    const r = byLane.get(l?.lane_id);
+    return r ? { ...l, resource_use: { schema_version: LANE_RESOURCE_SCHEMA, ...r } } : l;
+  });
 }
