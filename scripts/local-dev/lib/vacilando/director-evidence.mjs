@@ -29,6 +29,7 @@ import {
 } from "./trusted-host-repository-housekeeping.mjs";
 import { measureProviderCeilingGates } from "./trusted-host-provider-ceiling.mjs";
 import { measureToolkitConvergence } from "./toolkit-convergence.mjs";
+import { measureDeployedRestoreGates } from "./deployed-qa-session-restore-action.mjs";
 import { measureLaneDispatchGates } from "./lane-dispatch.mjs";
 import { getDurableLane } from "./development-lane.mjs";
 import { activeRunForLane } from "./execution-run.mjs";
@@ -306,6 +307,17 @@ export function collectDirectorEvidence(rec, {
     // produces exactly these fields; it was simply never called from here.
     try {
       Object.assign(evidence, measureToolkitConvergence());
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "environment.restore_deployed_qa_session") {
+    // The FOURTH place this defect would have appeared. `defineEnvironmentRestoreDeployedQaSession`
+    // names six gates; without this call every one of them reads `undefined`, the authority
+    // evaluation sees unmeasured gates, and the Director is told a deployed restore cannot be
+    // authorized for reasons that are actually "nobody measured".
+    try {
+      Object.assign(evidence, measureDeployedRestoreGates(
+        inputs.deployed_target || inputs.deployedTarget || inputs.target_key || null,
+      ));
     } catch { /* unmeasured -> escalates */ }
   }
   if (rec?.action_key === "capacity.set_provider_ceiling") {
