@@ -122,8 +122,50 @@ try {
   check("primary navigation carries no diagnostics",
     await desk.evaluate(() => !/Context|Slot|ahead|behind/.test(document.querySelector(".vnav").textContent)));
 
+  // ============ THE OPERATOR VOCABULARY IS THE ONLY VOCABULARY ============
+  //
+  // Four words: WORKING, NEEDS YOU, READY, FAILED. "Suspended" named a
+  // scheduler decision, not a state of anyone's work, and left the operator
+  // with nothing to do about it. The Communications fixture lane is
+  // WAITING_RESOURCE underneath — the exact run state that used to surface as
+  // SUSPENDED — so this asserts against a lane that would fail it.
+  const OPERATOR_WORDS = /^(Working|Needs you|Ready|Failed)$/i;
+  await open(desk, "/lanes");
+  check("no operator-facing surface says suspended",
+    await desk.evaluate(() => !/suspend/i.test(document.body.innerText)));
+  check("every lane state is one of the four operator words",
+    await desk.evaluate((src) => {
+      const re = new RegExp(src);
+      return [...document.querySelectorAll(".vstate")]
+        .every((el) => re.test(el.textContent.trim().split("·")[0].trim()));
+    }, OPERATOR_WORDS.source));
+  // AGREEMENT, NOT COINCIDENCE. Home, the Lanes list and the Lane header each
+  // used to describe a lane in their own words; one resolver now feeds all of
+  // them, and this is what proves they did not drift apart again.
+  // Home renders `laneRowV2` and the rail renders `mission-rail-item`; they
+  // carry the same word in different chrome, so the comparison reads the WORD
+  // rather than a selector. Comparing markup would only prove they share a
+  // component, which is not the claim.
+  const READ_STATES = (words) => Object.fromEntries(
+    [...document.querySelectorAll("[data-gw-lane]")].map((r) => {
+      const m = r.textContent.match(new RegExp(words, "i"));
+      return [r.dataset.gwLane, m ? m[0].toLowerCase() : null];
+    }).filter(([, v]) => v));
+  const lanesStates = await desk.evaluate(READ_STATES, "Working|Needs you|Ready|Failed");
+  await open(desk, "/home");
+  const homeStates = await desk.evaluate(READ_STATES, "Working|Needs you|Ready|Failed");
+  const shared = Object.keys(homeStates).filter((k) => k in lanesStates);
+  check("Home and Lanes agree about every lane they both show",
+    shared.length > 0 && shared.every((k) => homeStates[k] === lanesStates[k]),
+    `${shared.length} lanes compared`);
+
   await open(desk, `/lanes/${LANE}`);
   await desk.screenshot({ path: join(OUT, "03-desktop-lane.png"), fullPage: false });
+  const headWord = (await desk.locator(".vlane-head .vstate").first().innerText())
+    .match(/Working|Needs you|Ready|Failed/i)?.[0].toLowerCase() || null;
+  check("the Lane header agrees with the list it was opened from",
+    headWord !== null && headWord === lanesStates[LANE],
+    `header "${headWord}" vs list "${lanesStates[LANE]}"`);
   check("lane header shows breadcrumb, state and identity",
     (await desk.locator(".vcrumb").count()) === 1
     && (await desk.locator(".vlane-title").innerText()) === "Trust Runtime"

@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T04:16:41.233Z",
+  "captured_at": "2026-09-04T04:26:50.024Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -18,8 +18,8 @@
       "height": 380
     }
   },
-  "passed": 113,
-  "failed": 0,
+  "passed": 116,
+  "failed": 1,
   "results": [
     {
       "name": "desktop Home renders the five blocks",
@@ -50,6 +50,26 @@
       "name": "primary navigation carries no diagnostics",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "every lane state is one of the four operator words",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home and Lanes agree about every lane they both show",
+      "ok": false,
+      "detail": "5 lanes compared"
+    },
+    {
+      "name": "the Lane header agrees with the list it was opened from",
+      "ok": true,
+      "detail": "header \"working\" vs list \"working\""
     },
     {
       "name": "lane header shows breadcrumb, state and identity",
@@ -109,7 +129,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 8:58 PM Stop lane RUNTIME Executing"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 9:08 PM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
