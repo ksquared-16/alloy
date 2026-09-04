@@ -53,6 +53,15 @@ import {
     isChildcareBillableSource,
     type ChildcareBillableSourceType,
 } from "@/lib/financials/billableSource";
+import {
+    paymentAppliedEntry,
+    paymentApplicationReversedEntry,
+    paymentReceivedEntry,
+    paymentRefundedEntry,
+    findEntryForSource,
+    tryRecordFinancialJournalEntry,
+    type JournalOutcome,
+} from "@/lib/financials/financialJournalService";
 
 /**
  * How the money arrived. The vocabulary is the one already on the table
@@ -273,6 +282,12 @@ export type RecordChildcarePaymentResult = {
      * either being an error.
      */
     alreadyRecorded: boolean;
+    /**
+     * What the posted history recorded. A PENDING payment is skipped with a reason: an attempt that
+     * has not become money is not a financial consequence, and journalling it would put an event in
+     * a period that may never have happened.
+     */
+    journal: JournalOutcome;
 };
 
 /**
@@ -316,7 +331,15 @@ export async function recordChildcarePayment(
     const idempotencyKey = trimOrNull(input.idempotencyKey);
     if (idempotencyKey) {
         const existing = await findByIdempotencyKey(supabase, orgId, idempotencyKey);
-        if (existing) return { payment: existing, alreadyRecorded: true };
+        if (existing) {
+            // The replay path, and the one most likely to be taken: it converges the journal too,
+            // so a receipt whose entry failed the first time is repaired by the retry.
+            return {
+                payment: existing,
+                alreadyRecorded: true,
+                journal: await recordPaymentReceivedEntry(supabase, existing, input.actorUserId ?? null),
+            };
+        }
     }
 
     const status: ChildcarePaymentStatus = input.status === "pending" ? "pending" : "posted";
@@ -361,11 +384,57 @@ export async function recordChildcarePayment(
         // Lost the race on the idempotency index: the winner's payment is the one that stands.
         if (idempotencyKey && String(error.message ?? "").includes("uq_payments_org_idempotency_key")) {
             const winner = await findByIdempotencyKey(supabase, orgId, idempotencyKey);
-            if (winner) return { payment: winner, alreadyRecorded: true };
+            if (winner) {
+                return {
+                    payment: winner,
+                    alreadyRecorded: true,
+                    journal: await recordPaymentReceivedEntry(supabase, winner, input.actorUserId ?? null),
+                };
+            }
         }
         translateDbError(error, "record payment");
     }
-    return { payment: data as unknown as PaymentRow, alreadyRecorded: false };
+    const recorded = data as unknown as PaymentRow;
+    return {
+        payment: recorded,
+        alreadyRecorded: false,
+        journal: await recordPaymentReceivedEntry(supabase, recorded, input.actorUserId ?? null),
+    };
+}
+
+/**
+ * The money-received consequence, recorded once per payment.
+ *
+ * Idempotent by `payment_received:<payment id>`, so the already-recorded path converges rather than
+ * duplicating — a retried request repairs a journal entry that failed the first time.
+ *
+ * A receipt's `obligation_delta_cents` is ZERO. Money on the account is not money applied to an
+ * obligation, and the journal is the one place where conflating them would be invisible.
+ */
+async function recordPaymentReceivedEntry(
+    supabase: SupabaseClient,
+    payment: PaymentRow,
+    actorUserId: string | null,
+): Promise<JournalOutcome> {
+    if (payment.status !== "posted") {
+        return { status: "skipped", reason: `payment_not_posted: status is ${payment.status}` };
+    }
+    return tryRecordFinancialJournalEntry(
+        supabase,
+        paymentReceivedEntry({
+            orgId: payment.org_id,
+            paymentId: payment.id,
+            amountCents: payment.amount_cents,
+            currency: payment.currency,
+            billableSourceType: payment.billable_source_type,
+            billableSourceId: payment.billable_source_id,
+            customerId: payment.customer_id,
+            // Money reports in the period it ARRIVED in, not the one it was keyed in.
+            effectiveOn: payment.received_at,
+            actorUserId,
+            metadata: { payment_method: payment.payment_method },
+        }),
+    );
 }
 
 export type ApplyPaymentToChargeInput = {
@@ -387,6 +456,12 @@ export type ApplyPaymentToChargeResult = {
      * written. This is what makes a retried apply harmless rather than a second reduction.
      */
     alreadyApplied: boolean;
+    /**
+     * What the posted history recorded. An application of a PENDING payment is skipped with a
+     * reason: it does not reduce the balance, so journalling a negative obligation delta for it
+     * would make the journal disagree with the balance rule.
+     */
+    journal: JournalOutcome;
 };
 
 type ChargeBalanceFacts = {
@@ -568,7 +643,13 @@ export async function applyPaymentToCharge(
     }
 
     const existing = await findActiveAllocation(supabase, orgId, paymentId, chargeId);
-    if (existing) return { allocation: existing, alreadyApplied: true };
+    if (existing) {
+        return {
+            allocation: existing,
+            alreadyApplied: true,
+            journal: await recordPaymentAppliedEntry(supabase, payment, existing, input.actorUserId ?? null),
+        };
+    }
 
     const charge = await readChargeBalance(supabase, orgId, chargeId);
     if (!isChildcareBillableSource(charge.billableSourceType)) {
@@ -627,11 +708,59 @@ export async function applyPaymentToCharge(
         // Lost the race on the one-active-application index: the winner's row is the one that stands.
         if (String(error.message ?? "").includes("uq_payment_allocations_one_active_per_payment_charge")) {
             const winner = await findActiveAllocation(supabase, orgId, paymentId, chargeId);
-            if (winner) return { allocation: winner, alreadyApplied: true };
+            if (winner) {
+                return {
+                    allocation: winner,
+                    alreadyApplied: true,
+                    journal: await recordPaymentAppliedEntry(supabase, payment, winner, input.actorUserId ?? null),
+                };
+            }
         }
         translateDbError(error, "apply payment");
     }
-    return { allocation: data as unknown as PaymentAllocationRow, alreadyApplied: false };
+    const allocation = data as unknown as PaymentAllocationRow;
+    return {
+        allocation,
+        alreadyApplied: false,
+        journal: await recordPaymentAppliedEntry(supabase, payment, allocation, input.actorUserId ?? null),
+    };
+}
+
+/**
+ * The money-applied consequence, recorded once per allocation.
+ *
+ * This is the entry whose `obligation_delta_cents` is NEGATIVE — the only kind of event that reduces
+ * what a family owes, which is exactly the predicate `jobPaymentBalances` uses. The journal repeats
+ * that rule; it does not restate it differently.
+ */
+async function recordPaymentAppliedEntry(
+    supabase: SupabaseClient,
+    payment: PaymentRow,
+    allocation: PaymentAllocationRow,
+    actorUserId: string | null,
+): Promise<JournalOutcome> {
+    if (payment.status !== "posted") {
+        return { status: "skipped", reason: `payment_not_posted: status is ${payment.status}` };
+    }
+    return tryRecordFinancialJournalEntry(
+        supabase,
+        paymentAppliedEntry({
+            orgId: allocation.org_id,
+            allocationId: allocation.id,
+            chargeId: allocation.charge_id,
+            amountCents: Number(allocation.allocated_amount_cents) || 0,
+            currency: payment.currency,
+            billableSourceType: payment.billable_source_type,
+            billableSourceId: payment.billable_source_id,
+            customerId: payment.customer_id,
+            // The APPLICATION date. A payment received in one period and applied in the next reports
+            // its receipt in the first and its application in the second, which is the distinction
+            // that makes unapplied money visible at a period boundary.
+            effectiveOn: allocation.allocated_at,
+            actorUserId,
+            metadata: { payment_id: payment.id },
+        }),
+    );
 }
 
 export type RecordAndApplyInput = Omit<RecordChildcarePaymentInput, "billableSourceType" | "billableSourceId"> & {
@@ -892,6 +1021,31 @@ export async function refundChildcarePayment(
         if (reverseError) translateDbError(reverseError, "reverse application");
         reversedAllocationIds.push(alloc.id);
 
+        // The obligation comes BACK, and it comes back in the period the reversal happened — not the
+        // one the application was in, which may already have reported.
+        const appliedEntry = await findEntryForSource(supabase, {
+            orgId,
+            entryType: "payment_applied",
+            sourceId: alloc.id,
+        });
+        await tryRecordFinancialJournalEntry(
+            supabase,
+            paymentApplicationReversedEntry({
+                orgId,
+                allocationId: alloc.id,
+                chargeId: alloc.charge_id,
+                amountCents: allocAmount,
+                currency: original.currency,
+                billableSourceType: original.billable_source_type,
+                billableSourceId: original.billable_source_id,
+                customerId: original.customer_id,
+                effectiveOn: now,
+                reversesEntryId: appliedEntry?.id ?? null,
+                actorUserId: input.actorUserId ?? null,
+                metadata: { payment_id: original.id, refund_payment_id: refund.id, reason },
+            }),
+        );
+
         if (allocAmount > remaining) {
             // Part of this application survives the refund. It is re-applied, not edited.
             const keep = allocAmount - remaining;
@@ -921,11 +1075,41 @@ export async function refundChildcarePayment(
                 .single();
             if (reapplyError) translateDbError(reapplyError, "re-apply remainder after partial refund");
             reappliedAllocation = reapplied as unknown as PaymentAllocationRow;
+            // The kept remainder is a NEW application and reduces the balance again by its own
+            // amount. Reversing the whole and re-applying the part nets to the refunded amount,
+            // which is what makes a partial refund arithmetic rather than an edit.
+            await recordPaymentAppliedEntry(supabase, original, reappliedAllocation, input.actorUserId ?? null);
             remaining = 0;
             break;
         }
         remaining -= allocAmount;
     }
+
+    // The refund itself: money went back out. Its own obligation delta is ZERO — what the family
+    // owes was restored by the application reversals above, and counting it twice here is exactly
+    // the double-count a single signed `amount` column would have invited.
+    const receiptEntry = await findEntryForSource(supabase, {
+        orgId,
+        entryType: "payment_received",
+        sourceId: original.id,
+    });
+    await tryRecordFinancialJournalEntry(
+        supabase,
+        paymentRefundedEntry({
+            orgId,
+            refundPaymentId: refund.id,
+            refundsPaymentId: original.id,
+            amountCents: amountCents,
+            currency: refund.currency,
+            billableSourceType: refund.billable_source_type,
+            billableSourceId: refund.billable_source_id,
+            customerId: refund.customer_id,
+            effectiveOn: now,
+            reversesEntryId: receiptEntry?.id ?? null,
+            actorUserId: input.actorUserId ?? null,
+            metadata: { reason, reversed_allocation_ids: reversedAllocationIds },
+        }),
+    );
 
     return { refund, original, reversedAllocationIds, reappliedAllocation, alreadyRefunded: false };
 }

@@ -335,6 +335,95 @@ family could be charged and could never pay.
 
 ---
 
+### Billing periods, accounting periods and the financial journal (September 2026)
+
+Migration `supabase/migrations/20260904180000_financial_periods_and_journal.sql`.
+
+Threads 1 and 8 made the platform able to say what a family owes and what they have paid. What it
+could not say was **when, for reporting** — and what it *claimed* to say was worse than nothing.
+
+**What the census found, on the certification database rather than in the source.** There was no
+accounting period anywhere: `information_schema` returned NONE for every table or column named for
+one. There was no posted financial history for childcare money at all. The double-entry GL that does
+exist (`gl_journal_entries` / `gl_journal_lines`, posted by `post_ledger_transaction`) belongs to the
+job/Stripe vertical and is **dormant** — no application code calls the posting function, and with
+three charges, four payments and three allocations on the database it held **zero rows**. And
+`post_payment_to_ledger`, the one function whose name promised the missing behaviour, was proved by
+experiment to do nothing but stamp a timestamp: posting a childcare payment moved
+`ledger_transactions`, `gl_journal_entries` and `gl_journal_lines` from 0 rows to 0 rows while
+setting `posted_to_ledger_at`. Its own comment had said so since March.
+
+- **Billing period — the customer's cycle. Derived, unchanged.** `web/lib/financials/billingPeriod.ts`
+  places a row by `billable_on` (falling back through `occurs_on`, `service_date`, `created_at`, and
+  reporting which). There is no billing-period table and none is wanted: the cycle is a grouping of
+  charges, and a second stored answer would drift from `billable_on` the first time a template
+  changed its strategy.
+- **Accounting period — reporting attribution. Configured, because a boundary nobody wrote down is a
+  boundary nobody can close.** `financial_accounting_calendars` + `financial_accounting_periods`.
+  Boundaries are inclusive; periods within one calendar cannot overlap
+  (`financial_accounting_periods_no_overlap`, a GiST exclusion constraint rather than a check, because
+  two concurrent period authors each see no overlap). An org has at most one ACTIVE calendar, so
+  attribution is deterministic rather than a matter of query order.
+- **4/4/5 is not a code path.** A 4/4/5 calendar is period rows whose boundaries are not month
+  boundaries; `period_style` is descriptive only. Different calendars may cover the same days, which
+  is exactly how monthly parent billing coexists with a 4/4/5 reporting calendar. Certified: 30
+  September falls in `FY2026-P10` while billing calls it `2026-09`.
+- **The temporal facts stay apart.** `service_date`, `occurs_on`, `billable_on`, `due_date`,
+  `posted_at`, the payment's `received_at`, the application's `allocated_at` and the reversal date are
+  distinct columns and are never derived from one another. The accounting period is resolved from the
+  consequence's **effective date** — `service_date` first for a charge, because revenue belongs to the
+  period the service was delivered in — while the billing period leads with `billable_on`. A September
+  service billed in October reports in September and bills in October, and that difference is the
+  whole reason both exist.
+- **The journal is an append-only SUBLEDGER, not double-entry accounting.**
+  `financial_journal_entries` records one row per posted consequence: `charge_posted`,
+  `charge_corrected`, `payment_received`, `payment_applied`, `payment_application_reversed`,
+  `payment_refunded`. It carries org and account scope, source identity and type, amount and currency,
+  effective and posted timestamps, billing-period and accounting-period attribution, actor, reversal
+  lineage and an idempotency key. It is **not** converted into double-entry: that would mean a chart
+  of accounts, GL mappings and a posting policy per consequence — an accounting suite. The existing GL
+  keeps that job, and this journal is the **export seam** a future accounting integration reads.
+- **The journal is NOT a balance authority.** Charges remain the authority for gross owed; active
+  `payment_allocations` of POSTED payments remain the authority for what reduces it
+  (`jobPaymentBalances`, untouched). `amount_cents` is the event's own amount and is always positive;
+  `obligation_delta_cents` is the only signed column. A receipt has an amount of $500 and a delta of
+  **zero** — money arriving is not money applied, and one column would have invited a consumer to sum
+  it and get a second, wrong answer. Sum `obligation_delta_cents` for a period movement; never for a
+  balance.
+- **Payment ≠ application ≠ journal.** Receiving money, applying it to an obligation and recording the
+  consequence are three facts with three dates. Only the application carries a negative obligation
+  delta. A refund's own delta is zero: what the family owes is restored by the
+  `payment_application_reversed` entries, and counting it twice is the double-count the two-column
+  design exists to prevent.
+- **A closed period defers; it does not refuse.** Refusing would let a REPORTING boundary block an
+  OPERATIONAL act — a family could not be charged because the books were closed. A consequence
+  effective inside a closed period is attributed to the earliest open period after it, and the row
+  records `accounting_period_deferred` and the date it came from. With no open period to defer to,
+  attribution is unavailable and the write is refused rather than guessed. An effective date no period
+  covers is likewise refused, never guessed.
+- **History is not reassigned when configuration changes.** `accounting_period_key` is frozen on the
+  row at write time, entries are append-only (no UPDATE, no DELETE), and a period that has already
+  reported cannot be re-dated.
+- **Recording never blocks the money.** The services record their consequence through
+  `tryRecordFinancialJournalEntry`, which returns a `JournalOutcome` rather than throwing, and they
+  call it on the already-posted / already-applied paths too — so a retry repairs an entry that failed
+  rather than leaving a hole. An org with no calendar still gets complete history, marked
+  `no_calendar`; attribution is all-or-nothing, never half-filled.
+- **`post_payment_to_ledger` is gone.** It is `stamp_payment_posted_to_ledger_at`, named for what it
+  does. The trigger fires on the same events with the same effect, so job payments are untouched.
+  `posted_to_ledger_at` is documented as a status stamp and not evidence of journal posting — and note
+  it is set only by an UPDATE of `posted_at`/`paid_at`, so a payment inserted already-posted (the
+  childcare path) never carries it at all.
+
+Certified live against `alloy-cert`: `certification/financials/period-journal.cert.sh` (40 assertions,
+0 failures) for the rules the database owns, and
+`web/tests/financials/live/financialJournal.live.test.ts` for the vertical slice through the real
+services — charge posted, payment received and applied, partial refund reversed and re-applied,
+charge reversed — each producing its entry, each retry harmless, and the balance authority
+unchanged throughout.
+
+---
+
 ## What not to do
 
 - Do not build childcare billing before the financial core is generalized off `job_id`.
@@ -355,6 +444,15 @@ family could be charged and could never pay.
 - Do not render a reversed charge as plain `posted`, and do not offer a second correction on it — an operator acts on what the ledger says.
 - Do not drop a reversed original from a total; it nets against its reversal, and skipping it drives responsibility negative.
 - Do not write a charge without an actor; `created_by` / `updated_by` / `posted_by` are the audit trail money requires.
+- Do not derive the accounting period from the billing month or the due date — they are separate identities, and a 4/4/5 calendar exists precisely so they can disagree.
+- Do not add a billing-period column; the cycle is `billable_on` and a second stored answer drifts from it.
+- Do not let a closed period refuse an operational act; a consequence effective in one defers to the next open period and says that it did.
+- Do not re-date a period that has already reported, and do not expect a posted entry's period to move when a calendar is edited — the key is frozen on the row.
+- Do not compute a balance from `financial_journal_entries`; charges and active allocations of posted payments are the balance authority and the journal is history.
+- Do not sum `amount_cents` to measure money owed — `obligation_delta_cents` is the signed column, and a receipt's is zero.
+- Do not convert the subledger into double-entry accounting without a chart of accounts and a posting policy; the GL is the export target, not this table.
+- Do not let a journal write block a money write; record the consequence, report the outcome, and repair it on the next attempt.
+- Do not name a function for a consequence it does not have — `post_payment_to_ledger` stamped a timestamp for six months while its name promised a journal.
 - Do not add a childcare-specific ledger FK or a second ledger/GL; use the generic billable-source dimension (P3.1 gate 4).
 - Do not book expected subsidy as AR before a claim/posting; expected subsidy is L3-derived.
 - Do not collapse Rate / Charge / Financial Resolution into Posting — Posting is the only authoritative-write stage.
