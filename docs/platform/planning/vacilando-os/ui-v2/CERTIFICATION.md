@@ -66,7 +66,7 @@ is worse than no check.
 
 ## Result
 
-**113 checks, 113 passed, 0 failed.** See
+**117 checks, 117 passed, 0 failed.** See
 [`certification/results.json`](certification/results.json) for the machine record.
 
 ### Desktop
@@ -74,8 +74,8 @@ is worse than no check.
 | Screen | Evidence | Checks |
 |---|---|---|
 | Home | `01-desktop-home.png` | Six blocks render; two-column layout; Needs You lists exactly the genuine blocker; **no invented effectiveness number**; nav badge; nav carries no diagnostics |
-| Lanes | `02-desktop-lanes.png` | — |
-| Lane | `03-desktop-lane.png` | Breadcrumb, state, identity (`Claude · claude-opus-5 · Slot 6 · Started …`); six tabs; **`Provider estimate: ~62% complete`**; **no ETA anywhere on the page**; Current Work precedes the agent output |
+| Lanes | `02-desktop-lanes.png` | Every lane state is one of the four operator words; **no operator-facing surface says suspended** (asserted against the `WAITING_RESOURCE` fixture lane, which could fail it); **Home and the Lanes rail agree, by word, about all five lanes they both show** |
+| Lane | `03-desktop-lane.png` | Breadcrumb, state, identity (`Claude · claude-opus-5 · Slot 6 · Started …`); six tabs; progress qualifies the status in **one line** (`Working · ~62% · Claude`), marked as an estimate; **no second progress subsystem**; **no ETA anywhere on the page**; **no standalone Current Work card**, and the instruction survives as the first authored YOU message |
 | Lane Inspector | `04-desktop-lane-inspector.png` | A permanent column, not a drawer; **no folded section is open on a healthy lane**; RUN answers agent / slot / context / started / stop; a folded section opens on request |
 | Activity | `05-desktop-activity.png` | — |
 | System | `06-desktop-system.png` | — |
