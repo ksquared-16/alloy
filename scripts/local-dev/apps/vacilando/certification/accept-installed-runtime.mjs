@@ -328,6 +328,17 @@ try {
   check("LIVE desktop: inspector is quiet by default",
     (await desk.locator(".vinsp-run").count()) === 1
     && (await desk.locator(".vinsp-sec[open]").count()) === 0);
+  // CONTEXT -> CONVERSATION -> HUMAN ACTION, on the real lane.
+  check("LIVE desktop: the lane body is a conversation, not dashboard cards",
+    await desk.evaluate(() => {
+      const roles = [...document.querySelectorAll(".vthread [data-v-role]")].map((n) => n.dataset.vRole);
+      const work = document.querySelector(".vcard-work")?.getBoundingClientRect().top ?? 1e9;
+      const thread = document.querySelector(".vcard-thread")?.getBoundingClientRect().top ?? -1;
+      return roles.length > 0 && thread > work;
+    }),
+    (await desk.evaluate(() => [...new Set([...document.querySelectorAll(".vthread .vmsg-who")].map((n) => n.textContent.trim()))].join(", "))));
+  await desk.screenshot({ path: join(OUT, "live-05-desktop-lane-thread.png"), fullPage: false });
+
   const trayN = await desk.locator(".vneeds-tray").count();
   if (trayN) {
     check("LIVE desktop: Needs You is anchored at the composer boundary",
@@ -341,9 +352,14 @@ try {
     check("LIVE desktop: Needs You absent because nothing needs the operator", true,
       "no pending blocker on this lane — the tray correctly renders nothing");
   }
+  await open(desk, "/lanes", 3000);
+  await desk.screenshot({ path: join(OUT, "live-06-desktop-lanes.png"), fullPage: true });
   await desk.context().close();
 
   /* -------------------------- MOBILE -------------------------- */
+  // VISUAL ACCEPTANCE IS THE GATE. These measure the rendered result on REAL
+  // lanes, because every geometric assertion in the previous pass was green on
+  // a phone layout that was plainly desktop-sized.
   for (const [w, h] of [[390, 844], [320, 568]]) {
     const m = await newPage({ width: w, height: h }, true);
     await open(m, "/home", 4000);
@@ -356,6 +372,52 @@ try {
     let o = await overflow(m);
     check(`LIVE mobile ${w}: Home does not scroll sideways`,
       o.docScroll <= o.vw + 1 && o.worst.length === 0, JSON.stringify(o.worst));
+
+    // ---- Home and Lanes, live ----
+    await open(m, "/home", 4000);
+    await m.screenshot({ path: join(OUT, `live-14-mobile${w}-home.png`), fullPage: true });
+    const home = await m.evaluate(() => {
+      const crumb = document.querySelector(".topbar .crumb");
+      const grid = document.querySelector(".vcard-health .vgrid-4");
+      return {
+        title: document.querySelector(".vpage-title")?.textContent?.trim() || null,
+        crumbShown: Boolean(crumb) && getComputedStyle(crumb).display !== "none",
+        homeWords: (document.querySelector("#view")?.innerText || "").split("\n").filter((l) => l.trim() === "Home").length,
+        needsRows: [...document.querySelectorAll(".vneeds-row")].map((r) => Math.round(r.getBoundingClientRect().height)),
+        healthCols: grid ? getComputedStyle(grid).gridTemplateColumns.split(" ").length : null,
+        homeCols: getComputedStyle(document.querySelector(".vhome-grid")).gridTemplateColumns.split(" ").length,
+      };
+    });
+    check(`LIVE mobile ${w}: Home has exactly one identity`,
+      home.title === "Home" && home.crumbShown === false && home.homeWords <= 1,
+      `title "${home.title}", crumb shown ${home.crumbShown}, "Home" x${home.homeWords}`);
+    check(`LIVE mobile ${w}: Home Needs You is a summary`,
+      home.needsRows.every((h) => h <= 110), `row heights ${JSON.stringify(home.needsRows)}`);
+    check(`LIVE mobile ${w}: Home stacks and its tiles are readable`,
+      home.homeCols === 1 && (home.healthCols === null || home.healthCols <= 2),
+      `home ${home.homeCols} col, health tiles ${home.healthCols} across`);
+
+    await open(m, "/lanes", 4000);
+    await m.screenshot({ path: join(OUT, `live-15-mobile${w}-lanes.png`), fullPage: true });
+    const cat = await m.evaluate(() => {
+      const bar = document.querySelector("#approvals-bar");
+      const rows = [...document.querySelectorAll("[data-gw-lane]")];
+      return {
+        approvalsShown: Boolean(bar) && getComputedStyle(bar).display !== "none" && bar.getBoundingClientRect().height > 0,
+        noFolder: /no folder/i.test(document.querySelector("#view")?.innerText || ""),
+        total: rows.length,
+        visible: rows.filter((r) => { const b = r.getBoundingClientRect(); return b.top >= 0 && b.bottom <= window.innerHeight; }).length,
+        medianRow: rows.length ? Math.round(rows.map((r) => r.getBoundingClientRect().height).sort((a, b) => a - b)[Math.floor(rows.length / 2)]) : null,
+        folderNamesClipped: [...document.querySelectorAll(".gw-folder-name")]
+          .some((n) => n.scrollWidth > n.clientWidth + 2),
+      };
+    });
+    check(`LIVE mobile ${w}: the catalogue carries no governed payload`, cat.approvalsShown === false);
+    check(`LIVE mobile ${w}: no "No folder" heading`, cat.noFolder === false);
+    check(`LIVE mobile ${w}: folder names are not clipped against controls`, cat.folderNamesClipped === false);
+    check(`LIVE mobile ${w}: lane rows are compact and scannable`,
+      cat.visible >= 5 || cat.visible === cat.total,
+      `${cat.visible} of ${cat.total} rows visible, median row ${cat.medianRow}px`);
 
     await open(m, `/lanes/${encodeURIComponent(liveLaneId)}`, 5000);
     await m.screenshot({ path: join(OUT, `live-11-mobile${w}-lane.png`), fullPage: false });
@@ -374,6 +436,87 @@ try {
         return i.hasAttribute("inert") || getComputedStyle(i).display === "none"
           || i.getBoundingClientRect().left >= window.innerWidth - 1;
       }));
+    // ---- measured composition, on real content ----
+    const comp = await m.evaluate(() => {
+      const el = (sel) => document.querySelector(sel);
+      const h = (sel) => { const e = el(sel); return e ? Math.round(e.getBoundingClientRect().height) : null; };
+      const top = (sel) => { const e = el(sel); return e ? Math.round(e.getBoundingClientRect().top) : null; };
+      const shown = (sel) => { const e = el(sel); return Boolean(e) && getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0; };
+      const scroller = el("[data-gw-thread]");
+      return {
+        vh: window.innerHeight,
+        header: h(".vlane-head"),
+        work: h(".vcard-work"),
+        workTitle: el(".vwork-title")?.textContent?.trim().slice(0, 60) || null,
+        // HOW DEEP THE CONVERSATION STARTS, measured from the top of the lane
+        // body — NOT the first message's viewport position. Once the thread
+        // scrolls to the latest exchange the first message sits far above the
+        // fold (measured: -5663), and `firstMessageTop < vh` then passes on
+        // anything. A check that cannot fail is not a check.
+        conversationTop: (() => {
+          const card = el(".vcard-thread");
+          const body = el(".vlane-body");
+          if (!card || !body) return null;
+          return Math.round(card.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop);
+        })(),
+        conversationVisible: [...document.querySelectorAll(".vmsg")].some((n) => {
+          const r = n.getBoundingClientRect();
+          return r.bottom > 0 && r.top < window.innerHeight;
+        }),
+        textarea: h(".gw-composer textarea"),
+        tray: h(".vneeds-tray"),
+        stopShown: shown(".vlane-stop"),
+        metaShown: shown(".vlane-head-meta"),
+        detailsShown: shown("[data-gw-aside-toggle]"),
+        roles: [...document.querySelectorAll(".vthread [data-v-role]")].map((n) => n.dataset.vRole),
+        bylines: [...document.querySelectorAll(".vthread .vmsg-who")].map((n) => n.textContent.trim()),
+        // The scroll correction: the hook must be on something that scrolls.
+        scrollerScrolls: scroller ? scroller.scrollHeight > scroller.clientHeight + 4 : false,
+        scrollTop: scroller ? Math.round(scroller.scrollTop) : null,
+        scrollMax: scroller ? Math.round(scroller.scrollHeight - scroller.clientHeight) : null,
+        latestVisible: (() => {
+          if (!scroller) return null;
+          const authored = scroller.querySelectorAll(".vmsg-user, .vmsg-provider");
+          const last = authored[authored.length - 1];
+          if (!last) return null;
+          const r = last.getBoundingClientRect();
+          const s = scroller.getBoundingClientRect();
+          return r.top < s.bottom && r.bottom > s.top;
+        })(),
+        docScroll: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+      };
+    });
+    check(`LIVE mobile ${w}: lane header is phone-scale`,
+      comp.header !== null && comp.header <= 110, `header ${comp.header}px of ${comp.vh}`);
+    check(`LIVE mobile ${w}: header keeps Details, sheds Stop lane and identity detail`,
+      comp.detailsShown === true && comp.stopShown === false && comp.metaShown === false);
+    check(`LIVE mobile ${w}: Current Work is an orientation summary`,
+      comp.work !== null && comp.work <= 260, `${comp.work}px — "${comp.workTitle}"`);
+    check(`LIVE mobile ${w}: conversation begins within one screen of the lane top`,
+      comp.conversationTop !== null && comp.conversationTop < comp.vh,
+      `conversation starts ${comp.conversationTop}px into the lane body (viewport ${comp.vh})`);
+    check(`LIVE mobile ${w}: conversation content is actually on screen`,
+      comp.conversationVisible === true);
+    check(`LIVE mobile ${w}: the thread carries explicit bylines`,
+      comp.roles.length > 0 && comp.bylines.length > 0,
+      `${comp.roles.length} entries: ${[...new Set(comp.bylines)].join(", ")}`);
+    check(`LIVE mobile ${w}: idle composer is compact`,
+      comp.textarea !== null && comp.textarea <= 48, `textarea ${comp.textarea}px`);
+    check(`LIVE mobile ${w}: no page-level sideways scrolling`, comp.docScroll === true);
+    if (comp.scrollerScrolls) {
+      // THE CONTRACT IS "THE LATEST EXCHANGE IS ON SCREEN", not "pinned to the
+      // absolute bottom". A lane opens at the TOP of the most recent authored
+      // message so the operator reads the start of what was said — so the
+      // assertion is that the latest message is visible, not that scrollTop
+      // equals scrollHeight.
+      check(`LIVE mobile ${w}: a long thread opens at the latest message, not the oldest`,
+        comp.latestVisible === true && comp.scrollTop > comp.scrollMax * 0.5,
+        `latest message visible=${comp.latestVisible}, scrollTop ${comp.scrollTop} of ${comp.scrollMax}`);
+    } else {
+      check(`LIVE mobile ${w}: the scroll hook is on the scrolling element`,
+        comp.scrollTop !== null, "thread fits without scrolling on this lane");
+    }
+
     await m.locator("[data-gw-aside-toggle]").click({ timeout: 8000 }).catch(() => {});
     await m.waitForTimeout(700);
     await m.screenshot({ path: join(OUT, `live-12-mobile${w}-inspector.png`), fullPage: false });
