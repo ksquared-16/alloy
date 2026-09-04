@@ -771,6 +771,42 @@ function previewToggle(id) {
   </button>`;
 }
 
+/**
+ * COPY IS A PRIMARY ACTION, NOT AN OVERFLOW ITEM.
+ *
+ * Provider output is the thing the operator carries OUT of Vacilando — into a
+ * commit message, a ticket, a reply. Burying that behind "…" taxed the most
+ * common thing anyone does with a final report.
+ *
+ * The text travels ON THE BUTTON rather than being scraped from the DOM at
+ * click time, and that is the whole point: the visible body is line-clamped and
+ * may be wrapped in provider-specific markup, so reading the rendered element
+ * would copy a four-line excerpt of a rich rendering. `entry.body` is the
+ * underlying message — the same string whether the row is collapsed or open,
+ * with its own newlines — and the byline, clock and "Working" chrome are not in
+ * it because they were never part of what the provider said.
+ */
+function copyButton(entry) {
+  return `<button type="button" class="vmsg-copy" data-v-msg-copy="${esc(entry.id)}"
+    data-v-copy-text="${esc(entry.body)}" aria-label="Copy message" title="Copy message">
+    <span class="vmsg-copy-mark" aria-hidden="true">\u29c9</span><span class="vmsg-copy-label">Copy</span>
+  </button>`;
+}
+
+/**
+ * The one actions row a message carries. Show more governs how much of the
+ * message you are looking at; Copy takes all of it regardless. They sit
+ * together because they are the two things you do to a message, and neither is
+ * worth a menu.
+ */
+function msgActions(entry, clamp) {
+  const bits = [];
+  if (clamp) bits.push(previewToggle(entry.id));
+  if (entry.body) bits.push(copyButton(entry));
+  if (!bits.length) return "";
+  return `<div class="vmsg-acts">${bits.join("")}</div>`;
+}
+
 export function messageRow(entry, { renderProviderBody = null, attachments = "" } = {}) {
   if (!entry) return "";
   const cls = ROLE_CLASS[entry.role] || "vmsg-system";
@@ -795,7 +831,7 @@ export function messageRow(entry, { renderProviderBody = null, attachments = "" 
       data-v-msg-id="${esc(entry.id)}"${entry.working ? ' data-gw-live="1"' : ""}>
       ${byline(entry)}
       <div class="vmsg-clamp" data-v-msg-clamp>${body}</div>
-      ${clamp ? previewToggle(entry.id) : ""}
+      ${msgActions(entry, clamp)}
       ${entry.meta && !entry.working ? `<div class="vmsg-meta">${esc(entry.meta)}</div>` : ""}
     </li>`;
   }
@@ -807,7 +843,7 @@ export function messageRow(entry, { renderProviderBody = null, attachments = "" 
     data-v-msg-id="${esc(entry.id)}" data-gw-last>
     ${byline(entry)}
     <div class="vmsg-clamp" data-v-msg-clamp><div class="vmsg-body vmsg-user-body gw-last-text" data-gw-msg-text>${esc(entry.body)}</div></div>
-    ${clamp ? previewToggle(entry.id) : ""}
+    ${msgActions(entry, clamp)}
     ${attachments}
     ${entry.meta ? `<div class="vmsg-meta">${esc(entry.meta)}</div>` : ""}
   </li>`;

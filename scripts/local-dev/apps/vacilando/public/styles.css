@@ -3375,6 +3375,129 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
   content:"";position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;
   background:linear-gradient(to bottom, rgba(255,255,255,0), var(--card));
 }
+
+/* ---------------------------------------------------------------------------
+   THE MESSAGE ACTIONS ROW
+
+   Two actions, one row, no menu. "Show more" governs how much of the message
+   you are looking at; Copy takes all of it either way. They read as quiet text
+   affordances rather than buttons because a thread of ten messages would
+   otherwise carry twenty button-shaped holes.
+   --------------------------------------------------------------------------- */
+.vmsg-acts{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.vmsg-acts .vmsg-more{align-self:auto;}
+.vmsg-copy{
+  display:inline-flex;align-items:center;gap:5px;
+  font:inherit;font-size:12.5px;font-weight:600;
+  color:var(--ink-3);background:transparent;border:0;padding:4px 0;cursor:pointer;
+  min-height:32px;
+}
+.vmsg-copy:hover{color:var(--juniper);text-decoration:underline;}
+.vmsg-copy:focus-visible{outline:2px solid var(--juniper);outline-offset:2px;border-radius:4px;}
+.vmsg-copy-mark{font-size:13px;line-height:1;}
+/* Confirmation is the same control saying what it did — not a toast that
+   covers the thread, and not a layout change that moves the text being read. */
+.vmsg-copy.is-copied{color:var(--juniper);}
+.vmsg-copy.is-failed{color:var(--clay, #a4452f);}
+
 @media (max-width:860px){
   .vmsg-more{min-height:36px;font-size:13px;}
+  /* Thumb targets, without turning the row into two chips. */
+  .vmsg-acts{gap:18px;}
+  .vmsg-copy{min-height:36px;font-size:13px;}
+}
+
+/* ===========================================================================
+   COMPOSE MODE — TYPING IS A MODE
+
+   MEASURED, on a 390-wide phone with the iOS keyboard up: the lane kept its
+   back link, breadcrumb, title, status line, six scrolling tabs, a Details
+   button and the four-destination bottom bar, and gave the instruction field
+   44px with a 76px ceiling — laid out as a ROW, so the field was a slot beside
+   Send. Writing a real instruction meant typing a mission statement through a
+   letterbox while the chrome that told you where you were took four times the
+   space of the thing you were doing.
+
+   This is not the normal lane with less room. It is a different composition
+   for a different task. Orientation chrome stands down — you already know
+   which lane you are in, because you are typing into it — the thread keeps
+   enough tail to show what is being replied to, and the field becomes the
+   subject of the screen.
+
+   `data-gw-compose` is set by focus on the instruction field (see
+   syncComposeMode), not by media query: a short viewport is not the same fact
+   as an operator writing, and only one of them should move the furniture.
+   =========================================================================== */
+@media (max-width:860px){
+  /* ---- what stands down ------------------------------------------------ */
+  /* Orientation. You are in the lane; the question is what to say, not where
+     you are. Details and Stop lane are decisions, not writing, and both are one
+     dismissal away. */
+  :root[data-gw-compose] .topbar,
+  :root[data-gw-compose] .vtabs-lane,
+  :root[data-gw-compose] .vlane-head-top,
+  :root[data-gw-compose] .vlane-head-meta,
+  :root[data-gw-compose] .vlane-head-acts,
+  :root[data-gw-compose] .vtabs,
+  :root[data-gw-compose] .gw-new-update,
+  :root[data-gw-compose] .gw-composer-h{display:none;}
+
+  /* ---- the minimal lane context that remains --------------------------- */
+  /* One line: which lane, and what it is doing. That is the whole of what a
+     writer needs to keep in view. */
+  :root[data-gw-compose] .vlane-head{padding:4px 13px 0;}
+  :root[data-gw-compose] .vlane-head-row{margin:0 0 4px;align-items:center;}
+  :root[data-gw-compose] .vlane-head-id{
+    display:flex;align-items:baseline;gap:8px;min-width:0;flex-wrap:nowrap;
+  }
+  :root[data-gw-compose] .vlane-title{
+    font-size:14px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+  }
+  :root[data-gw-compose] .vlane-head-state{margin-top:0;flex:0 0 auto;font-size:11.5px;}
+
+  /* ---- the conversation keeps its tail --------------------------------- */
+  /* It shrinks, it does not disappear: replying to something you can no longer
+     see is the defect this mode exists to fix, not one to introduce. */
+  :root[data-gw-compose] .vlane-body{flex:1 1 auto;min-height:56px;padding:8px 13px;}
+
+  /* ---- the writing surface --------------------------------------------- */
+  /* The interaction zone stops rationing itself: in this mode it IS the screen,
+     and the thread above it is what yields. */
+  :root[data-gw-compose] .vlane-interaction{
+    max-height:none;flex:0 0 auto;padding:6px 13px max(6px, env(safe-area-inset-bottom, 0px));
+  }
+  :root[data-gw-compose] .gw.is-detail .gw-composer{
+    padding:6px 8px;box-shadow:none;border-radius:var(--radius-lg);
+    padding-bottom:max(4px, env(safe-area-inset-bottom, 0px));
+  }
+  /* COLUMN, NOT ROW. A row layout is what made the field a slot: it can only
+     ever be as tall as the button beside it. The field owns its own line and
+     the controls sit under it. */
+  :root[data-gw-compose] .gw-composer-box{flex-direction:column;align-items:stretch;gap:6px;}
+  /* The inline height is computed against the visual viewport in
+     autosizeInstruction; these ceilings would otherwise clamp it back to the
+     quick-reply size. Beyond its cap the field scrolls itself. */
+  :root[data-gw-compose] .gw-composer textarea{
+    max-height:none;min-height:0;overflow-y:auto;font-size:16px;line-height:1.45;
+    flex:0 0 auto;width:100%;
+  }
+  /* Send and attach stay immediately reachable at a thumb-sized target. The
+     provider stays REACHABLE but stops competing with the writing: it is a
+     choice you occasionally revisit, not part of composing. */
+  :root[data-gw-compose] .gw-composer-row{
+    margin-top:0;flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;
+  }
+  :root[data-gw-compose] .gw-lane-stage:not(:has(.gw-start)) .gw-provider{
+    display:flex;flex:0 1 auto;min-width:0;opacity:.72;
+  }
+  :root[data-gw-compose] .gw-provider-opt{min-height:34px;padding:5px 9px;font-size:12px;}
+  :root[data-gw-compose] .gw-attach{flex:0 0 auto;min-height:40px;display:flex;align-items:center;}
+  :root[data-gw-compose] .gw-send{min-height:40px;min-width:76px;margin-left:auto;flex:0 0 auto;}
+  /* No giant empty container around the controls. */
+  :root[data-gw-compose] .gw-count,
+  :root[data-gw-compose] .gw-enter-hint{display:none;}
+
+  /* A lane-scoped interruption still explains why the run is waiting, so it
+     survives compose mode — as one compact line, not a panel. */
+  :root[data-gw-compose] .vneeds-tray{flex:0 0 auto;padding:5px 9px;font-size:12px;}
 }

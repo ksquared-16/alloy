@@ -986,6 +986,9 @@ function syncGatewayViewport() {
   const keyboardOpen = Boolean(vv) && h < window.innerHeight * 0.75;
   const wasKeyboardOpen = document.documentElement.hasAttribute("data-gw-keyboard");
   document.documentElement.toggleAttribute("data-gw-keyboard", keyboardOpen);
+  // The writing area is measured from the visual viewport, so a keyboard
+  // appearing, growing (autocorrect bar) or leaving all resize the field.
+  syncComposeMode();
   // Opening the keyboard is a writing gesture: show the newest content, which
   // is what a reply is about to respond to.
   const pin = keyboardOpen && !wasKeyboardOpen ? { atBottom: true } : before;
@@ -1023,24 +1026,86 @@ function autosizeInstruction(ta) {
   if (!el) return;
   el.style.height = "auto";
   const isMobile = window.innerWidth <= 860;
-  const cap = Math.min(isMobile ? 112 : 220, Math.round((window.visualViewport?.height || window.innerHeight) * (isMobile ? 0.18 : 0.28)));
-  // Idle means empty AND unfocused. Either one is a reason to hold the room.
-  const idle = !String(el.value || "").trim() && document.activeElement !== el;
-  const floor = isMobile ? (idle ? 38 : 48) : 72;
+  const vvh = window.visualViewport?.height || window.innerHeight;
+  let floor;
+  let cap;
+  if (document.documentElement.hasAttribute("data-gw-compose")) {
+    // COMPOSE MODE SIZES TO THE WRITING AREA, NOT TO THE LINE COUNT.
+    //
+    // Everywhere else the field asks for one line and grows only as it is
+    // filled, because an idle composer should not reserve a screen. While the
+    // operator is actually writing that logic is backwards: the field is the
+    // task, and starting it at 44px means every real instruction is typed
+    // through a slot. It opens at ~35% of the ABOVE-KEYBOARD area — the visual
+    // viewport, which is what the keyboard leaves behind — grows to ~45%, and
+    // then scrolls itself rather than eating the conversation it is replying to.
+    floor = Math.round(vvh * 0.35);
+    cap = Math.round(vvh * 0.45);
+  } else {
+    cap = Math.min(isMobile ? 112 : 220, Math.round(vvh * (isMobile ? 0.18 : 0.28)));
+    // Idle means empty AND unfocused. Either one is a reason to hold the room.
+    const idle = !String(el.value || "").trim() && document.activeElement !== el;
+    floor = isMobile ? (idle ? 38 : 48) : 72;
+  }
   el.style.height = `${Math.max(floor, Math.min(el.scrollHeight, cap))}px`;
   const form = document.querySelector("[data-gw-composer]");
   const stage = document.querySelector("[data-gw-stage]");
   if (form && stage) stage.style.setProperty("--gw-composer-h", `${form.offsetHeight}px`);
 }
 
-// Focus and blur change what "idle" means, so they re-measure. Without this the
-// composer only ever resized on input and stayed at its typing height after the
-// operator moved on.
+/**
+ * COMPOSE MODE — WRITING IS A MODE, NOT A SMALLER LANE.
+ *
+ * The previous behaviour kept the whole lane composition and shrank the
+ * composer into it: tabs, header, metadata and bottom navigation all held their
+ * ground while the field the operator was typing into collapsed to a 44px slot
+ * with a 76px ceiling. That is a lane with a keyboard in front of it, not a
+ * writing surface.
+ *
+ * When the operator focuses the instruction field on a phone, composing becomes
+ * the primary task and the lane says so: orientation chrome stands down, enough
+ * recent thread stays to know what is being replied to, and the field takes the
+ * room. It is a distinct responsive state with its own composition, which is
+ * why it is an explicit attribute rather than a pile of `:focus-within` rules.
+ */
+function composeModeActive() {
+  if (window.innerWidth > 860) return false;
+  if (!document.querySelector(".gw.is-detail")) return false;
+  const ta = document.getElementById("gw-instruction");
+  if (!ta) return false;
+  // Focus is the gesture. The keyboard flag is the corroborating signal for
+  // devices that focus a field without a matching activeElement update.
+  return document.activeElement === ta
+    || document.documentElement.hasAttribute("data-gw-keyboard");
+}
+
+function syncComposeMode() {
+  const on = composeModeActive();
+  const was = document.documentElement.hasAttribute("data-gw-compose");
+  document.documentElement.toggleAttribute("data-gw-compose", on);
+  if (on === was) return;
+  // The field's floor and ceiling both change with the mode, so it must be
+  // re-measured rather than left at the other mode's height.
+  autosizeInstruction();
+  // Entering or leaving compose is a writing gesture: what the operator is
+  // replying to is the newest message, not wherever the thread happened to sit.
+  requestAnimationFrame(() => restoreThreadScroll({ atBottom: true }));
+}
+
+// Focus and blur change what "idle" means and whether composing is the task, so
+// they re-measure. Without this the composer only ever resized on input and
+// stayed at its typing height after the operator moved on.
 document.addEventListener("focusin", (e) => {
-  if (e.target instanceof HTMLElement && e.target.id === "gw-instruction") autosizeInstruction(e.target);
+  if (e.target instanceof HTMLElement && e.target.id === "gw-instruction") {
+    syncComposeMode();
+    autosizeInstruction(e.target);
+  }
 });
 document.addEventListener("focusout", (e) => {
-  if (e.target instanceof HTMLElement && e.target.id === "gw-instruction") autosizeInstruction(e.target);
+  if (e.target instanceof HTMLElement && e.target.id === "gw-instruction") {
+    syncComposeMode();
+    autosizeInstruction(e.target);
+  }
 });
 
 function statusOpenNow() {
@@ -1237,6 +1302,9 @@ function paint() {
   const count = view.querySelector("[data-gw-count]");
   const ta = document.getElementById("gw-instruction");
   if (count && ta) count.textContent = `${ta.value.length.toLocaleString()} characters`;
+  // A repaint can replace the composer, and with it the focus that put the lane
+  // into compose mode. Re-derive the mode from what is actually on screen.
+  syncComposeMode();
   autosizeInstruction(ta);
   if (G.selected && G.lane?.lane_id === G.selected) {
     markViewed(G.selected);
@@ -3212,6 +3280,23 @@ document.addEventListener("click", async (e) => {
  * lane listeners.
  * =========================================================================== */
 
+/** Clipboard fallback for non-secure contexts, where navigator.clipboard is absent. */
+function legacyCopyText(text) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none;";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 document.addEventListener("click", async (e) => {
   const hit = (sel) => (e.target instanceof Element ? e.target.closest(sel) : null);
 
@@ -3232,6 +3317,44 @@ document.addEventListener("click", async (e) => {
     const open = li.classList.toggle("is-expanded");
     more.setAttribute("aria-expanded", open ? "true" : "false");
     if (open) G.expandedMessages.add(id); else G.expandedMessages.delete(id);
+    return;
+  }
+
+  // COPY IS DOM-OWNED, LIKE EXPANSION, AND FOR THE SAME REASON.
+  //
+  // "Copied" is transient feedback on one button. Routing it through state and
+  // paint() would repaint a live thread — moving scroll, and re-collapsing
+  // nothing but costing the reader their place — to acknowledge a clipboard
+  // write. It writes the text, swaps the label, and puts the label back.
+  const copyMsg = hit("[data-v-msg-copy]");
+  if (copyMsg) {
+    e.preventDefault();
+    e.stopPropagation();
+    const text = copyMsg.getAttribute("data-v-copy-text") || "";
+    const label = copyMsg.querySelector(".vmsg-copy-label");
+    const mark = copyMsg.querySelector(".vmsg-copy-mark");
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      // Clipboard access is refused outside a secure context and in some
+      // embedded webviews. A textarea + execCommand still works there, and
+      // failing silently would look like the button did nothing.
+      ok = legacyCopyText(text);
+    }
+    if (copyMsg.dataset.copyTimer) clearTimeout(Number(copyMsg.dataset.copyTimer));
+    copyMsg.classList.toggle("is-copied", ok);
+    copyMsg.classList.toggle("is-failed", !ok);
+    if (label) label.textContent = ok ? "Copied" : "Copy failed";
+    if (mark) mark.textContent = ok ? "\u2713" : "\u29c9";
+    const t = setTimeout(() => {
+      copyMsg.classList.remove("is-copied", "is-failed");
+      if (label) label.textContent = "Copy";
+      if (mark) mark.textContent = "\u29c9";
+      delete copyMsg.dataset.copyTimer;
+    }, 1800);
+    copyMsg.dataset.copyTimer = String(t);
     return;
   }
 
