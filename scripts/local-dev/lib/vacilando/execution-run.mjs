@@ -310,15 +310,49 @@ function atomicWrite(path, obj) {
   renameSync(tmp, path);
 }
 
+/**
+ * Load the run store, and REFUSE rather than invent emptiness.
+ *
+ * WHAT THIS COST. On 2026-09-04 the store went to `{"lanes": {}}` mid-turn. A run verified
+ * registered at the start of a turn — status call returned EXECUTING, three occurrences in the
+ * store — returned `run_not_found` minutes later, and every run on every lane went with it. The
+ * `.prev` snapshot then rotated the EMPTY store into the previous-good slot, so the one recovery
+ * path left held nothing either.
+ *
+ * The write was never the problem: `atomicWrite` does temp-write plus rename and is correct. The
+ * problem was here. `catch { return emptyStore(); }` treated EVERY failure as "there is nothing
+ * yet" — a transient read error, a partial file, an EMFILE under load, the brief window during a
+ * concurrent rename — and made no distinction between a file that is ABSENT and a file that is
+ * merely UNREADABLE RIGHT NOW. The next writeStore then persisted that fabricated emptiness over
+ * real state. One unlucky read destroyed every run on the machine.
+ *
+ * So absence is now the ONLY thing that reads as empty. ENOENT means first boot and returns an
+ * empty store honestly. Anything else throws, because a caller that cannot read the store must not
+ * be handed a confident answer about what it contains.
+ */
 export function readExecutionRunStore(root = runtimeRoot()) {
+  const path = executionRunStorePath(root);
+  let text;
   try {
-    const raw = JSON.parse(readFileSync(executionRunStorePath(root), "utf8"));
-    if (!raw || typeof raw !== "object") return emptyStore();
-    const lanes = raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {};
-    return { schema_version: EXECUTION_RUN_SCHEMA, lanes };
-  } catch {
-    return emptyStore();
+    text = readFileSync(path, "utf8");
+  } catch (err) {
+    // The one legitimate empty: the store has never been written on this host.
+    if (err && err.code === "ENOENT") return emptyStore();
+    throw new Error(`execution run store is unreadable (${err?.code || "read failed"}): ${path}`);
   }
+  let raw;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    // A file that EXISTS but does not parse is damage, not absence. Reporting it as an empty
+    // store is what let a partial write erase the real one.
+    throw new Error(`execution run store is present but unparseable: ${path}`);
+  }
+  if (!raw || typeof raw !== "object") {
+    throw new Error(`execution run store is present but not an object: ${path}`);
+  }
+  const lanes = raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {};
+  return { schema_version: EXECUTION_RUN_SCHEMA, lanes };
 }
 
 function writeStore(store, root) {
