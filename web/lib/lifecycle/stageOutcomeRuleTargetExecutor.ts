@@ -40,6 +40,7 @@ import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orche
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import {
+    ENROLLED_CHILD_STATUS_KEY,
     ENROLLING_CHILD_STATUS_KEY,
     isReusableActiveParticipationStatus,
 } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
@@ -366,6 +367,41 @@ export async function applyStageOutcomeRuleTarget(
             // The exact row the write landed on — the compensation must not re-derive it.
             const writtenInstanceId = journeyInstanceId ?? pi.instanceId ?? null;
             if (pi.error) return { error: pi.error };
+
+            /*
+             * A WRITE THAT TOUCHED NOTHING IS NOT A SUCCESS.
+             *
+             * `setEnrollmentInstanceStateByScope` already reports what it did — `moved: 0` when it
+             * resolved no journey, `moved: 2` when duplicates make the target ambiguous — and its own
+             * comment says the caller's single-write assertion is what refuses those. That assertion
+             * was missing: only `pi.error` was checked, so a target that matched zero rows returned a
+             * clean success and the outcome reported no failed targets while changing nothing.
+             *
+             * That is how a child could be "enrolled" by an operator, with every surface reporting
+             * the action succeeded, while the durable state never moved.
+             *
+             * STRICT FOR `enrolled` ONLY. Making every disposition strict was tried earlier in this
+             * program and broke governed family close and participant decisions, which legitimately
+             * run against journeys this scope does not resolve. `enrolled` is the one disposition
+             * that must never be silently skipped: it is the terminal, operator-owned decision the
+             * whole gate exists to protect. The others keep their established declarative semantics.
+             */
+            if (dispositionKey === ENROLLED_CHILD_STATUS_KEY) {
+                if (pi.moved === 0) {
+                    return {
+                        error:
+                            "Enrollment was not completed: no Enrollment journey matched this child, so nothing was "
+                            + "updated. Nothing has changed.",
+                    };
+                }
+                if (pi.moved > 1) {
+                    return {
+                        error:
+                            `Enrollment was not completed: ${pi.moved} Enrollment journeys matched this child, so it `
+                            + "is not clear which one to enrol. Nothing has changed.",
+                    };
+                }
+            }
 
             const degradedEffects: string[] = [];
             let undoChildState = async () => {

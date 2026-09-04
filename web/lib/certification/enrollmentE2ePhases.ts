@@ -1559,10 +1559,28 @@ const completeEnrollment: Phase = {
         const after = await readChildState(ctx, pathA.childId, pathA.journeyId);
         const nowEnrolled = String(after.ocmStatus ?? "").toLowerCase() === "enrolled";
         if (!nowEnrolled) {
+            /*
+             * REPORT WHAT THE EXECUTOR DID, not only what the row says afterwards.
+             *
+             * "No failed targets" and "nothing changed" are compatible in exactly one way: no target
+             * ran at all. Discarding the result object hid which of those it was for several runs.
+             */
+            const raw = result as unknown as Record<string, unknown>;
             return {
                 status: "failed",
                 detail: `after Complete Enrollment the child reads ${String(after.ocmStatus)}, not enrolled`,
-                evidence: { before, after },
+                evidence: {
+                    before,
+                    after,
+                    outcomeResult: {
+                        keys: Object.keys(raw),
+                        appliedTargets: raw.applied_targets ?? raw.executed_targets ?? null,
+                        failedTargets: raw.failed_targets ?? null,
+                        errors: raw.errors ?? null,
+                        statusUpdated: raw.status_updated ?? null,
+                        moved: raw.moved ?? null,
+                    },
+                },
             };
         }
 
