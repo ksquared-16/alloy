@@ -31,6 +31,13 @@ import { expect, test } from "@playwright/test";
 const ORG_HOUSEHOLD = "fc500000-0000-4000-8000-0000000c0001";
 const CHILD = "fc500000-0000-4000-8000-0000000c0002";
 const TEMPLATE = "fc500000-0000-4000-8000-0000000d0001";
+// A charge is deduped by `tpl:<template_key>:<occurs_on>:<scope>`, so a second `charge.add`
+// from the SAME template on the same day returns the FIRST charge rather than a new one —
+// correct behaviour, and the reason the partial-payment proof needs a template of its own.
+const TEMPLATE_2 = "fc500000-0000-4000-8000-0000000d0002";
+// And a third, for the charge that must stay a DRAFT: a template already used today would
+// resolve to the posted charge instead, and paying that proves the wrong thing.
+const TEMPLATE_3 = "fc500000-0000-4000-8000-0000000d0003";
 
 type LedgerRow = { chargeId: string; amountCents: number; status: string; lifecycleStatus: string };
 type PaymentRow = {
@@ -61,14 +68,16 @@ test.describe("financials — money received through the operator's own surface"
             expect(res.status(), "the card read model must be reachable as the operator").toBe(200);
             return ((await res.json()) as { vm: CardVm }).vm;
         };
-        const addPostedCharge = async (): Promise<{ id: string; amountCents: number }> => {
+        const addPostedCharge = async (
+            templateId: string = TEMPLATE,
+        ): Promise<{ id: string; amountCents: number }> => {
             const added = await execute({
                 action_key: "charge.add",
                 entity_type: "child",
                 entity_id: CHILD,
                 mode: "execute",
                 confirmation: { confirmed: true },
-                payload: { customer_member_id: CHILD, customer_id: ORG_HOUSEHOLD, template_id: TEMPLATE },
+                payload: { customer_member_id: CHILD, customer_id: ORG_HOUSEHOLD, template_id: templateId },
             });
             expect(added.json.ok, `charge.add failed: ${JSON.stringify(added.json)}`).toBe(true);
             const id = added.json.data?.execution_result?.affected_id ?? added.json.data?.affected_id;
@@ -149,13 +158,16 @@ test.describe("financials — money received through the operator's own surface"
             payment_method: "check",
             reference_number: "cert-check-001",
         });
-        expect(retry.json.ok, "a retried payment must succeed rather than error").toBe(true);
+        expect(
+            retry.json.ok,
+            `a retried payment must succeed rather than error: ${JSON.stringify(retry.json)}`,
+        ).toBe(true);
         const afterRetry = await readCard();
         expect(afterRetry.payments).toHaveLength(startingPaymentCount + 1);
         expect(afterRetry.reconciliation.balanceCents).toBe(startingBalance);
 
         // ── C · PARTIAL PAYMENT ─────────────────────────────────────────────────────────────────
-        const charge2 = await addPostedCharge();
+        const charge2 = await addPostedCharge(TEMPLATE_2);
         const owed2 = charge2.amountCents;
         const half = Math.floor(owed2 / 2);
 
@@ -240,7 +252,7 @@ test.describe("financials — money received through the operator's own surface"
             entity_id: CHILD,
             mode: "execute",
             confirmation: { confirmed: true },
-            payload: { customer_member_id: CHILD, customer_id: ORG_HOUSEHOLD, template_id: TEMPLATE },
+            payload: { customer_member_id: CHILD, customer_id: ORG_HOUSEHOLD, template_id: TEMPLATE_3 },
         });
         const draftId =
             draftAdded.json.data?.execution_result?.affected_id ?? draftAdded.json.data?.affected_id;

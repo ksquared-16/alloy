@@ -170,15 +170,40 @@ const recordPayment: RegisteredAction = {
                     requiredInputs: [],
                 };
             }
+            /*
+             * A REPLAY OF THE REQUEST THAT SETTLED THE CHARGE IS NOT A NEW PAYMENT.
+             *
+             * The first submission settles the charge, so a double-click arrives at a charge with
+             * nothing outstanding and reads as "already paid in full" — which turned the retry into
+             * an error, while `execute` underneath was ready to answer `already_recorded` /
+             * `already_applied` and move the balance zero times. The blocker is right about a NEW
+             * payment against a settled charge and wrong about a replay of the one that settled it,
+             * and the derived idempotency key is exactly what tells those two apart.
+             *
+             * Narrow on purpose: only `charge_settled` is bypassed. A draft or voided charge still
+             * refuses money whether or not the request is a replay.
+             */
             if (charge.outstandingCents <= 0) {
-                return {
-                    eligible: false,
-                    blockers: [
-                        { code: "charge_settled", message: "This charge is already paid in full." },
-                    ],
-                    availableTransitions: [],
-                    requiredInputs: [],
-                };
+                const replayKey = idempotencyKeyFor(payload ?? {}, "payment.record");
+                const { data: alreadyRecorded } = await (supabase as SupabaseClient)
+                    .from("payments")
+                    .select("id")
+                    .eq("org_id", ctx.orgId)
+                    .eq("idempotency_key", replayKey)
+                    .maybeSingle();
+                if (!alreadyRecorded) {
+                    return {
+                        eligible: false,
+                        blockers: [
+                            {
+                                code: "charge_settled",
+                                message: "This charge is already paid in full.",
+                            },
+                        ],
+                        availableTransitions: [],
+                        requiredInputs: [],
+                    };
+                }
             }
             return { eligible: true, blockers: [], availableTransitions: [], requiredInputs: [] };
         } catch (err) {

@@ -14,6 +14,8 @@
 \set kid  'fc500000-0000-4000-8000-0000000c0002'
 \set agr  'fc500000-0000-4000-8000-0000000a0001'
 \set tpl  'fc500000-0000-4000-8000-0000000d0001'
+\set tpl2 'fc500000-0000-4000-8000-0000000d0002'
+\set tpl3 'fc500000-0000-4000-8000-0000000d0003'
 \set gla  'fc500000-0000-4000-8000-0000000e0001'
 
 -- ── Remove what previous runs of THIS certification created, innermost first.
@@ -48,7 +50,7 @@ delete from customer_members where id = :'kid'::uuid;
 delete from customers where id = :'hh'::uuid;
 delete from gl_account_mappings where org_id = :'org'::uuid and key in ('fee', 'credit', 'tuition');
 delete from gl_accounts where id = :'gla'::uuid;
-delete from financial_charge_templates where id = :'tpl'::uuid;
+delete from financial_charge_templates where id in (:'tpl'::uuid, :'tpl2'::uuid, :'tpl3'::uuid);
 delete from locations where id = :'site'::uuid;
 
 set session_replication_role = origin;
@@ -84,6 +86,27 @@ insert into financial_charge_templates
 values
   (:'tpl'::uuid, :'org'::uuid, 'certification_fee', 'Certification fee', 'fee', 'manual', 'fixed',
    130000, 'USD', 'now', 'immediate', current_date - 365, true);
+
+-- ── A SECOND template, because a charge is deduped by `tpl:<key>:<occurs_on>:<scope>` and this
+--    certification needs TWO distinct charges on ONE day. Adding the same template twice is a
+--    retry by design — correct behaviour, and the reason the partial-payment proof needs its own
+--    template rather than a second call. A different amount, so the two are never confusable.
+insert into financial_charge_templates
+  (id, org_id, template_key, label, charge_category, trigger_type, amount_strategy, amount_cents,
+   currency_code, occurs_on_strategy, billable_on_strategy, effective_start, is_active)
+values
+  (:'tpl2'::uuid, :'org'::uuid, 'certification_fee_2', 'Certification fee (second)', 'fee', 'manual',
+   'fixed', 90000, 'USD', 'now', 'immediate', current_date - 365, true);
+
+-- ── A THIRD, for the charge that must STAY a draft. The refusal case needs a charge nobody posted,
+--    and a template already used today would resolve to the posted charge instead — proving that
+--    money can be applied to a posted charge, which is not the rule under test.
+insert into financial_charge_templates
+  (id, org_id, template_key, label, charge_category, trigger_type, amount_strategy, amount_cents,
+   currency_code, occurs_on_strategy, billable_on_strategy, effective_start, is_active)
+values
+  (:'tpl3'::uuid, :'org'::uuid, 'certification_fee_3', 'Certification fee (draft only)', 'fee',
+   'manual', 'fixed', 50000, 'USD', 'now', 'immediate', current_date - 365, true);
 
 -- ── GL codes, so the ledger's GL column renders a code rather than `Unmapped`.
 insert into gl_accounts (id, org_id, code, name, type, is_active)
