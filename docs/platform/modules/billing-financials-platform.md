@@ -424,6 +424,74 @@ unchanged throughout.
 
 ---
 
+### The Financials card — what an operator can see and do (September 2026)
+
+No migration. Thread 2 is a consumer thread: it connects commands that already existed and renders
+truth the read model already composed.
+
+**What the census found.** `buildFinancialsCardVM` was already the one composition all three
+densities render, already computed the balance from charges and active allocations of posted
+payments — the `jobPaymentBalances` rule, quoted rather than re-derived — and already read
+`payments` with `appliedCents` per row. It reads `financial_journal_entries` **nowhere**; the journal
+explains history and is never a balance source. The card already issued `charge.add`, `charge.post`
+and `charge.reverse` and refreshed from the read model afterwards.
+
+What was missing was money coming IN. `payment.record` and `payment.refund` have been registered
+actions (`actionRegistry.ts`), catalogued `maturity: executable` / `implementationStatus: production`,
+and certified against real persistence since Thread 8 — and **no control on the card issued either**.
+`vm.payments` was composed and never rendered. A family could be charged and could not be recorded as
+having paid.
+
+- **Balance authority is unchanged.** Charges are the authority for gross owed; active allocations of
+  POSTED payments are what reduce it. The card renders `reconciliation.balanceCents` and computes no
+  financial arithmetic of its own. Nothing here sums journal deltas.
+- **Received is not applied.** The Payment band shows each receipt with what it was worth, what has
+  been applied, and what remains UNAPPLIED. Unapplied cash is called unapplied — never "account
+  credit", which in this platform is a charge-side ledger row (`charge_category = 'credit'`) written
+  through the correction path. `unappliedTotalCents` states cash on the account and is deliberately
+  subtracted from nothing.
+- **A row says whether it can take money.** `offersPayment` is decided in the read model, the mirror
+  of `offersReverse`: posted, not itself a correction, and still owing something. `appliedCents` and
+  `outstandingCents` ride with it — the same `appliedByChargeId` map the reconciliation already sums,
+  surfaced per row rather than recomputed. If the payments read fails, rows keep the state they were
+  built with (owing everything, offering nothing) rather than offering a control the card cannot
+  justify.
+- **Record payment and Refund run the registered actions.** `payment.record` takes the charge, an
+  amount pre-filled from that row's outstanding, and a method; `payment.refund` is offered on posted
+  inbound money that is not itself a refund. Every bound — a draft charge, an over-application, a
+  refund larger than the receipt — stays where it is enforced, and its refusal is surfaced verbatim.
+  Both refresh from the read model in `finally`, so what the card shows after a command is what
+  committed.
+- **The route is stricter than the actions.** `payment.record`, `charge.post` and `charge.reverse` all
+  declare `requiresEntityId: false`, but `/api/admin/actions/execute` refuses a request without an
+  entity id. Commands therefore send the charge's own child, falling back to the panel's subject. The
+  browser certification found this: the first run of the payment control returned 400, and the same
+  latent defect meant **Post and Reverse on a household (pre-enrolment) charge had never been
+  executable** — a subject-less row sent an empty string. The `charge_id` in the payload is what
+  decides which money moves; the subject travels as request context, not as attribution.
+- **Densities.** Compact, summary and expanded render one composition. The payment controls live in
+  the summary/expanded Payment band, beside Due/Past due.
+- **Filtering.** The subject filter narrows the ledger, the reconciliation and the payable rows
+  together, so a payment is never offered against a charge that is not on screen.
+
+**Intentionally unsupported, and named rather than drawn:** Stripe collection and Pay Now (no
+executor), autopay (fixtures only), payer splits (a payer ROLE exists; no allocation store, so
+`share` is null for every payer), responsibility splits, subsidy, tuition recommendation, recurring
+charge generation, and a Financials workspace. Each belongs to a later thread; none is rendered as a
+zero or a disabled control.
+
+**Certified:** `certification/playwright/financials-card-payment-controls.cert.spec.ts` through the
+running app as the authenticated operator (payable rows, the exact payload the button sends, balance
+moving exactly once, receipt as its own row, retry moving nothing, a settled charge closing the
+offer, balance = responsibility − payments); `web/tests/financials/live/financialsCardPayments.live.test.ts`
+(7 cases against real persistence); and `paymentPresentation.test.ts` (17 cases on the decision
+functions). The card cannot be clicked in the certification tenant — it mounts on an opportunity
+focus panel and that tenant has zero opportunities — so the browser evidence drives the card's own
+contracts. That seeding gap is a certification-platform limitation, recorded here rather than papered
+over.
+
+---
+
 ## What not to do
 
 - Do not build childcare billing before the financial core is generalized off `job_id`.
@@ -453,6 +521,10 @@ unchanged throughout.
 - Do not convert the subledger into double-entry accounting without a chart of accounts and a posting policy; the GL is the export target, not this table.
 - Do not let a journal write block a money write; record the consequence, report the outcome, and repair it on the next attempt.
 - Do not name a function for a consequence it does not have — `post_payment_to_ledger` stamped a timestamp for six months while its name promised a journal.
+- Do not render a balance the card computed itself; `buildFinancialsCardVM` decides every cents value and the card renders it.
+- Do not label unapplied cash as account credit — a credit is a charge-side ledger row, and merging the two sends an operator looking for a row that does not exist.
+- Do not offer a command the current data cannot justify: if the payments read failed, a row offers nothing rather than offering a control that would be refused.
+- Do not send an empty entity id to /api/admin/actions/execute; it refuses the request even where the action declares `requiresEntityId: false`.
 - Do not add a childcare-specific ledger FK or a second ledger/GL; use the generic billable-source dimension (P3.1 gate 4).
 - Do not book expected subsidy as AR before a claim/posting; expected subsidy is L3-derived.
 - Do not collapse Rate / Charge / Financial Resolution into Posting — Posting is the only authoritative-write stage.

@@ -22,6 +22,10 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    presentPayment,
+    unappliedTotalCents,
+} from "@/lib/adminV2/runtime/focusPanel/financials/paymentPresentation";
 import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
@@ -98,6 +102,25 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         summary: string;
         changes: string[];
     } | null>(null);
+
+    /*
+     * THE CHARGE A PAYMENT IS BEING RECORDED AGAINST.
+     *
+     * `payment.record` records money AND applies it in one act, so it needs the obligation it
+     * settles. The amount starts at what that row still owes — the read model's own
+     * `outstandingCents`, not arithmetic done here — and the operator may reduce it for a partial
+     * payment. The service and the allocation bounds trigger remain the authority on what is
+     * acceptable; this only opens the conversation.
+     */
+    const [payTarget, setPayTarget] = useState<{
+        chargeId: string;
+        label: string;
+        outstandingCents: number;
+        /** The charge's own child, when it has one. A household charge has none. */
+        subjectMemberId: string | null;
+    } | null>(null);
+    const [payAmount, setPayAmount] = useState<string>("");
+    const [payMethod, setPayMethod] = useState<string>("cash");
 
     /*
      * The card asks for the WHOLE account and filters in the client.
@@ -178,6 +201,19 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             ? vm.rows
             : vm.rows.filter((r) => r.subjectMemberId === subjectFilter);
     }, [vm, subjectFilter]);
+
+    /*
+     * The charges that can actually take money, in the operator's current scope.
+     *
+     * `offersPayment` is the read model's answer — posted, not a correction, still owing something —
+     * exactly as `offersReverse` is for the other direction. Filtering the same `visibleRows` the
+     * ledger renders is what keeps the menu honest under the subject filter: a payment offered
+     * against a sibling's charge that is not on screen would be attributing money by accident.
+     */
+    const payableRows = useMemo(
+        () => visibleRows.filter((r) => r.offersPayment),
+        [visibleRows],
+    );
 
     /** The child a charge would apply to — the filter's subject, else the panel's. */
     const chargeTarget =
@@ -336,14 +372,25 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         action_key: actionKey,
                         entity_type: "child",
                         /*
-                         * The ROW's own subject when it has one, and nothing when it does not.
+                         * The ROW's own subject when it has one, and the panel's when it does not.
                          *
-                         * A household charge has no child subject and must not borrow one — sending
-                         * the panel's first child would attribute a family expense to one sibling in
-                         * the audit trail. Neither action requires an entity: the charge is the
-                         * subject of its own posting.
+                         * This sent an EMPTY STRING for a household charge, on the reasoning that a
+                         * family expense must not be attributed to one sibling and that neither
+                         * action requires an entity — `charge.post` and `charge.reverse` both
+                         * declare `requiresEntityId: false`. The reasoning is right about
+                         * attribution and wrong about the route: `/api/admin/actions/execute`
+                         * refuses any request without an entity id, so Post and Reverse on a
+                         * household charge answered 400 and the operator could not act on a
+                         * pre-enrolment fee at all. Found by driving the route the way this card
+                         * does; the action definitions alone say the call is legal.
+                         *
+                         * The charge_id in the payload is what decides which charge is posted or
+                         * reversed, and the service reads the row's own billable source — so the
+                         * fallback subject travels as request context, not as the money's
+                         * attribution. `posted_by` still records the operator, and the charge stays
+                         * on the household it was billed to.
                          */
-                        entity_id: row.subjectMemberId ?? "",
+                        entity_id: row.subjectMemberId ?? chargeTarget ?? "",
                         mode: "execute",
                         confirmation: { confirmed: true },
                         payload: {
@@ -359,6 +406,74 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     // The domain refusing is an answer. Surfaced, never swallowed.
                     setCommandError(err || "That could not be done.");
                 }
+            } catch {
+                setCommandError("The request could not be sent.");
+            } finally {
+                setRunning(false);
+                await load();
+            }
+        },
+        [load, running, chargeTarget],
+    );
+
+    /*
+     * MONEY IN, AND MONEY BACK OUT — through the registered actions that already own both.
+     *
+     * `payment.record` and `payment.refund` have been registered, catalogued as executable and
+     * certified against real persistence since Thread 8; nothing on this card issued either of them,
+     * so a family could be charged and could not be recorded as having paid. This adds the call, not
+     * the capability: no amount is validated here beyond it being a positive integer of cents, no
+     * balance is computed, and the refusals — a draft charge, an over-application, a refund larger
+     * than the receipt — stay where they are enforced and are surfaced verbatim.
+     *
+     * Same shape as `runRowAction` deliberately: execute, surface a refusal, and refresh from the
+     * read model in `finally` so what the card shows afterwards is what committed rather than an
+     * optimistic guess about it.
+     */
+    const runPaymentAction = useCallback(
+        async (
+            actionKey: "payment.record" | "payment.refund",
+            payload: Record<string, unknown>,
+            entityId: string | null,
+        ) => {
+            if (running) return;
+            setRunning(true);
+            setCommandError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action_key: actionKey,
+                        entity_type: "child",
+                        /*
+                         * THE ROUTE IS STRICTER THAN THE ACTION.
+                         *
+                         * `payment.record` declares `requiresEntityId: false` — the subject of a
+                         * payment is the charge it settles — but `/api/admin/actions/execute`
+                         * refuses any request without one ("action_key, entity_type, and entity_id
+                         * are required"). The certification found this by calling the route the way
+                         * the card does, which is the only way it could have been found: the action
+                         * definition alone says the call is legal.
+                         *
+                         * So the money carries the subject it concerns: the charge's own child where
+                         * it has one, else the panel's. The charge_id in the payload remains what
+                         * decides where the money goes; this is attribution for the audit trail.
+                         */
+                        entity_id: entityId ?? "",
+                        mode: "execute",
+                        confirmation: { confirmed: true },
+                        payload,
+                    }),
+                });
+                const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+                if (!json?.ok) {
+                    const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                    setCommandError(err || "That could not be done.");
+                    return;
+                }
+                setPayTarget(null);
             } catch {
                 setCommandError("The request could not be sent.");
             } finally {
@@ -743,11 +858,213 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                         <p className="alloy-os-financials__note" data-financials-payment="state">
                                             {vm.paymentSetup}
                                         </p>
-                                    ) : (
-                                        <p className="alloy-os-financials__note" data-financials-payment="none">
-                                            No payment method on file
+                                    ) : null}
+
+                                    {/*
+                                        WHAT ARRIVED, AND WHAT IT IS DOING.
+                                        `vm.payments` was composed by the read model and never
+                                        rendered, so a family could send $500, have $300 applied, and
+                                        the card showed neither number. Received and applied are
+                                        separate facts; the difference between them is money sitting
+                                        on the account, and it is called UNAPPLIED — never account
+                                        credit, which in this platform is a charge-side ledger row.
+                                    */}
+                                    {vm.payments.length ? (
+                                        <ul
+                                            className="alloy-os-financials__payments"
+                                            data-financials-payments="true"
+                                        >
+                                            {vm.payments.map((raw) => {
+                                                const p = presentPayment(raw);
+                                                return (
+                                                    <li
+                                                        key={p.paymentId}
+                                                        className="alloy-os-financials__payment"
+                                                        data-financials-payment-id={p.paymentId}
+                                                        data-financials-payment-kind={p.kind}
+                                                    >
+                                                        <span data-financials-payment-received="true">
+                                                            {p.kind === "refund" ? "−" : ""}
+                                                            {money(p.receivedCents, p.currencyCode)}
+                                                        </span>
+                                                        <span className="alloy-os-financials__note">
+                                                            {p.statusLabel} · {p.methodLabel}
+                                                        </span>
+                                                        {p.kind === "receipt" && p.isMoney ? (
+                                                            <span
+                                                                className="alloy-os-financials__note"
+                                                                data-financials-payment-applied={p.appliedCents}
+                                                            >
+                                                                {money(p.appliedCents, p.currencyCode)} applied
+                                                                {p.unappliedCents > 0 ? (
+                                                                    <>
+                                                                        {" · "}
+                                                                        <span data-financials-payment-unapplied={p.unappliedCents}>
+                                                                            {money(p.unappliedCents, p.currencyCode)} unapplied
+                                                                        </span>
+                                                                    </>
+                                                                ) : null}
+                                                            </span>
+                                                        ) : null}
+                                                        {p.offersRefund ? (
+                                                            <button
+                                                                type="button"
+                                                                className="alloy-os-financials__action"
+                                                                data-financials-command="payment.refund"
+                                                                data-financials-refund-payment={p.paymentId}
+                                                                disabled={running}
+                                                                onClick={() =>
+                                                                    void runPaymentAction(
+                                                                        "payment.refund",
+                                                                        {
+                                                                            payment_id: p.paymentId,
+                                                                            payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                                        },
+                                                                        chargeTarget,
+                                                                    )
+                                                                }
+                                                            >
+                                                                Refund
+                                                            </button>
+                                                        ) : null}
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    ) : null}
+
+                                    {/* Cash on the account, stated as cash. Never subtracted from
+                                        what is owed here — applying money is its own act with its
+                                        own record, and the balance above stays the read model's. */}
+                                    {unappliedTotalCents(vm.payments) > 0 ? (
+                                        <p
+                                            className="alloy-os-financials__note"
+                                            data-financials-unapplied-total={unappliedTotalCents(vm.payments)}
+                                        >
+                                            {money(unappliedTotalCents(vm.payments), currency)} received and not yet
+                                            applied
                                         </p>
-                                    )}
+                                    ) : null}
+
+                                    {/* RECORD PAYMENT — the charges that can actually take money.
+                                        `offersPayment` is the read model's answer, the same way
+                                        `offersReverse` is; this renders it and does not restate it. */}
+                                    {payableRows.length ? (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-financials-command="payment.record"
+                                                    disabled={running}
+                                                >
+                                                    Record payment →
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="start" sideOffset={4} data-financials-payment-menu="true">
+                                                {payableRows.map((r) => (
+                                                    <DropdownMenuItem
+                                                        key={r.chargeId}
+                                                        data-financials-payment-charge={r.chargeId}
+                                                        onSelect={() => {
+                                                            setCommandError(null);
+                                                            setPayTarget({
+                                                                chargeId: r.chargeId,
+                                                                label: r.description ?? r.categoryLabel,
+                                                                outstandingCents: r.outstandingCents,
+                                                                subjectMemberId: r.subjectMemberId,
+                                                            });
+                                                            // The row's own outstanding amount, from
+                                                            // the read model. The operator may lower
+                                                            // it for a partial payment.
+                                                            setPayAmount((r.outstandingCents / 100).toFixed(2));
+                                                        }}
+                                                    >
+                                                        {r.description ?? r.categoryLabel}
+                                                        <span className="alloy-os-financials__menu-amount">
+                                                            {money(r.outstandingCents, r.currencyCode)}
+                                                        </span>
+                                                    </DropdownMenuItem>
+                                                ))}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    ) : null}
+
+                                    {payTarget ? (
+                                        <div
+                                            className="alloy-os-financials__preview"
+                                            data-financials-payment-form="true"
+                                        >
+                                            <p className="alloy-os-financials__preview-summary">
+                                                {payTarget.label}
+                                            </p>
+                                            <p className="alloy-os-financials__note">
+                                                {money(payTarget.outstandingCents, currency)} outstanding
+                                            </p>
+                                            <input
+                                                type="number"
+                                                min="0.01"
+                                                step="0.01"
+                                                value={payAmount}
+                                                aria-label="Payment amount"
+                                                data-financials-payment-amount="true"
+                                                onChange={(e) => setPayAmount(e.target.value)}
+                                            />
+                                            <select
+                                                value={payMethod}
+                                                aria-label="Payment method"
+                                                data-financials-payment-method="true"
+                                                onChange={(e) => setPayMethod(e.target.value)}
+                                            >
+                                                <option value="cash">Cash</option>
+                                                <option value="check">Check</option>
+                                                <option value="ach">Bank transfer</option>
+                                                <option value="card">Card</option>
+                                                <option value="other">Other</option>
+                                            </select>
+                                            <span className="alloy-os-financials__preview-actions">
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-financials-payment-commit="true"
+                                                    disabled={running}
+                                                    onClick={() => {
+                                                        // Cents, as an integer, because money is not
+                                                        // a float. The action refuses anything that
+                                                        // is not a positive integer of cents.
+                                                        const cents = Math.round(Number(payAmount) * 100);
+                                                        void runPaymentAction(
+                                                            "payment.record",
+                                                            {
+                                                                charge_id: payTarget.chargeId,
+                                                                amount_cents: cents,
+                                                                payment_method: payMethod,
+                                                                charge_label: payTarget.label,
+                                                            },
+                                                            payTarget.subjectMemberId ?? chargeTarget,
+                                                        );
+                                                    }}
+                                                >
+                                                    Record payment
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-financials-payment-cancel="true"
+                                                    disabled={running}
+                                                    onClick={() => setPayTarget(null)}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </span>
+                                        </div>
+                                    ) : null}
+
+                                    {!vm.paymentSetup && !vm.payments.length && !payableRows.length ? (
+                                        <p className="alloy-os-financials__note" data-financials-payment="none">
+                                            No payments recorded
+                                        </p>
+                                    ) : null}
                                 </section>
                             </div>
                             )}
