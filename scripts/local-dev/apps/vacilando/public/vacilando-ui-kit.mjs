@@ -23,7 +23,10 @@
 
 import {
   ACTIVITY_KINDS,
+  MESSAGE_PREVIEW_LINES,
   MESSAGE_ROLE,
+  messageNeedsPreview,
+  operatorStatusLine,
   DATA_STATE,
   HEALTH,
   HEALTH_LABEL,
@@ -750,6 +753,24 @@ function byline(entry) {
   return `<div class="vmsg-by"><span class="vmsg-who">${who}</span>${state}${when}</div>`;
 }
 
+/**
+ * The four-line preview control.
+ *
+ * SCAN DENSITY, NOT HIDING. The message is entirely in the DOM — the clamp is
+ * CSS — so copy, find-in-page and assistive technology all see the full text.
+ * What changes is how much vertical space one message may claim before the
+ * operator has agreed to spend it.
+ *
+ * Expansion is PER MESSAGE and is owned by the DOM, not by app state: a live
+ * provider message that repaints must not slam itself shut while the operator
+ * is reading it, and a repaint must not expand the whole thread either.
+ */
+function previewToggle(id) {
+  return `<button type="button" class="vmsg-more" data-v-msg-more="${esc(id)}" aria-expanded="false">
+    <span class="vmsg-more-open">Show more</span><span class="vmsg-more-close">Show less</span>
+  </button>`;
+}
+
 export function messageRow(entry, { renderProviderBody = null, attachments = "" } = {}) {
   if (!entry) return "";
   const cls = ROLE_CLASS[entry.role] || "vmsg-system";
@@ -764,21 +785,29 @@ export function messageRow(entry, { renderProviderBody = null, attachments = "" 
     </li>`;
   }
 
+  const clamp = messageNeedsPreview(entry.body);
+
   if (entry.role === MESSAGE_ROLE.PROVIDER) {
     const body = typeof renderProviderBody === "function"
       ? renderProviderBody(entry)
       : `<div class="vmsg-body">${esc(entry.body)}</div>`;
-    return `<li class="vmsg ${cls}" data-v-role="provider"${entry.working ? ' data-gw-live="1"' : ""}>
+    return `<li class="vmsg ${cls}${clamp ? " is-clampable" : ""}" data-v-role="provider"
+      data-v-msg-id="${esc(entry.id)}"${entry.working ? ' data-gw-live="1"' : ""}>
       ${byline(entry)}
-      ${body}
+      <div class="vmsg-clamp" data-v-msg-clamp>${body}</div>
+      ${clamp ? previewToggle(entry.id) : ""}
       ${entry.meta && !entry.working ? `<div class="vmsg-meta">${esc(entry.meta)}</div>` : ""}
     </li>`;
   }
 
   // USER. The instruction is shown verbatim; delivery is quiet metadata.
-  return `<li class="vmsg ${cls}" data-v-role="user" data-gw-last>
+  // Attachments sit OUTSIDE the clamp — an artifact is not prose, and hiding it
+  // behind "Show more" would hide the thing the message was carrying.
+  return `<li class="vmsg ${cls}${clamp ? " is-clampable" : ""}" data-v-role="user"
+    data-v-msg-id="${esc(entry.id)}" data-gw-last>
     ${byline(entry)}
-    <div class="vmsg-body vmsg-user-body gw-last-text" data-gw-msg-text>${esc(entry.body)}</div>
+    <div class="vmsg-clamp" data-v-msg-clamp><div class="vmsg-body vmsg-user-body gw-last-text" data-gw-msg-text>${esc(entry.body)}</div></div>
+    ${clamp ? previewToggle(entry.id) : ""}
     ${attachments}
     ${entry.meta ? `<div class="vmsg-meta">${esc(entry.meta)}</div>` : ""}
   </li>`;

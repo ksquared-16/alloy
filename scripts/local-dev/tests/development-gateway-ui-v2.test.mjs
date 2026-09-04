@@ -434,11 +434,17 @@ test("the tray sits at the human interaction boundary", () => {
   const out = renderGatewayShell({ page: "lanes", lanes: [lane], selectedId: lane.lane_id, lane, listReady: true, outputText: "ok" });
   const trayAt = out.indexOf("vneeds-tray");
   const composerAt = out.indexOf("gw-composer");
-  const workAt = out.indexOf("vcard-work");
   const threadAt = out.indexOf("vcard-thread");
   assert.ok(trayAt > 0 && composerAt > trayAt, "the tray is immediately above the composer");
-  // CONTEXT -> CONVERSATION -> HUMAN ACTION.
-  assert.ok(workAt > 0 && threadAt > workAt, "current work orients, then the conversation");
+  // CONVERSATION -> HUMAN ACTION.
+  //
+  // The Current Work card is gone: it printed the operator's own latest
+  // instruction as a titled card directly above the thread that prints the same
+  // instruction as their message. Two renderings of one sentence, and the
+  // duplicate owned the top of every phone screen. Progress moved into the
+  // lane's status line; the run's metadata is untouched in Details and Runs.
+  assert.equal(out.includes("vcard-work"), false, "no standalone Current Work card");
+  assert.ok(threadAt > 0, "the conversation is the lane body");
   assert.ok(trayAt > threadAt, "the tray must never interrupt the conversation");
 });
 

@@ -30,7 +30,9 @@ import {
   buildHomeViewModel,
   buildLaneThread,
   buildSystemViewModel,
+  laneOperatorStatus,
   laneProgress,
+  operatorStatusLine,
   readPlaceholderMode,
   writePlaceholderMode,
 } from "./vacilando-ui-model.mjs";
@@ -4918,9 +4920,8 @@ export function renderCandidateList(candidates, loading) {
  */
 export function laneIdentityMeta(lane, telemetry, { nowMs = Date.now() } = {}) {
   const bits = [];
-  const who = laneProviderLabel(lane);
   const model = telemetry?.agent?.model || telemetry?.model || null;
-  bits.push(model ? `${who} · ${model}` : who);
+  if (model) bits.push(model);
   const slot = Number(lane?.slot ?? lane?.binding?.slot);
   if (Number.isInteger(slot)) bits.push(`Slot ${slot}`);
   const startedMs = lane?.execution_run?.started_at ? Date.parse(lane.execution_run.started_at) : NaN;
@@ -4928,6 +4929,7 @@ export function laneIdentityMeta(lane, telemetry, { nowMs = Date.now() } = {}) {
     const clock = new Date(startedMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     bits.push(`Started ${clock}`);
   }
+  // The provider is no longer repeated here: it is part of the status line.
   return bits.filter(Boolean).join(" · ");
 }
 
@@ -4950,6 +4952,9 @@ export function renderLaneHeaderV2(lane, {
   const laneId = lane?.lane_id || selectedId;
   const label = lane?.label || laneId;
   const st = work || canonicalLaneWorkState(lane, { nowMs });
+  // ONE RESOLVER. Home, Lanes, this header and every badge read the same
+  // projection; nothing re-interprets execution state on its own.
+  const status = laneOperatorStatus(lane, st, { nowMs });
   const meta = laneIdentityMeta(lane, telemetry, { nowMs });
   const canStop = Boolean(lane?.execution_run && !["COMPLETE", "FAILED", "ABANDONED"].includes(lane.execution_run.state));
   return `<header class="vlane-head" data-gw-chat-head>
@@ -4970,7 +4975,17 @@ export function renderLaneHeaderV2(lane, {
     <div class="vlane-head-row">
       <div class="vlane-head-id">
         <h1 class="vlane-title">${esc(label)}</h1>
-        <div class="vlane-head-state" data-gw-stage-status>${stateDot(st.label, { tone: st.tone, live: st.live })}<span class="vlane-head-who"> · ${esc(laneProviderLabel(lane))}</span></div>
+        ${/*
+          WHAT LANE? WHAT STATE? ROUGHLY HOW FAR? WHO IS RUNNING IT? — answered
+          on one line, in the lane's identity, without a card of its own.
+          Progress rides here only while it is FRESH; the resolver omits a stale
+          or absent estimate rather than leaving a number attached to a lane
+          nobody has heard from in hours.
+        */ ""}
+        <div class="vlane-head-state" data-gw-stage-status>${stateDot(
+          operatorStatusLine(status, laneProviderLabel(lane)),
+          { tone: status.tone, live: status.live },
+        )}</div>
         ${meta ? `<p class="vlane-head-meta">${esc(meta)}</p>` : ""}
       </div>
       <div class="vlane-head-acts">
@@ -5450,14 +5465,20 @@ export function renderGatewayShell({
     nowMs,
     providerLabel: laneProviderLabel(lane),
   });
+  /*
+    CURRENT WORK IS GONE FROM OVERVIEW, AND NOTHING WAS LOST.
+
+    It printed the operator's own latest instruction as a titled card, directly
+    above the thread that prints the same instruction as their message. Two
+    renderings of one sentence, and the duplicate was the one occupying the top
+    of every phone screen.
+
+    The thread is the authoritative presentation: YOU said this, the PROVIDER
+    replied, the SYSTEM did these things. Progress moved into the lane's own
+    status line, where it answers "roughly how far" without a card. The run's
+    mission metadata is untouched and remains in Details and Runs.
+  */
   const overview = `
-        ${currentWorkCard(currentWork, {
-          state: currentWork.active ? work.label : null,
-          tone: currentWork.active ? work.tone : "",
-          live: currentWork.active ? work.live : false,
-          expanded: Boolean(userMessageExpanded),
-          cancel: renderCancelControl(lane?.execution_run, { pending: cancelPending }),
-        })}
         <section class="vcard vcard-thread">
           <div class="vcard-head">
             <div class="vcard-headings"><h2 class="vcard-title">Conversation</h2></div>
@@ -5569,7 +5590,11 @@ export function railLaneRow(lane, selectedId, attentionByLane, telemetryByLane) 
   // beyond the canonical state, and it earns its place by the same test
   // everything else failed: it changes what the operator can DO.
   const readOnly = cursorObservationOnly(lane) ? " · read-only" : "";
-  const attn = `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}${esc(queue)}${esc(readOnly)}</span>`;
+  // ONE OPERATOR STATE. The rail used to print the runtime phrase — including
+  // "Needs input · suspended", which told the operator that a provider process
+  // is not resident. That is scheduler machinery; it is in Details.
+  const opStatus = laneOperatorStatus(lane, canonicalLaneWorkState(lane));
+  const attn = `<span class="gw-lane-attn${opStatus.tone ? ` is-${opStatus.tone}` : ""}">${esc(st.mark)} ${esc(operatorStatusLine(opStatus))}${esc(queue)}${esc(readOnly)}</span>`;
   // NAVIGATION CARRIES NAME, STATE, RECENCY AND A GENUINE BLOCKER COUNT.
   //
   // It used to carry the provider and the Claude context percentage too. Neither

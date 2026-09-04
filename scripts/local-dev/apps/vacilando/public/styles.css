@@ -3321,3 +3321,60 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
   .topbar{padding:6px 12px;min-height:0;gap:8px;}
   .topbar .search,.topbar #improve-vacilando-btn,.topbar .gen{display:none;}
 }
+
+/* ---------------------------------------------------------------------------
+   FOUR-LINE MESSAGE PREVIEW.
+
+   SCAN DENSITY, NOT HIDING. The message is entirely in the DOM — this clamps it
+   visually — so copy, find-in-page and assistive technology keep the whole text.
+   What changes is how much of the screen one message may claim before the
+   operator has agreed to spend it: a phone should show several exchanges, not
+   one verbose provider response.
+   --------------------------------------------------------------------------- */
+.vmsg-clamp{min-width:0;}
+/* THE CLAMP GOES ON THE CHILD, NOT ON .vmsg-clamp ITSELF.
+   `.vmsg` is a flex container, so `.vmsg-clamp` is a flex item — and a flex
+   item's display is BLOCKIFIED. `display:-webkit-box` became `flow-root`,
+   `-webkit-line-clamp:4` computed to 4 and did nothing, and every message
+   rendered full height while the toggle sat underneath claiming otherwise. A
+   browser probe caught it; the geometry checks had not, because they were
+   asserting against the same broken layout.
+   The child is an ordinary block inside a block, so it is never blockified. */
+.vmsg:not(.vmsg-provider).is-clampable:not(.is-expanded) .vmsg-clamp > *{
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+}
+/* A PROVIDER REPORT IS NOT A PARAGRAPH, SO THE CLAMP GOES DEEPER.
+   Its body is `.gw-report-body` inside `.gw-report`, and clamping the outer
+   wrapper does nothing: a clamp only counts LINE boxes, and `.gw-report` is a
+   block child, so the whole report counted as one item and a 1,600-character
+   report rendered 875px tall on an 844px phone — the exact complaint the
+   preview was meant to answer. It surfaced only once the fixture was made as
+   long as a real report.
+   `.gw-report` is flattened to a block while collapsed for the same reason the
+   wrapper moved: a flex ITEM has its display blockified, so a clamp declared on
+   `.gw-report-body` inside a flex parent would be discarded in turn. */
+.vmsg-provider.is-clampable:not(.is-expanded) .gw-report{display:block;}
+.vmsg-provider.is-clampable:not(.is-expanded) .gw-report-h{margin-bottom:6px;}
+.vmsg-provider.is-clampable:not(.is-expanded) .gw-report-body{
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+}
+.vmsg-more{
+  align-self:flex-start;font:inherit;font-size:12.5px;font-weight:600;
+  color:var(--juniper);background:transparent;border:0;padding:4px 0;cursor:pointer;
+  min-height:32px;
+}
+.vmsg-more:hover{text-decoration:underline;}
+.vmsg-more-close{display:none;}
+.vmsg.is-expanded .vmsg-more-open{display:none;}
+.vmsg.is-expanded .vmsg-more-close{display:inline;}
+/* A fade tells the reader there IS more, so "Show more" is an offer rather than
+   a surprise. Only while collapsed, and never over the user's tinted ground
+   where it would read as a gradient someone chose. */
+.vmsg-provider.is-clampable:not(.is-expanded) .vmsg-clamp{position:relative;}
+.vmsg-provider.is-clampable:not(.is-expanded) .vmsg-clamp::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;
+  background:linear-gradient(to bottom, rgba(255,255,255,0), var(--card));
+}
+@media (max-width:860px){
+  .vmsg-more{min-height:36px;font-size:13px;}
+}

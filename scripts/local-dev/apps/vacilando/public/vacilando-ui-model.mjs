@@ -398,7 +398,7 @@ export function buildNeedsYou({ lanes = [], approvals = [], laneState = () => nu
     // blocker twice.
     const alreadyListed = items.some((i) => i.lane_id === l.lane_id);
     if (alreadyListed) continue;
-    if (st?.key === "needs_input" || run?.state === "NEEDS_INPUT") {
+    if (operatorState(st, l) === OPERATOR_STATE.NEEDS_YOU) {
       items.push({
         kind: "needs_input",
         lane_id: l.lane_id,
@@ -484,17 +484,21 @@ export function buildLaneSummaries({ lanes = [], laneState = () => null, nowMs =
   return (Array.isArray(lanes) ? lanes : []).map((l) => {
     const st = laneState(l) || {};
     const run = l.execution_run || null;
+    // Home reads the SAME resolver as the rail and the lane header. Three
+    // surfaces interpreting execution state independently is how one lane came
+    // to read three ways.
+    const op = laneOperatorStatus(l, st, { nowMs });
     return {
       lane_id: l.lane_id,
       // READ-ONLY IS A STATE, NOT A PROVIDER INTERNAL. An observation-only lane
       // cannot be sent an instruction, so plain "Ready" is a promise it cannot
       // keep. It travels with the state everywhere the operator picks a lane.
       label: l.label || l.lane_id,
-      state: `${st.label || "Unknown"}${st.read_only || l.observation_only ? " · read-only" : ""}`,
-      state_key: st.key || "idle",
-      tone: st.tone || "",
+      state: `${operatorStatusLine(op)}${st.read_only || l.observation_only ? " · read-only" : ""}`,
+      state_key: op.state,
+      tone: op.tone,
       mark: st.mark || "○",
-      live: Boolean(st.live),
+      live: op.live,
       blockers: Number(l.unseen_needs_you || 0) || (st.key === "needs_input" ? 1 : 0),
       at_ms: Number(l.last_activity_ms) || parseMs(run?.updated_at) || null,
       progress: laneProgress(run, { nowMs }),
@@ -917,7 +921,19 @@ export function buildLaneThread(lane, {
   const run = lane?.execution_run || lane?.previous_run || null;
 
   // ---- the operator's instruction -------------------------------------
-  const rec = lastInstruction || lane?.last_instruction || null;
+  //
+  // THE RUN'S OWN INSTRUCTION IS THE FALLBACK, and it has to be.
+  //
+  // The thread previously drew the operator's message only from the delivery
+  // record. That was survivable while a Current Work card printed the
+  // instruction separately; with that card removed, a lane whose delivery
+  // record had aged out showed a conversation with no operator in it — the run
+  // was executing an instruction the thread refused to name. The run carries
+  // the instruction it is executing, so it answers when the record cannot.
+  const runInstruction = run?.instruction
+    ? { instruction: run.instruction, status: "delivered", delivered_at: run.started_at || run.created_at }
+    : null;
+  const rec = lastInstruction || lane?.last_instruction || runInstruction;
   if (rec?.instruction && (rec.status === "delivered" || rec.status === "queued")) {
     const at = parseMs(rec.delivered_at || rec.queued_at) || parseMs(run?.created_at);
     entries.push({
@@ -1048,4 +1064,143 @@ export function buildCurrentWork(lane, { nowMs = Date.now() } = {}) {
     truncated,
     run,
   };
+}
+
+/* ===========================================================================
+ * THE OPERATOR STATE
+ *
+ * Runtime state and operator state are different vocabularies, and V2 was
+ * showing the first where it owed the second. "Needs input · suspended" told
+ * the operator two things, one of which was scheduler machinery: whether a
+ * provider process happens to be resident is Vacilando's problem, not theirs.
+ * The only fact that changed what the operator should DO was that the lane was
+ * waiting on them.
+ *
+ * FOUR STATES. That is the whole operator-facing vocabulary:
+ *
+ *   WORKING    a provider is executing
+ *   NEEDS_YOU  nothing can continue until the operator acts
+ *   READY      the lane can take work; nothing is running
+ *   FAILED     execution failed and recovery is required
+ *
+ * ONE RESOLVER feeds Home, Lanes, the lane header, badges and counts. Each
+ * renderer reinterpreting execution state independently is how the same lane
+ * came to read differently on three surfaces.
+ *
+ * NOTHING IS DESTROYED. The execution state is untouched and remains visible in
+ * Lane Details and System diagnostics, where machinery belongs.
+ * ========================================================================= */
+
+export const OPERATOR_STATE = Object.freeze({
+  WORKING: "working",
+  NEEDS_YOU: "needs_you",
+  READY: "ready",
+  FAILED: "failed",
+});
+
+export const OPERATOR_STATE_LABEL = Object.freeze({
+  working: "Working",
+  needs_you: "Needs you",
+  ready: "Ready",
+  failed: "Failed",
+});
+
+/** Presentation tone per operator state. One mapping, used everywhere. */
+export const OPERATOR_STATE_TONE = Object.freeze({
+  working: "run",
+  needs_you: "needs",
+  ready: "",
+  failed: "failed",
+});
+
+/**
+ * Runtime work state -> operator state.
+ *
+ * `work` is the existing canonicalLaneWorkState() result: the canonical owner
+ * of what the RUNTIME is doing. This projects it, and deliberately does not
+ * re-derive it — two answers to "what is this lane doing" is the bug this
+ * exists to prevent, not a shape to copy.
+ */
+export function operatorState(work, lane = null) {
+  const key = work?.key || null;
+  const group = work?.group || null;
+
+  // NEEDS YOU is the operator's own word for every runtime shape that cannot
+  // continue without them — needs_input, an awaiting-operator governed action,
+  // a provider suspended holding a question. Whether the process is resident is
+  // not the operator's problem; being asked is.
+  const ga = lane?.execution_run?.governed_action || lane?.governed_action || null;
+  const awaiting = ga && (ga.status === "awaiting_operator" || ga.status === "pending");
+  if (awaiting || key === "needs_input" || group === "needs_input") return OPERATOR_STATE.NEEDS_YOU;
+
+  if (key === "failed") return OPERATOR_STATE.FAILED;
+
+  // Working covers every shape of "the machine is getting on with it":
+  // executing, validating, recovering, queued for capacity, waiting on a
+  // resource, refreshing context. The operator does not act on any of them.
+  if (work?.live === true || group === "active") return OPERATOR_STATE.WORKING;
+
+  // Everything else — idle, complete, offline, a released provider, a stale
+  // capacity claim — is a lane that can take work.
+  return OPERATOR_STATE.READY;
+}
+
+/**
+ * The one lane-state descriptor every surface renders.
+ *
+ * `detail` carries the runtime phrase for Details and diagnostics, so nothing
+ * is lost — it is simply no longer the headline.
+ */
+export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
+  const state = operatorState(work, lane);
+  const progress = laneProgress(lane?.execution_run, { nowMs });
+  return {
+    state,
+    label: OPERATOR_STATE_LABEL[state],
+    tone: OPERATOR_STATE_TONE[state],
+    live: state === OPERATOR_STATE.WORKING,
+    // Progress rides with identity, not in a card of its own. Only a FRESH
+    // estimate earns a place: a stale one is silently omitted rather than
+    // leaving "~62%" attached to a lane nobody has heard from in hours.
+    percent: progress.available ? progress.percent : null,
+    estimate: progress.available && progress.source === "provider_estimate",
+    runtime_detail: work?.label || null,
+    runtime_hint: work?.hint || null,
+  };
+}
+
+/** "Working · ~62% · Claude" — the header line, assembled once. */
+export function operatorStatusLine(status, providerLabel = null) {
+  const bits = [status.label];
+  if (status.percent != null) bits.push(`${status.estimate ? "~" : ""}${status.percent}%`);
+  if (providerLabel) bits.push(providerLabel);
+  return bits.join(" · ");
+}
+
+/* ---------------------------------------------------------------------------
+ * MESSAGE PREVIEW — four lines, then ask.
+ * ------------------------------------------------------------------------- */
+
+/** Rendered lines a message may occupy before it collapses. */
+export const MESSAGE_PREVIEW_LINES = 4;
+
+/**
+ * Does this message need a preview?
+ *
+ * Line count is estimated from the text, not measured, because the model runs
+ * before layout. The clamp itself is CSS (`-webkit-line-clamp`), which is exact;
+ * this only decides whether to OFFER "Show more", so an approximate answer that
+ * errs toward offering it is the safe one.
+ *
+ * THE DATA IS NEVER TRUNCATED. The full text is always in the DOM — clamped
+ * visually — so copy, find-in-page and assistive technology keep the whole
+ * message.
+ */
+export function messageNeedsPreview(text, { lines = MESSAGE_PREVIEW_LINES, charsPerLine = 38 } = {}) {
+  const s = String(text || "");
+  if (!s.trim()) return false;
+  const hard = s.split("\n");
+  if (hard.length > lines) return true;
+  const soft = hard.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / charsPerLine)), 0);
+  return soft > lines;
 }

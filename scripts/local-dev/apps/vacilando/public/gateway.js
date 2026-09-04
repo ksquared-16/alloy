@@ -95,6 +95,10 @@ const G = {
   activityFilters: { lane: null, kind: "all", outcome: "all", provider: null },
   usageWindow: "today",
   placeholders: false,
+  // Which messages the operator has opened. Ids only — the text is never held
+  // here, and an id for a message that has scrolled out of the thread is
+  // harmless.
+  expandedMessages: new Set(),
 };
 
 function routeName() {
@@ -1216,6 +1220,15 @@ function paint() {
     activityVm: G.page === "activity" ? buildActivityVm(Date.now()) : null,
     systemVm: G.page === "system" ? buildSystemVm() : null,
   });
+  // Re-open what the operator had open. Done before scroll restoration, so the
+  // heights are settled by the time the thread is positioned.
+  for (const id of G.expandedMessages) {
+    const li = view.querySelector(`.vmsg[data-v-msg-id="${CSS.escape(id)}"]`);
+    if (!li) continue;
+    li.classList.add("is-expanded");
+    const btn = li.querySelector("[data-v-msg-more]");
+    if (btn) btn.setAttribute("aria-expanded", "true");
+  }
   paintNav();
   paintRail();
   restoreComposer(saved);
@@ -3201,6 +3214,26 @@ document.addEventListener("click", async (e) => {
 
 document.addEventListener("click", async (e) => {
   const hit = (sel) => (e.target instanceof Element ? e.target.closest(sel) : null);
+
+  // MESSAGE EXPANSION IS OWNED BY THE DOM, NOT BY APP STATE.
+  //
+  // Expansion toggles a class on the one message and nothing else. It is
+  // deliberately not held in G: a live provider message repaints on every poll,
+  // and a repaint that re-derived expansion from state would slam the message
+  // shut while the operator was reading it. paint() re-applies the open set
+  // from the ids it recorded, so scroll position and the reader's choice both
+  // survive an update.
+  const more = hit("[data-v-msg-more]");
+  if (more) {
+    e.preventDefault();
+    const li = more.closest(".vmsg");
+    if (!li) return;
+    const id = li.getAttribute("data-v-msg-id");
+    const open = li.classList.toggle("is-expanded");
+    more.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) G.expandedMessages.add(id); else G.expandedMessages.delete(id);
+    return;
+  }
 
   // Placeholder mode is turned OFF from the banner it paints. There is
   // deliberately no way to turn it on by accident.
