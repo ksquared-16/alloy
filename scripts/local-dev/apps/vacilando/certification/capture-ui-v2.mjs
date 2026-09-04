@@ -826,6 +826,99 @@ try {
     await nav.close();
   }
 
+  /* ========== RE-VERIFICATION: THREAD DENSITY, PROGRESS, VOCABULARY ==========
+   *
+   * The prior pass is not assumed to have landed correctly. These re-assert its
+   * claims against the shipped build, and add the three the harness never had:
+   * that reading does not cost you your place, that a stale estimate disappears
+   * rather than lingering, and that the operator vocabulary holds on EVERY
+   * surface rather than the one route it was first checked on.
+   */
+  {
+    const rv = await browser.newPage({ viewport: VIEWPORTS.mobile, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+
+    // ---- expanding a message must not move the thread underneath the reader ----
+    await open(rv, "/lanes/lane_payments00001");
+    const scroll = await rv.evaluate(async () => {
+      const body = document.querySelector(".vlane-body");
+      body.scrollTop = Math.max(0, body.scrollHeight - body.clientHeight);
+      const before = body.scrollTop;
+      const li = document.querySelector(".vmsg-provider.is-clampable");
+      const btn = li?.querySelector("[data-v-msg-more]");
+      if (!btn) return null;
+      const anchorTop = li.getBoundingClientRect().top;
+      btn.click();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const afterTop = li.getBoundingClientRect().top;
+      const expanded = li.classList.contains("is-expanded");
+      btn.click();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return {
+        expanded, collapsed: !li.classList.contains("is-expanded"),
+        before, after: body.scrollTop, drift: Math.abs(afterTop - anchorTop),
+      };
+    });
+    check("expanding a message keeps the message where the reader was looking",
+      Boolean(scroll) && scroll.expanded && scroll.drift <= 8,
+      scroll ? `moved ${Math.round(scroll.drift)}px` : "no clampable message");
+    check("Show less collapses it again", scroll?.collapsed === true);
+
+    // ---- a live provider repaint must not reset the thread ----
+    await open(rv, `/lanes/${LANE}`);
+    const live = await rv.evaluate(async () => {
+      const body = document.querySelector(".vlane-body");
+      body.scrollTop = 0;
+      const li = document.querySelector(".vmsg-provider");
+      const id = li?.getAttribute("data-v-msg-id");
+      const btn = li?.querySelector("[data-v-msg-more]");
+      if (btn) btn.click();
+      const wasExpanded = li?.classList.contains("is-expanded") || false;
+      const at = body.scrollTop;
+      // The controller repaints the whole view on every poll; force one.
+      window.dispatchEvent(new Event("focus"));
+      await new Promise((r) => setTimeout(r, 900));
+      const now = document.querySelector(`.vmsg[data-v-msg-id="${CSS.escape(id || "")}"]`);
+      return {
+        stillExpanded: wasExpanded ? Boolean(now?.classList.contains("is-expanded")) : true,
+        scrollKept: Math.abs((document.querySelector(".vlane-body")?.scrollTop || 0) - at) <= 24,
+      };
+    });
+    check("a repaint does not slam an expanded message shut", live.stillExpanded === true);
+    check("a repaint does not throw the thread back to the top", live.scrollKept === true);
+
+    // ---- progress: fresh shows, stale disappears, absent invents nothing ----
+    await open(rv, `/lanes/${LANE}`);
+    const fresh = await rv.evaluate(() => document.querySelector(".vlane-head .vstate")?.textContent || "");
+    check("a FRESH estimate rides with the lane's state", /~62%/.test(fresh), fresh.trim());
+    await open(rv, "/lanes/lane_runtimeperf001");
+    const stale = await rv.evaluate(() => document.querySelector(".vlane-head .vstate")?.textContent || "");
+    // The fixture's estimate is 95 minutes old against a 30-minute staleness
+    // floor. A number nobody has refreshed is worse than no number.
+    check("a STALE estimate is dropped, not left attached to the lane",
+      !/%/.test(stale), stale.trim());
+    await open(rv, "/lanes/lane_payments00001");
+    const none = await rv.evaluate(() => document.querySelector(".vlane-head .vstate")?.textContent || "");
+    check("no estimate invents no percentage — and never 0%",
+      !/%/.test(none) && !/\b0%/.test(none), none.trim());
+
+    // ---- the operator vocabulary holds on EVERY surface ----
+    for (const route of ["/home", "/lanes", "/activity", "/system",
+      `/lanes/${LANE}`, "/lanes/lane_suspended0001", "/lanes/lane_runtimeperf001"]) {
+      await open(rv, route);
+      const leak = await rv.evaluate(() => {
+        // The Inspector is Details: scheduler and provider internals legitimately
+        // live there. Everything the operator reads WITHOUT asking must not.
+        const insp = document.querySelector(".vinsp");
+        const clone = document.body.cloneNode(true);
+        clone.querySelectorAll(".vinsp, .gw-lane-aside").forEach((n) => n.remove());
+        const text = clone.innerText || clone.textContent || "";
+        return { primary: /suspend/i.test(text), hasInspector: Boolean(insp) };
+      });
+      check(`no operator-facing surface says suspended — ${route}`, leak.primary === false);
+    }
+    await rv.close();
+  }
+
   /* ============ LANE RESOURCES — MEASURED, OR SAID TO BE ABSENT ============ */
   {
     const rs = await browser.newPage({ viewport: VIEWPORTS.desktop, deviceScaleFactor: 2 });

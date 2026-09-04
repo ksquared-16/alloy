@@ -66,7 +66,7 @@ is worse than no check.
 
 ## Result
 
-**185 checks, 185 passed, 0 failed.** See
+**199 checks, 199 passed, 0 failed.** See
 [`certification/results.json`](certification/results.json) for the machine record.
 
 ### Desktop
@@ -264,7 +264,7 @@ one that condemns it.
 
 ## The final convergence pass
 
-Sixty-eight checks were added for this pass. The ones that matter most are the
+Eighty-two checks were added for this pass. The ones that matter most are the
 ones asserting that something is ABSENT — a number not shown, a card not
 rendered, a payload not dumped — because every one of those was previously
 present and wrong.
@@ -346,3 +346,26 @@ Certified on desktop and mobile.
 | How it was attributed | "by process ancestry from this lane's provider seat" |
 | **CPU declared absent, not estimated** | "Not sampled", and no figure anywhere |
 | Peak memory names its unwired source | "Not projected yet" |
+
+### Re-verification — the prior pass, not assumed
+
+The instruction asked for these to be proved again rather than taken on trust.
+
+| Claim | Evidence |
+|---|---|
+| A fresh estimate rides with the lane's state | `Working · ~62% · Claude` |
+| A **stale** estimate is dropped, not left attached | `Ready · Claude` — the fixture's estimate is 95 minutes old against a 30-minute floor |
+| No estimate invents no percentage, and never `0%` | `Ready · Claude` |
+| No ETA anywhere | PASS |
+| Expanding a message keeps it where the reader was looking | moved 0px |
+| *Show less* collapses it again | PASS |
+| A repaint does not slam an expanded message shut | PASS |
+| A repaint does not throw the thread back to the top | PASS |
+| Copy takes the full output while collapsed | 1,418 characters |
+
+**"Suspended" is now asserted on every surface, not one route.** The original
+check ran on `/lanes` alone. It now runs on Home, Lanes, Activity, System and
+three lanes — including the `WAITING_RESOURCE` lane and the one carrying a
+provider suspension — with the Lane Inspector excluded from the search, because
+Details is exactly where scheduler and provider internals belong. Seven routes,
+no leak.

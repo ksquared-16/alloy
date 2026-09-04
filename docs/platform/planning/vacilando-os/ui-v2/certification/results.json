@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T10:47:18.865Z",
+  "captured_at": "2026-09-04T10:52:33.862Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -18,7 +18,7 @@
       "height": 380
     }
   },
-  "passed": 185,
+  "passed": 199,
   "failed": 0,
   "results": [
     {
@@ -149,7 +149,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 3:28 AM Stop lane RUNTIME Executing"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 3:33 AM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
@@ -923,6 +923,76 @@
     },
     {
       "name": "mobile390 a deep-linked lane falls back to the directory",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "expanding a message keeps the message where the reader was looking",
+      "ok": true,
+      "detail": "moved 0px"
+    },
+    {
+      "name": "Show less collapses it again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "a repaint does not slam an expanded message shut",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "a repaint does not throw the thread back to the top",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "a FRESH estimate rides with the lane's state",
+      "ok": true,
+      "detail": "Working · ~62% · Claude"
+    },
+    {
+      "name": "a STALE estimate is dropped, not left attached to the lane",
+      "ok": true,
+      "detail": "Ready · Claude"
+    },
+    {
+      "name": "no estimate invents no percentage — and never 0%",
+      "ok": true,
+      "detail": "Ready · Claude"
+    },
+    {
+      "name": "no operator-facing surface says suspended — /home",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /activity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /system",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes/lane_trustruntime01",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes/lane_suspended0001",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes/lane_runtimeperf001",
       "ok": true,
       "detail": ""
     },
