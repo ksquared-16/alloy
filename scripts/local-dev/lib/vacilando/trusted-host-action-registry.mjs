@@ -18,6 +18,9 @@ import {
   validateClosePullRequestInputs,
   validateDeleteRemoteBranchInputs,
 } from "./trusted-host-repository-housekeeping.mjs";
+import {
+  validateProviderCeilingInputs, CEILING_MIN, CEILING_MAX, MANAGED_KEY as PROVIDER_CEILING_KEY,
+} from "./trusted-host-provider-ceiling.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -32,6 +35,7 @@ export const ACTION_TYPES = Object.freeze({
   REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
   VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
   VACILANDO_RETIRE_WORKTREE: "vacilando.retire_worktree",
+  CAPACITY_SET_PROVIDER_CEILING: "capacity.set_provider_ceiling",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -428,6 +432,45 @@ function defineRepositoryDeleteRemoteBranch() {
   };
 }
 
+/**
+ * Move the provider ceiling — and nothing else.
+ *
+ * The predecessor of this action was "let the agent edit a host config file",
+ * which the permission boundary refused, correctly: that capability reaches
+ * every setting on the machine and records nothing about why a number moved.
+ * The effect below is small enough to be read in one sentence and therefore
+ * small enough to be approved or refused on its merits.
+ *
+ * The managed key is NOT an input. As a parameter this becomes a general host
+ * config writer wearing a narrow name, and the whole distinction that makes it
+ * approvable collapses.
+ */
+function defineCapacitySetProviderCeiling() {
+  return {
+    actionType: ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING,
+    version: 1,
+    title: `Move ${PROVIDER_CEILING_KEY} within ${CEILING_MIN}-${CEILING_MAX}`,
+    requiredCapability: "trusted_host.capacity.set_provider_ceiling",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    // Never retried. A compare-and-set that failed because the live value moved
+    // must be re-measured by the caller, not re-attempted against a prediction
+    // already known to be stale.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["expected_ceiling", "requested_ceiling", "rollback_ceiling", "reason"],
+    },
+    outputSchema: { key: "string", previous_value: "number", new_value: "number", readback_verified: "boolean" },
+    evidenceSchema: [
+      "key", "expected_ceiling", "requested_ceiling", "rollback_ceiling",
+      "previous_value", "new_value", "readback_verified", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateProviderCeilingInputs(inputs);
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -543,6 +586,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
   [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
+  [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
 ]);
 
 export function listRegisteredActions() {

@@ -108,6 +108,9 @@ const FULL_SHA = /^[0-9a-f]{40}$/i;
 const DURABLE_BRANCH_STATES = Object.freeze([
   "reachable_from_canonical_remote", "merged", "pushed_not_merged",
 ]);
+/** Mirrors the executor's window; a gate must not read the value it authorises. */
+const PROVIDER_CEILING_WINDOW = Object.freeze({ key: "ALLOY_MAX_ACTIVE_PROVIDERS", min: 4, max: 8 });
+
 const NEVER_RETIRE = Object.freeze(["staging", "main", "master", "production"]);
 
 export const GATES = Object.freeze({
@@ -124,6 +127,34 @@ export const GATES = Object.freeze({
   durability_gates_passed: (ev) => (ev.durability_gates_passed == null ? null : ev.durability_gates_passed === true),
   no_governance_exception: (ev) => (ev.governance_exception_active == null ? null : ev.governance_exception_active === false),
   no_operator_hold: (ev) => (ev.operator_hold == null ? null : ev.operator_hold === false),
+
+  /* Provider ceiling. The delegation rests on the move being small, predicted,
+   * reversible and measured — remove any one of those and it is an operator
+   * decision again. */
+  ceiling_within_experimental_window: (ev) =>
+    (ev.requested_ceiling == null || ev.expected_ceiling == null ? null
+      : [ev.requested_ceiling, ev.expected_ceiling].every(
+        (n) => Number.isInteger(n) && n >= PROVIDER_CEILING_WINDOW.min && n <= PROVIDER_CEILING_WINDOW.max)),
+  ceiling_key_is_the_managed_one: (ev) =>
+    (ev.ceiling_key == null ? null : String(ev.ceiling_key) === PROVIDER_CEILING_WINDOW.key),
+  // Compare-and-set is the difference between an experiment and a guess. An
+  // agent that has lost track of the live ceiling is precisely the one that
+  // must not write.
+  ceiling_expectation_measured: (ev) =>
+    (ev.expected_ceiling == null || ev.live_ceiling == null ? null
+      : Number(ev.expected_ceiling) === Number(ev.live_ceiling)),
+  rollback_ceiling_declared: (ev) =>
+    (ev.rollback_ceiling == null ? null
+      : Number.isInteger(ev.rollback_ceiling)
+        && ev.rollback_ceiling >= PROVIDER_CEILING_WINDOW.min
+        && ev.rollback_ceiling <= PROVIDER_CEILING_WINDOW.max),
+  // Raising capacity on a host already under pressure is how a capacity
+  // experiment becomes an outage. Unmeasured headroom escalates.
+  host_headroom_measured: (ev) => (ev.host_headroom_ok == null ? null : ev.host_headroom_ok === true),
+  // A previous experiment that left an unvalidated ceiling behind must be
+  // reconciled by a human before another one starts on top of it.
+  no_unvalidated_ceiling_active: (ev) =>
+    (ev.unvalidated_ceiling_active == null ? null : ev.unvalidated_ceiling_active === false),
   branch_pushed_to_remote: (ev) => (ev.remote_head_sha == null ? null : String(ev.remote_head_sha).toLowerCase() === String(ev.source_sha || "").toLowerCase()),
   base_is_staging: (ev) => (ev.base_branch == null ? null : String(ev.base_branch).toLowerCase() === "staging"),
   required_checks_successful: (ev) =>
@@ -285,6 +316,35 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
       "all_corrections_allowlisted", "no_destructive_corrections",
       "no_foreign_owner_mutation", "no_ambiguous_owner_mutation",
       "no_live_process_affected", "metadata_store_known",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
+    policy_id: "routine_provider_ceiling_experiment_v1",
+    label: "Provider capacity experiment — move one ceiling inside the tested window",
+    action_key: "capacity.set_provider_ceiling",
+    // Never staging. This changes how many providers this HOST will run; there
+    // is no deployed environment in which the setting means anything, and
+    // listing one would invite the action to be claimed under it.
+    environments: Object.freeze(["development_certification"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // WHY A CAPACITY WRITE IS DELEGABLE AT ALL. The refused predecessor was
+    // "edit a host config file", which reaches every setting on the machine.
+    // What is delegated here is one key, inside a window whose ends were both
+    // chosen by the operator, from a value the caller correctly predicted, with
+    // the restore value named in the same request. Reversal needs no cleverness
+    // and no history: it is another call with the numbers swapped.
+    //
+    // It is worth being explicit that this does NOT let the agent enlarge its
+    // own authority — the ceiling governs how many providers may run, not what
+    // any of them may do, which is why it is absent from
+    // SELF_EXPANSION_ACTION_KEYS. It does let the agent ask for more of the
+    // machine, so headroom is a measured gate rather than a courtesy.
+    gates: Object.freeze([
+      "ceiling_key_is_the_managed_one", "ceiling_within_experimental_window",
+      "ceiling_expectation_measured", "rollback_ceiling_declared",
+      "host_headroom_measured", "no_unvalidated_ceiling_active",
       "no_governance_exception", "no_operator_hold",
     ]),
   }),
