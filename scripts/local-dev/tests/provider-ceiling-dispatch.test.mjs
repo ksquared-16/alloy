@@ -42,12 +42,12 @@ test("every registered privileged_write action has a dispatch branch", () => {
   // Census is dispatched through its own guarded tail rather than an equality branch.
   dispatched.add("DATABASE_READ_CENSUS");
 
-  // Known-unreachable, and this list must only ever shrink. host.install_toolkit
-  // is registered with gates and a policy but has no executor wired yet, so it
-  // would fail `action_unavailable` exactly as the ceiling did. Recorded here
-  // rather than hidden, because the whole point of this test is that an
-  // unreachable action is invisible until an operator approves one.
-  const KNOWN_UNREACHABLE = ["host.install_toolkit"];
+  // Empty, and it must stay that way. It briefly held host.install_toolkit,
+  // which this very test caught: registered with gates and a policy, and no
+  // executor, so it would have failed `action_unavailable` exactly as the
+  // ceiling did. An unreachable action is invisible until an operator approves
+  // one, which is why this guard is structural rather than per-action.
+  const KNOWN_UNREACHABLE = [];
 
   const missing = [];
   for (const [constName, actionType] of Object.entries(R.ACTION_TYPES)) {
@@ -62,4 +62,11 @@ test("every registered privileged_write action has a dispatch branch", () => {
   for (const a of KNOWN_UNREACHABLE) {
     assert.ok(missing.includes(a), `${a} is now dispatched — remove it from KNOWN_UNREACHABLE`);
   }
+});
+
+test("the toolkit install is reachable end to end", () => {
+  assert.equal(typeof ACTIONS.fulfillInstallToolkitForMission, "function");
+  assert.equal(typeof ACTIONS.executeInstallToolkitTrustedHostAction, "function");
+  assert.match(SRC, /fulfillInstallToolkitForMission,/);
+  assert.match(SRC, /rec\.action_key === ACTION_TYPES\.HOST_INSTALL_TOOLKIT/);
 });

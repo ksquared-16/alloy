@@ -403,3 +403,67 @@ export function validateInstallToolkitInputs(inputs = {}, { measure = measureToo
   }
   return { ok: true, already_converged: false, evidence: ev, plan };
 }
+
+/**
+ * Execute the install by invoking the canonical command.
+ *
+ * This layer adds authority, not behaviour. `alloy-toolkit install` already
+ * holds the gateway_host_mutation guard, the immutable versioned layout and
+ * rollback, and a second implementation here would be a more permissive copy of
+ * the operation the tests actually cover.
+ *
+ * IT DELIBERATELY DOES NOT RESTART THE GATEWAY. The Gateway is what executes
+ * this action, and restarting it from inside itself would kill the process
+ * mid-write — losing the completion record of the very install that just
+ * happened, which is the one audit line nobody can reconstruct afterwards. The
+ * symlink flip and the process restart are therefore separate bounded steps,
+ * and this returns `gateway_restart_required` so the caller can see that
+ * installed and running have not yet been reconciled. That is the same
+ * installed-vs-running distinction the whole module exists to keep visible.
+ */
+export function executeToolkitInstall({
+  expectedStagingSha = null,
+  toolkitRoot = TOOLKIT_ROOT,
+  runner = null,
+  binPath = null,
+} = {}) {
+  const bin = binPath || join(toolkitRoot, "current", "alloy-toolkit");
+  const before = installedToolkitSha({ toolkitRoot });
+
+  let raw = "";
+  try {
+    raw = String((runner || ((c, a) => execFileSync(c, a, { encoding: "utf8", timeout: 300_000 })))(
+      bin, ["install", CONVERGENCE_REF],
+    ));
+  } catch (e) {
+    return {
+      ok: false,
+      error: "install_command_failed",
+      detail: String(e?.stderr || e?.message || "").split("\n")[0].slice(0, 300),
+      previous_sha: before,
+    };
+  }
+
+  // Readback, because an exit code proves a command ran and nothing else.
+  const after = installedToolkitSha({ toolkitRoot });
+  const want = short(expectedStagingSha);
+  if (want && after !== want) {
+    return {
+      ok: false, error: "install_readback_mismatch",
+      detail: `installed ${after || "unknown"} after installing ${CONVERGENCE_REF}, expected ${want}`,
+      previous_sha: before, installed_sha: after, output: raw.slice(0, 300),
+    };
+  }
+
+  const gw = observeGatewayExecution({ toolkitRoot });
+  return {
+    ok: true,
+    previous_sha: before,
+    installed_sha: after,
+    already_converged: before === after,
+    readback_verified: Boolean(want) && after === want,
+    rollback_target: before,
+    gateway_executing_sha: gw.executing_sha,
+    gateway_restart_required: gw.executing_sha !== after,
+  };
+}
