@@ -1,11 +1,14 @@
 {
   "trusted_host_action_id": "tha_f83e35e9076b4e",
-  "query_hash": "6b8dd09d848e3608d82fc80f36822a51da98f946a1feffd5d49d43b372cf5187",
+  "query_hash": "f7110a8e1315930c86e0d2cd2579a24d20b7b92434f03209627a96e6676535bb",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-04T15:02:24.676Z",
+    "census_run_at": "2026-09-04T15:05:27.447Z",
     "question_ids": [
-      "config_source"
+      "config_source",
+      "department",
+      "entry_points",
+      "stage_grain"
     ],
     "questions": {
       "config_source": {
@@ -13,15 +16,190 @@
         "row_count": null,
         "rows": [
           {
-            "org_id": "93667019-3b1a-4c9a-9c9f-6b7b0e6a4d33",
-            "departments_with_builder": 0,
-            "business_process_revisions": 0,
-            "configuration_publications": 0,
-            "business_process_drafts": 0
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "org_exists": true,
+            "departments_total": 5,
+            "departments_with_builder": 1,
+            "business_process_revisions": 22,
+            "configuration_publications": 22,
+            "business_process_drafts": 1
+          }
+        ]
+      },
+      "department": {
+        "question_id": "department",
+        "row_count": null,
+        "rows": [
+          {
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "department_name": "Enrollment",
+            "active_process_id": "42be9074-443f-4047-bece-d68cd1d22788",
+            "process_count": 1,
+            "latest_revision_number": 22
+          }
+        ]
+      },
+      "entry_points": {
+        "question_id": "entry_points",
+        "row_count": null,
+        "rows": [
+          {
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "process_key": "enrollment",
+            "by_intent": {
+              "create_lead": "lead",
+              "enrollment_start": "enrolling"
+            }
+          }
+        ]
+      },
+      "stage_grain": {
+        "question_id": "stage_grain",
+        "row_count": null,
+        "rows": [
+          {
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "process_key": "enrollment",
+            "process_is_active": "true",
+            "stage_key": "decision",
+            "is_active": "true",
+            "metadata_grain": "family",
+            "plan_journey_segment": "family",
+            "track_key": null,
+            "outcomes": [
+              "needs_follow_up",
+              "paths_chosen"
+            ],
+            "enrols_a_child": false,
+            "moves_to": [],
+            "exits_to": []
+          },
+          {
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "process_key": "enrollment",
+            "process_is_active": "true",
+            "stage_key": "enrolled",
+            "is_active": "true",
+            "metadata_grain": "child",
+            "plan_journey_segment": "child",
+            "track_key": null,
+            "outcomes": [
+              "acknowledged"
+            ],
+            "enrols_a_child": false,
+            "moves_to": [],
+            "exits_to": []
+          },
+          {
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "process_key": "enrollment",
+            "process_is_active": "true",
+            "stage_key": "enrolling",
+            "is_active": "true",
+            "metadata_grain": "child",
+            "plan_journey_segment": "child",
+            "track_key": null,
+            "outcomes": [
+              "enrollment_complete",
+              "family_withdrew",
+              "packet_pending"
+            ],
+            "enrols_a_child": true,
+            "moves_to": [
+              "enrolling_to_enrolled"
+            ],
+            "exits_to": [
+              "enrolled"
+            ]
+          },
+          {
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "process_key": "enrollment",
+            "process_is_active": "true",
+            "stage_key": "lead",
+            "is_active": "true",
+            "metadata_grain": "family",
+            "plan_journey_segment": "family",
+            "track_key": null,
+            "outcomes": [
+              "awaiting_response",
+              "contact_closed_lost",
+              "left_message",
+              "reached_qualified",
+              "tour_scheduled",
+              "unable_to_reach"
+            ],
+            "enrols_a_child": false,
+            "moves_to": [
+              "lead_to_tour"
+            ],
+            "exits_to": [
+              "tour"
+            ]
+          },
+          {
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "process_key": "enrollment",
+            "process_is_active": "true",
+            "stage_key": "tour",
+            "is_active": "true",
+            "metadata_grain": "family",
+            "plan_journey_segment": "family",
+            "track_key": null,
+            "outcomes": [
+              "outcome_1",
+              "outcome_10",
+              "outcome_11",
+              "outcome_2",
+              "outcome_3",
+              "outcome_4",
+              "outcome_5",
+              "outcome_6",
+              "outcome_7",
+              "outcome_8",
+              "outcome_9"
+            ],
+            "enrols_a_child": false,
+            "moves_to": [
+              "tour_transition_2"
+            ],
+            "exits_to": [
+              "decision"
+            ]
+          },
+          {
+            "department_id": "3933ac47-077a-4de8-aaac-8aed48d80413",
+            "process_key": "enrollment",
+            "process_is_active": "true",
+            "stage_key": "waitlist",
+            "is_active": "true",
+            "metadata_grain": "child",
+            "plan_journey_segment": "child",
+            "track_key": null,
+            "outcomes": [
+              "candidate_paused",
+              "no_response",
+              "spot_offered"
+            ],
+            "enrols_a_child": false,
+            "moves_to": [],
+            "exits_to": []
           }
         ]
       }
     },
-    "row_count": 1
+    "row_count": 9
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-04T15:05:26.790Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_21443d4ea313ea",
+    "authorization_id": "grnt_84a0526511964d37",
+    "query_hash": "f7110a8e1315930c86e0d2cd2579a24d20b7b92434f03209627a96e6676535bb",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
   }
 }
