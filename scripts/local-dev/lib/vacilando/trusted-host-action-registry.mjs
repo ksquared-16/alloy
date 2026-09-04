@@ -197,7 +197,17 @@ function defineDatabaseReadCensus() {
           actualHash: hash,
         };
       }
-      const target = inputs.databaseTarget || inputs.database_target || DEFAULT_TARGET;
+      // THE DATABASE IS NAMED, NEVER ASSUMED.
+      //
+      // This fell back to DEFAULT_TARGET, so a census that named no database
+      // still ran — against the deployed primary. Only one target is supported
+      // today, which is exactly why the default looked harmless: the moment a
+      // second one exists, silence would pick the privileged one. A privileged
+      // read must say what it is reading.
+      const target = inputs.databaseTarget || inputs.database_target;
+      if (!target) {
+        return { ok: false, code: "missing_database_target", detail: "databaseTarget required" };
+      }
       if (target !== DEFAULT_TARGET && target !== "alloy_deployed_primary") {
         return { ok: false, code: "wrong_database_target", detail: `Unsupported target: ${target}` };
       }

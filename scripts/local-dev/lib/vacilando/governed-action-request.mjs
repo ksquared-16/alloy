@@ -1088,9 +1088,28 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
   return event;
 }
 
-function artifactPathFrom(refs = []) {
+/**
+ * THE QUERY A CENSUS RUNS IS NEVER INFERRED.
+ *
+ * THE INCIDENT THIS CLOSES. This returned Q15_CENSUS_ARTIFACT when a request
+ * carried no artifact_refs, so a census filed WITHOUT naming a query silently
+ * became the Q15 authority census and ran it against the deployed primary. The
+ * substitution was then written into the request record, so the store showed a
+ * query the filer had never asked for. Observed for real: gar_a1d647be39e8b6
+ * was filed with no refs and executed q15-authority-census.json.
+ *
+ * A privileged read whose SUBJECT is guessed is not a governed action; it is an
+ * unreviewed one wearing a governed action's record. Absence now returns null,
+ * which validateInputs turns into `missing_query_artifact`, and the request
+ * fails closed before any database is touched. Every legitimate census in the
+ * store already names its own artifact, so nothing that was explicit changes.
+ *
+ * `fallback` exists for the two DISPLAY callers — a label and a filename in a
+ * summary — which want a readable string and can never cause execution.
+ */
+function artifactPathFrom(refs = [], { fallback = null } = {}) {
   const first = Array.isArray(refs) ? refs.find(Boolean) : refs;
-  return first ? String(first) : Q15_CENSUS_ARTIFACT;
+  return first ? String(first) : fallback;
 }
 
 /**
@@ -1136,7 +1155,7 @@ function identityFromInputs(input = {}) {
   const versions = Array.isArray(inputs.migrations)
     ? inputs.migrations.map((m) => m.version || m.prefix || m.path || "").join(",")
     : "";
-  return [pr, sha, versions].filter(Boolean).join(":") || artifactPathFrom(input.artifact_refs);
+  return [pr, sha, versions].filter(Boolean).join(":") || artifactPathFrom(input.artifact_refs, { fallback: "" });
 }
 
 function dedupeKey(input) {
@@ -2038,7 +2057,7 @@ export function governedActionSubjectKey(rec) {
     return `migration:${versions.join(",")}`;
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS) {
-    const artifact = artifactPathFrom(rec.artifact_refs) || "";
+    const artifact = artifactPathFrom(rec.artifact_refs, { fallback: "" }) || "";
     if (!rec.target) return null;
     return `census:${rec.target}:${artifact.split("/").pop()}`;
   }
@@ -2161,7 +2180,7 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
         rec.purpose,
         "",
         "Artifact:",
-        artifactPathFrom(rec.artifact_refs).split("/").pop(),
+        String(artifactPathFrom(rec.artifact_refs, { fallback: "" }) || "").split("/").pop(),
         "",
         "Data mode:",
         rec.requested_mode === "read_only" ? "Read-only" : rec.requested_mode,

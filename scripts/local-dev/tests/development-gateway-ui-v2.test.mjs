@@ -932,8 +932,8 @@ test("the badge counts exactly what the panel renders", () => {
   assert.equal(heading, "2", "panel heading");
   assert.equal(badge, "2", "global badge");
   const gwSrc = readFileSync(join(PUB, "gateway.js"), "utf8");
-  assert.match(gwSrc, /const needs = needsYouVm\(\)\.count;/,
-    "the nav badge must count the rendered set, not a second store");
+  assert.match(gwSrc, /const needs = needsYouCommitted\(\)\.count;/,
+    "the nav badge must count the committed set, not a second store");
 });
 
 test("an emptied canonical list is an answer, not a missing one", () => {
@@ -949,4 +949,93 @@ test("an emptied canonical list is an answer, not a missing one", () => {
   assert.equal(/G\.approvals && G\.approvals\.length\) \? G\.approvals/.test(gwSrc), false,
     "length must never stand in for loadedness");
   assert.match(gwSrc, /G\.approvalsLoaded = true;/, "the fetch must record that it answered");
+});
+
+/* =========================================================================
+ * 10. NEEDS YOU — ONE COMMITTED REVISION
+ * ====================================================================== */
+
+/** Every number a reader can see, for one committed revision. */
+function needsYouSurfaces(vm) {
+  const nav = renderPrimaryNav("home", { needsYou: vm.count });
+  const mobile = renderMobileNav("home", { needsYou: vm.count });
+  const control = needsYouControl(vm.count);
+  const panel = needsYouPanel(vm);
+  const num = (html, re) => Number(html.match(re)?.[1] ?? 0);
+  return {
+    navBadge: num(nav, /vnav-badge[^>]*>(\d+)</),
+    mobileBadge: num(mobile, /vtab-badge">(\d+)</),
+    control: num(control, /vneeds-ctl-badge">(\d+)</),
+    heading: num(panel, /vneeds-panel-count">(\d+)</),
+    rows: (panel.match(/<li class="vneeds-row /g) || []).length,
+  };
+}
+
+const approval = (id, at) => ({
+  request_id: id, lane_id: "l1", action_key: "repository.push",
+  status: "awaiting_operator", requested_at: new Date(at).toISOString(),
+  inputs: { branch: `feature/${id}` },
+});
+
+test("badge, control, heading and rows never diverge across a transition", () => {
+  // THE DEFECT THIS ENCODES. Three surfaces each recomputed the set at three
+  // different moments — the nav badge in paint(), the control and panel in
+  // paintNeedsYou(), and the panel AGAIN when the sheet was opened. Measured
+  // live, mid-transition: 1/1/0/0 on Lanes and 0/0/1/1 on Home. Steady state
+  // always converged, which is what made it easy to miss and worthless as a
+  // guarantee. Every step below is ONE committed revision.
+  const now = Date.now();
+  const steps = [
+    ["loaded empty", [], 0],
+    ["one arrives", [approval("gar_a", now - 60_000)], 1],
+    ["a second arrives", [approval("gar_a", now - 60_000), approval("gar_b", now - 30_000)], 2],
+    ["one resolves", [approval("gar_b", now - 30_000)], 1],
+    ["the last resolves", [], 0],
+    ["reload, canonical set empty", [], 0],
+  ];
+  for (const [label, approvals, expected] of steps) {
+    const vm = buildNeedsYou({ lanes: [], approvals, nowMs: now });
+    assert.equal(vm.count, vm.items.length, `${label}: count IS the collection length`);
+    assert.equal(vm.count, expected, `${label}: expected ${expected}`);
+    const s = needsYouSurfaces(vm);
+    assert.deepEqual(
+      [s.navBadge, s.mobileBadge, s.control, s.heading, s.rows],
+      [expected, expected, expected, expected, expected],
+      `${label}: every surface must read ${expected}, got ${JSON.stringify(s)}`,
+    );
+  }
+});
+
+test("a terminal action cannot re-enter a later revision", () => {
+  const now = Date.now();
+  // The same request, decided. It is gone from the canonical set, and the lane
+  // still carries its snapshot — the shape that used to resurrect it.
+  const lane = {
+    lane_id: "l1", label: "UI-Vac",
+    execution_run: { state: "EXECUTING", governed_action: { request_id: "gar_a", status: "failed", action_key: "repository.push" } },
+  };
+  const state = () => ({ key: "executing", group: "active", live: true });
+  for (const status of ["failed", "complete", "denied", "cancelled", "expired"]) {
+    lane.execution_run.governed_action.status = status;
+    const vm = buildNeedsYou({ lanes: [lane], approvals: [], laneState: state, nowMs: now });
+    assert.equal(vm.count, 0, `${status} must not re-enter`);
+    assert.deepEqual(needsYouSurfaces(vm), { navBadge: 0, mobileBadge: 0, control: 0, heading: 0, rows: 0 });
+  }
+});
+
+test("the surfaces read one committed revision and never recompute it", () => {
+  const gwSrc = readFileSync(join(PUB, "gateway.js"), "utf8");
+  // Exactly one place computes the set.
+  const calls = [...gwSrc.matchAll(/^\s*(?:const \w+ = )?needsYouVm\(/gm)];
+  assert.equal(calls.length, 1, "the set is computed in exactly one place");
+  assert.match(gwSrc, /function commitNeedsYou\([\s\S]{0,40}?\{\n  const vm = needsYouVm\(nowMs\);/,
+    "and that place is commitNeedsYou");
+  assert.match(gwSrc, /function commitNeedsYou\(/);
+  assert.match(gwSrc, /count: items\.length,/, "count is the collection length, never a second store");
+  // Every consumer reads the committed object.
+  assert.match(gwSrc, /const needs = needsYouCommitted\(\)\.count;/, "nav badge");
+  assert.match(gwSrc, /const vm = needsYouCommitted\(\);/, "control and panel");
+  assert.match(gwSrc, /View\.needsYouPanel\(needsYouCommitted\(\)\)/, "opening the sheet");
+  // And a change in governed state commits once, then paints together.
+  assert.match(gwSrc, /commitNeedsYou\(\);\n  paintNeedsYou\(\);\n  paintNav\(\);/);
 });
