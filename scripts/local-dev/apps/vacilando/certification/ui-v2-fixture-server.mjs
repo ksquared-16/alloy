@@ -267,11 +267,19 @@ const USAGE = {
   cost_note: "Cost is authoritative only when the provider reports it.",
 };
 
+// MORE THAN ONE INTERRUPTION AT A TIME IS THE NORMAL CASE, and a one-request
+// fixture certified a list that never had to group, sort or fit. Two lanes, two
+// different capabilities, two ages.
 const APPROVALS = [{
   request_id: "ga_census01", lane_id: "lane_surfaces000001",
   action_key: "database.readonly_census", title: "Read-only database census",
   status: "awaiting_operator", requested_at: T(6),
   reason_worker_cannot_execute: "The lane cannot reach production credentials; the Director must run it.",
+}, {
+  request_id: "ga_merge01", lane_id: "lane_runtimeperf001",
+  action_key: "repository.merge_pull_request", title: "Promotion into staging",
+  status: "awaiting_operator", requested_at: T(52),
+  reason_worker_cannot_execute: "Merging is Director-owned; this lane holds no credentials.",
 }];
 
 const OUTPUT = {

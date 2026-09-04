@@ -39,23 +39,36 @@ on desktop and mobile; the Home command centre; the V2 lane (header, tabs,
 conversation thread, composer); four-line message previews with per-message
 Show more; the operator state vocabulary (WORKING / NEEDS YOU / READY / FAILED)
 from one resolver; provider progress rendered inside the lane's status line; the
-Needs You tray at the human interaction boundary; the Lane Inspector with
-progressive disclosure; the Activity feed and its filters; the System surface;
-the provider progress contract end to end; the data-maturity layer and the
-governed placeholder mechanism; the V2 visual system.
+Lane Inspector with progressive disclosure; the Activity feed and its filters;
+the System surface; the provider progress contract end to end; the data-maturity
+layer and the governed placeholder mechanism; the V2 visual system.
+
+**SHIPPED — the final experience convergence pass** — mobile Compose Mode, a
+distinct responsive state entered on focus of the instruction field; one-tap
+Copy on every message, taking the whole underlying output while it is collapsed;
+Needs You as a global interruption centre in the shell, with the lane keeping
+only a compact tray when it is itself blocked; Home as a command centre and
+Lanes as the directory; origin-aware Back and breadcrumbs; lane memory
+attributed by process ancestry, with per-lane CPU declared absent rather than
+estimated.
 
 **REMOVED** — the standalone Current Work card (it duplicated the operator's own
 instruction, already shown as the first YOU message); the standalone progress
-bar and its caption; `SUSPENDED` as an operator-facing word.
+bar and its caption; `SUSPENDED` as an operator-facing word; the Needs You card
+on Home and the permanent governed-approvals bar above every route (one decision
+was rendering in three places at once); "Back = Lanes" hard-coded into six
+templates.
 
 **REPRESENTED BUT NOT WIRED** — swap trajectory; disk on Home before the probe
 is called; stale/failed process counts; health history; lane provider usage
 aggregation; cost; runtime and context aggregates; lane-scoped Activity; the
-Files, Commits and Runs tabs.
+Files, Commits and Runs tabs; lane PEAK memory (`workload-observation` records
+it per lane for sampled validation workloads only).
 
 **REQUIRES INSTRUMENTATION** — autonomous completion %, human interventions,
 retry/rework rate, cache tokens, tests run/passed, certifications, historical
-usage windows.
+usage windows; per-lane CPU (`ps` reports a lifetime average, not current use —
+see [DATA-CONTRACT.md](DATA-CONTRACT.md#lane--resources)).
 
 **DEFERRED** — ETA (explicitly refused until a real estimator exists), progress
 milestones as activity events, effectiveness analytics.

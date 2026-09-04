@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T10:01:12.284Z",
+  "captured_at": "2026-09-04T10:47:18.865Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -18,11 +18,16 @@
       "height": 380
     }
   },
-  "passed": 117,
+  "passed": 185,
   "failed": 0,
   "results": [
     {
-      "name": "desktop Home renders the five blocks",
+      "name": "desktop Home renders the five command-centre blocks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home renders no Needs You card",
       "ok": true,
       "detail": ""
     },
@@ -32,9 +37,24 @@
       "detail": ""
     },
     {
-      "name": "Needs You lists the genuine blocker",
+      "name": "the interruption centre lists every genuine blocker",
       "ok": true,
-      "detail": "Read-only database census"
+      "detail": "Runtime Performance: Promotion into staging | Surfaces: Read-only database census"
+    },
+    {
+      "name": "each request is identified by its lane",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "each request states the ask, one line of why, and its age",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the interruption centre carries the count",
+      "ok": true,
+      "detail": ""
     },
     {
       "name": "Home shows no invented effectiveness number",
@@ -129,7 +149,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 2:42 AM Stop lane RUNTIME Executing"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 3:28 AM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
@@ -289,7 +309,7 @@
     {
       "name": "mobile 390 conversation begins in the first screen",
       "ok": true,
-      "detail": "first message at 157 of 844"
+      "detail": "first message at 116 of 844"
     },
     {
       "name": "mobile 390 authorship is visually distinguishable",
@@ -499,7 +519,7 @@
     {
       "name": "mobile 320 conversation begins in the first screen",
       "ok": true,
-      "detail": "first message at -180 of 568"
+      "detail": "first message at -221 of 568"
     },
     {
       "name": "mobile 320 authorship is visually distinguishable",
@@ -589,7 +609,7 @@
     {
       "name": "the composer stays reachable with the keyboard open",
       "ok": true,
-      "detail": "{\"cBottom\":365,\"sBottom\":346,\"vh\":380}"
+      "detail": "{\"cBottom\":366,\"sBottom\":353,\"vh\":380}"
     },
     {
       "name": "no sideways scroll with the keyboard open",
@@ -603,6 +623,326 @@
     },
     {
       "name": "keyboard-open interaction zone bounds itself instead of pushing Send off",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 focusing the field enters compose mode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 the field opens at a third of the writing area",
+      "ok": true,
+      "detail": "133px of 380 = 35%"
+    },
+    {
+      "name": "compose 390 the field grows toward half the writing area",
+      "ok": true,
+      "detail": "171px = 45%"
+    },
+    {
+      "name": "compose 390 past its ceiling the field scrolls itself",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 the conversation keeps a readable tail",
+      "ok": true,
+      "detail": "65px, 5 messages"
+    },
+    {
+      "name": "compose 390 the field owns its own line, not a slot beside Send",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 Send and attach stay immediately reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 the provider stays reachable while writing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 orientation chrome stands down",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 no sideways scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390 blurring the field returns the lane",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 focusing the field enters compose mode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 the field opens at a third of the writing area",
+      "ok": true,
+      "detail": "105px of 300 = 35%"
+    },
+    {
+      "name": "compose 320 the field grows toward half the writing area",
+      "ok": true,
+      "detail": "124px = 41%"
+    },
+    {
+      "name": "compose 320 past its ceiling the field scrolls itself",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 the conversation keeps a readable tail",
+      "ok": true,
+      "detail": "40px, 5 messages"
+    },
+    {
+      "name": "compose 320 the field owns its own line, not a slot beside Send",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 Send and attach stay immediately reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 the provider stays reachable while writing",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 orientation chrome stands down",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 no sideways scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320 blurring the field returns the lane",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy is visible on provider output without opening anything",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the report under test is genuinely clamped",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy takes the WHOLE message while it is collapsed",
+      "ok": true,
+      "detail": "1418 characters"
+    },
+    {
+      "name": "Copy preserves the report's paragraphs",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy takes no UI metadata",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy confirms itself in place",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy does not expand the message to read it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy needs no Show more first",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop /home renders no permanent Needs You content",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop /home carries exactly one global Needs You control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop /lanes renders no permanent Needs You content",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop /lanes carries exactly one global Needs You control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop the Needs You panel opens from the shell",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop opening it is not navigation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop each request names its lane, the ask, and its age",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop the governed payload stays behind Review",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 /home renders no permanent Needs You content",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 /home carries exactly one global Needs You control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 /lanes renders no permanent Needs You content",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 /lanes carries exactly one global Needs You control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 the Needs You panel opens from the shell",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 opening it is not navigation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 each request names its lane, the ask, and its age",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 the governed payload stays behind Review",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home shows a bounded operational subset, not the directory",
+      "ok": true,
+      "detail": "Home 3 of 10 shown on Lanes"
+    },
+    {
+      "name": "Home names that subset for what it is",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home offers the directory rather than reproducing it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home keeps its command-centre blocks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop a lane opened from /home returns to /home",
+      "ok": true,
+      "detail": "back=\"#/home\""
+    },
+    {
+      "name": "desktop the breadcrumb names the origin, not the directory",
+      "ok": true,
+      "detail": "Home"
+    },
+    {
+      "name": "desktop a lane opened from /lanes returns to /lanes",
+      "ok": true,
+      "detail": "back=\"#/lanes\""
+    },
+    {
+      "name": "desktop the breadcrumb names the origin, not the directory",
+      "ok": true,
+      "detail": "Lanes"
+    },
+    {
+      "name": "desktop a deep-linked lane falls back to the directory",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile390 a lane opened from /home returns to /home",
+      "ok": true,
+      "detail": "back=\"#/home\""
+    },
+    {
+      "name": "mobile390 the breadcrumb names the origin, not the directory",
+      "ok": true,
+      "detail": "Home"
+    },
+    {
+      "name": "mobile390 a lane opened from /lanes returns to /lanes",
+      "ok": true,
+      "detail": "back=\"#/lanes\""
+    },
+    {
+      "name": "mobile390 the breadcrumb names the origin, not the directory",
+      "ok": true,
+      "detail": "Lanes"
+    },
+    {
+      "name": "mobile390 a deep-linked lane falls back to the directory",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the lane reports the memory its own process tree holds",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the lane says how that was attributed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "CPU is declared absent, not estimated",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "peak memory names its unwired source",
       "ok": true,
       "detail": ""
     }

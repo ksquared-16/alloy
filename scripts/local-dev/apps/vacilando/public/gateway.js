@@ -1050,6 +1050,32 @@ function autosizeInstruction(ta) {
   el.style.height = `${Math.max(floor, Math.min(el.scrollHeight, cap))}px`;
   const form = document.querySelector("[data-gw-composer]");
   const stage = document.querySelector("[data-gw-stage]");
+  // A PROPORTION IS AN INTENTION; THE STAGE IS THE CONSTRAINT.
+  //
+  // 45% of the writing area is the right SHAPE, and on a 320x300 viewport it is
+  // still too much: the head, the thread's floor and the composer's own controls
+  // do not shrink with it, so the interaction zone ran 27px past the bottom of
+  // the screen and took Send with it. Measured after layout rather than
+  // predicted, because the chrome around the field is what actually varies.
+  if (document.documentElement.hasAttribute("data-gw-compose") && stage) {
+    const zone = document.querySelector(".vlane-interaction");
+    const head = document.querySelector(".vlane-head");
+    const MIN_THREAD_PX = 40;
+    if (zone) {
+      // Two constraints, and the tighter one governs: the zone must end on the
+      // screen (the visual viewport, which is what the keyboard shrinks), and
+      // it must leave the thread its floor. Bounding only by the stage left the
+      // zone 8px past the bottom of a 300px screen, because the stage's own
+      // padding and safe-area inset sit outside its client box.
+      const screenBottom = Math.round(window.visualViewport?.height || window.innerHeight);
+      const offScreen = Math.round(zone.getBoundingClientRect().bottom) - screenBottom;
+      const room = stage.clientHeight - (head?.offsetHeight || 0) - MIN_THREAD_PX;
+      const over = Math.max(offScreen, zone.offsetHeight - room);
+      if (over > 0) {
+        el.style.height = `${Math.max(72, el.offsetHeight - over)}px`;
+      }
+    }
+  }
   if (form && stage) stage.style.setProperty("--gw-composer-h", `${form.offsetHeight}px`);
 }
 

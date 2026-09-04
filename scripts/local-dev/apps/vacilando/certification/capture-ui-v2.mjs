@@ -107,13 +107,40 @@ try {
   }
 
   await open(desk, "/home");
-  check("desktop Home renders the five blocks",
-    (await desk.locator(".vcard-needs, .vcard-health, .vcard-lanes, .vcard-usage, .vcard-effect, .vcard-activity").count()) >= 6);
+  // FIVE BLOCKS, and Needs You is deliberately not one of them any more: an
+  // interruption is global state that lives in the shell, not Home's content.
+  check("desktop Home renders the five command-centre blocks",
+    (await desk.locator(".vcard-health, .vcard-lanes, .vcard-usage, .vcard-effect, .vcard-activity").count()) >= 5);
+  check("desktop Home renders no Needs You card",
+    (await desk.locator(".vcard-needs").count()) === 0);
   check("desktop Home uses the width in two columns",
     (await desk.evaluate(() => getComputedStyle(document.querySelector(".vhome-grid")).gridTemplateColumns.split(" ").length)) === 2);
-  check("Needs You lists the genuine blocker",
-    (await desk.locator(".vneeds-row").count()) === 1,
-    await desk.locator(".vneeds-row-request").first().innerText().catch(() => ""));
+  // The genuine blocker is still listed — in the global interruption centre,
+  // one click from anywhere, rather than as the top of this page.
+  await desk.locator("[data-v-needs-open]:visible").first().click();
+  await desk.waitForTimeout(250);
+  const centre = await desk.evaluate(() => {
+    const rows = [...document.querySelectorAll("#needs-panel .vneeds-row")];
+    return rows.map((r) => ({
+      lane: r.querySelector(".vneeds-row-lane")?.textContent.trim(),
+      request: r.querySelector(".vneeds-row-request")?.textContent.trim(),
+      why: r.querySelector(".vneeds-row-why")?.textContent.trim() || null,
+      age: r.querySelector(".vneeds-row-age")?.textContent.trim(),
+    }));
+  });
+  check("the interruption centre lists every genuine blocker",
+    centre.length === 2, centre.map((c) => `${c.lane}: ${c.request}`).join(" | "));
+  // GROUPED AND IDENTIFIED BY LANE. With one request a list proves nothing
+  // about which lane is asking; with two, the lane is the first thing each row
+  // has to say.
+  check("each request is identified by its lane",
+    centre.every((c) => c.lane) && new Set(centre.map((c) => c.lane)).size === 2);
+  check("each request states the ask, one line of why, and its age",
+    centre.every((c) => c.request && c.why && c.age));
+  check("the interruption centre carries the count",
+    (await desk.locator("#needs-panel .vneeds-panel-count").innerText()) === "2");
+  await desk.keyboard.press("Escape");
+  await desk.waitForTimeout(200);
   check("Home shows no invented effectiveness number",
     await desk.evaluate(() => [...document.querySelectorAll(".vcard-effect .vmetric")]
       .every((el) => el.classList.contains("is-unavailable"))));
@@ -277,10 +304,14 @@ try {
       tabs.every((t) => t.h >= 44), JSON.stringify(tabs.map((t) => t.h)));
     check(`mobile ${label} stacks Home in one column`,
       (await m.evaluate(() => getComputedStyle(document.querySelector(".vhome-grid")).gridTemplateColumns.split(" ").length)) === 1);
+    // The hierarchy is the same on both form factors; what leads it changed.
+    // Home opens on what is RUNNING, because what needs you is now in the shell
+    // on every route rather than at the top of one page.
     check(`mobile ${label} keeps the same Home hierarchy`,
       await m.evaluate(() => {
         const order = [...document.querySelectorAll(".vcard")].map((c) => c.className);
-        return order.findIndex((c) => c.includes("vcard-needs")) === 0;
+        return order.findIndex((c) => c.includes("vcard-lanes")) === 0
+          && !order.some((c) => c.includes("vcard-needs"));
       }));
 
     // ---- Home and Lanes as product surfaces ----
@@ -576,6 +607,251 @@ try {
       const cr = c.getBoundingClientRect();
       return zr.bottom <= window.innerHeight + 2 && cr.bottom <= window.innerHeight + 2;
     }));
+
+  /* ======================= COMPOSE MODE =======================
+   *
+   * The keyboard checks above prove the composer is REACHABLE. They passed
+   * throughout the period the operator was telling us that writing on a phone
+   * felt like typing through a letterbox — because reachable is not usable.
+   * These measure the writing surface itself.
+   */
+  for (const [label, vp, kbvp] of [
+    ["390", VIEWPORTS.mobile, VIEWPORTS.keyboard],
+    ["320", VIEWPORTS.narrow, { width: 320, height: 300 }],
+  ]) {
+    const cm = await browser.newPage({ viewport: vp, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    await open(cm, `/lanes/${LANE}`);
+    await cm.setViewportSize(kbvp);
+    await cm.waitForTimeout(500);
+    await cm.locator("#gw-instruction").click();
+    await cm.waitForTimeout(350);
+    await cm.screenshot({ path: join(OUT, `17-mobile${label}-compose.png`), fullPage: false });
+
+    const idle = await cm.evaluate(() => {
+      const ta = document.querySelector("#gw-instruction");
+      const vh = window.visualViewport?.height || window.innerHeight;
+      return { on: document.documentElement.hasAttribute("data-gw-compose"), h: ta.getBoundingClientRect().height, vh };
+    });
+    check(`compose ${label} focusing the field enters compose mode`, idle.on === true);
+    // 35-45% of the ABOVE-KEYBOARD area. Asserted as a band, not a pixel count,
+    // because the point is the proportion of what the keyboard left behind.
+    const idlePct = idle.h / idle.vh * 100;
+    check(`compose ${label} the field opens at a third of the writing area`,
+      idlePct >= 33 && idlePct <= 47, `${Math.round(idle.h)}px of ${idle.vh} = ${idlePct.toFixed(0)}%`);
+
+    await cm.locator("#gw-instruction").fill(
+      "Investigate the resource attribution path end to end.\n\n".repeat(8));
+    await cm.waitForTimeout(300);
+    await cm.screenshot({ path: join(OUT, `18-mobile${label}-compose-long.png`), fullPage: false });
+    const full = await cm.evaluate(() => {
+      const ta = document.querySelector("#gw-instruction");
+      const body = document.querySelector(".vlane-body");
+      const send = document.querySelector("[data-gw-send]");
+      const att = document.querySelector(".gw-attach");
+      const prov = document.querySelector(".gw-provider");
+      const vis = (el) => Boolean(el) && el.getBoundingClientRect().height > 0;
+      const vh = window.visualViewport?.height || window.innerHeight;
+      return {
+        h: ta.getBoundingClientRect().height, vh,
+        scrolls: ta.scrollHeight > ta.clientHeight + 1,
+        thread: body ? body.getBoundingClientRect().height : 0,
+        sendBottom: send ? Math.round(send.getBoundingClientRect().bottom) : null,
+        send: vis(send), attach: vis(att), provider: vis(prov),
+        column: getComputedStyle(document.querySelector(".gw-composer-box")).flexDirection,
+        messages: [...document.querySelectorAll(".vmsg")].filter((n) => n.getBoundingClientRect().height > 0).length,
+      };
+    });
+    const fullPct = full.h / full.vh * 100;
+    check(`compose ${label} the field grows toward half the writing area`,
+      fullPct >= 40 && fullPct <= 50, `${Math.round(full.h)}px = ${fullPct.toFixed(0)}%`);
+    check(`compose ${label} past its ceiling the field scrolls itself`, full.scrolls === true);
+    // A composer that ate the conversation would trade one defect for another.
+    check(`compose ${label} the conversation keeps a readable tail`,
+      full.thread >= 40 && full.messages > 0, `${Math.round(full.thread)}px, ${full.messages} messages`);
+    check(`compose ${label} the field owns its own line, not a slot beside Send`,
+      full.column === "column");
+    check(`compose ${label} Send and attach stay immediately reachable`,
+      full.send && full.attach && full.sendBottom <= full.vh + 2);
+    // Reachable but secondary — the instruction asked for exactly this, and
+    // the previous behaviour hid it entirely.
+    check(`compose ${label} the provider stays reachable while writing`, full.provider === true);
+    check(`compose ${label} orientation chrome stands down`,
+      await cm.evaluate(() => {
+        const gone = (s) => { const el = document.querySelector(s); return !el || getComputedStyle(el).display === "none"; };
+        return gone(".vtabs-lane") && gone(".vtabs") && gone(".vlane-head-meta") && gone(".vlane-head-acts");
+      }));
+    const cmOverflow = await overflow(cm);
+    check(`compose ${label} no sideways scroll`, cmOverflow.docScroll <= cmOverflow.vw + 1);
+
+    // Leaving the mode restores the lane.
+    await cm.evaluate(() => document.querySelector("#gw-instruction").blur());
+    await cm.waitForTimeout(300);
+    check(`compose ${label} blurring the field returns the lane`,
+      await cm.evaluate(() => !document.documentElement.hasAttribute("data-gw-compose")));
+    await cm.close();
+  }
+
+  /* ======================= COPY ======================= */
+  {
+    const cp = await browser.newPage({ viewport: VIEWPORTS.desktop, deviceScaleFactor: 2 });
+    await cp.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    // The long final report — the case that makes Copy worth having, and the
+    // one where scraping the rendered element would copy a four-line excerpt.
+    await open(cp, "/lanes/lane_payments00001");
+    const before = await cp.evaluate(() => {
+      const li = document.querySelector(".vmsg-provider");
+      const btn = li?.querySelector("[data-v-msg-copy]");
+      return {
+        clamped: li?.classList.contains("is-clampable") && !li.classList.contains("is-expanded"),
+        visible: Boolean(btn) && btn.getBoundingClientRect().height > 0,
+        inOverflow: Boolean(btn?.closest("details, [hidden]")),
+        len: btn?.getAttribute("data-v-copy-text")?.length || 0,
+      };
+    });
+    check("Copy is visible on provider output without opening anything",
+      before.visible && !before.inOverflow);
+    check("the report under test is genuinely clamped", before.clamped === true);
+    await cp.locator(".vmsg-provider [data-v-msg-copy]").first().click();
+    await cp.waitForTimeout(250);
+    const copied = await cp.evaluate(async () => ({
+      text: await navigator.clipboard.readText(),
+      label: document.querySelector(".vmsg-provider [data-v-msg-copy] .vmsg-copy-label")?.textContent,
+      stillCollapsed: !document.querySelector(".vmsg-provider").classList.contains("is-expanded"),
+    }));
+    check("Copy takes the WHOLE message while it is collapsed",
+      copied.text.length === before.len && copied.text.length > 1000,
+      `${copied.text.length} characters`);
+    check("Copy preserves the report's paragraphs", copied.text.split("\n\n").length >= 4);
+    // The byline and the run's own labels are chrome, not what the provider said.
+    check("Copy takes no UI metadata",
+      !/^CLAUDE/i.test(copied.text) && !/Final report/.test(copied.text));
+    check("Copy confirms itself in place", copied.label === "Copied");
+    check("Copy does not expand the message to read it", copied.stillCollapsed === true);
+    check("Copy needs no Show more first", before.clamped && copied.text.length > 1000);
+    await cp.screenshot({ path: join(OUT, "19-desktop-copy.png"), fullPage: false });
+    await cp.close();
+  }
+
+  /* =============== NEEDS YOU — GLOBAL INTERRUPT STATE =============== */
+  for (const [label, vp, mobile] of [
+    ["desktop", VIEWPORTS.desktop, false],
+    ["mobile390", VIEWPORTS.mobile, true],
+  ]) {
+    const ny = await browser.newPage({ viewport: vp, deviceScaleFactor: 2, isMobile: mobile, hasTouch: mobile });
+    for (const route of ["/home", "/lanes"]) {
+      await open(ny, route);
+      const r = await ny.evaluate(() => ({
+        card: Boolean(document.querySelector(".vcard-needs")),
+        bar: (() => { const b = document.getElementById("approvals-bar"); return Boolean(b) && !b.hidden && b.innerHTML.trim().length > 0; })(),
+        controls: [...document.querySelectorAll("[data-v-needs-open]")].filter((b) => b.getBoundingClientRect().height > 0).length,
+      }));
+      check(`${label} ${route} renders no permanent Needs You content`, !r.card && !r.bar);
+      check(`${label} ${route} carries exactly one global Needs You control`, r.controls === 1);
+    }
+    await open(ny, "/home");
+    await ny.locator("[data-v-needs-open]:visible").first().click();
+    await ny.waitForTimeout(300);
+    await ny.screenshot({ path: join(OUT, `20-${label}-needs-you.png`), fullPage: false });
+    const panel = await ny.evaluate(() => {
+      const p = document.getElementById("needs-panel");
+      const row = p?.querySelector(".vneeds-row");
+      return {
+        open: Boolean(p) && !p.hidden,
+        rows: p?.querySelectorAll(".vneeds-row").length || 0,
+        lane: Boolean(row?.querySelector(".vneeds-row-lane")?.textContent.trim()),
+        request: Boolean(row?.querySelector(".vneeds-row-request")?.textContent.trim()),
+        age: Boolean(row?.querySelector(".vneeds-row-age")?.textContent.trim()),
+        review: Boolean(row?.querySelector("[data-v-needs-review-link]")),
+        route: location.hash,
+        // The full governed proposal belongs behind Review, not in this list.
+        payload: /content_fingerprint|Approve|Deny/.test(p?.textContent || ""),
+      };
+    });
+    check(`${label} the Needs You panel opens from the shell`, panel.open === true);
+    check(`${label} opening it is not navigation`, panel.route === "#/home");
+    check(`${label} each request names its lane, the ask, and its age`,
+      panel.rows > 0 && panel.lane && panel.request && panel.age && panel.review);
+    check(`${label} the governed payload stays behind Review`, panel.payload === false);
+    await ny.close();
+  }
+
+  /* ============ HOME IS A COMMAND CENTRE, LANES IS A DIRECTORY ============ */
+  {
+    const hv = await browser.newPage({ viewport: VIEWPORTS.desktop, deviceScaleFactor: 2 });
+    await open(hv, "/home");
+    const home = await hv.evaluate(() => ({
+      title: document.querySelector(".vcard-lanes .vcard-title")?.textContent.trim(),
+      rows: document.querySelectorAll(".vcard-lanes .vlane").length,
+      viewAll: Boolean(document.querySelector('.vcard-lanes a[href="#/lanes"]')),
+      health: Boolean(document.querySelector(".vcard-health")),
+      usage: Boolean(document.querySelector(".vcard-usage")),
+      activity: Boolean(document.querySelector(".vcard-activity")),
+    }));
+    await open(hv, "/lanes");
+    const dir = await hv.evaluate(() => document.querySelectorAll("[data-gw-lane]").length);
+    check("Home shows a bounded operational subset, not the directory",
+      home.rows > 0 && home.rows < dir, `Home ${home.rows} of ${dir} shown on Lanes`);
+    check("Home names that subset for what it is", home.title === "Active lanes");
+    check("Home offers the directory rather than reproducing it", home.viewAll === true);
+    check("Home keeps its command-centre blocks", home.health && home.usage && home.activity);
+    await hv.close();
+  }
+
+  /* ================= BACK PRESERVES THE ENTRY ORIGIN ================= */
+  for (const [label, vp, mobile] of [
+    ["desktop", VIEWPORTS.desktop, false],
+    ["mobile390", VIEWPORTS.mobile, true],
+  ]) {
+    const nav = await browser.newPage({ viewport: vp, deviceScaleFactor: 2, isMobile: mobile, hasTouch: mobile });
+    for (const origin of ["/home", "/lanes"]) {
+      await open(nav, origin);
+      const entry = nav.locator(`[data-gw-lane="${LANE}"]:visible`).first();
+      if (await entry.count() === 0) continue;
+      await entry.click();
+      await nav.waitForTimeout(600);
+      const back = await nav.evaluate(() => ({
+        href: document.querySelector("[data-gw-back]")?.getAttribute("href"),
+        crumb: document.querySelector(".vlane-crumb a")?.textContent.trim(),
+      }));
+      check(`${label} a lane opened from ${origin} returns to ${origin}`,
+        back.href === `#${origin}`, `back="${back.href}"`);
+      check(`${label} the breadcrumb names the origin, not the directory`,
+        back.crumb === (origin === "/home" ? "Home" : "Lanes"), back.crumb);
+    }
+    // A deep link has no journey to return to.
+    await nav.goto(`${BASE}/#/lanes/${LANE}`, { waitUntil: "domcontentloaded" });
+    await nav.waitForTimeout(700);
+    check(`${label} a deep-linked lane falls back to the directory`,
+      await nav.evaluate(() => document.querySelector("[data-gw-back]")?.getAttribute("href") === "#/lanes"));
+    await nav.close();
+  }
+
+  /* ============ LANE RESOURCES — MEASURED, OR SAID TO BE ABSENT ============ */
+  {
+    const rs = await browser.newPage({ viewport: VIEWPORTS.desktop, deviceScaleFactor: 2 });
+    await open(rs, `/lanes/${LANE}`);
+    const res = await rs.evaluate(() => {
+      const sec = document.querySelector('[data-v-inspector="resources"]');
+      if (!sec) return null;
+      sec.open = true;
+      const text = sec.textContent.replace(/\s+/g, " ");
+      return {
+        memory: /Memory 1\.7 GB/.test(text),
+        cpuAbsent: /CPU Not sampled/.test(text),
+        peakAbsent: /Peak memory Not projected yet/.test(text),
+        ancestry: /ancestry/.test(text),
+        // A number for CPU would be the whole failure.
+        cpuNumber: /CPU \d+ ?%/.test(text),
+      };
+    });
+    check("the lane reports the memory its own process tree holds", res?.memory === true);
+    check("the lane says how that was attributed", res?.ancestry === true);
+    check("CPU is declared absent, not estimated", res?.cpuAbsent === true && res?.cpuNumber === false);
+    check("peak memory names its unwired source", res?.peakAbsent === true);
+    await rs.screenshot({ path: join(OUT, "21-desktop-lane-resources.png"), fullPage: false });
+    await rs.close();
+  }
+
   await kb.close();
 } finally {
   await browser.close();

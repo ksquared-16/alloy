@@ -28,6 +28,7 @@ import {
   buildActivityViewModel,
   buildEffectivenessModel,
   buildHomeViewModel,
+  buildLaneResources,
   buildNeedsYou,
   buildSystemHealth,
   buildSystemViewModel,
@@ -37,7 +38,12 @@ import {
   healthDot,
   laneProgress,
   metric,
+  laneReturnTarget,
+  messageRow,
+  needsYouControl,
+  needsYouPanel,
   needsYouTray,
+  operationalLanes,
   progress as renderProgress,
   readPlaceholderMode,
   renderActivity,
@@ -680,4 +686,101 @@ test("health and state have exactly one colour vocabulary", () => {
   const pages = kitSrc.slice(kitSrc.indexOf("export function renderHome"));
   assert.equal(/style="[^"]*(#[0-9a-f]{3,6}|rgb\()/.test(pages), false,
     "no page function may inline a colour");
+});
+
+/* =========================================================================
+ * 9. THE FINAL CONVERGENCE PASS
+ * ====================================================================== */
+
+test("the global control is silent when nothing is pending", () => {
+  const quiet = needsYouControl(0);
+  assert.equal(quiet.includes("vneeds-ctl-badge"), false, "no badge with nothing to say");
+  assert.equal(quiet.includes("has-items"), false, "and no attention colour");
+  const loud = needsYouControl(3);
+  assert.match(loud, /vneeds-ctl-badge">3</);
+  assert.match(loud, /has-items/);
+});
+
+test("the interruption centre says so when nothing needs you", () => {
+  const empty = needsYouPanel({ items: [] });
+  assert.match(empty, /Nothing needs you/);
+  assert.equal(empty.includes("vneeds-row"), false);
+});
+
+test("the interruption centre summarises; it does not render the proposal", () => {
+  const html = needsYouPanel({ items: [{
+    lane_id: "l1", lane_label: "Financials", request: "Executable transport required",
+    detail: "The lane holds no credentials.", at_ms: Date.now() - 60_000,
+    href: "#/lanes/l1", severity: "authorize",
+  }] });
+  assert.match(html, /Financials/);
+  assert.match(html, /Executable transport required/);
+  assert.match(html, /The lane holds no credentials/);
+  assert.match(html, /data-v-needs-review-link/);
+  // Approve/Deny belong on the lane, behind Review, with the request's context.
+  assert.equal(/Approve|Deny|content_fingerprint/.test(html), false);
+});
+
+test("Home takes the lanes that are doing something, not the directory", () => {
+  const summaries = [
+    { lane_id: "a", state_key: "ready", at_ms: 900 },
+    { lane_id: "b", state_key: "working", at_ms: 100 },
+    { lane_id: "c", state_key: "needs_you", at_ms: 50 },
+    { lane_id: "d", state_key: "failed", at_ms: 80 },
+    { lane_id: "e", state_key: "ready", at_ms: 999 },
+  ];
+  const out = operationalLanes(summaries);
+  assert.deepEqual(out.map((l) => l.lane_id), ["c", "d", "b"], "attention first, then recency");
+  assert.equal(out.some((l) => l.state_key === "ready"), false, "a Ready lane is not news");
+  assert.equal(operationalLanes(summaries, { limit: 2 }).length, 2, "and it is bounded");
+});
+
+test("return context is the origin, and the fallback is never a guess", () => {
+  assert.equal(laneReturnTarget({ page: "home" }).hash, "#/home");
+  assert.equal(laneReturnTarget({ page: "activity" }).label, "Activity");
+  assert.equal(laneReturnTarget({ page: "lanes" }).hash, "#/lanes");
+  // A deep link has no journey; the directory is the honest fallback.
+  assert.equal(laneReturnTarget(null).hash, "#/lanes");
+  assert.equal(laneReturnTarget({ page: "settings" }).hash, "#/lanes");
+  assert.equal(laneReturnTarget({ page: "home", scrollY: 420 }).scrollY, 420);
+});
+
+test("Copy carries the whole message, not the rendered excerpt", () => {
+  const body = ["First paragraph.", "", "Second paragraph, much longer, the part a four-line clamp hides."].join("\n");
+  const html = messageRow({ id: "m1", role: "provider", author: "Claude", body, clock: "9:19 PM" });
+  const m = html.match(/data-v-copy-text="([^"]*)"/);
+  assert.ok(m, "provider output must carry a copy control");
+  // The attribute is the underlying message; the clamp is CSS over the same text.
+  assert.match(m[1], /Second paragraph/);
+  assert.equal(m[1].includes("Claude"), false, "the byline is chrome, not what was said");
+  assert.equal(m[1].includes("9:19 PM"), false);
+});
+
+test("a message with no body offers nothing to copy", () => {
+  const html = messageRow({ id: "m2", role: "provider", author: "Claude", body: "" });
+  assert.equal(html.includes("data-v-msg-copy"), false);
+});
+
+test("lane resources are honest field by field", () => {
+  const wired = buildLaneResources({ resource_use: {
+    attribution: "ancestry", process_count: 6, memory_mb: 1743, complete: true,
+    sampled_at: new Date().toISOString(),
+  } });
+  assert.equal(wired.available, true);
+  assert.equal(wired.memory.maturity, MATURITY.LIVE);
+  assert.equal(wired.memory.state, "live");
+  assert.equal(wired.memory.display, "1.7 GB");
+  // The two that have no source must never render a number.
+  assert.equal(wired.cpu.maturity, MATURITY.INSTRUMENTATION_REQUIRED);
+  assert.equal(wired.cpu.state, "unavailable");
+  assert.equal(/\d/.test(wired.cpu.display), false, "CPU must not show a figure it did not measure");
+  assert.equal(wired.peak_memory.maturity, MATURITY.AVAILABLE_NOT_WIRED);
+  assert.equal(wired.peak_memory.state, "unavailable");
+  assert.match(wired.cpu.note, /lifetime average/);
+
+  // A lane with no seat is UNKNOWN, and must not read as an idle lane.
+  const none = buildLaneResources({});
+  assert.equal(none.available, false);
+  assert.equal(none.memory.state, "unavailable");
+  assert.equal(/^0/.test(none.memory.display), false, "unmeasured must never render as zero");
 });

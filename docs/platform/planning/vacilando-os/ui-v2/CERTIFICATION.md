@@ -66,14 +66,14 @@ is worse than no check.
 
 ## Result
 
-**117 checks, 117 passed, 0 failed.** See
+**185 checks, 185 passed, 0 failed.** See
 [`certification/results.json`](certification/results.json) for the machine record.
 
 ### Desktop
 
 | Screen | Evidence | Checks |
 |---|---|---|
-| Home | `01-desktop-home.png` | Six blocks render; two-column layout; Needs You lists exactly the genuine blocker; **no invented effectiveness number**; nav badge; nav carries no diagnostics |
+| Home | `01-desktop-home.png` | Five command-centre blocks; two-column layout; **no Needs You card**; **Active lanes is a bounded subset, not the directory** (3 of 5), with *View all lanes*; **no invented effectiveness number**; nav badge; nav carries no diagnostics |
 | Lanes | `02-desktop-lanes.png` | Every lane state is one of the four operator words; **no operator-facing surface says suspended** (asserted against the `WAITING_RESOURCE` fixture lane, which could fail it); **Home and the Lanes rail agree, by word, about all five lanes they both show** |
 | Lane | `03-desktop-lane.png` | Breadcrumb, state, identity (`Claude · claude-opus-5 · Slot 6 · Started …`); six tabs; progress qualifies the status in **one line** (`Working · ~62% · Claude`), marked as an estimate; **no second progress subsystem**; **no ETA anywhere on the page**; **no standalone Current Work card**, and the instruction survives as the first authored YOU message |
 | Lane Inspector | `04-desktop-lane-inspector.png` | A permanent column, not a drawer; **no folded section is open on a healthy lane**; RUN answers agent / slot / context / started / stop; a folded section opens on request |
@@ -261,3 +261,88 @@ outside their owning slice, which needs repository context the bare extract does
 not have. Re-run from a real detached worktree at the same commit, staging gives
 the expected four. A baseline that flatters the candidate is as much a defect as
 one that condemns it.
+
+## The final convergence pass
+
+Sixty-eight checks were added for this pass. The ones that matter most are the
+ones asserting that something is ABSENT — a number not shown, a card not
+rendered, a payload not dumped — because every one of those was previously
+present and wrong.
+
+### Compose Mode — `17-mobile390-compose.png`, `18-mobile390-compose-long.png` (and 320)
+
+Certified at **390×380** and **320×300**, idle and with a long multi-paragraph
+instruction.
+
+| Check | 390 | 320 |
+|---|---|---|
+| Focus enters compose mode | PASS | PASS |
+| Field opens at a third of the writing area | 133px / 35% | 105px / 35% |
+| Field grows toward half of it | 171px / 45% | 124px / 41% |
+| Past its ceiling the field scrolls itself | PASS | PASS |
+| Conversation keeps a readable tail | 65px, 5 messages | 40px, 5 messages |
+| Field owns its own line, not a slot beside Send | PASS | PASS |
+| Send and attach immediately reachable | PASS | PASS |
+| Provider reachable while writing | PASS | PASS |
+| Orientation chrome stands down (tabs, bottom nav, meta, Details) | PASS | PASS |
+| No sideways scroll | PASS | PASS |
+| Blurring the field returns the lane | PASS | PASS |
+
+The 320 figures are the interesting ones: 45% of that viewport overflowed, and
+the field is measured against the stage after layout and yields. Without that,
+the interaction zone ended 27px below the screen with Send inside it.
+
+### Copy — `19-desktop-copy.png`
+
+Asserted against the 1,418-character Payments final report, **while collapsed**:
+
+| Check | Result |
+|---|---|
+| Copy visible without opening an overflow | PASS |
+| The report under test is genuinely clamped | PASS |
+| Copy takes the WHOLE message while collapsed | 1,418 characters |
+| Paragraphs preserved | 5 |
+| No UI metadata (byline, "Final report") | PASS |
+| Confirms itself in place | "Copied" |
+| Does not expand the message to read it | PASS |
+| Needs no *Show more* first | PASS |
+
+### Needs You — `20-desktop-needs-you.png`, `20-mobile390-needs-you.png`
+
+Two pending requests, two lanes, two capabilities, two ages — a one-request
+fixture certified a list that never had to group.
+
+| Check | Desktop | Mobile |
+|---|---|---|
+| Home renders no permanent Needs You content | PASS | PASS |
+| Lanes renders no permanent Needs You content | PASS | PASS |
+| Exactly one global control per route | PASS | PASS |
+| The panel opens from the shell | PASS | PASS |
+| Opening it is not navigation (route unchanged) | PASS | PASS |
+| Every blocker listed, identified by lane | 2 of 2 | 2 of 2 |
+| Each states the ask, one line of why, and its age | PASS | PASS |
+| The governed payload stays behind Review | PASS | PASS |
+
+### Home vs Lanes
+
+Home shows 3 of the 5 lanes the directory lists, titled **Active lanes**, with
+*View all lanes →*, and keeps health, usage and activity.
+
+### Back preserves the entry origin
+
+| Journey | Back | Breadcrumb |
+|---|---|---|
+| Home → lane | `#/home` | Home |
+| Lanes → lane | `#/lanes` | Lanes |
+| Deep link → lane | `#/lanes` | Lanes |
+
+Certified on desktop and mobile.
+
+### Lane resources — `21-desktop-lane-resources.png`
+
+| Check | Result |
+|---|---|
+| Memory the lane's own process tree holds | 1.7 GB |
+| How it was attributed | "by process ancestry from this lane's provider seat" |
+| **CPU declared absent, not estimated** | "Not sampled", and no figure anywhere |
+| Peak memory names its unwired source | "Not projected yet" |

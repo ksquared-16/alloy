@@ -120,3 +120,42 @@ directions. The negative cases matter more than the positive one: a reduction in
 asks that also reduced the boundaries would not be an improvement. Two mutations
 are proven to fail it: adding `repository.merge_pull_request` to the allowlist,
 and treating the operator-only environment check as a shrug.
+
+## Re-measured, September 2026
+
+Not assumed to have landed. The same replay was run again against the CURRENT
+Gateway request log — a different 200-request window from the one above — with
+each request offered to the real resolvers in chronological order.
+
+| | Operator asked | Share of all requests |
+|---|---|---|
+| **BEFORE** (the log's own record of operator decisions) | 173 | 86.5% |
+| **AFTER** (replayed with standing authority) | 81 | 40.5% |
+| **Removed** | **92 interruptions** | **53.2% of asks** |
+
+Removed, by capability: `repository.push` 51, `promotion.open_pr` 30,
+`environment.restore_qa_session` 11.
+
+Still asked: `repository.merge_pull_request` 50, `database.read_census` 17,
+`database.apply_migration` 3, `repository.close_pull_request` 1,
+`environment.assign_qa_identity_access` 1, plus 9 first-asks across the three
+eligible capabilities — the one approval that establishes each lane's standing
+scope.
+
+This reproduces the original result (95 removed, 52.2%) on data it has never
+seen. `tests/development-standing-authorization.test.mjs` passes 9/9.
+
+### The categories that were asked about, answered directly
+
+| Category | What actually happens |
+|---|---|
+| Lane-owned branch pushes | Standing after the first approval — 51 interruptions removed in this window |
+| QA / browser restoration | Standing after the first approval — 11 removed |
+| Opening a pull request | Standing after the first approval — 30 removed |
+| Read-only DB census | **Still asked, deliberately.** It reads `alloy_deployed_primary`, and `AUTHZ_OPERATOR_ONLY_ENVIRONMENTS` says a derived authority may never cover it. Read-only is not the same as inside the trust boundary |
+| Repeated same capability in one lane | This is precisely what standing authority removes — 84.1% of the original asks were repeats of an already-approved (lane, capability) pair |
+| Local environment operations, tests, server lifecycle, repository inspection | **Never governed at all.** The registry holds twelve action types and none of these is among them, so they have never produced an operator interruption. There was nothing to reduce |
+
+The remaining volume is dominated by `repository.merge_pull_request` (50) and
+`database.read_census` (17) — promotion authority and a production-boundary
+read. Both stay gated. **Volume is not an argument against a boundary.**

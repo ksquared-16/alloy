@@ -3458,7 +3458,9 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
   /* ---- the conversation keeps its tail --------------------------------- */
   /* It shrinks, it does not disappear: replying to something you can no longer
      see is the defect this mode exists to fix, not one to introduce. */
-  :root[data-gw-compose] .vlane-body{flex:1 1 auto;min-height:56px;padding:8px 13px;}
+  /* 40px is the floor the composer sizer reserves for the thread; the two
+     numbers must agree or one of them silently wins. */
+  :root[data-gw-compose] .vlane-body{flex:1 1 auto;min-height:40px;padding:8px 13px;}
 
   /* ---- the writing surface --------------------------------------------- */
   /* The interaction zone stops rationing itself: in this mode it IS the screen,

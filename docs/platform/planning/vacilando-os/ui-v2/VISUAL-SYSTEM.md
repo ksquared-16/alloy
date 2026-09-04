@@ -294,3 +294,33 @@ One further note on assertions: the first version of this check tested
 `getComputedStyle().display === "-webkit-box"` and failed against a clamp that
 was working perfectly — current Chromium reports the used display as `flow-root`
 while still clamping. **Assert the effect, not the spelling.**
+
+## 13. Compose Mode composition
+
+The keyboard state (`data-gw-keyboard`) says the viewport shrank. Compose Mode
+(`data-gw-compose`) says the operator is WRITING. They are different facts and
+they move different things: the first is geometry, the second is intent, and
+only the second is allowed to take the furniture away.
+
+What stands down while composing: the top bar, the lane's back row and
+breadcrumb, the six lane tabs, the identity metadata, Details and Stop lane, the
+bottom navigation, and the new-update affordance. What remains: one line of lane
+identity, the tail of the conversation, and the field.
+
+The composer becomes a COLUMN, not a row. A row layout is what made the field a
+slot — it can only ever be as tall as the button beside it.
+
+The provider selector stays reachable at reduced emphasis rather than being
+hidden. It is a choice the operator occasionally revisits; it is not part of
+writing, and removing it entirely removed a question they might need to answer.
+
+## 14. The message actions row
+
+Two actions, one row, no menu. *Show more* governs how much of a message you are
+looking at; *Copy* takes all of it either way. They render as quiet text
+affordances rather than buttons, because a thread of ten messages would
+otherwise carry twenty button-shaped holes.
+
+Copy confirms itself in place — the control says "Copied" and puts itself back.
+Not a toast that covers the thread, and not a layout change that moves the text
+being read.
