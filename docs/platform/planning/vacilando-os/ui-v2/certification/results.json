@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T13:13:04.748Z",
+  "captured_at": "2026-09-04T16:25:11.039Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -18,7 +18,7 @@
       "height": 380
     }
   },
-  "passed": 209,
+  "passed": 213,
   "failed": 0,
   "results": [
     {
@@ -149,7 +149,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 5:53 AM Stop lane RUNTIME Executing"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 9:05 AM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
@@ -309,7 +309,7 @@
     {
       "name": "mobile 390 conversation begins in the first screen",
       "ok": true,
-      "detail": "first message at 116 of 844"
+      "detail": "first message at 124 of 844"
     },
     {
       "name": "mobile 390 authorship is visually distinguishable",
@@ -379,17 +379,17 @@
     {
       "name": "mobile 390 a real provider report is long enough to be worth clamping",
       "ok": true,
-      "detail": "1636 characters"
+      "detail": "1813 characters"
     },
     {
       "name": "mobile 390 a long provider report previews at four lines",
       "ok": true,
-      "detail": "92px of text, line 21px"
+      "detail": "84px of text, line 21px"
     },
     {
       "name": "mobile 390 the long report does not own the screen",
       "ok": true,
-      "detail": "179px of 844"
+      "detail": "171px of 844"
     },
     {
       "name": "mobile 390 the long report offers Show more",
@@ -519,7 +519,7 @@
     {
       "name": "mobile 320 conversation begins in the first screen",
       "ok": true,
-      "detail": "first message at -221 of 568"
+      "detail": "first message at -213 of 568"
     },
     {
       "name": "mobile 320 authorship is visually distinguishable",
@@ -589,17 +589,17 @@
     {
       "name": "mobile 320 a real provider report is long enough to be worth clamping",
       "ok": true,
-      "detail": "1636 characters"
+      "detail": "1813 characters"
     },
     {
       "name": "mobile 320 a long provider report previews at four lines",
       "ok": true,
-      "detail": "92px of text, line 21px"
+      "detail": "84px of text, line 21px"
     },
     {
       "name": "mobile 320 the long report does not own the screen",
       "ok": true,
-      "detail": "198px of 568"
+      "detail": "190px of 568"
     },
     {
       "name": "mobile 320 the long report offers Show more",
@@ -609,7 +609,7 @@
     {
       "name": "the composer stays reachable with the keyboard open",
       "ok": true,
-      "detail": "{\"cBottom\":366,\"sBottom\":353,\"vh\":380}"
+      "detail": "{\"cBottom\":380,\"sBottom\":365,\"vh\":380}"
     },
     {
       "name": "no sideways scroll with the keyboard open",
@@ -649,7 +649,7 @@
     {
       "name": "compose 390 the conversation keeps a readable tail",
       "ok": true,
-      "detail": "65px, 5 messages"
+      "detail": "77px, 5 messages"
     },
     {
       "name": "compose 390 the field owns its own line, not a slot beside Send",
@@ -677,6 +677,16 @@
       "detail": ""
     },
     {
+      "name": "compose 390 the composer ends at the bottom of the visual viewport",
+      "ok": true,
+      "detail": "composer bottom 380 of 380"
+    },
+    {
+      "name": "compose 390 no ancestor reserves a band under the composer",
+      "ok": true,
+      "detail": "zone:0px view:0px app:0px"
+    },
+    {
       "name": "compose 390 blurring the field returns the lane",
       "ok": true,
       "detail": ""
@@ -694,7 +704,7 @@
     {
       "name": "compose 320 the field grows toward half the writing area",
       "ok": true,
-      "detail": "124px = 41%"
+      "detail": "128px = 43%"
     },
     {
       "name": "compose 320 past its ceiling the field scrolls itself",
@@ -732,6 +742,16 @@
       "detail": ""
     },
     {
+      "name": "compose 320 the composer ends at the bottom of the visual viewport",
+      "ok": true,
+      "detail": "composer bottom 300 of 300"
+    },
+    {
+      "name": "compose 320 no ancestor reserves a band under the composer",
+      "ok": true,
+      "detail": "zone:0px view:0px app:0px"
+    },
+    {
       "name": "compose 320 blurring the field returns the lane",
       "ok": true,
       "detail": ""
@@ -749,7 +769,7 @@
     {
       "name": "Copy takes the WHOLE message while it is collapsed",
       "ok": true,
-      "detail": "1418 characters"
+      "detail": "1610 characters"
     },
     {
       "name": "Copy preserves the report's paragraphs",
