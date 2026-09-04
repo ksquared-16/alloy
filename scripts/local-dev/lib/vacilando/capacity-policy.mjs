@@ -46,7 +46,22 @@ export const CAPACITY_POLICY_V1 = Object.freeze({
   // current intended capacity on the 8-core host.
   provider_divisor: 3,
   provider_floor: 3,
-  provider_memory_gb_each: 6,
+  // MEASURED, 2026-09-04, on the 48 GB / 12-core Mac mini. The old value here
+  // was 6 GB per provider, which is not what a provider costs — it is closer to
+  // what someone feared one might cost. Five resident providers measured
+  // 344, 566, 597, 671 and 739 MB, totalling 2.9 GB: a mean of 583 MB and a
+  // maximum under 0.75 GB.
+  //
+  // The error mattered because it was load-bearing. At 6 GB each, 48 GB of RAM
+  // implies eight providers and memory looks like a real constraint; at the
+  // measured cost it implies dozens, and memory is not the constraint at all —
+  // cores and upstream throughput are. This is the same class of mistake as
+  // dev_server_memory_gb_each, which claimed 8 GB against a measured ~2 GB and
+  // capped a 48 GB host at six servers while it demonstrably ran eight.
+  //
+  // 1 GB rather than 0.583: providers grow over a long session, and rounding
+  // toward the expensive side costs nothing here because cores bind first.
+  provider_memory_gb_each: 1,
 
   // Validation: 8 cores -> 6 tokens, 14 -> 10.
   validation_core_fraction: 0.75,
