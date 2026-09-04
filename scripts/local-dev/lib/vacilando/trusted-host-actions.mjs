@@ -1743,8 +1743,11 @@ export function executeInstallToolkitTrustedHostAction(action, { actor = "direct
   const i = action.inputs || {};
   let out;
   try {
+    // Normalized name first: action.inputs holds validateInputs' `normalized`
+    // object, exactly as it does for the provider ceiling. Raw names are kept
+    // as fallbacks for a request that skipped normalization.
     out = executeToolkitInstall({
-      expectedStagingSha: i.expected_staging_sha ?? i.expectedStagingSha ?? null,
+      expectedStagingSha: i.expectedStagingSha ?? i.expected_staging_sha ?? null,
     });
   } catch (e) {
     out = { ok: false, error: "install_threw", detail: String(e?.message || "").slice(0, 300) };

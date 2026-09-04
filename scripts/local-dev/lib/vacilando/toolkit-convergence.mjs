@@ -420,12 +420,33 @@ export function validateInstallToolkitInputs(inputs = {}, { measure = measureToo
   if (plan.state === "blocked") {
     return { ok: false, error: "convergence_blocked", detail: plan.reason, evidence: ev };
   }
+
+  /*
+   * `normalized` IS THE CONTRACT, not a convenience.
+   *
+   * requestTrustedHostAction reads `validated.normalized.dedupeKey` the moment
+   * validation succeeds, and stores `validated.normalized` as the action's
+   * inputs. The first version of this validator returned only
+   * {ok, evidence, plan} — so `validated.normalized` was undefined, reading
+   * .dedupeKey off it threw a TypeError, and the governed request failed with
+   * `execution_threw` before any trusted-host action was ever created. That is
+   * why the failure carried no action id to inspect.
+   *
+   * Same shape of defect as the ceiling NaN: two halves of one path disagreeing
+   * about a field name while each looks correct read on its own.
+   */
+  const normalized = {
+    expectedStagingSha: short(expected),
+    ref: CONVERGENCE_REF,
+    reason,
+    dedupeKey: `toolkit_install:${CONVERGENCE_REF}:${short(expected)}`,
+  };
   if (plan.state === "converged") {
     // Not an error. An install that is already done is a no-op the caller
     // should be told about plainly rather than allowed to perform again.
-    return { ok: true, already_converged: true, evidence: ev, plan };
+    return { ok: true, already_converged: true, normalized, evidence: ev, plan };
   }
-  return { ok: true, already_converged: false, evidence: ev, plan };
+  return { ok: true, already_converged: false, normalized, evidence: ev, plan };
 }
 
 /**
