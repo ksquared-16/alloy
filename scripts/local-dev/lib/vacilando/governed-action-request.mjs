@@ -95,7 +95,7 @@ import {
   releaseMissionDelegation,
   reserveMissionDelegation,
 } from "./mission-delegation.mjs";
-import { classForGovernedStatus, upsertNotification } from "./lane-notifications.mjs";
+import { classForGovernedStatus, isRoutineProgress, upsertNotification } from "./lane-notifications.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -1115,19 +1115,38 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
   try {
     const cls = classForGovernedStatus(rec.status);
     if (cls) {
-      upsertNotification({
+      // ROUTINE PROGRESS DOES NOT OPEN A RECORD.
+      //
+      // Measured on this host: `governed_action_worker_resumed` was 232 of the
+      // 500 records in the store and pushed zero times — pure feed noise from
+      // actions running inside policy. It is suppressed at CREATION only. If a
+      // record for this request already exists it is still updated, because the
+      // completion of an approved action is what resolves the approval that
+      // opened it.
+      const noted = upsertNotification({
         subjectKey: `governed:${rec.request_id}`,
         requestId: rec.request_id,
         laneId: rec.lane_id || null,
         eventType: type,
         state: rec.status || null,
         attentionClass: cls,
+        createIfMissing: !isRoutineProgress(type),
         summary: title || rec.title || rec.action_key,
         path: rec.mission_id
           ? `/#/missions/${encodeURIComponent(rec.mission_id)}`
           : (rec.lane_id ? `/#/lanes/${encodeURIComponent(rec.lane_id)}` : "/#/lanes"),
         root,
       });
+      // Delivery is a projection of the record and must never be able to
+      // block, slow or fail the governed action itself — the same
+      // fire-and-forget contract run outcomes already use. Only a record that
+      // was just OPENED, or that has become a live demand again, is announced;
+      // an update that merely resolves one is not news.
+      if (noted?.record && (noted.created || noted.record.seen_at === null)) {
+        import("./lane-push.mjs")
+          .then((mod) => mod.pushGovernedNotification(noted.record, { root }))
+          .catch(() => { /* push is best-effort; the record is the truth */ });
+      }
     }
   } catch { /* the canonical record is best-effort too; never break the action */ }
   return event;
