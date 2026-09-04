@@ -1145,6 +1145,49 @@ export function buildLaneThread(lane, {
   const entries = [];
   const run = lane?.execution_run || lane?.previous_run || null;
 
+  // ---- the previous exchange, when there is one ------------------------
+  //
+  // `previous_run` was consulted only as a FALLBACK — `execution_run ||
+  // previous_run` — so on a lane that had both, the earlier exchange was
+  // discarded entirely and the thread showed a single turn no matter how much
+  // had actually happened. A conversation that forgets its previous turn the
+  // moment a new one starts is not a conversation.
+  //
+  // It contributes its own USER instruction and PROVIDER reply, above the
+  // current exchange, in the order they occurred. Nothing is invented: the
+  // entries appear only where the run genuinely carries that content.
+  const prior = lane?.previous_run && lane?.execution_run
+    && lane.previous_run.run_id !== lane.execution_run.run_id
+    ? lane.previous_run
+    : null;
+  if (prior?.instruction) {
+    const at = parseMs(prior.started_at) || parseMs(prior.created_at);
+    entries.push({
+      id: `user:prior:${prior.run_id}`,
+      role: MESSAGE_ROLE.USER,
+      author: "You",
+      at_ms: at,
+      clock: clockOf(at),
+      body: String(prior.instruction),
+      attachments: [],
+      meta: "Delivered",
+    });
+  }
+  const priorReport = prior?.agent_report?.message || prior?.completion_report?.summary || null;
+  if (priorReport) {
+    const at = parseMs(prior.completed_at) || parseMs(prior.updated_at) || parseMs(prior.created_at);
+    entries.push({
+      id: `provider:prior:${prior.run_id}`,
+      role: MESSAGE_ROLE.PROVIDER,
+      author: providerLabel,
+      at_ms: at,
+      clock: clockOf(at),
+      body: String(priorReport),
+      // Historical, so never `current` — the pin belongs to the live edge only.
+      meta: "Final report",
+    });
+  }
+
   // ---- the operator's instruction -------------------------------------
   //
   // THE RUN'S OWN INSTRUCTION IS THE FALLBACK, and it has to be.
@@ -1194,9 +1237,18 @@ export function buildLaneThread(lane, {
       meta: outcome.approved_by ? `approved by ${outcome.approved_by}` : null,
     });
   }
+  // ONE EVENT, ONE LINE. Observed live on this lane: "Claude context refreshed
+  // automatically." twice, same summary, same timestamp, from a feed that
+  // recorded it once per observer. Two identical lines in a conversation read
+  // as two things happening, and the operator has no way to tell that they are
+  // the same thing counted twice.
+  const seenSystem = new Set();
   for (const item of (lane?.recent_system_activity || []).slice(0, 3)) {
     const at = parseMs(item.at) || parseMs(item.occurred_at);
     if (!item?.summary) continue;
+    const fingerprint = `${item.at || ""}|${item.summary}`;
+    if (seenSystem.has(fingerprint)) continue;
+    seenSystem.add(fingerprint);
     entries.push({
       id: `system:${item.at || item.summary}`,
       role: MESSAGE_ROLE.SYSTEM,
@@ -1236,12 +1288,49 @@ export function buildLaneThread(lane, {
       body: assistant.text || assistant.report?.message || paneText || "",
       source: assistant,
       working,
+      // THE live edge of the conversation, not just its newest entry. Pinned
+      // last so it always sits against the interaction boundary.
+      current: true,
+      // Only the LIVE edge claims a state. A finished turn that is no longer
+      // current is history, and history does not announce itself as complete.
+      complete: !working && Boolean(assistant.finalized),
       // "CLAUDE · WORKING" rather than a clock, when it is mid-utterance.
       meta: working ? "Working" : (assistant.finalized ? "Final report" : null),
     });
   }
 
-  entries.sort((a, b) => (a.at_ms || 0) - (b.at_ms || 0));
+  // ---- chronological order, and one invariant that outranks it -----------
+  //
+  // TWO DEFECTS THIS FIXES.
+  //
+  // 1. `(a.at_ms || 0)` sent every entry with an unknown time to position ZERO
+  //    — above the operator's own first message. A governed outcome recorded
+  //    without a timestamp opened the conversation with its own ending.
+  //    Insertion order here is already chronological by construction
+  //    (instruction, then system history, then the provider), so an unknown
+  //    time inherits the last known one and holds its place instead of leaping
+  //    to the top.
+  //
+  // 2. The CURRENT provider output is not merely the newest message; it is the
+  //    live edge of the conversation, and it belongs immediately above the
+  //    composer where the operator is about to reply. Sorting alone could not
+  //    guarantee that: the provider entry is stamped `run.updated_at`, and a
+  //    freshly delivered instruction carries a LATER `delivered_at`, so the
+  //    answer sorted above the question that prompted it. Chronology decides
+  //    everything else; this one entry is pinned last.
+  let lastKnown = 0;
+  entries.forEach((e, i) => {
+    const at = Number(e.at_ms);
+    if (Number.isFinite(at) && at > 0) lastKnown = at;
+    e._order = Number.isFinite(at) && at > 0 ? at : lastKnown;
+    e._seq = i;
+  });
+  entries.sort((a, b) => (a._order - b._order) || (a._seq - b._seq));
+  const currentIdx = entries.findIndex((e) => e.role === MESSAGE_ROLE.PROVIDER && e.current);
+  if (currentIdx >= 0 && currentIdx !== entries.length - 1) {
+    entries.push(entries.splice(currentIdx, 1)[0]);
+  }
+  for (const e of entries) { delete e._order; delete e._seq; }
   return { entries, nowMs, count: entries.length };
 }
 
