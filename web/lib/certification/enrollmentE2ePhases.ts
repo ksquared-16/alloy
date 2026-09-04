@@ -1419,6 +1419,262 @@ const requirementCompletion: Phase = {
     },
 };
 
+/** The durable child state, read straight from the authority that owns it. */
+async function readChildState(
+    ctx: Parameters<Phase["run"]>[0],
+    childId: string,
+    journeyId: string,
+): Promise<Record<string, unknown>> {
+    const { data: ocm } = await ctx.supabase
+        .from("opportunity_customer_members")
+        .select("id, outcome_status_key, opportunity_id")
+        .eq("org_id", ctx.orgId)
+        .eq("customer_member_id", childId);
+    const { data: pi } = await ctx.supabase
+        .from("process_instances")
+        .select("id, state, stage_key")
+        .eq("org_id", ctx.orgId)
+        .eq("id", journeyId);
+    const o = ((ocm ?? []) as Row[])[0] ?? {};
+    const p = ((pi ?? []) as Row[])[0] ?? {};
+    return {
+        ocmStatus: o.outcome_status_key ?? null,
+        ocmOpportunityId: o.opportunity_id ?? null,
+        processState: p.state ?? null,
+        processStage: p.stage_key ?? null,
+    };
+}
+
+/**
+ * K: participant completion does NOT enrol the child.
+ *
+ * The single most important negative in this program. Finishing paperwork is the family's act;
+ * enrolling a child is the school's decision. A system that collapses them has removed the operator
+ * from a decision that is theirs to make, and would do it silently.
+ */
+const participantCompletionDoesNotEnrol: Phase = {
+    key: "K_participant_complete",
+    title: "participant completion does not durably enrol the child",
+    dependsOn: ["G_evidence"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { journeyId: string; childId: string }> | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "Path A entry facts unavailable" };
+
+        const state = await readChildState(ctx, pathA.childId, pathA.journeyId);
+        const enrolled = String(state.ocmStatus ?? "").toLowerCase() === "enrolled";
+
+        return enrolled
+            ? {
+                  status: "failed",
+                  detail:
+                      "the child is already durably ENROLLED after participant work alone — the operator decision "
+                      + "has been bypassed",
+                  evidence: state,
+              }
+            : {
+                  status: "passed",
+                  detail:
+                      `paperwork is complete and the child is NOT enrolled (status ${String(state.ocmStatus)}); `
+                      + "enrolling remains the operator's decision",
+                  evidence: state,
+              };
+    },
+};
+
+/**
+ * N: Complete Enrollment, through the real governed outcome.
+ *
+ * Uses `enrollment_complete` on the configured `enrolling` plan — the same outcome an operator
+ * triggers — rather than writing `enrolled` anywhere directly. A certification that reaches enrolled
+ * by patching a column has certified the column.
+ */
+const completeEnrollment: Phase = {
+    key: "N_complete_enrollment",
+    title: "Complete Enrollment through the real governed outcome",
+    dependsOn: ["K_participant_complete"],
+    async run(ctx) {
+        const { defaultStageOperatingPlanForEnrollmentStage } = await import(
+            "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans"
+        );
+        const { executeStageOperatingOutcome } = await import("@/lib/lifecycle/executeStageOperatingOutcome");
+        const { resolveEnrollmentParticipantProgress } = await import(
+            "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress"
+        );
+
+        const entry = ctx.facts.B_entry as
+            | Record<string, { journeyId: string; childId: string; participationId: string }>
+            | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "Path A entry facts unavailable" };
+
+        const before = await readChildState(ctx, pathA.childId, pathA.journeyId);
+
+        // The stage the journey is actually governed by, resolved rather than assumed.
+        const progress = await resolveEnrollmentParticipantProgress(ctx.supabase, {
+            orgId: ctx.orgId,
+            processInstanceId: pathA.journeyId,
+        });
+        if (!progress.ok) return { status: "failed", detail: `progress refused: ${progress.refusal.code}` };
+        const stageKey = progress.value.stage_key ?? "";
+        const plan = defaultStageOperatingPlanForEnrollmentStage(stageKey);
+        if (!plan) return { status: "failed", detail: `no operating plan for stage ${stageKey}` };
+
+        const result = await executeStageOperatingOutcome({
+            supabase: ctx.supabase,
+            orgId: ctx.orgId,
+            userId: ctx.actorUserId ?? "",
+            // Context-free Path A has no acquisition department; the executor types this as a
+            // string, so the absence is expressed as empty rather than smuggled through as null.
+            departmentId: "",
+            plan,
+            outcomeKey: "enrollment_complete",
+            subject: {
+                journey_segment: "child",
+                // Required by the subject type even for a context-free child; empty says "no
+                // acquisition episode" rather than pointing at one that does not exist.
+                opportunity_id: "",
+                customer_member_id: pathA.childId,
+                /*
+                 * The participation, named directly.
+                 *
+                 * A context-free child has NO opportunity_id, so a resolver that finds the OCM via
+                 * the acquisition episode finds nothing — and the first attempt reported no failed
+                 * targets while changing nothing, which is a silent no-op rather than a refusal.
+                 * Naming the participation removes the guess.
+                 */
+                opportunity_customer_member_id: pathA.participationId,
+                // The most specific child identity, so movement targets exactly this journey.
+                process_instance_id: pathA.journeyId,
+            },
+            // The family stage move belongs to the operator UI; the child effect is what is certified.
+            skipTargetKinds: ["move_to_stage"],
+        } as Parameters<typeof executeStageOperatingOutcome>[0]);
+
+        const failed = result.failed_targets ?? [];
+        if (failed.length) {
+            return { status: "failed", detail: (result.errors ?? []).join("; ") || "completion outcome failed" };
+        }
+
+        const after = await readChildState(ctx, pathA.childId, pathA.journeyId);
+        const nowEnrolled = String(after.ocmStatus ?? "").toLowerCase() === "enrolled";
+        if (!nowEnrolled) {
+            return {
+                status: "failed",
+                detail: `after Complete Enrollment the child reads ${String(after.ocmStatus)}, not enrolled`,
+                evidence: { before, after },
+            };
+        }
+
+        /*
+         * THE THREE AUTHORITIES, asserted live rather than by construction.
+         * OCM owns durable child status; the Process Instance owns execution state/stage; the
+         * Opportunity owns family acquisition context. Path A has none and must not gain one.
+         */
+        if (after.ocmOpportunityId) {
+            return {
+                status: "failed",
+                detail: "completing a context-free Enrollment fabricated an acquisition Opportunity",
+                evidence: { before, after },
+            };
+        }
+
+        return {
+            status: "passed",
+            detail: `OCM ${String(before.ocmStatus)} -> enrolled through the governed outcome; no Opportunity fabricated`,
+            evidence: { before, after },
+        };
+    },
+};
+
+/**
+ * Q: the next episode, and live cross-episode evidence isolation.
+ *
+ * Two properties in one place because they share a setup. Starting Enrollment again must open a NEW
+ * participation rather than reopening the enrolled one — and the completed evidence of episode A must
+ * not satisfy episode B. That second half is the safety proof owed by widening evidence reads to
+ * include completed sessions; until it runs live it is only an argument about a query predicate.
+ */
+const nextEpisode: Phase = {
+    key: "Q_next_episode",
+    title: "next episode opens cleanly and cannot inherit episode A's evidence",
+    dependsOn: ["N_complete_enrollment"],
+    async run(ctx) {
+        const { startEnrollment } = await import("@/lib/records/startEnrollmentService");
+        const { resolveEnrollmentCompletionSufficiency } = await import(
+            "@/lib/enrollment/completion/enrollmentCompletionSufficiency"
+        );
+
+        const entry = ctx.facts.B_entry as Record<string, { journeyId: string; childId: string; participationId: string }> | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "Path A entry facts unavailable" };
+
+        const started = await startEnrollment(ctx.supabase, {
+            orgId: ctx.orgId,
+            customerMemberId: pathA.childId,
+            actorUserId: ctx.actorUserId,
+        } as Parameters<typeof startEnrollment>[1]);
+
+        const b = started as unknown as {
+            enrollmentParticipationId?: string | null;
+            processInstanceId?: string | null;
+            opportunityId?: string | null;
+        };
+        if (!b.enrollmentParticipationId || !b.processInstanceId) {
+            return { status: "failed", detail: `starting a second episode returned no new participation/journey` };
+        }
+        if (b.enrollmentParticipationId === pathA.participationId) {
+            return { status: "failed", detail: "the enrolled participation was REOPENED rather than a new one created" };
+        }
+        if (b.opportunityId) {
+            return { status: "failed", detail: "the new context-free episode fabricated an Opportunity" };
+        }
+
+        // Episode A must remain enrolled history.
+        const { data: aRow } = await ctx.supabase
+            .from("opportunity_customer_members")
+            .select("outcome_status_key")
+            .eq("org_id", ctx.orgId)
+            .eq("id", pathA.participationId);
+        const aStatus = String((((aRow ?? []) as Row[])[0]?.outcome_status_key) ?? "");
+        if (aStatus.toLowerCase() !== "enrolled") {
+            return { status: "failed", detail: `episode A is no longer enrolled; it reads ${aStatus}` };
+        }
+
+        /*
+         * THE ISOLATION PROOF. Episode B has done no paperwork, so its requirement must be
+         * outstanding. If A's completed evidence leaked across, B would already be eligible.
+         */
+        const bGate = await resolveEnrollmentCompletionSufficiency(ctx.supabase, {
+            orgId: ctx.orgId,
+            processInstanceId: String(b.processInstanceId),
+        });
+        if (!bGate.ok) return { status: "failed", detail: `episode B sufficiency refused: ${bGate.refusal.code}` };
+        if (bGate.sufficiency.eligible) {
+            return {
+                status: "failed",
+                detail:
+                    "episode B is already eligible with no paperwork done — episode A's completed evidence leaked "
+                    + "across Process Instances",
+                evidence: { episodeBCounts: bGate.sufficiency.counts },
+            };
+        }
+
+        return {
+            status: "passed",
+            detail:
+                `episode A remains enrolled history; episode B is a new context-free participation with its own `
+                + `journey and its requirements are outstanding (${bGate.sufficiency.counts.blocking} blocking)`,
+            evidence: {
+                episodeAParticipation: pathA.participationId.slice(0, 8),
+                episodeBParticipation: String(b.enrollmentParticipationId).slice(0, 8),
+                episodeBJourney: String(b.processInstanceId).slice(0, 8),
+                episodeBCounts: bGate.sufficiency.counts,
+            },
+        };
+    },
+};
+
 /**
  * Phases that need the participant browser surface. Declared, ordered and explicitly unimplemented
  * so the report shows the shape of what remains rather than hiding it.
@@ -1429,10 +1685,7 @@ const browserPhases: readonly Phase[] = (
         ["H_artifacts", "artifact generation"],
         ["I_correction", "review and correction"],
         ["J_signature", "signatures"],
-        ["K_participant_complete", "participant completion"],
-        ["N_complete_enrollment", "Complete Enrollment"],
         ["P_handoff", "operational handoff"],
-        ["Q_next_episode", "next episode"],
         ["S_responsive", "1280 and 375 product proof"],
     ] as const
 ).map(([key, title]) => ({
@@ -1474,5 +1727,8 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
      */
     governedException,
     requirementCompletion,
+    participantCompletionDoesNotEnrol,
+    completeEnrollment,
+    nextEpisode,
     ...browserPhases,
 ];
