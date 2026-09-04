@@ -182,15 +182,37 @@
  */
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row {
   display: flex;
-  flex-wrap: wrap;
+  /*
+   * ONE ROW, ALWAYS.
+   *
+   * Wrapping was the earlier answer — "a fifth action costs a line, never a truncated word" — and
+   * it costs something the line did not buy: the command row stops reading as one rail. With three
+   * commands in the work band's `minmax(300px, 0.9fr)` column, Send form dropped beneath Tour and
+   * Add family member and read as a separate, lesser group.
+   *
+   * The set stays on one line and keeps whole labels. When the row genuinely cannot fit its
+   * commands it scrolls along that line rather than folding: a command may be out of view and
+   * reachable, never restacked into a second row that changes what the set looks like.
+   */
+  flex-wrap: nowrap;
   justify-content: flex-end;
   grid-template-columns: none;
+  overflow-x: auto;
+  /* The row is a rail, not a scroll region to look at — no gutter, no chained scrolling. */
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row::-webkit-scrollbar {
+  display: none;
 }
 
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action,
-.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action {
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action,
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > [data-work-tour-grouped="true"] {
   width: auto;
   min-width: 0;
+  /* Keep its own label whole; never absorb a neighbour's overflow by shrinking to nothing. */
+  flex: 0 0 auto;
   /* One line per action. A wrapped label reads as two actions on a rail of many. */
   white-space: nowrap;
 }

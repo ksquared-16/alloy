@@ -22,6 +22,10 @@
  */
 
 import {
+    overlayLiveCommandPlacementOntoPinnedRevision,
+    type CommandPlacementSource,
+} from "@/lib/lifecycle/liveCommandPlacement";
+import {
     LIFECYCLE_BUILDER_METADATA_KEY,
     activeLifecycleProcess,
     asOperatorStageKey,
@@ -55,6 +59,16 @@ export type PublishedStageInputsForCurrentWork = {
     process?: LifecycleBuilderProcessRecord | null;
     /** Precomputed runtime Command projection (process selection + stage recommendation). */
     commandProjection?: ProcessRuntimeCommandProjection | null;
+    /**
+     * Provenance for the D-96 split. Engineer-facing, never rendered: a pinned instance now reports
+     * `workSemanticsSource: "pinned_revision"` with `source: "live_published"`, and that combination
+     * is correct rather than contradictory.
+     */
+    commandConfiguration?: {
+        workSemanticsSource: "pinned_revision" | "live_published";
+        source: CommandPlacementSource;
+        refsByTemplateKey: Record<string, string[]>;
+    };
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -89,8 +103,24 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
             ? params.departmentMetadata
             : {};
 
-    const departmentMetadata = params.governingBuilderPayload
-        ? { ...liveMetadata, [LIFECYCLE_BUILDER_METADATA_KEY]: params.governingBuilderPayload }
+    /*
+     * D-96 SPLIT. The pinned revision still governs what the work MEANS — identity, grain,
+     * completion, outcomes, requirements. Command placement is not that: it answers "what can the
+     * operator do now?", and it was pinned only because `helpful_actions` sits inside the
+     * work-template payload. Overlaying current published command refs onto the pinned payload is
+     * what makes a `/process` command edit reach records already in the stage, while everything the
+     * pin exists to protect keeps coming from the revision.
+     */
+    const placement = params.governingBuilderPayload
+        ? overlayLiveCommandPlacementOntoPinnedRevision({
+              pinnedBuilderPayload: params.governingBuilderPayload,
+              liveDepartmentMetadata: liveMetadata,
+              stageKey,
+          })
+        : null;
+
+    const departmentMetadata = placement
+        ? { ...liveMetadata, [LIFECYCLE_BUILDER_METADATA_KEY]: placement.payload }
         : liveMetadata;
 
     const { plan, processKey, stageRecord } = resolveEffectiveStageOperatingPlan({
@@ -143,5 +173,12 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
         operatorGuidance: stage?.operator_guidance?.trim() || null,
         process: process ?? null,
         commandProjection,
+        commandConfiguration: {
+            // After the D-96 split these two legitimately disagree, and saying so is the point:
+            // work semantics may be pinned while command placement is live.
+            workSemanticsSource: params.governingBuilderPayload ? "pinned_revision" : "live_published",
+            source: placement ? placement.placement.source : "live_published",
+            refsByTemplateKey: placement ? placement.placement.refsByTemplateKey : {},
+        },
     };
 }

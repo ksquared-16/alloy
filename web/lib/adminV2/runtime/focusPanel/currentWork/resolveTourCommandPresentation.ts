@@ -70,6 +70,10 @@ const STATE_STEM: Partial<Record<TourBookingStatusKey, string>> = {
  * A standing appointment is a time the operator is working toward, so it leads with one. A
  * concluded tour's instant is history: "Tour completed" is the operative fact, and pinning a
  * date to it invites reading a past tour as an upcoming one.
+ *
+ * Membership here is necessary but NOT sufficient — see `ELAPSED_STEM`. A booking sitting in one
+ * of these states with an instant that has already passed is not a time the operator is working
+ * toward either, and printing it makes the same false promise a concluded tour would.
  */
 const STATE_CARRIES_TIME = new Set<TourBookingStatusKey>([
     "requested",
@@ -77,6 +81,46 @@ const STATE_CARRIES_TIME = new Set<TourBookingStatusKey>([
     "confirmed",
     "rescheduled",
 ]);
+
+/**
+ * WHAT A STANDING APPOINTMENT BECOMES ONCE ITS OWN INSTANT IS BEHIND US.
+ *
+ * A booking does not move to `completed` on its own — an operator records that outcome. So between
+ * the tour happening and someone saying what happened, the durable state is still `confirmed`, and
+ * the control read "Tour scheduled · Aug 14, 9:00 AM" three weeks after the family had already
+ * visited. Both halves of that were wrong: the tour is not scheduled, and the date is not something
+ * to work toward.
+ *
+ * The date is dropped and the state names the operator's actual position: the tour has happened and
+ * its outcome is still open — which is exactly what Record outcome, sitting in this same group, is
+ * for. Nothing here changes the durable state or which commands are offered; a booking whose time
+ * has passed is still `confirmed` to every other reader, and only its LABEL changes.
+ *
+ * States absent from this map keep their own stem and simply lose the date: a requested slot that
+ * has gone by is stale, not concluded, and "Tour requested" remains the true statement about it.
+ */
+const ELAPSED_STEM: Partial<Record<TourBookingStatusKey, string>> = {
+    confirmed: "Tour awaiting outcome",
+    rescheduled: "Tour awaiting outcome",
+};
+
+/**
+ * Whether a booking's own instant is already behind the operator. PURE — `now` is injected so this
+ * is testable without freezing the clock, and so a caller can pass a viewer-anchored instant.
+ *
+ * An unusable or missing instant is NOT "passed": there is no evidence the tour happened, so the
+ * state keeps whatever it already said rather than being demoted on a parse failure.
+ */
+export function tourInstantHasPassed(
+    startAt: string | null | undefined,
+    now: number = Date.now(),
+): boolean {
+    const raw = (startAt ?? "").trim();
+    if (!raw) return false;
+    const at = new Date(raw);
+    if (Number.isNaN(at.getTime())) return false;
+    return at.getTime() < now;
+}
 
 /** "Sep 8, 10:00 AM" in the viewer's zone. Null when there is no usable instant. */
 export function formatTourControlWhen(
@@ -110,7 +154,7 @@ export function formatTourControlWhen(
 export function resolveTourCommandPresentation<T extends { key: string; handlerKey?: string | null }>(
     actions: readonly T[],
     tour: Pick<OperationalTourSignal, "scheduled" | "startAt" | "statusKey"> | null | undefined,
-    opts?: { timeZone?: string | null },
+    opts?: { timeZone?: string | null; now?: number },
 ): TourCommandPresentation & { tour: T[]; rest: T[] } {
     const { tour: tourActions, rest } = partitionTourGroupedActions(actions);
 
@@ -129,12 +173,18 @@ export function resolveTourCommandPresentation<T extends { key: string; handlerK
         return { grouped: true, label: "Tour", statusKey, tour: tourActions, rest };
     }
 
-    const when = STATE_CARRIES_TIME.has(statusKey!)
-        ? formatTourControlWhen(tour?.startAt ?? null, opts?.timeZone ?? null)
-        : null;
+    // A time is printed only while it is still ahead. Once it is behind the operator the control
+    // states where the Tour concept actually stands instead of quoting a date that has gone by.
+    const carriesTime = STATE_CARRIES_TIME.has(statusKey!);
+    const elapsed = carriesTime && tourInstantHasPassed(tour?.startAt ?? null, opts?.now ?? Date.now());
+    const statedStem = (elapsed ? ELAPSED_STEM[statusKey!] : null) ?? stem;
+    const when =
+        carriesTime && !elapsed
+            ? formatTourControlWhen(tour?.startAt ?? null, opts?.timeZone ?? null)
+            : null;
     return {
         grouped: true,
-        label: when ? `${stem} · ${when}` : stem,
+        label: when ? `${statedStem} · ${when}` : statedStem,
         statusKey,
         tour: tourActions,
         rest,

@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import {
     formatTourControlWhen,
     resolveTourCommandPresentation,
+    tourInstantHasPassed,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveTourCommandPresentation";
 import { partitionTourGroupedActions } from "@/lib/adminV2/runtime/focusPanel/currentWork/groupTourPresentationActions";
 import type { OperationalTourSignal } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -82,7 +83,9 @@ describe("the label states the durable booking state", () => {
         const out = resolveTourCommandPresentation(
             TOUR_SET,
             signal({ scheduled: true, statusKey: "confirmed", startAt: "2026-09-08T17:00:00Z" }),
-            { timeZone: "UTC" },
+            // `now` is pinned BEFORE the booking: the time is printed because it is still ahead,
+            // and this assertion cannot quietly change meaning on the day the date goes by.
+            { timeZone: "UTC", now: Date.parse("2026-09-01T00:00:00Z") },
         );
         expect(out.label).toBe("Tour scheduled · Sep 8, 5:00 PM");
     });
@@ -152,5 +155,86 @@ describe("a concluded tour still says what it was", () => {
         expect(never.label).toBe("Tour");
         expect(done.label).toBe("Tour completed");
         expect(never.label).not.toBe(done.label);
+    });
+});
+
+describe("a tour that has already happened states its status, not its date", () => {
+    /**
+     * A booking does not conclude itself — an operator records the outcome. So a tour the family
+     * already attended sits in `confirmed` until someone says what happened, and the control read
+     * "Tour scheduled · Aug 14, 9:00 AM" three weeks after the visit: a date to work toward, for a
+     * tour that was over. The date is what has to go; the state is what the operator needs.
+     */
+    const PAST = "2026-08-14T16:00:00Z";
+    const NOW = Date.parse("2026-09-04T12:00:00Z");
+
+    it.each([
+        ["confirmed" as const],
+        ["rescheduled" as const],
+    ])("%s with an elapsed instant reads as awaiting its outcome", (statusKey) => {
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: true, statusKey, startAt: PAST }),
+            { timeZone: "UTC", now: NOW },
+        );
+        expect(out.label).toBe("Tour awaiting outcome");
+        // The DURABLE state is untouched — only the label speaks differently.
+        expect(out.statusKey).toBe(statusKey);
+    });
+
+    it("prints no date once the instant is behind the operator", () => {
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: true, statusKey: "confirmed", startAt: PAST }),
+            { timeZone: "UTC", now: NOW },
+        );
+        expect(out.label).not.toMatch(/Aug|14|9:00/);
+    });
+
+    it("keeps the date while the booking is still ahead", () => {
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: true, statusKey: "confirmed", startAt: "2026-09-08T17:00:00Z" }),
+            { timeZone: "UTC", now: NOW },
+        );
+        expect(out.label).toBe("Tour scheduled · Sep 8, 5:00 PM");
+    });
+
+    it("leaves an un-negotiated slot as what it is, minus the stale date", () => {
+        // A requested slot that has gone by is stale, not concluded: nothing says the family came.
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: true, statusKey: "requested", startAt: PAST }),
+            { timeZone: "UTC", now: NOW },
+        );
+        expect(out.label).toBe("Tour requested");
+    });
+
+    it("does not demote a booking on an unusable instant", () => {
+        // No evidence the tour happened — a parse failure must not restate the operator's position.
+        for (const startAt of [null, "", "not-a-date"]) {
+            const out = resolveTourCommandPresentation(
+                TOUR_SET,
+                signal({ scheduled: true, statusKey: "confirmed", startAt }),
+                { timeZone: "UTC", now: NOW },
+            );
+            expect(out.label).toBe("Tour scheduled");
+        }
+    });
+
+    it("still says what a concluded tour was, rather than awaiting an outcome it has", () => {
+        const out = resolveTourCommandPresentation(
+            TOUR_SET,
+            signal({ scheduled: false, statusKey: "completed", startAt: PAST }),
+            { timeZone: "UTC", now: NOW },
+        );
+        expect(out.label).toBe("Tour completed");
+    });
+
+    it("tourInstantHasPassed answers only on evidence", () => {
+        expect(tourInstantHasPassed(PAST, NOW)).toBe(true);
+        expect(tourInstantHasPassed("2026-09-08T17:00:00Z", NOW)).toBe(false);
+        expect(tourInstantHasPassed(null, NOW)).toBe(false);
+        expect(tourInstantHasPassed("not-a-date", NOW)).toBe(false);
     });
 });

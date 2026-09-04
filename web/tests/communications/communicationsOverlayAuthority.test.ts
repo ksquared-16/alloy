@@ -29,6 +29,18 @@ const ROOTS = [
     join(process.cwd(), "components/admin/communications"),
 ];
 
+/**
+ * Composers that live OUTSIDE those roots and portal to `document.body` all the same.
+ *
+ * `QuickMessageModal` is the composer Manage opens on a record, and being filed under
+ * `app/adminV2/components` rather than `.../communications` is the only reason it kept
+ * `ADMINV2_DRAWER_ACTION_MODAL_Z` (80) through the last pass. Measured in the running app: the
+ * modal at 80, the BOS rail at 95 covering everything from x=1256 rightward — so the composer
+ * opened with Send behind the rail, which an operator reads as "Message does nothing". The roots
+ * describe where these files happen to sit; this list describes what they ARE.
+ */
+const PORTALED_COMPOSERS_OUTSIDE_ROOTS = ["app/adminV2/components/QuickMessageModal.tsx"];
+
 function tsxFilesUnder(dir: string): string[] {
     const out: string[] = [];
     for (const entry of readdirSync(dir)) {
@@ -84,5 +96,25 @@ describe("Communications overlays use the platform's nested-overlay authority", 
             "utf8"
         );
         expect(src).not.toMatch(/ADMINV2_DRAWER_ACTION_MODAL_Z/);
+    });
+});
+
+describe("a composer outside the Communications roots obeys the same authority", () => {
+    it.each(PORTALED_COMPOSERS_OUTSIDE_ROOTS)("%s portals at the platform constant", (relative) => {
+        const src = readFileSync(join(process.cwd(), relative), "utf8");
+        expect(src).toMatch(/createPortal\(/);
+        expect(src).toMatch(/document\.body/);
+        expect(src).toMatch(/ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z/);
+        expect(src).not.toMatch(RAW_Z_CLASS);
+    });
+
+    it.each(PORTALED_COMPOSERS_OUTSIDE_ROOTS)("%s stays off the drawer-action layer", (relative) => {
+        // 80 < 95 (BOS rail) < 100 (shell chrome). The value is correct for a modal rendered
+        // INSIDE the drawer, and wrong for one portaled to the body — which is what makes the
+        // mistake worth naming rather than merely forbidding.
+        const src = readFileSync(join(process.cwd(), relative), "utf8");
+        const declared = src.match(/zIndex:\s*(ADMINV2_[A-Z_]+)/g) ?? [];
+        expect(declared, "no platform layer constant is applied to the overlay").not.toEqual([]);
+        expect(declared.every((d) => d.includes("ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z"))).toBe(true);
     });
 });

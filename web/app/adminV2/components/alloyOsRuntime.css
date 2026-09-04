@@ -2208,6 +2208,27 @@ html[data-alloy-os-runtime="on"]
   min-height: 0;
   overflow-y: auto;
 }
+/*
+ * THE MESSAGE BODY SCROLLS ITSELF.
+ *
+ * The body is the one region that grows without bound as the operator types, and with
+ * `overflow: visible` it neither clips nor scrolls — it SPILLS. The browser then scrolls the
+ * nearest scrollable ancestor to keep the caret in view, and that ancestor is the Focus Panel:
+ * measured over 40 typed lines the body's scrollHeight went 285 → 1195 inside a 229px box while
+ * `scrollTop` stayed pinned at 0, and the raised command card was dragged from y=315 to y=-1473 —
+ * the operator's own composer walked off the top of the panel as they wrote.
+ *
+ * Giving the body its own scroll region is the whole fix: the scrollbar appears only once the text
+ * passes the space it has, typing follows the caret inside that region, and everything written
+ * earlier stays reachable by scrolling back up. `overscroll-behavior: contain` stops a flick at the
+ * end of the body from chaining out and moving the panel behind it.
+ */
+.alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] [contenteditable="true"],
+.alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] textarea {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] textarea[aria-label="Message body"] {
   min-height: 88px;
 }
@@ -3395,7 +3416,11 @@ html[data-alloy-os-runtime-split="true"]
    * Do NOT use percentage-of-cell max-height — elevated cells reserve only the resting
    * height, so `100%` crushed Assignments below its own list content. */
   min-height: 0;
-  max-height: min(75vh, calc(100dvh - 64px));
+  /* `--alloy-os-fp-raised-available` is measured by FocusPanelCardGrid: the room between where a
+   * raised card LANDS (canvas top + inset) and the bottom of the visible Focus Panel. The viewport
+   * terms stay as the cap this KIND of card declares; the measured term is what keeps the card —
+   * and its command footer — inside the panel the operator is actually looking at. */
+  max-height: min(75vh, calc(100dvh - 64px), var(--alloy-os-fp-raised-available, 100dvh));
   height: max-content;
   overflow: hidden;
   z-index: 60;
@@ -3437,7 +3462,7 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard[data-universal-card-modal="command"] {
   width: min(var(--alloy-os-focus-panel-command-max-width, 560px), calc(100% - 32px));
-  max-height: min(76vh, calc(100dvh - 64px));
+  max-height: min(76vh, calc(100dvh - 64px), var(--alloy-os-fp-raised-available, 100dvh));
   top: 22px;
 }
 
@@ -3445,7 +3470,7 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard[data-universal-card-modal="record"] {
   width: min(var(--alloy-os-focus-panel-record-max-width, 880px), calc(100% - 32px));
-  max-height: min(84vh, calc(100dvh - 56px));
+  max-height: min(84vh, calc(100dvh - 56px), var(--alloy-os-fp-raised-available, 100dvh));
   top: 20px;
 }
 
@@ -3458,7 +3483,7 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard[data-universal-card-modal="workstation"] {
   width: min(var(--alloy-os-focus-panel-detail-max-width, 1180px), calc(100% - 32px));
-  max-height: min(96vh, calc(100dvh - 28px));
+  max-height: min(96vh, calc(100dvh - 28px), var(--alloy-os-fp-raised-available, 100dvh));
   top: 12px;
 }
 
@@ -3519,7 +3544,7 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard--expanded:has([data-room-picker="true"]) {
   height: max-content;
   /* Viewport-based only — cell % height is the resting reservation and clips content. */
-  max-height: min(75vh, calc(100dvh - 64px));
+  max-height: min(75vh, calc(100dvh - 64px), var(--alloy-os-fp-raised-available, 100dvh));
   overflow: hidden;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
@@ -6794,11 +6819,15 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   flex: 0 0 auto;
   padding-bottom: 6px;
 }
-/* Cap the centered card to the viewport; height follows content (max-content on the base rule). */
+/* Cap the centered card to the VISIBLE PANEL; height follows content (max-content on the base rule).
+ * This rule matches the base elevated-card rule's specificity and comes later, so it is the one that
+ * decides how tall an open command surface may grow — it therefore has to carry the measured term too.
+ * With only viewport units a 760px-tall window put the Send footer 178px below the panel: 86vh is a
+ * cap on the WINDOW, and the card does not start at the top of the window. */
 .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-currentwork[data-capability-active="true"]
   .alloy-os-ucard {
-  max-height: min(86vh, calc(100dvh - 40px));
+  max-height: min(86vh, calc(100dvh - 40px), var(--alloy-os-fp-raised-available, 100dvh));
 }
 .alloy-os-currentwork__focused[data-has-panel="true"] {
   min-height: 0;

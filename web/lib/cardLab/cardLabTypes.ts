@@ -421,6 +421,12 @@ export type ProcessAction = {
     /** Executes through the shared command host. Absent in the lab. */
     onInvoke?: () => void;
     /**
+     * Operator intent ahead of the click — hover, keyboard focus, or opening the group this command
+     * sits in. The runtime decides what that is worth warming; the card only reports the gesture,
+     * and a command that warms nothing simply omits it. Absent in the lab.
+     */
+    onIntent?: () => void;
+    /**
      * Secondary operations on the SAME operational concept, presented behind this control.
      *
      * Present only when the command runtime has already decided these belong together — the
