@@ -1,3 +1,4 @@
+import { applyCohortLocalManualPositions } from "@/lib/orchestration/placement/applyCohortLocalManualPositions";
 import { comparePlacementSortTuples } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { readNormalizedCohortFromWaitlistRow } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
@@ -40,7 +41,7 @@ export function sortPlacementCandidateQueueRows(
 ): Array<Record<string, unknown>> {
     if (rows.length < 2) return rows;
 
-    return [...rows].sort((a, b) => {
+    const natural = [...rows].sort((a, b) => {
         const ca = readNormalizedCohortFromWaitlistRow(a);
         const cb = readNormalizedCohortFromWaitlistRow(b);
         if (ca && !cb) return -1;
@@ -75,4 +76,14 @@ export function sortPlacementCandidateQueueRows(
 
         return String(a.id ?? "").localeCompare(String(b.id ?? ""));
     });
+
+    /*
+     * The natural order is settled above. A manual position is the operator placing a row INTO that
+     * order, so it is applied here rather than as a sort key — see
+     * `applyCohortLocalManualPositions` for why an ordinal cannot be a tuple component.
+     *
+     * Shadow mode never reorders, so it never places either: a preview must show what the rules
+     * alone produce.
+     */
+    return shadowMode ? natural : applyCohortLocalManualPositions(natural);
 }
