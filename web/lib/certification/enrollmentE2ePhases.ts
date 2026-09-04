@@ -1457,7 +1457,22 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     participantEntry,
     priorTruthConfirmation,
     semanticWalk,
-    requirementCompletion,
+    /*
+     * THE EXCEPTION RUNS BEFORE THE REQUIREMENT IS SATISFIED, and the order is a contract rather
+     * than a preference.
+     *
+     * M needs an OUTSTANDING requirement to be meaningful: it proves the block, excepts it, refuses
+     * an unauthorised actor, then revokes so the block returns. G then satisfies that same
+     * requirement through the participant product.
+     *
+     * Running G first made M fail with "no blocking requirement to except" — correctly, and only
+     * once G started working. While G was broken the order looked fine, which is worth noting: a
+     * failing phase can conceal an ordering error in the phase after it.
+     *
+     * M leaves the requirement blocking again, so it is exactly G's precondition. The sequence is
+     * intentional mutation, declared here rather than discovered later.
+     */
     governedException,
+    requirementCompletion,
     ...browserPhases,
 ];
