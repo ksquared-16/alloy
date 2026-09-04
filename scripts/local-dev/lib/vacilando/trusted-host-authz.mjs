@@ -164,6 +164,14 @@ export function isOperatorOnlyAuthzEnvironment(env) {
  * WHY NOT THE OTHERS — each is a real trust boundary, and the count of asks is
  * not an argument against a boundary:
  *
+ *   environment.restore_deployed_qa_session
+ *                            reads as the sibling above and is not. That one
+ *                            authenticates loopback on this machine; this one
+ *                            authenticates a PUBLIC host, so it has an external
+ *                            side effect by definition. Named here rather than
+ *                            merely absent from the list below, because an
+ *                            omission reads as an oversight somebody later
+ *                            "fixes".
  *   repository.merge_pull_request  promotion authority into staging. A standing
  *                            grant would cover a head SHA nobody reviewed.
  *   database.apply_migration       production mutation.

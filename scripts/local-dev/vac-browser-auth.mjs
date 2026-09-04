@@ -5,6 +5,7 @@
  *   vac browser-auth status  --lane <id> [--slot N]
  *   vac browser-auth sign-in --lane <id> [--slot N] [--timeout <seconds>]
  *   vac browser-auth verify  --lane <id> [--slot N]
+ *   vac browser-auth restore-deployed --target <deployed_target_key>
  *
  * `sign-in` opens the slot's own isolated browser on its loopback base and waits
  * for a PERSON to authenticate. The agent starts it and can abandon it; the
@@ -46,10 +47,11 @@ Credentials never reach the agent, the prompt, the logs or the result.
 const args = process.argv.slice(2);
 if (!args.length || args[0] === "-h" || args[0] === "--help") usage(args.length ? 0 : 2);
 const op = args.shift();
-if (!["status", "sign-in", "verify", "restore"].includes(op)) usage();
+if (!["status", "sign-in", "verify", "restore", "restore-deployed"].includes(op)) usage();
 
 let laneId = null;
 let slot = null;
+let targetKey = null;
 let timeoutS = null;
 let asJson = false;
 while (args.length) {
@@ -58,10 +60,70 @@ while (args.length) {
   else if (a.startsWith("--lane=")) laneId = a.slice(7);
   else if (a === "--slot") slot = args.shift() || "";
   else if (a.startsWith("--slot=")) slot = a.slice(7);
+  else if (a === "--target") targetKey = args.shift() || "";
+  else if (a.startsWith("--target=")) targetKey = a.slice(9);
   else if (a === "--timeout") timeoutS = Number(args.shift());
   else if (a === "--json") asJson = true;
   else usage();
 }
+/*
+ * The deployed branch, placed BEFORE lane resolution on purpose.
+ *
+ * A deployed target has no lane, no slot and no port, so making it pass through the lane-shaped
+ * argument handling below would mean inventing one of each — and an invented slot is exactly the
+ * kind of near-miss that lets a deployed request be answered with a loopback session. It takes a
+ * registry KEY and nothing else: there is no --url, no --identity and no --cookie-domain to supply,
+ * because those are not the caller's to choose.
+ *
+ * Like `restore`, this REQUESTS and does not perform. Nothing privileged runs here.
+ */
+if (op === "restore-deployed") {
+  if (!targetKey) {
+    process.stderr.write("vac browser-auth restore-deployed: --target <deployed_target_key> is required\n");
+    process.exit(2);
+  }
+  const { resolveDeployedTarget } = await import("./lib/vacilando/deployed-target-registry.mjs");
+  const resolved = resolveDeployedTarget(targetKey);
+  if (!resolved.ok) {
+    process.stderr.write(`vac browser-auth restore-deployed: ${resolved.error} — ${resolved.detail || ""}\n`);
+    process.exit(4);
+  }
+  const t = resolved.target;
+  const { resolveGovernedAuthority } = await import("./lib/vacilando/governed-repository-authority.mjs");
+  const { requestGovernedAction } = await import("./lib/vacilando/governed-action-request.mjs");
+  const authority = await resolveGovernedAuthority(laneId || null);
+  const asked = requestGovernedAction({
+    action_key: ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION,
+    run_id: process.env.VACILANDO_RUN_ID || null,
+    lane_id: laneId || null,
+    reason_worker_cannot_execute:
+      "Minting a session on a deployed host uses the service-role boundary against a public deployment. A worker may request it; only the operator may approve it.",
+    inputs: { deployed_target: t.key },
+    __authority: authority,
+  }, { processNow: false });
+
+  if (!asked?.ok) {
+    const err = asked?.error || "request_refused";
+    if (asJson) process.stdout.write(`${JSON.stringify({ ok: false, error: err })}\n`);
+    else process.stdout.write(`Deployed restore could not be requested: ${err}\n`);
+    process.exit(4);
+  }
+  const requestId = asked.request?.request_id || null;
+  if (asJson) {
+    process.stdout.write(`${JSON.stringify({
+      ok: true, request_id: requestId, target_key: t.key,
+      environment: t.environment, host: t.host, expected_identity: t.qa_identity,
+      state: "awaiting_operator_approval",
+    })}\n`);
+  } else {
+    process.stdout.write(`Deployed restore requested for ${t.host} (${t.qa_identity}).\n`);
+    process.stdout.write(`Awaiting operator approval — nothing privileged runs until it is granted.\n`);
+    process.stdout.write(`  Director surface: Restore QA session on ${t.host}\n`);
+    if (requestId) process.stdout.write(`  request ${requestId}\n`);
+  }
+  process.exit(0);
+}
+
 if (!laneId) usage();
 
 const lane = getDurableLane(laneId);

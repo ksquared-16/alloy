@@ -214,6 +214,12 @@ export const ACTION_CLASS_INVENTORY = Object.freeze([
     bounds: null,
   }),
   Object.freeze({
+    class_id: "environment.restore_deployed_qa_session", surface: "qa_identity", action_key: "environment.restore_deployed_qa_session", tier: C,
+    executes_via: "operator only",
+    why: "The deployed sibling of the class above, and reserved for the same reason with one addition: the destination is a public host, so a wrong approval authenticates something the operator can neither see nor unwind from a local prompt.",
+    bounds: "Only a target named in the deployed-target registry. The caller supplies a key; base URL, host, cookie domain, Supabase project and QA identity are resolved from the registry, and the credentials must be PROVEN to back that deployment before anything is minted.",
+  }),
+  Object.freeze({
     class_id: "environment.provision_qa_identity", surface: "qa_identity", action_key: "environment.provision_qa_identity", tier: C,
     executes_via: "operator only",
     why: "Creating an identity creates a principal that can then be granted access. That is an authority boundary, not a fixture.",

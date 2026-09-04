@@ -63,6 +63,10 @@ export const OPERATOR_OWNED_ACTION_KEYS = Object.freeze([
   "environment.provision_qa_identity",
   "environment.assign_qa_identity_access",
   "environment.restore_qa_session",
+  // Authenticating a PUBLIC host is at least as consequential as authenticating a loopback slot.
+  // Listed explicitly rather than left to policy matching: an action absent from this list is one
+  // a future delegated policy could pick up, and "deployed" is the wrong place to discover that.
+  "environment.restore_deployed_qa_session",
   "credential.provision",
   "credential.bind_trusted_secret",
   "executor.grant_authority",

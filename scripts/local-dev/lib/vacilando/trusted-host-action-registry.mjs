@@ -11,6 +11,7 @@ import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
+import { validateRestoreDeployedQaSessionInputs } from "./deployed-qa-session-restore-action.mjs";
 import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
 import { validateProvisionQaIdentityInputs } from "./qa-identity-provision-action.mjs";
 import { validateAssignQaAccessInputs } from "./qa-access-assign-action.mjs";
@@ -31,6 +32,7 @@ export const ACTION_TYPES = Object.freeze({
   PROMOTION_OPEN_PR: "promotion.open_pr",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
+  ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION: "environment.restore_deployed_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
   ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS: "environment.assign_qa_identity_access",
   REPOSITORY_CLOSE_PULL_REQUEST: "repository.close_pull_request",
@@ -590,6 +592,38 @@ function defineDatabaseApplyMigration() {
  * or host. It always requires an operator grant: this is a service-role action, and an agent that
  * could approve its own is not governed at all.
  */
+/**
+ * The deployed sibling.
+ *
+ * Deliberately a SEPARATE registration rather than an optional field on the local one. Two actions
+ * cannot be confused by an operator reading a card, and an approval for a loopback slot session can
+ * never be spent on a public host — which is exactly the substitution this capability exists to
+ * prevent.
+ */
+function defineEnvironmentRestoreDeployedQaSession() {
+  return {
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION,
+    version: 1,
+    title: "Restore a managed QA browser session on a deployed target",
+    requiredCapability: "trusted_host.environment.restore_deployed_qa_session",
+    riskClass: "privileged_write",
+    alwaysRequiresOperatorApproval: true,
+    timeoutMs: 300_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    // One key. Not a URL, not a project, not a cookie domain, not an account.
+    inputSchema: { required: ["deployed_target"] },
+    outputSchema: { status: "string", verified: "boolean", verified_at: "string", target_key: "string" },
+    evidenceSchema: [
+      "deployed_target_registered", "deployed_base_is_https", "trusted_env_source_readable",
+      "deployment_states_its_project", "project_backing_proven", "storage_destination_is_deployed",
+      "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateRestoreDeployedQaSessionInputs(inputs);
+    },
+  };
+}
+
 function defineEnvironmentRestoreQaSession() {
   return {
     actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
@@ -662,6 +696,7 @@ function defineEnvironmentAssignQaIdentityAccess() {
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
   [ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, defineEnvironmentRestoreQaSession()],
+  [ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION, defineEnvironmentRestoreDeployedQaSession()],
   [ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, defineEnvironmentProvisionQaIdentity()],
   [ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS, defineEnvironmentAssignQaIdentityAccess()],
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],

@@ -51,6 +51,7 @@ import {
   fulfillApplyReconciliationPlanForMission,
   fulfillRetireWorktreeForMission,
   fulfillDeleteRemoteBranchForMission,
+  fulfillRestoreDeployedQaSessionForMission,
   fulfillRestoreQaSessionForMission,
   fulfillProvisionQaIdentityForMission,
   fulfillAssignQaAccessForMission,
@@ -63,6 +64,7 @@ import {
   fulfillLaneDispatchForMission,
   previewTrustedHostAuthorization,
 } from "./trusted-host-actions.mjs";
+import { resolveDeployedTarget } from "./deployed-target-registry.mjs";
 import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
 import { ACCESS_IDENTITY_STAGING_MIGRATIONS } from "./trusted-host-migrate.mjs";
 import { createDecision, listDecisions, answerDecision } from "./decisions.mjs";
@@ -336,6 +338,28 @@ export function presentationForGovernedAction(req = {}) {
       wait_label: "Waiting on Director — QA identity provisioning",
       mission_need: `Needs approval — Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`,
       detail: `Create the managed, non-production QA account ${identity}${slot ? ` for Slot ${slot}` : ""} in hosted staging · lane ${lane} · no email is sent · no human-managed password is created · creates no browser session`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    /*
+     * A deployed approval must READ as deployed. The hazard here is the exact inverse of the one the
+     * local branch below was written for: an operator shown "Restore QA session on Slot 1" while
+     * approving an action that authenticates a public host has approved something they were not
+     * told about. The card therefore names the environment and the host, because those are the two
+     * facts that decide whether this approval is the right one.
+     */
+    const key2 = inputs.deployed_target || inputs.deployedTarget || inputs.target_key || "";
+    const resolved = resolveDeployedTarget(key2);
+    const t = resolved.ok ? resolved.target : null;
+    const host = t?.host || "the registered deployed target";
+    const env = t?.environment || "deployed";
+    const identity = t?.qa_identity || "the target's registered QA identity";
+    return {
+      approve_label: "Authorize deployed QA session restore",
+      deny_label: "Deny",
+      wait_label: `Waiting on Director — deployed QA session restore (${env})`,
+      mission_need: `Needs approval — Restore QA session on ${host}`,
+      detail: `Restore the browser session for ${identity} on ${host} · ${env} · target resolved from the registry, not from the request · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
     };
   }
   if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
@@ -740,6 +764,13 @@ export function operatorLabel(rec) {
   if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
     const slot = operatorSlotHint(rec);
     return `Restore QA browser session${slot ? ` on Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    const k = inputs.deployed_target || inputs.deployedTarget || inputs.target_key || "";
+    const resolved = resolveDeployedTarget(k);
+    return resolved.ok
+      ? `Restore QA browser session on ${resolved.target.host}`
+      : "Restore QA browser session on a deployed target";
   }
   if (key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
     const n = Array.isArray(inputs.corrections) ? inputs.corrections.length : 0;
@@ -1470,6 +1501,7 @@ function defaultModeForAction(actionKey, requested) {
   // promotion nor a migration. Inventing a mode name instead fails `invalid_mode`, and widening the
   // enum would add governance vocabulary for one action that already has a home.
   if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
@@ -1477,6 +1509,14 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) return "other";
   if (actionKey === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) return "other";
+  /*
+   * Both of these shipped without a default and worked anyway, because every payload that ever
+   * proposed them set `requested_mode` explicitly. That is precisely the latent form of the trap
+   * NC14 exists to catch: the first caller that omits the mode gets `policy_denied`, which reads as
+   * the operator forbidding the action rather than nobody having assigned it one.
+   */
+  if (actionKey === ACTION_TYPES.HOST_INSTALL_TOOLKIT) return "other";
+  if (actionKey === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) return "other";
   return "read_only";
 }
 
@@ -2686,6 +2726,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    return fulfillRestoreDeployedQaSessionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}) },
       actor,
       nowMs,
       grant,
