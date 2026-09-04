@@ -67,6 +67,10 @@ case "${1:-}" in
     shift
     exec node "$SCRIPT_DIR/vac-health.mjs" "$@"
     ;;
+  capacity)
+    shift
+    exec node "$SCRIPT_DIR/vac-capacity.mjs" "$@"
+    ;;
   reconcile)
     shift
     exec node "$SCRIPT_DIR/vac-reconcile.mjs" "$@"
