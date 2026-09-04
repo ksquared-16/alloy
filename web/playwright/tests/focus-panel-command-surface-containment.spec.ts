@@ -62,6 +62,24 @@ const MEASURE = `(() => {
     };
 })`;
 
+/** What `MEASURE` reports back. Declared so the assertions below are type-checked, not asserted at. */
+type Box = { top: number; bottom: number; left: number; right: number; w: number; h: number };
+type CommandSurfaceMeasurement = {
+    raisedKey: string | null;
+    requestedKey: string | null;
+    surfaceMounted: boolean;
+    panel: Box | null;
+    card: Box | null;
+    footer: Box | null;
+    onTop: { isScrim: boolean | null; insideCard: boolean } | null;
+    innerScrollers: Array<{ scrollH: number; clientH: number }>;
+    cardZ: number | null;
+    scrimZ: number | null;
+    cellOpacity: string | null;
+    cellFilter: string | null;
+    pageScrollable: boolean;
+};
+
 async function openSendTourInvitation(page: Page): Promise<boolean> {
     await page.goto(WORK_UNIT, { waitUntil: "domcontentloaded" });
     await page.waitForSelector('[data-fp-grid-area="business_process"]', { timeout: 120_000 });
@@ -113,7 +131,7 @@ for (const vp of [
         const opened = await openSendTourInvitation(page);
         test.skip(!opened, "this subject's Process card presents no Tour invitation command");
 
-        const m = (await page.evaluate(`${MEASURE}()`)) as Record<string, never> & Record<string, any>;
+        const m = (await page.evaluate(`${MEASURE}()`)) as CommandSurfaceMeasurement;
         console.log(`COMMAND SURFACE @ ${vp.name}:`, JSON.stringify(m));
 
         expect(m.surfaceMounted, "the composer never mounted").toBe(true);
@@ -124,21 +142,31 @@ for (const vp of [
         expect(m.cellFilter, "a filter on the raised cell would trap it below the scrim").toBe("none");
 
         // ── Layering: above its own backdrop, and hit-testable ──────────────
-        expect(m.cardZ).toBeGreaterThan(m.scrimZ);
+        // Asserted before they are read, so a missing box fails as "nothing was raised" rather
+        // than as an unrelated error deep in the geometry comparisons below.
+        expect(m.cardZ, "the raised card carries no stacking level").not.toBeNull();
+        expect(m.scrimZ, "no depth scrim was painted").not.toBeNull();
+        expect(m.card, "nothing was raised to measure").not.toBeNull();
+        expect(m.panel, "no Focus Panel scroll region to contain it").not.toBeNull();
+        expect(m.footer, "the command surface showed no Send control").not.toBeNull();
+        const card = m.card as Box;
+        const panel = m.panel as Box;
+        const footer = m.footer as Box;
+
+        expect(m.cardZ as number).toBeGreaterThan(m.scrimZ as number);
         expect(m.onTop?.isScrim, "the command surface is painted UNDER the depth scrim").toBe(false);
         expect(m.onTop?.insideCard, "the topmost element over the composer is outside the card").toBe(true);
 
         // ── Containment: inside the visible Focus Panel work region ─────────
-        expect(m.card.top).toBeGreaterThanOrEqual(m.panel.top - EDGE_TOLERANCE_PX);
-        expect(m.card.bottom).toBeLessThanOrEqual(m.panel.bottom + EDGE_TOLERANCE_PX);
-        expect(m.footer, "the command surface showed no Send control").not.toBeNull();
+        expect(card.top).toBeGreaterThanOrEqual(panel.top - EDGE_TOLERANCE_PX);
+        expect(card.bottom).toBeLessThanOrEqual(panel.bottom + EDGE_TOLERANCE_PX);
         // Inside its own card — `overflow: hidden` means anything past this edge is CLIPPED,
         // which is how a viewport-sized cap lost the Send button on a 760px-tall window.
-        expect(m.footer.bottom, "the Send control is clipped by its own card").toBeLessThanOrEqual(
-            m.card.bottom,
+        expect(footer.bottom, "the Send control is clipped by its own card").toBeLessThanOrEqual(
+            card.bottom,
         );
-        expect(m.footer.bottom, "the Send control fell below the visible panel").toBeLessThanOrEqual(
-            m.panel.bottom,
+        expect(footer.bottom, "the Send control fell below the visible panel").toBeLessThanOrEqual(
+            panel.bottom,
         );
 
         // ── Scroll: one intentional region, and never the page ──────────────
@@ -151,7 +179,7 @@ for (const vp of [
         // ── Escape returns to the Process card ──────────────────────────────
         await page.keyboard.press("Escape");
         await page.waitForTimeout(1200);
-        const closed = (await page.evaluate(`${MEASURE}()`)) as Record<string, any>;
+        const closed = (await page.evaluate(`${MEASURE}()`)) as CommandSurfaceMeasurement;
         expect(closed.raisedKey, "the command surface did not close").toBeNull();
         expect(
             await page.locator('[data-fp-grid-area="business_process"] [data-process-action-group="tour"]').count(),
