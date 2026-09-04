@@ -1,0 +1,219 @@
+{
+  "captured_at": "2026-09-04T12:08:20.788Z",
+  "base": "http://127.0.0.1:3030",
+  "passed": 19,
+  "failed": 23,
+  "results": [
+    {
+      "name": "mobile Home: a global Needs You control exists",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lanes: a global Needs You control exists",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lane: a global Needs You control exists",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home: a global Needs You control exists",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lanes: a global Needs You control exists",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lane: a global Needs You control exists",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "Home renders no permanent Needs You card",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "Home renders no permanent approvals block",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "Home shows an operational subset, not the directory",
+      "ok": true,
+      "detail": "Home 9 of 18 on Lanes"
+    },
+    {
+      "name": "Home names that subset and offers the directory",
+      "ok": false,
+      "detail": "Lanes"
+    },
+    {
+      "name": "Home keeps its command-centre blocks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "there is no thread-level Copy anywhere",
+      "ok": false,
+      "detail": "1 found"
+    },
+    {
+      "name": "user message owns a Copy control",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "user short message needs no See more but keeps Copy",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "provider message owns a Copy control",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "provider short message needs no See more but keeps Copy",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "no standalone Current Work card",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "no second progress subsystem",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no ETA anywhere",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the lane status line carries state (and progress when fresh)",
+      "ok": false,
+      "detail": "Idle"
+    },
+    {
+      "name": "no operator-facing surface says suspended — /home",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /activity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /system",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes/lane_faacca6079ad",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "lane resources never show a CPU figure that was not measured",
+      "ok": true,
+      "detail": "(no resources block — no live seat for this lane)"
+    },
+    {
+      "name": "a lane opened from Home returns to Home",
+      "ok": false,
+      "detail": "back=\"#/lanes\" crumb=\"Lanes\""
+    },
+    {
+      "name": "a lane opened from Lanes returns to Lanes",
+      "ok": true,
+      "detail": "back=\"#/lanes\" crumb=\"Lanes\""
+    },
+    {
+      "name": "compose 390: typing enters compose mode",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: the field is the dominant surface above the keyboard",
+      "ok": false,
+      "detail": "68px of 380 = 18%"
+    },
+    {
+      "name": "compose 390: the field owns its own line",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: Send and attach stay reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: the provider stays reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: orientation chrome stands down",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: some conversation remains",
+      "ok": true,
+      "detail": "125px"
+    },
+    {
+      "name": "compose 320: typing enters compose mode",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: the field is the dominant surface above the keyboard",
+      "ok": false,
+      "detail": "54px of 300 = 18%"
+    },
+    {
+      "name": "compose 320: the field owns its own line",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: Send and attach stay reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: the provider stays reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: orientation chrome stands down",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: some conversation remains",
+      "ok": true,
+      "detail": "59px"
+    }
+  ],
+  "what_this_is": "The RUNNING, INSTALLED Gateway measured BEFORE this pass was promoted — toolkit 684153774d2a, which is staging and does not contain the candidate. It is kept as the baseline the operator described in prose: no global Needs You control on any surface, a permanent Needs You card and approvals block on Home, a THREAD-LEVEL Copy and no message-local Copy, the Current Work card still rendered, Back going to Lanes from a lane opened from Home, and a compose field of 68px in a 380px keyboard viewport (18%). 19 passed, 23 failed. The same script is re-run after installation; these are the checks that have to flip."
+}
