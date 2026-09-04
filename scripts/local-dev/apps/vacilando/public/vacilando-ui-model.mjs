@@ -1093,6 +1093,7 @@ export function buildLaneThread(lane, {
   attachments = [],
   nowMs = Date.now(),
   providerLabel = "Provider",
+  paneText = "",
 } = {}) {
   const entries = [];
   const run = lane?.execution_run || lane?.previous_run || null;
@@ -1178,7 +1179,14 @@ export function buildLaneThread(lane, {
       author: providerLabel,
       at_ms: at,
       clock: clockOf(at),
-      body: assistant.text || "",
+      // WHAT THE PROVIDER SAID, WHATEVER SHAPE IT ARRIVED IN.
+      //
+      // This was `assistant.text` alone, which is empty for a WORKING message
+      // whose content is the live pane output. The message still rendered — and
+      // still showed that output — but carried no Copy control, because the row
+      // only offers one when there is a body to copy. A provider message the
+      // operator can read is a provider message they can take with them.
+      body: assistant.text || assistant.report?.message || paneText || "",
       source: assistant,
       working,
       // "CLAUDE · WORKING" rather than a clock, when it is mid-utterance.
