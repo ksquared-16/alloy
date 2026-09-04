@@ -207,3 +207,107 @@ test("LIVE — this host really is behind promoted staging", () => {
   assert.equal(typeof ev.toolkit_drift, "boolean");
   assert.equal(ev.previous_toolkit_retained, true, "the installed tree must remain as a rollback target");
 });
+
+/* ── Part 3: drift must be observable without terminal archaeology ───────── */
+
+const owner = (path) => () => ({ pid: 1176, argv: ["/usr/bin/node", path, "--port", "3030"] });
+
+test("a sha-pinned gateway path is read as pinned", () => {
+  const gw = T.observeGatewayExecution({
+    readOwner: owner("/Users/x/.local/share/alloy/toolkit/4ee65145b96b/lib/vacilando-server.mjs"),
+  });
+  assert.equal(gw.executing_sha, "4ee65145b96b");
+  assert.equal(gw.path_is_pinned, true);
+  assert.equal(gw.resolves_through_current, false);
+});
+
+test("a path through `current` is UNPINNED — it says where to look, not what is loaded", () => {
+  const gw = T.observeGatewayExecution({
+    readOwner: owner("/Users/x/.local/share/alloy/toolkit/current/lib/vacilando-gateway-host.mjs"),
+  });
+  assert.equal(gw.executing_sha, null);
+  assert.equal(gw.path_is_pinned, false);
+  assert.equal(gw.resolves_through_current, true);
+});
+
+test("installed-but-not-running is its own state, never 'converged'", () => {
+  // The exact hazard: the symlink was flipped, the process was not restarted.
+  const st = T.convergenceStatus({
+    ...fixture({ installed: STAGING.slice(0, 12) }),
+    readLink: () => `/toolkit/${STAGING.slice(0, 12)}`,
+    readOwner: owner(`/Users/x/.local/share/alloy/toolkit/${OLD}/lib/vacilando-server.mjs`),
+  });
+  assert.equal(st.drifted, false, "the install itself did land");
+  assert.equal(st.gateway_matches_installed, false);
+  assert.equal(st.converged, false, "a flipped symlink is not a converged host");
+  assert.match(st.headline, /GATEWAY BEHIND INSTALL/);
+});
+
+test("an unpinned gateway leaves convergence UNVERIFIED, never ok", () => {
+  const st = T.convergenceStatus({
+    ...fixture({ installed: STAGING.slice(0, 12) }),
+    readLink: () => `/toolkit/${STAGING.slice(0, 12)}`,
+    readOwner: owner("/Users/x/.local/share/alloy/toolkit/current/lib/vacilando-gateway-host.mjs"),
+  });
+  assert.equal(st.gateway_matches_installed, null);
+  assert.equal(st.converged, false);
+  assert.match(st.headline, /TOOLKIT UNVERIFIED/);
+});
+
+test("LIVE — this host reports drift in one line", () => {
+  const st = T.convergenceStatus({
+    ownerPath: "/Users/vacilando/.local/state/alloy-dev/gateway/vacilando/control-plane-owner.json",
+  });
+  assert.match(st.headline, /^(TOOLKIT DRIFT|CONVERGED|GATEWAY BEHIND INSTALL|TOOLKIT UNVERIFIED)/);
+  assert.equal(typeof st.staging_sha, "string");
+  assert.equal(typeof st.installed_sha, "string");
+});
+
+/* ── Part 5: convergence fails closed ────────────────────────────────────── */
+
+const okStatus = {
+  installed_sha: "684153774d2a", gateway_executing_sha: "684153774d2a",
+  gateway_matches_installed: true, gateway_path_is_pinned: true,
+};
+
+test("a fully verified convergence is the only thing called converged", () => {
+  const v = T.verifyConvergenceOutcome({
+    expectedSha: "684153774d2a", status: okStatus, loopbackHealth: 200, directorHealth: 200,
+  });
+  assert.equal(v.verified, true);
+  assert.equal(v.outcome, "converged");
+  assert.equal(v.rollback_recommended, false);
+});
+
+test("an install that landed the wrong sha is not converged", () => {
+  const v = T.verifyConvergenceOutcome({
+    expectedSha: "684153774d2a",
+    status: { ...okStatus, installed_sha: OLD, gateway_executing_sha: OLD },
+    loopbackHealth: 200, directorHealth: 200,
+  });
+  assert.equal(v.verified, false);
+  assert.ok(v.reasons.some((r) => r.includes("not the expected")));
+});
+
+test("unmeasured health is not healthy, and does NOT trigger rollback", () => {
+  const v = T.verifyConvergenceOutcome({ expectedSha: "684153774d2a", status: okStatus });
+  assert.equal(v.verified, false);
+  assert.equal(v.outcome, "unverified");
+  // Rolling back a possibly-fine toolkit on no evidence is its own outage.
+  assert.equal(v.rollback_recommended, false);
+});
+
+test("an OBSERVED health failure recommends rollback", () => {
+  const v = T.verifyConvergenceOutcome({
+    expectedSha: "684153774d2a", status: okStatus, loopbackHealth: 503, directorHealth: 200,
+  });
+  assert.equal(v.verified, false);
+  assert.equal(v.outcome, "failed_health");
+  assert.equal(v.rollback_recommended, true);
+});
+
+test("an unreadable status can never verify", () => {
+  const v = T.verifyConvergenceOutcome({ expectedSha: "684153774d2a", status: null, loopbackHealth: 200, directorHealth: 200 });
+  assert.equal(v.verified, false);
+  assert.ok(v.reasons.some((r) => r.includes("unreadable")));
+});

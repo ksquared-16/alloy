@@ -198,6 +198,166 @@ export function planToolkitConvergence(ev = {}) {
 }
 
 /**
+ * What the Gateway is ACTUALLY executing, read from the process rather than
+ * inferred from the symlink.
+ *
+ * This distinction is not pedantry, and the live host proves why. Two processes
+ * carry two different truths:
+ *
+ *   pid A  .../toolkit/current/lib/vacilando-gateway-host.mjs   (unpinned)
+ *   pid B  .../toolkit/<sha>/lib/vacilando-server.mjs           (pinned to a sha)
+ *
+ * Flipping `current` moves NEITHER. The unpinned one already has the old module
+ * graph in memory; the pinned one names the old commit outright. So an install
+ * that only flips the symlink leaves a Gateway running code that is no longer
+ * what `current` says — and every symlink-based check would report success.
+ *
+ * "Installed" and "running" are therefore separate facts, which is the same
+ * distinction the turn summary refuses to let anyone blur.
+ */
+export function observeGatewayExecution({
+  ownerPath = null,
+  readOwner = null,
+  psRunner = null,
+  toolkitRoot = TOOLKIT_ROOT,
+} = {}) {
+  const out = {
+    gateway_pid: null,
+    gateway_argv: null,
+    executing_path: null,
+    executing_sha: null,
+    path_is_pinned: null,
+    resolves_through_current: null,
+  };
+
+  let owner = null;
+  try {
+    owner = readOwner ? readOwner() : JSON.parse(readFileSync(ownerPath, "utf8"));
+  } catch { owner = null; }
+
+  if (owner && Array.isArray(owner.argv) && owner.argv.length > 1) {
+    out.gateway_pid = owner.pid ?? null;
+    out.gateway_argv = owner.argv;
+    out.executing_path = owner.argv[1];
+  } else if (psRunner) {
+    const line = psRunner();
+    if (line) {
+      const m = String(line).trim().match(/^(\d+)\s+(.*)$/);
+      if (m) {
+        out.gateway_pid = Number(m[1]);
+        out.gateway_argv = m[2].split(/\s+/);
+        out.executing_path = out.gateway_argv[1] || null;
+      }
+    }
+  }
+
+  if (out.executing_path) {
+    const p = String(out.executing_path);
+    out.resolves_through_current = p.includes(`${toolkitRoot}/current/`) || p.includes("/toolkit/current/");
+    const m = p.match(/\/toolkit\/([0-9a-f]{12})\//);
+    out.executing_sha = m ? m[1] : null;
+    // A path that names a sha is pinned. One that goes through `current` is not:
+    // it says where to look, never what is loaded.
+    out.path_is_pinned = out.executing_sha != null;
+  }
+  return out;
+}
+
+/**
+ * The whole convergence picture in one object.
+ *
+ * A future old-toolkit condition has to be answerable without terminal
+ * archaeology, so every fact the question needs lives here: what staging is,
+ * what is installed, what is RUNNING, whether those agree, and what we would
+ * roll back to.
+ */
+export function convergenceStatus(opts = {}) {
+  const ev = measureToolkitConvergence(opts);
+  const plan = planToolkitConvergence(ev);
+  const gw = observeGatewayExecution(opts);
+
+  // Installed-vs-running is its own question. Null when the executing path is
+  // unpinned: not converged, not drifted — UNKNOWN, which must never read as ok.
+  const gatewayMatchesInstalled = gw.executing_sha == null
+    ? null
+    : gw.executing_sha === ev.installed_toolkit_sha;
+
+  return {
+    schema_version: "vacilando.toolkit_convergence_status.v1",
+    staging_sha: ev.promoted_staging_sha,
+    installed_sha: ev.installed_toolkit_sha,
+    gateway_executing_sha: gw.executing_sha,
+    gateway_executing_path: gw.executing_path,
+    gateway_path_is_pinned: gw.path_is_pinned,
+    gateway_matches_installed: gatewayMatchesInstalled,
+    converged: ev.toolkit_drift === false && gatewayMatchesInstalled === true,
+    drifted: ev.toolkit_drift === true,
+    rollback_target: ev.previous_toolkit_retained ? ev.installed_toolkit_sha : null,
+    state: plan.state,
+    reason: plan.reason,
+    // The one-line form the operating model should be able to say.
+    headline: ev.toolkit_drift === true
+      ? `TOOLKIT DRIFT — staging ${ev.promoted_staging_sha}, installed ${ev.installed_toolkit_sha}`
+      : gatewayMatchesInstalled === false
+        ? `GATEWAY BEHIND INSTALL — installed ${ev.installed_toolkit_sha}, running ${gw.executing_sha}`
+        : gatewayMatchesInstalled == null
+          ? `TOOLKIT UNVERIFIED — gateway path is unpinned (${gw.executing_path || "unknown"})`
+          : `CONVERGED — ${ev.installed_toolkit_sha}`,
+  };
+}
+
+/**
+ * Did the convergence actually work?
+ *
+ * Separate from planning on purpose. An install that reports exit 0 has proven
+ * that a command ran, not that the host converged — and the failure mode being
+ * guarded is the one where a half-completed install is recorded as success and
+ * the next drift check is therefore never made.
+ *
+ * Everything is required to be POSITIVELY true. Unknown health is not healthy,
+ * an unpinned Gateway path is not a matching one, and either leaves the outcome
+ * unverified rather than converged. `rollback_recommended` is set when we can
+ * see the host is worse off than before, which is the only case where going
+ * back is better than stopping.
+ */
+export function verifyConvergenceOutcome({
+  expectedSha = null,
+  status = null,
+  loopbackHealth = null,
+  directorHealth = null,
+} = {}) {
+  const reasons = [];
+  const want = short(expectedSha);
+  if (!want) reasons.push("no expected sha to verify against");
+  if (!status) reasons.push("convergence status unreadable");
+
+  if (status) {
+    if (status.installed_sha !== want) {
+      reasons.push(`installed ${status.installed_sha || "unknown"} is not the expected ${want}`);
+    }
+    if (status.gateway_matches_installed !== true) {
+      reasons.push(status.gateway_path_is_pinned === false || status.gateway_executing_sha == null
+        ? "gateway path is unpinned, so what it is running cannot be proven"
+        : `gateway is running ${status.gateway_executing_sha}, not the installed ${status.installed_sha}`);
+    }
+  }
+  if (loopbackHealth !== 200) reasons.push(`loopback health ${loopbackHealth ?? "unmeasured"}, expected 200`);
+  if (directorHealth !== 200) reasons.push(`director health ${directorHealth ?? "unmeasured"}, expected 200`);
+
+  const healthFailed = (loopbackHealth != null && loopbackHealth !== 200)
+    || (directorHealth != null && directorHealth !== 200);
+
+  return {
+    verified: reasons.length === 0,
+    reasons,
+    // Rolling back on an UNMEASURED health check would replace a possibly-fine
+    // toolkit on no evidence. Only an observed failure justifies it.
+    rollback_recommended: healthFailed,
+    outcome: reasons.length === 0 ? "converged" : (healthFailed ? "failed_health" : "unverified"),
+  };
+}
+
+/**
  * Validate a governed install request.
  *
  * expected_staging_sha is compare-and-set, exactly as the provider ceiling is.

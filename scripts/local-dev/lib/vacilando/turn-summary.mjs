@@ -190,6 +190,34 @@ export function formatTurnSummary(s = {}) {
 }
 
 /**
+ * The five-line form (Part 11).
+ *
+ * The full summary is already bounded, but "bounded" and "scannable" are not
+ * the same thing. This answers only: did it work, what changed, what is live,
+ * what remains, am I needed — and sends everything else to the inspector. It
+ * exists so extensive evidence never becomes a reason to skip reading the
+ * result.
+ */
+export function formatTurnSummaryConcise(s = {}) {
+  const stages = list(s.lifecycle);
+  const live = stages.includes("live_certified") ? "live-certified"
+    : stages.includes("installed") ? "installed"
+      : stages.includes("merged") ? "merged, not installed"
+        : stages.includes("pushed") ? "pushed, not merged"
+          : stages.includes("committed") ? "committed, not pushed"
+            : "nothing live";
+  const changed = list(s.what_changed);
+  const needed = s.blocker && text(s.blocker.what) ? text(s.director_action) || "yes" : "no";
+  return [
+    `${s.status} — ${changed.length} change${changed.length === 1 ? "" : "s"}`,
+    changed.length ? `Changed: ${changed[0]}${changed.length > 1 ? ` (+${changed.length - 1} more)` : ""}` : "Changed: nothing",
+    `Live: ${live}`,
+    `Remaining: ${list(s.remaining)[0] || "nothing"}`,
+    `You needed: ${needed}`,
+  ].join("\n");
+}
+
+/**
  * Map the summary onto the EXISTING handoff orientation fields.
  *
  * Deliberately not a new store. agent-handoffs.json is already what

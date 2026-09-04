@@ -174,3 +174,68 @@ test("a next provider can orient from the payload alone", () => {
   assert.match(payload.completed_work, /lifecycle: implemented → committed/);
   assert.match(payload.next_action, /Request governed convergence/);
 });
+
+/* ── Part 9: canonical facts come from their owners ──────────────────────── */
+
+const ST = await import("../lib/vacilando/turn-summary-state.mjs");
+
+test("git truth is read from git, not from the provider's memory", () => {
+  const g = ST.gitTruth(process.cwd());
+  assert.match(String(g.head), /^[0-9a-f]{40}$/);
+  assert.match(String(g.staging_sha), /^[0-9a-f]{40}$/);
+  assert.equal(typeof g.ahead, "number");
+  assert.equal(typeof g.behind, "number");
+});
+
+test("canonical state derives the lifecycle rather than accepting a claim", () => {
+  const s = ST.collectCanonicalState({ worktreePath: process.cwd() });
+  assert.ok(s.lifecycle.includes("implemented"));
+  assert.ok(s.lifecycle.includes("committed"));
+  // This branch has unpushed commits and a drifted toolkit, so neither of these
+  // may be claimed. If that ever changes, the assertion is what should change.
+  if (s.git.ahead > 0) assert.equal(s.lifecycle.includes("pushed"), false);
+  if (!s.convergence.converged) assert.equal(s.lifecycle.includes("installed"), false);
+  assert.ok(s.current_state.some((l) => l.startsWith("branch ")));
+  assert.ok(s.current_state.some((l) => /TOOLKIT|CONVERGED|GATEWAY/.test(l)));
+});
+
+test("a summary built from canonical state validates", () => {
+  const s = ST.collectCanonicalState({ worktreePath: process.cwd() });
+  const r = S.validateTurnSummary({
+    status: "PARTIAL",
+    what_changed: ["Implemented canonical state collection."],
+    current_state: s.current_state,
+    lifecycle: s.lifecycle,
+    verified: ["tested: this assertion"],
+    remaining: ["Install promoted staging."],
+    next_automatic_action: "Converge once the install is cleared.",
+  });
+  assert.deepEqual(r.errors, []);
+});
+
+/* ── Part 11: the five-line form ─────────────────────────────────────────── */
+
+test("the concise form answers the five questions and nothing else", () => {
+  const out = S.formatTurnSummaryConcise({
+    status: "PARTIAL",
+    what_changed: ["Added drift detection.", "Registered the install action."],
+    lifecycle: ["implemented", "committed"],
+    remaining: ["Install promoted staging."],
+    blocker: { what: "Install denied by the permission classifier.", owner: "operator", clearing_action: "Approve it." },
+    director_action: "Approve the install.",
+  });
+  const lines = out.split("\n");
+  assert.equal(lines.length, 5);
+  assert.match(lines[0], /^PARTIAL — 2 changes/);
+  assert.match(lines[2], /^Live: committed, not pushed/);
+  assert.match(lines[4], /^You needed: Approve the install\./);
+});
+
+test("the concise form says no when the Director is not needed", () => {
+  const out = S.formatTurnSummaryConcise({
+    status: "COMPLETE", what_changed: ["One thing."], lifecycle: [...S.LIFECYCLE_STAGES], remaining: [],
+  });
+  assert.match(out, /Live: live-certified/);
+  assert.match(out, /You needed: no/);
+  assert.match(out, /Remaining: nothing/);
+});

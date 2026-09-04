@@ -402,6 +402,45 @@ Until the toolkit carrying these changes is the installed one, the old name
 proxy is still what evaluates every request — including the pushes that
 delivered this fix, each of which required a click.
 
+## Finding: toolkit convergence bootstrap gap
+
+**Observed.** Promoted staging contained a required control-plane capability.
+The installed toolkit stayed on the previous commit. The lane that needed the
+capability reported "operator-run install required" and stopped. Nothing was
+broken and nothing retried.
+
+**Root causes — two absences, not one misconfiguration.**
+
+1. **No toolkit drift signal.** Nothing compared the installed toolkit sha to
+   promoted staging. `control-plane-health.json` carried no toolkit field, so
+   the Gateway could not report that it was running old code even in principle.
+2. **No governed install action.** The trusted-host registry held thirteen
+   action keys and none installed a toolkit, so a lane could not propose the
+   install *even to be refused*. The evaluator answered "no delegated policy
+   covers this action", which reads like a policy decision and is really an
+   absence.
+
+The old toolkit could therefore neither detect its own drift nor request its own
+replacement — which is what made this a bootstrap problem rather than a bug.
+
+**Resolution.** `toolkit-convergence.mjs` owns drift detection and the
+convergence status; `host.install_toolkit` is a registered governed action;
+`routine_toolkit_convergence_v1` makes ordinary convergence Tier A. One
+operator-run bootstrap install is required to reach the first toolkit that
+contains these.
+
+**A distinction the fix depends on.** Installed and running are separate facts.
+The Gateway host process resolves through the `current` symlink and the
+control-plane server names a sha outright, so flipping the symlink moves
+neither: the executing argv is read from the process, and a path routed through
+`current` is reported as *unpinned* rather than as matching. `TOOLKIT
+UNVERIFIED` is a distinct state from `CONVERGED`, and a symlink-only check that
+reported success is exactly the failure being designed out.
+
+**Status: not resolved.** Closes when autonomous post-bootstrap convergence is
+live-certified — drift detected, `host.install_toolkit` auto-executed under
+policy, argv and health verified, blocked work resumed, no Director click.
+
 ## Related
 
 - [`managed-sprint-operations.md`](managed-sprint-operations.md)
@@ -409,3 +448,5 @@ delivered this fix, each of which required a click.
 - `scripts/local-dev/lib/vacilando/director-authority.mjs` — the policy set and gates
 - `scripts/local-dev/lib/vacilando/director-evidence.mjs` — what is measured
 - `scripts/local-dev/lib/vacilando/director-operating-authorization.mjs` — the durable authorization and the action-class inventory
+- `scripts/local-dev/lib/vacilando/toolkit-convergence.mjs` — drift detection, convergence status and outcome verification
+- `scripts/local-dev/lib/vacilando/turn-summary.mjs` — the operator-facing turn summary contract
