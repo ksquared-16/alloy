@@ -1306,6 +1306,36 @@ export const OPERATOR_STATE_TONE = Object.freeze({
  * re-derive it — two answers to "what is this lane doing" is the bug this
  * exists to prevent, not a shape to copy.
  */
+/**
+ * WHAT "STILL NEEDS THE OPERATOR" MEANS — ONCE.
+ *
+ * The UI had invented its own answer: `status === "awaiting_operator" || status
+ * === "pending"`. `pending` is not a status the governed lifecycle ever
+ * produces, and the three states that genuinely precede an operator decision —
+ * `requested`, `awaiting_director`, `awaiting_control_plane_refresh` — were
+ * missing, so a request could be actionable in canonical truth and invisible
+ * here, or visible here on a status that does not exist.
+ *
+ * This mirrors governed-action-request.mjs PENDING_GOVERNED_STATUSES minus
+ * `executing`, exactly as pendingApprovals() filters it: once execution starts
+ * the decision has already been made and there is nothing left to ask.
+ * Restated rather than imported because this module runs in the browser and
+ * must not pull in the server store — the same reason PROGRESS_STALE_MS is
+ * restated above. Terminal states are excluded BY CONSTRUCTION: this is a
+ * whitelist, so `complete`, `failed`, `denied`, `cancelled`, `expired` and
+ * anything added later can never leak back into Needs You.
+ */
+export const GOVERNED_ACTIONABLE_STATUSES = Object.freeze([
+  "requested",
+  "awaiting_director",
+  "awaiting_control_plane_refresh",
+  "awaiting_operator",
+]);
+
+export function isActionableGovernedAction(ga) {
+  return Boolean(ga) && GOVERNED_ACTIONABLE_STATUSES.includes(String(ga.status || ""));
+}
+
 export function operatorState(work, lane = null) {
   const key = work?.key || null;
   const group = work?.group || null;
@@ -1315,7 +1345,7 @@ export function operatorState(work, lane = null) {
   // a provider suspended holding a question. Whether the process is resident is
   // not the operator's problem; being asked is.
   const ga = lane?.execution_run?.governed_action || lane?.governed_action || null;
-  const awaiting = ga && (ga.status === "awaiting_operator" || ga.status === "pending");
+  const awaiting = isActionableGovernedAction(ga);
   if (awaiting || key === "needs_input" || group === "needs_input") return OPERATOR_STATE.NEEDS_YOU;
 
   if (key === "failed") return OPERATOR_STATE.FAILED;

@@ -32,6 +32,7 @@ import {
   buildLaneThread,
   buildSystemViewModel,
   governedActionLabel,
+  isActionableGovernedAction,
   laneOperatorStatus,
   laneProgress,
   laneReturnTarget,
@@ -5064,7 +5065,10 @@ export function renderLaneCurrentWork(lane, { nowMs = Date.now(), cancelPending 
 export function laneNeedsYouItems(lane) {
   const items = [];
   const ga = lane?.execution_run?.governed_action || lane?.governed_action || null;
-  if (ga && (ga.status === "awaiting_operator" || ga.status === "pending")) {
+  // ONE DEFINITION OF ACTIONABLE. See isActionableGovernedAction: a lane payload
+  // carries a SNAPSHOT of its governed action, so a resolved one stays embedded
+  // in the record long after the decision. The whitelist is what keeps it out.
+  if (isActionableGovernedAction(ga)) {
     items.push({
       kind: "governed_action",
       lane_id: lane.lane_id,

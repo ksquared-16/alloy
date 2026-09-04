@@ -772,7 +772,16 @@ function resources() {
  * mobile app" and "the desktop app" stop being the same product.
  */
 function paintNav() {
-  const needs = Number(G.attentionCount) || (G.home?.approvals?.length || 0);
+  // ONE COUNT, FROM THE SET THAT IS ACTUALLY RENDERED.
+  //
+  // This read `G.attentionCount` — the notification store's own actionable
+  // number — while the Needs You control, its panel heading and the rows in it
+  // all came from buildNeedsYou(). Two answers to "how much needs you", from
+  // two stores, free to disagree: a resolved request that had left the governed
+  // list could still be carried in the notification count, and the badge would
+  // insist something needed the operator while the panel it opens said nothing
+  // did. The badge now counts exactly what the panel will show.
+  const needs = needsYouVm().count;
   const primary = document.getElementById("primary-nav");
   if (primary) primary.innerHTML = View.renderPrimaryNav(G.page, { needsYou: needs });
   const tabs = document.getElementById("mobile-nav");

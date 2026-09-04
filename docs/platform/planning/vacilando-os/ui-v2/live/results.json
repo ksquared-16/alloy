@@ -1,7 +1,7 @@
 {
-  "captured_at": "2026-09-04T13:03:39.427Z",
+  "captured_at": "2026-09-04T14:10:51.904Z",
   "base": "http://127.0.0.1:3030",
-  "passed": 86,
+  "passed": 88,
   "failed": 0,
   "results": [
     {
@@ -32,7 +32,7 @@
     {
       "name": "mobile Home: every Review link names a real lane",
       "ok": true,
-      "detail": "#/lanes/lane_9b9082778292"
+      "detail": "#/lanes/lane_db3431e755a8"
     },
     {
       "name": "mobile Home: closing returns to the same screen",
@@ -67,7 +67,7 @@
     {
       "name": "mobile Lanes: every Review link names a real lane",
       "ok": true,
-      "detail": "#/lanes/lane_9b9082778292"
+      "detail": "#/lanes/lane_db3431e755a8"
     },
     {
       "name": "mobile Lanes: closing returns to the same screen",
@@ -87,7 +87,7 @@
     {
       "name": "mobile Lane: opening it does not navigate",
       "ok": true,
-      "detail": "#/lanes/lane_db3431e755a8 -> #/lanes/lane_db3431e755a8"
+      "detail": "#/lanes/lane_a5ce60877b5f -> #/lanes/lane_a5ce60877b5f"
     },
     {
       "name": "mobile Lane: no \"Lane unavailable\"",
@@ -102,7 +102,7 @@
     {
       "name": "mobile Lane: every Review link names a real lane",
       "ok": true,
-      "detail": "#/lanes/lane_9b9082778292"
+      "detail": "#/lanes/lane_db3431e755a8"
     },
     {
       "name": "mobile Lane: closing returns to the same screen",
@@ -137,7 +137,7 @@
     {
       "name": "desktop Home: every Review link names a real lane",
       "ok": true,
-      "detail": "#/lanes/lane_9b9082778292"
+      "detail": "#/lanes/lane_db3431e755a8"
     },
     {
       "name": "desktop Home: closing returns to the same screen",
@@ -172,7 +172,7 @@
     {
       "name": "desktop Lanes: every Review link names a real lane",
       "ok": true,
-      "detail": "#/lanes/lane_9b9082778292"
+      "detail": "#/lanes/lane_db3431e755a8"
     },
     {
       "name": "desktop Lanes: closing returns to the same screen",
@@ -192,7 +192,7 @@
     {
       "name": "desktop Lane: opening it does not navigate",
       "ok": true,
-      "detail": "#/lanes/lane_db3431e755a8 -> #/lanes/lane_db3431e755a8"
+      "detail": "#/lanes/lane_a5ce60877b5f -> #/lanes/lane_a5ce60877b5f"
     },
     {
       "name": "desktop Lane: no \"Lane unavailable\"",
@@ -207,7 +207,7 @@
     {
       "name": "desktop Lane: every Review link names a real lane",
       "ok": true,
-      "detail": "#/lanes/lane_9b9082778292"
+      "detail": "#/lanes/lane_db3431e755a8"
     },
     {
       "name": "desktop Lane: closing returns to the same screen",
@@ -227,7 +227,7 @@
     {
       "name": "Home shows an operational subset, not the directory",
       "ok": true,
-      "detail": "Home 1 of 18 on Lanes"
+      "detail": "Home 2 of 18 on Lanes"
     },
     {
       "name": "Home names that subset and offers the directory",
@@ -250,9 +250,9 @@
       "detail": ""
     },
     {
-      "name": "user message defaults to about four lines",
+      "name": "user message defaults to four lines",
       "ok": true,
-      "detail": "5 lines"
+      "detail": "4 lines"
     },
     {
       "name": "user long message offers See more",
@@ -265,9 +265,9 @@
       "detail": ""
     },
     {
-      "name": "provider message defaults to about four lines",
+      "name": "provider message defaults to four lines",
       "ok": true,
-      "detail": "5 lines"
+      "detail": "4.17 lines"
     },
     {
       "name": "provider long message offers See more",
@@ -397,7 +397,12 @@
     {
       "name": "compose 390: some conversation remains",
       "ok": true,
-      "detail": "65px"
+      "detail": "77px"
+    },
+    {
+      "name": "compose 390: the composer ends at the visual viewport bottom",
+      "ok": true,
+      "detail": "composer 380 of 380"
     },
     {
       "name": "compose 320: typing enters compose mode",
@@ -407,7 +412,7 @@
     {
       "name": "compose 320: the field is the dominant surface above the keyboard",
       "ok": true,
-      "detail": "124px of 300 = 41%"
+      "detail": "128px of 300 = 43%"
     },
     {
       "name": "compose 320: the field owns its own line",
@@ -433,6 +438,11 @@
       "name": "compose 320: some conversation remains",
       "ok": true,
       "detail": "40px"
+    },
+    {
+      "name": "compose 320: the composer ends at the visual viewport bottom",
+      "ok": true,
+      "detail": "composer 300 of 300"
     }
   ]
 }
