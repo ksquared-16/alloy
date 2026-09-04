@@ -28,6 +28,7 @@ import {
   isNeverDeletable,
 } from "./trusted-host-repository-housekeeping.mjs";
 import { measureProviderCeilingGates } from "./trusted-host-provider-ceiling.mjs";
+import { measureToolkitConvergence } from "./toolkit-convergence.mjs";
 
 const PROTECTED = ["staging", "main", "master", "production"];
 
@@ -276,6 +277,15 @@ export function collectDirectorEvidence(rec, {
       // head_sha_still_matches compares the PR head against the sha the
       // REQUEST named, so the request's claim must be the one on trial.
       if (evidence.source_sha == null) evidence.source_sha = sha;
+    } catch { /* unmeasured -> escalates */ }
+  }
+  if (rec?.action_key === "host.install_toolkit") {
+    // The third occurrence of one defect: gates were named and a policy written
+    // while nothing collected the evidence, so every convergence escalated with
+    // "required gates were not measured". measureToolkitConvergence already
+    // produces exactly these fields; it was simply never called from here.
+    try {
+      Object.assign(evidence, measureToolkitConvergence());
     } catch { /* unmeasured -> escalates */ }
   }
   if (rec?.action_key === "capacity.set_provider_ceiling") {
