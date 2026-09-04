@@ -151,3 +151,58 @@ and introduces no new failure.
 A baseline number carried over from an earlier moment is not a baseline. Each
 comparison in this record was measured against the other side under the same
 conditions.
+
+
+---
+
+# Mobile visual correction — live acceptance (September 2026)
+
+**77 checks, 77 passed, 0 failed** against the promoted runtime on REAL lanes.
+
+## Promotion chain
+
+```
+authorized  52b13f7c5 + b98b9d8e3
+     ↓ rebased 0694bed21 — identical 33-file / 1,686-line patch, zero drift
+     ↓ PR #679  → 3540def392a8   the correction
+     ↓ PR #681  → b2a3f427c7ec   open a lane on the latest exchange
+     ↓ PR #682  → 4ee65145b96b   provider messages sized to content
+installed   toolkit/4ee65145b96b     Gateway host pid 46443
+```
+
+## Measured on the installed runtime, real content
+
+| | 390×844 | 320×568 |
+|---|---|---|
+| Lane header | **84px** | 83px |
+| Current Work (real 400-word instruction) | **238px** | 211px |
+| Conversation starts | 263px into the lane body | 236px |
+| Lane rows visible | **16 of 18** (median 78px) | 13 of 18 |
+| Idle composer field | 41px | 41px |
+| Long thread opens at | **5946 of 5946** — the latest | 6746 of 6746 |
+| Keyboard: Send bottom | 346 of 380 viewport | — |
+
+Home: one identity, Needs You rows 92px, stacks to 1 column, health tiles 2
+across. Catalogue: no governed payload, no "No folder", folder names unclipped.
+Desktop: conversation with `You` / `Claude` bylines, inspector quiet, no ETA.
+
+## Three defects the live gate found that the fixture could not
+
+**1. The thread opened at the OLDEST message.** `positionThreadForEntry` queried
+`.gw-msg-user` — a class that no longer existed, so the intended path was dead
+code — and used `querySelector`, the FIRST match. It looked correct only because
+the measured lane had a single provider entry.
+
+**2. 146px of dead space per provider message.** `.gw-msg-assistant` carries
+`min-height: min(58vh, 22rem)` from its life as a standing pane. Measured live: a
+206px report occupied 352px.
+
+**3. Two acceptance checks that could not fail.** The scroll check demanded
+`scrollTop` within 24px of the absolute bottom, when the contract is that the
+latest exchange is *on screen*. And "conversation begins in the first screen"
+measured the first message's viewport position — which after scroll-to-latest is
+**−5663**, so `< 844` passed on anything.
+
+All three share a cause: **a fixture's threads are short and its providers
+verbose in convenient ways.** That is the argument for live acceptance, and it is
+why it is the gate rather than a formality.
