@@ -3382,6 +3382,15 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
 .vmsg-provider.is-clampable:not(.is-expanded) .gw-report-h{display:none;}
 .vmsg-provider.is-clampable:not(.is-expanded) .gw-report-body{
   display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+  /* A LINE CLAMP COUNTS LINE BOXES — AND A REPORT IS NOT ALWAYS LINES.
+     The body is renderReportMarkdown() output, so a structured report arrives as
+     block children: headings, paragraphs, list items. `-webkit-line-clamp:4`
+     then clamps to FOUR OF THOSE BLOCKS rather than four lines. Measured on the
+     installed product against a real 2,346-character report with 13 children:
+     238px, close to twelve lines, with the clamp declared and obeyed.
+     `4lh` is four of this element's own line boxes and does not care how the
+     content is structured. Verified on that same report: 238px -> 84px. */
+  max-height:4lh;
 }
 .vmsg-more{
   align-self:flex-start;font:inherit;font-size:12.5px;font-weight:600;

@@ -75,6 +75,12 @@ const lenOf = (l) => String(l.execution_run?.instruction || l.previous_run?.inst
 const repOf = (l) => String(l.execution_run?.completion_report?.summary
   || l.previous_run?.completion_report?.summary || "").length;
 const LONG_USER = [...LANES].sort((a, b) => lenOf(b) - lenOf(a))[0];
+// COMPOSE MODE IS A LANE-WITH-A-CONVERSATION STATE. A lane that has never run
+// shows the START composer, which compose mode deliberately does not restyle —
+// so picking LANES[0] made the subject depend on activity ordering, and the
+// checks reported a 72px field whenever the newest lane happened to be idle.
+// Pick a lane that actually has a thread.
+const THREADED = [...LANES].sort((a, b) => (lenOf(b) + repOf(b)) - (lenOf(a) + repOf(a)))[0] || LANES[0];
 const LONG_PROVIDER = [...LANES].sort((a, b) => repOf(b) - repOf(a))[0];
 process.stdout.write(`lanes=${LANES.length} longest instruction=${LONG_USER?.label} (${lenOf(LONG_USER)}) `
   + `longest report=${LONG_PROVIDER?.label} (${repOf(LONG_PROVIDER)})\n\n`);
@@ -97,7 +103,7 @@ try {
   /* ============ 3. NEEDS YOU OPENS IN PLACE, FROM EVERY SURFACE ============ */
   for (const [tag, vp, mobile] of [["mobile", MOBILE, true], ["desktop", DESKTOP, false]]) {
     const p = await newPage(vp, mobile);
-    for (const [route, hash] of [["Home", "/home"], ["Lanes", "/lanes"], ["Lane", `/lanes/${LANES[0]?.lane_id}`]]) {
+    for (const [route, hash] of [["Home", "/home"], ["Lanes", "/lanes"], ["Lane", `/lanes/${THREADED?.lane_id}`]]) {
       await open(p, hash);
       const before = await p.evaluate(() => location.hash);
       const historyBefore = await p.evaluate(() => history.length);
@@ -142,6 +148,10 @@ try {
     laneRows: document.querySelectorAll(".vcard-lanes .vlane").length,
     title: document.querySelector(".vcard-lanes .vcard-title")?.textContent?.trim() || null,
     viewAll: Boolean(document.querySelector('.vcard-lanes a[href="#/lanes"]')),
+    // ZERO IS A LEGITIMATE ANSWER. When nothing is working and nothing needs the
+    // operator, the honest subset is empty and the card says so. Asserting
+    // "> 0" made a quiet machine look like a broken one.
+    empty: /Nothing is running|No lanes yet/.test(document.querySelector(".vcard-lanes")?.textContent || ""),
     health: Boolean(document.querySelector(".vcard-health")),
   }));
   check("Home renders no permanent Needs You card", home.needsCard === false);
@@ -150,7 +160,8 @@ try {
   await shot(m, "live-03-mobile-lanes");
   const total = await m.evaluate(() => document.querySelectorAll("[data-gw-lane]").length);
   check("Home shows an operational subset, not the directory",
-    home.laneRows > 0 && home.laneRows < total, `Home ${home.laneRows} of ${total} on Lanes`);
+    home.laneRows < total && (home.laneRows > 0 || home.empty),
+    `Home ${home.laneRows} of ${total} on Lanes${home.empty ? " (nothing running — empty state shown)" : ""}`);
   check("Home names that subset and offers the directory",
     home.title === "Active lanes" && home.viewAll === true, String(home.title));
   check("Home keeps its command-centre blocks", home.health === true);
@@ -166,11 +177,23 @@ try {
       if (!li) return null;
       const clamp = li.querySelector("[data-v-msg-clamp]");
       const body = clamp?.firstElementChild || clamp || li;
-      const lh = (body instanceof Element ? parseFloat(getComputedStyle(body).lineHeight) : NaN) || 20;
+      const cs = body instanceof Element ? getComputedStyle(body) : null;
+      const lh = (cs ? parseFloat(cs.lineHeight) : NaN) || 20;
+      // THE LINE COUNT IS THE TEXT'S, NOT THE PADDED BOX'S. The operator message
+      // is a tinted block with its own padding; dividing the padded height by the
+      // line-height reported 4.69 lines for text that occupies exactly four, and
+      // would have had us "fixing" a clamp that was already right.
+      const pad = cs ? parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) : 0;
       return {
         clampable: li.classList.contains("is-clampable"),
         expanded: li.classList.contains("is-expanded"),
-        lines: +(((clamp?.getBoundingClientRect().height || 0) / lh).toFixed(2)),
+        // WHAT IS ON SCREEN, NOT WHAT THE CHILD WOULD LIKE TO BE. The wrapper
+        // clips; a child taller than it is simply not visible. Measuring the
+        // child alone reported 15 lines for a message showing four.
+        lines: +((Math.max(0, Math.min(
+          clamp?.getBoundingClientRect().height || 0,
+          (body?.getBoundingClientRect().height || 0),
+        ) - pad) / lh).toFixed(2)),
         hasCopy: Boolean(li.querySelector("[data-v-msg-copy]")),
         copyVisible: (li.querySelector("[data-v-msg-copy]")?.getBoundingClientRect().height || 0) > 0,
         hasMore: Boolean(li.querySelector("[data-v-msg-more]")),
@@ -318,15 +341,30 @@ try {
   ].join("\n");
   for (const [label, normal, kb] of [["390", MOBILE, KB], ["320", NARROW, KB320]]) {
     const c = await newPage(normal, true);
-    await open(c, `/lanes/${LANES[0]?.lane_id}`);
+    await open(c, `/lanes/${THREADED?.lane_id}`, 3200);
     await c.setViewportSize(kb);
-    await c.waitForTimeout(700);
+    await c.waitForTimeout(800);
     const ta = c.locator("#gw-instruction");
     if (await ta.count() === 0) { check(`compose ${label}: composer present`, false); await c.close(); continue; }
     await ta.click();
-    await c.waitForTimeout(400);
+    // WAIT FOR THE MODE, NOT FOR A CLOCK. Compose mode engages when focus lands
+    // AND the viewport sync has run; a fixed pause raced it, and an acceptance
+    // harness that intermittently reports a defect that is not there is worse
+    // than one that is slow. One run in three measured the pre-compose composer
+    // and called the anchor broken.
+    await c.waitForFunction(() => document.documentElement.hasAttribute("data-gw-compose"), null,
+      { timeout: 8000 }).catch(() => {});
     await ta.fill(INSTRUCTION);
-    await c.waitForTimeout(500);
+    // The field resizes from the visual viewport on the next frames; settle on a
+    // stable height rather than assuming one has been reached.
+    await c.waitForFunction(() => {
+      const el = document.querySelector("#gw-instruction");
+      if (!el) return false;
+      const h = Math.round(el.getBoundingClientRect().height);
+      const prev = Number(el.dataset.probeH || 0);
+      el.dataset.probeH = String(h);
+      return h > 0 && h === prev;
+    }, null, { timeout: 8000, polling: 150 }).catch(() => {});
     await shot(c, label === "390" ? "live-11-mobile-compose" : "live-12-mobile320-compose");
     const cm = await c.evaluate(() => {
       const el = document.querySelector("#gw-instruction");
@@ -342,6 +380,7 @@ try {
         attach: (document.querySelector(".gw-attach")?.getBoundingClientRect().height || 0) > 0,
         provider: (document.querySelector(".gw-provider")?.getBoundingClientRect().height || 0) > 0,
         thread: Math.round(body?.height || 0),
+        composerBottom: Math.round(document.querySelector(".gw-composer")?.getBoundingClientRect().bottom || 0),
         chromeGone: gone(".vtabs-lane") && gone(".vtabs") && gone(".vlane-head-acts"),
         column: getComputedStyle(document.querySelector(".gw-composer-box")).flexDirection === "column",
       };
@@ -354,6 +393,11 @@ try {
     check(`compose ${label}: the provider stays reachable`, cm.provider === true);
     check(`compose ${label}: orientation chrome stands down`, cm.chromeGone === true);
     check(`compose ${label}: some conversation remains`, cm.thread >= 30, `${cm.thread}px`);
+    // THE DEFECT THE DEVICE SHOWED: a blank application-owned band between the
+    // composer and the keyboard, from the bottom safe-area inset being reserved
+    // three times over. Vacilando must own none of that gap.
+    check(`compose ${label}: the composer ends at the visual viewport bottom`,
+      Math.abs(cm.vh - cm.composerBottom) <= 2, `composer ${cm.composerBottom} of ${cm.vh}`);
     await c.close();
   }
 

@@ -170,6 +170,16 @@ export const LANES = [
       run_id: "erun_pay0001", state: "COMPLETE", completed_at: T(47),
       completion_report: {
         summary: [
+          // A STRUCTURED REPORT, NOT A WALL OF PROSE. renderReportMarkdown turns
+          // this into block children, and `-webkit-line-clamp` counts BLOCKS, not
+          // lines — so a prose-only fixture certified a clamp that fell apart on
+          // the first real markdown report it met.
+          "## Ledger reconciliation",
+          "",
+          "- 1,248 postings balance against the settlement file",
+          "- 14 partial refunds were fixture rows, not live data",
+          "- rounding is certified at the boundary, not the interior",
+          "",
           "Validation completed. 312 tests passed, 1 pre-existing failure left untouched.",
           "",
           "Ledger reconciliation is certified. All 1,248 postings balance against the",
