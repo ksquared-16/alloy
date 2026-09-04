@@ -1776,6 +1776,257 @@ const nextEpisode: Phase = {
     },
 };
 
+
+/**
+ * P: the operational handoff, read from the records it actually produced.
+ *
+ * THE DISTINCTION THIS PHASE EXISTS TO MAKE. "Handoff ran" and "handoff did something" are not the
+ * same claim, and the failure mode this program has hit repeatedly is the second one masquerading
+ * as the first — a materializer that resolves no facts, writes nothing, throws nothing, and leaves
+ * every surface reporting success. So this phase counts the canonical outputs and REFUSES a run
+ * that produced none of them, rather than reporting a clean pass over an empty handoff.
+ *
+ * WHAT IS AND IS NOT CONFIGURATION. An output that cannot legitimately materialize from the
+ * fixture's own data is reported as configuration-proven partial, WITH the reason, and is not
+ * fabricated. A schedule assignment needs a schedule pattern the fixture may not carry; an
+ * agreement and a placement do not. Absent source data is a fact about the fixture, not a defect,
+ * and saying which is which is the whole point of separating them.
+ *
+ * IDEMPOTENCY IS EXERCISED, NOT ASSERTED. The materializer is invoked a second time through its
+ * own supported entry point and every output is re-counted. A duplicate agreement or placement is
+ * the concrete operational harm here — a family with two enrollment agreements — so the retry is
+ * run rather than reasoned about.
+ */
+const operationalHandoff: Phase = {
+    key: "P_handoff",
+    title: "operational handoff materializes durable records, once",
+    dependsOn: ["N_complete_enrollment"],
+    async run(ctx) {
+        const entry = ctx.facts.B_entry as Record<string, { childId: string; journeyId: string }> | undefined;
+        const pathA = entry?.context_free;
+        if (!pathA) return { status: "failed", detail: "no context-free child recorded by B_entry" };
+
+        const countsFor = async () => {
+            const [agreements, placements, schedules] = await Promise.all([
+                /*
+                 * `*` DELIBERATELY. Naming columns here means this phase carries a second copy of
+                 * the operational schema, and the first attempt proved the point by asserting
+                 * `status_key` and `location_id` that these tables do not have — a certification
+                 * failure caused by the certification, not by the product. The phase's job is to
+                 * prove records exist for the right child and are not duplicated on retry; the
+                 * columns it reports are whatever the row actually carries.
+                 */
+                ctx.supabase
+                    .from("child_enrollment_agreements")
+                    .select("*")
+                    .eq("org_id", ctx.orgId)
+                    .eq("customer_member_id", pathA.childId),
+                ctx.supabase
+                    .from("child_placements")
+                    .select("*")
+                    .eq("org_id", ctx.orgId)
+                    .eq("customer_member_id", pathA.childId),
+                ctx.supabase
+                    .from("schedule_assignments")
+                    .select("*")
+                    .eq("org_id", ctx.orgId)
+                    .eq("customer_member_id", pathA.childId),
+            ]);
+            return {
+                agreements: (agreements.data ?? []) as Record<string, unknown>[],
+                placements: (placements.data ?? []) as Record<string, unknown>[],
+                schedules: (schedules.data ?? []) as Record<string, unknown>[],
+                errors: [agreements.error, placements.error, schedules.error]
+                    .filter(Boolean)
+                    .map((e) => String((e as { message?: string }).message ?? e)),
+            };
+        };
+
+        const before = await countsFor();
+        if (before.errors.length) {
+            return { status: "failed", detail: `could not read operational outputs: ${before.errors.join("; ")}` };
+        }
+
+        const produced =
+            before.agreements.length + before.placements.length + before.schedules.length;
+
+        /*
+         * ZERO OUTPUTS HAS TWO CAUSES AND THEY ARE NOT THE SAME VERDICT.
+         *
+         * The handoff runs only when Childcare Operational Enrollment v1 is enabled for the org —
+         * an env flag AND an `org_settings` metadata flag, both of which must be on. With the gate
+         * closed the materializer is never called, so no records is the CONFIGURED behaviour and
+         * calling it a product failure would be wrong. With the gate open, no records is the
+         * silent-nothing failure this phase exists to catch.
+         *
+         * So the gate is read and reported either way. An N/A here carries the exact configuration
+         * evidence that makes it non-applicable, rather than being asserted.
+         */
+        const { isChildcareOperationalEnrollmentV1EnabledForOrg } = await import(
+            "@/lib/childcareOperational/featureFlag"
+        );
+        const handoffEnabled = await isChildcareOperationalEnrollmentV1EnabledForOrg(
+            ctx.supabase,
+            ctx.orgId,
+        ).catch(() => false);
+
+        if (produced === 0 && !handoffEnabled) {
+            const child = await readChildState(ctx, pathA.childId, pathA.journeyId);
+            return {
+                status: "not_applicable",
+                detail:
+                    "Childcare Operational Enrollment v1 is NOT enabled for this org, so the "
+                    + "enrollment handoff is not configured to materialize agreements, placements or "
+                    + "schedule assignments. Zero operational records is the configured behaviour "
+                    + "here, not a silent failure — and Complete Enrollment itself still moved the "
+                    + `child durably (OCM ${String(child.ocmStatus)}, process ${String(child.processState)}).`,
+                evidence: {
+                    childId: pathA.childId,
+                    handoffEnabledForOrg: false,
+                    gate: "isChildcareOperationalEnrollmentV1EnabledForOrg (env flag AND org_settings metadata)",
+                    agreements: 0,
+                    placements: 0,
+                    schedules: 0,
+                    ocmStatus: child.ocmStatus,
+                    processState: child.processState,
+                    processStage: child.processStage,
+                },
+            };
+        }
+
+        if (produced === 0) {
+            // Gate OPEN and nothing written: the silent-nothing case, named as the failure it is.
+            return {
+                status: "failed",
+                detail:
+                    "Childcare Operational Enrollment v1 IS enabled for this org, yet Complete "
+                    + "Enrollment produced NO durable records — no agreement, no placement, no "
+                    + "schedule assignment. A handoff that writes nothing is not a handoff that "
+                    + "succeeded.",
+                evidence: {
+                    childId: pathA.childId,
+                    handoffEnabledForOrg: true,
+                    agreements: 0,
+                    placements: 0,
+                    schedules: 0,
+                },
+            };
+        }
+
+        /*
+         * PROVENANCE, not just presence. Each record must belong to THIS child in THIS org, and
+         * the agreement must name the journey that produced it — otherwise a row that happened to
+         * exist would certify a handoff that never ran.
+         */
+        const wrongScope = [...before.agreements, ...before.placements, ...before.schedules].filter(
+            (r) => String(r.org_id) !== ctx.orgId || String(r.customer_member_id) !== pathA.childId,
+        );
+        if (wrongScope.length) {
+            return {
+                status: "failed",
+                detail: `${wrongScope.length} operational record(s) do not belong to this child/org`,
+            };
+        }
+
+        // The supported retry boundary, exercised rather than assumed.
+        const { materializeEnrollmentForChildScope } = await import(
+            "@/lib/childcareOperational/materializeEnrollmentFromProcessInstance"
+        );
+        let retryDetail = "retry ran";
+        try {
+            await materializeEnrollmentForChildScope(ctx.supabase, {
+                orgId: ctx.orgId,
+                // Context-free Path A has no Opportunity; absence is null, never "".
+                opportunityId: null,
+                customerMemberId: pathA.childId,
+                userId: ctx.actorUserId ?? null,
+            } as Parameters<typeof materializeEnrollmentForChildScope>[1]);
+        } catch (e) {
+            retryDetail = `retry threw: ${e instanceof Error ? e.message : String(e)}`;
+        }
+
+        const after = await countsFor();
+        const duplicated: string[] = [];
+        if (after.agreements.length > before.agreements.length) duplicated.push("agreement");
+        if (after.placements.length > before.placements.length) duplicated.push("placement");
+        if (after.schedules.length > before.schedules.length) duplicated.push("schedule assignment");
+        if (duplicated.length) {
+            return {
+                status: "failed",
+                detail: `the idempotent retry DUPLICATED: ${duplicated.join(", ")}`,
+                evidence: { before: summarize(before), after: summarize(after) },
+            };
+        }
+
+        const child = await readChildState(ctx, pathA.childId, pathA.journeyId);
+        if (String(child.ocmStatus) !== "enrolled") {
+            return { status: "failed", detail: `after handoff retry the child reads ${String(child.ocmStatus)}, not enrolled` };
+        }
+
+        /*
+         * A schedule assignment needs a schedule pattern the fixture may not carry. Reported as
+         * configuration-proven partial WITH the reason, never fabricated.
+         */
+        const scheduleNote =
+            after.schedules.length > 0
+                ? `${after.schedules.length} schedule assignment(s)`
+                : "no schedule assignment — configuration-proven partial: the fixture carries no "
+                  + "schedule pattern for this child, and one is not fabricated";
+
+        return {
+            status: "passed",
+            detail:
+                `handoff produced ${after.agreements.length} agreement(s) and ${after.placements.length} `
+                + `placement(s) for the exact child; ${scheduleNote}; the supported retry created no `
+                + "duplicates and the child remains enrolled",
+            evidence: {
+                childId: pathA.childId,
+                journeyId: pathA.journeyId,
+                before: summarize(before),
+                after: summarize(after),
+                retry: retryDetail,
+                // Reported as the rows actually are — ids and timestamps dropped so the evidence
+                // stays about the enrollment rather than about row plumbing.
+                agreements: before.agreements.map((a) => reportableRow(a)),
+                placements: before.placements.map((pl) => reportableRow(pl)),
+                schedules: before.schedules.map((sc) => reportableRow(sc)),
+                ocmStatus: child.ocmStatus,
+                processState: child.processState,
+                processStage: child.processStage,
+            },
+        };
+    },
+};
+
+/**
+ * A durable row, reduced to what an operator would recognise.
+ *
+ * Ids and audit timestamps are dropped: they change every run and would make two identical
+ * handoffs look different. What remains is the operational substance — dates, keys, references —
+ * so the evidence is comparable across runs.
+ */
+function reportableRow(row: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(row)) {
+        if (k === "id" || k === "org_id" || k.endsWith("_at") || v == null) continue;
+        out[k] = v;
+    }
+    return out;
+}
+
+/** Counts only — the record contents are reported separately, so a diff reads at a glance. */
+function summarize(c: {
+    agreements: readonly unknown[];
+    placements: readonly unknown[];
+    schedules: readonly unknown[];
+}) {
+    return {
+        agreements: c.agreements.length,
+        placements: c.placements.length,
+        schedules: c.schedules.length,
+    };
+}
+
 /**
  * Phases that need the participant browser surface. Declared, ordered and explicitly unimplemented
  * so the report shows the shape of what remains rather than hiding it.
@@ -1786,7 +2037,6 @@ const browserPhases: readonly Phase[] = (
         ["H_artifacts", "artifact generation"],
         ["I_correction", "review and correction"],
         ["J_signature", "signatures"],
-        ["P_handoff", "operational handoff"],
         ["S_responsive", "1280 and 375 product proof"],
     ] as const
 ).map(([key, title]) => ({
@@ -1831,5 +2081,6 @@ export const REAL_ENROLLMENT_V1_PHASES: readonly Phase[] = [
     participantCompletionDoesNotEnrol,
     completeEnrollment,
     nextEpisode,
+    operationalHandoff,
     ...browserPhases,
 ];

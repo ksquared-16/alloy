@@ -35,7 +35,19 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type PhaseStatus = "passed" | "failed" | "skipped" | "not_implemented";
+/**
+ * `not_applicable` is a CLOSED verdict, not a soft failure.
+ *
+ * A phase is N/A when the active configuration makes it inapplicable — the handoff materializer
+ * being gated off for the org, say. That is a real answer about a real tenant, and it is different
+ * in kind from `not_implemented`, which means nobody has written the phase yet.
+ *
+ * The distinction has to exist in the type or the two collapse: without it, a configuration-proven
+ * N/A has to be reported either as a pass it did not earn or as a TODO that implies missing work.
+ * A legitimate N/A must carry the configuration evidence that makes it non-applicable, which is why
+ * it is a phase RESULT rather than a phase that was skipped.
+ */
+export type PhaseStatus = "passed" | "failed" | "skipped" | "not_implemented" | "not_applicable";
 
 export type PhaseResult = {
     readonly key: string;
@@ -89,7 +101,17 @@ export async function runEnrollmentCertification(
     const statusByKey = new Map<string, PhaseStatus>();
 
     for (const phase of phases) {
-        const blocker = (phase.dependsOn ?? []).find((k) => statusByKey.get(k) !== "passed");
+        /*
+         * A phase that is configuration-proven N/A does not block what comes after it. Its
+         * prerequisite ran and answered; the answer was "this does not apply here". Treating that
+         * as a blocker would cascade one tenant's configuration into a wall of SKIPs that look
+         * like failures.
+         */
+        const satisfied = (k: string) => {
+            const st = statusByKey.get(k);
+            return st === "passed" || st === "not_applicable";
+        };
+        const blocker = (phase.dependsOn ?? []).find((k) => !satisfied(k));
         if (blocker) {
             const r: PhaseResult = {
                 key: phase.key,
@@ -123,7 +145,9 @@ export async function runEnrollmentCertification(
      * worse than no harness, because it converts an unknown into a false assurance.
      */
     const firstFailure = results.find((r) => r.status === "failed") ?? null;
-    const ok = results.every((r) => r.status === "passed");
+    // Green means every phase reached a CLOSED verdict: it passed, or the configuration proved it
+    // does not apply. A stub or a skip is neither.
+    const ok = results.every((r) => r.status === "passed" || r.status === "not_applicable");
     return { ok, phases: results, firstFailure };
 }
 
@@ -166,6 +190,7 @@ export function formatDriverReport(result: DriverRunResult): string {
         failed: "FAIL",
         skipped: "SKIP",
         not_implemented: "TODO",
+        not_applicable: "N/A ",
     };
     /*
      * Evidence is printed, not just collected. A certification report that states verdicts without
@@ -193,11 +218,14 @@ export function formatDriverReport(result: DriverRunResult): string {
         "REAL ENROLLMENT V1 — certification driver",
         ...lines,
         "",
-        `  passed=${counts.passed ?? 0} failed=${counts.failed ?? 0} skipped=${counts.skipped ?? 0} not_implemented=${counts.not_implemented ?? 0}`,
+        `  passed=${counts.passed ?? 0} failed=${counts.failed ?? 0} skipped=${counts.skipped ?? 0}`
+        + ` not_applicable=${counts.not_applicable ?? 0} not_implemented=${counts.not_implemented ?? 0}`,
         result.firstFailure
             ? `  FIRST FAILURE: ${result.firstFailure.key} — ${result.firstFailure.detail}`
             : result.ok
-              ? "  ALL PHASES PASSED"
+              ? (counts.not_applicable
+                    ? `  ALL PHASES CLOSED (${counts.passed ?? 0} passed, ${counts.not_applicable} configuration-proven N/A)`
+                    : "  ALL PHASES PASSED")
               : "  no failure, but the run is not green: unimplemented phases remain",
     ].join("\n");
 }
