@@ -91,7 +91,13 @@ test("an unreadable observation measures nothing and therefore escalates", () =>
 
 test("LIVE — this host measures its own ceiling gates", () => {
   const ev = P.measureProviderCeilingGates(INPUTS);
-  assert.equal(ev.live_ceiling, 4, "the certified live ceiling is 4");
+  // Not pinned to a literal: this experiment MOVES the ceiling, and a live
+  // assertion that hard-codes today's value fails the moment the thing under
+  // test works. What must hold is that the value is readable and inside the
+  // authorised window.
+  assert.ok(Number.isInteger(ev.live_ceiling), "the live ceiling must be readable");
+  assert.ok(ev.live_ceiling >= 4 && ev.live_ceiling <= 8,
+    `live ceiling ${ev.live_ceiling} is outside the authorised window`);
   assert.equal(typeof ev.host_headroom_ok, "boolean");
 });
 

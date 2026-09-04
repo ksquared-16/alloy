@@ -290,6 +290,20 @@ export const ACTION_CLASS_INVENTORY = Object.freeze([
     bounds: "Bounded restart budget per convergence; health verified after. An exhausted budget is STUCK, not another restart.",
   }),
 
+  Object.freeze({
+    class_id: "lane.dispatch_measurement_instruction", surface: "lane",
+    action_key: "lane.dispatch_measurement_instruction", tier: B,
+    executes_via: "trusted host (composes createQueuedRun)",
+    why: "The refused version of this is 'a lane may instruct other lanes', which is remote control. What is delegated is one sentence: an authorized capacity mission may place ONE bounded read-only analysis task into a lane that is idle and eligible. Nothing is committed, pushed or configured, so undoing it is cancelling a queued run.",
+    bounds: "Allowlisted purpose only, authorized mission only, target idle and eligible, instruction carries the read-only banner and is scanned for mutation verbs, bound to a named measurement, origin forced to certification.",
+  }),
+  Object.freeze({
+    class_id: "lane.instruct_arbitrary", surface: "lane", action_key: null, tier: D,
+    executes_via: "never",
+    why: "Unbounded cross-lane instruction is impersonation. The governed action refuses a free-text purpose and a mutating payload precisely so this never becomes reachable by widening a field.",
+    bounds: null,
+  }),
+
   // ── Data and credentials ─────────────────────────────────────────────────
   Object.freeze({
     class_id: "database.read_census", surface: "data", action_key: "database.read_census", tier: B,

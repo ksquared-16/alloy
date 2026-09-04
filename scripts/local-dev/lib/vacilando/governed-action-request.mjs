@@ -58,6 +58,7 @@ import {
   fulfillDatabaseMigrationForMission,
   fulfillSetProviderCeilingForMission,
   fulfillInstallToolkitForMission,
+  fulfillLaneDispatchForMission,
   previewTrustedHostAuthorization,
 } from "./trusted-host-actions.mjs";
 import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
@@ -2525,6 +2526,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
    * fallthrough describes: the action existed everywhere except in this dispatch,
    * and the error names the registry rather than the missing branch.
    */
+  if (rec.action_key === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
+    return fulfillLaneDispatchForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
   if (rec.action_key === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
     return fulfillInstallToolkitForMission(scope, {
       assignmentId: rec.run_id || null,

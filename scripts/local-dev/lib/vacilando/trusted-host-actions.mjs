@@ -53,6 +53,8 @@ import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
 import { executeToolkitInstall } from "./toolkit-convergence.mjs";
+import { executeLaneDispatch } from "./lane-dispatch.mjs";
+import { createQueuedRun } from "./execution-run.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
 import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
@@ -655,6 +657,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
     return executeInstallToolkitTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
+    return executeLaneDispatchTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -1779,6 +1784,73 @@ export function fulfillInstallToolkitForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.HOST_INSTALL_TOOLKIT, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * Deliver one bounded certification task into one idle lane.
+ *
+ * The delivery primitive is createQueuedRun, injected here rather than
+ * reimplemented: it already refuses to displace an active run, which is the
+ * property that keeps a measurement from destroying the work it is measuring.
+ */
+export function executeLaneDispatchTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    out = executeLaneDispatch({
+      targetLaneId: i.targetLaneId ?? i.target_lane_id,
+      instruction: i.instruction,
+      measurementId: i.measurementId ?? i.measurement_id,
+      purpose: i.purpose,
+      sourceMission: i.sourceMission ?? i.source_mission_id,
+      sourceLane: i.sourceLane ?? i.source_lane_id ?? null,
+    }, { createRun: createQueuedRun, nowMs });
+  } catch (e) {
+    out = { ok: false, error: "dispatch_threw", detail: String(e?.message || "").slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = out.error;
+    action.completed_at = iso(nowMs);
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: out.error, detail: out.detail || null, action };
+  }
+
+  action.state = "completed";
+  action.executionState = "completed";
+  action.result = { ...out, credentialsExposed: false };
+  action.completed_at = iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action };
+}
+
+export function fulfillLaneDispatchForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, inputs, nowMs,
     authorizationContext: exactContext,
   });
   if (!req.ok) return req;
