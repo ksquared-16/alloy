@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T00:29:29.863Z",
+  "captured_at": "2026-09-04T00:36:41.716Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -18,7 +18,7 @@
       "height": 380
     }
   },
-  "passed": 51,
+  "passed": 53,
   "failed": 0,
   "results": [
     {
@@ -89,7 +89,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 5:11 PM Stop lane RUNTIME Executing"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 5:18 PM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
@@ -172,6 +172,11 @@
       "detail": ""
     },
     {
+      "name": "mobile 390 interaction zone fits the space it actually has",
+      "ok": true,
+      "detail": ""
+    },
+    {
       "name": "mobile 390 lane keeps the composer on screen",
       "ok": true,
       "detail": ""
@@ -233,6 +238,11 @@
     },
     {
       "name": "mobile 320 keeps the same Home hierarchy",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 interaction zone fits the space it actually has",
       "ok": true,
       "detail": ""
     },

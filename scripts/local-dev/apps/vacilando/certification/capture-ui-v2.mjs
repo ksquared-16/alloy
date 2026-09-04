@@ -222,6 +222,15 @@ try {
       }));
 
     await open(m, `/lanes/${LANE}`);
+    // THE SUM, NOT THE PIECES. Every component was individually bounded and
+    // every bound was honoured; nothing bounded what they had to share.
+    check(`mobile ${label} interaction zone fits the space it actually has`,
+      await m.evaluate(() => {
+        const z = document.querySelector(".vlane-interaction");
+        const stage = document.querySelector(".gw-lane-stage");
+        if (!z || !stage) return false;
+        return z.getBoundingClientRect().height <= stage.getBoundingClientRect().height + 1;
+      }));
     check(`mobile ${label} lane keeps the composer on screen`,
       await m.evaluate(() => {
         const c = document.querySelector(".gw-composer")?.getBoundingClientRect();

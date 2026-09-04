@@ -2970,6 +2970,45 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
 
    All of it returns the moment the keyboard closes.
    --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   BOUND THE CONTAINER, NOT EACH PIECE.
+
+   MEASURED on the installed runtime, 390x844 — a phone at FULL height — on a
+   lane with a pending governed action:
+
+     interaction zone 888   in a viewport of 844
+       decision bar   591   (its own max-height: min(70vh, 620px) — 70vh = 591)
+       needs-you tray 138
+       composer       132
+     Send button bottom 1083                    → 239px BELOW THE FOLD
+
+   Every piece was individually bounded, and each bound was honoured. Nothing
+   bounded their SUM against the space they actually had to share, so three
+   correctly-sized components added up to more than the screen and the operator
+   could not reach Send at all while a governed action was pending — the exact
+   moment the product most needs them to.
+
+   The composer is the floor and never shrinks. Everything stacked above it
+   shares what is left and scrolls. Component max-heights inside the zone are
+   released, because the container now governs and two authorities disagreeing
+   about the same space is what produced this.
+   --------------------------------------------------------------------------- */
+.vlane-interaction{
+  display:flex;flex-direction:column;min-height:0;
+  max-height:min(72vh, 640px);
+}
+.vlane-interaction > .gw-composer{flex:0 0 auto;}
+.vlane-interaction > *:not(.gw-composer){flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}
+.vlane-interaction > .gw-decision-bar{max-height:none;}
+
+@media (max-width: 860px){
+  /* A phone has less to give, so the zone keeps at most half the stage for
+     everything above the composer. */
+  .vlane-interaction{max-height:min(62vh, 520px);}
+  .vlane-interaction > .gw-decision-bar{max-height:none;}
+  .vneeds-tray{flex:0 0 auto;}
+}
+
 @media (max-width: 860px) and (max-height: 520px){
   .vlane-head{padding:6px 13px 0;}
   .vlane-head-top,
@@ -2980,16 +3019,11 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
   .vlane-head-state{margin-top:2px;}
   .vlane-head-acts .btn{min-height:32px;padding:5px 9px;font-size:12px;}
 
-  /* The composer is the floor. Everything stacked above it inside the
-     interaction zone scrolls rather than pushing Send off the screen. */
+  /* The mechanics are declared once above; a short viewport only tightens the
+     budget and drops the composer's own label. */
   .vlane-interaction{
-    display:flex;flex-direction:column;min-height:0;
-    max-height:72vh;padding:6px 13px max(6px, env(safe-area-inset-bottom, 0px));
+    max-height:78vh;padding:6px 13px max(6px, env(safe-area-inset-bottom, 0px));
   }
-  .vlane-interaction > *:not(.gw-composer){
-    flex:0 1 auto;min-height:0;overflow-y:auto;
-  }
-  .vlane-interaction > .gw-composer{flex:0 0 auto;}
   .gw-composer-h{display:none;}
   .gw-composer textarea{max-height:64px;}
 }
