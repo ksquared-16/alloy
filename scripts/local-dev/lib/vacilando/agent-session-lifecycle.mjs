@@ -23,6 +23,7 @@ import {
   findExecutionRun,
   getExecutionRun,
   isTerminalRunState,
+  progressSolicitationDue,
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
@@ -418,6 +419,17 @@ export function buildContinuationInstruction({ run, handoff, git, successorSessi
       : (queued
         ? "After orientation, Vacilando delivers the queued instruction on this same Execution Run."
         : "After orientation, continue the same Execution Run from next_action."),
+    ...(progressSolicitationDue(run) ? [
+      "",
+      // ASKED OF THE PROVIDER, NOT THE OPERATOR. The operator is the one
+      // waiting for this answer; interrupting them to ask how long their own
+      // agent needs is exactly backwards. It rides the orientation text the
+      // provider already receives, so soliciting it costs no extra channel and
+      // no notification.
+      "Progress on this run is unknown or out of date. With your next state report, include how far along you are and how much longer you expect to need:",
+      "  vac run-status <run_id> executing --progress <0-100> --estimated-remaining-minutes <n> --progress-summary \"<one line>\"",
+      "Report what you actually believe. An absent estimate is rendered honestly as unknown; a confident wrong one is worse than none.",
+    ] : []),
     "Report ORIENTED with the Gateway-owned helper once lane, run, worktree, branch, and next action match.",
     `node ${JSON.stringify(sessionReportHelperPath(run.worktree_path || git?.worktree || ""))} oriented --run ${run.run_id} --lane ${run.lane_id} --json ${jsonFlag({
       lane: run.lane_id,

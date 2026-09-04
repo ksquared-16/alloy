@@ -3686,3 +3686,29 @@ body[data-v-page="home"] .gw-approvals-bar{display:none;}
      on a device and cannot be reserved twice. */
   :root[data-gw-compose] .gw.is-detail .gw-composer{padding-bottom:6px;}
 }
+
+/* THE PHONE SWITCH.
+   Sits above the folded delivery-status report, not inside it: turning
+   interruptions off is an everyday act and must not look like troubleshooting.
+   Sized for a thumb — the operator reaching for this is usually on the phone
+   it silences. */
+.gw-notify-switch{
+  display:flex;flex-direction:column;gap:4px;
+  padding:10px 12px;margin:0 0 8px;
+  border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2, transparent);
+}
+.gw-switch{display:flex;align-items:center;gap:10px;cursor:pointer;min-height:32px;}
+.gw-switch input{position:absolute;opacity:0;width:0;height:0;}
+.gw-switch-track{
+  position:relative;flex:0 0 auto;width:40px;height:24px;border-radius:var(--pill);
+  background:var(--line);transition:background .15s ease;
+}
+.gw-switch-thumb{
+  position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+  background:var(--bg);transition:transform .15s ease;
+}
+.gw-switch input:checked + .gw-switch-track{background:var(--accent, #3b82f6);}
+.gw-switch input:checked + .gw-switch-track .gw-switch-thumb{transform:translateX(16px);}
+.gw-switch input:focus-visible + .gw-switch-track{outline:2px solid var(--accent, #3b82f6);outline-offset:2px;}
+.gw-switch-label{font-weight:600;}
+.gw-switch-copy{margin:0;font-size:12px;color:var(--muted);}

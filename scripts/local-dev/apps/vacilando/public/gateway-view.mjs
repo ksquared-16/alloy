@@ -2281,8 +2281,33 @@ export function notificationUiState({
   return { kind: "off", headline: "Notify", label: "Get notified when managed work completes or needs you.", action: "enable" };
 }
 
+/**
+ * THE PHONE SWITCH IS NOT A DIAGNOSTIC.
+ *
+ * Everything below it — permission, subscription, push service, last test —
+ * answers "is this machinery working?", which is a question an operator asks
+ * roughly once. "Stop interrupting me" is a question they ask at 11pm, on a
+ * phone, and it must not require opening a troubleshooting popover to find.
+ * So the switch renders OUTSIDE the details element, first, and the health
+ * report stays folded underneath it where it belongs.
+ *
+ * The copy states the guarantee explicitly, because a notification switch that
+ * might also be hiding work from you is one nobody dares turn off.
+ */
 export function renderNotificationControls(state = {}) {
   const st = notificationUiState(state);
+  const pushOn = state.pushEnabled !== false;
+  const toggle = `<div class="gw-notify-switch" data-gw-notify-switch>
+    <label class="gw-switch">
+      <input type="checkbox" data-gw-push-toggle ${pushOn ? "checked" : ""}
+        aria-label="Send notifications to my phone">
+      <span class="gw-switch-track" aria-hidden="true"><span class="gw-switch-thumb"></span></span>
+      <span class="gw-switch-label">Notify my phone</span>
+    </label>
+    <p class="gw-switch-copy">${pushOn
+      ? "Approvals and finished work reach your device."
+      : "Nothing is sent to your device. Needs You, Activity and lane history are unchanged."}</p>
+  </div>`;
   let action = "";
   if (st.action === "enable") {
     action = `<button type="button" class="btn sm gw-notify-enable" data-gw-notify-enable>Enable notifications</button>`;
@@ -2299,13 +2324,14 @@ export function renderNotificationControls(state = {}) {
       <dt>Last test</dt><dd>${esc(st.health.lastTest)}</dd>
     </dl>`
     : "";
-  return `<details class="gw-notify" data-gw-notify data-kind="${esc(st.kind || "off")}">
-    <summary class="gw-notify-sum" aria-label="Notifications">
+  return `${toggle}
+  <details class="gw-notify" data-gw-notify data-kind="${esc(st.kind || "off")}">
+    <summary class="gw-notify-sum" aria-label="Notification delivery status">
       <span class="gw-notify-mark" aria-hidden="true"></span>
       <span class="gw-notify-sum-label">${esc(st.headline || "Notify")}</span>
     </summary>
     <div class="gw-notify-pop">
-      <p class="gw-notify-h">Notifications</p>
+      <p class="gw-notify-h">Delivery status</p>
       <p class="gw-notify-copy">${esc(st.label)}</p>
       ${health}
       <div class="gw-notify-actions">${action}</div>

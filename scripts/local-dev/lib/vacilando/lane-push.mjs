@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { pushEnabled } from "./notification-preferences.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -502,9 +503,26 @@ export async function sendPushToSubscriptions(payload, {
   root = runtimeRoot(),
   send = null,
   onlyEndpoints = null,
+  ignorePreference = false,
 } = {}) {
   if (!assertSafePushPayload(payload)) {
     return { ok: false, error: "unsafe_payload", sent: 0, failed: 0, pruned: 0 };
+  }
+  // THE OPERATOR'S SWITCH, AT THE ONE PLACE EVERY PUSH PASSES THROUGH.
+  //
+  // Gating here rather than at each caller is what makes the guarantee
+  // checkable: a push path added next month inherits the preference without
+  // anyone remembering to ask. And because the durable notification record is
+  // always written BEFORE delivery is attempted, switching the phone off
+  // removes the interruption and nothing else — Needs You, Activity, lane
+  // state and the audit log are untouched.
+  //
+  // Nothing is queued. The suppressed push is dropped, and the record it would
+  // have announced is already in the app waiting to be read.
+  if (!ignorePreference && !pushEnabled(root)) {
+    const out = { ok: true, sent: 0, failed: 0, pruned: 0, skipped: "push_disabled_by_operator" };
+    recordDispatch(root, { ...out, type: payload?.type || null });
+    return out;
   }
   const store = readPushStore(root);
   const vapid = store.vapid?.publicKey && store.vapid?.privateKey
@@ -613,7 +631,10 @@ export async function sendTestPush({
     recordDispatch(root, { ...out, type: payload.type, targeted: "device" }, { test: true });
     return out;
   }
-  const out = await sendPushToSubscriptions(payload, { root, send, onlyEndpoints: [ep] });
+  // The operator pressed this button just now, so it answers the question they
+  // actually asked — "can this device receive a push?" — rather than reporting
+  // their own preference back at them as a delivery failure.
+  const out = await sendPushToSubscriptions(payload, { root, send, onlyEndpoints: [ep], ignorePreference: true });
   recordDispatch(root, {
     type: payload.type,
     sent: out.sent || 0,
@@ -633,4 +654,57 @@ export async function sendTestPush({
     body: payload.body,
     path: payload.path,
   };
+}
+
+/**
+ * THE CORRECTION THIS PASS EXISTS FOR.
+ *
+ * `pushRunOutcome` above is keyed on RUN STATE, so it is structurally
+ * incapable of announcing a governed action: those never become runs. That is
+ * not a tuning oversight, it is why an audit of 500 real records found all 33
+ * `governed_action_approval_required` notifications with
+ * `delivery.attempted: false` while 188 routine completions pushed every
+ * single time. Vacilando could tell the operator their work had finished and
+ * had no way at all to tell them it was waiting on them.
+ *
+ * Eligibility is not decided here. It is asked of the one policy in
+ * `lane-notifications`, so this path cannot drift away from every other one.
+ */
+export async function pushGovernedNotification(record, {
+  root = runtimeRoot(),
+  send = null,
+} = {}) {
+  if (!record?.notification_id) return { ok: false, error: "missing_record", sent: 0 };
+  const { isPushEligible, recordNotificationDelivery } =
+    await import("./lane-notifications.mjs");
+  if (!isPushEligible({
+    eventType: record.event_type,
+    attentionClass: record.attention_class,
+    state: record.state,
+  })) {
+    return { ok: true, sent: 0, skipped: "not_push_eligible" };
+  }
+  const label = String(record.lane_name || record.lane_id || "Vacilando").slice(0, 80);
+  const payload = {
+    type: "governed_action.approval_required",
+    lane_id: record.lane_id || null,
+    title: label,
+    // The summary is the action's own title, which is what the operator is
+    // being asked to decide about. It is not agent output.
+    body: `needs your approval. ${String(record.summary || "").slice(0, 140)}`.trim(),
+    state: "NEEDS_INPUT",
+    path: record.path || "/#/lanes",
+  };
+  let out;
+  try {
+    out = await sendPushToSubscriptions(payload, { root, send });
+  } catch (err) {
+    out = { ok: false, error: "send_failed", sent: 0, detail: String(err?.message || err) };
+  }
+  recordNotificationDelivery(record.notification_id, {
+    sent: Number(out?.sent || 0),
+    error: out?.ok === false ? (out.error || "send_failed") : (out?.errors?.[0]?.reason || null),
+    root,
+  });
+  return { ...out, notification_id: record.notification_id };
 }

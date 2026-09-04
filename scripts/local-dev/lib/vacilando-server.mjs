@@ -27,6 +27,7 @@
  *   GET  /api/attachments/:id → the image bytes, same auth as the conversation
  *   GET  /api/notifications   → durable notification records + unseen counts
  *   POST /api/notifications/seen → acknowledge by notification_id | lane_id | all
+ *   GET/POST /api/notifications/preferences → the operator phone-push switch
  *   GET  /api/lane-folders    → lane folders (organisation only; never a lifecycle)
  *   POST /api/lane-folders/create|:id/rename|:id/delete → folder CRUD (delete unfiles, never deletes lanes)
  *   POST /api/lanes/:id/folder → file a lane into a folder (folder_id: null unfiles)
@@ -2094,6 +2095,32 @@ export function createVacilandoServer() {
         } catch (e) {
           return sendJson(res, 500, { ok: false, error: "attachment_list_failed", detail: String(e && e.message || e) });
         }
+      }
+    }
+    // THE OPERATOR'S PHONE SWITCH.
+    //
+    // GET reports it; POST sets it. It is deliberately its own endpoint rather
+    // than a field on the push-subscription record: unsubscribing a device is
+    // a different act from asking not to be interrupted, and conflating them
+    // means "notifications off" silently uninstalls the ability to turn them
+    // back on from that device.
+    if (path === "/api/notifications/preferences") {
+      try {
+        const prefs = await import("./vacilando/notification-preferences.mjs");
+        if (req.method === "GET") {
+          return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
+        }
+        if (req.method === "POST") {
+          const body = await readJsonBody(req);
+          if (typeof body?.push_enabled !== "boolean") {
+            return sendJson(res, 400, { ok: false, error: "push_enabled_required" });
+          }
+          prefs.setPushEnabled(body.push_enabled);
+          return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
+        }
+        return sendJson(res, 405, { ok: false, error: "method_not_allowed" });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "preferences_failed", detail: String(e && e.message || e) });
       }
     }
     if (path === "/api/notifications") {

@@ -78,6 +78,7 @@ const G = {
     vapidAvailable: null,
     lastTestAt: null,
     lastTestOk: null,
+    pushEnabled: true,
   },
   notifyEndpoint: null,
   // ---- UI V2 ----------------------------------------------------------
@@ -232,6 +233,7 @@ function refreshNotifyFlags() {
     origin,
     swControlling: typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller),
     vapidAvailable: G.notify?.vapidAvailable ?? null,
+    pushEnabled: G.notify?.pushEnabled !== false,
     lastTestAt: G.notify?.lastTestAt || null,
     lastTestOk: G.notify?.lastTestOk ?? null,
   };
@@ -432,6 +434,45 @@ async function fetchPushHealth() {
   } catch { /* */ }
 }
 
+/**
+ * The phone switch, read and written against the Gateway.
+ *
+ * It is deliberately SERVER state, not localStorage: the operator turning
+ * notifications off on their phone means "do not send them", and only the
+ * sender can honour that. A client-side flag would leave the Gateway happily
+ * pushing to a device that had asked it to stop.
+ */
+async function fetchPushPreferences() {
+  try {
+    const r = await gwFetch("/api/notifications/preferences");
+    const j = await r.json();
+    if (r.ok && j?.ok && j.preferences) {
+      G.notify.pushEnabled = j.preferences.push_enabled !== false;
+    }
+  } catch { /* keep the last known answer */ }
+}
+
+async function setPhonePushEnabled(enabled) {
+  const previous = G.notify.pushEnabled !== false;
+  G.notify.pushEnabled = enabled;
+  paint();
+  try {
+    const r = await gwFetch("/api/notifications/preferences", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ push_enabled: enabled }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j?.ok) throw new Error(j?.error || "preference_failed");
+    G.notify.pushEnabled = j.preferences?.push_enabled !== false;
+  } catch {
+    // The switch must never show a setting the Gateway did not accept.
+    G.notify.pushEnabled = previous;
+    G.notify.error = "Could not change notification delivery.";
+  }
+  paint();
+}
+
 async function sendTestNotification() {
   G.notify.error = null;
   await inspectDevicePush();
@@ -488,7 +529,10 @@ async function restoreGatewayNotifications() {
       G.notify.subscribed = Boolean(G.notifyEndpoint);
     }
   }
-  await fetchPushHealth();
+  // The preference is fetched alongside health, in parallel: it decides what
+  // the switch renders as, and a switch that paints its default and then flips
+  // is a switch the operator does not trust.
+  await Promise.all([fetchPushHealth(), fetchPushPreferences()]);
   refreshNotifyFlags();
   paint();
 }
@@ -2377,6 +2421,15 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     if (enable.disabled) return;
     await enableGatewayNotifications();
+    return;
+  }
+  const pushToggle = e.target?.closest?.("[data-gw-push-toggle]");
+  if (pushToggle) {
+    // Do NOT preventDefault — the checkbox has already flipped and that is the
+    // operator seeing their own action land. The request confirms it; a failure
+    // puts it back rather than leaving the switch lying about the server.
+    e.stopPropagation();
+    await setPhonePushEnabled(Boolean(pushToggle.checked));
     return;
   }
   const testPush = e.target?.closest?.("[data-gw-notify-test]");

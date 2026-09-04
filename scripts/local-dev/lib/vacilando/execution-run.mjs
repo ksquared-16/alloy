@@ -68,6 +68,62 @@ export const PROGRESS_SUMMARY_MAX = 240;
 export const PROGRESS_REMAINING_MAX = 480;
 
 /**
+ * THE FINISH ESTIMATE IS REPORTED, NEVER DERIVED.
+ *
+ * The rule above still stands: elapsed time divided by a provider's own guess
+ * is a lie with a decimal point on it, and this function will not compute one.
+ * What it accepts is a provider SAYING how much longer it needs — which is a
+ * different claim, made by the only party with a plan, and it travels with its
+ * own confidence and its own timestamp so a consumer can see how much to trust
+ * it and how old it is.
+ *
+ * `estimated_remaining_minutes` and `estimated_finish_at` are two spellings of
+ * one answer. A worker mid-task naturally knows "about twenty more minutes";
+ * a scheduled or queued one naturally knows a wall-clock time. Both normalise
+ * to an absolute instant, because "20 minutes" read forty minutes later is
+ * worse than useless — it is confidently wrong. Converting minutes to an
+ * instant against the report's own timestamp is arithmetic on reported data,
+ * not an invented schedule.
+ *
+ * Absent is a legitimate, renderable state. Nothing here invents a value.
+ */
+function normalizeFinishEstimate({
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
+  source = null,
+  nowMs = Date.now(),
+} = {}) {
+  let finishMs = null;
+  const mins = estimated_remaining_minutes === null || estimated_remaining_minutes === undefined
+    || estimated_remaining_minutes === ""
+    ? null
+    : Number(estimated_remaining_minutes);
+  if (Number.isFinite(mins) && mins >= 0) {
+    // Anchored to the moment of the report, not to read time.
+    finishMs = nowMs + Math.round(mins) * 60_000;
+  }
+  if (finishMs === null && estimated_finish_at) {
+    const at = Date.parse(estimated_finish_at);
+    if (Number.isFinite(at)) finishMs = at;
+  }
+  if (finishMs === null) return null;
+  const conf = String(estimate_confidence || "").trim().toLowerCase();
+  const src = String(source || "").trim().toLowerCase();
+  return {
+    estimated_finish_at: iso(finishMs),
+    // Kept as reported so a consumer can say "about 20 minutes" without doing
+    // subtraction the operator would then have to check.
+    estimated_remaining_minutes: Number.isFinite(mins) && mins >= 0
+      ? Math.round(mins)
+      : Math.max(0, Math.round((finishMs - nowMs) / 60_000)),
+    estimate_confidence: PROGRESS_CONFIDENCES.includes(conf) ? conf : "low",
+    estimate_source: PROGRESS_SOURCES.includes(src) ? src : "provider_estimate",
+    estimate_updated_at: iso(nowMs),
+  };
+}
+
+/**
  * Normalise a reported estimate. Returns null when there is nothing usable —
  * an absent estimate is a legitimate, renderable state ("Progress estimate
  * unavailable"), so this never invents a value to avoid returning null.
@@ -78,6 +134,9 @@ export function normalizeProgressEstimate({
   summary = null,
   source = null,
   remaining_work = null,
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
   nowMs = Date.now(),
 } = {}) {
   const pct = percent === null || percent === undefined || percent === ""
@@ -88,7 +147,14 @@ export function normalizeProgressEstimate({
   const src = String(source || "").trim().toLowerCase();
   const sum = bound(summary, PROGRESS_SUMMARY_MAX);
   const rem = bound(remaining_work, PROGRESS_REMAINING_MAX);
-  if (!hasPct && !sum && !rem) return null;
+  const finish = normalizeFinishEstimate({
+    estimated_remaining_minutes, estimated_finish_at,
+    estimate_confidence: estimate_confidence ?? confidence,
+    source, nowMs,
+  });
+  // A finish estimate on its own is a complete answer: "about an hour left" is
+  // useful even from a provider that will not put a number on percent done.
+  if (!hasPct && !sum && !rem && !finish) return null;
   return {
     percent: hasPct ? Math.max(0, Math.min(100, Math.round(pct))) : null,
     confidence: PROGRESS_CONFIDENCES.includes(conf) ? conf : "low",
@@ -96,6 +162,7 @@ export function normalizeProgressEstimate({
     remaining_work: rem,
     source: PROGRESS_SOURCES.includes(src) ? src : "provider_estimate",
     updated_at: iso(nowMs),
+    ...(finish || {}),
   };
 }
 
@@ -108,6 +175,35 @@ export function progressEstimateIsStale(estimate, { nowMs = Date.now(), staleMs 
   const at = Date.parse(estimate.updated_at);
   if (!Number.isFinite(at)) return true;
   return nowMs - at > staleMs;
+}
+
+/**
+ * Should Vacilando ask this run for a fresh progress estimate?
+ *
+ * WHY IT ASKS RATHER THAN GUESSES. A stale estimate is not a rendering
+ * problem to be smoothed over; it is a question nobody has answered lately,
+ * and the only party who can answer it is the provider. The UI's job is to say
+ * "unknown" honestly, and this predicate's job is to make "unknown" temporary.
+ *
+ * WHO IS ASKED. The provider, through the orientation and continuation text it
+ * already receives. Not the operator — they are the one waiting for the
+ * answer, and interrupting them to ask how long their own agent will take is
+ * exactly backwards.
+ *
+ * Only ACTIVE runs are solicited. A run that is finished, failed or waiting on
+ * a human has no remaining plan to estimate, and asking would produce a number
+ * about nothing.
+ */
+export const PROGRESS_SOLICIT_STATES = Object.freeze([
+  "EXECUTING", "VALIDATING", "RECOVERING",
+]);
+
+export function progressSolicitationDue(run, { nowMs = Date.now(), staleMs = PROGRESS_STALE_MS } = {}) {
+  if (!PROGRESS_SOLICIT_STATES.includes(String(run?.state || "").toUpperCase())) return false;
+  const est = run?.progress_estimate || null;
+  // Never reported at all is the strongest case for asking.
+  if (!est) return true;
+  return progressEstimateIsStale(est, { nowMs, staleMs });
 }
 
 export const RUN_STATES = Object.freeze([
@@ -1197,6 +1293,11 @@ export function reportRunState(runId, state, {
   progress_summary = null,
   progress_source = null,
   remaining_work = null,
+  // The provider's own claim about how much longer it needs. Reported, never
+  // derived from progress_percent — see normalizeFinishEstimate.
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
 } = {}) {
   const found = root
     ? { run: getExecutionRun(runId, root), root }
@@ -1235,6 +1336,9 @@ export function reportRunState(runId, state, {
     summary: progress_summary,
     source: progress_source,
     remaining_work,
+    estimated_remaining_minutes,
+    estimated_finish_at,
+    estimate_confidence,
     nowMs,
   });
   const ready = checkpoint_ready === true || String(checkpoint_ready).toLowerCase() === "true" || String(checkpoint_ready) === "1";
