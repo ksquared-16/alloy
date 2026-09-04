@@ -1658,10 +1658,18 @@ export function executeSetProviderCeilingTrustedHostAction(action, { actor = "di
   const i = action.inputs || {};
   let out;
   try {
+    // THE NORMALIZED NAMES COME FIRST, because they are what is actually
+    // stored. validateProviderCeilingInputs rewrites the request into
+    // {key, expected, requested, rollbackTo, ...} and THAT is what lands in
+    // action.inputs — so reading only expected_ceiling/expectedCeiling yielded
+    // undefined, Number(undefined) is NaN, and every ceiling move invoked
+    // `--expected NaN --to NaN`, hit the CLI's usage() and died with no stdout.
+    // The caller saw `command_failed` and no number ever moved. The raw names
+    // are kept as fallbacks so a request that skipped normalization still works.
     out = executeProviderCeiling({
-      expected: Number(i.expected_ceiling ?? i.expectedCeiling),
-      requested: Number(i.requested_ceiling ?? i.requestedCeiling),
-      rollbackTo: Number(i.rollback_ceiling ?? i.rollbackCeiling),
+      expected: Number(i.expected ?? i.expected_ceiling ?? i.expectedCeiling),
+      requested: Number(i.requested ?? i.requested_ceiling ?? i.requestedCeiling),
+      rollbackTo: Number(i.rollbackTo ?? i.rollback_ceiling ?? i.rollbackCeiling),
       reason: i.reason,
       experimentId: i.experiment_id ?? i.experimentId ?? null,
     }, { vacPath: i.vacPath || null });

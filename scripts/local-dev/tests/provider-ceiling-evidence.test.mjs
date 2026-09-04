@@ -94,3 +94,40 @@ test("LIVE — this host measures its own ceiling gates", () => {
   assert.equal(ev.live_ceiling, 4, "the certified live ceiling is 4");
   assert.equal(typeof ev.host_headroom_ok, "boolean");
 });
+
+/* ── The two halves must agree on field names ────────────────────────────── */
+
+const R2 = await import("../lib/vacilando/trusted-host-action-registry.mjs");
+
+test("validated inputs survive into the executor without becoming NaN", () => {
+  // THE BUG THIS CATCHES. validateProviderCeilingInputs rewrites the request
+  // into {expected, requested, rollbackTo}; that normalized object is what gets
+  // stored as action.inputs. The executor read expected_ceiling/expectedCeiling
+  // only, so it got undefined, Number(undefined) is NaN, and every ceiling move
+  // ran `--expected NaN --to NaN`, hit the CLI usage banner and exited with no
+  // stdout. The caller reported command_failed and the number never moved.
+  const def = R2.getActionDefinition("capacity.set_provider_ceiling");
+  const v = def.validateInputs({
+    expected_ceiling: 4, requested_ceiling: 5, rollback_ceiling: 4, reason: "round trip",
+  });
+  assert.equal(v.ok, true);
+
+  const stored = v.normalized;
+  let seen = null;
+  P.executeProviderCeiling(
+    {
+      expected: Number(stored.expected ?? stored.expected_ceiling ?? stored.expectedCeiling),
+      requested: Number(stored.requested ?? stored.requested_ceiling ?? stored.requestedCeiling),
+      rollbackTo: Number(stored.rollbackTo ?? stored.rollback_ceiling ?? stored.rollbackCeiling),
+      reason: stored.reason,
+    },
+    { runner: (_bin, args) => { seen = args; throw Object.assign(new Error("stub"), { stdout: "" }); } },
+  );
+  assert.ok(seen, "the executor must have built a command");
+  for (const a of seen) {
+    assert.notEqual(a, "NaN", `argument list contains NaN: ${seen.join(" ")}`);
+  }
+  assert.deepEqual(seen.slice(0, 8), [
+    "capacity", "set-provider-ceiling", "--expected", "4", "--to", "5", "--rollback-to", "4",
+  ]);
+});
