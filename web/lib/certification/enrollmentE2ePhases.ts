@@ -1520,13 +1520,50 @@ const completeEnrollment: Phase = {
         const plan = defaultStageOperatingPlanForEnrollmentStage(stageKey);
         if (!plan) return { status: "failed", detail: `no operating plan for stage ${stageKey}` };
 
+        /*
+         * THE DEPARTMENT IS NOT OPTIONAL, AND PATH A HAS ONE.
+         *
+         * This passed `departmentId: ""` and explained it as "context-free Path A has no
+         * acquisition department". That conflated two different things. Path A has no
+         * acquisition OPPORTUNITY. It has the same DEPARTMENT as every other path, because the
+         * department is where the Business Process configuration lives — it is not a property
+         * of the acquisition episode.
+         *
+         * The cost of that conflation was a diagnosis pointed at the wrong layer. Configured
+         * Stage Referential Integrity loads the stage vocabulary from the department, so an
+         * empty id loaded NO department and the guard refused Complete Enrollment with
+         * `Stage "enrolled" is not part of the configured Business Process. Configured stages:
+         * (none)`. That reads as a tenant configuration fault. It is not one: Firefly's
+         * published revision 22 declares six stages and `enrolled` is one of them. The runtime
+         * had simply been told to look nowhere.
+         *
+         * `resolveEnrollmentDepartmentForOpportunity` is the canonical resolver and answers
+         * this without an Opportunity: a blank id skips the Opportunity hint and falls through
+         * to the org's active `enrollment` process. It refuses rather than guessing if there
+         * is no such department, so an absent one is still a refusal — just an honest one.
+         */
+        const { resolveEnrollmentDepartmentForOpportunity } = await import(
+            "@/lib/lifecycle/resolveStageWorkOutcomeContext"
+        );
+        const departmentId = await resolveEnrollmentDepartmentForOpportunity({
+            supabase: ctx.supabase,
+            orgId: ctx.orgId,
+            opportunityId: null,
+        });
+        if (!departmentId) {
+            return {
+                status: "failed",
+                detail:
+                    "no active enrollment department resolved for this org, so the configured stage "
+                    + "vocabulary cannot be loaded; Complete Enrollment was not attempted",
+            };
+        }
+
         const result = await executeStageOperatingOutcome({
             supabase: ctx.supabase,
             orgId: ctx.orgId,
             userId: ctx.actorUserId ?? "",
-            // Context-free Path A has no acquisition department; the executor types this as a
-            // string, so the absence is expressed as empty rather than smuggled through as null.
-            departmentId: "",
+            departmentId,
             plan,
             outcomeKey: "enrollment_complete",
             subject: {
