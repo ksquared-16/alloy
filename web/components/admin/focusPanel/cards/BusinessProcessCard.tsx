@@ -23,6 +23,7 @@ import { resolveTourCommandPresentation } from "@/lib/adminV2/runtime/focusPanel
 import {
     logProcessCardCommandDrift,
     logProcessCardCommandWithheld,
+    logProcessCardCommandProjection,
 } from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { warmCurrentWorkCapabilityOnIntent } from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
@@ -312,7 +313,32 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
         for (const row of projection.withheld) {
             logProcessCardCommandWithheld({ processKey, stageKey, ...row });
         }
-    }, [projection.drift, projection.withheld, context.businessProcess.key, context.businessProcess.stageKey]);
+        // Both halves together: what configuration named, and what the row became.
+        const psi = context.publishedStageInputs as
+            | { operatingPlan?: { work_templates?: Array<Record<string, unknown>> }; commandProjection?: unknown }
+            | null
+            | undefined;
+        logProcessCardCommandProjection({
+            processKey,
+            stageKey,
+            configuredRefs: projection.configuredRefs,
+            commandKeys: projection.commands.map((c) => c.key),
+            planTemplates: (psi?.operatingPlan?.work_templates ?? []).map((t) => ({
+                label: String((t as { label?: unknown }).label ?? ""),
+                helpful: (((t as { helpful_actions?: Array<{ action_ref?: string }> }).helpful_actions) ?? []).map(
+                    (h) => String(h.action_ref ?? ""),
+                ),
+            })),
+            commandProjection: psi?.commandProjection ?? null,
+        });
+    }, [
+        projection.drift,
+        projection.withheld,
+        projection.configuredRefs,
+        projection.commands,
+        context.businessProcess.key,
+        context.businessProcess.stageKey,
+    ]);
 
     const processEvidence = useMemo(
         () =>

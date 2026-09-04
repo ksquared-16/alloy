@@ -36,6 +36,7 @@ type DriftWindow = Window & {
     __ALLOY_PROCESS_COMMAND_DRIFT?: ProcessCardCommandDriftEvent[];
     /** Executable commands the configuration never selected, so the row does not carry them. */
     __ALLOY_PROCESS_COMMAND_WITHHELD?: ProcessCardCommandWithheldEvent[];
+    __ALLOY_PROCESS_COMMAND_PROJECTION?: ProcessCardCommandProjectionEvent[];
 };
 
 /** Report one configured command that did not resolve to a registered action. */
@@ -79,4 +80,35 @@ export function resetProcessCardCommandDrift(): void {
     if (typeof window === "undefined") return;
     (window as DriftWindow).__ALLOY_PROCESS_COMMAND_DRIFT = [];
     (window as DriftWindow).__ALLOY_PROCESS_COMMAND_WITHHELD = [];
+}
+
+/**
+ * One projection, as configuration handed it over and as the card ended up with it.
+ *
+ * Drift and withheld each answer half the question. This answers the whole one — "which refs did
+ * configuration name for this stage, and which commands came out" — which is what makes a
+ * configuration-parity claim checkable in a browser instead of inferred from the rendered row.
+ * Engineer-facing, never rendered, and carries no operator vocabulary.
+ */
+export type ProcessCardCommandProjectionEvent = {
+    processKey: string | null;
+    stageKey: string | null;
+    configuredRefs: string[];
+    commandKeys: string[];
+    /** The published operating plan's templates as the runtime received them. */
+    planTemplates?: Array<{ label: string; helpful: string[] }>;
+    /** The process's own command selection, when the published inputs carry one. */
+    commandProjection?: unknown;
+};
+
+export function logProcessCardCommandProjection(event: ProcessCardCommandProjectionEvent): void {
+    if (typeof window === "undefined") return;
+    const w = window as DriftWindow;
+    const seen = (w.__ALLOY_PROCESS_COMMAND_PROJECTION ??= []);
+    const signature = (row: ProcessCardCommandProjectionEvent) =>
+        `${row.processKey}|${row.stageKey}|${row.configuredRefs.join(",")}|${row.commandKeys.join(",")}`;
+    const next = signature(event);
+    // The same stage projecting the same row every render is one fact, not many.
+    if (seen.some((row) => signature(row) === next)) return;
+    seen.push(event);
 }
