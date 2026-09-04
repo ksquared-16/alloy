@@ -2457,6 +2457,83 @@ const correctionRegeneration: Phase = {
     },
 };
 
+
+/**
+ * Advance the participant runtime until the SIGNATURE PAD is reachable, and say so if it is not.
+ *
+ * WHY THIS IS SHARED. G_evidence already knows this route, and it learned it the hard way — three
+ * separate loops are recorded in its comments. J_signature reimplemented the walk and rediscovered
+ * exactly one of those mistakes: it stopped as soon as it saw "Sign and finish", which the runtime
+ * renders BEFORE "Tap to sign", and then handed a surface with no pad control to `driveSignature`,
+ * which correctly reported that it could not open a pad. Two independent ways to reach one
+ * component is how that divergence became possible, so there is now one.
+ *
+ * THE ORDER IS THE WHOLE POINT. "Type instead" exists only once the pad is OPEN, and the pad opens
+ * only via "Tap to sign". "Sign and finish" sits beside both and is refused while the form is
+ * unsigned. So the sequence cannot be expressed as a flat preference list, and the pad control is
+ * checked BEFORE the finishing control on every step.
+ *
+ * This helper owns navigation TO the component. `driveSignature` owns interaction WITH it. Neither
+ * knows the other's job.
+ */
+async function advanceParticipantToSignature(
+    page: PlaywrightPage,
+    maxSteps = 14,
+): Promise<
+    | { ok: true; trail: Array<{ step: number; buttons: string[]; chose: string }> }
+    | { ok: false; reason: "SIGNATURE_SURFACE_NOT_REACHED"; trail: Array<{ step: number; buttons: string[]; chose: string }>; prompt: string; buttons: string[] }
+> {
+    const trail: Array<{ step: number; buttons: string[]; chose: string }> = [];
+
+    for (let i = 0; i < maxSteps; i += 1) {
+        const buttons = await visibleButtons(page);
+
+        // Already at the pad, or the pad is open: navigation is done.
+        if (buttons.some((b) => /^tap to sign$/i.test(b)) || buttons.some((b) => /instead$/i.test(b))) {
+            trail.push({ step: i, buttons, chose: "(signature surface reached)" });
+            return { ok: true, trail };
+        }
+
+        /*
+         * The same ordered preference G uses, minus "Done" — that belongs to the pad and pressing it
+         * here commits against an already-finished pad instead of advancing.
+         */
+        const prefer: readonly RegExp[] = [
+            /^everything looks good$/i,
+            /^review paperwork$/i,
+            /that's right/i,
+            /^(continue|next|submit)$/i,
+            /^no$/i,
+            // Last, and deliberately so: on an unsigned form this reveals the pad rather than
+            // finishing, which is exactly the step J was stopping short of.
+            /^sign and finish$/i,
+        ];
+        let choice: string | undefined;
+        for (const rx of prefer) {
+            choice = buttons.find((b) => rx.test(b));
+            if (choice) break;
+        }
+        if (!choice) {
+            const prompt = (await visibleText(page)).replace(/\s+/g, " ").trim();
+            trail.push({ step: i, buttons, chose: "(nothing actionable)" });
+            return { ok: false, reason: "SIGNATURE_SURFACE_NOT_REACHED", trail, prompt: prompt.slice(0, 400), buttons };
+        }
+
+        trail.push({ step: i, buttons, chose: choice });
+        await page.getByRole("button", { name: choice }).first().click().catch(() => undefined);
+        await page.waitForTimeout(900);
+    }
+
+    const prompt = (await visibleText(page)).replace(/\s+/g, " ").trim();
+    return {
+        ok: false,
+        reason: "SIGNATURE_SURFACE_NOT_REACHED",
+        trail,
+        prompt: prompt.slice(0, 400),
+        buttons: await visibleButtons(page),
+    };
+}
+
 /**
  * J: the signature INTERACTION, not the persistence.
  *
@@ -2478,34 +2555,41 @@ const signatureInteraction: Phase = {
         if (!journey.ok) return { status: "failed", detail: journey.detail };
 
         const out = await withParticipantPage(ctx, journey.journeyId, async (page) => {
-            // Advance to the signing surface using only the affordances the packet presents.
-            for (let i = 0; i < 8; i += 1) {
-                const buttons = await visibleButtons(page);
-                if (buttons.some((b) => /^tap to sign$|^type instead$|^sign and finish$/i.test(b))) break;
-                const next = buttons.find((b) =>
-                    /^(yes, that's right|yes|continue|next|review paperwork|everything looks good)$/i.test(b));
-                if (!next) break;
-                await page.getByRole("button", { name: next }).first().click().catch(() => undefined);
-                await page.waitForTimeout(900);
-            }
+            // ONE route to the component, shared with G_evidence. J owns the interaction, not the walk.
+            const nav = await advanceParticipantToSignature(page);
+            if (!nav.ok) return { nav, signature: null, after: [] as string[] };
             const reached = await visibleButtons(page);
             const signature = await driveSignature(page, "Ada Certfree");
             const after = await visibleButtons(page);
-            return { reached, signature, after };
+            return { nav, reached, signature, after };
         });
 
         if (!out.ok) return { status: "failed", detail: out.detail };
-        const { reached, signature, after } = out.value;
+        const { nav, signature, after } = out.value as {
+            nav: Awaited<ReturnType<typeof advanceParticipantToSignature>>;
+            signature: Awaited<ReturnType<typeof driveSignature>> | null;
+            after: string[];
+        };
 
-        if (!reached.some((b) => /tap to sign|type instead|sign and finish/i.test(b))) {
+        if (!nav.ok) {
+            /*
+             * A SPECIFIC failure, not "stuck". The previous message named the pad as missing, which
+             * read as a product defect; the pad was fine and the walk had stopped a step short of it.
+             */
             return {
-                status: "not_applicable",
-                detail:
-                    "the active packet presented no signature surface on this journey, so there is no signature "
-                    + "interaction to certify here. Persistence remains certified by G_evidence.",
-                evidence: { childId, journeyId: journey.journeyId, buttonsAtEnd: reached },
+                status: "failed",
+                detail: `SIGNATURE_SURFACE_NOT_REACHED — the participant runtime never presented a signature pad control`,
+                evidence: {
+                    childId,
+                    journeyId: journey.journeyId,
+                    reason: nav.reason,
+                    promptAtStop: nav.prompt,
+                    buttonsAtStop: nav.buttons,
+                    trail: nav.trail,
+                },
             };
         }
+        if (!signature) return { status: "failed", detail: "reached the signature surface but did not run the component" };
         if (signature.state !== "finished") {
             return {
                 status: "failed",
