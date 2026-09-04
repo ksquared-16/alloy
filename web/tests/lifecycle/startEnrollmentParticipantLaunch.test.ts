@@ -230,7 +230,7 @@ function client(db: Record<string, Row[]>) {
                  * object, so `Record<string, unknown>` left that member untyped.
                  * Only the delegated member is declared.
                  */
-                const q: Record<string, unknown> & { insert: (payload: unknown) => unknown } = {
+                const q: Record<string, unknown> & { insert: (payload: Row | Row[]) => unknown } = {
             select: () => q,
             eq: (col: string, val: unknown) => {
                 filters.push({ col, val, op: "eq" });

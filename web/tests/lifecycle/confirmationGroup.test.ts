@@ -71,6 +71,9 @@ function need(input: {
         has_value: true,
         current_value: input.value ?? "x",
         value_source: "canonical_prefill",
+        // Required by EnrollmentInformationNeed and nullable, so null is the
+        // exact value for a fixture that asserts nothing about origin.
+        value_origin: null,
         requires_participant_action: (input.state ?? "known_requires_confirmation") === "known_requires_confirmation",
     } as EnrollmentInformationNeed;
 }

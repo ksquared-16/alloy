@@ -65,6 +65,10 @@ function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObj
             evidence: [],
         },
         // No question outstanding — the ordinary case.
+        // ParticipantObjectiveWire requires both. They are lists, so empty is
+        // the exact shape for a fixture with no settled or collected facts.
+        settled: [],
+        collected: [],
         pending_clarification: null,
         complete: false,
         ...overrides,
