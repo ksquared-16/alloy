@@ -5550,7 +5550,12 @@ export function renderGatewayShell({
   // Current Work orients (one card, bounded). The thread is the body, and it is
   // a conversation: who said it, when, in order. The composer is where the human
   // acts. Nothing else competes for that space.
-  const currentWork = buildCurrentWork(lane, { nowMs });
+  // NO TOP-OF-THREAD OUTPUT BLOCK. buildCurrentWork was still being computed
+  // here and thrown away — the last trace of the card that used to print the
+  // provider's latest output above the conversation. The thread is the only
+  // rendering of what was said; `renderCurrentWork` and `renderLaneCurrentWork`
+  // remain exported for the suites that still exercise them, but nothing in the
+  // Lane mounts them.
   const thread = buildLaneThread(lane, {
     assistant,
     lastInstruction: lastInstruction || lane?.last_instruction,

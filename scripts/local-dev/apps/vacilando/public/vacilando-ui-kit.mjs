@@ -820,9 +820,15 @@ const ROLE_CLASS = Object.freeze({
 function byline(entry) {
   const who = esc(entry.author || "");
   const when = entry.clock ? `<span class="vmsg-when">${esc(entry.clock)}</span>` : "";
+  // THE PROVIDER SAYS WHICH OF ITS TWO STATES IT IS IN.
+  //
+  // "Claude" alone cannot distinguish an answer still being written from one
+  // that is finished, and the difference decides whether the operator waits or
+  // reads. WORKING is a promise of more; COMPLETE is the end of the turn.
+  // Historical provider messages carry neither — they are simply what was said.
   const state = entry.working
-    ? `<span class="vmsg-state">Working</span>`
-    : "";
+    ? `<span class="vmsg-state is-working">Working</span>`
+    : (entry.complete ? `<span class="vmsg-state is-complete">Complete</span>` : "");
   return `<div class="vmsg-by"><span class="vmsg-who">${who}</span>${state}${when}</div>`;
 }
 
