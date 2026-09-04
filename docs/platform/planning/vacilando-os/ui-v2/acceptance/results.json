@@ -1,18 +1,18 @@
 {
-  "accepted_at": "2026-09-04T03:04:01.878Z",
+  "accepted_at": "2026-09-04T03:17:12.765Z",
   "base": "http://127.0.0.1:3030",
   "installed_toolkit": [
     "source_repo=/Users/vacilando/Alloy",
     "source_ref=origin/staging",
-    "source_commit=3540def392a829c851c14c896126bc25f3139269",
-    "source_commit_short=3540def392a8",
+    "source_commit=b2a3f427c7ec300f2989f9bf54d4358ce8847158",
+    "source_commit_short=b2a3f427c7ec",
     "source_subdir=scripts/local-dev",
-    "installed_at=2026-09-04T03:02:22Z",
+    "installed_at=2026-09-04T03:15:14Z",
     "installed_by=alloy-toolkit",
     "command_count=84"
   ],
-  "passed": 74,
-  "failed": 1,
+  "passed": 77,
+  "failed": 0,
   "results": [
     {
       "name": "running gateway serves /api/v2/views/home (promoted route)",
@@ -52,7 +52,7 @@
     {
       "name": "the running Gateway projects the estimate to the UI",
       "ok": true,
-      "detail": "{\"percent\":62,\"confidence\":\"medium\",\"summary\":\"Installed-runtime acceptance: driving the live Gateway\",\"remaining_work\":\"mobile acceptance and terminal-state proof\",\"source\":\"provider_estimate\",\"updated_at\":\"2026-09-04T03:02:56.999Z\"}"
+      "detail": "{\"percent\":62,\"confidence\":\"medium\",\"summary\":\"Installed-runtime acceptance: driving the live Gateway\",\"remaining_work\":\"mobile acceptance and terminal-state proof\",\"source\":\"provider_estimate\",\"updated_at\":\"2026-09-04T03:16:07.954Z\"}"
     },
     {
       "name": "installed module: a run can be created for the terminal-state proof",
@@ -67,7 +67,7 @@
     {
       "name": "installed module: COMPLETE becomes a MEASURED 100%",
       "ok": true,
-      "detail": "{\"percent\":100,\"confidence\":\"high\",\"summary\":\"midway\",\"remaining_work\":null,\"source\":\"deterministic\",\"updated_at\":\"2026-09-04T03:02:57.278Z\"}"
+      "detail": "{\"percent\":100,\"confidence\":\"high\",\"summary\":\"midway\",\"remaining_work\":null,\"source\":\"deterministic\",\"updated_at\":\"2026-09-04T03:16:08.181Z\"}"
     },
     {
       "name": "installed module: FAILED removes the estimate",
@@ -250,9 +250,14 @@
       "detail": "238px — \"MOBILE VISUAL CORRECTION — AUTHORIZED FOR PROMOTION + LIVE V\""
     },
     {
-      "name": "LIVE mobile 390: conversation begins in the first screen",
+      "name": "LIVE mobile 390: conversation begins within one screen of the lane top",
       "ok": true,
-      "detail": "first message at -5663 of 844"
+      "detail": "conversation starts 263px into the lane body (viewport 844)"
+    },
+    {
+      "name": "LIVE mobile 390: conversation content is actually on screen",
+      "ok": true,
+      "detail": ""
     },
     {
       "name": "LIVE mobile 390: the thread carries explicit bylines",
@@ -272,7 +277,7 @@
     {
       "name": "LIVE mobile 390: a long thread opens at the latest message, not the oldest",
       "ok": true,
-      "detail": "scrollTop 6076 of 6076"
+      "detail": "latest message visible=true, scrollTop 6076 of 6076"
     },
     {
       "name": "LIVE mobile 390: Details opens the compact Lane Inspector",
@@ -322,7 +327,7 @@
     {
       "name": "LIVE mobile 320: lane rows are compact and scannable",
       "ok": true,
-      "detail": "14 of 18 rows visible, median row 78px"
+      "detail": "13 of 18 rows visible, median row 78px"
     },
     {
       "name": "LIVE mobile 320: lane usable at phone width",
@@ -355,9 +360,14 @@
       "detail": "211px — \"MOBILE VISUAL CORRECTION — AUTHORIZED FOR PROMOTION + LIVE V\""
     },
     {
-      "name": "LIVE mobile 320: conversation begins in the first screen",
+      "name": "LIVE mobile 320: conversation begins within one screen of the lane top",
       "ok": true,
-      "detail": "first message at -6237 of 568"
+      "detail": "conversation starts 236px into the lane body (viewport 568)"
+    },
+    {
+      "name": "LIVE mobile 320: conversation content is actually on screen",
+      "ok": true,
+      "detail": ""
     },
     {
       "name": "LIVE mobile 320: the thread carries explicit bylines",
@@ -376,8 +386,8 @@
     },
     {
       "name": "LIVE mobile 320: a long thread opens at the latest message, not the oldest",
-      "ok": false,
-      "detail": "scrollTop 6623 of 6776"
+      "ok": true,
+      "detail": "latest message visible=true, scrollTop 6547 of 6776"
     },
     {
       "name": "LIVE mobile 320: Details opens the compact Lane Inspector",
