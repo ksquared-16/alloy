@@ -3,6 +3,7 @@
  */
 
 import { FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
+import { FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveLeadDrawerCommandHeaderMeta } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
@@ -257,7 +258,7 @@ function childrenCollectionItems(record: Record<string, unknown>): {
 } {
     // See {@link childrenInsight} — the collection source is decided by the normalizer, once.
     const { rows } = normalizeFocusPanelChildrenRowsFromTruth(record);
-    const visible = rows.slice(0, 3).map((row) => {
+    const visible = rows.slice(0, FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY).map((row) => {
         const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
         const status =
             formatFocusPanelDisplayLabel(row.outcome_status_label) ??
@@ -265,7 +266,7 @@ function childrenCollectionItems(record: Record<string, unknown>): {
             "In progress";
         return { label: firstName, status };
     });
-    return { items: visible, overflowCount: Math.max(0, rows.length - 3) };
+    return { items: visible, overflowCount: Math.max(0, rows.length - FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY) };
 }
 
 function statusIssuesFromVm(displayVm: OpportunityDrawerViewModel): string[] {
@@ -570,7 +571,7 @@ function schedulingCollectionItems(record: Record<string, unknown>): {
     overflowCount: number;
 } {
     const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
-    const visible = rows.slice(0, 3).map((row) => {
+    const visible = rows.slice(0, FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY).map((row) => {
         const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
         // Operational schedule assignments do not exist until enrollment/Registration;
         // at the case-grain lead stage each child reads "Needs a room" (honest state,
@@ -578,7 +579,7 @@ function schedulingCollectionItems(record: Record<string, unknown>): {
         // scheduling projection once the child is enrolled.
         return { label: firstName, status: "Needs a room" };
     });
-    return { items: visible, overflowCount: Math.max(0, rows.length - 3) };
+    return { items: visible, overflowCount: Math.max(0, rows.length - FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY) };
 }
 
 /**
