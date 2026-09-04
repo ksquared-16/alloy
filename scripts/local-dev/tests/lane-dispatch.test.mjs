@@ -263,3 +263,31 @@ test("the collector is CALLED, not merely written", async () => {
   assert.match(src, /lookupLane:/);
   assert.match(src, /activeRunFor:/);
 });
+
+test("two dispatches to DIFFERENT lanes are different actions", async () => {
+  /*
+   * Found live: fanning out to a second lane returned the FIRST request's id,
+   * reported ok, and queued nothing for the second target. The identity
+   * resolver had no case for this action, so every dispatch produced an empty
+   * identity and dedupeKey collapsed to mission|lane|action_key|target for all
+   * of them. A cohort would have counted lanes that never received work.
+   */
+  const { resolveActionAuthorizationIdentity } = await import("../lib/vacilando/action-authorization-identity.mjs");
+  const idFor = (laneId, measurement = "m1") => resolveActionAuthorizationIdentity({
+    actionType: "lane.dispatch_measurement_instruction",
+    scope: MISSION,
+    target: "development_certification",
+    inputs: { target_lane_id: laneId, measurement_id: measurement },
+  });
+
+  const a = idFor("lane_aaa111");
+  const b = idFor("lane_bbb222");
+  assert.ok(a.subjectKey, "a dispatch must have a non-empty identity or every one dedupes together");
+  assert.notEqual(a.subjectKey, b.subjectKey, "different target lanes are different actions");
+  assert.equal(a.targetRef, "lane_aaa111");
+
+  // Same lane, same measurement: genuinely the same action, and should dedupe.
+  assert.equal(idFor("lane_aaa111").subjectKey, a.subjectKey);
+  // Same lane, different measurement: a new experiment, so a new action.
+  assert.notEqual(idFor("lane_aaa111", "m2").subjectKey, a.subjectKey);
+});
