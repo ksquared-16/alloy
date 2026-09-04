@@ -991,17 +991,38 @@ function bindGatewayViewport() {
   }
 }
 
+/**
+ * The composer grows with what is in it.
+ *
+ * THE FLOOR USED TO BE UNCONDITIONAL: 48px on a phone whether or not anything
+ * had been typed, inside a box that then reserved ~139px of a 844px screen for
+ * an empty field. An idle composer should ask for one line; a composer being
+ * used should take what it needs.
+ */
 function autosizeInstruction(ta) {
   const el = ta || document.getElementById("gw-instruction");
   if (!el) return;
   el.style.height = "auto";
   const isMobile = window.innerWidth <= 860;
   const cap = Math.min(isMobile ? 112 : 220, Math.round((window.visualViewport?.height || window.innerHeight) * (isMobile ? 0.18 : 0.28)));
-  el.style.height = `${Math.max(isMobile ? 48 : 72, Math.min(el.scrollHeight, cap))}px`;
+  // Idle means empty AND unfocused. Either one is a reason to hold the room.
+  const idle = !String(el.value || "").trim() && document.activeElement !== el;
+  const floor = isMobile ? (idle ? 38 : 48) : 72;
+  el.style.height = `${Math.max(floor, Math.min(el.scrollHeight, cap))}px`;
   const form = document.querySelector("[data-gw-composer]");
   const stage = document.querySelector("[data-gw-stage]");
   if (form && stage) stage.style.setProperty("--gw-composer-h", `${form.offsetHeight}px`);
 }
+
+// Focus and blur change what "idle" means, so they re-measure. Without this the
+// composer only ever resized on input and stayed at its typing height after the
+// operator moved on.
+document.addEventListener("focusin", (e) => {
+  if (e.target instanceof HTMLElement && e.target.id === "gw-instruction") autosizeInstruction(e.target);
+});
+document.addEventListener("focusout", (e) => {
+  if (e.target instanceof HTMLElement && e.target.id === "gw-instruction") autosizeInstruction(e.target);
+});
 
 function statusOpenNow() {
   if (G.statusOpen != null) return G.statusOpen;
@@ -3190,9 +3211,22 @@ document.addEventListener("click", async (e) => {
   // The lane tray's Review opens the lane's details, where the governed action
   // and its evidence live. Authorize routes to the same decision surface the
   // approvals bar already owns — the tray never approves anything by itself.
+  // REVIEW OPENS THE DECISION, IT DOES NOT MAKE IT.
+  //
+  // The tray is one line and states only what is waiting. Review brings the
+  // operator to the canonical governed surface — the decision bar the
+  // governed-action owner renders, with its proposal and its approve/deny — and
+  // focuses it. It never approves anything itself.
   const review = hit("[data-v-needs-review]");
   if (review) {
     e.preventDefault();
+    const bar = document.querySelector("[data-gw-decision-bar]");
+    if (bar instanceof HTMLElement) {
+      bar.scrollIntoView({ block: "center", behavior: "smooth" });
+      const approve = bar.querySelector("[data-gw-governed-approve]");
+      if (approve instanceof HTMLElement) approve.focus({ preventScroll: true });
+      return;
+    }
     setAsideOpen(true, { restoreFocus: false });
     return;
   }

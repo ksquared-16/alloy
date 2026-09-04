@@ -856,3 +856,196 @@ export function parseMs(iso) {
   const ms = typeof iso === "number" ? iso : Date.parse(iso);
   return Number.isFinite(ms) ? ms : null;
 }
+
+/* ===========================================================================
+ * THE LANE THREAD
+ *
+ * A lane is a CONVERSATION between an operator and a provider, with the system
+ * occasionally speaking up. V2's first cut rendered every one of those as a
+ * similarly weighted white card — Current Work, latest output, the governed
+ * outcome, the user's instruction — and in doing so destroyed the two things a
+ * conversation is made of: WHO SAID IT and WHEN.
+ *
+ * This builds one ordered, typed thread. Authorship and chronology are
+ * properties of the data, not decisions a renderer makes ad hoc, so no surface
+ * can quietly start attributing a provider's output to the operator's composer
+ * again.
+ * ========================================================================= */
+
+export const MESSAGE_ROLE = Object.freeze({
+  /** The operator's submitted instruction, verbatim. */
+  USER: "user",
+  /** The provider's readable result or update. */
+  PROVIDER: "provider",
+  /** Something the runtime did. Lower hierarchy; never competes with work. */
+  SYSTEM: "system",
+  /** A decision waiting on the operator. Only this one is allowed to shout. */
+  GOVERNANCE: "governance",
+  /** What the run is doing right now, when nothing has been said yet. */
+  RUN_STATUS: "run_status",
+});
+
+export const ROLE_ORDER = Object.freeze([
+  MESSAGE_ROLE.USER,
+  MESSAGE_ROLE.PROVIDER,
+  MESSAGE_ROLE.SYSTEM,
+  MESSAGE_ROLE.GOVERNANCE,
+  MESSAGE_ROLE.RUN_STATUS,
+]);
+
+function clockOf(ms) {
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * Build the ordered thread for a lane.
+ *
+ * `assistant` is the pre-existing assistantMessageSource() result — the
+ * canonical owner of "which provider utterance is current". It is consumed
+ * rather than re-derived, because two answers to that question is exactly the
+ * bug that made a finished summary vanish behind a late pane poll.
+ */
+export function buildLaneThread(lane, {
+  assistant = null,
+  lastInstruction = null,
+  attachments = [],
+  nowMs = Date.now(),
+  providerLabel = "Provider",
+} = {}) {
+  const entries = [];
+  const run = lane?.execution_run || lane?.previous_run || null;
+
+  // ---- the operator's instruction -------------------------------------
+  const rec = lastInstruction || lane?.last_instruction || null;
+  if (rec?.instruction && (rec.status === "delivered" || rec.status === "queued")) {
+    const at = parseMs(rec.delivered_at || rec.queued_at) || parseMs(run?.created_at);
+    entries.push({
+      id: `user:${rec.delivered_at || rec.queued_at || "now"}`,
+      role: MESSAGE_ROLE.USER,
+      author: "You",
+      at_ms: at,
+      clock: clockOf(at),
+      body: String(rec.instruction),
+      attachments: Array.isArray(attachments) ? attachments : [],
+      // Delivery is QUIET METADATA. It is a fact about plumbing, not about
+      // what the operator said.
+      meta: rec.status === "queued" ? "Queued" : "Delivered",
+      pending: rec.status === "queued",
+    });
+  }
+
+  // ---- system history --------------------------------------------------
+  // A COMPLETED governed action is HISTORY. It used to render as a permanent
+  // high-weight banner directly above the composer, competing with current work
+  // forever. It belongs in the thread, at system weight, where it happened.
+  const outcome = lane?.last_governed_outcome || null;
+  if (outcome) {
+    const at = parseMs(outcome.at);
+    entries.push({
+      id: `system:governed:${outcome.at || outcome.title}`,
+      role: MESSAGE_ROLE.SYSTEM,
+      author: "System",
+      at_ms: at,
+      clock: clockOf(at),
+      ok: outcome.ok !== false,
+      body: [outcome.title, outcome.detail].filter(Boolean).join(" — "),
+      meta: outcome.approved_by ? `approved by ${outcome.approved_by}` : null,
+    });
+  }
+  for (const item of (lane?.recent_system_activity || []).slice(0, 3)) {
+    const at = parseMs(item.at) || parseMs(item.occurred_at);
+    if (!item?.summary) continue;
+    entries.push({
+      id: `system:${item.at || item.summary}`,
+      role: MESSAGE_ROLE.SYSTEM,
+      author: "System",
+      at_ms: at,
+      clock: clockOf(at),
+      ok: true,
+      body: String(item.summary),
+      meta: null,
+    });
+  }
+
+  // ---- the provider ----------------------------------------------------
+  // THE PROVIDER SLOT ALWAYS EXISTS ON AN OPEN LANE.
+  //
+  // Gated on `assistant.text` this dropped the entry whenever the provider had
+  // said nothing yet — and "nothing yet" is itself the answer the operator came
+  // for. assistantMessageSource already renders that state ("this run has not
+  // reported a summary yet"); silently omitting the row made a lane look empty
+  // when it was merely quiet.
+  if (assistant) {
+    const at = parseMs(run?.updated_at) || Number(lane?.last_activity_ms) || nowMs;
+    const working = assistant.kind === "working" || assistant.kind === "live";
+    entries.push({
+      id: `provider:${assistant.kind}:${run?.run_id || "none"}`,
+      role: MESSAGE_ROLE.PROVIDER,
+      author: providerLabel,
+      at_ms: at,
+      clock: clockOf(at),
+      body: assistant.text || "",
+      source: assistant,
+      working,
+      // "CLAUDE · WORKING" rather than a clock, when it is mid-utterance.
+      meta: working ? "Working" : (assistant.finalized ? "Final report" : null),
+    });
+  }
+
+  entries.sort((a, b) => (a.at_ms || 0) - (b.at_ms || 0));
+  return { entries, nowMs, count: entries.length };
+}
+
+/* ---------------------------------------------------------------------------
+ * CURRENT WORK IS AN ORIENTATION CARD, NOT A DOCUMENT VIEWER.
+ * ------------------------------------------------------------------------- */
+
+export const WORK_TITLE_MAX = 72;
+export const WORK_SUMMARY_MAX = 130;
+
+/**
+ * Reduce a run to the four things the card is for: what the work is, what phase
+ * it is in, how far along, and what state it is in.
+ *
+ * The full instruction is NOT part of that. It was printed into the card in
+ * full, so a long mission pushed the conversation entirely below the fold — the
+ * card became a transcript viewer for the one piece of text the operator had
+ * just written themselves. It is returned separately as `details` for a
+ * disclosure.
+ */
+export function buildCurrentWork(lane, { nowMs = Date.now() } = {}) {
+  const run = lane?.execution_run || null;
+  if (!run?.state) return { active: false, title: null, summary: null, details: null, progress: laneProgress(null) };
+
+  const instruction = String(run.instruction || "").trim();
+  const lines = instruction.split("\n").map((l) => l.trim()).filter(Boolean);
+  const rawTitle = lines[0] || "";
+  // A title is a NAME, not the first 400 characters of a briefing.
+  const title = rawTitle.length > WORK_TITLE_MAX
+    ? `${rawTitle.slice(0, WORK_TITLE_MAX - 1).trimEnd()}…`
+    : (rawTitle || "Current work");
+
+  const progress = laneProgress(run, { nowMs });
+  // The phase the provider reported beats a re-statement of the instruction:
+  // it is the only part of this card that changes as the work advances.
+  const phase = progress.summary || run.latest_progress?.summary || run.completion_report?.summary || lines[1] || null;
+  const summary = phase && phase.length > WORK_SUMMARY_MAX
+    ? `${phase.slice(0, WORK_SUMMARY_MAX - 1).trimEnd()}…`
+    : phase;
+
+  const truncated = rawTitle.length > WORK_TITLE_MAX
+    || lines.length > 1
+    || instruction.length > WORK_TITLE_MAX + WORK_SUMMARY_MAX;
+
+  return {
+    active: true,
+    title,
+    summary,
+    progress,
+    // Everything the card deliberately did not print, for the disclosure.
+    details: truncated ? instruction : null,
+    truncated,
+    run,
+  };
+}

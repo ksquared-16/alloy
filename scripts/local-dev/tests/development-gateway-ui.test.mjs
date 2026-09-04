@@ -2160,8 +2160,20 @@ await test("conversation detail has user and assistant messages with icon copy, 
     lastInstruction: last,
     listReady: true,
   });
-  assert.match(html, /gw-msg-user/);
+  // AUTHORSHIP IS THE CONTRACT; the class names carrying it changed.
+  //
+  // The lane body is now a chronological thread with an explicit role per
+  // entry, because V2's first cut rendered the operator's instruction, the
+  // provider's output and system events as similarly weighted cards and you
+  // could not tell who had said what. What is asserted is what always
+  // mattered: the operator's words are present and attributed to YOU, and the
+  // provider's output is present and attributed to the provider.
+  assert.match(html, /vmsg-user/);
+  assert.match(html, /data-v-role="user"/);
+  assert.match(html, /vmsg-who">You</);
   assert.match(html, /Ship the composer/);
+  assert.match(html, /vmsg-provider/);
+  assert.match(html, /data-v-role="provider"/);
   assert.match(html, /gw-msg-assistant/);
   assert.match(html, /function ok\(\) \{\}/);
   assert.match(html, /data-gw-provider-opt="claude"/);

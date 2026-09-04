@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T00:36:41.716Z",
+  "captured_at": "2026-09-04T02:04:54.350Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -18,7 +18,7 @@
       "height": 380
     }
   },
-  "passed": 53,
+  "passed": 84,
   "failed": 0,
   "results": [
     {
@@ -72,7 +72,12 @@
       "detail": ""
     },
     {
-      "name": "current work precedes the agent output",
+      "name": "current work orients, then the conversation follows",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop keeps the conversation as the central content, not dashboard cards",
       "ok": true,
       "detail": ""
     },
@@ -89,7 +94,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 5:18 PM Stop lane RUNTIME Executing"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 6:46 PM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
@@ -172,6 +177,36 @@
       "detail": ""
     },
     {
+      "name": "mobile 390 Home has ONE page identity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Home Needs You is a summary, not a payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Home metric tiles are wide enough to read",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 the lane catalogue carries no governed payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 no \"No folder\" heading",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 several lanes are scannable at once",
+      "ok": true,
+      "detail": "10 of 10 rows in the first screen"
+    },
+    {
       "name": "mobile 390 interaction zone fits the space it actually has",
       "ok": true,
       "detail": ""
@@ -190,6 +225,51 @@
       "name": "mobile 390 hides diagnostics from the primary lane screen",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "mobile 390 lane header is phone-scale",
+      "ok": true,
+      "detail": "header 84px of 844"
+    },
+    {
+      "name": "mobile 390 header carries no desktop actions or identity detail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 Current Work is a bounded summary, not a document",
+      "ok": true,
+      "detail": "current work 194px"
+    },
+    {
+      "name": "mobile 390 the long instruction is behind a disclosure",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 conversation begins in the first screen",
+      "ok": true,
+      "detail": "first message at -27 of 844"
+    },
+    {
+      "name": "mobile 390 authorship is visually distinguishable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 a completed governed action is a system line, not a banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 390 the idle composer asks for one line",
+      "ok": true,
+      "detail": "textarea 41px"
+    },
+    {
+      "name": "mobile 390 the Needs You tray is one line",
+      "ok": true,
+      "detail": "tray nullpx"
     },
     {
       "name": "mobile 390 Lane details opens the inspector",
@@ -242,6 +322,36 @@
       "detail": ""
     },
     {
+      "name": "mobile 320 Home has ONE page identity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Home Needs You is a summary, not a payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Home metric tiles are wide enough to read",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 the lane catalogue carries no governed payload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 no \"No folder\" heading",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 several lanes are scannable at once",
+      "ok": true,
+      "detail": "9 of 10 rows in the first screen"
+    },
+    {
       "name": "mobile 320 interaction zone fits the space it actually has",
       "ok": true,
       "detail": ""
@@ -262,6 +372,51 @@
       "detail": ""
     },
     {
+      "name": "mobile 320 lane header is phone-scale",
+      "ok": true,
+      "detail": "header 83px of 568"
+    },
+    {
+      "name": "mobile 320 header carries no desktop actions or identity detail",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 Current Work is a bounded summary, not a document",
+      "ok": true,
+      "detail": "current work 211px"
+    },
+    {
+      "name": "mobile 320 the long instruction is behind a disclosure",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 conversation begins in the first screen",
+      "ok": true,
+      "detail": "first message at -359 of 568"
+    },
+    {
+      "name": "mobile 320 authorship is visually distinguishable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 a completed governed action is a system line, not a banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile 320 the idle composer asks for one line",
+      "ok": true,
+      "detail": "textarea 41px"
+    },
+    {
+      "name": "mobile 320 the Needs You tray is one line",
+      "ok": true,
+      "detail": "tray nullpx"
+    },
+    {
       "name": "mobile 320 Lane details opens the inspector",
       "ok": true,
       "detail": ""
@@ -269,7 +424,7 @@
     {
       "name": "the composer stays reachable with the keyboard open",
       "ok": true,
-      "detail": "{\"cBottom\":366,\"sBottom\":355,\"vh\":380}"
+      "detail": "{\"cBottom\":365,\"sBottom\":346,\"vh\":380}"
     },
     {
       "name": "no sideways scroll with the keyboard open",

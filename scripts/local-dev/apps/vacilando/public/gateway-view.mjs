@@ -4,7 +4,9 @@
  */
 import {
   ago as kitAgo,
+  currentWorkCard,
   esc as kitEsc,
+  renderThread,
   laneRowV2,
   needsYouTray,
   placeholderBanner,
@@ -24,7 +26,9 @@ import {
 } from "./vacilando-ui-kit.mjs";
 import {
   buildActivityViewModel,
+  buildCurrentWork,
   buildHomeViewModel,
+  buildLaneThread,
   buildSystemViewModel,
   laneProgress,
   readPlaceholderMode,
@@ -1356,7 +1360,14 @@ export function groupLanesByFolder(lanes, folders = [], { collapsed = new Set(),
     const raw = lane?.folder_id ? String(lane.folder_id) : null;
     // A folder_id the store no longer knows must not hide the lane.
     const id = raw && known.has(raw) ? raw : UNFILED_FOLDER_ID;
-    const g = groupFor(id, id === UNFILED_FOLDER_ID ? "No folder" : known.get(id).name);
+    // ABSENT ORGANISATION IS NOT A GROUP NAME.
+    //
+    // Unfiled lanes were headed "No folder", so an operator with one real
+    // folder saw a heading whose entire content was the fact that the other
+    // lanes had none. Folders are optional; the ungrouped remainder is simply
+    // "Lanes". (With NO folders at all the list stays flat and no header is
+    // rendered — see renderLaneList.)
+    const g = groupFor(id, id === UNFILED_FOLDER_ID ? "Lanes" : known.get(id).name);
     g.lanes.push(lane);
     if (index < g.rank) g.rank = index;
     const work = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
@@ -4948,16 +4959,24 @@ export function renderLaneHeaderV2(lane, {
         <a href="#/lanes">Lanes</a><span class="vcrumb-sep" aria-hidden="true">/</span><span aria-current="page">${esc(label)}</span>
       </nav>
     </div>
+    ${/*
+      MOBILE CARRIES A DIFFERENT COMPOSITION, NOT A SMALLER ONE.
+      The phone header renders name + "state · provider" and ONE control
+      (Details). Stop lane, the model string, the slot and the start time are
+      desktop-scale identity; on a phone they cost most of the first viewport
+      and none of them is what the operator came to see. They live in Details,
+      where the Inspector's RUN block already owns them.
+    */ ""}
     <div class="vlane-head-row">
       <div class="vlane-head-id">
         <h1 class="vlane-title">${esc(label)}</h1>
-        <div class="vlane-head-state" data-gw-stage-status>${stateDot(st.label, { tone: st.tone, live: st.live })}</div>
+        <div class="vlane-head-state" data-gw-stage-status>${stateDot(st.label, { tone: st.tone, live: st.live })}<span class="vlane-head-who"> · ${esc(laneProviderLabel(lane))}</span></div>
         ${meta ? `<p class="vlane-head-meta">${esc(meta)}</p>` : ""}
       </div>
       <div class="vlane-head-acts">
-        ${canStop ? `<button type="button" class="btn sm" data-gw-cancel-run data-lane-id="${esc(laneId)}">Stop lane</button>` : ""}
+        ${canStop ? `<button type="button" class="btn sm vlane-stop" data-gw-cancel-run data-lane-id="${esc(laneId)}">Stop lane</button>` : ""}
         <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
-          aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Lane details</button>
+          aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
       </div>
     </div>
     ${renderLaneTabs(laneId, tab)}
@@ -5418,24 +5437,43 @@ export function renderGatewayShell({
   const needsItems = laneNeedsYouItems(lane);
   const tray = needsYouTray(needsItems, { laneId });
 
+  // CONTEXT -> CONVERSATION -> HUMAN ACTION.
+  //
+  // Current Work orients (one card, bounded). The thread is the body, and it is
+  // a conversation: who said it, when, in order. The composer is where the human
+  // acts. Nothing else competes for that space.
+  const currentWork = buildCurrentWork(lane, { nowMs });
+  const thread = buildLaneThread(lane, {
+    assistant,
+    lastInstruction: lastInstruction || lane?.last_instruction,
+    attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
+    nowMs,
+    providerLabel: laneProviderLabel(lane),
+  });
   const overview = `
-        ${renderLaneCurrentWork(lane, { nowMs, cancelPending })}
-        <section class="vcard vcard-output" data-gw-thread>
+        ${currentWorkCard(currentWork, {
+          state: currentWork.active ? work.label : null,
+          tone: currentWork.active ? work.tone : "",
+          live: currentWork.active ? work.live : false,
+          expanded: Boolean(userMessageExpanded),
+          cancel: renderCancelControl(lane?.execution_run, { pending: cancelPending }),
+        })}
+        <section class="vcard vcard-thread">
           <div class="vcard-head">
-            <div class="vcard-headings"><h2 class="vcard-title">Latest agent output</h2></div>
+            <div class="vcard-headings"><h2 class="vcard-title">Conversation</h2></div>
             <div class="vcard-actions">
               ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
               ${liveMark}
             </div>
           </div>
           <div class="vcard-body">
-            ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, {
-              expanded: Boolean(userMessageExpanded),
-              attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
+            ${renderThread(thread, {
+              // Keeps the assistant-message hook the existing renderers and
+              // styles bind to: this IS the assistant body, now inside a
+              // thread entry that also says who authored it and when.
+              renderProviderBody: () => `<div class="vmsg-body gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">${renderAssistantMessage(assistant, { pending })}</div>`,
+              attachments: renderMessageAttachments((lane?.execution_run || lane?.previous_run)?.attachments || []),
             })}
-            <article class="gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">
-              ${renderAssistantMessage(assistant, { pending })}
-            </article>
           </div>
         </section>`;
 
@@ -5455,13 +5493,19 @@ export function renderGatewayShell({
     <section class="gw-main">
       <div class="gw-lane-stage" data-gw-stage>
         ${renderLaneHeaderV2(lane, { selectedId, work, telemetry, tab: activeTab, nowMs, asideOpen })}
-        <div class="vlane-body" data-gw-lane-body>
+        <div class="vlane-body" data-gw-lane-body data-gw-thread>
           ${tabBody}
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
         <div class="vlane-interaction">
+          ${/*
+            renderGovernedOutcome is GONE from here. A COMPLETED governed action
+            is history: it rendered as a permanent high-weight banner directly
+            above the composer, outliving the work it described and competing
+            with it forever. It is now a one-line SYSTEM entry in the thread, at
+            the time it happened. See buildLaneThread.
+          */ ""}
           ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
-          ${renderGovernedOutcome(lane)}
           ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
           ${renderUnanswerableScreen(blockingScreen, { laneId })}
           ${tray}
