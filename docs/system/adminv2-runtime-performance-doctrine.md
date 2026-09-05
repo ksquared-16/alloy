@@ -484,3 +484,51 @@ work starts from measurement rather than from a fresh optimisation hunt.
 | 5 | 32 pre-existing test failures across 17 files on staging | measured at `bcd20f004` | no runtime impact; erodes the signal guards depend on | low |
 
 Do not start these inside a certification mission.
+
+---
+
+## Placement / Waitlist certified contract
+
+Placement is a certified operator surface. A change that can reach placement inherits these
+obligations; they are not advisory, and "the tests exist" is not the same as being governed — the
+suites below are wired into the runners named beside them, which is what makes them inescapable.
+
+### Hard invariants
+
+| Invariant | Certified by | Tier |
+|---|---|---|
+| OCM grouping changes propagate through the one canonical writer | `syncPlacementCandidateFromOcm.test.ts` | 1 |
+| A cohort-local manual position persists and changes canonical order | `cohortLocalManualPositions.test.ts`, `waitlist-manual-position-truth.cert.spec.ts` | 1, 3 |
+| Section rank stays separate from cohort ordinal | `waitlistAdjustGroupRange.test.ts` | 1 |
+| One active candidate per canonical uniqueness contract | `certification/placement-invariants` (A, A2) | 1 (DB) |
+| One active manual position per candidate/cohort/kind | `certification/placement-invariants` (B, B2) | 1 (DB) |
+| DB identity back-fill and org consistency hold | `certification/placement-invariants` (C, D, D2, D3) | 1 (DB) |
+| Repair executors keep idempotency and error semantics | `placementCandidateOcmRepairExecutor.test.ts` | 1 |
+| Candidate ensure collision behaviour is stated, not inferred | `placementCandidateLifecycleHookEffects.test.ts` | 1 |
+| Shadow mode is proven behaviourally, never by substring | `waitlistShadowModeBehaviour.test.ts` | 1 |
+| Destructive cleanup stays org- and marker-scoped | `waitlistDemoCleanupScoping.test.ts` | 1 |
+
+### Tiers
+
+- **Tier 1 — always.** Vitest placement suites plus `certification/placement-invariants/run.sh`,
+  which runs inside `scripts/certify-trust-db.sh` and therefore inside the Trust DB certification
+  job. The database is the only enforcement of candidate uniqueness and the `person_id` back-fill;
+  before this suite, nothing in the repository referenced those objects by name.
+- **Tier 2 — local production.** `npm run cert:runtime:local` when placement-adjacent runtime
+  changes.
+- **Tier 3 — deployed acceptance.** `waitlist-manual-position-truth.cert.spec.ts` against deployed
+  staging for milestone releases. It exists because the manual-position defect escaped every unit
+  test and was only caught by write → canonical read → rendered order → reload.
+
+### Two rules worth stating plainly
+
+**Deciders and doers are both covered.** The gap this contract closes was not missing tests; it was
+tests that exercised pure decision functions while the functions that *wrote* went untouched. A new
+placement writer needs an effect test asserting the write itself — its payload, its scoping, and
+whether it happens at all — not only its returned summary.
+
+**Source-level assertions are for module-graph and forbidden-content properties only.** "There is
+one writer for these columns" and "this seed file must not contain a production label" cannot be
+observed at runtime. Anything with a runtime answer — a default, an ordering, a mode — is tested as
+behaviour with a positive control. The pre-existing `shadow_mode` guard asserted an exact ternary
+source expression; it would have survived any behavioural inversion that preserved the characters.
