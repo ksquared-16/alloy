@@ -130,6 +130,27 @@ export type FinancialsLedgerRow = {
      * it can restate it.
      */
     offersReverse: boolean;
+    /**
+     * Money already applied to THIS charge, and what it therefore still owes.
+     *
+     * Not new arithmetic: `appliedByChargeId` is the same map `reconcileRows` and `pastDueFor`
+     * already sum, under the one balance rule (active applications whose parent payment is POSTED).
+     * It is surfaced per row because the card previously had no way to say which charge a payment
+     * settled, and an operator deciding what to collect needs the row's own number rather than the
+     * account total.
+     */
+    appliedCents: number;
+    /** `amountCents − appliedCents`. Zero or negative means nothing is left to collect. */
+    outstandingCents: number;
+    /**
+     * Whether this row can receive a payment — the transition the card renders as `Record payment`.
+     *
+     * Decided HERE for the same reason `offersReverse` is: leaving it to JSX puts the rule in the
+     * component and again in every test that restates it. `payment.record`'s own eligibility check
+     * refuses a draft or void charge, and the database bounds over-application; this is the card's
+     * mirror of that answer, never a second rule.
+     */
+    offersPayment: boolean;
     dueDate: string | null;
     /** Operator-facing GL code, or null when nothing maps it. Never silently blank. */
     glCode: string | null;
@@ -678,6 +699,7 @@ export async function buildFinancialsCardVM(
         const correctsChargeId = t(c.source_charge_id) || null;
         const correctionKind = t(metadata.correction_kind) || null;
         const reversedByChargeId = reversalBySource.get(t(c.id)) ?? null;
+        const amountCents = Number(c.amount_cents ?? 0);
         return {
             chargeId: t(c.id),
             date: billableOn ?? t(c.occurs_on) ?? t(c.service_date) ?? null,
@@ -688,7 +710,7 @@ export async function buildFinancialsCardVM(
             categoryKey,
             categoryLabel: chargeCategoryLabel(categoryKey),
             description: labelByTemplateId.get(t(c.charge_template_id)) || t(c.description) || null,
-            amountCents: Number(c.amount_cents ?? 0),
+            amountCents,
             currencyCode: t(c.currency_code) || "USD",
             status,
             lifecycleStatus:
@@ -705,6 +727,14 @@ export async function buildFinancialsCardVM(
             correctionKind,
             reversedByChargeId,
             offersReverse: offersReverseTransition({ status, reversedByChargeId, correctsChargeId }),
+            /*
+             * Filled in below, once the payments read has answered. Until then a row owes its whole
+             * amount and offers nothing — the honest state for a card that has not yet been told
+             * what has been paid, and the state that survives if the payments read fails.
+             */
+            appliedCents: 0,
+            outstandingCents: amountCents,
+            offersPayment: false,
             dueDate: t(c.due_date) || null,
             glCode: account?.code ?? null,
             glAccountName: account?.name ?? null,
@@ -749,6 +779,25 @@ export async function buildFinancialsCardVM(
             ...vm.unavailable,
             { fact: "payments", reason: e instanceof Error ? e.message : String(e) },
         ];
+    }
+
+    /*
+     * WHAT EACH ROW HAS BEEN PAID, AND WHETHER IT CAN TAKE MORE.
+     *
+     * After the payments read, never before: a row's outstanding amount is not knowable until the
+     * applications are in, and if that read FAILED the rows keep the state they were built with —
+     * owing their whole amount and offering nothing. That is the safe direction. The alternative,
+     * defaulting `offersPayment` to true, would put a Record-payment control on a card that has just
+     * admitted it cannot say what has been paid.
+     */
+    for (const row of rows) {
+        row.appliedCents = appliedByChargeId.get(row.chargeId) ?? 0;
+        row.outstandingCents = row.amountCents - row.appliedCents;
+        row.offersPayment = offersPaymentTransition({
+            status: row.status,
+            correctsChargeId: row.correctsChargeId,
+            outstandingCents: row.outstandingCents,
+        });
     }
 
     vm.reconciliation = reconcileRows(rows, period.key, today, appliedByChargeId);
@@ -838,6 +887,39 @@ export function offersReverseTransition(row: {
         && row.status !== "void"
         && !row.reversedByChargeId
         && !row.correctsChargeId
+    );
+}
+
+/**
+ * THE TRANSITION A LEDGER ROW OFFERS FOR MONEY COMING IN — a posted obligation that still owes
+ * something.
+ *
+ * The mirror of `offersReverseTransition`, and deliberately the same shape: one definition, asserted
+ * directly, never restated in JSX. Three conditions, each of which the domain already enforces and
+ * this only anticipates:
+ *
+ *   - posted. `payment.record`'s eligibility refuses a draft or void charge, because paying a draft
+ *     settles an obligation the family was never told about.
+ *   - not a correction. A reversal or credit is money going the other way; it is not a receivable.
+ *   - still owed. Applying to a settled charge is refused by the allocation bounds trigger, so
+ *     offering it would be offering a refusal.
+ *
+ * A REVERSED row fails the last test by arithmetic rather than by special case: its reversal does not
+ * reduce `outstandingCents`, so a reversed charge can still legitimately show an outstanding amount.
+ * That is correct — the pair nets to zero at the ACCOUNT level, and this row-level question is only
+ * about whether this row can receive money. The service and the database remain the authority; if
+ * they refuse, the card surfaces the refusal rather than having pre-empted it wrongly.
+ */
+export function offersPaymentTransition(row: {
+    status: string;
+    correctsChargeId: string | null;
+    outstandingCents: number;
+}): boolean {
+    return (
+        row.status !== "draft"
+        && row.status !== "void"
+        && !row.correctsChargeId
+        && row.outstandingCents > 0
     );
 }
 
