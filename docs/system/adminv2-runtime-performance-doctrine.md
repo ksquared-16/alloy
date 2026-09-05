@@ -1,14 +1,15 @@
 ---
 owner: runtime
-status: frozen
-last_reviewed: 2026-07-12
+status: canonical
+last_reviewed: 2026-09-04
 supersedes: []
 ---
 
 # AdminV2 runtime performance doctrine
 
 **Path:** `docs/system/adminv2-runtime-performance-doctrine.md`  
-**Status:** **Locked baseline** (June 2026). Implementation detail for reveal/queue/drawer gates.  
+**Status:** **Certified baseline** — deployed staging `bcd20f004`, 2026-09-04. Implementation detail for reveal/queue/drawer gates.
+See **§ Final deployed certification** at the end of this file for the measured baseline, the canonical owner map, and the guard matrix.  
 **Platform summary:** **`platform-performance-doctrine.md`** (Passes 1–3, sidecar deferral).  
 **Supplements:** `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/system/drawer-doctrine.md`, `docs/archive/2026-06-execution/operating-doctrine.md`  
 **Historical context:** `docs/sprints/archive/05_2026/adminv2_reveal_doctrine.md`, `docs/sprints/archive/05_2026/completed/adminv2_performance_closeout.md`  
@@ -39,7 +40,13 @@ AdminV2 should feel like **one continuous operating surface**. Loading, reveal, 
 | **Prefetch is allowed; partial reveal is not** | Background prefetch and idle hydrate are fine; above-fold partial paint is not. |
 | **Loading/performance is infrastructure** | Reveal gates, cache keys, and readiness predicates are protected — not incidental UI details. |
 
-Code anchors: `web/lib/adminV2/*RevealGate.ts`, `web/lib/admin/drawer/composedDrawerPayload/`, `web/lib/adminV2/runtime/contract/`, `web/lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts`, `web/components/presentation/workUnit/QueueRegion.tsx`.
+Code anchors: `web/lib/adminV2/workspaceRevealGate.ts`, `web/lib/admin/drawer/composedDrawerPayload/`, `web/lib/adminV2/runtime/contract/`, `web/lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime.ts`, `web/components/presentation/workUnit/QueueRegion.tsx`.
+
+> **Anchor drift, corrected 2026-09-04.** This line named `useWorkUnitSurfaceRuntime.ts`, which no
+> longer exists — Presentation Runtime V2 replaced it with `useCommittedWorkUnitSurfaceRuntime.ts`,
+> whose own header describes what it superseded. The gate table below named three modules of which
+> only `workspaceRevealGate.ts` exists. A doctrine whose pointers have rotted cannot protect anything;
+> check the anchors when you touch this file.
 
 ---
 
@@ -72,8 +79,12 @@ Preserve cache keys by **org / department / work-unit / queue / view scope**. Ch
 | Surface | Gate module | Console filter |
 |---------|-------------|----------------|
 | Workspace | `workspaceRevealGate.ts` | `[workspace-reveal-gate]` |
-| Department | `deptRevealGate.ts` | `[dept-reveal-gate]` |
-| Work unit | `workUnitRevealGate.ts` | `[wu-reveal-gate]` |
+| Department | *(no module — console filter only)* | `[dept-reveal-gate]` |
+| Work unit | `workUnitPageRevealPolicy.ts` + `drawerVmPrewarmScheduler.ts` | `[wu-reveal-gate]` |
+
+`deptRevealGate.ts` / `workUnitRevealGate.ts` do not exist and have not for some time; the work-unit
+reveal window lives in `drawerVmPrewarmScheduler.ts` (`beginWorkUnitPrimaryReveal` /
+`endWorkUnitPrimaryReveal`).
 
 ---
 
@@ -255,3 +266,137 @@ Use these to diagnose regressions — not to mask partial reveal.
 - **Drawer and queue behavior are stable** enough to move forward on product/configuration work.
 - **Remaining work is backend query and payload optimization**, not core runtime architecture (see next-phase backlog).
 - **Future UI changes must preserve this doctrine.**
+
+---
+
+## Final deployed certification (2026-09-04)
+
+Certified against **deployed staging `bcd20f004`** (Vercel `dpl_G29K4atk2dj3nDEBEyCfHfBHypmP`,
+Supabase `ikaxilmwmrmbagoidedu`), driven with real pointer input on the managed QA session.
+
+**Certification is a DEPLOYED verdict.** Local dev and local production are instrumentation and
+controlled A/B only. A number measured on localhost has never been evidence about this product —
+see § Measurement pitfalls.
+
+### 1. Operation classes — never mix them
+
+A single "how fast is it" number is meaningless because these four have different owners and
+different budgets. Measure and report them separately.
+
+| Class | What it is | What dominates it |
+|---|---|---|
+| **Cold document entry** | New document, cold client cache | TTFB + server compose + full card fan-out |
+| **Warm document entry** | Document load with warm caches | Server compose, little client work |
+| **Warm in-app transition** | Router move, shell preserved | Client compose; must be **0 document loads** |
+| **Row selection** | Subject change inside one Work Unit | Per-subject VM + self-fetching cards |
+| **Work View change** | Lens change on one Work Unit | K2 answer for the new lens; must not remount the host |
+
+### 2. Canonical owner map
+
+One truth, one owner. A second producer of the same truth is a defect even when it agrees.
+
+| Concern | Canonical owner |
+|---|---|
+| Work Unit committed world | `useCommittedWorkUnitSurfaceRuntime` (from K3 Focus) |
+| Provisioning answer | `workUnitProvisioningAnswer` / `composeProvisioningAnswerForRoute` |
+| Subject of attention | Committed Focus — **never** the drawer store |
+| Queue ordering (candidate grain) | `sortPlacementCandidateQueueRows` |
+| Manual position application | `applyCohortLocalManualPositions` |
+| Override → snapshot merge | `applyPlacementCandidateOverrides` |
+| Section rank + group range | `assignWaitlistCandidateRuntimePositions` |
+| Manual-position write | `upsertPlacementPinOverride` / `releaseManualPositionOverrides` |
+| Candidate uniqueness | `placementCandidateSubjectUniqueness` (+ lifecycle hook) |
+| Focus Panel body identity | `bodyRenderKey` = the committed subject |
+| Speculative prewarm | `drawerVmPrewarmScheduler` |
+| Roster (site/day) | `RosterWorkspace` — one authoritative request per genuine site/day |
+
+### 3. Intentional duplication (allowed, and why)
+
+- **Speculative prefetch** keyed identically to the real demand read, so the click consumes it
+  instead of starting new work. It must defer to the primary reveal.
+- **Self-fetching cards** for data the provisioning answer does not carry.
+- **Explicit refresh after a mutation.**
+
+Anything else — same endpoint, same parameters, no operator intent — is **redundant**.
+
+### 4. Forbidden duplicate ownership
+
+- Two producers of the same card model.
+- Client-side re-derivation of placement order or of the legal manual-position range.
+- A second subject owner (this cost 4418 duplicate requests of 4421 once already).
+- A render `key` derived from resolving data — see § Focus Panel lifecycle.
+
+### 5. Focus Panel lifecycle: `reserved` → `self_loading` → `ready`
+
+A reserved cell **holds space**; it does not draw a card. `self_loading` is **not** ready. `ready`
+telemetry must match meaningful DOM.
+
+**The body is keyed on the committed subject, never on resolving data.** Keying it on
+`displayVm.entity.id` remounted the whole panel on every child subject, because the child Attention
+id and the family opportunity id are different by construction — measured as WU-08/WU-09 mounting
+twice per cold entry and financials/attendance/health each fetching twice with identical parameters
+3773 ms apart. The pending → enriched transition is a **prop change, never a remount**.
+
+### 6. Summary-density doctrine
+
+A summary card shows a summary. Bounded rows, a truthful total, a truthful remainder, and a way to
+reach the full collection. No unbounded collection in a summary, no nested scroll trap. The
+17-child case renders 3 rows + "14 more children" + "View children →".
+
+### 7. Placement: section rank vs cohort ordinal
+
+Two different numbers, and conflating them has now caused two separate defects.
+
+- **Section rank** (`runtime_position` / `runtime_position_total`) — where the row sits in the list
+  being read. A section may contain several cohorts.
+- **Cohort ordinal** (`pin_ordinal`, bounded by `runtime_group_total`) — where a candidate sits
+  inside its own cohort. This is what the manual-position command takes.
+
+A pin is a **position**, not a precedence score: it must not be a `sort_tuple` component, because a
+per-row value cannot know how many unpinned rows precede it. Splicing it into the tuple compared an
+ordinal against `bucket.priority_order` and collapsed every ordinal below that constant to one
+answer. The control's selectable range must come from `runtime_group_total`, never from the section
+label.
+
+### 8. Operations: one authoritative roster request
+
+Initial open = 1. A genuine site or day change = 1. A satisfied site/day is **not** refetched.
+Week must not issue the Day roster request. Sub-lenses (Rooms / Staff / Assignments) reuse.
+
+### 9. Workspace / App Router continuity
+
+In-workspace transitions perform **zero** document loads and preserve the shell **by node identity**
+— assert the node, not a selector re-match. Crossing into Organization may legitimately use a
+different shell.
+
+### 10. Measurement pitfalls proven during this programme
+
+Every one of these produced a wrong conclusion at least once here.
+
+1. **Dev-mode timings are not product findings.** The `/organization` "1343 ms" was Turbopack
+   on-demand compilation. Deployed: ~438 ms.
+2. **Sequential `await`s do not share a clock.** Measuring milestones one after another makes each
+   clock start when the previous resolved. Record milestones against **one** `t0` in-page.
+3. **Arm the observer before the gesture.** A MutationObserver installed after the click misses the
+   feedback it is supposed to measure and over-reports by ~1 s.
+4. **A selector miss is a PROBE FAILURE, never a latency number.**
+5. **Source-string tests prove a string exists, not that a path runs.** They cannot detect a
+   function that is exported, imported by tests, and called by nobody.
+6. **Compare failing test NAMES against the baseline commit**, never counts.
+7. **Read the deployed payload, not just the DOM.** The canonical answer carries the truth the DOM
+   only renders.
+
+### 11. Regression guard matrix
+
+| Guard | Test |
+|---|---|
+| Body key never derived from the VM | `tests/presentation/focusPanelBodyKeyStability.test.ts` |
+| Manual position is a cohort position | `tests/orchestration/placement/cohortLocalManualPositions.test.ts` |
+| Control bounded by group, not section | `tests/orchestration/placement/waitlistAdjustGroupRange.test.ts` |
+| Prewarm never competes with reveal | `tests/adminV2/drawerVmPrewarmScheduler.test.ts` |
+| Reveal gate cannot stay armed | `tests/runtime/revealLifecycleAndReadinessInvariants.test.ts` |
+| Canonical placement order is handed over | `tests/runtime/provisioning/law36CanonicalPlacementOrder.test.ts` |
+
+Prefer behavioural guards over source-string tests. Every guard above that asserts an ordering
+carries a **positive control** — a case that fails on the pre-fix implementation. A guard that
+cannot fail on the old code is not evidence.

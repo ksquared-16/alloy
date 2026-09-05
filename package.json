@@ -35,7 +35,10 @@
     "local-dev:test:ai-health": "bash scripts/local-dev/tests/test-ai-health.sh",
     "docs:lint": "node scripts/docs-lint.mjs",
     "docs:lint:ci": "node scripts/docs-lint.mjs --ci --base origin/staging",
-    "docs:lint:baseline": "node scripts/docs-lint.mjs --write-baseline"
+    "docs:lint:baseline": "node scripts/docs-lint.mjs --write-baseline",
+    "cert:runtime": "node scripts/runtime-certification/runtimeCertification.mjs",
+    "cert:runtime:deployed": "node scripts/runtime-certification/runtimeCertification.mjs --env deployed-staging",
+    "cert:runtime:local": "node scripts/runtime-certification/runtimeCertification.mjs --env local-production"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",

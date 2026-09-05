@@ -39,6 +39,20 @@ export type WaitlistRuntimePositionFields = {
     runtime_position_precedence_note?: string;
     /** Operator-safe typed precedence outcome — NOT shadow-gated. */
     runtime_position_precedence_reason?: WaitlistRuntimePrecedenceReason;
+    /*
+     * THE GROUP-LOCAL RANGE — the only range a manual position may legally express.
+     *
+     * `runtime_position` / `runtime_position_total` are SECTION-scoped: they answer "where does this
+     * row sit in the list the operator is reading". A pin is COHORT-scoped: `pin_ordinal` orders a
+     * candidate inside its own program/room cohort, and a section can hold several cohorts.
+     *
+     * Publishing both is what stops the Adjust control offering a position the command cannot mean.
+     * Bounding that control on the section total let it offer "12" to a candidate whose cohort holds
+     * 11 — the write then clamped, and the operator's number silently became a different number.
+     * The control must read THIS, and no client may recompute it: one placement authority.
+     */
+    runtime_group_position?: number;
+    runtime_group_total?: number;
 };
 
 export function formatWaitlistRuntimePositionLabel(
@@ -272,12 +286,22 @@ export function assignWaitlistCandidateRuntimePositions(
                 cohortLocalPosition != null &&
                 cohortLocalPosition === requestedOrdinal &&
                 position !== requestedOrdinal;
+            // How many candidates share this row's cohort in this section — the legal range a manual
+            // position may address. Counted from the same `rankIndices` the positions come from, so
+            // the control can never be bounded by a number this engine did not produce.
+            const cohortTotal =
+                ownCohort == null
+                    ? null
+                    : rankIndices.filter((idx) => readWaitlistRowCohortKey(rows[idx]!) === ownCohort).length;
             writeRuntimePositionOnRow(rows[rowIdx]!, {
                 runtime_position: position,
                 runtime_position_total: total,
                 runtime_position_label: formatWaitlistRuntimePositionLabel(mode, position, total),
                 runtime_position_mode: mode,
                 runtime_position_section_key: sectionKey,
+                ...(cohortLocalPosition != null && cohortTotal != null
+                    ? { runtime_group_position: cohortLocalPosition, runtime_group_total: cohortTotal }
+                    : {}),
                 ...(beatenByManualPin ?
                     {
                         runtime_position_precedence_note:
