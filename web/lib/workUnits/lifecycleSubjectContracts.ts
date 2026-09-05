@@ -265,6 +265,13 @@ export type QueueRowContext = {
          * shadow-gated; copy is resolved at the presentation layer, not stored here.
          */
         precedence_reason?: "pin_scoped_to_cohort" | null;
+        /**
+         * The GROUP-LOCAL range a manual position may legally address, from the placement engine.
+         * `position_label` is section-scoped; a pin is cohort-scoped. The Adjust control must bound
+         * itself on this and never recompute it — one placement authority.
+         */
+        group_position?: number | null;
+        group_total?: number | null;
     } | null;
 
     /**

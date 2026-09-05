@@ -39,7 +39,8 @@ const LANE = "lane_1111aaaa2222";
 
 function freshRoot() {
     const root = mkdtempSync(join(tmpdir(), "vac-reuse-"));
-    resetExecutionRunsForTests();
+    // Explicit root: bare, this helper wipes the LIVE gateway store.
+    resetExecutionRunsForTests(root);
     return root;
 }
 

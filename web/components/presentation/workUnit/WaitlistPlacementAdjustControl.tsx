@@ -46,6 +46,13 @@ type Props = {
     childDisplayName?: string | null;
     /** Canonical precedence reason from placement — never inferred from rendered order. */
     precedenceReason?: string | null;
+    /**
+     * Authoritative GROUP-LOCAL range from the placement engine
+     * (`runtime_group_position` / `runtime_group_total`). Bounds the selectable positions.
+     * `currentPositionLabel` is SECTION-scoped and is only a fallback when no group range is
+     * published — bounding on it offered positions the write had to clamp.
+     */
+    group?: { position?: number | null; total?: number | null } | null;
 };
 
 export function WaitlistPlacementAdjustControl({
@@ -53,6 +60,7 @@ export function WaitlistPlacementAdjustControl({
     currentPositionLabel,
     childDisplayName,
     precedenceReason,
+    group,
 }: Props) {
     const [open, setOpen] = useState(false);
     const titleId = useId();
@@ -107,6 +115,7 @@ export function WaitlistPlacementAdjustControl({
                     currentPositionLabel={currentPositionLabel}
                     childDisplayName={childDisplayName}
                     precedenceReason={precedenceReason}
+                    group={group}
                     onClose={close}
                 />
             ) : null}
@@ -121,6 +130,7 @@ function WaitlistPlacementAdjustPopover({
     currentPositionLabel,
     childDisplayName,
     precedenceReason,
+    group,
     onClose,
 }: {
     anchorEl: HTMLElement;
@@ -129,10 +139,12 @@ function WaitlistPlacementAdjustPopover({
     currentPositionLabel?: string | null;
     childDisplayName?: string | null;
     precedenceReason?: string | null;
+    /** Authoritative group-local range from the placement engine — bounds the control. */
+    group?: { position?: number | null; total?: number | null } | null;
     onClose: () => void;
 }) {
     const kernel = useRuntimeKernel();
-    const model = waitlistAdjustPositionModel(currentPositionLabel, precedenceReason);
+    const model = waitlistAdjustPositionModel(currentPositionLabel, precedenceReason, group);
     // Opens on the row's CURRENT position, so applying without touching the dropdown is a no-op
     // rather than a silent move to 1 — the old default.
     const [pinOrdinal, setPinOrdinal] = useState(String(model.current ?? 1));

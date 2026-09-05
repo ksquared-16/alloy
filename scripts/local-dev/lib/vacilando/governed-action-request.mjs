@@ -1921,6 +1921,46 @@ export function requestGovernedAction(input = {}, {
   const laneId = canonicalLaneStoreId(shape.laneId, storeRoot) || shape.laneId;
   const runId = input.run_id || input.runId || activeRunForLane(laneId, storeRoot)?.run_id || null;
   const run = runId ? getExecutionRun(runId, storeRoot) : null;
+
+  /*
+   * ONE CANONICAL OWNER OF RUN IDENTITY.
+   *
+   * THE SPLIT-BRAIN THIS CLOSES. `runId` is whatever the CALLER passed on the
+   * command line. The canonical store was already consulted on the line above
+   * — and its answer was then thrown away. So a worker could name a run the
+   * execution-run store had never heard of, and this layer would file it,
+   * authorize it and execute it.
+   *
+   * Measured, not imagined: after run erun_9bccef4667cc68ef vanished from the
+   * canonical store, FOURTEEN governed actions stayed bound to it and TWELVE of
+   * them COMPLETED — push, pull request, merge, toolkit install, cross-lane
+   * dispatch — every one of them authorized against a run that
+   * `getExecutionRun` reported as absent. Meanwhile `checkpoint-create` asked
+   * the same question, got the honest answer, and refused. Two subsystems
+   * disagreed about whether the same run existed, and the one that could
+   * promote code to staging was the one that had stopped checking.
+   *
+   * The invariant: no subsystem may authorize work against a run the canonical
+   * owner considers nonexistent. A caller that names a run gets that name
+   * VERIFIED, not trusted. Naming nothing is still fine — plenty of governed
+   * work legitimately has no run — but naming a ghost is now a refusal rather
+   * than a silent parallel universe.
+   *
+   * This deliberately fails closed. If canonical run truth is ever lost again,
+   * governed actions stop instead of proceeding on stale identity, which is the
+   * behaviour that would have surfaced the durability defect on its first
+   * occurrence instead of its third.
+   */
+  const namedRun = Boolean(input.run_id || input.runId);
+  if (namedRun && !run) {
+    return {
+      ok: false,
+      error: "run_not_found",
+      failure_code: "run_not_found",
+      detail: `run ${runId} is not present in the canonical execution-run store; governed work may not be authorized against a run the run owner does not have`,
+    };
+  }
+
   const worktreePath = resolveWorktreePath(input, laneId, run, storeRoot);
   const artifactRefs = shape.artifactRefs.length
     ? shape.artifactRefs
