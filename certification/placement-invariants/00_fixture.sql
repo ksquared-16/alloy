@@ -23,16 +23,28 @@ $fn$;
 -- The placement migration's RLS policies reference auth.uid(), the Supabase client roles and
 -- public.user_roles. Supplied here for the same reason as the Trust suite's fixture: so the
 -- placement invariants are proven in isolation rather than re-proving the whole schema chain.
--- Create the auth shim only when the image does not already provide one. A Supabase-derived image
--- ships `auth.uid()` and owns the schema, so defining it again is both unnecessary and denied.
+-- The placement RLS policies call auth.uid() AND auth.role(). Shim each only when the image does
+-- not already provide it: a plain postgres image has neither, while a Supabase-derived image ships
+-- both and owns the schema, where redefining them is unnecessary and denied.
+--
+-- Both are needed. Shimming only uid() passed against a Supabase image locally and failed in CI on
+-- postgres:17-alpine with "function auth.role() does not exist" — the suite's first real run.
 DO $auth$
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'auth') THEN
+        EXECUTE 'CREATE SCHEMA auth';
+    END IF;
     IF NOT EXISTS (
         SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'auth' AND p.proname = 'uid'
     ) THEN
-        EXECUTE 'CREATE SCHEMA IF NOT EXISTS auth';
         EXECUTE 'CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $q$ SELECT NULL::uuid $q$';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'auth' AND p.proname = 'role'
+    ) THEN
+        EXECUTE 'CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $q$ SELECT NULL::text $q$';
     END IF;
 END
 $auth$;

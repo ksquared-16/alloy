@@ -24,6 +24,10 @@ PORT="${PLACEMENT_CERT_PORT:-54782}"
 # The house default matches the other certification suites. Overridable so the suite can run on a
 # host whose registry access differs (any Postgres 15+ image satisfies these assertions).
 IMAGE="${PLACEMENT_CERT_IMAGE:-postgres:17-alpine}"
+# Target database. Overridable for one specific reason: on a Supabase-derived image the default
+# `postgres` database already carries an `auth` schema, which HIDES a missing auth shim. Pointing the
+# suite at a freshly created database reproduces the bare-Postgres condition CI actually runs under.
+DB="${PLACEMENT_CERT_DB:-postgres}"
 
 cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -52,8 +56,13 @@ if [ "$ready" -lt 3 ]; then
 fi
 
 run_sql() {
-    docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f - < "$1"
+    docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d "$DB" -f - < "$1"
 }
+
+if [ "$DB" != "postgres" ]; then
+    echo "--- creating bare target database $DB ---"
+    docker exec "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE DATABASE \"$DB\"" >/dev/null
+fi
 
 echo "--- placement dependency fixture ---"
 run_sql "$CERT_DIR/00_fixture.sql"
