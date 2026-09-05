@@ -400,3 +400,87 @@ Every one of these produced a wrong conclusion at least once here.
 Prefer behavioural guards over source-string tests. Every guard above that asserts an ordering
 carries a **positive control** — a case that fails on the pre-fix implementation. A guard that
 cannot fail on the old code is not evidence.
+
+---
+
+## Runtime performance is part of the platform contract
+
+Not a past project. Whenever new product functionality is introduced anywhere that can reach the
+Work Unit, Focus Panel, cards, placement, Operations, Workspace or Organization runtime, the change
+must either **run the applicable certification subset and pass**, or **prove its dependency graph
+cannot reach the certified runtime**. There are no silent exemptions: a change that can reach this
+runtime and certifies nothing is not exempt, it is uncertified.
+
+### Canonical command
+
+```bash
+npm run cert:runtime:deployed                      # final acceptance (deployed staging only)
+npm run cert:runtime:local                         # deterministic pre-merge
+npm run cert:runtime -- --changed <files>          # subset selection via the trigger matrix
+npm run cert:runtime -- --subset focus-panel,operations --samples 3
+```
+
+Source: `scripts/runtime-certification/` — `runtimeCertification.mjs` (entry, evaluation, report),
+`run.mjs` (driver), `measure.mjs` (primitives), `ownership.mjs` (owner map + duplicate classifier),
+`baseline.json` (certified baseline, invariants, bands). It orchestrates the primitives; it does not
+define a second way to measure anything.
+
+### Trigger matrix
+
+| Change touches | Certification subset |
+|---|---|
+| `lib/runtime/provisioning/**` | work-unit, focus-panel |
+| `lib/queues/**` | work-unit |
+| `lib/presentation/runtime/**` | work-unit, focus-panel |
+| `focusPanel` / card components | focus-panel |
+| `lib/orchestration/placement/**` | waitlist, work-unit |
+| roster / scheduling | operations |
+| AdminV2 shell / navigation | workspace, organization |
+| shared auth / org / site context | workspace, work-unit |
+
+Prefer graph reachability over filename lists where the repo supports it; this table is the floor,
+not a substitute for judgement.
+
+### Enforcement tiers
+
+1. **Fast PR guards** — the deterministic tests in the guard matrix above. Cheap, always run.
+2. **Heavier certification** — local-production browser run when runtime-sensitive code changes.
+3. **Final acceptance** — deployed-staging certification for milestone/runtime releases. Only this
+   tier can grant acceptance.
+
+Do not make every small PR run a full browser suite when dependency selection can narrow it safely.
+Do not let a runtime-sensitive change merge with no certification at all.
+
+### Hard invariants vs performance bands
+
+`baseline.json` separates them deliberately, and the distinction is load-bearing:
+
+- **Hard invariants** are laws — one Focus Panel subtree per entry; exactly one authoritative
+  financials/attendance/health read per subject intent; one roster request per new `(site,date)` and
+  none when already satisfied; zero document loads on in-app transitions; shell preserved by node
+  identity; canonical Waitlist ordering across reload. A violation fails at any latency.
+- **Performance bands** come from a measured distribution on real hardware over a real network. A
+  breach is a signal to investigate. Do not tighten a band until it fails on a slow morning — that
+  is how a team learns to ignore its own harness.
+
+### Probe integrity
+
+The harness fails on an unmeasured run before it consults any threshold. This is not hypothetical:
+on its first deployed run it reported PASS having measured nothing, because the QA session had
+expired and it saw zero API traffic. A harness that passes when it measured nothing is worse than no
+harness, because it will be believed. `null` means NOT MEASURED — never "fast".
+
+### Improvement roadmap (evidence-supported only, not authorized work)
+
+Ranked by operator-perceived impact against risk. **Nothing here is approved**; it exists so future
+work starts from measurement rather than from a fresh optimisation hunt.
+
+| # | Opportunity | Evidence | Est. impact | Risk |
+|---|---|---|---|---|
+| 1 | Reserved cells under-reserve: Financials +241px, Children +414px, Household +173px, so the right column expands after commit | measured, 3 runs | removes the remaining 3–4 waves and ~777px of growth | medium — geometry contract |
+| 2 | `rows` / first-useful-card at p50 ~2.5s on cold entry is the largest single operator-visible wait | measured p50 | high | medium — server compose |
+| 3 | Duplicate placement candidates (`infant` vs `infant_0_18_months`) split a cohort and strand pins | certified in `placementCandidateSubjectUniqueness` | correctness before latency | high — contested survivor rule; governed repair |
+| 4 | Focus Panel stable at 6.4–9.3s, driven by the slowest card rather than by composition | measured range | medium | low — per-card |
+| 5 | 32 pre-existing test failures across 17 files on staging | measured at `bcd20f004` | no runtime impact; erodes the signal guards depend on | low |
+
+Do not start these inside a certification mission.
