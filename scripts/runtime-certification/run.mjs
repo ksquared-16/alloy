@@ -8,7 +8,7 @@
  */
 import { createRequire } from "node:module";
 import { RECORDER, arm, feedback, until, stable, centre, realPointer, docLoads, navTiming, p, geometry } from "./measure.mjs";
-import { classifyDuplicates, cardReadCounts, remounts, ROSTER_READ } from "./ownership.mjs";
+import { classifyDuplicates, cardReadCounts, remounts, intentionalRemounts, ROSTER_READ } from "./ownership.mjs";
 
 const require = createRequire(import.meta.url);
 /** Playwright lives in web/node_modules; the harness must not add a second copy. */
@@ -61,6 +61,7 @@ async function certifyWorkUnitAndFocusPanel(env, samples) {
             cardReads: cardReadCounts(last.api),
             duplicates: classifyDuplicates(last.api),
             remounts: remounts(last.mounts),
+            intentionalRemounts: intentionalRemounts(last.mounts),
             consoleErrors: last.errors,
         },
         focusPanel: { geometry: geometry(last.frames) },
@@ -100,16 +101,29 @@ async function certifyNavigation(env) {
     await page.waitForTimeout(15000);
     await page.evaluate(() => { window.__SHELL__ = document.querySelector("[data-adminv2-workspace-shell]"); });
     const transitions = [];
+    /*
+     * A SUBSET MUST NOT BE ABLE TO HANG THE CERTIFICATION.
+     *
+     * Observed: this subset ran past 20 minutes on deployed staging without producing output, because
+     * each transition can spend its full `until` budget AND its full `stable` budget, and a control
+     * that never resolves leaves the page in a state where the next one cannot either. A harness
+     * nobody can finish running is a harness nobody runs.
+     *
+     * Past the deadline the remaining transitions are recorded as PROBE FAILURES — not as passes, and
+     * not as fast.
+     */
+    const deadline = Date.now() + 8 * 60 * 1000;
     const go = async (name, pred, usefulFn) => {
+        if (Date.now() > deadline) { transitions.push({ name, probeFailure: "navigation subset deadline exceeded before this transition ran" }); return; }
         const c = await centre(page, pred);
         if (!c) { transitions.push({ name, probeFailure: "control not resolvable" }); return; }
         const navB = await docLoads(page);
         await arm(page);
         const t0 = Date.now();
         await realPointer(page, c);
-        const useful = await until(page, usefulFn, 25000);
+        const useful = await until(page, usefulFn, 20000);
         const fb = await feedback(page);
-        const st = await stable(page, t0);
+        const st = await stable(page, t0, 1200, 20000);
         const sh = await page.evaluate(() => window.__SHELL__ === document.querySelector("[data-adminv2-workspace-shell]"));
         transitions.push({ name, feedback: fb, useful, stable: st, docLoads: (await docLoads(page)) - navB, shellSameNode: sh });
     };
