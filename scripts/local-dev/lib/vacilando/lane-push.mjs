@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { categoryForPush, pushAllowedForCategory, pushEnabled } from "./notification-preferences.mjs";
+import { DURABLE_LANE_ID_RE, getDurableLane } from "./development-lane.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -390,9 +391,33 @@ function firstReportLine(run) {
   return null;
 }
 
-export function outcomePushPayload({ lane_id, title, state, reason } = {}) {
+/**
+ * THE TITLE A PHONE SHOWS IS A NAME, NEVER AN ID.
+ *
+ * The operator names their lanes; `lane_2cea84351d90` is not that name, and on
+ * a lock screen it is not identifiable at all. Records written before the
+ * governed emit path learned to pass `laneName` still carry an id in
+ * `lane_name` — 22 of 74 live records on this host — so fixing the write path
+ * alone would leave those pushing ids until they aged out. This resolves the
+ * durable lane by id as a second chance, and falls back to a human phrase
+ * rather than shipping the id to a notification.
+ */
+function laneDisplayLabel(candidate, laneId, root) {
+  const given = String(candidate || "").trim();
+  if (given && !DURABLE_LANE_ID_RE.test(given)) return given.slice(0, 80);
+  const id = String(laneId || given || "").trim();
+  if (id) {
+    try {
+      const name = getDurableLane(id, root)?.name;
+      if (name && String(name).trim()) return String(name).trim().slice(0, 80);
+    } catch { /* an unreadable lane store must never block a notification */ }
+  }
+  return "Development Lane";
+}
+
+export function outcomePushPayload({ lane_id, title, state, reason, root = runtimeRoot() } = {}) {
   const id = String(lane_id || "").trim();
-  const label = String(title || id || "Development Lane").slice(0, 80);
+  const label = laneDisplayLabel(title, id, root);
   const st = String(state || "").toUpperCase();
   let body = "Work complete and ready for review.";
   if (st === "NEEDS_INPUT") {
@@ -455,6 +480,7 @@ export async function pushRunOutcome(run, {
     lane_id: run.lane_id,
     title: label || run.lane_id,
     state,
+    root,
     reason: ["NEEDS_INPUT", "ABANDONED"].includes(state)
       ? (firstReportLine(run) || run.state_reason)
       : null,
@@ -702,7 +728,7 @@ export async function pushGovernedNotification(record, {
   })) {
     return { ok: true, sent: 0, skipped: "not_push_eligible" };
   }
-  const label = String(record.lane_name || record.lane_id || "Vacilando").slice(0, 80);
+  const label = laneDisplayLabel(record.lane_name, record.lane_id, root);
   const payload = {
     type: "governed_action.approval_required",
     lane_id: record.lane_id || null,
