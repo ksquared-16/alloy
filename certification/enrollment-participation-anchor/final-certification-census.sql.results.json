@@ -3,7 +3,7 @@
   "query_hash": "bf92193bbf68966ba2b1b8bcd83a9d0e7d668b09d84698f0ae4ae85074e8fa41",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-05T13:25:07.513Z",
+    "census_run_at": "2026-09-05T13:32:41.658Z",
     "question_ids": [
       "active_context_free_per_child",
       "exceptions",
@@ -32,9 +32,9 @@
         "row_count": null,
         "rows": [
           {
-            "total": 1,
+            "total": 0,
             "active": 0,
-            "revoked": 1
+            "revoked": 0
           }
         ]
       },
@@ -47,10 +47,10 @@
             "households": 2,
             "members": 2,
             "children": 2,
-            "participations": 3,
-            "journeys": 3,
+            "participations": 2,
+            "journeys": 2,
             "opportunities": 1,
-            "packet_sessions": 4
+            "packet_sessions": 2
           }
         ]
       },
@@ -59,12 +59,12 @@
         "row_count": null,
         "rows": [
           {
-            "sessions": 4,
-            "sessions_in_progress": 1,
-            "sessions_completed": 3,
-            "items": 4,
-            "items_with_submission": 4,
-            "distinct_submissions": 4
+            "sessions": 2,
+            "sessions_in_progress": 2,
+            "sessions_completed": 0,
+            "items": 2,
+            "items_with_submission": 0,
+            "distinct_submissions": 0
           }
         ]
       },
@@ -86,14 +86,6 @@
         "rows": [
           {
             "child": "Patha Certfree",
-            "state": "enrolled",
-            "stage": "enrolled",
-            "context_type": "enrollment_participation",
-            "anchored_to_participation": true,
-            "revision_pinned": true
-          },
-          {
-            "child": "Patha Certfree",
             "state": null,
             "stage": null,
             "context_type": "enrollment_participation",
@@ -102,8 +94,8 @@
           },
           {
             "child": "Pathb Certopp",
-            "state": "enrolled",
-            "stage": "enrolled",
+            "state": null,
+            "stage": null,
             "context_type": "enrollment_participation",
             "anchored_to_participation": true,
             "revision_pinned": true
@@ -665,6 +657,10 @@
             "subject_id": "b97f65da-f307-4506-848f-d809784c8e8a"
           },
           {
+            "journey_id": "cd56c165-dfb7-4a4f-b414-8870c5ca4129",
+            "subject_id": "35dd38d3-32d2-41ea-9645-25fcca7b1b3b"
+          },
+          {
             "journey_id": "cda3e23b-9e6b-4b51-b809-2b3edebf4704",
             "subject_id": "3442efbe-acd5-4abb-8827-8fd9eebd436e"
           },
@@ -729,6 +725,10 @@
             "subject_id": "6d168f77-f8cc-472f-9fa6-f070a9eeca62"
           },
           {
+            "journey_id": "ecb99dec-d665-41c4-83d7-d34e3614003c",
+            "subject_id": "35dd38d3-32d2-41ea-9645-25fcca7b1b3b"
+          },
+          {
             "journey_id": "edcd7226-3cf3-4594-a40e-d1a2a4a6b3b5",
             "subject_id": "5a480026-cc31-4aa8-999c-94eb08e566b7"
           },
@@ -747,6 +747,10 @@
           {
             "journey_id": "f371a2c5-7aa3-4b06-9275-869ae676026d",
             "subject_id": "4641755d-8022-44f3-86b2-6860c2b373b9"
+          },
+          {
+            "journey_id": "f49cafcc-711e-4f6a-83ac-09afbb383b7a",
+            "subject_id": "6ef656b1-ad25-436d-9abd-b96c4a480435"
           },
           {
             "journey_id": "f4a1afec-8607-4656-9f03-0fd30de3707c",
@@ -780,19 +784,13 @@
         "rows": [
           {
             "child": "Patha Certfree",
-            "status": "enrolled",
-            "stage": null,
-            "acquisition_backed": false
-          },
-          {
-            "child": "Patha Certfree",
             "status": "enrolling",
             "stage": null,
             "acquisition_backed": false
           },
           {
             "child": "Pathb Certopp",
-            "status": "enrolled",
+            "status": "enrolling",
             "stage": null,
             "acquisition_backed": true
           }
@@ -804,31 +802,31 @@
         "rows": [
           {
             "child": "Patha Certfree",
-            "journey_state": "enrolled",
-            "session_status": "completed",
-            "submissions": 1
-          },
-          {
-            "child": "Patha Certfree",
-            "journey_state": null,
-            "session_status": "completed",
-            "submissions": 1
-          },
-          {
-            "child": "Patha Certfree",
             "journey_state": null,
             "session_status": "in_progress",
-            "submissions": 1
+            "submissions": 0
           },
           {
             "child": "Pathb Certopp",
-            "journey_state": "enrolled",
-            "session_status": "completed",
-            "submissions": 1
+            "journey_state": null,
+            "session_status": "in_progress",
+            "submissions": 0
           }
         ]
       }
     },
-    "row_count": 178
+    "row_count": 177
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-05T13:32:40.828Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_df6f67b002e2c6",
+    "authorization_id": "grnt_c291bf746ad34ec3",
+    "query_hash": "bf92193bbf68966ba2b1b8bcd83a9d0e7d668b09d84698f0ae4ae85074e8fa41",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
   }
 }
