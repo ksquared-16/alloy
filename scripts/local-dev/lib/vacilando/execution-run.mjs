@@ -6,12 +6,12 @@
  * not a resource scheduler.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { LANE_ID_RE, LANE_INSTRUCTION_MAX, runReceiptToken, textProvesInstructionReceipt } from "./lanes.mjs";
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { assertResettableRoot, canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
@@ -311,18 +311,85 @@ function atomicWrite(path, obj) {
 }
 
 export function readExecutionRunStore(root = runtimeRoot()) {
+  const read = readExecutionRunStoreGuarded(root);
+  // Readers stay lenient: a dashboard that cannot read the store should render
+  // empty rather than throw. MUTATIONS must not, which is what the guarded form
+  // below exists for.
+  return read.store;
+}
+
+/**
+ * DURABLE RUN IDENTITY MUST OUTLIVE THE GATEWAY PROCESS.
+ *
+ * The lenient read above returned `emptyStore()` for every failure, and every
+ * mutation is read → modify → atomic whole-file overwrite. So a single transient
+ * unreadable read — a partial file observed mid-rename, an interrupted write
+ * during Gateway shutdown, EMFILE under concurrency — made the very NEXT write
+ * replace the entire store with one run. Not a lane's history: every lane's.
+ *
+ * That is not theoretical. It stranded a completed implementation: run
+ * erun_34e080af44cc2c5d vanished, `current_run_id` went null, `vac run-status`
+ * and `checkpoint-create` both answered `run_not_found`, and finished work on
+ * disk had no run to be committed under. The store afterwards held five lanes
+ * with exactly one run each — the signature of a reset, not of the 16-per-lane
+ * retention cap doing its job.
+ *
+ * ABSENT AND UNREADABLE ARE DIFFERENT ANSWERS. A missing file is legitimately
+ * an empty store: first boot has no history to lose. A file that EXISTS and
+ * cannot be parsed is a fact we do not have, and writing over it converts a
+ * recoverable problem into a permanent one. Mutations therefore fail closed and
+ * say so, leaving the bytes on disk for recovery.
+ */
+export function readExecutionRunStoreGuarded(root = runtimeRoot()) {
+  const path = executionRunStorePath(root);
+  if (!existsSync(path)) {
+    // Genuinely nothing to lose.
+    return { ok: true, store: emptyStore(), absent: true };
+  }
+  let text;
   try {
-    const raw = JSON.parse(readFileSync(executionRunStorePath(root), "utf8"));
-    if (!raw || typeof raw !== "object") return emptyStore();
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    return { ok: false, error: "run_store_unreadable", detail: e?.message || String(e), store: emptyStore() };
+  }
+  try {
+    const raw = JSON.parse(text);
+    if (!raw || typeof raw !== "object") {
+      return { ok: false, error: "run_store_malformed", detail: "top level is not an object", store: emptyStore() };
+    }
     const lanes = raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {};
-    return { schema_version: EXECUTION_RUN_SCHEMA, lanes };
-  } catch {
-    return emptyStore();
+    return { ok: true, store: { schema_version: EXECUTION_RUN_SCHEMA, lanes } };
+  } catch (e) {
+    return { ok: false, error: "run_store_malformed", detail: e?.message || String(e), store: emptyStore() };
   }
 }
 
+/**
+ * Read the store for a MUTATION, or refuse.
+ *
+ * Returns null when the caller must not proceed. Every write path goes through
+ * this, so "we could not read it" can never again be silently spelled "there was
+ * nothing there".
+ */
+function readStoreForMutation(root) {
+  const read = readExecutionRunStoreGuarded(root);
+  return read.ok ? read.store : null;
+}
+
 function writeStore(store, root) {
-  atomicWrite(executionRunStorePath(root), store);
+  /*
+   * Keep one generation behind the current file.
+   *
+   * The write itself is atomic, so this is not about torn files — it is about
+   * the case where a mutation was already wrong before it got here. A single
+   * `.prev` copy is what makes a bad generation recoverable at all; without it
+   * the only copy of run history is the one being replaced.
+   */
+  const path = executionRunStorePath(root);
+  try {
+    if (existsSync(path)) copyFileSync(path, `${path}.prev`);
+  } catch { /* a missing backup must never block the write that keeps runs alive */ }
+  atomicWrite(path, store);
   return store;
 }
 
@@ -782,7 +849,9 @@ export function createQueuedRun({
   const text = String(instruction ?? "");
   if (!text.trim()) return { ok: false, error: "instruction_empty" };
   if (text.length > LANE_INSTRUCTION_MAX) return { ok: false, error: "instruction_too_large" };
-  const store = readExecutionRunStore(root);
+  // Refuse rather than found a new store on top of one we could not read.
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
   const pack = store.lanes[id];
   const current = pack?.current_run_id
     ? (pack.runs || []).find((r) => r.run_id === pack.current_run_id)
@@ -858,7 +927,8 @@ export function transitionExecutionRun(runId, toState, {
   // BLOCKED_STATES guard below.
   execution_failure = false,
 } = {}) {
-  const store = readExecutionRunStore(root);
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
   let found = null;
   let packId = null;
   for (const [laneId, pack] of Object.entries(store.lanes || {})) {
@@ -1028,7 +1098,8 @@ export function transitionExecutionRun(runId, toState, {
 }
 
 export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
-  const store = readExecutionRunStore(root);
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
   for (const pack of Object.values(store.lanes || {})) {
     const found = (pack.runs || []).find((r) => r.run_id === runId);
     if (!found) continue;
@@ -1135,7 +1206,8 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
 }
 
 export function patchRunResourceWait(runId, resourceWait, root = runtimeRoot()) {
-  const store = readExecutionRunStore(root);
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
   for (const pack of Object.values(store.lanes || {})) {
     const found = (pack.runs || []).find((r) => r.run_id === runId);
     if (!found) continue;
@@ -1692,7 +1764,17 @@ export function executionEnvelope(runId, instruction, { laneId = null } = {}) {
   ].join("\n");
 }
 
+/**
+ * The same landmine as the lane store's reset, and the same refusal.
+ *
+ * Defaulting to `runtimeRoot()` means `ALLOY_RUNTIME_ROOT`, which in a worker
+ * shell is the LIVE gateway root. Every test calling this without an explicit
+ * root wiped the real run registry — which is what actually emptied runs.json
+ * alongside lanes.json, twice, moments after a test sweep. Not a transient I/O
+ * fault; the helper doing exactly what it was told, against production.
+ */
 export function resetExecutionRunsForTests(root = runtimeRoot()) {
+  assertResettableRoot(root, "execution run store");
   writeStore(emptyStore(), root);
   try {
     const p = executionRunEventsPath(root);

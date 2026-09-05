@@ -145,11 +145,24 @@ function laneIn(repositoryId, { name = "promotion lane" } = {}) {
   return laneId;
 }
 
+/**
+ * A REAL run, not a made-up id.
+ *
+ * This named `erun_test0000000001` and never created it, so the case exercised
+ * the split-brain hole — governed work authorized against a run the canonical
+ * owner had never heard of — rather than the approval flow it describes.
+ * Governed requests now verify the run they name.
+ */
+function runFor(laneId) {
+  const made = createQueuedRun({ laneId, instruction: "approval fixture", root: ROOT });
+  return made.run?.run_id || made.run_id || null;
+}
+
 function mergeRequest(laneId, overrides = {}) {
   return {
     action_key: "repository.merge_pull_request",
     lane_id: laneId,
-    run_id: "erun_test0000000001",
+    run_id: runFor(laneId),
     target: "staging",
     purpose: "Promote the reviewed change",
     reason_worker_cannot_execute: "The lane cannot hold GitHub credentials.",
