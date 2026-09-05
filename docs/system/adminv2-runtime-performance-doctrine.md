@@ -1,6 +1,6 @@
 ---
 owner: runtime
-status: current
+status: canonical
 last_reviewed: 2026-09-04
 supersedes: []
 ---
