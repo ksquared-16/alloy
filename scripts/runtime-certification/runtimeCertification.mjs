@@ -167,7 +167,8 @@ export function report(results, verdict, env) {
         L.push("── WORK UNIT (cold document entry) ──");
         L.push(`  p50 ttfb=${r.p50?.ttfb}ms shell=${r.p50?.shell}ms rows=${r.p50?.rows}ms firstUsefulCard=${r.p50?.firstUsefulCard}ms`);
         L.push(`  api requests=${r.apiTotal}  card reads=${JSON.stringify(r.cardReads)}`);
-        L.push(`  remounts=${r.remounts?.length ?? 0}  redundant duplicates=${r.duplicates?.redundant?.length ?? 0}  intentional=${r.duplicates?.intentional?.length ?? 0}`);
+        L.push(`  remounts(card-bearing)=${r.remounts?.length ?? 0}  redundant duplicates=${r.duplicates?.redundant?.length ?? 0}`);
+        for (const ir of r.intentionalRemounts ?? []) L.push(`  intentional remount ${ir.id} x${ir.mounts} — ${ir.why}`);
     }
     if (results.focusPanel?.geometry) {
         const g = results.focusPanel.geometry;

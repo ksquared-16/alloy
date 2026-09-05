@@ -72,9 +72,42 @@ export function cardReadCounts(urls) {
     return out;
 }
 
-/** A section id mounting more than once in one entry is a remount — never acceptable. */
+/**
+ * Sections whose remount is INTENTIONAL, with the reason.
+ *
+ * WU-08 is `FocusPanelModeSwitch`, rendered by `FocusPanelCompactHeader` — the SEED header, which
+ * lives outside the keyed body and deliberately owns the clicked subject's identity until the
+ * payload for that subject resolves. The seed → resolved header handoff is the acknowledgement that
+ * a row switch happened; it carries no self-fetching data and costs no requests.
+ *
+ * Measured on deployed 5f9eb2b1 after the body-key fix: WU-09 (the card-bearing grid) mounts once,
+ * every authoritative card read is 1 per subject intent, and total requests fell 48 → 45. WU-08 still
+ * mounts twice and that is the handoff, not a duplicated owner.
+ *
+ * This list is deliberately short and each entry names its reason. Adding a section here to make a
+ * red run go green — rather than because its remount is genuinely free — defeats the harness.
+ */
+export const INTENTIONAL_REMOUNTS = {
+    "WU-08": "Seed header identity handoff (FocusPanelCompactHeader → resolved header). No self-fetching data, no requests.",
+};
+
+/**
+ * A CARD-BEARING section mounting more than once in one entry is a remount — never acceptable,
+ * because every self-fetching card inside it re-runs its authoritative read.
+ */
 export function remounts(mounts) {
     const byId = new Map();
     for (const m of mounts) byId.set(m.id, [...(byId.get(m.id) ?? []), m.t]);
-    return [...byId.entries()].filter(([, ts]) => ts.length > 1).map(([id, ts]) => ({ id, mounts: ts.length, at: ts }));
+    return [...byId.entries()]
+        .filter(([id, ts]) => ts.length > 1 && !INTENTIONAL_REMOUNTS[id])
+        .map(([id, ts]) => ({ id, mounts: ts.length, at: ts }));
+}
+
+/** Remounts we tolerate, surfaced in the report so they stay visible rather than silent. */
+export function intentionalRemounts(mounts) {
+    const byId = new Map();
+    for (const m of mounts) byId.set(m.id, [...(byId.get(m.id) ?? []), m.t]);
+    return [...byId.entries()]
+        .filter(([id, ts]) => ts.length > 1 && INTENTIONAL_REMOUNTS[id])
+        .map(([id, ts]) => ({ id, mounts: ts.length, why: INTENTIONAL_REMOUNTS[id] }));
 }

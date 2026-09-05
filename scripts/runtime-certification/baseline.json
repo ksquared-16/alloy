@@ -1,7 +1,6 @@
 {
   "schema_version": "alloy.runtime_certification_baseline.v1",
   "_comment": "HARD INVARIANTS are laws and must never regress. PERFORMANCE BANDS are derived from the measured distribution and are host/network sensitive: they are guidance, not law. Do not promote a band to a law by tightening it until it fails on a slow morning.",
-
   "certified": {
     "measured_at": "2026-09-04",
     "staging_sha": "bcd20f004a6039f51987c8b764b82f097f7a4374",
@@ -9,13 +8,12 @@
     "deployment_id": "dpl_G29K4atk2dj3nDEBEyCfHfBHypmP",
     "supabase_project": "ikaxilmwmrmbagoidedu",
     "environment": "DEPLOYED_STAGING",
-    "fixture": "Firefly Early Learning — Waitlist Work Unit, 17-child stressed case",
+    "fixture": "Firefly Early Learning \u2014 Waitlist Work Unit, 17-child stressed case",
     "samples": 3
   },
-
   "hard_invariants": {
     "_comment": "Violating any of these fails certification outright, at any latency.",
-    "focus_panel_subtree_mounts_once_per_entry": true,
+    "focus_panel_subtree_mounts_once_per_entry": "card-bearing sections only; WU-08 seed-header handoff is intentional and free",
     "financials_reads_per_subject_intent": 1,
     "attendance_reads_per_subject_intent": 1,
     "health_reads_per_subject_intent": 1,
@@ -28,46 +26,103 @@
     "waitlist_order_survives_reload": true,
     "children_summary_is_bounded": true
   },
-
   "performance_bands": {
     "_comment": "p50 measured on deployed staging over 3 cold samples; bands allow for host and network variance. A band breach is a signal to investigate, not an automatic failure.",
     "work_unit_cold_entry": {
-      "ttfb_ms": { "p50": 129, "band_max": 400 },
-      "shell_ms": { "p50": 881, "band_max": 2500 },
-      "rows_ms": { "p50": 2496, "band_max": 5000 },
-      "first_useful_card_ms": { "p50": 2496, "band_max": 5000 },
-      "api_requests": { "observed": 48, "band_max": 60 }
+      "ttfb_ms": {
+        "p50": 129,
+        "band_max": 400
+      },
+      "shell_ms": {
+        "p50": 881,
+        "band_max": 2500
+      },
+      "rows_ms": {
+        "p50": 2496,
+        "band_max": 5000
+      },
+      "first_useful_card_ms": {
+        "p50": 2496,
+        "band_max": 5000
+      },
+      "api_requests": {
+        "observed": 48,
+        "band_max": 60
+      }
     },
     "focus_panel": {
       "grid_initial_px": 406,
       "grid_final_px": 1183,
-      "growth_px": { "observed": 777, "band_max": 1000 },
-      "largest_delta_px": { "observed": 489, "band_max": 700 },
-      "waves": { "observed": 4, "band_max": 5 },
-      "scroll_displacement_px": { "observed": 0, "band_max": 0 },
-      "neighbour_movement_px": { "observed": 8, "band_max": 40 },
-      "stable_ms": { "observed_range": [6403, 9314], "band_max": 12000 }
+      "growth_px": {
+        "observed": 777,
+        "band_max": 1000
+      },
+      "largest_delta_px": {
+        "observed": 489,
+        "band_max": 700
+      },
+      "waves": {
+        "observed": 4,
+        "band_max": 5
+      },
+      "scroll_displacement_px": {
+        "observed": 0,
+        "band_max": 0
+      },
+      "neighbour_movement_px": {
+        "observed": 8,
+        "band_max": 40
+      },
+      "stable_ms": {
+        "observed_range": [
+          6403,
+          9314
+        ],
+        "band_max": 12000
+      }
     },
     "warm_navigation": {
-      "workspace_to_work_unit_feedback_ms": { "p50": 102, "band_max": 400 },
-      "work_unit_to_workspace_feedback_ms": { "p50": 54, "band_max": 400 },
-      "workspace_to_operations_feedback_ms": { "p50": 67, "band_max": 400 },
-      "work_view_change_stable_ms": { "p50": 851, "band_max": 3500 }
+      "workspace_to_work_unit_feedback_ms": {
+        "p50": 102,
+        "band_max": 400
+      },
+      "work_unit_to_workspace_feedback_ms": {
+        "p50": 54,
+        "band_max": 400
+      },
+      "workspace_to_operations_feedback_ms": {
+        "p50": 67,
+        "band_max": 400
+      },
+      "work_view_change_stable_ms": {
+        "p50": 851,
+        "band_max": 3500
+      }
     },
     "organization": {
-      "landing_useful_ms": { "p50": 951, "band_max": 2500 },
-      "subsection_useful_ms": { "p50": 408, "band_max": 1500 },
-      "back_ms": { "p50": 23, "band_max": 500 },
-      "forward_ms": { "p50": 11, "band_max": 500 }
+      "landing_useful_ms": {
+        "p50": 951,
+        "band_max": 2500
+      },
+      "subsection_useful_ms": {
+        "p50": 408,
+        "band_max": 1500
+      },
+      "back_ms": {
+        "p50": 23,
+        "band_max": 500
+      },
+      "forward_ms": {
+        "p50": 11,
+        "band_max": 500
+      }
     }
   },
-
   "retired_findings": {
     "organization_1343ms": "Dev-mode Turbopack on-demand compilation. Does not reproduce on deployed staging (~438-951ms). Never re-open from a dev measurement."
   },
-
   "known_open": {
-    "duplicate_placement_candidates": "DEFECT. Prevention deployed (placementCandidateSubjectUniqueness). Repair deliberately gated — its survivor rule oscillated on real tenant data — and belongs to a separate governed mission. Staging residue is expected, not a certification failure.",
+    "duplicate_placement_candidates": "DEFECT. Prevention deployed (placementCandidateSubjectUniqueness). Repair deliberately gated \u2014 its survivor rule oscillated on real tenant data \u2014 and belongs to a separate governed mission. Staging residue is expected, not a certification failure.",
     "baseline_red_tests": "As of bcd20f004, 32 pre-existing test failures across 17 files in the placement/presentation/runtime suites. Compare failing test NAMES against the baseline commit, never counts."
   }
 }
