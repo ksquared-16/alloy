@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { LANE_ID_RE, LANE_INSTRUCTION_MAX, runReceiptToken, textProvesInstructionReceipt } from "./lanes.mjs";
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { assertResettableRoot, canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
@@ -1764,7 +1764,17 @@ export function executionEnvelope(runId, instruction, { laneId = null } = {}) {
   ].join("\n");
 }
 
+/**
+ * The same landmine as the lane store's reset, and the same refusal.
+ *
+ * Defaulting to `runtimeRoot()` means `ALLOY_RUNTIME_ROOT`, which in a worker
+ * shell is the LIVE gateway root. Every test calling this without an explicit
+ * root wiped the real run registry — which is what actually emptied runs.json
+ * alongside lanes.json, twice, moments after a test sweep. Not a transient I/O
+ * fault; the helper doing exactly what it was told, against production.
+ */
 export function resetExecutionRunsForTests(root = runtimeRoot()) {
+  assertResettableRoot(root, "execution run store");
   writeStore(emptyStore(), root);
   try {
     const p = executionRunEventsPath(root);

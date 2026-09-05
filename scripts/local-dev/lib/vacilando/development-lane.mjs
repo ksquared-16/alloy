@@ -1007,7 +1007,36 @@ export function setLaneRepository(laneId, repositoryId, {
   return { ok: true, lane_id: rec.lane_id, repository_id: rec.repository_id, previous: current };
 }
 
+/**
+ * A TEST RESET MAY NEVER WIPE THE LIVE CONTROL PLANE.
+ *
+ * This defaulted to `runtimeRoot()`, which is `ALLOY_RUNTIME_ROOT` — and in any
+ * worker shell that variable points at the LIVE gateway root. So every test that
+ * called this without an explicit root wrote an empty store over the real lane
+ * registry, and eleven call sites across six suites do exactly that.
+ *
+ * That is what actually destroyed state on this host: lanes.json and runs.json
+ * emptied in the same second, twice, each time moments after a test sweep ran —
+ * 20 registered lanes and every run, gone. It was diagnosed at first as a
+ * transient unreadable read being persisted as emptiness. It was not. It was the
+ * test helper doing precisely what it was asked to do, against production.
+ *
+ * Refusing loudly rather than silently: a suite that tries to wipe the live
+ * control plane has a bug worth failing on, and a silent no-op would leave it
+ * reading real state while believing it had a clean one. Runs with no
+ * ALLOY_RUNTIME_ROOT set are unaffected.
+ */
+export function assertResettableRoot(root, what = "store") {
+  if (/(^|\/)gateway\/?$/.test(String(root || ""))) {
+    throw new Error(
+      `refusing to reset the ${what} at ${root}: that is the live gateway root, not a test root. `
+      + "Pass an explicit temporary root to the reset helper.",
+    );
+  }
+}
+
 export function resetDevelopmentLanesForTests(root = runtimeRoot()) {
+  assertResettableRoot(root, "development lane store");
   writeStore(emptyStore(), root);
 }
 

@@ -50,8 +50,10 @@ const MISSION = "msn_identity_probe";
  */
 function freshRoot() {
     const root = mkdtempSync(join(tmpdir(), "vac-identity-"));
-    resetExecutionRunsForTests();
-    resetDevelopmentLanesForTests();
+    // Explicit root: the helpers default to ALLOY_RUNTIME_ROOT, which in a worker
+    // shell is the LIVE gateway root. Calling them bare wiped the real registries.
+    resetExecutionRunsForTests(root);
+    resetDevelopmentLanesForTests(root);
     const wt = join(root, "wt-identity");
     mkdirSync(wt, { recursive: true });
     const made = createDurableLane({
@@ -110,7 +112,7 @@ test("the refusal survives the store being emptied under it", () => {
     assert.equal(push(made.run.run_id, root).ok, true, "a real run must still be usable");
 
     writeFileSync(executionRunStorePath(root), JSON.stringify({ lanes: {} }), "utf8");
-    resetExecutionRunsForTests();
+    resetExecutionRunsForTests(root);
 
     assert.equal(getExecutionRun(made.run.run_id, root), null, "the canonical owner has lost it");
     const after = push(made.run.run_id, root);
