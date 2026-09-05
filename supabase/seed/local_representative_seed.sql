@@ -227,9 +227,7 @@ DROP TABLE IF EXISTS _childcare_mvp_seed_target_orgs;  -- see note above
 \ir ../migrations/20260430253000_enrollment_right_rail_dept_scope.sql
 \ir ../migrations/20260501193000_workspace_kpi_placement.sql
 \ir ../migrations/20260502100000_kpi_v1_context_placement_seeds.sql
-\ir ../migrations/20260505120100_settings_users_roles_permission.sql
 \ir ../migrations/20260505153000_backfill_default_role_definitions.sql
-\ir ../migrations/20260505164000_permission_grid_keys.sql
 \ir ../migrations/20260513103000_childcare_opportunity_drawer_append_tour_scheduling.sql
 \ir ../migrations/20260520120000_inquiry_child_desired_start_and_field_defs.sql
 \ir ../migrations/20260526153000_action_buttons_phase2_message_ask_bos.sql
@@ -264,7 +262,39 @@ DROP TABLE IF EXISTS _childcare_mvp_seed_target_orgs;  -- see note above
 \ir ../migrations/20260624120200_analytics_v2_surface_placements.sql
 \ir ../migrations/20260707120100_header_metric_definitions_activation.sql
 \ir ../migrations/20260711153100_person_child_relationship_type_option_set.sql
-\ir ../migrations/20260722000000_operational_expectations_authority_model_p1_wave_c.sql
+
+-- ---------------------------------------------------------------------------
+-- RBAC FOR THIS ORG, THROUGH THE PLATFORM'S OWN ROUTINE.
+--
+-- Three of the replayed migrations above used to live here and no longer can:
+--
+--   20260505120100_settings_users_roles_permission
+--   20260505164000_permission_grid_keys
+--   20260722000000_operational_expectations_authority_model_p1_wave_c
+--
+-- Each writes `public.permissions` and `public.permission_keys`, and the catalog
+-- they were written against is GONE by the end of the migration sequence:
+-- `20260729120000` dropped both tables for compatibility views, and
+-- `20260818240000` dropped those views. Replaying them against a fully migrated
+-- database therefore aborted the whole seed under ON_ERROR_STOP with
+-- `relation "public.permissions" does not exist` — which is why this tenant had
+-- no organization, and so no Opportunity and no mountable Financials card.
+--
+-- They were replayed for one reason: their org-scoped tail grants permissions
+-- with `SELECT ... FROM public.orgs`, which matches NOTHING at migration time
+-- because the org is created here, afterwards. That job now belongs to
+-- `public.seed_default_rbac`, which `20260807170000` (W-12) rewrote for the
+-- current catalog: it writes `permission_definitions` and
+-- `role_permission_grants` only, and that migration REFUSES to install if its
+-- enumeration omits any active catalog key. So this stays correct as the
+-- catalog grows, without copying a single grant list into this file — the same
+-- zero-hand-copy-drift rule the replay block above is built on.
+--
+-- `role_definitions` needs no help: `20260729120000` also installed the
+-- `orgs_seed_default_role_definitions` AFTER INSERT trigger on `public.orgs`,
+-- so this org received its four system roles the moment it was created.
+-- ---------------------------------------------------------------------------
+SELECT public.seed_default_rbac(:'ORG_ID'::uuid);
 
 \echo '== Section 4: department process configuration (authoritative, post-replay) =='
 
