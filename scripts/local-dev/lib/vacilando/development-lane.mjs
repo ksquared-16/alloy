@@ -8,7 +8,7 @@
  * substrate before consequential operations. Binding metadata is not Git/tmux truth.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -68,24 +68,96 @@ function emptyStore() {
 }
 
 export function readDevelopmentLaneStore(root = runtimeRoot()) {
+  // Readers stay lenient so a surface renders empty instead of throwing.
+  // MUTATIONS must not — see readLaneStoreGuarded below.
+  return readLaneStoreGuarded(root).store;
+}
+
+/**
+ * THE SAME DEFECT THAT COST THE RUN STORE, IN THE LANE STORE.
+ *
+ * This returned `emptyStore()` for every failure, and every mutation is read →
+ * modify → atomic whole-file overwrite. So one unreadable read persists an empty
+ * lane universe on the very next write.
+ *
+ * It is not hypothetical here either. At 15:45:58 this file and
+ * execution-runs/runs.json were emptied IN THE SAME SECOND — 20 registered lanes
+ * and every run gone — while admissions.json (2265 entries), agent-sessions.json
+ * and governed-actions/requests.json were untouched. What the emptied pair had
+ * in common was this exact read-then-clobber shape; the survivors did not. The
+ * Gateway had been up for half an hour, so a restart was not involved.
+ *
+ * ABSENT AND UNREADABLE ARE DIFFERENT ANSWERS. A missing file is legitimately an
+ * empty store: first boot has no lanes to lose. A file that EXISTS and cannot be
+ * parsed is a fact we do not have, and overwriting it turns a recoverable
+ * problem into a permanent one.
+ */
+export function readLaneStoreGuarded(root = runtimeRoot()) {
+  const path = developmentLaneStorePath(root);
+  if (!existsSync(path)) return { ok: true, store: emptyStore(), absent: true };
+  let text;
   try {
-    const raw = JSON.parse(readFileSync(developmentLaneStorePath(root), "utf8"));
-    if (!raw || typeof raw !== "object") return emptyStore();
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    return { ok: false, error: "lane_store_unreadable", detail: e?.message || String(e), store: emptyStore() };
+  }
+  try {
+    const raw = JSON.parse(text);
+    if (!raw || typeof raw !== "object") {
+      return { ok: false, error: "lane_store_malformed", detail: "top level is not an object", store: emptyStore() };
+    }
     return {
-      schema_version: DEVELOPMENT_LANE_SCHEMA,
-      lanes: raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {},
-      // This normalisation drops every top-level key it does not name, so a
-      // store shape that is not listed here is silently erased on the next
-      // write. Folders live in the same file and must be carried forward.
-      folders: raw.folders && typeof raw.folders === "object" ? raw.folders : {},
+      ok: true,
+      store: {
+        schema_version: DEVELOPMENT_LANE_SCHEMA,
+        lanes: raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {},
+        // This normalisation drops every top-level key it does not name, so a
+        // store shape that is not listed here is silently erased on the next
+        // write. Folders live in the same file and must be carried forward.
+        folders: raw.folders && typeof raw.folders === "object" ? raw.folders : {},
+      },
     };
-  } catch {
-    return emptyStore();
+  } catch (e) {
+    return { ok: false, error: "lane_store_malformed", detail: e?.message || String(e), store: emptyStore() };
   }
 }
 
+/** Read for a MUTATION, or refuse. Null means the caller must not proceed. */
+function readStoreForMutation(root) {
+  const read = readLaneStoreGuarded(root);
+  return read.ok ? read.store : null;
+}
+
 function writeStore(store, root) {
-  atomicWrite(developmentLaneStorePath(root), store);
+  /*
+   * Keep one generation behind the current file, for the same reason the run
+   * store does: the write itself is atomic, so this is not about torn files. It
+   * is about a mutation that was already wrong before it arrived. Without it the
+   * only copy of the lane registry is the one being replaced — which is exactly
+   * why the 15:45:58 loss was unrecoverable.
+   */
+  const path = developmentLaneStorePath(root);
+
+  /*
+   * NEVER OVERWRITE A STORE WE COULD NOT READ.
+   *
+   * Guarded at the single write choke point rather than at each of the ten
+   * mutations, so a caller added later cannot forget. A refused write is
+   * recoverable — the caller's change is simply not persisted, and the operator
+   * retries. A clobbered registry is not: 20 lanes went at 15:45:58 and the only
+   * copy was the one being replaced.
+   *
+   * Deliberately not a throw. This runs inside the Gateway, and converting a
+   * transient read failure into an uncaught exception trades one outage for
+   * another. Declining to write is the conservative half of fail-closed.
+   */
+  const current = readLaneStoreGuarded(root);
+  if (!current.ok) return store;
+
+  try {
+    if (existsSync(path)) copyFileSync(path, `${path}.prev`);
+  } catch { /* a missing backup must never block the write that keeps lanes alive */ }
+  atomicWrite(path, store);
   return store;
 }
 
@@ -935,7 +1007,36 @@ export function setLaneRepository(laneId, repositoryId, {
   return { ok: true, lane_id: rec.lane_id, repository_id: rec.repository_id, previous: current };
 }
 
+/**
+ * A TEST RESET MAY NEVER WIPE THE LIVE CONTROL PLANE.
+ *
+ * This defaulted to `runtimeRoot()`, which is `ALLOY_RUNTIME_ROOT` — and in any
+ * worker shell that variable points at the LIVE gateway root. So every test that
+ * called this without an explicit root wrote an empty store over the real lane
+ * registry, and eleven call sites across six suites do exactly that.
+ *
+ * That is what actually destroyed state on this host: lanes.json and runs.json
+ * emptied in the same second, twice, each time moments after a test sweep ran —
+ * 20 registered lanes and every run, gone. It was diagnosed at first as a
+ * transient unreadable read being persisted as emptiness. It was not. It was the
+ * test helper doing precisely what it was asked to do, against production.
+ *
+ * Refusing loudly rather than silently: a suite that tries to wipe the live
+ * control plane has a bug worth failing on, and a silent no-op would leave it
+ * reading real state while believing it had a clean one. Runs with no
+ * ALLOY_RUNTIME_ROOT set are unaffected.
+ */
+export function assertResettableRoot(root, what = "store") {
+  if (/(^|\/)gateway\/?$/.test(String(root || ""))) {
+    throw new Error(
+      `refusing to reset the ${what} at ${root}: that is the live gateway root, not a test root. `
+      + "Pass an explicit temporary root to the reset helper.",
+    );
+  }
+}
+
 export function resetDevelopmentLanesForTests(root = runtimeRoot()) {
+  assertResettableRoot(root, "development lane store");
   writeStore(emptyStore(), root);
 }
 
