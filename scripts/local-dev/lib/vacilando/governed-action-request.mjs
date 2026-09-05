@@ -1154,10 +1154,24 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
       // record for this request already exists it is still updated, because the
       // completion of an approved action is what resolves the approval that
       // opened it.
+      // THE OPERATOR NAMED THIS LANE; THE NOTIFICATION SHOULD USE THAT NAME.
+      //
+      // This passed `laneId` and no `laneName`, and `upsertNotification` falls
+      // back to the id — so every governed record stored `lane_2cea84351d90` as
+      // its display name and the phone push, whose title is
+      // `record.lane_name || record.lane_id`, showed the id. Measured on this
+      // host: 22 of 74 live records carried an id where a name belongs, and all
+      // of them came through this path. The run-outcome path already resolves
+      // the durable lane for exactly this reason (execution-run.mjs:608).
+      let laneName = null;
+      try {
+        laneName = rec.lane_id ? (getDurableLane(rec.lane_id, root)?.name || null) : null;
+      } catch { /* an unnamed or unreadable lane keeps the id — never break the action */ }
       const noted = upsertNotification({
         subjectKey: `governed:${rec.request_id}`,
         requestId: rec.request_id,
         laneId: rec.lane_id || null,
+        laneName,
         eventType: type,
         state: rec.status || null,
         attentionClass: cls,
@@ -1168,12 +1182,15 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
           : (rec.lane_id ? `/#/lanes/${encodeURIComponent(rec.lane_id)}` : "/#/lanes"),
         root,
       });
-      // Delivery is a projection of the record and must never be able to
-      // block, slow or fail the governed action itself — the same
-      // fire-and-forget contract run outcomes already use. Only a record that
-      // was just OPENED, or that has become a live demand again, is announced;
-      // an update that merely resolves one is not news.
-      if (noted?.record && (noted.created || noted.record.seen_at === null)) {
+      // ANNOUNCE A NEW DEMAND, NOT AN UNREAD ONE.
+      //
+      // The guard was `noted.created || noted.record.seen_at === null`, and
+      // `seen_at === null` is true of every unread record — so each routine
+      // progress event on an unread approval pushed the phone again with
+      // nothing new to say. That is the "nothing to do, nothing completed"
+      // notification. Only a record that was just opened, or that has genuinely
+      // become actionable again, is worth a push.
+      if (noted?.record && (noted.created || noted.becameActionable)) {
         import("./lane-push.mjs")
           .then((mod) => mod.pushGovernedNotification(noted.record, { root }))
           .catch(() => { /* push is best-effort; the record is the truth */ });

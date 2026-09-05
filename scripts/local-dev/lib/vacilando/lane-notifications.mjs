@@ -642,16 +642,35 @@ export function upsertNotification({
   if (existing) {
     const wasActionable = existing.attention_class === "actionable";
     existing.attention_class = attentionClass;
-    existing.event_type = eventType || existing.event_type;
+    // ROUTINE PROGRESS MAY RESOLVE A RECORD; IT MAY NOT RENAME IT.
+    //
+    // `existing.event_type = eventType` let a routine event overwrite the
+    // identity of the record it was only meant to settle. Observed on this
+    // host: an approval opened `governed:gar_x` as
+    // `governed_action_approval_required`, a later `worker_resumed` updated the
+    // same subject, and the operator's record became "Worker resumed" — an item
+    // describing nothing they had to do and nothing that had finished. The
+    // record still resolves (its class updates above); it keeps the name of the
+    // thing it is about.
+    if (eventType && createIfMissing) existing.event_type = eventType;
     if (state) existing.state = state;
-    if (summary) existing.summary = bound(summary);
+    if (summary && createIfMissing) existing.summary = bound(summary);
     if (path) existing.path = path;
+    // A lane NAME is worth adopting whenever one arrives: the governed path
+    // historically supplied none, and a record that learned the real name later
+    // should keep it rather than stay an id forever.
+    if (laneName) existing.lane_name = bound(laneName, 80);
     existing.updated_at = iso(nowMs);
     // Becoming actionable again is a NEW demand on the operator, so it returns
     // to unread. Every other transition leaves an acknowledged item acknowledged.
-    if (!wasActionable && attentionClass === "actionable") existing.seen_at = null;
+    const becameActionable = !wasActionable && attentionClass === "actionable";
+    if (becameActionable) existing.seen_at = null;
     writeStore(store, root);
-    return { ok: true, created: false, updated: true, record: existing };
+    // `becameActionable` is the ONLY reason an update is worth announcing.
+    // Callers previously inferred that from `seen_at === null`, which is true of
+    // every unread record — so routine progress on an unread approval pushed
+    // again, and again, with nothing new to say.
+    return { ok: true, created: false, updated: true, becameActionable, record: existing };
   }
   if (!createIfMissing) {
     return { ok: true, created: false, updated: false, skipped: "routine_progress" };
