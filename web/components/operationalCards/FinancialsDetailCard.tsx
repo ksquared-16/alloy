@@ -11,7 +11,7 @@ import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/c
  * Billing detail — what "Billing details →" opens.
  *
  * NOT a separate Billing product or runtime. It is the SAME card at `density="expanded"`, the
- * centered Focus Card with a depth scrim that Household, Children and the real BillingPreviewCard
+ * centered Focus Card with a depth scrim that Household, Children and the real assignment Tuition card
  * already use (System 5B Expand). The summary card and this surface are one card at two
  * densities, which is the platform's own density system — Micro, Compact, Standard, Expanded.
  *

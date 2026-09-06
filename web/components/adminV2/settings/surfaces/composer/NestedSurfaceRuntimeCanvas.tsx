@@ -11,7 +11,7 @@ import { useMemo } from "react";
 
 import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
-import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPreviewCard";
+import AssignmentTuitionCard from "@/components/admin/focusPanel/cards/AssignmentTuitionCard";
 import HouseholdContactEditPreview from "@/components/adminV2/settings/surfaces/composer/HouseholdContactEditPreview";
 import { buildDemoFocusPanelSummaryViewModel } from "@/lib/adminV2/runtime/focusPanel/demoFocusPanelSummaryViewModel";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
@@ -187,7 +187,7 @@ export default function NestedSurfaceRuntimeCanvas({
                 {...{ [SURFACE_COMPOSER_CANVAS_ATTR]: "nested-runtime" }}
             >
                 <div className="rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3 shadow-sm">
-                    <BillingPreviewCard
+                    <AssignmentTuitionCard
                         model={billingModel}
                         context={context}
                         composerPreview={{ perspective: "expanded" }}
