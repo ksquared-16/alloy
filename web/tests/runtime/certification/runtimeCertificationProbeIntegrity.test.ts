@@ -24,6 +24,16 @@ import {
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+/**
+ * The harness is plain `.mjs`, so its exported object literals arrive with inferred shapes whose
+ * keys are literal unions. These tests deliberately index them with runtime strings (baseline keys,
+ * trigger-matrix subset names) to prove coverage, which is exactly what a literal-union index
+ * rejects. Widen once, here, rather than casting at each use.
+ */
+type SubsetOwner = { measuredHere: boolean; certifiedBy?: string; tier?: number };
+const OWNERSHIP = SUBSET_OWNERSHIP as Record<string, SubsetOwner | undefined>;
+const DELEGATED = INVARIANTS_DELEGATED as Record<string, string | undefined>;
+
 const BASELINE = JSON.parse(
     readFileSync(join(process.cwd(), "..", "scripts/runtime-certification/baseline.json"), "utf8"),
 );
@@ -118,7 +128,7 @@ describe("baseline / harness drift", () => {
         const declared = Object.keys(BASELINE.hard_invariants).filter((k) => !k.startsWith("_"));
         expect(declared.length).toBeGreaterThan(0); // the guard is pointless if it scans nothing
         const orphans = declared.filter(
-            (k) => !INVARIANTS_ASSERTED_HERE.has(k) && !INVARIANTS_DELEGATED[k],
+            (k) => !INVARIANTS_ASSERTED_HERE.has(k) && !DELEGATED[k],
         );
         expect(orphans, `declared but nothing asserts them: ${orphans.join(", ")}`).toEqual([]);
     });
@@ -128,16 +138,16 @@ describe("baseline / harness drift", () => {
         expect(routed.size).toBeGreaterThan(0);
         for (const s of routed) {
             expect(SUBSETS, `TRIGGER_MATRIX routes to unknown subset "${s}"`).toContain(s);
-            expect(SUBSET_OWNERSHIP[s], `subset "${s}" has no declared owner`).toBeTruthy();
+            expect(OWNERSHIP[s], `subset "${s}" has no declared owner`).toBeTruthy();
         }
     });
 
     it("every declared subset says who measures it", () => {
         for (const s of SUBSETS) {
-            const own = SUBSET_OWNERSHIP[s];
+            const own = OWNERSHIP[s];
             expect(own, `subset "${s}" has no ownership entry`).toBeTruthy();
             // A subset not measured here must name the runner that does — otherwise it certifies nothing.
-            if (!own.measuredHere) expect(typeof own.certifiedBy).toBe("string");
+            if (!own?.measuredHere) expect(typeof own?.certifiedBy).toBe("string");
         }
     });
 });
