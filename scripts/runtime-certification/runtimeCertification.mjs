@@ -50,6 +50,70 @@ const ENVIRONMENTS = {
 export const SUBSETS = ["work-unit", "focus-panel", "waitlist", "operations", "workspace", "organization"];
 
 /**
+ * WHO MEASURES EACH SUBSET.
+ *
+ * A subset name in `SUBSETS` is a promise that requesting it certifies something. `waitlist` broke
+ * that promise: it was routed here by TRIGGER_MATRIX (`lib/orchestration/placement/**` →
+ * ["waitlist","work-unit"]) but `runCertification` has no waitlist branch, so
+ * `npm run cert:runtime -- --subset waitlist` opened no page, measured nothing, found zero
+ * failures and printed PASS with exit 0. That is the precise failure this file's own probe-
+ * integrity gate exists to prevent, and the gate could not see it: every check is written as
+ * `if (results.<key>)`, so a subset that produces NO results object is checked by nothing.
+ *
+ * The fix is not to measure waitlist here. Deployed waitlist mutation truth already has an owner —
+ * duplicating it would create the second producer the doctrine forbids. The fix is to say so in
+ * data, and to refuse to call a delegated subset "passed" on this harness's authority.
+ */
+export const SUBSET_OWNERSHIP = {
+    "work-unit": { measuredHere: true },
+    "focus-panel": { measuredHere: true },
+    operations: { measuredHere: true },
+    workspace: { measuredHere: true },
+    organization: { measuredHere: true },
+    waitlist: {
+        measuredHere: false,
+        certifiedBy: "certification/playwright/waitlist-manual-position-truth.cert.spec.ts",
+        tier: 3,
+    },
+};
+
+/**
+ * What a harness-measured subset must have produced for the run to have measured anything at all.
+ * Returning a falsy value means "this subset was asked for and nothing came back".
+ */
+export const SUBSET_EVIDENCE = {
+    "work-unit": (r) => r.workUnit,
+    "focus-panel": (r) => r.focusPanel ?? r.workUnit,
+    operations: (r) => r.operations,
+    workspace: (r) => r.workspace?.transitions,
+    organization: (r) => r.workspace?.transitions,
+};
+
+/**
+ * Every hard invariant in baseline.json must be asserted by `evaluate` or delegated to a named
+ * runner. Three were declared and silently consulted by nothing — a baseline entry that reads like
+ * a law but is inert. Listing them here forces the drift to be visible: add an invariant to the
+ * baseline without asserting it, and certification fails until it is asserted or delegated.
+ */
+export const INVARIANTS_ASSERTED_HERE = new Set([
+    "focus_panel_subtree_mounts_once_per_entry",
+    "financials_reads_per_subject_intent",
+    "attendance_reads_per_subject_intent",
+    "health_reads_per_subject_intent",
+    "roster_requests_per_new_site_date",
+    "roster_requests_when_site_date_already_satisfied",
+    "document_loads_on_in_app_transition",
+    "workspace_shell_preserved_by_node_identity",
+    "redundant_duplicate_authoritative_reads",
+]);
+
+export const INVARIANTS_DELEGATED = {
+    waitlist_order_survives_reload: "certification/playwright/waitlist-manual-position-truth.cert.spec.ts",
+    children_summary_is_bounded: "web/tests/presentation/focusPanelChildrenSummaryDensity.test.ts",
+    drawer_vm_settlement_is_prop_change_not_remount: "web/tests/presentation/focusPanelBodyKeyStability.test.ts",
+};
+
+/**
  * Which certification subset a change class must run.
  *
  * Prefer reachability over filename lists where the repo supports it; this map is the floor, not a
@@ -103,6 +167,38 @@ export function evaluate(results) {
      *
      * An unmeasured run is NOT a passing run. It is an inconclusive run, and it fails.
      */
+    /*
+     * Requested-subset accounting. `if (results.x)` cannot notice a subset that produced nothing,
+     * so ask the other question first: for every subset the operator ASKED for, did anything come
+     * back? A delegated subset is reported as delegated and never counted as measured here.
+     */
+    const requested = results.subsets ?? [];
+    const delegated = [];
+    let measuredHereCount = 0;
+    for (const s of requested) {
+        const own = SUBSET_OWNERSHIP[s];
+        if (!own) { failures.push(`PROBE FAILURE: unknown subset "${s}" — it certifies nothing.`); continue; }
+        if (!own.measuredHere) { delegated.push({ subset: s, certifiedBy: own.certifiedBy, tier: own.tier }); continue; }
+        if (!SUBSET_EVIDENCE[s]?.(results)) {
+            failures.push(`PROBE FAILURE: subset "${s}" was requested but produced no measurements. Nothing was measured; this is not a pass.`);
+            continue;
+        }
+        measuredHereCount += 1;
+    }
+    if (requested.length && measuredHereCount === 0) {
+        const via = delegated.map((d) => `${d.subset} → ${d.certifiedBy}`).join("; ");
+        failures.push(
+            `PROBE FAILURE: this harness measured nothing. ${delegated.length ? `Requested subsets are certified elsewhere (${via}); run that runner — this run is not evidence about them.` : "No requested subset produced measurements."}`
+        );
+    }
+
+    // Baseline drift: a declared law that nothing asserts is not a law.
+    for (const k of Object.keys(inv)) {
+        if (k.startsWith("_")) continue;
+        if (INVARIANTS_ASSERTED_HERE.has(k) || INVARIANTS_DELEGATED[k]) continue;
+        failures.push(`PROBE FAILURE: hard invariant "${k}" is declared in baseline.json but nothing asserts it. Assert it here or delegate it to a named runner.`);
+    }
+
     if (results.workUnit) {
         const r = results.workUnit;
         if (!r.apiTotal) failures.push("PROBE FAILURE: no API traffic observed — the session is probably unauthenticated. Nothing was measured; this is not a pass.");
@@ -148,7 +244,7 @@ export function evaluate(results) {
             if (t.shellSameNode === false) failures.push(`INVARIANT: "${t.name}" did not preserve the workspace shell node`);
         }
     }
-    return { failures, warnings, pass: failures.length === 0 };
+    return { failures, warnings, delegated, pass: failures.length === 0 };
 }
 
 export function report(results, verdict, env) {
@@ -182,6 +278,9 @@ export function report(results, verdict, env) {
         for (const t of results.workspace.transitions) L.push(`  ${String(t.name).padEnd(34)} fb=${t.feedback}ms useful=${t.useful}ms docLoads=${t.docLoads} shellSameNode=${t.shellSameNode}`);
     }
     L.push("");
+    for (const d of verdict.delegated ?? []) {
+        L.push(`DELEGATED: subset "${d.subset}" is certified by ${d.certifiedBy} (tier ${d.tier}) — not measured here.`);
+    }
     L.push(verdict.failures.length ? "INVARIANT FAILURES:" : "INVARIANT FAILURES: none");
     verdict.failures.forEach((f) => L.push("  ✗ " + f));
     L.push(verdict.warnings.length ? "BAND WARNINGS (investigate, not automatic failure):" : "BAND WARNINGS: none");

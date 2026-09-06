@@ -403,6 +403,56 @@ cannot fail on the old code is not evidence.
 
 ---
 
+## Re-measurement (2026-09-06) — deployed staging `606e77d21552b0`
+
+Deployed SHA **matches** `origin/staging` exactly. Vercel `dpl_HAvA1pkLFoR9J31mCA2h4eW5TZhq`, Supabase
+`ikaxilmwmrmbagoidedu`, QA identity `qa-slot1-product@example.com`, 3 cold samples, one revision for
+the whole matrix. Verdict: **PASS**, zero invariant failures, zero band warnings.
+
+The certified baseline (`bcd20f004`) is **deliberately unchanged**. This run is recorded in
+`baseline.json` → `measurement_history` as trajectory, not as a new floor — see below for why.
+
+### What held
+
+Every hard invariant: financials/attendance/health each **1 read per subject intent**; **0**
+card-bearing remounts; **0** redundant duplicates; Operations **1** roster request on open and **0**
+refetch on a satisfied site/day; all four in-app transitions **0 document loads** with the shell
+preserved **by node identity**. `waitlist` reported **DELEGATED**, not silently passed — the fix in
+§ Probe integrity working as intended on a real run.
+
+### What improved
+
+API requests 48 → **45**. Focus Panel waves 4 → **3**. Organization landing useful 951 → **735 ms**.
+Shell 881 → **850 ms**.
+
+### What got worse, and why the PASS does not excuse it
+
+`rows` / `first useful card` p50 went **2496 ms → 4690 ms (+88%)**.
+
+No band warning fired, and the verdict is correctly PASS: `band_max` is 5000 ms and bands are
+guidance, not law. But this is **94% of band_max** on the metric already ranked *the largest single
+operator-visible wait*. Under § Continuous improvement this is a **REGRESS signal**, and the correct
+response is to investigate it — never to widen the band or to advance the baseline to 4690 ms so the
+number stops looking bad. That is precisely the goalpost-move the policy forbids.
+
+Stated honestly: 3 cold samples, and 27+ commits separate the two revisions, so this is a signal to
+investigate rather than a proven single-cause regression. It is recorded rather than absorbed.
+
+`largest_delta_px` also moved 489 → 587 (band_max 700); grid growth is unchanged at +777px, still the
+top geometry opportunity.
+
+### Tier 3 — first actual execution
+
+`waitlist-manual-position-truth.cert.spec.ts` **PASSED** against deployed staging (72 s): write →
+canonical read → rendered order → reload → clear → restore, with the tenant returned to its starting
+truth. This spec had never been run before. Two environment facts make it operator-invoked rather
+than routine, and both are gaps, not properties: `certification/playwright.config.ts` requires
+`@playwright/test` but there is **no root `node_modules`** (it resolves only via `NODE_PATH` into
+`web/node_modules`), and its `setup` project performs an interactive sign-in, so it must be run
+`--no-deps` against a session supplied by the governed restore.
+
+---
+
 ## Runtime performance is part of the platform contract
 
 Not a past project. Whenever new product functionality is introduced anywhere that can reach the
@@ -433,13 +483,23 @@ define a second way to measure anything.
 | `lib/queues/**` | work-unit |
 | `lib/presentation/runtime/**` | work-unit, focus-panel |
 | `focusPanel` / card components | focus-panel |
-| `lib/orchestration/placement/**` | waitlist, work-unit |
+| `lib/orchestration/placement/**` | waitlist *(delegated — see below)*, work-unit |
 | roster / scheduling | operations |
 | AdminV2 shell / navigation | workspace, organization |
 | shared auth / org / site context | workspace, work-unit |
 
 Prefer graph reachability over filename lists where the repo supports it; this table is the floor,
 not a substitute for judgement.
+
+**The source of truth is `TRIGGER_MATRIX` in `runtimeCertification.mjs`; this table is its summary.**
+Two hand-maintained copies of the same routing WILL drift, so read the code when they disagree.
+
+**Not every subset is measured by this harness.** `waitlist` is routed here but certified by
+`certification/playwright/waitlist-manual-position-truth.cert.spec.ts` (tier 3), because deployed
+waitlist mutation truth already has an owner and a second producer of the same verdict is exactly
+what § Forbidden duplicate ownership prohibits. `SUBSET_OWNERSHIP` records who measures what, and a
+delegated subset can never carry a PASS on this harness's authority — requesting only delegated
+subsets is a probe failure that names the runner you actually needed.
 
 ### Enforcement tiers
 
@@ -470,6 +530,26 @@ on its first deployed run it reported PASS having measured nothing, because the 
 expired and it saw zero API traffic. A harness that passes when it measured nothing is worse than no
 harness, because it will be believed. `null` means NOT MEASURED — never "fast".
 
+It then happened a second time, in a worse form, and the gate could not see it. Every check was
+written as `if (results.<key>)`, which cannot notice a subset that produced **no results object at
+all**. `waitlist` was a declared subset with no driver in `runCertification`, so
+`npm run cert:runtime -- --subset waitlist` opened no page, measured nothing, found zero failures
+and printed **PASS with exit 0** — for the one subset the trigger matrix routes placement changes
+to. A blind spot in a gate is not a gap in coverage; it is a false green, and it is worse than the
+thing it replaced.
+
+The gate now asks the other question first: *for every subset that was requested, did anything come
+back?* Three failures are unconditional — a requested subset that measured nothing, an unknown
+subset, and a run where nothing was measured here at all. A hard invariant declared in
+`baseline.json` that neither `evaluate` asserts nor `INVARIANTS_DELEGATED` assigns to a named runner
+is also a failure: three had been declared and consulted by nothing, which is how a baseline entry
+comes to be quoted as evidence for a property no one checks.
+
+The harness is itself certified by `web/tests/runtime/certification/runtimeCertificationProbeIntegrity.test.ts`,
+which had no predecessor — the thing that gated everything was the only untested component in the
+system. Its positive control removes the gate and asserts the verdict flips back to `pass: true` on
+an unmeasured run, so the test provably catches the defect it was written for.
+
 ### Improvement roadmap (evidence-supported only, not authorized work)
 
 Ranked by operator-perceived impact against risk. **Nothing here is approved**; it exists so future
@@ -484,3 +564,92 @@ work starts from measurement rather than from a fresh optimisation hunt.
 | 5 | 32 pre-existing test failures across 17 files on staging | measured at `bcd20f004` | no runtime impact; erodes the signal guards depend on | low |
 
 Do not start these inside a certification mission.
+
+---
+
+## Continuous improvement: certification is a floor, not a finish line
+
+> **Certified runtime behaviour may stay consistent or improve. It must not silently regress.**
+
+Runtime certification exists to stop decay, not to freeze the product at the first number we managed
+to measure. Every runtime-affecting change is compared against the certified baseline and lands in
+one of three states:
+
+| State | Meaning | Consequence |
+|---|---|---|
+| **IMPROVE** | Measurably better than baseline, no hard-invariant regression | Baseline may be advanced — see § Baseline evolution |
+| **HOLD** | Within the certified band | Proceeds normally; baseline unchanged |
+| **REGRESS** | Outside the band, or any hard-invariant failure | **Promotion blocked** unless an explicit governed exception is recorded |
+
+**A baseline is never rewritten downward to accommodate a slower change.** Moving the goalposts to
+match a regression converts the harness into a record of what we settled for. If a slower path is
+genuinely the right trade, that is a governed exception with a stated reason — not a quiet edit to
+`baseline.json`.
+
+Hard invariants and performance bands regress differently. An invariant failure is a defect at any
+latency. A band breach is a signal: investigate before tightening or loosening, because a band that
+fails on a slow morning teaches the team to ignore its own harness.
+
+## Baseline evolution: proving Alloy gets faster
+
+We should be able to answer *"is Alloy getting faster over time?"* with evidence rather than
+recollection. When a change produces an operationally meaningful improvement:
+
+1. Certify the candidate (applicable subsets, pre-merge tier).
+2. Merge and deploy to staging.
+3. Repeat the canonical matrix **on one deployed revision** — never pooled across environments.
+4. Prove no hard invariant regressed.
+5. Advance the baseline upward.
+6. Record old and new measurements **with both SHAs** in `baseline.json` provenance.
+
+Keep enough history to show trajectory, not just the current value. A baseline that only ever holds
+the latest number can prove the product is healthy today but can never show whether it is improving,
+which is the question worth answering.
+
+---
+
+## Placement / Waitlist certified contract
+
+Placement is a certified operator surface. A change that can reach placement inherits these
+obligations; they are not advisory, and "the tests exist" is not the same as being governed — the
+suites below are wired into the runners named beside them, which is what makes them inescapable.
+
+### Hard invariants
+
+| Invariant | Certified by | Tier |
+|---|---|---|
+| OCM grouping changes propagate through the one canonical writer | `syncPlacementCandidateFromOcm.test.ts` | 1 |
+| A cohort-local manual position persists and changes canonical order | `cohortLocalManualPositions.test.ts`, `waitlist-manual-position-truth.cert.spec.ts` | 1, 3 |
+| Section rank stays separate from cohort ordinal | `waitlistAdjustGroupRange.test.ts` | 1 |
+| One active candidate per canonical uniqueness contract | `certification/placement-invariants` (A, A2) | 1 (DB) |
+| One active manual position per candidate/cohort/kind | `certification/placement-invariants` (B, B2) | 1 (DB) |
+| DB identity back-fill and org consistency hold | `certification/placement-invariants` (C, D, D2, D3) | 1 (DB) |
+| Repair executors keep idempotency and error semantics | `placementCandidateOcmRepairExecutor.test.ts` | 1 |
+| Candidate ensure collision behaviour is stated, not inferred | `placementCandidateLifecycleHookEffects.test.ts` | 1 |
+| Shadow mode is proven behaviourally, never by substring | `waitlistShadowModeBehaviour.test.ts` | 1 |
+| Destructive cleanup stays org- and marker-scoped | `waitlistDemoCleanupScoping.test.ts` | 1 |
+
+### Tiers
+
+- **Tier 1 — always.** Vitest placement suites plus `certification/placement-invariants/run.sh`,
+  which runs inside `scripts/certify-trust-db.sh` and therefore inside the Trust DB certification
+  job. The database is the only enforcement of candidate uniqueness and the `person_id` back-fill;
+  before this suite, nothing in the repository referenced those objects by name.
+- **Tier 2 — local production.** `npm run cert:runtime:local` when placement-adjacent runtime
+  changes.
+- **Tier 3 — deployed acceptance.** `waitlist-manual-position-truth.cert.spec.ts` against deployed
+  staging for milestone releases. It exists because the manual-position defect escaped every unit
+  test and was only caught by write → canonical read → rendered order → reload.
+
+### Two rules worth stating plainly
+
+**Deciders and doers are both covered.** The gap this contract closes was not missing tests; it was
+tests that exercised pure decision functions while the functions that *wrote* went untouched. A new
+placement writer needs an effect test asserting the write itself — its payload, its scoping, and
+whether it happens at all — not only its returned summary.
+
+**Source-level assertions are for module-graph and forbidden-content properties only.** "There is
+one writer for these columns" and "this seed file must not contain a production label" cannot be
+observed at runtime. Anything with a runtime answer — a default, an ordering, a mode — is tested as
+behaviour with a positive control. The pre-existing `shadow_mode` guard asserted an exact ternary
+source expression; it would have survived any behavioural inversion that preserved the characters.
