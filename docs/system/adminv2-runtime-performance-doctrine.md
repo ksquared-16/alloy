@@ -425,21 +425,52 @@ preserved **by node identity**. `waitlist` reported **DELEGATED**, not silently 
 API requests 48 → **45**. Focus Panel waves 4 → **3**. Organization landing useful 951 → **735 ms**.
 Shell 881 → **850 ms**.
 
-### What got worse, and why the PASS does not excuse it
+### A regress signal that did not survive contact with a second measurement
 
-`rows` / `first useful card` p50 went **2496 ms → 4690 ms (+88%)**.
+This run recorded `rows` / `first useful card` p50 at **4690 ms** against a 2496 ms baseline (+88%)
+and flagged it as a REGRESS signal worth investigating.
 
-No band warning fired, and the verdict is correctly PASS: `band_max` is 5000 ms and bands are
-guidance, not law. But this is **94% of band_max** on the metric already ranked *the largest single
-operator-visible wait*. Under § Continuous improvement this is a **REGRESS signal**, and the correct
-response is to investigate it — never to widen the band or to advance the baseline to 4690 ms so the
-number stops looking bad. That is precisely the goalpost-move the policy forbids.
+**It did not reproduce.** Re-measured hours later on `178b46995` — 3 cold samples, runtime-identical
+code, the only intervening change from this lane being test- and doc-only — `rows` p50 came back at
+**2874 ms**, +15% on baseline. Across three sample sets (2496 / 4690 / 2874) the 4690 is the
+outlier, and the honest reading is host and network variance, exactly what § Hard invariants vs
+performance bands warns bands are sensitive to.
 
-Stated honestly: 3 cold samples, and 27+ commits separate the two revisions, so this is a signal to
-investigate rather than a proven single-cause regression. It is recorded rather than absorbed.
+Both the observation and its retraction are kept, because the lesson is the durable part: **a single
+3-sample p50 is not enough to call a regression.** Raising it was right; concluding from it would
+have been wrong, and would have sent someone hunting a defect that was not there. The band was not
+widened and the baseline was not advanced — the correct handling either way.
 
-`largest_delta_px` also moved 489 → 587 (band_max 700); grid growth is unchanged at +777px, still the
-top geometry opportunity.
+`largest_delta_px` also moved 489 → 587 (band_max 700) and held there across both runs; grid growth is
+unchanged at +777px, still the top geometry opportunity.
+
+### Final certified measurement — deployed staging `178b46995` (post-merge)
+
+`origin/staging` == deployed SHA == `178b46995aa14f29dd54924497f76ced5438e4fc`, Vercel
+`dpl_39B8nx733jf8WBUt2KVdgDE3MmwJ`, 3 cold samples, one revision for the whole matrix.
+**RUNTIME CERTIFICATION — PASS**, zero invariant failures, zero band warnings.
+
+| | Baseline `bcd20f004` | Final `178b46995` |
+|---|---|---|
+| ttfb p50 | 129 ms | 150 ms |
+| shell p50 | 881 ms | 862 ms |
+| rows / first-useful p50 | 2496 ms | 2874 ms |
+| API requests | 48 | **45** |
+| financials / attendance / health per subject intent | 1 / 1 / 1 | **1 / 1 / 1** |
+| card-bearing remounts | 0 | **0** |
+| redundant duplicates | 0 | **0** |
+| roster open / satisfied refetch | 1 / 0 | **1 / 0** |
+| in-app transitions: document loads | 0 | **0 (4/4)** |
+| shell preserved by node identity | yes | **yes (4/4)** |
+| Focus Panel waves | 4 | **3** |
+| scroll displacement | 0 px | **0 px** |
+
+Tier 3 `waitlist-manual-position-truth.cert.spec.ts`: **PASS** (72 s) — write → canonical read →
+rendered order → reload → clear → restore, tenant returned to its starting truth.
+
+Worth recording: an earlier attempt on this same revision returned `api requests=0` and the harness
+**FAILED with PROBE FAILURE** rather than passing on nothing. That is the post-fix gate behaving
+correctly on a genuinely expired session — the defect this release fixes, caught in the wild.
 
 ### Tier 3 — first actual execution
 

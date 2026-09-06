@@ -208,7 +208,80 @@
         "organization landing useful 951ms -> 735ms",
         "shell 881ms -> 850ms"
       ],
-      "note": "Measured after the harness probe-integrity fix; waitlist reported DELEGATED, not silently passed."
+      "note": "Measured after the harness probe-integrity fix; waitlist reported DELEGATED, not silently passed.",
+      "regress_signal_resolution": "DID NOT REPRODUCE. Re-measured on 178b46995 (same day, 3 cold samples, runtime-identical code - the only intervening change from this lane was test/doc-only): rows p50 2874ms, i.e. +15% vs the 2496ms baseline rather than +88%. Across three sample sets (2496 / 4690 / 2874) the 4690 is an outlier. Treat it as host/network measurement variance, not a regression. Recorded rather than deleted: the observation was real, the conclusion drawn from it was wrong, and a single 3-sample p50 is not enough to call a regression."
+    },
+    {
+      "measured_at": "2026-09-06",
+      "deployed_sha": "178b46995aa14f29dd54924497f76ced5438e4fc",
+      "deployment_id": "dpl_39B8nx733jf8WBUt2KVdgDE3MmwJ",
+      "supabase_project": "ikaxilmwmrmbagoidedu",
+      "qa_identity": "qa-slot1-product@example.com",
+      "environment": "DEPLOYED_STAGING",
+      "samples": 3,
+      "verdict": "PASS",
+      "note": "Post-merge revision containing PR #718. One deployed revision for the whole matrix.",
+      "work_unit": {
+        "ttfb_p50": 150,
+        "shell_p50": 862,
+        "rows_p50": 2874,
+        "first_useful_card_p50": 2874,
+        "api_requests": 45,
+        "card_reads_per_subject": {
+          "financials": 1,
+          "attendance": 1,
+          "health": 1
+        },
+        "card_bearing_remounts": 0,
+        "redundant_duplicates": 0,
+        "intentional_remount": "WU-08 x2 seed-header identity handoff; no self-fetching data, no requests"
+      },
+      "focus_panel": {
+        "grid_initial_px": 406,
+        "grid_final_px": 1183,
+        "growth_px": 777,
+        "largest_delta_px": 587,
+        "waves": 3,
+        "scroll_displacement_px": 0,
+        "neighbour_movement_px": 8,
+        "stable_ms": 8074
+      },
+      "operations": {
+        "open_roster_requests": 1,
+        "satisfied_refetch": 0
+      },
+      "navigation": {
+        "workspace_to_work_unit": {
+          "feedback_ms": 83,
+          "useful_ms": 1,
+          "doc_loads": 0,
+          "shell_same_node": true
+        },
+        "work_unit_to_workspace": {
+          "feedback_ms": 48,
+          "useful_ms": 1,
+          "doc_loads": 0,
+          "shell_same_node": true
+        },
+        "workspace_to_organization": {
+          "feedback_ms": 106,
+          "useful_ms": 872,
+          "doc_loads": 0,
+          "shell_same_node": true
+        },
+        "organization_to_subsection": {
+          "feedback_ms": 73,
+          "useful_ms": 516,
+          "doc_loads": 0,
+          "shell_same_node": true
+        }
+      },
+      "waitlist_tier3": {
+        "spec": "certification/playwright/waitlist-manual-position-truth.cert.spec.ts",
+        "result": "PASS",
+        "duration_s": 72
+      },
+      "probe_integrity_note": "An earlier attempt on this same revision returned api requests=0 and the harness FAILED with PROBE FAILURE rather than passing on nothing - the post-fix gate behaving correctly on a real expired session."
     }
   ]
 }
