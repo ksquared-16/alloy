@@ -529,8 +529,21 @@ const API_ROOT = "app/api";
  * reference shape for W-1 (§5) — it is the seventh route in the raw difference and is correctly
  * gated. A route gating on a capability is not "gating on `access.ok` alone", which is what RL-1
  * asserts, so it belongs here rather than in an exception list.
+ *
+ * `canReadAnalytics` joined them 2026-09-06 (eighth issuance), surfaced by name when the
+ * classification lock first read `lib/admin/canReadAnalytics.ts`. It is the same shape as the two
+ * above — `permissionKeys.includes("reports.read" | "reports.write")`, and nothing else. W-13 /
+ * `I-35`ᴮ removed its `portalEligible` leg precisely so that admission could no longer satisfy it
+ * (`canReadAnalytics.ts:26-42`), so it authorizes on a capability alone, which is what this list
+ * means. Listing it is the *permissive* direction and is **inert on today's corpus**: no route file
+ * calls `canReadAnalytics(` — every caller reaches it through `requireAnalyticsReadAccess`, which
+ * is already a sufficient gate. It is registered because it is reachable, not because it is used.
  */
-const CAPABILITY_GATES = ["canReadProgramPublication", "canManageProgramPublication"] as const;
+const CAPABILITY_GATES = [
+    "canReadProgramPublication",
+    "canManageProgramPublication",
+    "canReadAnalytics",
+] as const;
 
 /** Reviewed exceptions. Empty by design — an entry here is a security decision (W-4's ratchet). */
 const G2_CLASS_EXCEPTIONS: { route: string; reason: string }[] = [];
@@ -660,10 +673,24 @@ describe("W-1 — routes already portal-gated stay gated (RL-1 regression lock)"
  * is the same change of question — ask the defining module what it exports, rather than
  * maintaining a list beside it that a one-line `export const` silently invalidates.
  */
+/**
+ * **Derived, not declared** — see *"the access-primitive module list is derived, not declared"* at
+ * the foot of this file. Every module here must house at least one classified symbol, and every
+ * module housing one must be here; both directions are locked, so this literal cannot drift from
+ * the symbol lists above. Adding a gate to `SUFFICIENT_GATES` drags its defining module in here,
+ * and with it every sibling export into the classification lock.
+ *
+ * The last three were added 2026-09-06 (eighth issuance). They were **not new** — they had housed
+ * four of `SUFFICIENT_GATES`' own entries since before the classification lock was written, which
+ * is why the lock that reads them was the missing piece rather than the modules themselves.
+ */
 const ACCESS_PRIMITIVE_MODULES = [
     "lib/admin/getAdminContext.ts",
     "lib/admin/getAdminAccessContext.ts",
     "lib/adminAuth.ts",
+    "lib/admin/adminRouteGate.ts",
+    "lib/admin/canReadAnalytics.ts",
+    "lib/metrics/platform/adminApiHelpers.ts",
 ] as const;
 
 /** `export const A = B;` — a re-export of an existing symbol under a second name. */
@@ -757,10 +784,14 @@ describe("W-1 — every alias of a listed symbol is listed too (RL-1 subject com
  * Types are excluded deliberately: `export type` / `export interface` emit no runtime symbol and
  * cannot be called, so they can neither gate nor resolve.
  *
- * **What it still cannot do.** It reads three named modules. A *fourth* module exporting an access
- * primitive is outside its subject — the same "a lock naming N cannot notice the N+1th" limit, now
- * at the module layer, which is where W-14's declared route table is the real answer. Recorded here
- * so the next reader does not mistake this for completeness.
+ * **The limit this carried is closed, 2026-09-06 (eighth issuance).** As written, this lock read
+ * *three named modules*, and recorded that "a fourth module exporting an access primitive is
+ * outside its subject." The fourth, fifth and sixth already existed — `adminRouteGate.ts`,
+ * `canReadAnalytics.ts` and `adminApiHelpers.ts` housed four of `SUFFICIENT_GATES`' own entries.
+ * `ACCESS_PRIMITIVE_MODULES` is now derived from where the classified symbols actually live, so
+ * this lock's subject follows the symbol lists instead of being maintained beside them. See *"the
+ * access-primitive module list is derived, not declared"* at the foot of this file for what the
+ * derivation still cannot reach.
  */
 const REVIEWED_NON_GATES: { symbol: string; reason: string }[] = [
     {
@@ -774,6 +805,40 @@ const REVIEWED_NON_GATES: { symbol: string; reason: string }[] = [
         reason:
             "Re-exported audit writer (`adminAuth.ts:132`, from `@/lib/admin/adminAuditLog`). Records " +
             "that an action happened; authorizes nothing.",
+    },
+    // Registered 2026-09-06 (eighth issuance), when the derived module list first brought
+    // `adminRouteGate.ts`, `canReadAnalytics.ts` and `adminApiHelpers.ts` into the lock's subject.
+    // Each of these six had been an unread export beside a listed gate until then.
+    {
+        symbol: "adminRouteGateFailureResponse",
+        reason:
+            "Renders a gate failure into a NextResponse (`adminRouteGate.ts:70-72`), delegating to " +
+            "`adminContextFailureResponse`. Same classification as that symbol for the same reason: " +
+            "it is what a gate returns, not a gate. 31 route files call it, always after a denial.",
+    },
+    {
+        symbol: "ANALYTICS_READ_PERMISSION",
+        reason:
+            "A permission-key string constant, `\"reports.read\"` (`canReadAnalytics.ts:11`). It is the " +
+            "capability a gate compares against, not a callable that decides anything.",
+    },
+    {
+        symbol: "ANALYTICS_MANAGE_PERMISSION",
+        reason:
+            "A permission-key string constant, `\"reports.write\"` (`canReadAnalytics.ts:12`). Same " +
+            "classification as the read key above; neither is callable.",
+    },
+    {
+        symbol: "zodErrorResponse",
+        reason:
+            "Legacy 400 validation-error renderer (`adminApiHelpers.ts:30-33`). Shapes a body for " +
+            "input the handler rejected, after any gate has already admitted the caller.",
+    },
+    {
+        symbol: "metricValidationError",
+        reason:
+            "Standard-envelope 400 validation-error renderer (`adminApiHelpers.ts:40-44`). Same " +
+            "classification as `zodErrorResponse`: it reports bad input, never who the caller is.",
     },
 ];
 
@@ -813,7 +878,13 @@ describe("W-1 — every export of an access-primitive module is classified (RL-1
         // Anchored on one symbol of each classification, so an empty or collapsed scan fails here
         // rather than passing the classification assertion on nothing.
         const all = exportsByModule.flatMap((m) => m.symbols);
-        expect(all.length).toBeGreaterThanOrEqual(9);
+        // 9 when this lock was written over three modules (2026-09-06, seventh issuance); **21 over
+        // six** once the derived module list brought `adminRouteGate`, `canReadAnalytics` and
+        // `adminApiHelpers` into the subject (eighth issuance). Ratcheted to the live count and read
+        // from this predicate itself via a temporary impossible floor, not from a second
+        // replication — the seventh issuance's method, because a replication is a second chance to
+        // make the first one's mistake.
+        expect(all.length).toBeGreaterThanOrEqual(21);
         expect(all).toContain("requireAdminOrOps"); // gate
         expect(all).toContain("loadAdminAccessBundleCached"); // raw resolution
         expect(all).toContain("adminContextFailureResponse"); // reviewed non-gate
@@ -863,5 +934,160 @@ describe("W-1 — every export of an access-primitive module is classified (RL-1
     it("requires every reviewed non-gate to carry a reason", () => {
         const unreasoned = REVIEWED_NON_GATES.filter((entry) => entry.reason.trim().length < 20);
         expect(unreasoned).toEqual([]);
+    });
+});
+
+/* --------------------------------------------------------------------------------------------- *
+ * RL-1 subject completeness, one level up again — a fourth module defeats the classification lock
+ * --------------------------------------------------------------------------------------------- */
+
+/**
+ * **The sixth instance of this workstream's recurring escape class — and the first where the N+1th
+ * was already present when the lock was written.**
+ *
+ * The pattern, five repairs deep: 2026-08-04 listed *directories*; 2026-08-06 moved the subject to
+ * the *primitive*; 2026-08-07 caught the *alias*; 2026-09-06 (seventh issuance) required every
+ * export of an access-primitive module to be classified. Each repair left a hand-maintained list
+ * policing the layer beneath it, and the seventh issuance said so in its own words: *"It reads
+ * three named modules. A fourth module exporting an access primitive is outside its subject."*
+ *
+ * **It was not hypothetical when it was written.** `SUFFICIENT_GATES` already named
+ * `loadAdminRouteGate`, `requireAnalyticsReadAccess`, `requireAnalyticsV2AdminContext` and
+ * `requireAnalyticsV2AdminMutate` — four gates defined in **three modules that
+ * `ACCESS_PRIMITIVE_MODULES` did not list.** So the classification lock has never read the modules
+ * housing four of its own ten gates, and a second export added beside any of them was invisible to
+ * every lock in this file. That is exactly how `getAdminAuthCached` escaped for months.
+ *
+ * The repair is the same change of question, applied to the module layer: **stop declaring where
+ * the primitives live and derive it.** Every module under `web/lib` that defines or re-exports an
+ * already-classified symbol *is* an access-primitive module, by definition, and must be listed —
+ * so the module list can no longer drift from the symbol lists it exists to police. Adding a gate
+ * to `SUFFICIENT_GATES` now drags its whole defining module into the classification lock with it.
+ *
+ * **What this still cannot do**, stated so it is not mistaken for completeness: it discovers
+ * modules that house an *already-listed* symbol. A module exporting a wholly new primitive that no
+ * list names remains outside every lock here — the irreducible residue of static discovery, and
+ * where W-14's declared `(route → capability)` table is the real answer. The honest claim is the
+ * same one each repair has made: the cost of the next escape is raised, not eliminated. It now
+ * takes a new module whose primitive is called by no listed name — a larger and more visible act
+ * than adding an export beside an existing gate, which is what this closes.
+ */
+const LIB_ROOT = "lib";
+
+/** Every `.ts`/`.tsx` module under `web/lib`, excluding test files. */
+function libModuleFiles(webRoot: string): string[] {
+    const found: string[] = [];
+
+    const walk = (abs: string) => {
+        if (!fs.existsSync(abs)) return;
+        for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
+            const next = path.join(abs, entry.name);
+            if (entry.isDirectory()) {
+                if (entry.name === "node_modules" || entry.name === "__tests__") continue;
+                walk(next);
+            } else if (/\.tsx?$/.test(entry.name) && !/\.(test|spec)\.tsx?$/.test(entry.name)) {
+                found.push(path.relative(webRoot, next));
+            }
+        }
+    };
+
+    walk(path.join(webRoot, LIB_ROOT));
+    return found.sort();
+}
+
+/**
+ * symbol → the `web/lib` modules whose runtime exports include it.
+ *
+ * Pre-filtered on a raw substring test purely for speed: a module that exports `S` necessarily
+ * contains the text `S`, so the filter cannot hide a defining module — it only skips files that
+ * `runtimeExports` would have returned nothing relevant for.
+ */
+function definingLibModules(symbols: readonly string[], webRoot: string): Map<string, string[]> {
+    const wanted = new Set(symbols);
+    const bySymbol = new Map<string, string[]>();
+
+    for (const mod of libModuleFiles(webRoot)) {
+        const source = fs.readFileSync(path.join(webRoot, mod), "utf8");
+        if (![...wanted].some((symbol) => source.includes(symbol))) continue;
+        for (const symbol of runtimeExports(source)) {
+            if (!wanted.has(symbol)) continue;
+            bySymbol.set(symbol, [...(bySymbol.get(symbol) ?? []), mod]);
+        }
+    }
+
+    return bySymbol;
+}
+
+/**
+ * Classified symbols that no `web/lib` module defines, because they are declared **inside a route
+ * file**: `app/api/admin/configuration/programs/route.ts:49,60`. That route is §5's own named
+ * reference shape for W-1, so this is deliberate rather than a defect — but it means a capability
+ * gate can live in app code where no module-level lock in this file can reach it. Locked as an
+ * exhaustive list so a *fourth* route-defined gate has to be argued for rather than merely added.
+ */
+const ROUTE_DEFINED_GATES = ["canReadProgramPublication", "canManageProgramPublication"] as const;
+
+describe("W-1 — the access-primitive module list is derived, not declared (RL-1 subject completeness)", () => {
+    const webRoot = path.resolve(__dirname, "../..");
+    const classifiedSymbols = [...SUFFICIENT_GATES, ...RAW_RESOLUTIONS, ...CAPABILITY_GATES];
+    const bySymbol = definingLibModules(classifiedSymbols, webRoot);
+
+    it("scans the library and finds where the primitives live, so the assertions below are not vacuous", () => {
+        const modules = libModuleFiles(webRoot);
+        // **Deliberately loose, and the only loose floor in this file.** 4212 live; the floor is
+        // 3000. Every other ratchet here is set to its live count because it measures this lock's
+        // *subject*, where slack is free escape. This one measures the whole library — it exists
+        // only to fail if the walk collapses, and a tight floor would break on refactors with no
+        // access-control content, which teaches the next contributor to retune a lock rather than
+        // read it. The exact anti-vacuity guarantee comes from the three symbol anchors below,
+        // which name modules by path and cannot pass on a partial scan.
+        expect(modules.length).toBeGreaterThanOrEqual(3000);
+        expect(modules).toContain("lib/adminAuth.ts");
+
+        // One anchor per classification, resolved through the scan rather than asserted in prose.
+        expect(bySymbol.get("getAdminContextCached")).toEqual(["lib/admin/getAdminContext.ts"]);
+        expect(bySymbol.get("loadAdminAccessBundleCached")).toEqual(["lib/admin/getAdminAccessContext.ts"]);
+        expect(bySymbol.get("loadAdminRouteGate")).toEqual(["lib/admin/adminRouteGate.ts"]);
+    });
+
+    it("lists every module that defines a classified access primitive", () => {
+        const declared = new Set<string>(ACCESS_PRIMITIVE_MODULES);
+        const undeclared = [
+            ...new Set([...bySymbol.values()].flat().filter((mod) => !declared.has(mod))),
+        ].sort();
+
+        // A module housing a listed gate but absent from `ACCESS_PRIMITIVE_MODULES` lands here by
+        // path: its sibling exports are unread by the classification lock, which is the blind spot
+        // this whole section exists to remove.
+        expect(undeclared).toEqual([]);
+    });
+
+    it("carries no declared module that defines no classified primitive", () => {
+        // The exemption-register discipline applied to the module list: an entry that stops housing
+        // a primitive must be removed, not left to make the list look thorough.
+        const housed = new Set([...bySymbol.values()].flat());
+        const stale = ACCESS_PRIMITIVE_MODULES.filter((mod) => !housed.has(mod));
+        expect(stale).toEqual([]);
+    });
+
+    it("accounts for every classified symbol — in a module, or on the route-defined register", () => {
+        const unhoused = classifiedSymbols
+            .filter((symbol) => !bySymbol.has(symbol))
+            .filter((symbol) => !(ROUTE_DEFINED_GATES as readonly string[]).includes(symbol))
+            .sort();
+
+        // A gate that is neither in a lib module nor on the route register is a name this file
+        // trusts and cannot locate — a typo in `SUFFICIENT_GATES` reads exactly like a gate that
+        // no route calls, and both silently weaken the class-wide scan.
+        expect(unhoused).toEqual([]);
+    });
+
+    it("finds each route-defined gate in the route the plan names as W-1's reference shape", () => {
+        const source = fs.readFileSync(
+            path.join(webRoot, "app/api/admin/configuration/programs/route.ts"),
+            "utf8"
+        );
+        const exported = runtimeExports(source);
+        for (const gate of ROUTE_DEFINED_GATES) expect(exported).toContain(gate);
     });
 });
