@@ -717,4 +717,34 @@ ANALYZE public.customer_members;
 ANALYZE public.customer_persons;
 ANALYZE public.operational_tasks;
 
+-- ---------------------------------------------------------------------------
+-- ONE CHARGE TEMPLATE, SO THE FINANCIALS CARD IS OPERABLE AND NOT MERELY VISIBLE.
+--
+-- `FinancialsCard` gates its Add-charge control on `vm.chargeTemplates.length > 0`
+-- (the card renders the balance either way), and `buildFinancialsCardVM` builds
+-- that list from `financial_charge_templates` effective today. With none, the
+-- mounted card can be READ but no operator command can be executed from it — so
+-- the browser certification could prove the mount and nothing beyond it.
+--
+-- This is configuration, not behaviour: the shape is the one
+-- `certification/fixtures/financials-charge-spine.sql` already uses for the same
+-- purpose, and `charge.add` resolves it through the ordinary template path. A
+-- fixed manual fee is deliberately the least interesting template that still
+-- exercises the whole spine — resolve, draft, post, correct.
+--
+-- Deterministic id and ON CONFLICT so a seed rerun changes nothing.
+-- ---------------------------------------------------------------------------
+INSERT INTO public.financial_charge_templates
+    (id, org_id, template_key, label, charge_category, trigger_type, amount_strategy, amount_cents,
+     currency_code, occurs_on_strategy, billable_on_strategy, effective_start, review_required, is_active)
+VALUES
+    ('00000000-0000-4000-8000-0000000f0001'::uuid, :'ORG_ID'::uuid, 'representative_registration_fee',
+     'Registration fee', 'fee', 'manual', 'fixed', 15000, 'USD', 'now', 'immediate',
+     current_date - 365, false, true)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label,
+    amount_cents = EXCLUDED.amount_cents,
+    is_active = EXCLUDED.is_active,
+    effective_start = EXCLUDED.effective_start;
+
 \echo '== Seed complete =='
