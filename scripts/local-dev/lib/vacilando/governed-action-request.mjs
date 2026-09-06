@@ -9,6 +9,7 @@
  * decisions, and trusted-host actions.
  */
 import { createHash, randomBytes } from "node:crypto";
+import { measureMergePullRequestGates } from "./trusted-host-repository-housekeeping.mjs";
 import { describeWait } from "./run-wait.mjs";
 import { evaluateDirectorAuthority } from "./director-authority.mjs";
 import { collectDirectorEvidence } from "./director-evidence.mjs";
@@ -125,9 +126,42 @@ export const PENDING_GOVERNED_STATUSES = Object.freeze([
   "requested",
   "awaiting_director",
   "awaiting_control_plane_refresh",
+  // A merge whose CI checks have not been reported yet. See enterCheckWait.
+  "awaiting_checks",
   "awaiting_operator",
   "executing",
 ]);
+
+/**
+ * Gates that can only be answered once CI has reported.
+ *
+ * MEASURED. Three merges in one session escalated with "Required gates did not
+ * pass: required_checks_successful, certification_suite_passed" and every one
+ * was approved by hand. Re-measuring the same two PRs afterwards returns
+ * certification_suite_passed TRUE, 8/8 and 9/9 checks passing, none failing,
+ * none pending. The evidence was never missing and the plumbing was never
+ * absent — `measureMergePullRequestGates` is wired for exactly this action.
+ *
+ * The gates were measured ONCE, seconds after the pull request was opened,
+ * before GitHub had registered a single check run. With no checks reported,
+ * `required_checks_total` is 0, which the predicate scores FALSE — deliberately,
+ * because zero checks is not "all checks passed" — and the certification filter
+ * matches nothing, which is NULL. Both correct. Both permanent, because
+ * `tickGovernedActions` re-processes `requested`, `awaiting_director` and
+ * `awaiting_control_plane_refresh` and never `awaiting_operator`. A minute later
+ * the checks went green and nobody looked again.
+ *
+ * So the defect is not a missing producer. It is a measurement taken too early
+ * and never repeated.
+ */
+export const CHECK_AVAILABILITY_GATES = Object.freeze([
+  "required_checks_successful",
+  "certification_suite_passed",
+]);
+
+/** Bounded. A wait that never resolves must become a visible escalation, not a hang. */
+export const MAX_CHECK_WAIT_ATTEMPTS = 20;
+export const MAX_CHECK_WAIT_MS = 20 * 60_000;
 
 const STALE_REGISTRY_FAILURES = new Set([
   "unauthorized_action_key",
@@ -3298,6 +3332,9 @@ export function processGovernedAction(requestId, {
   saveRequest(rec, root);
 
   if (policy.operator_approval_required) {
+    // Wait for CI before waking a human, when waiting is the whole answer.
+    const wait = checkWaitDecision(rec, { nowMs });
+    if (wait.wait) return enterCheckWait(rec, { nowMs, root, detail: wait.detail });
     rec.status = "awaiting_operator";
     rec.updated_at = iso(nowMs);
     openApprovalDecision(rec, { nowMs, root });
@@ -3308,6 +3345,90 @@ export function processGovernedAction(requestId, {
   }
 
   return executeGovernedAction(rec.request_id, { nowMs, root, actor });
+}
+
+/**
+ * Should this escalation be a WAIT instead?
+ *
+ * Only when every gate that stopped it is one CI answers, and CI has not
+ * answered yet. A single failing check, a gate outside that set, or an
+ * exhausted budget all fall through to the operator exactly as before — this
+ * narrows when a human is woken, never whether one can be.
+ */
+export function checkWaitDecision(rec, { nowMs = Date.now(), measure = null } = {}) {
+  if (rec?.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return { wait: false };
+  const reason = String(rec.escalation_reason || "");
+  const named = reason.match(/Required gates did not pass:\s*(.+?)\.?$/);
+  if (!named) return { wait: false, why: "the escalation does not name gates" };
+  const gates = named[1].split(",").map((g) => g.trim()).filter(Boolean);
+  if (!gates.length || !gates.every((g) => CHECK_AVAILABILITY_GATES.includes(g))) {
+    return { wait: false, why: "a gate outside CI availability also failed" };
+  }
+  const attempts = Number(rec.check_wait?.attempts || 0);
+  const firstAt = rec.check_wait?.started_at ? Date.parse(rec.check_wait.started_at) : nowMs;
+  if (attempts >= MAX_CHECK_WAIT_ATTEMPTS) return { wait: false, why: "check wait exhausted its attempts" };
+  if (nowMs - firstAt > MAX_CHECK_WAIT_MS) return { wait: false, why: "check wait exceeded its window" };
+
+  // A RED CHECK IS NOT A SLOW ONE. Waiting is only right while the answer is
+  // absent; once CI has failed something, the operator is the correct audience
+  // and delaying that helps nobody.
+  const ev = typeof measure === "function" ? measure(rec) : mergeCheckState(rec);
+  if (ev == null) return { wait: true, detail: "pull-request checks could not be read yet" };
+  if (Number(ev.required_checks_failing || 0) > 0) {
+    return { wait: false, why: `${ev.required_checks_failing} required check(s) are failing` };
+  }
+  const total = ev.required_checks_total;
+  const pending = Number(ev.required_checks_pending || 0);
+  if (total == null || total === 0) return { wait: true, detail: "no checks have been reported yet" };
+  if (pending > 0) return { wait: true, detail: `${pending} check(s) still running` };
+  if (ev.certification_suite_passed == null) return { wait: true, detail: "no certification check has reported yet" };
+  // Everything CI owes has arrived. Re-processing will now measure the gates.
+  return { wait: true, detail: "checks have reported; re-measuring" };
+}
+
+/*
+ * Read the pull request's own check state, through the module that already
+ * owns that measurement. `trusted-host-repository-housekeeping` imports nothing
+ * from here, so the dependency runs one way and a static import is safe.
+ */
+function mergeCheckState(rec) {
+  try {
+    const inputs = rec?.inputs || {};
+    const n = Number(inputs.pullRequestNumber ?? inputs.pull_request_number);
+    if (!Number.isFinite(n)) return null;
+    return measureMergePullRequestGates({
+      repository: inputs.repository,
+      pullRequestNumber: n,
+      expectedHeadSha: inputs.expectedHeadSha || inputs.expected_head_sha || null,
+    });
+  } catch { return null; }
+}
+
+/**
+ * Park a merge until CI reports, and re-measure on the tick.
+ *
+ * This is NOT a softer approval. The request stays pending, no grant is minted,
+ * nothing executes, and when the budget runs out it escalates to the operator
+ * with the same question it would have asked immediately. What changes is that
+ * the question is asked once CI has actually answered, instead of two seconds
+ * after the pull request was opened when it could not have.
+ */
+export function enterCheckWait(rec, { nowMs = Date.now(), root = runtimeRoot(), detail = null } = {}) {
+  const attempts = Number(rec.check_wait?.attempts || 0) + 1;
+  rec.status = "awaiting_checks";
+  rec.check_wait = {
+    attempts,
+    started_at: rec.check_wait?.started_at || iso(nowMs),
+    last_attempt_at: iso(nowMs),
+    detail,
+    attempts_allowed: MAX_CHECK_WAIT_ATTEMPTS,
+    window_ms: MAX_CHECK_WAIT_MS,
+  };
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  attachRunWait(rec, { nowMs, root });
+  appendAudit(rec, "awaiting_checks", { nowMs, extra: { attempts, detail } }, root);
+  return { ok: true, request: publicGovernedAction(rec), awaiting_checks: true, detail };
 }
 
 export function executeGovernedAction(requestId, {
@@ -3852,6 +3973,9 @@ export function tickGovernedActions({
       && r.operator_approval?.decision === "approved"
       && r.action_key === ACTION_TYPES.DATABASE_READ_CENSUS)
     || (r.status === "awaiting_control_plane_refresh" && Boolean(getActionDefinition(r.action_key)))
+    // The whole point of the wait: look again. Without this line the status is
+    // a nicer name for the same silence.
+    || r.status === "awaiting_checks"
   );
   const out = [...recovered];
   const seen = new Set(recovered.map((r) => r?.request?.request_id).filter(Boolean));
