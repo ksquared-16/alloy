@@ -156,7 +156,17 @@ test.describe("financials smoke — a real charge through the mounted card", () 
         // ── S5 · THE PROJECTION CARRIES THE COMMITTED CHARGE ────────────────────────────────────
         // A draft does not move the balance — "creates a draft, and a draft is not owed" — so the
         // proof is the LEDGER, reached through the card's own Details control.
-        await page.getByRole("button", { name: /Details/ }).first().click();
+        /*
+         * SCOPED TO THE FINANCIALS CARD. The Focus Panel now also mounts a Tuition card, and it
+         * offers its own "Details →" — so an unscoped match opened the wrong card and this step
+         * looked for a charge in a ledger that was never going to hold one. Two cards offering the
+         * same affordance is ordinary; a certification that cannot say which one it meant is not.
+         */
+        await page
+            .locator('[data-financials-card="true"]')
+            .getByRole("button", { name: /Details/ })
+            .first()
+            .click();
         // The detail card is drawn by the Focus Panel's own depth layer, so the card's wrapper has
         // no box of its own to be "visible" — the ledger's arrival in the document is the signal.
         await expect
