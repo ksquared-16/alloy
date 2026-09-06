@@ -123,6 +123,92 @@
   },
   "known_open": {
     "duplicate_placement_candidates": "DEFECT. Prevention deployed (placementCandidateSubjectUniqueness). Repair deliberately gated \u2014 its survivor rule oscillated on real tenant data \u2014 and belongs to a separate governed mission. Staging residue is expected, not a certification failure.",
-    "baseline_red_tests": "As of bcd20f004, 32 pre-existing test failures across 17 files in the placement/presentation/runtime suites. Compare failing test NAMES against the baseline commit, never counts."
-  }
+    "baseline_red_tests": "As of bcd20f004, 32 pre-existing test failures across 17 files. The method is to compare failing test NAMES against the baseline commit, never counts \u2014 but see suite_cannot_complete: that method currently cannot be executed repo-wide.",
+    "suite_cannot_complete": "BLOCKER for the non-regression method, measured 2026-09-06 on a worktree based at 0fbeaa02a. The full vitest run aborts instead of finishing: tests/adminV2/runtime/householdConfigureCanvas.render.test.tsx emits 16 unhandled rejections (ERR_INVALID_URL, input '/api/admin/locations?hierarchy=1') from useInquiryChildPlacementCascade.ts:74 -> dedupeAdminFetchWithTtl -> undici fetch, which requires an absolute URL. In isolation vitest tolerates them and the file reports 1 passed / 2 tests passed \u2014 a green file that is not clean. Under --maxWorkers=2 the same rejections kill the worker fork and the broker classifies the run 'FAILED TO START (CLI/config error, not a test failure)'. Consequence: 'compare failing test NAMES against the baseline' cannot be performed repo-wide until this is fixed. Likely fix: give the dedupe layer an absolute base in test environments, or stub fetch in the render harness. Not repaired here \u2014 it is product-path code and outside this mission's scope."
+  },
+  "_measurement_history_comment": "Trajectory, so 'is Alloy getting faster?' is answerable with evidence rather than recollection. Appending a measurement NEVER rewrites `certified` or `performance_bands`: a baseline is advanced only on a proven improvement with no hard-invariant regression, and is never moved to accommodate a slower change.",
+  "measurement_history": [
+    {
+      "measured_at": "2026-09-04",
+      "deployed_sha": "bcd20f004a6039f51987c8b764b82f097f7a4374",
+      "deployment_id": "dpl_G29K4atk2dj3nDEBEyCfHfBHypmP",
+      "samples": 3,
+      "verdict": "PASS",
+      "work_unit": {
+        "ttfb_p50": 129,
+        "shell_p50": 881,
+        "rows_p50": 2496,
+        "first_useful_card_p50": 2496,
+        "api_requests": 48
+      },
+      "focus_panel": {
+        "growth_px": 777,
+        "largest_delta_px": 489,
+        "waves": 4,
+        "scroll_displacement_px": 0,
+        "neighbour_movement_px": 8
+      },
+      "note": "Certified baseline."
+    },
+    {
+      "measured_at": "2026-09-06",
+      "deployed_sha": "606e77d21552b00954f72cc5b0b65f30566e861c",
+      "deployment_id": "dpl_HAvA1pkLFoR9J31mCA2h4eW5TZhq",
+      "supabase_project": "ikaxilmwmrmbagoidedu",
+      "qa_identity": "qa-slot1-product@example.com",
+      "environment": "DEPLOYED_STAGING",
+      "samples": 3,
+      "verdict": "PASS",
+      "work_unit": {
+        "ttfb_p50": 137,
+        "shell_p50": 850,
+        "rows_p50": 4690,
+        "first_useful_card_p50": 4690,
+        "api_requests": 45,
+        "card_reads_per_subject": {
+          "financials": 1,
+          "attendance": 1,
+          "health": 1
+        },
+        "card_bearing_remounts": 0,
+        "redundant_duplicates": 0
+      },
+      "focus_panel": {
+        "grid_initial_px": 406,
+        "grid_final_px": 1183,
+        "growth_px": 777,
+        "largest_delta_px": 587,
+        "waves": 3,
+        "scroll_displacement_px": 0,
+        "neighbour_movement_px": 8,
+        "stable_ms": 8052
+      },
+      "operations": {
+        "open_roster_requests": 1,
+        "satisfied_refetch": 0
+      },
+      "navigation": {
+        "workspace_to_work_unit_feedback_ms": 86,
+        "work_unit_to_workspace_feedback_ms": 51,
+        "workspace_to_organization_useful_ms": 735,
+        "organization_subsection_useful_ms": 431,
+        "document_loads": 0,
+        "shell_same_node": true
+      },
+      "waitlist_tier3": {
+        "spec": "certification/playwright/waitlist-manual-position-truth.cert.spec.ts",
+        "result": "PASS",
+        "duration_s": 72,
+        "note": "First actual execution of this spec. Write -> canonical read -> rendered order -> reload -> clear -> restore, against deployed staging."
+      },
+      "regression_signal": "rows / first_useful_card p50 went 2496ms -> 4690ms (+88%). Within band_max 5000 so no BAND WARNING fired and the verdict is correctly PASS - bands are guidance, not law - but this is 94% of band_max on the metric already ranked the largest single operator-visible wait. Treat as REGRESS-signal under the continuous-improvement policy and investigate BEFORE any thought of widening the band. 3 cold samples, and 27+ commits separate the two revisions, so this is a signal to investigate, not a proven single-cause regression.",
+      "improvements": [
+        "api_requests 48 -> 45",
+        "focus panel waves 4 -> 3",
+        "organization landing useful 951ms -> 735ms",
+        "shell 881ms -> 850ms"
+      ],
+      "note": "Measured after the harness probe-integrity fix; waitlist reported DELEGATED, not silently passed."
+    }
+  ]
 }
