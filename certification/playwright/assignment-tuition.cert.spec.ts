@@ -326,10 +326,13 @@ test.describe("assignment → tuition, in the mounted application", () => {
     });
 
     test("J — an unpriced assignment says so, rather than showing nothing", async ({ page }) => {
+        // Drop-in is one assignment in three, and each queue row costs a full cold load to open, so
+        // this case needs more than the suite's per-test budget to walk far enough to find one.
+        test.setTimeout(900_000);
         // `drop_in` is deliberately unpriced in the representative catalog, so a no-match is
         // reachable on a real assignment rather than only in a fixture.
         let found = false;
-        for (let index = 0; index < 6 && !found; index++) {
+        for (let index = 0; index < 10 && !found; index++) {
             await openSubject(page, index);
             const sections = page.locator(ASSIGNMENT);
             const total = await sections.count();
