@@ -7,29 +7,21 @@
  * `charge.add` action through `/api/admin/actions/execute`. Nothing is written to the database here,
  * and no Financials behaviour is modified to make it pass.
  *
- * ── WHAT THIS PROOF FOUND, AND WHY IT IS RED ──
+ * ── WHAT THIS PROOF FOUND ──
  *
- * It does not pass today, and the reason is a product finding rather than a harness one. The
+ * Its first run was red, and the reason was a product finding rather than a harness one. The
  * representative tenant holds ZERO `child_enrollment_agreements` — every New Leads family is
  * pre-enrolment, which is what New Leads MEANS. `buildFinancialsCardVM` derives `vm.subjects`
- * exclusively from agreements, so the card's `chargeTarget`
+ * exclusively from agreements, so the card's `chargeTarget` was null and BOTH `preview()` and
+ * `commit()` opened with `if (!chargeTarget …) return`. The overlay still opened, still rendered an
+ * amount from the template's own configuration, and still offered an enabled "Add charge" that
+ * issued no request at all: not one call to `/api/admin/actions/execute`, and `charges` at 0.
  *
- *   subjectFilter !== "all" ? subjectFilter : scopedMemberId ?? vm?.subjects[0]?.customerMemberId ?? null
- *
- * is null, and BOTH `preview()` and `commit()` open with `if (!chargeTarget …) return` — a silent
- * no-op. The overlay still opens, still renders a plausible amount and preview from the template's
- * own configuration, and still offers an enabled "Add charge" button that issues no request at all.
- * Verified in the trace: not one call to `/api/admin/actions/execute`, and `charges` stayed at 0.
- *
- * The DOMAIN is ready for this charge. `resolveChargeSubject` falls through to `kind: "customer"`
- * when a child has no agreement — "a pre-enrolment child's fee is the FAMILY's, and that is a real,
- * chargeable subject" — and the card already holds the household id it would need. The card is
- * refusing, in silence, to ask a question the resolver would answer. That is the registration fee
- * the Financials card was explicitly built to support.
- *
- * This spec is deliberately left RED rather than retargeted at an enrolled fixture. Seeding
- * agreements onto inquiry families would make it green by misdescribing the tenant, and the gap it
- * found is exactly the one an operator meets on their first pre-enrolment fee.
+ * The domain had been ready the whole time. `resolveChargeSubject` falls through to
+ * `kind: "customer"` when a child has no agreement — "a pre-enrolment child's fee is the FAMILY's,
+ * and that is a real, chargeable subject" — and the card already held the household id. The card
+ * was silently refusing to ask a question the resolver would answer. The invocation now travels at
+ * the grain the panel HAS, and the resolver still decides the subject.
  *
  *   S1  the mounted card's read projection loads
  *   S2  exactly one Add Charge is executed through the real UI
@@ -145,12 +137,45 @@ test.describe("financials smoke — a real charge through the mounted card", () 
         const after = await bodyText();
         expect(after).toContain("FINANCIALS");
 
+        // The command card closes on success only — a refusal keeps it open with the domain's own
+        // message. Its absence is therefore the card agreeing that the write committed.
+        await expect(overlay, "the command must close on a committed charge").toHaveCount(0, {
+            timeout: 30_000,
+        });
+
         // ── S4 · A FULL RELOAD, RE-OPENING THE SAME SUBJECT ─────────────────────────────────────
+        // The URL still carries subject_id, so this is the same Opportunity reached by a cold load —
+        // nothing in memory survives it, and the projection is rebuilt from the database.
         await page.reload();
         await page.waitForLoadState("domcontentloaded");
         await page.waitForTimeout(40_000);
         const reloaded = await bodyText();
         expect(reloaded, "the card must mount again after a reload").toContain("FINANCIALS");
         expect(reloaded).toContain("Current balance");
+
+        // ── S5 · THE PROJECTION CARRIES THE COMMITTED CHARGE ────────────────────────────────────
+        // A draft does not move the balance — "creates a draft, and a draft is not owed" — so the
+        // proof is the LEDGER, reached through the card's own Details control.
+        await page.getByRole("button", { name: /Details/ }).first().click();
+        // The detail card is drawn by the Focus Panel's own depth layer, so the card's wrapper has
+        // no box of its own to be "visible" — the ledger's arrival in the document is the signal.
+        await expect
+            .poll(async () => await bodyText(), { timeout: 30_000 })
+            .toContain("Registration fee");
+        const ledger = await bodyText();
+        expect(ledger, "the committed charge must appear in the rebuilt ledger").toContain("$150.00");
+        // A draft, and said to be one — Add charge creates what is not yet owed, which is why the
+        // balance above it correctly still reads $0.00.
+        expect(ledger, "and it must be a draft, not silently owed").toContain("draft");
+        // Attribution, read back through the product: the charge is the HOUSEHOLD's. A family
+        // expense pinned onto whichever sibling sorted first is the failure the resolver exists to
+        // prevent, and this is the row the resolver actually produced.
+        expect(ledger).toContain("Household");
+
+        // Exactly one execution for the whole journey — the reload replayed nothing.
+        expect(
+            executeCalls.filter((b) => b.includes('"mode":"execute"')).length,
+            "a reload must not replay the mutation",
+        ).toBe(1);
     });
 });
