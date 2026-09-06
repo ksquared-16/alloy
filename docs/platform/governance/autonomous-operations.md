@@ -535,3 +535,138 @@ Releasing a slot is not a hygiene decision.
   the whole ref list, so this is safe, not silent.
 * Worktree byte totals come from `du` and cost about 20 seconds over a 29 GB
   estate. Routine cycles run without them; only the scoreboard pays it.
+
+---
+
+# Phase 5 — Resident scheduling, continuation, and the unread-output view
+
+Owner modules: `work-scheduler.mjs` (decision), `work-scheduler-observe.mjs`
+(composition), `lane-attention-view.mjs` (operator view). Surface:
+`vac host-steward --status --json`, `scheduling` and `attention`.
+
+**Status: the decision layer and the explanation are live. Autonomous dispatch
+is not enabled, and the reason is a missing owner, not a missing scheduler.**
+
+## What the scheduler owns, and what it may not
+
+It owns exactly one judgement: *of the work Vacilando is already authorized to
+do, what deserves the next provider, and if nothing does, why is that right?*
+
+It may not decide whether a run exists, whether a provider is executing, whether
+a lane is closed, whether capacity is occupied, whether a finding exists,
+whether the host is healthy, whether a governed action is approved, or whether a
+dependency is satisfied. It consumes all of that. `work-scheduler.mjs` imports
+nothing at all, and a control asserts it — a planner that could reach a store
+would eventually start deciding these for itself.
+
+`scheduler.mjs` is left alone. It answers a different question — "given machine
+pressure and free slots, may I start a worker?" — over a legacy sprint/slot
+snapshot with `auto_scheduling: false`. Its pressure half is superseded by
+`capacity-operating-model` and `provider-seat-state`, and it has no
+representation of lanes, runs, missions, dependencies or findings.
+
+## Wait reasons
+
+Thirteen, closed, with `unknown` explicit: `executing`, `eligible`,
+`no_authorized_work`, `dependency`, `director_answer`, `governed_action`,
+`capacity`, `host_constrained`, `provider_unavailable`, `finding_constraint`,
+`retry_cooldown`, `completed`, `scheduled_later`.
+
+Ordered so the **most actionable** reason wins. A lane blocked on a person *and*
+short of seats reports the person: freeing a seat would not move it, and saying
+"capacity" sends someone to fix the wrong thing. `capacity` is deliberately
+narrow — it was previously the catch-all, which is how a lane waiting on a
+human looked like a lane waiting on a machine.
+
+## Priority and fairness
+
+Eight classes, highest first: `director_explicit`, `unblocks_other_work`,
+`control_plane`, `mission_continuation`, `finding_constrained`,
+`dependency_cleared`, `planned`, `maintenance`.
+
+Class decides the band; within reach of a band, the longer-ready lane wins. A
+lane waiting past 45 minutes is promoted by **exactly one class**, never past
+`control_plane`, and never past an explicit Director priority. Ordering is total
+and deterministic — ties break on lane id — so two ticks with identical facts
+produce identical order.
+
+Hygiene sits in the bottom class precisely so it cannot outrank product work by
+running often, and the single-class promotion is what stops it being starved in
+return.
+
+## Continuation
+
+`continuationDecision` requires all eight conditions measured true:
+`already_authorized`, `deterministic_next_action`, `within_policy`,
+`dependencies_ready`, `no_new_judgment`, `no_unresolved_blocker`,
+`no_conflicting_finding`, `bounded_and_auditable`. Any unmet condition is named.
+No next action returns `none`, never a silent continue.
+
+It decides only whether a step *may* run unattended. `planSchedule` decides
+*when*, from the same candidate list as everything else. One planner: a
+continuation evaluator that dispatched on its own would be a second scheduler
+wearing a different name.
+
+## Why dispatch is not enabled
+
+Run live over 9 durable lanes: **3 executing, 6 UNKNOWN.**
+
+The six are unknown because three facts a dispatch decision needs have no owner
+anywhere in the runtime — **per-lane authorization for a next step, dependency
+readiness, and the deterministic next action.** Lanes, runs, seats, capacity,
+findings and host band are all canonically owned and compose cleanly; these
+three are recorded by nothing. `mission-advance.mjs` holds the equivalent only
+for implementation chains, not for lanes generally.
+
+So the planner refuses, which is the fail-closed answer. Enabling dispatch would
+mean defaulting authorization to `true` to make the plan look decisive, which is
+the one thing this programme does not do. Tracked as
+`no-owner-for-lane-next-step-authorization` (`blocks_work`).
+
+**The Phase 5 blocker is not the scheduler, capacity, or provider reuse. It is
+that nothing writes down what a lane is allowed to do next.**
+
+## The unread-output view
+
+A provider finishes a turn, leaves output, and the lane returns to `ready` —
+indistinguishable from a lane that is merely idle. Finished work was found by
+opening lanes one at a time.
+
+`lane-attention-view.mjs` derives `has_unread_output` from the notification
+store's existing `seen_at` cursor. It creates **no execution or run state**,
+owns no storage, and a control asserts it contains no write call. Unread state
+is durable because the notification store is; it clears through
+`markLaneNotificationsSeen`, the mechanism that already treats opening a lane as
+the acknowledgement.
+
+Only completed provider output counts — `complete`, `failed`, `abandoned`,
+`needs_input`. A governed-action status change is activity, and activity belongs
+in lane history.
+
+**Two questions that must not collapse:**
+
+| | answers |
+| --- | --- |
+| `has_unread_output` | Is there new provider output I have not seen? |
+| `director_category` | Do I have an obligation? |
+
+A completed lane is unread with `requires_director: false` — useful work that
+wants reading and no reply. A `needs_input` lane is unread *and* an obligation,
+reported as two separate facts, and stays an obligation after its output is
+read. Presentation is a dot plus a `· New` suffix and a bold title; colour alone
+is explicitly not a treatment.
+
+Live cross-check: 141 notifications, 0 unseen, 102 output-class records, 0
+unseen — and the view reports 0 unread across 9 lanes. Derivation and store
+agree exactly.
+
+## Limitations
+
+* Dispatch is planned, keyed for idempotency and bounded, but not enabled.
+* Findings constrain lanes globally, not per lane: every candidate carries the
+  same constraint set until a per-lane finding index exists.
+* Capacity is passed in rather than probed by the status row, so the live
+  posture reports `seats_available: null` until a caller supplies it.
+* The live unread transition is certified in-harness; the live store currently
+  holds nothing unseen, so there was no real unread→read transition to observe
+  without fabricating one in the Director's own read state.
