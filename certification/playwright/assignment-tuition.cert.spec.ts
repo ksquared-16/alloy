@@ -350,7 +350,9 @@ test.describe("assignment → tuition, in the mounted application", () => {
      */
     test("J — an unpriced assignment says so, rather than showing nothing", async ({ page }) => {
         test.skip(process.env.CERT_EXPECT_NO_MATCH !== "1", "driven by the harness");
-        await openSubject(page);
+        // The assignment the harness moved is the one that already carries a term, so it is found
+        // by the term rather than by a queue position.
+        await openAcceptedSubject(page);
         const first = page.locator(ASSIGNMENT).first();
         await expect(first).toBeVisible({ timeout: 30_000 });
         await expect(first).toHaveAttribute("data-tuition-state", "no_match", { timeout: 30_000 });
@@ -361,7 +363,10 @@ test.describe("assignment → tuition, in the mounted application", () => {
         // Nothing was invented in its place, and nothing is offered to accept.
         await expect(first.locator('[data-tuition-option-kind="recommended"]')).toHaveCount(0);
         await expect(first.locator('[data-tuition-command="accept"]')).toHaveCount(0);
-        // The reason is usable: the catalog said why, in the operator's terms.
-        expect(await first.getAttribute("data-tuition-no-match")).toMatch(/\S/);
+        // The reason is usable: the catalog said why, and said it on the notice itself.
+        expect(await notice.getAttribute("data-tuition-no-match")).toMatch(/\S/);
+        // The term already agreed is untouched by the assignment falling off the catalog — it is
+        // history, and history does not evaporate because configuration stopped covering it.
+        await expect(first.locator("[data-tuition-accepted-term]")).toHaveCount(1);
     });
 });

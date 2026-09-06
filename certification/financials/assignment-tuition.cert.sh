@@ -115,7 +115,10 @@ run env CERT_EXPECT_UNAUTHORIZED=1 "$PW" test -c playwright.config.ts "$SPEC" -g
 check $? "with the grant revoked, the override is refused server-side"
 psql "$DB" -q -c "update public.role_permission_grants set allowed = true
                    where org_id='$ORG' and permission_key='enrollment.pricing.override';"
-psql "$DB" -q -c "delete from public.commercial_tuition_rates where id = '00000000-0000-4000-8000-0000000bfe01';"
+# The site rate cannot be deleted while an accepted term still references it — which is the
+# RESTRICT guarantee working, not a teardown problem. Release the terms first.
+psql "$DB" -q -c "delete from public.enrollment_pricing_terms where org_id = '$ORG';" \
+                -c "delete from public.commercial_tuition_rates where id = '00000000-0000-4000-8000-0000000bfe01';"
 
 echo; echo "RESULT: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
