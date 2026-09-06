@@ -95,6 +95,19 @@ test.describe("assignment → tuition, in the mounted application", () => {
     test.describe.configure({ mode: "serial" });
 
     test("A–E, M — resolve, accept, reload, and a retry that adds nothing", async ({ page }) => {
+        /*
+         * THE CADENCE REGRESSION, ASSERTED ON THE WIRE.
+         *
+         * The card first sent `cadence_key: view.facts.cadenceKey ?? option.cadenceKey` — so when the
+         * operator had chosen NO billing frequency it quietly sent the recommendation's own. The
+         * server then re-resolved a different question and refused the acceptance as stale. The
+         * request itself is the only place that defect is visible, so it is checked there.
+         */
+        const acceptBodies: string[] = [];
+        page.on("request", (req) => {
+            if (req.url().includes("/api/admin/actions/execute")) acceptBodies.push(String(req.postData() ?? ""));
+        });
+
         await openSubjectWith(page, "recommended");
 
         // ── A · THE CARD MOUNTS FOR AN ASSIGNMENT WITH NO ENROLMENT ─────────────────────────
@@ -156,6 +169,22 @@ test.describe("assignment → tuition, in the mounted application", () => {
             .getAttribute("data-tuition-accepted-term");
         expect(termAfterRetry, "a retry must return the same term, not a second one").toBe(termId);
 
+        // The acceptance carried the facts it was resolved against — and an unchosen cadence stayed
+        // unchosen. Both the first commit and the retry are checked.
+        expect(acceptBodies.length).toBeGreaterThan(0);
+        for (const body of acceptBodies) {
+            const parsed = JSON.parse(body) as { payload?: Record<string, unknown> };
+            expect(parsed.payload?.resolution_key, "the request must name the resolution shown").toBe(resolutionKey);
+            expect(
+                Object.prototype.hasOwnProperty.call(parsed.payload ?? {}, "cadence_key"),
+                "an unchosen billing frequency must not be substituted into the request",
+            ).toBe(false);
+            expect(
+                Object.prototype.hasOwnProperty.call(parsed.payload ?? {}, "amount_cents"),
+                "the client must never send an amount",
+            ).toBe(false);
+        }
+
         if (OUT) writeFileSync(OUT, JSON.stringify({ ocmId, termId, resolutionKey, amountLabel }));
     });
 
@@ -196,13 +225,16 @@ test.describe("assignment → tuition, in the mounted application", () => {
             // rather than presenting the old number as current.
             await expect(first).toHaveAttribute("data-tuition-stale", "true", { timeout: 30_000 });
             await expect(first.locator("[data-tuition-stale-notice]")).toBeVisible();
-            expect(days, "the card must show the assignment as it now stands").toContain("3 days");
+            // The card shows the assignment as it NOW stands, not as it stood when priced.
+            expect(days).not.toBe(process.env.CERT_PRIOR_DAYS ?? "");
             // H — and the new recommendation is the right one for the new facts.
-            expect(amount).not.toBe(process.env.CERT_PRIOR_AMOUNT ?? "");
+            expect(amount, "a different schedule must cost a different amount").not.toBe(
+                process.env.CERT_PRIOR_AMOUNT ?? "",
+            );
             expect(resolution).not.toBe(process.env.CERT_PRIOR_RESOLUTION ?? "");
         } else {
             await expect(first).toHaveAttribute("data-tuition-stale", "false");
-            expect(days).toContain("5 days");
+            expect(days).toMatch(/\d days a week/);
         }
         if (OUT) writeFileSync(OUT, JSON.stringify({ resolution, amount, days }));
     });

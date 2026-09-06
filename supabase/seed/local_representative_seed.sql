@@ -830,7 +830,14 @@ FROM (VALUES
     (1, '00000000-0000-4000-8000-0000000d0001'::uuid, '5 days a week', 5),
     (2, '00000000-0000-4000-8000-0000000d0002'::uuid, '3 days a week', 3),
     (3, '00000000-0000-4000-8000-0000000d0003'::uuid, '5 days a week', 5),
-    (4, '00000000-0000-4000-8000-0000000d0004'::uuid, '3 days a week', 3)
+    (4, '00000000-0000-4000-8000-0000000d0004'::uuid, '3 days a week', 3),
+    -- The OTHER day-count each offering also sells. Without these a schedule change falls off the
+    -- catalog entirely instead of re-pricing, and "changing a fact changes the answer" could only
+    -- ever be proved as a no-match.
+    (5, '00000000-0000-4000-8000-0000000d0001'::uuid, '3 days a week', 3),
+    (6, '00000000-0000-4000-8000-0000000d0002'::uuid, '5 days a week', 5),
+    (7, '00000000-0000-4000-8000-0000000d0003'::uuid, '3 days a week', 3),
+    (8, '00000000-0000-4000-8000-0000000d0004'::uuid, '5 days a week', 5)
 ) AS s(n, offering_id, label, days)
 ON CONFLICT (id) DO UPDATE
 SET label = EXCLUDED.label, is_active = true, status = 'active';
@@ -848,7 +855,11 @@ FROM (VALUES
     (1, '00000000-0000-4000-8000-0000000e0001'::uuid, 168000),
     (2, '00000000-0000-4000-8000-0000000e0002'::uuid, 112000),
     (3, '00000000-0000-4000-8000-0000000e0003'::uuid, 155000),
-    (4, '00000000-0000-4000-8000-0000000e0004'::uuid, 103000)
+    (4, '00000000-0000-4000-8000-0000000e0004'::uuid, 103000),
+    (5, '00000000-0000-4000-8000-0000000e0005'::uuid, 121000),
+    (6, '00000000-0000-4000-8000-0000000e0006'::uuid, 149000),
+    (7, '00000000-0000-4000-8000-0000000e0007'::uuid, 112000),
+    (8, '00000000-0000-4000-8000-0000000e0008'::uuid, 138000)
 ) AS s(n, variant_id, cents)
 ON CONFLICT (id) DO UPDATE
 SET rate_cents = EXCLUDED.rate_cents, is_active = true, not_offered = false,
