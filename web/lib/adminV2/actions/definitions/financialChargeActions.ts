@@ -54,8 +54,40 @@ function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
 }
 
-function childIdFrom(payload: Record<string, unknown> | undefined, entityId: string | undefined): string {
-    return t(payload?.customer_member_id) || t(payload?.child_id) || t(entityId);
+/**
+ * AN OPPORTUNITY IS NOT A CHILD, so its id must never be read as one.
+ *
+ * The invocation's entity id is a child only when the invocation's GRAIN says it is. This is every
+ * grain `charge.add` accepts except `opportunity`, which names a case rather than a person.
+ */
+const CHILD_GRAIN_ENTITY_TYPES: ReadonlySet<string> = new Set([
+    "child",
+    "opportunity_customer_member",
+    "person",
+]);
+
+/**
+ * The child this charge NAMES — and an empty string is a real answer, meaning "no child named".
+ *
+ * The entity id used to be adopted unconditionally. That was harmless while every caller invoked at
+ * child grain, and wrong the moment one did not: a pre-enrolment family has no agreement and so no
+ * child subject the card can offer, and its only canonical identity is the panel's own opportunity.
+ * Adopting that id turned the household case into a `customer_member_id` lookup against a table it
+ * can never match — `resolveChargeSubject` would still reach its household fallback, but by
+ * accident, having been asked a question about a child that does not exist.
+ *
+ * Nothing changes for the grains that were already child-grain; an opportunity id matched no
+ * agreement before this and matches none now. What changes is that the resolver is now ASKED the
+ * household question instead of arriving at it.
+ */
+function childIdFrom(
+    payload: Record<string, unknown> | undefined,
+    entityId: string | undefined,
+    entityType?: string | undefined,
+): string {
+    const named = t(payload?.customer_member_id) || t(payload?.child_id);
+    if (named) return named;
+    return CHILD_GRAIN_ENTITY_TYPES.has(t(entityType)) ? t(entityId) : "";
 }
 
 function todayYmd(): string {
@@ -200,7 +232,7 @@ const addCharge: RegisteredAction = {
         const subject = await resolveChargeSubject(
             supabase as SupabaseClient,
             ctx.orgId,
-            childIdFrom(payload, invocation?.entityId),
+            childIdFrom(payload, invocation?.entityId, invocation?.entityType),
             t(payload?.customer_id) || null,
         );
         return {
@@ -223,7 +255,7 @@ const addCharge: RegisteredAction = {
         const subject = await resolveChargeSubject(
             supabase as SupabaseClient,
             ctx.orgId,
-            childIdFrom(payload, invocation?.entityId),
+            childIdFrom(payload, invocation?.entityId, invocation?.entityType),
             t(payload?.customer_id) || null,
         );
         if (!subject.ok) return { summary: subject.message, changes: [] };
@@ -265,7 +297,7 @@ const addCharge: RegisteredAction = {
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
         try {
-            const childId = childIdFrom(payload, invocation.entityId);
+            const childId = childIdFrom(payload, invocation.entityId, invocation.entityType);
             const subject = await resolveChargeSubject(
                 supabase as SupabaseClient,
                 ctx.orgId,
@@ -294,7 +326,9 @@ const addCharge: RegisteredAction = {
                 result: {
                     actionKey: CHARGE_ADD_ACTION_KEY,
                     entityType: invocation.entityType,
-                    entityId: childId,
+                    // The child when one was named; otherwise the record actually invoked against,
+                    // so a household charge reports the subject it was raised from rather than "".
+                    entityId: childId || invocation.entityId,
                     affectedId: written.chargeId,
                     detail: { write_status: written.status, resolution_key: written.resolutionKey },
                 },

@@ -227,9 +227,7 @@ DROP TABLE IF EXISTS _childcare_mvp_seed_target_orgs;  -- see note above
 \ir ../migrations/20260430253000_enrollment_right_rail_dept_scope.sql
 \ir ../migrations/20260501193000_workspace_kpi_placement.sql
 \ir ../migrations/20260502100000_kpi_v1_context_placement_seeds.sql
-\ir ../migrations/20260505120100_settings_users_roles_permission.sql
 \ir ../migrations/20260505153000_backfill_default_role_definitions.sql
-\ir ../migrations/20260505164000_permission_grid_keys.sql
 \ir ../migrations/20260513103000_childcare_opportunity_drawer_append_tour_scheduling.sql
 \ir ../migrations/20260520120000_inquiry_child_desired_start_and_field_defs.sql
 \ir ../migrations/20260526153000_action_buttons_phase2_message_ask_bos.sql
@@ -264,7 +262,39 @@ DROP TABLE IF EXISTS _childcare_mvp_seed_target_orgs;  -- see note above
 \ir ../migrations/20260624120200_analytics_v2_surface_placements.sql
 \ir ../migrations/20260707120100_header_metric_definitions_activation.sql
 \ir ../migrations/20260711153100_person_child_relationship_type_option_set.sql
-\ir ../migrations/20260722000000_operational_expectations_authority_model_p1_wave_c.sql
+
+-- ---------------------------------------------------------------------------
+-- RBAC FOR THIS ORG, THROUGH THE PLATFORM'S OWN ROUTINE.
+--
+-- Three of the replayed migrations above used to live here and no longer can:
+--
+--   20260505120100_settings_users_roles_permission
+--   20260505164000_permission_grid_keys
+--   20260722000000_operational_expectations_authority_model_p1_wave_c
+--
+-- Each writes `public.permissions` and `public.permission_keys`, and the catalog
+-- they were written against is GONE by the end of the migration sequence:
+-- `20260729120000` dropped both tables for compatibility views, and
+-- `20260818240000` dropped those views. Replaying them against a fully migrated
+-- database therefore aborted the whole seed under ON_ERROR_STOP with
+-- `relation "public.permissions" does not exist` — which is why this tenant had
+-- no organization, and so no Opportunity and no mountable Financials card.
+--
+-- They were replayed for one reason: their org-scoped tail grants permissions
+-- with `SELECT ... FROM public.orgs`, which matches NOTHING at migration time
+-- because the org is created here, afterwards. That job now belongs to
+-- `public.seed_default_rbac`, which `20260807170000` (W-12) rewrote for the
+-- current catalog: it writes `permission_definitions` and
+-- `role_permission_grants` only, and that migration REFUSES to install if its
+-- enumeration omits any active catalog key. So this stays correct as the
+-- catalog grows, without copying a single grant list into this file — the same
+-- zero-hand-copy-drift rule the replay block above is built on.
+--
+-- `role_definitions` needs no help: `20260729120000` also installed the
+-- `orgs_seed_default_role_definitions` AFTER INSERT trigger on `public.orgs`,
+-- so this org received its four system roles the moment it was created.
+-- ---------------------------------------------------------------------------
+SELECT public.seed_default_rbac(:'ORG_ID'::uuid);
 
 \echo '== Section 4: department process configuration (authoritative, post-replay) =='
 
@@ -686,5 +716,35 @@ ANALYZE public.persons;
 ANALYZE public.customer_members;
 ANALYZE public.customer_persons;
 ANALYZE public.operational_tasks;
+
+-- ---------------------------------------------------------------------------
+-- ONE CHARGE TEMPLATE, SO THE FINANCIALS CARD IS OPERABLE AND NOT MERELY VISIBLE.
+--
+-- `FinancialsCard` gates its Add-charge control on `vm.chargeTemplates.length > 0`
+-- (the card renders the balance either way), and `buildFinancialsCardVM` builds
+-- that list from `financial_charge_templates` effective today. With none, the
+-- mounted card can be READ but no operator command can be executed from it — so
+-- the browser certification could prove the mount and nothing beyond it.
+--
+-- This is configuration, not behaviour: the shape is the one
+-- `certification/fixtures/financials-charge-spine.sql` already uses for the same
+-- purpose, and `charge.add` resolves it through the ordinary template path. A
+-- fixed manual fee is deliberately the least interesting template that still
+-- exercises the whole spine — resolve, draft, post, correct.
+--
+-- Deterministic id and ON CONFLICT so a seed rerun changes nothing.
+-- ---------------------------------------------------------------------------
+INSERT INTO public.financial_charge_templates
+    (id, org_id, template_key, label, charge_category, trigger_type, amount_strategy, amount_cents,
+     currency_code, occurs_on_strategy, billable_on_strategy, effective_start, review_required, is_active)
+VALUES
+    ('00000000-0000-4000-8000-0000000f0001'::uuid, :'ORG_ID'::uuid, 'representative_registration_fee',
+     'Registration fee', 'fee', 'manual', 'fixed', 15000, 'USD', 'now', 'immediate',
+     current_date - 365, false, true)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label,
+    amount_cents = EXCLUDED.amount_cents,
+    is_active = EXCLUDED.is_active,
+    effective_start = EXCLUDED.effective_start;
 
 \echo '== Seed complete =='

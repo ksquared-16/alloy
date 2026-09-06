@@ -220,6 +220,53 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         subjectFilter !== "all" ? subjectFilter : scopedMemberId ?? vm?.subjects[0]?.customerMemberId ?? null;
 
     /**
+     * ── WHAT THE ACTION IS INVOKED AGAINST — a child when this card has one, the panel's own
+     * subject when it does not ──
+     *
+     * `resolveChargeSubject` already owns the whole question of what a charge is written against:
+     * the named child's agreement when there is one, the HOUSEHOLD when there is not, because "a
+     * pre-enrolment child's fee is the FAMILY's, and that is a real, chargeable subject". This card
+     * decides none of that and must not; its only job is to hand the resolver enough canonical
+     * identity to decide.
+     *
+     * It was handing over a child or nothing. `chargeTarget` derives from `vm.subjects`, which
+     * derives from `child_enrollment_agreements` — so for a family with no agreement it is null,
+     * and both `preview()` and `commit()` opened with a bare `return`. The overlay still showed an
+     * amount and an enabled confirmation, and the click issued no request at all: the exact family
+     * the resolver documents could never reach it. Proven on the certification tenant, where every
+     * New Leads family is pre-enrolment and `charges` stayed at 0.
+     *
+     * So when there is no child, the invocation travels at the grain the panel actually has. The
+     * household id goes in the payload as `customer_id` exactly as it always did, no
+     * `customer_member_id` is invented, and the resolver — not this card — decides the subject.
+     */
+    const chargeInvocation = useMemo((): {
+        entityType: string;
+        entityId: string;
+        customerMemberId: string | null;
+    } | null => {
+        if (chargeTarget) {
+            return { entityType: "child", entityId: chargeTarget, customerMemberId: chargeTarget };
+        }
+        const subjectId = (context.subject?.id ?? "").trim();
+        if (customerId && subjectId) {
+            return {
+                entityType: (context.subject?.type ?? "").trim() || "opportunity",
+                entityId: subjectId,
+                customerMemberId: null,
+            };
+        }
+        // Genuinely unresolvable: no child, and no household to fall back to.
+        return null;
+    }, [chargeTarget, customerId, context.subject?.id, context.subject?.type]);
+
+    /** Why Add charge cannot be offered, when it cannot. Stated, never silent. */
+    const chargeUnavailableReason =
+        chargeInvocation ? null : (
+            "This record has no household or child in scope, so there is nothing to charge against."
+        );
+
+    /**
      * PREVIEW FIRST, and the preview is the DOMAIN's.
      *
      * `mode: "preview"` runs `previewTemplateCharge` — the same resolver the write uses — so the
@@ -229,7 +276,12 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      */
     const preview = useCallback(
         async (templateId: string, label: string) => {
-            if (!chargeTarget || running) return;
+            if (running) return;
+            if (!chargeInvocation) {
+                // An absent target is an answer the operator is owed, not a reason to do nothing.
+                setCommandError(chargeUnavailableReason);
+                return;
+            }
             setRunning(true);
             setCommandError(null);
             try {
@@ -239,17 +291,24 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     credentials: "include",
                     body: JSON.stringify({
                         action_key: "charge.add",
-                        entity_type: "child",
-                        entity_id: chargeTarget,
+                        entity_type: chargeInvocation.entityType,
+                        entity_id: chargeInvocation.entityId,
                         mode: "preview",
                         payload: {
-                            customer_member_id: chargeTarget,
+                            // Omitted entirely when no child is named — the resolver reads that as
+                            // "no child", which is what sends it to the household.
+                            ...(chargeInvocation.customerMemberId
+                                ? { customer_member_id: chargeInvocation.customerMemberId }
+                                : {}),
                             // The household, so a pre-enrolment family has a billable subject when
                             // no child agreement exists. The resolver still prefers an agreement.
                             customer_id: customerId,
                             template_id: templateId,
-                            child_label: vm?.subjects.find((s) => s.customerMemberId === chargeTarget)
-                                ?.displayName,
+                            child_label: chargeInvocation.customerMemberId
+                                ? vm?.subjects.find(
+                                      (s) => s.customerMemberId === chargeInvocation.customerMemberId,
+                                  )?.displayName
+                                : undefined,
                             // An `event_date` template is REFUSED without one — the preview returns
                             // `missing_event_date` — so the operator's date has to travel with the
                             // preview, not only with the commit.
@@ -281,11 +340,15 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 setRunning(false);
             }
         },
-        [chargeTarget, chargeEventDate, chargeNote, running, vm],
+        [chargeInvocation, chargeUnavailableReason, chargeEventDate, chargeNote, running, vm],
     );
 
     const commit = useCallback(async () => {
-        if (!pending || !chargeTarget || running) return;
+        if (!pending || running) return;
+        if (!chargeInvocation) {
+            setCommandError(chargeUnavailableReason);
+            return;
+        }
         setRunning(true);
         setCommandError(null);
         try {
@@ -295,8 +358,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 credentials: "include",
                 body: JSON.stringify({
                     action_key: "charge.add",
-                    entity_type: "child",
-                    entity_id: chargeTarget,
+                    entity_type: chargeInvocation.entityType,
+                    entity_id: chargeInvocation.entityId,
                     mode: "execute",
                     confirmation: { confirmed: true },
                     /*
@@ -309,7 +372,9 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                      * given the same inputs or the resolver is being asked two different questions.
                      */
                     payload: {
-                        customer_member_id: chargeTarget,
+                        ...(chargeInvocation.customerMemberId
+                            ? { customer_member_id: chargeInvocation.customerMemberId }
+                            : {}),
                         // Same subject inputs the preview was given — preview and commit run the
                         // same resolver, so they must be asked the same question.
                         customer_id: customerId,
@@ -344,7 +409,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         // dependency list. Without them the commit closed over the empty initial values and the
         // domain refused with `missing_event_date` — after the operator had entered a date, and
         // after the PREVIEW had accepted it. A stale closure is invisible until the two disagree.
-    }, [chargeEventDate, chargeNote, chargeTarget, load, pending, running]);
+    }, [chargeEventDate, chargeNote, chargeInvocation, chargeUnavailableReason, load, pending, running]);
 
     /**
      * A LEDGER ROW'S OWN TRANSITION — post a draft, reverse posted money.
@@ -370,7 +435,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     credentials: "include",
                     body: JSON.stringify({
                         action_key: actionKey,
-                        entity_type: "child",
+                        entity_type: row.subjectMemberId ? "child" : (chargeInvocation?.entityType ?? "child"),
                         /*
                          * The ROW's own subject when it has one, and the panel's when it does not.
                          *
@@ -390,7 +455,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                          * attribution. `posted_by` still records the operator, and the charge stays
                          * on the household it was billed to.
                          */
-                        entity_id: row.subjectMemberId ?? chargeTarget ?? "",
+                        entity_id: row.subjectMemberId ?? chargeInvocation?.entityId ?? "",
                         mode: "execute",
                         confirmation: { confirmed: true },
                         payload: {
@@ -413,7 +478,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 await load();
             }
         },
-        [load, running, chargeTarget],
+        [load, running, chargeInvocation],
     );
 
     /*
