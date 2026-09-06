@@ -18,7 +18,7 @@ import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 import {
-  RETENTION_POLICY_V1,
+  RETENTION_POLICY,
   buildInventory,
   comparePlans,
   configuredKeepN,

@@ -23,6 +23,7 @@ import { classifyHostAdmission } from "./host-admission.mjs";
 
 import { findingsForSteward } from "./operational-findings.mjs";
 import { ATTEMPT_CEILINGS, readEpisode } from "./control-plane-recovery.mjs";
+import { hygienePosture } from "./hygiene-reclaim.mjs";
 
 export const STEWARD_CYCLE_SCHEMA = "vacilando.host_steward_cycle.v1";
 
@@ -38,6 +39,18 @@ export const RECHECK_MS = 30_000;
 export const CYCLE_TIMEOUT_MS = 4 * 60_000;
 /** A steward that has not completed a cycle within this window is a health finding. */
 export const STALE_CYCLE_MS = 3 * CADENCE_MS;
+
+/**
+ * Hygiene runs on its own, far slower cadence inside the same loop.
+ *
+ * NOT because it is unimportant — because it is expensive and the estate moves
+ * slowly. One hygiene observation costs a toolkit `du` over ~100 directories
+ * and an `lsof` per log; running that every five minutes would take the
+ * steward's duty cycle from under 1% to something worth noticing, to reclaim
+ * bytes that were equally reclaimable six hours ago. Four sweeps a day is the
+ * cadence the resource actually has.
+ */
+export const HYGIENE_CADENCE_MS = 6 * 60 * 60_000;
 
 /**
  * Anti-thrash. A resource acted on may not be acted on again until its cooldown
@@ -59,6 +72,11 @@ export const ACTION_PRIORITY = Object.freeze({
   prune_policy_eligible_toolkit: 3,
   reclaim_idle_provider_seat: 4,
   stop_terminal_dev_server: 5,
+  // Hygiene is last on purpose. Nothing about the host's health depends on it,
+  // and a cycle under pressure should spend its budget on live resources.
+  reconcile_stale_worktree_registration: 6,
+  reclaim_diagnostic_log: 7,
+  retire_worktree: 8,
 });
 
 /**
@@ -74,7 +92,27 @@ export const ACTION_OWNERS = Object.freeze({
   // worktree, and the steward's raw signal executor must not become the
   // permanent dev-server lifecycle API.
   stop_terminal_dev_server: { owner: "canonical-dev-server-lifecycle", authority: "operator", certified: false },
+  // V3 Phase 4. Each names the certified executor it delegates to; none of them
+  // contains a removal of its own except the bounded log rewrite.
+  reconcile_stale_worktree_registration: { owner: "hygiene-execute:git-worktree-prune", authority: "automatic", certified: true },
+  reclaim_diagnostic_log: { owner: "hygiene-execute:truncate-to-tail", authority: "automatic", certified: true },
+  retire_worktree: { owner: "trusted-host-worktree-retirement", authority: "automatic", certified: true },
 });
+
+/** When did hygiene last complete, and is it due? Recorded in the steward's own state. */
+export function hygieneDue({ root, nowMs = Date.now(), cadenceMs = HYGIENE_CADENCE_MS } = {}) {
+  const at = readState(root).hygiene_last_ms ?? null;
+  if (at == null) return { due: true, last_ms: null, reason: "hygiene has never run in this root" };
+  return { due: (nowMs - at) >= cadenceMs, last_ms: at, reason: null };
+}
+
+export function recordHygieneCycle({ root, nowMs = Date.now(), summary = null } = {}) {
+  const state = readState(root);
+  state.hygiene_last_ms = nowMs;
+  state.hygiene_last = summary ? { at: new Date(nowMs).toISOString(), ...summary } : { at: new Date(nowMs).toISOString() };
+  writeState(root, state);
+  return { ok: true };
+}
 
 export function stewardStatePath(root) {
   return join(root, "host-steward", "state.json");
@@ -83,8 +121,14 @@ export function stewardStatePath(root) {
 function readState(root) {
   try {
     const j = JSON.parse(readFileSync(stewardStatePath(root), "utf8"));
-    return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: j.cycles || [], cooldowns: j.cooldowns || {}, running: j.running || null };
-  } catch { return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: [], cooldowns: {}, running: null }; }
+    return {
+      schema_version: STEWARD_CYCLE_SCHEMA,
+      cycles: j.cycles || [], cooldowns: j.cooldowns || {}, running: j.running || null,
+      hygiene_last_ms: j.hygiene_last_ms ?? null, hygiene_last: j.hygiene_last ?? null,
+    };
+  } catch {
+    return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: [], cooldowns: {}, running: null, hygiene_last_ms: null, hygiene_last: null };
+  }
 }
 
 function writeState(root, state) {
@@ -225,6 +269,9 @@ const POSTCONDITIONS = Object.freeze({
   prune_policy_eligible_toolkit: "current, live pins and rollback window still present",
   repair_stale_port_registration: "correction absent from the next S7 plan",
   reclaim_idle_provider_seat: "seat released and dormancy/resume state preserved",
+  reconcile_stale_worktree_registration: "registration absent and every ref unchanged",
+  reclaim_diagnostic_log: "file smaller than before with its tail intact",
+  retire_worktree: "path and registration absent, branch still resolvable",
 });
 
 function countBy(base, total) {
@@ -295,7 +342,28 @@ export function stewardStatus({ root, nowMs = Date.now(), staleMs = STALE_CYCLE_
      * because a status call must never restart anything as a side effect.
      */
     control_plane_recovery: recoveryPosture(root),
+    /*
+     * HYGIENE, ANSWERED WITHOUT MEASURING. §13 asks the Steward to be able to
+     * say what was reclaimed and what is blocked. It reports the LAST recorded
+     * hygiene cycle and never observes — a status call that ran a `du` over a
+     * 29 GB estate would be a status call nobody dares make.
+     */
+    hygiene: hygienePostureFor(root, readState(root)),
   };
+}
+
+function hygienePostureFor(root, state) {
+  try {
+    return {
+      ...hygienePosture(root),
+      last_cycle_at: state.hygiene_last?.at ?? null,
+      last_recorded_cycle: state.hygiene_last ?? null,
+      due: state.hygiene_last_ms == null ? true : (Date.now() - state.hygiene_last_ms) >= HYGIENE_CADENCE_MS,
+      cadence_ms: HYGIENE_CADENCE_MS,
+    };
+  } catch {
+    return { unavailable: true };
+  }
 }
 
 function recoveryPosture(root) {
