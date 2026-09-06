@@ -922,6 +922,32 @@ export function publicGovernedAction(req) {
     director_approval: req.director_approval || null,
     director_decision: req.director_decision || null,
     escalation_reason: req.escalation_reason || null,
+    /*
+     * "I APPROVED IT" IS NOT "THE LANE KNOWS."
+     *
+     * The status field already separates awaiting_operator from executing from
+     * complete, and the audit trail shows approval and execution as distinct
+     * events. What the record could NOT say is whether the requester was ever
+     * told the outcome — and that was the whole of the incident: two actions
+     * that failed in seconds, correctly and with good reasons, and a lane that
+     * refiled them five times because it never heard either reason.
+     *
+     * So the delivery state is projected beside the action state. DELIVERED
+     * means the lane knows. PENDING means it is owed and will be paid when the
+     * lane clears. UNDELIVERABLE means it can never be told, and says why.
+     * `null` means nothing has been attempted yet — which, after this fix, only
+     * happens before an action resolves.
+     */
+    notification_delivery: req.notification_delivery
+      ? {
+        state: req.notification_delivery.state,
+        kind: req.notification_delivery.kind || null,
+        reason: req.notification_delivery.reason || null,
+        attempts: req.notification_delivery.attempts || 0,
+        delivered_at: req.notification_delivery.delivered_at || null,
+      }
+      : null,
+    requester_informed: req.notification_delivery?.state === "DELIVERED",
     created_at: req.created_at,
     updated_at: req.updated_at,
   };
@@ -4025,6 +4051,19 @@ export async function drainGovernedNotificationsForLane(laneId, {
     nowMs,
     send,
     getLane: (id) => getDevelopmentLane(id, { includeGitFacts: false }),
+    /*
+     * A notification held behind another action is skipped, not attempted.
+     *
+     * The attempt budget is sized for a busy pane, which clears in seconds. A
+     * notification waiting on an `awaiting_operator` action is waiting on a
+     * person — one on this host waited an hour and three quarters — and
+     * spending an attempt per conductor tick would expire it as UNDELIVERABLE
+     * long before it was ever undeliverable.
+     */
+    isBlocked: (rec) => {
+      const next = pendingGovernedActionForLane(rec.lane_id, root);
+      return next && next.request_id !== rec.request_id ? next.request_id : null;
+    },
     buildText: async (rec) => {
       if (rec.notification_delivery?.kind === "governed_action_failed") {
         return continuationTextForFailedGovernedAction(rec);
@@ -4035,6 +4074,46 @@ export async function drainGovernedNotificationsForLane(laneId, {
       return continuationTextForGovernedAction(rec, action);
     },
   });
+}
+
+/**
+ * A DEFERRED NOTIFICATION IS OWED, NOT DROPPED.
+ *
+ * Both resume paths hold a notification back while another action on the same
+ * lane is still pending, which is right: pasting a second instruction into a
+ * lane that is mid-decision interleaves two conversations. What was wrong is
+ * that they returned `{ deferred: true }` and told nobody, so the notification
+ * left no trace and the drain — which exists, and works — had nothing to find.
+ *
+ * MEASURED: 83 of 200 governed actions on this host, 77 of them SUCCESSFUL,
+ * resolved with no delivery record at all, and every single one had a
+ * co-pending action on its lane at that moment. From inside the lane that is
+ * indistinguishable from an action that was approved and never executed.
+ *
+ * Registering the deferral with the delivery owner is the whole fix: the record
+ * enters PENDING, the drain finds it when the lane clears, and if it can never
+ * be delivered it becomes UNDELIVERABLE with a reason. Silence stops being one
+ * of the outcomes.
+ */
+async function oweNotification(rec, { kind, waitingOn, nowMs, root }) {
+  try {
+    const { recordDeliveryAttempt } = await import("./governed-notification-delivery.mjs");
+    recordDeliveryAttempt(rec, { ok: false, error: "deferred_behind_pending_action" }, {
+      kind,
+      nowMs,
+      save: (r) => saveRequest(r, root),
+    });
+    appendAudit(rec, "notification_deferred", { nowMs, extra: { waiting_on: waitingOn, kind } }, root);
+  } catch (err) {
+    // Failing to RECORD the debt must not also hide it. The audit line is the
+    // last thing standing between a deferral and silence.
+    try {
+      appendAudit(rec, "notification_deferral_unrecorded", {
+        nowMs,
+        extra: { waiting_on: waitingOn, error: String(err?.message || err) },
+      }, root);
+    } catch { /* nothing further is available */ }
+  }
 }
 
 export async function resumeLaneAfterFailedGovernedAction(requestId, {
@@ -4049,7 +4128,13 @@ export async function resumeLaneAfterFailedGovernedAction(requestId, {
   const pendingNext = pendingGovernedActionForLane(rec.lane_id, root);
   if (pendingNext && pendingNext.request_id !== rec.request_id) {
     attachRunWait(pendingNext, { nowMs, root });
-    return { ok: true, deferred: true, waiting_on: pendingNext.request_id };
+    await oweNotification(rec, {
+      kind: "governed_action_failed",
+      waitingOn: pendingNext.request_id,
+      nowMs,
+      root,
+    });
+    return { ok: true, deferred: true, waiting_on: pendingNext.request_id, notification_owed: true };
   }
   releaseRunAfterGovernedFailure(rec, { nowMs, root });
   const { sendLaneInstruction } = await import("./lanes.mjs");
@@ -4090,13 +4175,34 @@ export async function resumeLaneAfterFailedGovernedAction(requestId, {
     save: (r) => saveRequest(r, root),
   });
   appendAudit(rec, "failed_notified", { nowMs, detail: { ...rec.resume_delivery, delivery: rec.notification_delivery } }, root);
+  const drained = await drainOwedAfterResolution(rec, { nowMs, root });
   return {
     ok: Boolean(delivered?.ok),
     request: publicGovernedAction(rec),
     delivered,
     startedSession,
     same_lane: true,
+    drained,
   };
+}
+
+/**
+ * THE MOMENT THE QUEUE CLEARS IS THE MOMENT TO PAY THE DEBT.
+ *
+ * A deferral is registered when another action on the lane is still pending, so
+ * the natural time to redeliver is when an action resolves — right here, rather
+ * than waiting for the lane's run to end or for the next conductor tick thirty
+ * seconds later. Those remain the safety net; this is the direct path.
+ *
+ * Best-effort by construction: the action itself has already succeeded or
+ * failed, and a redelivery problem must not rewrite that outcome.
+ */
+async function drainOwedAfterResolution(rec, { nowMs, root }) {
+  try {
+    return await drainGovernedNotificationsForLane(rec.lane_id, { root, nowMs });
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
 }
 
 export async function resumeLaneAfterGovernedAction(requestId, {
@@ -4112,7 +4218,13 @@ export async function resumeLaneAfterGovernedAction(requestId, {
   const pendingNext = pendingGovernedActionForLane(rec.lane_id, root);
   if (pendingNext && pendingNext.request_id !== rec.request_id) {
     attachRunWait(pendingNext, { nowMs, root });
-    return { ok: true, deferred: true, waiting_on: pendingNext.request_id };
+    await oweNotification(rec, {
+      kind: "governed_action_resume",
+      waitingOn: pendingNext.request_id,
+      nowMs,
+      root,
+    });
+    return { ok: true, deferred: true, waiting_on: pendingNext.request_id, notification_owed: true };
   }
   const { sendLaneInstruction } = await import("./lanes.mjs");
   const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
@@ -4172,6 +4284,7 @@ export async function resumeLaneAfterGovernedAction(requestId, {
     body: `Continuing ${rec.lane_id} with governed-action results.`,
     root,
   });
+  const drained = await drainOwedAfterResolution(rec, { nowMs, root });
   return {
     ok: Boolean(delivered?.ok),
     request: publicGovernedAction(rec),
@@ -4179,6 +4292,7 @@ export async function resumeLaneAfterGovernedAction(requestId, {
     startedSession,
     same_lane: true,
     same_worktree: true,
+    drained,
   };
 }
 
