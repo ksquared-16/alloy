@@ -21,6 +21,8 @@ import { createHash } from "node:crypto";
 import { buildStewardPlan, OWNERSHIP } from "./host-steward.mjs";
 import { classifyHostAdmission } from "./host-admission.mjs";
 
+import { findingsForSteward } from "./operational-findings.mjs";
+
 export const STEWARD_CYCLE_SCHEMA = "vacilando.host_steward_cycle.v1";
 
 /**
@@ -268,7 +270,31 @@ export function stewardStatus({ root, nowMs = Date.now(), staleMs = STALE_CYCLE_
       .map((s) => ({ at: c.ended_at, resource: s.resource_key, why: s.suppressed_because, action: s.action }))).slice(-10),
     admission_before: last?.admission_before ?? null,
     admission_after: last?.admission_after ?? null,
+    /*
+     * FINDINGS ARE CONSUMED HERE, AND OWNED ELSEWHERE.
+     *
+     * The Steward needs to know which durable operational problems currently
+     * affect operation, which constrain planning, and which are owed to the
+     * Director. It reads that view and never writes to it, so findings cannot
+     * become a second source of operational truth beside the run, lane and
+     * health owners the Steward already coordinates.
+     *
+     * Read defensively: a findings store that cannot be read must degrade the
+     * Steward's awareness, never its cycle. The Steward's job is the host, and
+     * it has to keep doing it when a satellite store is unavailable.
+     */
+    findings: stewardFindingsView(root),
   };
+}
+
+function stewardFindingsView(root) {
+  try {
+    return findingsForSteward(root);
+  } catch {
+    // A findings store that cannot be read must degrade the Steward's
+    // awareness, never its cycle. The Steward's job is the host.
+    return { schema_version: "vacilando.findings_steward_view.v1", unavailable: true };
+  }
 }
 
 export { classifyHostAdmission, OWNERSHIP };
