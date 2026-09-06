@@ -13,6 +13,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { aliasImportsIn } from "./lib/aliasImports";
 
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(webRoot, "..");
@@ -48,9 +49,6 @@ const untrackedUnderWeb = new Set(
     ).map((p) => p.replace(/^web\//, ""))
 );
 
-const importRe = /\bfrom\s+["'](@\/[^"']+)["']/g;
-const importRe2 = /\bimport\s+["'](@\/[^"']+)["']/g;
-
 type Issue = { kind: "missing" | "untracked"; file: string; importPath: string; resolved: string };
 
 const issues: Issue[] = [];
@@ -58,13 +56,7 @@ const issues: Issue[] = [];
 for (const rel of trackedUnderWeb) {
     const abs = resolve(webRoot, rel);
     if (!existsSync(abs)) continue;
-    const src = readFileSync(abs, "utf8");
-    const paths = new Set<string>();
-    for (const re of [importRe, importRe2]) {
-        for (const m of src.matchAll(re)) {
-            if (m[1]) paths.add(m[1]);
-        }
-    }
+    const paths = aliasImportsIn(readFileSync(abs, "utf8"));
 
     for (const importPath of paths) {
         const resolved = resolveAliasImport(importPath);
