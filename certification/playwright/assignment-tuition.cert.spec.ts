@@ -308,6 +308,11 @@ test.describe("assignment → tuition, in the mounted application", () => {
         const first = page.locator(ASSIGNMENT).first();
         await expect(first).toBeVisible({ timeout: 30_000 });
 
+        // Whatever stands now — the authorized case may have left an override behind — must be
+        // exactly what stands afterwards.
+        const termBefore = await first.locator("[data-tuition-accepted-term]").getAttribute("data-tuition-accepted-term");
+        const stateBefore = await first.getAttribute("data-tuition-accepted");
+
         const alternatives = first.locator("[data-tuition-alternatives] [data-tuition-choose]");
         expect(await alternatives.count(), "an alternative must exist for this case to mean anything").toBeGreaterThan(0);
         await alternatives.first().click();
@@ -317,12 +322,21 @@ test.describe("assignment → tuition, in the mounted application", () => {
         await form.locator('[data-tuition-command="override"]').click();
         await page.waitForTimeout(15_000);
 
-        // The server's refusal is authoritative and visible.
-        const error = first.locator('[data-tuition-error="command"]');
+        // The server's refusal is authoritative and visible. It is rendered by the CARD, not inside
+        // one assignment's section — a refusal belongs to the command, not to a row.
+        const error = page.locator('[data-tuition-error="command"]');
         await expect(error).toBeVisible({ timeout: 30_000 });
         expect(await error.innerText()).toContain("permission");
-        // And nothing was recorded.
-        expect(await first.getAttribute("data-tuition-accepted")).not.toBe("overridden");
+
+        // And nothing was recorded: the same term, in the same state, after a reload.
+        await page.reload();
+        await page.waitForLoadState("domcontentloaded");
+        await page.waitForTimeout(40_000);
+        const after = page.locator(ASSIGNMENT).first();
+        expect(await after.getAttribute("data-tuition-accepted")).toBe(stateBefore);
+        expect(
+            await after.locator("[data-tuition-accepted-term]").getAttribute("data-tuition-accepted-term"),
+        ).toBe(termBefore);
     });
 
     test("J — an unpriced assignment says so, rather than showing nothing", async ({ page }) => {
