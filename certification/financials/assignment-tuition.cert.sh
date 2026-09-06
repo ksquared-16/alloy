@@ -67,8 +67,15 @@ psql "$DB" -q -c "update public.opportunity_customer_members
                    where org_id = '$ORG' and id = '$SUBJECT';"
 
 step "J · an unpriced assignment"
-run "$PW" test -c playwright.config.ts "$SPEC" -g "unpriced assignment says so" --workers=1 --reporter=line >/dev/null 2>&1
-check $? "a drop-in assignment says no configured tuition applies"
+# `drop_in` is the attendance shape the representative catalog deliberately leaves unpriced. Moving
+# the assignment onto it — at its owner — makes a no-match reachable without depending on how far
+# down the queue a drop-in row happens to sit.
+J_SUBJECT=$(psql "$DB" -tAc "select opportunity_customer_member_id from public.enrollment_pricing_terms where superseded_at is null limit 1")
+J_TYPE=$(psql "$DB" -tAc "select schedule_type from public.opportunity_customer_members where id = '$J_SUBJECT'")
+psql "$DB" -q -c "update public.opportunity_customer_members set schedule_type = 'drop_in' where id = '$J_SUBJECT';"
+run env CERT_EXPECT_NO_MATCH=1 "$PW" test -c playwright.config.ts "$SPEC" -g "unpriced assignment says so" --workers=1 --reporter=line >/dev/null 2>&1
+check $? "an unpriced attendance shape says no configured tuition applies"
+psql "$DB" -q -c "update public.opportunity_customer_members set schedule_type = '$J_TYPE' where id = '$J_SUBJECT';"
 
 step "I · an ambiguous catalog"
 # A second billing cadence beside every monthly one: two configured options then apply equally to

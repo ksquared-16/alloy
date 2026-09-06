@@ -339,29 +339,29 @@ test.describe("assignment → tuition, in the mounted application", () => {
         ).toBe(termBefore);
     });
 
+    /*
+     * J · NO MATCH. The harness moves the assignment under test onto `drop_in` at its owner — the
+     * attendance shape the representative catalog deliberately leaves unpriced — and puts it back
+     * afterwards.
+     *
+     * Walking the queue for a drop-in row was the first shape of this case and it was the wrong
+     * one: New Leads offers whatever it offers, each row costs a full cold load, and a proof that
+     * depends on how far it has to walk is a proof that depends on an ordering nobody promised.
+     */
     test("J — an unpriced assignment says so, rather than showing nothing", async ({ page }) => {
-        // Drop-in is one assignment in three, and each queue row costs a full cold load to open, so
-        // this case needs more than the suite's per-test budget to walk far enough to find one.
-        test.setTimeout(900_000);
-        // `drop_in` is deliberately unpriced in the representative catalog, so a no-match is
-        // reachable on a real assignment rather than only in a fixture.
-        let found = false;
-        for (let index = 0; index < 10 && !found; index++) {
-            await openSubject(page, index);
-            const sections = page.locator(ASSIGNMENT);
-            const total = await sections.count();
-            for (let i = 0; i < total; i++) {
-                if ((await sections.nth(i).getAttribute("data-tuition-state")) === "no_match") {
-                    await expect(sections.nth(i).locator("[data-tuition-no-match]")).toBeVisible();
-                    const text = await sections.nth(i).locator("[data-tuition-no-match]").innerText();
-                    expect(text).toContain("No configured tuition applies");
-                    // Nothing was invented in its place.
-                    await expect(sections.nth(i).locator('[data-tuition-option-kind="recommended"]')).toHaveCount(0);
-                    found = true;
-                    break;
-                }
-            }
-        }
-        expect(found, "an unpriced assignment must be reachable in the representative tenant").toBe(true);
+        test.skip(process.env.CERT_EXPECT_NO_MATCH !== "1", "driven by the harness");
+        await openSubject(page);
+        const first = page.locator(ASSIGNMENT).first();
+        await expect(first).toBeVisible({ timeout: 30_000 });
+        await expect(first).toHaveAttribute("data-tuition-state", "no_match", { timeout: 30_000 });
+
+        const notice = first.locator("[data-tuition-no-match]");
+        await expect(notice).toBeVisible();
+        expect(await notice.innerText()).toContain("No configured tuition applies");
+        // Nothing was invented in its place, and nothing is offered to accept.
+        await expect(first.locator('[data-tuition-option-kind="recommended"]')).toHaveCount(0);
+        await expect(first.locator('[data-tuition-command="accept"]')).toHaveCount(0);
+        // The reason is usable: the catalog said why, in the operator's terms.
+        expect(await first.getAttribute("data-tuition-no-match")).toMatch(/\S/);
     });
 });
