@@ -670,3 +670,116 @@ agree exactly.
 * The live unread transition is certified in-harness; the live store currently
   holds nothing unseen, so there was no real unread→read transition to observe
   without fabricating one in the Director's own read state.
+
+---
+
+# Phase 6 — Lane memory and the authorized next step
+
+Owner modules: `lane-memory.mjs` (durable structured context),
+`authorized-next-step.mjs` (the contract the scheduler consumes). Integration:
+`work-scheduler-observe.mjs`. Surface: `vac host-steward --status --json`,
+`scheduling.authorization_summary`.
+
+## The gap this closes
+
+Phase 5 built a planner that could rank work, explain itself and refuse safely —
+and then could not be used. Live, nine durable lanes resolved to two executing
+and seven UNKNOWN, with six productive seats deliberately idle. Three facts a
+dispatch decision needs were recorded by nothing: **what a lane is authorized to
+do next, whether that step's dependencies are ready, and what the step is.**
+
+The durable lane record proves it. Its fields are `lane_id`, `name`,
+`description`, `status`, `origin`, `aliases`, `mission_id`, `work_class`,
+`binding`, `repository_id` — an identity and a placement, with no objective, no
+scope, no authorization and no next action. On this host `mission_id` is null
+for all nine lanes.
+
+## Lane memory is structured context, not a summary
+
+Sections: identity, mission, authorization, progress, dependencies, next step,
+blockers, documentation. Nothing here is generated prose to be reread.
+
+**Referenced, never duplicated.** Run state belongs to `execution-run`, provider
+and capacity truth to `provider-seat-state`, findings to
+`operational-findings`, promotion lineage to the governed-action store. The
+record holds finding *ids*, evidence *shas* and PR *references* — never their
+bodies or their states. A convenience copy is a second source of truth that
+goes stale silently, which is the same defect class as a merge gate measured
+once and never again.
+
+One record per lane, updated in place: a lane accumulates one current
+understanding rather than hundreds of tiny files nobody reads.
+
+## Authorization is derived, never inferred
+
+Every `AUTHORIZED` verdict names durable evidence from a **closed provenance
+list**: `director_instruction`, `lane_scope`, `policy`,
+`governed_action_policy`, `ratified_plan`, `checkpoint_boundary`,
+`continuation_rule`. A provenance outside that list does not count. An empty
+provenance is UNKNOWN. `model_judgement` is deliberately absent — an LLM
+deciding a step "sounds authorized" is precisely what this excludes.
+
+The stored verdict may only ever be **narrowed** by the lane's scope, never
+widened: a step claiming `AUTHORIZED` for a class outside `authorized_classes`
+resolves UNKNOWN, and one naming a class in `prohibited_classes` resolves
+PROHIBITED whatever it claims.
+
+## A checkpoint is evidence of what was true then
+
+Six revalidation checks run at the moment of asking: `checkpoint_fresh`,
+`run_state_unchanged`, `promoted_lineage_current`, `dependencies_still_ready`,
+`blocking_findings_unchanged`, `mission_not_complete`. **Null is not a pass** —
+an unmeasurable check invalidates, because "we could not tell" and "nothing
+changed" are different facts and only one is safe to act on.
+
+A failed check downgrades to UNKNOWN and names *which* check failed. It never
+authorizes, and it is never quietly refreshed into looking current.
+
+This programme has now twice shipped a defect whose whole shape was a
+measurement taken once and trusted forever — the merge gate, and the worktree
+safety snapshot. This does not add a third.
+
+## Enums
+
+| | |
+| --- | --- |
+| authorization | `AUTHORIZED` · `REQUIRES_DIRECTOR` · `PROHIBITED` · `UNKNOWN` |
+| dependency | `READY` · `WAITING` · `FAILED` · `UNKNOWN` |
+
+`WAITING`, `FAILED` and `UNKNOWN` stay distinct: an unmet dependency is not a
+failed one, and neither is a capacity problem.
+
+## Provider handoff
+
+`laneContextProjection` returns objective, phase, success condition, exclusions,
+completed work, decisions, constraints, blockers, dependencies, next step,
+authorization provenance, documentation and promoted lineage — **bounded**, with
+every clipped list reporting its true total. A projection that dumps the whole
+store is the transcript problem with extra steps.
+
+## Dispatch is still disabled
+
+The contract is wired and consumed — `getLaneMemory` → `authorizedNextStep` →
+`candidateFieldsFor` → the planner, asserted by a control, because a collector
+that exists is not a collector that runs.
+
+Live after this phase: nine lanes, **one AUTHORIZED**, eight UNKNOWN of which
+eight have no memory record at all. The one authorized lane derives from a
+quoted Director instruction, and it is not eligible because it is already
+executing — which is the right answer, not a failure.
+
+Enabling dispatch needs the §14 evidence on real lanes, and eight of nine lanes
+have no durable objective for anyone to authorize. Writing those records is a
+Director act, not a model act: inventing scope for a lane whose objective nobody
+recorded is the inference this whole design exists to prevent.
+
+## Limitations
+
+* Eight of nine lanes have no memory record, so the live population is still
+  dominated by UNKNOWN — now with `no_memory` naming the reason.
+* Dependency and finding revalidation compare against caller-supplied maps; a
+  caller that omits them gets UNKNOWN rather than a pass, which is correct but
+  means the Steward status row must supply live truth to be useful.
+* Next-action derivation is read from the checkpoint, not inferred from the
+  engineering lifecycle. Composing `mission-advance`'s implementation-chain
+  logic is the obvious next composition and was not attempted here.

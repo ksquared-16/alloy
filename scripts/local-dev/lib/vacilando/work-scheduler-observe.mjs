@@ -14,14 +14,17 @@
  *   findings constraint  operational-findings.findingsForSteward
  *   unread output        lane-attention-view, over the notification store
  *
- * WHAT IS HONESTLY NOT YET MEASURED. Per-lane authorization, dependency
- * readiness and the deterministic next action are not derivable from any
- * existing store today: no owner records "this lane is authorized to do X
- * next". They are therefore reported as NULL, which the planner treats as
- * `unknown` and refuses to dispatch. That is the fail-closed answer, and it is
- * stated here rather than defaulted to `true` to make a plan look decisive.
+ * PHASE 6 CLOSED THE GAP THAT LEFT EVERY CANDIDATE UNKNOWN. Per-lane
+ * authorization, dependency readiness and the deterministic next action now
+ * come from `authorized-next-step`, which derives them from durable lane memory
+ * and REVALIDATES them against live truth at the moment of asking. A lane with
+ * no memory, a stale checkpoint, or an authorization with no provenance still
+ * resolves UNKNOWN and still refuses to dispatch — the gap is closed by
+ * supplying evidence, never by defaulting the absence of it to `true`.
  */
 import { listDurableLanes } from "./development-lane.mjs";
+import { authorizedNextStep, candidateFieldsFor } from "./authorized-next-step.mjs";
+import { getLaneMemory } from "./lane-memory.mjs";
 import { activeRunForLane } from "./execution-run.mjs";
 import { findingsForSteward } from "./operational-findings.mjs";
 import { allLaneAttentionViews, attentionRollup } from "./lane-attention-view.mjs";
@@ -52,7 +55,7 @@ function constraintsFor(findingsView) {
   }));
 }
 
-export function observeCandidates({ root, now = Date.now() } = {}) {
+export function observeCandidates({ root, now = Date.now(), liveTruth = {} } = {}) {
   const lanes = listDurableLanes(root) || [];
   let findingsView = null;
   try { findingsView = findingsForSteward(root); } catch { findingsView = null; }
@@ -62,16 +65,34 @@ export function observeCandidates({ root, now = Date.now() } = {}) {
     let run = null;
     try { run = activeRunForLane(lane.lane_id, root); } catch { run = null; }
     const state = run?.state ?? null;
+
+    // The authorization contract, revalidated against the live facts that could
+    // have moved under the checkpoint. `live` is passed EXPLICITLY, including
+    // the empty-object cases, because an undefined fact is unmeasurable and the
+    // contract must be able to tell that from a measured absence.
+    let memory = null;
+    try { memory = getLaneMemory(lane.lane_id, root); } catch { memory = null; }
+    const contract = authorizedNextStep({
+      record: memory,
+      live: {
+        lane_id: lane.lane_id,
+        run_state: state,
+        staging_sha: liveTruth.staging_sha,
+        dependency_states: liveTruth.dependency_states,
+        finding_statuses: liveTruth.finding_statuses,
+      },
+      now,
+    });
+    const fields = candidateFieldsFor(contract);
+
     return schedulableCandidate({
       laneId: lane.lane_id,
       missionId: lane.mission_id ?? null,
       runState: state,
-      // NOT MEASURED. No owner records per-lane authorization for a next step,
-      // so this stays null and the planner refuses rather than assuming.
-      authorized: null,
-      dependenciesReady: null,
-      directorJudgmentRequired: null,
-      priorityClass: "planned",
+      ...fields,
+      priorityClass: contract.authorization === "AUTHORIZED" && fields.nextAction
+        ? "mission_continuation"
+        : "planned",
       seatState: OCCUPYING.has(String(state)) ? "active" : null,
       readySince: run?.updated_at ?? lane.created_at ?? null,
       lastProgressAt: run?.updated_at ?? null,
@@ -92,8 +113,9 @@ export function observeScheduling({
   now = Date.now(),
   capacity = null,
   hostBand = null,
+  liveTruth = {},
 } = {}) {
-  const candidates = observeCandidates({ root, now });
+  const candidates = observeCandidates({ root, now, liveTruth });
   const plan = planSchedule({ candidates, capacity, hostBand, now });
   const views = allLaneAttentionViews({
     lanes: candidates.map((c) => ({ lane_id: c.lane_id, run_state: c.run_state })),
@@ -107,9 +129,34 @@ export function observeScheduling({
     lanes_with_unread_output: views.filter((v) => v.has_unread_output).map((v) => v.lane_id),
     lanes_requiring_director: views.filter((v) => v.requires_director).map((v) => v.lane_id),
     // Named so a reader is not left wondering why nothing is eligible.
+    // Phase 6 supplies the evidence; enabling dispatch is a separate, evidenced
+    // decision and is not taken here.
     dispatch_enabled: false,
-    dispatch_note: "Phase 5 ships the planner and the explanation. Autonomous dispatch is not enabled: "
-      + "per-lane authorization, dependency readiness and the deterministic next action have no owner yet, "
-      + "so every candidate is UNKNOWN and correctly refuses to run.",
+    dispatch_note: "The authorization contract is wired and consumed. Dispatch stays disabled until the "
+      + "§14 enablement evidence is met on real lanes; a lane with no memory, a stale checkpoint or an "
+      + "unprovenanced authorization still resolves UNKNOWN and refuses.",
+    authorization_summary: authorizationSummary(candidates, root, now, liveTruth),
   };
+}
+
+/** How the authorization contract resolved for each lane — the §18 scoreboard input. */
+function authorizationSummary(candidates, root, now, liveTruth) {
+  const out = { AUTHORIZED: 0, REQUIRES_DIRECTOR: 0, PROHIBITED: 0, UNKNOWN: 0, no_memory: 0 };
+  for (const c of candidates) {
+    let memory = null;
+    try { memory = getLaneMemory(c.lane_id, root); } catch { memory = null; }
+    if (!memory) { out.no_memory += 1; out.UNKNOWN += 1; continue; }
+    const contract = authorizedNextStep({
+      record: memory,
+      live: {
+        lane_id: c.lane_id, run_state: c.run_state,
+        staging_sha: liveTruth.staging_sha,
+        dependency_states: liveTruth.dependency_states,
+        finding_statuses: liveTruth.finding_statuses,
+      },
+      now,
+    });
+    out[contract.authorization] = (out[contract.authorization] || 0) + 1;
+  }
+  return out;
 }
