@@ -44,6 +44,8 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "attendance.move",
     "attendance.correct",
     "attendance.mark_absent",
+    "enrollment.pricing.accept",
+    "enrollment.pricing.override",
     "charge.add",
     "charge.post",
     "charge.reverse",
@@ -190,6 +192,46 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         registeredActionKey: "health_fact.end",
         implementationStatus: "production",
         reason: "Closes a fact with an end date. Never a deletion — the record says when it stopped applying.",
+    }),
+    // ── Enrollment pricing ─────────────────────────────────────────────────
+    // The operator's decision about tuition, over the resolution Commercial Execution produced.
+    // Neither of these creates a charge: an accepted term is a contract fact, and turning it into
+    // money is a later thread's job.
+    def({
+        capabilityKey: "enrollment.pricing.accept",
+        canonicalCommandKey: "enrollment.pricing.accept",
+        operatorLabel: "Accept tuition",
+        family: "enrollment",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "enrollment.pricing.accept",
+        implementationStatus: "production",
+        reason:
+            "Records the recommended tuition as an effective-dated pricing term on the assignment. "
+            + "The server re-reads the assignment and re-resolves before writing, so a resolution "
+            + "that has gone stale is refused rather than committed.",
+    }),
+    def({
+        capabilityKey: "enrollment.pricing.override",
+        canonicalCommandKey: "enrollment.pricing.override",
+        operatorLabel: "Override tuition",
+        family: "enrollment",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "enrollment.pricing.override",
+        implementationStatus: "production",
+        reason:
+            "Chooses a DIFFERENT authored tuition option than the one recommended, with a recorded "
+            + "reason, under `enrollment.pricing.override`. It cannot accept an amount: an override "
+            + "picks from the catalog, so every accepted price stays traceable to a rate someone authored.",
     }),
     // ── Financials ─────────────────────────────────────────────────────────
     // One operator intent over the existing charge-lifecycle service. The adapter resolves the
