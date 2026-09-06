@@ -11,7 +11,43 @@ export { canonicalGatewayRuntimeRoot, liveMergePermitted };
 export const ALLOWED_TARGET_BRANCHES = Object.freeze(["staging"]);
 export const ALLOWED_MERGE_METHODS = Object.freeze(["merge", "squash", "rebase"]);
 export const BLOCKED_TARGET_BRANCHES = Object.freeze(["main", "master", "production", "prod"]);
-const DEFAULT_REPOS = Object.freeze(["ksquared-16/alloy", "ksquared-16/alloy"]);
+const DEFAULT_REPOS = Object.freeze(["ksquared-16/alloy"]);
+
+/**
+ * The canonical form of a GitHub repository reference.
+ *
+ * CASE IS NOT IDENTITY. GitHub addresses owner/name case-insensitively:
+ * `ksquared-16/Alloy` and `ksquared-16/alloy` are one repository, and `gh` and
+ * `git` will both happily use either. The allowlist compared them as exact
+ * strings, so a capital A was refused as "not allowlisted" — a refusal that is
+ * literally true of the string and false of the repository.
+ *
+ * MEASURED: two lanes lost governed pushes to this. One filed the same push
+ * twice over 45 minutes with `ksquared-16/Alloy`, and the refusal it needed to
+ * see never reached it. The duplicate entry that used to sit in this list —
+ * `["ksquared-16/alloy", "ksquared-16/alloy"]`, collapsed by the Set and so
+ * doing nothing — is the fossil of an earlier attempt to fix this by listing a
+ * variant instead of normalising.
+ *
+ * The same normal form settles the remote check further down the push path,
+ * where `git remote get-url` returns whatever the clone happens to say.
+ */
+export function normalizeRepositorySlug(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/^git@github\.com:/i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
+/** Is this repository allowlisted, comparing repositories rather than strings? */
+export function isAllowlistedRepository(value) {
+  const want = normalizeRepositorySlug(value);
+  if (!want) return false;
+  return allowlistedRepositories().some((r) => normalizeRepositorySlug(r) === want);
+}
 
 export function allowlistedRepositories() {
   const extra = String(process.env.VACILANDO_GITHUB_REPOSITORY || process.env.ALLOY_GITHUB_REPOSITORY || "")
@@ -41,6 +77,12 @@ export function repositoryRefusalDetail(repository) {
   const given = String(repository || "");
   const looksLikeRegistryId = /^repo_[a-z0-9_]+$/i.test(given);
   const parts = [`Repository ${given} is not allowlisted.`];
+  const caseOnly = allowed.find((r) => r !== given && r.toLowerCase() === given.toLowerCase());
+  if (caseOnly) {
+    // Unreachable once the callers use isAllowlistedRepository, and kept because
+    // a refusal that cannot explain a near miss is how this repeated.
+    parts.push(`Only the case differs from the allowlisted "${caseOnly}".`);
+  }
   if (looksLikeRegistryId) {
     parts.push(
       `"${given}" is a repository registry id, not a GitHub repository. `
@@ -51,13 +93,7 @@ export function repositoryRefusalDetail(repository) {
   return parts.join(" ");
 }
 
-function normRepo(value) {
-  return String(value || "")
-    .trim()
-    .replace(/^https?:\/\/github\.com\//i, "")
-    .replace(/\.git$/i, "")
-    .replace(/^git@github\.com:/i, "");
-}
+const normRepo = normalizeRepositorySlug;
 
 function normSha(value) {
   return String(value || "").trim().toLowerCase();
@@ -121,7 +157,7 @@ export function validateMergeInputs(inputs = {}) {
   }
   const repository = normRepo(inputs.repository || inputs.repo);
   if (!repository) return { ok: false, code: "missing_repository", detail: "repository is required" };
-  if (!allowlistedRepositories().includes(repository)) {
+  if (!isAllowlistedRepository(repository)) {
     return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
   }
   // `pull_request` is accepted alongside the other spellings. A lane proposed

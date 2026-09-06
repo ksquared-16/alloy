@@ -30,7 +30,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-import { allowlistedRepositories, repositoryRefusalDetail } from "./trusted-host-merge.mjs";
+import { isAllowlistedRepository, normalizeRepositorySlug, repositoryRefusalDetail } from "./trusted-host-merge.mjs";
 import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
 
 /** Refs a branch push may never target. Promotion is a merge, not a push. */
@@ -43,9 +43,9 @@ const FORCE_KEYS = [
   "tags", "followTags", "follow_tags", "refspec", "argv", "shell", "command",
 ];
 
-function normRepo(v) {
-  return String(v || "").trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/i, "");
-}
+// One normal form for repository identity, owned next to the allowlist it is
+// compared against. See normalizeRepositorySlug: case is not identity.
+const normRepo = normalizeRepositorySlug;
 
 function normSha(v) {
   return String(v || "").trim().toLowerCase();
@@ -72,7 +72,7 @@ export function validatePushInputs(inputs = {}) {
   }
   const repository = normRepo(inputs.repository || inputs.repo);
   if (!repository) return { ok: false, code: "missing_repository", detail: "repository is required" };
-  if (!allowlistedRepositories().includes(repository)) {
+  if (!isAllowlistedRepository(repository)) {
     return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
   }
 
