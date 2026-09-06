@@ -116,6 +116,7 @@ export function laneMemoryRecord({
   nextStep = null,
   blockers = [],
   documentation = [],
+  promotionCheckpoints = [],
   nowMs = Date.now(),
 } = {}) {
   return {
@@ -173,8 +174,72 @@ export function laneMemoryRecord({
       accepted_debt: b.accepted_debt ?? false,
     })),
     documentation: documentation.map(String),
+    /*
+     * PROMOTION CHECKPOINTS — the Phase 6 gap, closed inside the owner that
+     * already holds lane context rather than in a parallel documentation system.
+     *
+     * The distinction this exists to make is the one autonomous continuation
+     * depends on: "the capability shipped and the mission CONTINUES" versus
+     * "the mission is done". A promotion record that cannot say which is a
+     * changelog entry, and a future provider reading it learns nothing about
+     * whether to carry on.
+     *
+     * Bounded: the most recent few, newest last. Full narratives live in the
+     * incident and findings owners and are referenced by id, never copied.
+     */
+    promotion_checkpoints: promotionCheckpoints.map(promotionCheckpoint),
     updated_at: new Date(nowMs).toISOString(),
   };
+}
+
+/** How many promotion checkpoints a lane retains. Bounded audit, not an archive. */
+export const PROMOTION_CHECKPOINT_LIMIT = 10;
+
+/**
+ * One promotion, recorded so a future provider can tell a shipped capability
+ * from a finished mission.
+ */
+export function promotionCheckpoint(c = {}) {
+  return {
+    capability: c.capability ?? null,
+    root_cause: c.root_cause ?? null,
+    decisions: c.decisions ?? [],
+    certification: c.certification ?? null,
+    lineage: {
+      candidate: c.lineage?.candidate ?? null,
+      pull_request: c.lineage?.pull_request ?? null,
+      merge: c.lineage?.merge ?? null,
+      final_staging: c.lineage?.final_staging ?? null,
+      installed: c.lineage?.installed ?? null,
+      running: c.lineage?.running ?? null,
+    },
+    // References, never narratives.
+    findings_affected: c.findings_affected ?? [],
+    limitations: c.limitations ?? [],
+    // THE FIELD THAT MATTERS FOR CONTINUATION.
+    mission_complete: c.mission_complete ?? null,
+    next_authorized_action: c.next_authorized_action ?? null,
+    at: c.at ?? new Date().toISOString(),
+  };
+}
+
+/**
+ * Append a promotion checkpoint to a lane, bounded and idempotent by merge sha.
+ *
+ * Idempotent because a re-reported promotion is the same promotion: the run
+ * that files it may be replayed, and a second identical entry would make the
+ * lineage read like two ships of the same change.
+ */
+export function recordPromotionCheckpoint(laneId, checkpoint, { root, nowMs = Date.now() } = {}) {
+  if (!root) return { ok: false, error: "missing_runtime_root" };
+  const existing = getLaneMemory(laneId, root);
+  if (!existing) return { ok: false, error: "no_lane_memory" };
+  const entry = promotionCheckpoint({ ...checkpoint, at: new Date(nowMs).toISOString() });
+  const merge = entry.lineage.merge;
+  const kept = (existing.promotion_checkpoints || []).filter((c) => !(merge && c.lineage?.merge === merge));
+  existing.promotion_checkpoints = [...kept, entry].slice(-PROMOTION_CHECKPOINT_LIMIT);
+  existing.updated_at = new Date(nowMs).toISOString();
+  return saveLaneMemory(existing, { root });
 }
 
 export function getLaneMemory(laneId, root) {
@@ -253,6 +318,9 @@ export function laneContextProjection(record, { limit = 8 } = {}) {
     authorization_provenance: record.authorization?.provenance ?? [],
     documentation: clip(record.documentation),
     promoted_lineage: clip(record.progress?.promoted_lineage),
+    // The most recent promotion, so a provider entering the lane immediately
+    // knows whether the mission continues.
+    last_promotion: (record.promotion_checkpoints || []).slice(-1)[0] ?? null,
     finding_refs: clip(record.progress?.finding_refs),
     updated_at: record.updated_at,
   };

@@ -24,6 +24,9 @@ const safeWorld = (over = {}) => ({
   durability: "merged",
   requestingWorktree: "wt5-current",
   operatorHold: false, governanceException: false,
+  // The fourteenth gate. This fixture models an UNMANAGED worktree, so the
+  // measurement is false; omitting it would block, which is the gate working.
+  managedSlot: false,
   ...over,
 });
 
