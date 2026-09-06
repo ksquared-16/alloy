@@ -33,6 +33,41 @@ const OUT = process.env.CERT_TUITION_OUT || "";
 /** The assignment section for the first child on the panel. */
 const ASSIGNMENT = "[data-tuition-assignment]";
 
+/**
+ * Open queue rows until one of them has an assignment in the wanted state.
+ *
+ * Queue order is not a fixture. A third of the representative tenant's assignments are drop-in and
+ * deliberately unpriced, so "the first row" is not reliably a priced one — and pinning the case to a
+ * particular row would make this certification depend on an ordering nobody promised.
+ */
+async function openSubjectWith(page: Page, state: string, limit = 8): Promise<{ subjectId: string; index: number }> {
+    for (let index = 0; index < limit; index++) {
+        const subjectId = await openSubject(page, index);
+        const section = page.locator(ASSIGNMENT).first();
+        if ((await section.count()) > 0) {
+            await expect(section).toBeVisible({ timeout: 30_000 });
+            if ((await section.getAttribute("data-tuition-state")) === state) {
+                return { subjectId, index };
+            }
+        }
+    }
+    throw new Error(`no assignment in state "${state}" within the first ${limit} queue rows`);
+}
+
+/** Open queue rows until one has an assignment with a term already accepted. */
+async function openAcceptedSubject(page: Page, limit = 8): Promise<string> {
+    for (let index = 0; index < limit; index++) {
+        const subjectId = await openSubject(page, index);
+        const section = page.locator(ASSIGNMENT).first();
+        if ((await section.count()) > 0) {
+            await expect(section).toBeVisible({ timeout: 30_000 });
+            const accepted = await section.getAttribute("data-tuition-accepted");
+            if (accepted && accepted !== "none") return subjectId;
+        }
+    }
+    throw new Error(`no assignment with an accepted term within the first ${limit} queue rows`);
+}
+
 async function openSubject(page: Page, index = 0): Promise<string> {
     await page.addInitScript(
         ([key, state]) => {
@@ -60,7 +95,7 @@ test.describe("assignment → tuition, in the mounted application", () => {
     test.describe.configure({ mode: "serial" });
 
     test("A–E, M — resolve, accept, reload, and a retry that adds nothing", async ({ page }) => {
-        await openSubject(page);
+        await openSubjectWith(page, "recommended");
 
         // ── A · THE CARD MOUNTS FOR AN ASSIGNMENT WITH NO ENROLMENT ─────────────────────────
         const card = page.locator("[data-assignment-tuition]");
@@ -145,7 +180,8 @@ test.describe("assignment → tuition, in the mounted application", () => {
         const expectStale = process.env.CERT_EXPECT_STALE === "1";
         test.skip(!process.env.CERT_EXPECT_STALE, "driven by the harness, in two halves");
 
-        await openSubject(page);
+        // The SAME assignment A–E accepted: the harness moved that one's days at its owner.
+        await openAcceptedSubject(page);
         const first = page.locator(ASSIGNMENT).first();
         await expect(first).toBeVisible({ timeout: 30_000 });
 
@@ -172,10 +208,9 @@ test.describe("assignment → tuition, in the mounted application", () => {
     });
 
     test("K — an authorized override keeps the recommendation, needs a reason, and survives a reload", async ({ page }) => {
-        await openSubject(page);
+        await openSubjectWith(page, "recommended");
         const first = page.locator(ASSIGNMENT).first();
         await expect(first).toBeVisible({ timeout: 30_000 });
-        await expect(first).toHaveAttribute("data-tuition-state", "recommended", { timeout: 30_000 });
 
         // An alternative authored option has to exist for an override to be possible at all.
         const alternatives = first.locator("[data-tuition-alternatives] [data-tuition-choose]");
@@ -217,9 +252,8 @@ test.describe("assignment → tuition, in the mounted application", () => {
      */
     test("I — an ambiguous catalog offers the options and selects none", async ({ page }) => {
         test.skip(process.env.CERT_EXPECT_AMBIGUOUS !== "1", "driven by the harness");
-        await openSubject(page);
+        await openSubjectWith(page, "ambiguous");
         const first = page.locator(ASSIGNMENT).first();
-        await expect(first).toBeVisible({ timeout: 30_000 });
         await expect(first).toHaveAttribute("data-tuition-state", "ambiguous", { timeout: 30_000 });
         await expect(first.locator("[data-tuition-ambiguous]")).toBeVisible();
         // NOTHING was chosen on the operator's behalf.
@@ -238,7 +272,7 @@ test.describe("assignment → tuition, in the mounted application", () => {
      */
     test("L — without the grant, the server refuses the override", async ({ page }) => {
         test.skip(process.env.CERT_EXPECT_UNAUTHORIZED !== "1", "driven by the harness");
-        await openSubject(page);
+        await openSubjectWith(page, "recommended");
         const first = page.locator(ASSIGNMENT).first();
         await expect(first).toBeVisible({ timeout: 30_000 });
 
