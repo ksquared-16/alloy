@@ -23,6 +23,7 @@ Usage:
   vac reconcile [--apply]      S7 reconciliation: read-only plan; --apply FILES a governed request
   vac worktree-retire [<wt> --apply]  Retirement candidates + evidence; --apply FILES a governed request
   vac hygiene [--plan|--apply ...]  Retention scoreboard; --apply needs --cycle or an explicit --kind/--target
+  vac scoreboard [--json]      One composed view: runtime, lanes, scheduling, hygiene, findings, attention
   vac run-report <run_id> <type> --message-file <path|->
                            Submit the user-facing agent report that IS the
                            conversation: progress | needs-input | completion | failure
@@ -83,6 +84,10 @@ case "${1:-}" in
   hygiene)
     shift
     exec node "$SCRIPT_DIR/vac-hygiene.mjs" "$@"
+    ;;
+  scoreboard)
+    shift
+    exec node "$SCRIPT_DIR/vac-scoreboard.mjs" "$@"
     ;;
   host-steward)
     shift

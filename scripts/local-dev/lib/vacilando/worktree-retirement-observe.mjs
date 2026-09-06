@@ -194,7 +194,22 @@ export function observeRetirementCandidates({
     // rather than inferred from S7's lifecycle state, which calls a worktree
     // "active" for any live reference at all.
     const devServer = refs.some((p) => /next[- ](dev|start|server)/.test(String(p.command || "")));
-    const registration = resolveWorktreeRegistration({ root, name, repositoryId: repository });
+    // THE SLOT STORE IS AN ENUMERATION, SO ABSENCE IS AN ANSWER.
+    //
+    // `resolveWorktreeRegistration` reads every metadata/*.env and returns a
+    // definite verdict: a name that is not among them is not a managed slot.
+    // That is a measurement, not a gap. Only a lookup that THROWS is unmeasured,
+    // and that blocks — which is why this is the one place the distinction is
+    // drawn rather than treating `known: false` as ignorance.
+    let registration;
+    let managedSlot;
+    try {
+      registration = resolveWorktreeRegistration({ root, name, repositoryId: repository });
+      managedSlot = registration.managed === true;
+    } catch {
+      registration = { provenance: "unknown", managed: false, known: false };
+      managedSlot = null;
+    }
 
     const safety = evaluateRetirementSafety({
       path: name,
@@ -213,6 +228,10 @@ export function observeRetirementCandidates({
       requestingWorktree,
       operatorHold,
       governanceException,
+      // The slot store is the authority on whether a worktree is a managed
+      // slot's checkout. `resolveWorktreeRegistration` reads metadata/*.env and
+      // never invents management, so `managed` is a measurement, not a guess.
+      managedSlot,
     });
 
     return {

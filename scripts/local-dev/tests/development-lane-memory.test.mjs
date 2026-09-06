@@ -274,3 +274,82 @@ await test("declared enums are closed and include their unknown", () => {
     assert.equal(M.AUTHORIZATION_PROVENANCE.includes("model_judgement"), false,
         "an LLM deciding a step sounds authorized is exactly what this excludes");
 });
+
+/* ── I — the promotion checkpoint (the Phase 6 gap) ──────────────────────── */
+
+await test("I — a promotion checkpoint records lineage AND whether the mission continues", () => {
+    const root = freshRoot();
+    M.saveLaneMemory(record(), { root });
+    const out = M.recordPromotionCheckpoint("lane_test", {
+        capability: "the fourteenth retirement gate",
+        root_cause: "the retirement evaluator could not read slot configuration",
+        decisions: ["the invariant belongs at the authoritative boundary, not only in the planner"],
+        certification: "50/50 retirement, 33/33 hygiene, live: two managed slots now blocked",
+        lineage: { candidate: "abc123", pull_request: 731, merge: "def456", final_staging: "def456", installed: "def456", running: "def456" },
+        findings_affected: ["managed-slot-worktree-passes-retirement-gates"],
+        limitations: ["eight lanes still have no memory"],
+        mission_complete: false,
+        next_authorized_action: "run_tests",
+    }, { root });
+    assert.equal(out.ok, true);
+
+    const back = M.getLaneMemory("lane_test", root);
+    const cp = back.promotion_checkpoints[0];
+    assert.equal(cp.lineage.merge, "def456");
+    assert.equal(cp.lineage.running, "def456");
+    // THE FIELD CONTINUATION DEPENDS ON: shipped is not the same as finished.
+    assert.equal(cp.mission_complete, false);
+    assert.equal(cp.next_authorized_action, "run_tests");
+    // References, never narratives.
+    assert.deepEqual(cp.findings_affected, ["managed-slot-worktree-passes-retirement-gates"]);
+});
+
+await test("a re-reported promotion is the same promotion, not a second ship", () => {
+    const root = freshRoot();
+    M.saveLaneMemory(record(), { root });
+    const cp = { capability: "x", lineage: { merge: "same-sha" }, mission_complete: false };
+    M.recordPromotionCheckpoint("lane_test", cp, { root });
+    M.recordPromotionCheckpoint("lane_test", cp, { root });
+    assert.equal(M.getLaneMemory("lane_test", root).promotion_checkpoints.length, 1);
+});
+
+await test("promotion checkpoints are bounded, and the handoff shows the latest", () => {
+    const root = freshRoot();
+    M.saveLaneMemory(record(), { root });
+    for (let i = 0; i < M.PROMOTION_CHECKPOINT_LIMIT + 5; i += 1) {
+        M.recordPromotionCheckpoint("lane_test", { capability: `c${i}`, lineage: { merge: `sha${i}` } }, { root });
+    }
+    const back = M.getLaneMemory("lane_test", root);
+    assert.equal(back.promotion_checkpoints.length, M.PROMOTION_CHECKPOINT_LIMIT);
+    assert.equal(back.promotion_checkpoints.at(-1).capability, `c${M.PROMOTION_CHECKPOINT_LIMIT + 4}`, "newest last");
+    const p = M.laneContextProjection(back);
+    assert.equal(p.last_promotion.capability, `c${M.PROMOTION_CHECKPOINT_LIMIT + 4}`);
+});
+
+await test("a promotion checkpoint refuses a lane with no memory rather than inventing one", () => {
+    const root = freshRoot();
+    assert.equal(M.recordPromotionCheckpoint("lane_absent", {}, { root }).error, "no_lane_memory");
+});
+
+/* ── The fourteenth retirement gate, at the authoritative boundary ───────── */
+
+await test("a managed slot is blocked by the RETIREMENT EVALUATOR, not only by hygiene", async () => {
+    const W = await import("../lib/vacilando/worktree-retirement.mjs");
+    const base = {
+        path: "troubleshooting", branch: "agent/troubleshooting", headSha: "b".repeat(40),
+        existsInGit: true, liveProviders: [], liveDevServer: false, activeRuns: [],
+        activeGovernedActions: [], activeLanes: [], dirtyPaths: [], untrackedPaths: [],
+        untrackedReproducible: true, durability: "merged",
+        requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false,
+    };
+    assert.ok(W.SAFETY_GATES.includes("no_managed_slot_binding"));
+    // Every git fact true, and it is still refused.
+    const managed = W.evaluateRetirementSafety({ ...base, managedSlot: true });
+    assert.equal(managed.state, "blocked");
+    assert.deepEqual(managed.blocked_by, ["no_managed_slot_binding"]);
+    // An unmanaged worktree is unaffected: the gate is precise, not blunt.
+    assert.equal(W.evaluateRetirementSafety({ ...base, managedSlot: false }).state, "candidate");
+    // And unmeasured blocks, like every other gate.
+    assert.equal(W.evaluateRetirementSafety(base).state, "blocked");
+    assert.ok(W.evaluateRetirementSafety(base).unmeasured.includes("no_managed_slot_binding"));
+});

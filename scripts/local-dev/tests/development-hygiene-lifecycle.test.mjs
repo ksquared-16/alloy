@@ -230,7 +230,7 @@ await test("E — withheld evidence preserves rather than reclaims", () => {
       existsInGit: true, liveProviders: [], liveDevServer: false, activeRuns: [],
       activeGovernedActions: [], activeLanes: [], dirtyPaths: [], untrackedPaths: [],
       untrackedReproducible: true, durability: "merged",
-      requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false,
+      requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false, managedSlot: false,
     };
     delete inputs[withheld];
     const safety = W.evaluateRetirementSafety(inputs);
@@ -244,7 +244,7 @@ await test("E — withheld evidence preserves rather than reclaims", () => {
     existsInGit: true, liveProviders: [], liveDevServer: false, activeRuns: [],
     activeGovernedActions: [], activeLanes: [], dirtyPaths: [], untrackedPaths: [],
     untrackedReproducible: true, durability: "merged",
-    requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false,
+    requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false, managedSlot: false,
   });
   assert.equal(C.classifyWorktreeHygiene(full).hygiene_state, "RECLAIMABLE");
 });
@@ -561,7 +561,7 @@ await test("LIVE — a managed slot's worktree is intentionally retained, howeve
     existsInGit: true, liveProviders: [], liveDevServer: false, activeRuns: [],
     activeGovernedActions: [], activeLanes: [], dirtyPaths: [], untrackedPaths: [],
     untrackedReproducible: true, durability: "merged",
-    requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false,
+    requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false, managedSlot: false,
   });
   assert.equal(safety.state, "candidate", "the retirement gates genuinely pass — that is the point");
   assert.equal(C.classifyWorktreeHygiene(safety, { managed: false }).hygiene_state, "RECLAIMABLE");
@@ -577,7 +577,7 @@ await test("LIVE — a managed slot's worktree is intentionally retained, howeve
     existsInGit: true, liveProviders: [], liveDevServer: false, activeRuns: [],
     activeGovernedActions: [], activeLanes: [], dirtyPaths: [], untrackedPaths: [],
     untrackedReproducible: true, durability: "unique_local_commits",
-    requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false,
+    requestingWorktree: "/elsewhere", operatorHold: false, governanceException: false, managedSlot: false,
   });
   const cls = C.classifyWorktreeHygiene(atRisk, { managed: true, provenance: "managed" });
   assert.equal(cls.hygiene_state, "NEEDS_ATTENTION");
