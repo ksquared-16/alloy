@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: sprint
-last_reviewed: 2026-08-10
+last_reviewed: 2026-09-06
 supersedes: []
 ---
 
@@ -61,6 +61,18 @@ given the same objective. **Mission-scoped dedupe did not collapse the two, so t
 for one census: approve `gar_3368b11eb1b1ce`, deny this one.** No worker-side withdraw exists. This pass also
 corrected the run-4 preparation's own hash evidence — the `git log … returns EMPTY` claim is false, though the
 verdict it supports survives on a stronger key-level check (§4)
+· **W-0 run 4 EXECUTED 2026-09-04T11:28:53Z** (`tha_836b248cacf951`, via `gar_c834cb05ce8425`) — **the first run
+that drifted.** Same query and same org fingerprint `ab7e5dde…` as run 3, so the movement is in the *data*.
+`q4_pairs_without_profile` **2 → 5**, `q4_membership_rows` **8 → 13**, `q4_distinct_user_org_pairs` **6 → 11**;
+every other consequence-bearing count unchanged. **Three of the five new `(user, org)` pairs arrived fail-open**,
+which disproves the standing reading that W-5 shut Q4's growth path (§4, §6)
+· **W-0 re-issued a seventh time — 2026-09-06** (mission `msn_b7040b5174ddeafb79`, assignment
+`asg_71201204af2de6`) — **no run 5 was filed, deliberately**: run 4's evidence is two days old and every
+condition this programme set for a re-run has been discharged. What run 4 left undone was *propagation* — its
+counts never reached this plan, whose W-0 log ended at "run 4 filed" and whose forward-looking claims still read
+*"M1 is sized at exactly 2 rows"*. Also **corrected a false lockout alarm** (M1 self-sizes in-transaction, so a
+stale "2" cannot mis-apply) and **flagged that RULE 5 has now bitten**: a live M1 apply-authorization stands on a
+run-3 preflight, and its unattributed-growth abort condition is satisfied (§4, §6, §7)
 · **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
 `asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
 authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
@@ -172,6 +184,19 @@ lock is not in this assignment's scope** and no test could be executed to prove 
 **strengthened within scope**: W-16's role FK (`20260818190000`, landed *after* W-5's last issuance) makes the
 opposite failure direction injectable for the first time, so the suite now covers **orphan profiles** as well as
 orphan memberships. Tier C still unexecuted — the service-role key remains absent by design (§5)
+· **W-1…W-3 issued a seventh time — 2026-09-06** (mission `msn_b7040b5174ddeafb79`, assignment
+`asg_72bda8e62b6698`) — the run that **discharges both debts the sixth issuance left**. That run could execute
+nothing; this one runs **93 passed / 0 failed** across the four lock suites with `vac run typecheck:tests`
+**rc=0** — the first executed Wave 1 suite result since 2026-08-07. The class-wide floor the sixth set *blind*
+is confirmed **exactly 103**, so its lower-bound argument was tight rather than merely safe, and no ratchet now
+carries slack in either direction (family 27, aliases 3). The repair it deferred to *"a run that can prove it
+red"* is **built**: every runtime export of the three access-primitive modules must be classified as gate, raw
+resolution, or reviewed non-gate, closing the **fifth** instance of this workstream's escape class — the first
+closed before it had a live victim — and the three unlisted `adminAuth` gates are now listed, inertly. Proved
+red by three negative fixtures, all removed before commit. **W-2's exit criterion is met and now executed**
+rather than statically read. Six `tests/access` failures are **W-11/W-12's, not Wave 1's**, and are reported
+unrepaired. **A third consecutive fixture-titled mission has issued this access workstream** — DX7, then DX-5,
+now DX-6 — and no run has answered whether it should (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -245,6 +270,11 @@ statements**, and it is the highest-leverage step in the programme.
 **It proved so.** Executed 2026-07-31, Wave 0 emptied the remediation set for three of the four lockout-class
 workstreams, struck a migration (M8), kept W-20 in wave 5 by showing G1 is latent, and sized the one real
 remediation at two rows. Three of those four answers were *not* the conservative assumption the plan carried.
+
+**And it kept proving so.** The same census re-run on 2026-09-04 (run 4) is the one that moved: the single real
+remediation went from **two rows to five**. Three runs of identical counts had made re-running look ceremonial —
+it was not. **Wave 0 is worth its authorization every time it is run immediately before a lockout-class switch,
+and worth nothing run on a calendar.**
 
 ### 1.3 Declaring a capability per route is worthless until the vocabulary is settled
 
@@ -385,6 +415,10 @@ population rather than a no-op.
 **Four of six rules did not fire.** Three of the four lockout-class workstreams — L2 (W-13), L3 (W-16) and
 L4 (W-20) — have an **empty** remediation set. Only L1 has real work, and it is two rows. This is the
 single largest de-risking of the programme, and it is exactly what §1.2 predicted Wave 0 would buy.
+
+> **The counts in this section are run 1's (2026-07-31) and are preserved as that run's record.** Four rules
+> still do not fire, but **L1 is now five rows, not two** — see *W-0 run 4* at the end of this section for the
+> current figures. Every consumer re-derives rather than cites; that rule is why this block is not rewritten.
 
 **Two things this does *not* license.** First, the defects are no less real: the same code ships to any tenant
 that grows, and Q4 will keep growing until W-5 lands, so **the counts are a snapshot and every switch must
@@ -636,6 +670,8 @@ rather than confirming it backwards — their target remains inferential; every 
 unchanged and still governs: Q4 is the count that grows, and every §11 preflight must re-derive it rather than
 cite this one. Per the census file's `now_also_serves_w6_m1_preflight`, this run is *also* the fresh Q4 that
 W-6/M1 requires immediately before apply, and its `q4_pairs_without_profile = 2` is the number M1 must equal.
+**Superseded by run 4 (2026-09-04): that number is now 5**, and *"the number M1 must equal"* is the wrong frame
+for it — M1 self-sizes in-transaction. See the run-4 section below.
 
 **W-6's pre-apply rules pass on this run — with one that decays.** Rule 1 (sizing) is satisfied at 2; rule 2
 (grain) is satisfied because that figure is `q4_pairs_without_profile`, not the 8 membership rows or the 6
@@ -810,6 +846,106 @@ validator is byte-identical to the one run 3 passed, and `combined_query` is byt
 Same query, same validator, same verdict. The permission wall is meanwhile **wider** than recorded: not just
 `node -e`, but `node <script-file>`, `shasum -a 256` and `openssl dgst -sha256` are all refused, so there is no
 in-worker route to `sha256` by any obvious means. Both checks stay provenance arguments because they have to be.
+
+#### W-0 run 4 — **EXECUTED 2026-09-04T11:28:53Z**, and it is the first run that drifted
+
+The operator granted one of the two cards and the Director executed host-side. `tha_836b248cacf951`, via
+`gar_c834cb05ce8425`, query hash `a3982ca5…` unchanged. Raw output landed in
+[`wave0-authority-census.results.json`](wave0-authority-census.results.json) — **not** in the census file, exactly
+as both sixth-re-issue passes predicted.
+
+| | |
+|---|---|
+| Org fingerprint | **`ab7e5dde2e229d5c46e251456e4d9534`** — *identical to run 3*, so this is the same target and the drift comparison is valid |
+| Query | Byte-identical to run 3. **The movement is in the data, not the instrument** |
+
+| Count | Run 3 | Run 4 | |
+|---|---|---|---|
+| `q4_membership_rows` | 8 | **13** | The tenant stopped being idle |
+| `q4_distinct_user_org_pairs` | 6 | **11** | Every new membership row is a new pair — nobody gained a second role in an org they already held |
+| `q4_pairs_without_profile` | 2 | **5** | **Three of the five new pairs arrived fail-open** |
+| Q1 / Q2 / Q3 / Q5 / Q6 | — | *unchanged* | 0 application triggers (74 internal, up from 62 — rule unaffected), 0 legacy-only, 0 undefined roles, 0 undefined admin/ops definitions, 1 restricted admin/ops |
+
+**Three consecutive identical runs had made re-running look ceremonial. The fourth is the one that moved** — and
+it moved the single count another workstream consumes as a *quantity* rather than as a yes/no. That is the whole
+argument for RULE 5, now measured instead of argued.
+
+**What it disproves, and this is the substantive finding.** The standing reading has been that W-5 closed Q4's
+growth path on 2026-08-07. **It did not.** W-5 closed the *admin API* path — `POST /api/admin/users` now RPCs
+`create_membership_with_access_profile` in one transaction (`web/app/api/admin/users/route.ts:176-180`,
+`web/lib/admin/membershipWithProfile.ts:46`) and no longer inserts into `user_roles` at all. So the route named
+in run 3's diagnosis is genuinely fixed, and Q4 grew anyway. The census file's `run_4_root_cause_analysis`
+identifies what is still writing memberships without profiles: **seed and QA tooling W-5's audit never covered** —
+`web/scripts/seedRealisticChildcareDemoData.ts:1310`, `web/scripts/seedAccessValidationDemo.ts:536`, and
+`web/scripts/qa/employmentNegativeControls.sh:76`, which creates a profile-less membership *deliberately*, as a
+negative control. The census target carries the org slug `demo-childcare-co-c144769f`, which is the first
+script's tenant.
+
+**The consequence for W-5's scope**, recorded as a recommendation to its owner: **W-5 should be read as *"no path
+creates a membership without a profile"*, not *"the admin API does not"***. Either the seed/QA scripts adopt
+`create_membership_with_access_profile`, or the invariant moves into the database where no writer can bypass it.
+Until one of those lands, **M1 is a broom, not a fix** — it empties the backlog until the next seed run.
+
+**What this census cannot say**, stated so nobody over-reads it: *which* path created the three rows. Q4 returns
+counts, not rows. Nor does it establish what is *deployed* to the target — a branch that has W-5 and a deployment
+that does not would produce these same numbers.
+
+#### W-0 re-issued a seventh time — **2026-09-06**, assignment `asg_71201204af2de6`: no run 5, and the propagation run 4 left undone
+
+Mission `msn_b7040b5174ddeafb79` v1, contentHash `7925190b4920d87d78a39ed7154312b9`. **The census had already
+run.** Six re-issues ended at *prepared* or *filed*; this one arrived two days after run 4 actually executed.
+
+**No run 5 was filed, and that is the finding rather than an omission.** Every condition this programme set for a
+re-run has been discharged: run 4's evidence is two days old, and the questions the fifth re-issue used to
+justify run 4 — M1's and M9's apply state — are answered. Filing again would spend an operator authorization to
+re-measure a two-day-old number, which §4 has named as the wrong outcome four times over. **The sixth re-issue's
+correction — *"filing is what puts the card in front of the operator"* — is not general licence to file.** It
+applied when nothing had run. **A dispatch is not evidence that work is outstanding**; `run_history` and the
+`.results.json` answer that in one read, with no authorization.
+
+**What run 4 left undone was propagation.** Its counts reached the census file's own summary blocks and stopped
+there — they never reached this plan, whose W-0 log ended at *"run 4 filed"*, nor the blocks other workstreams
+read. Closed in this pass, across both scope files.
+
+**A false alarm, corrected.** The census recorded that *"shipping M1 at its recorded size of 2 would leave 3
+principals without an access profile at the moment the switch flips — three lockouts."* **That is wrong, and
+leaving a false lockout alarm standing is how an authorization gets spent on a non-problem.** M1 is not sized at
+2 in any executable sense — **it self-sizes**. Its insert is `SELECT DISTINCT … FROM user_roles ON CONFLICT DO
+NOTHING` (`20260807140000…sql:80-83`), covering every pair present at apply time, and post-condition (1)
+(`:120-124`) compares rows created against an anti-join measured *in the same transaction* (`:54-58`) — never
+against a number in a file. Applied today it creates 5, asserts 5 == 5, and post-condition (2) asserts zero pairs
+left uncovered. **W-6's owner had this right on 2026-08-07** (`w6_owner_acceptance.the_one_refinement_added`:
+*"a stale preflight cannot cause a WRONG apply, only an UNEXPLAINED one"*); run 4 is the first evidence that
+vindicates it, and the alarm contradicted a finding already in its own file.
+
+**⚠ But RULE 5 has now genuinely bitten, and this one is for W-6's owner.** M1's operator apply-authorization was
+granted 2026-08-07 and **the apply never happened**. Its preflight is 30 days old and the population it measured
+has moved, which is precisely the staleness RULE 5 exists to catch — the first time that rule has bitten rather
+than been carried as a caution. **The gate was deliberately not moved here**: W-0 produces the numbers, W-6's
+owner applies them. Two things need its ruling:
+
+1. **`abort_conditions[0]` is satisfied** — *"`q4_pairs_without_profile` cannot be attributed to a known writer
+   (cert fixture) — stop; a sixth membership writer exists and W-5's audit was incomplete."* Three new fail-open
+   pairs exist, the census cannot attribute them, and the writers the RCA names are **not** the cert fixture
+   RULE 5 anticipated. On the condition's own terms this is a **stop pending attribution**, not a proceed.
+2. **An operator-facing reading hazard.** The apply was authorized against a written record saying *"2 rows"*.
+   An operator watching it emit `profile_rows_created = 5` could reasonably read a **correct** apply as a
+   misfire. Re-state the size before the apply so expectation and observation agree.
+
+**The cheapest way to discharge both** is the census file's own `recommended_next_census`: add row-level
+attribution **for the failing population only** — `(user_id, org_id, role, created_at)` where no profile exists.
+Read-only, bounded, five rows of output. That converts *"cannot attribute"* into attributed, and it is the same
+re-run RULE 5 requires before the apply anyway — **one authorization discharging two obligations**, the trick
+W-6's preflight already proved works.
+
+**⚠ Operator: one card may still be open.** Run 4 executed under `gar_c834cb05ce8425` — **the request both prior
+sessions recommended *denying***. No harm done: both named this census in `artifact_refs` and the same target, so
+*"either one alone produces the same run 4"* held exactly as predicted, and the recommendation was always about
+attention economy rather than correctness. **But if `gar_3368b11eb1b1ce` and its decision card
+`dec_b1c5c947f5129e` are still pending, approving them now would run a fifth census nobody needs.** This pass
+could not check: the request store lives outside the worktree and the workspace boundary refuses reads outside it
+— the same control class §4 has recorded since 2026-07-31, working as designed. **There is still no worker-side
+withdraw**, so this stays an operator-only cleanup.
 
 ---
 
@@ -1520,6 +1656,119 @@ raised and no run has answered.
 
 **Not verified this run.** No suite execution, no typecheck, no live database query — W-0's counts are now
 **four weeks** old. Wave 1 needs no live query, but M1 must still re-derive Q4 rather than cite it.
+
+#### Wave 1, seventh issuance — **2026-09-06**, assignment `asg_72bda8e62b6698`: the blind ratchet was exact, and the deferred repair is built
+
+The seventh issuance of W-1…W-3. §4's rule holds a seventh time: **re-execute rather than re-assert.** This run
+is defined entirely by what the sixth could not do. That run could not execute the suites — no installed
+dependencies — so it set the class-wide floor **blind** and closed by asking *"the next runner that can execute
+the suite should confirm the exact figure."* It also recorded a subject gap and deferred the repair to *"a run
+that can prove it red."* **This worktree has dependencies. Both debts are discharged.**
+
+| Field | Value |
+|---|---|
+| Base | `8ac36e88d` @ `fix/census-containment-and-dispatch-identity` — **28 web commits** since the sixth-issuance base `bda34e2e8`. API routes **603 → 603** (unmoved); migrations 371 → **373**. Root is `managed-worktree`, sanctioned, 8 commits behind `origin/staging` |
+| Suites | **Passed — 93 passed / 0 failed**, 4 test files passed / 0 failed. `analyticsRouteGates` 53 · `permissionGrid` 20 · `selfAuthorityMutation` 14 · `selfAuthorityRouteDiscovery` 6. **This is the first executed Wave 1 suite result since 2026-08-07** |
+| Subjects | Executed, not derived: analytics family **27** (floor 27) · class-wide G2 **103 of 603** (floor 103) · aliases **3** (floor 3) |
+| Typecheck | `vac run typecheck:tests` **rc=0 class=ok** (brokered, 17:08:19Z → 17:09:17Z). The second Wave 1 run ever to reproduce one, after 2026-08-07 |
+| Regression | Full `tests/access`: **789 passed / 6 failed / 7 skipped** across 47 files. All 6 failures are **Wave 3** (`catalogVocabularyReconciliation` ×4, `capabilityTaxonomy` ×1, `grantSeedEnumeration`/RL-8 ×1) — see below |
+| Changed | `web/tests/access/analyticsRouteGates.test.ts` only. **No route handler, library, schema or migration**, so nothing here is a behaviour change |
+
+**W-1 / RL-1 — the blind ratchet was not merely safe, it was exact.**
+
+The sixth issuance argued its static count was a safe *lower* bound: every way the derivation could diverge from
+the executed predicate — `codeOnly` joining a match across a stripped block comment, `\s*` spanning a newline,
+`readdirSync` seeing files ripgrep's gitignore filter does not — moves the count **up**, never down. Executed
+here, the subject is **exactly 103**. All three divergence paths contributed **zero**, which converts that run's
+*"comment-stripping is a no-op on this corpus"* from an argument into a measurement. The family census is
+**27** and the alias scan finds **3**, both equal to their floors. No ratchet carries slack, in either direction,
+for the first time in this workstream's record.
+
+The figures were read **from the predicate itself** rather than from a second replication: a temporary
+impossible floor makes `toBeGreaterThanOrEqual` report the live value, so the number comes from the code that
+enforces it. A replication would have been a second chance to make the first replication's mistake.
+
+**The deferred repair is built: every export of an access-primitive module must now be classified.**
+
+This is the **fifth** instance of this workstream's recurring escape class, and the first closed *before* it had
+a live victim. The pattern, now five deep: 2026-08-04 listed **directories**; 2026-08-06 moved the subject to
+the **primitive**; 2026-08-07 caught the **alias**; 2026-09-04 found a **wholly new export** that no list saw;
+each repair left a hand-maintained list policing the layer beneath it. The alias lock asks whether an alias of
+an *already listed* symbol is listed, so a module exporting a brand-new gate is invisible to it —
+`getAdminAuthCached` sat unlisted that way from the day it was written, and the sixth issuance found it **by
+hand**, which is exactly the labour these locks exist to retire.
+
+The new lock asks the last question left: **gate, raw resolution, capability gate, or a reviewed non-gate with a
+written reason.** A new `export async function requireSomethingNew()` fails immediately and the failure *names
+the symbol*, so the next contributor makes a decision instead of silently widening the blind spot. The list
+stops being maintained against the module; the module drives the list. `adminContextFailureResponse` and
+`logAdminAudit` are registered as reviewed non-gates — the first renders what a gate returns, the second records
+that an action happened — and the register is itself locked against stale entries and against reasonless ones.
+
+**The three gates are now listed, and the permissive step was made safe rather than assumed safe.** The sixth
+issuance declined to add them, correctly: *"widening a lock speculatively, against no observed failure and
+without the ability to execute the suite, is how a lock quietly stops locking."* Two things answer that
+objection here. The addition is **inert on today's corpus** — all 103 subject routes already call a gate that
+was listed, so no route's verdict changes — and it is **no longer speculative**, because the classification lock
+fails on any unclassified export. The permissive step and the restrictive step land in the same change; neither
+is load-bearing alone. Each gate was verified at source, not cited: `loadAdminAuth` returns null unless
+`bundle.ok && bundle.portalEligible` (`lib/adminAuth.ts:43-45`), `getAdminAuth` is its alias (`:92`), and
+`requireAdmin` is strictly stronger (`:98-107`).
+
+**Proved red by three negative fixtures**, each mutated, observed, and reverted. Unlisting `requireAdmin` →
+**rejected as designed**, naming `lib/adminAuth.ts:requireAdmin` (1 assertion fired, 52 unaffected). A register
+entry for a symbol that does not exist → **rejected as designed** (1 fired, 52 unaffected). A registered
+non-gate with an empty reason → **rejected as designed** (1 fired, 52 unaffected). None is present in the
+committed tree, and the delivered result is the 93/0 above — per this document's own rule, **a negative fixture
+is finished when it is removed and green, not when it goes red.**
+
+**What the new lock still cannot do**, stated so it is not mistaken for completeness: it reads **three named
+modules**. A *fourth* module exporting an access primitive is outside its subject — the same "a lock naming N
+cannot notice the N+1th" limit, now at the module layer, which is where W-14's declared route table is the real
+answer. The escape class is pushed up one level again, not eliminated. The honest claim is that each repair has
+raised the cost of the next escape, and this one raises it to *"add a new module,"* which is a larger and more
+visible act than *"add a line to an existing one."*
+
+**W-2 / RL-11 — the exit criterion is MET, and this is the first run to execute the proof.** The sixth issuance
+found it met but could run nothing. Re-verified here against the files, then executed:
+`lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts` contains **no `insert`, `upsert` or `update`**; the
+self guard is still called by all three routes (`role:34`, `remove:47`, `access-scope:82`); and
+`selfAuthorityRouteDiscovery` **6 passed** plus `selfAuthorityMutation` **14 passed** now stand behind the claim
+rather than a static reading of it. Three consecutive issuances recorded this criterion *not met*; it is met,
+it was not Wave 1 that closed it (W-8 deleted the write), and it is now proven by execution.
+
+**W-3 / RL-2 → RL-3 — green, executed, unchanged.** `permissionGrid.test.ts` **20 passed**. `permissionGrid.ts`
+still holds no `PERMISSION_GRID_ROWS`; the grid remains a projection, so a row naming an absent key stays
+unrepresentable rather than caught. Neither of the two new migrations touches `workflows` or
+`permission_definitions`. C13 → W-11 still owns the `workflows.*` restore question.
+
+**Mission identity divergence — a third consecutive run raising it, and it has widened again.** The fifth
+issuance asked whether a mission titled *"DX7 Fixture"* should be issuing Wave 1; the sixth asked the same of
+*"DX-5 Evidence Experience."* This assignment arrives under mission `msn_b7040b5174ddeafb79` titled **"DX-6
+Collaboration fixture"**, against a file headed `msn_e9133cdade883793d2`, with a phase naming an access sprint.
+**Three different fixture missions have now issued this access workstream, and no run has answered the
+question.** `X-2` / `DR-4` / `QE-15` register the document divergence; this is the dispatch layer, and it is
+escalated rather than absorbed for the third time.
+
+**Concurrency, a fourth time — and this run shares its mission with the W-0 seventh issuance.** The uncommitted
+edits to this file and to `wave0-authority-census.json` present at session start are `asg_71201204af2de6`'s W-0
+propagation, under **this assignment's own mission**. Untouched, not reverted, not built upon — the fourth
+issuance's judgment, applied as policy for the third time. The untracked `a.md` from the sixth issuance's
+mission is still present and likewise untouched.
+
+**Six failures in `tests/access` that are not Wave 1's — reported, not repaired.** The wider directory runs
+**789 passed / 6 failed**, and all six sit in **Wave 3** catalog suites: `catalogVocabularyReconciliation`
+(4 — *"finds the full catalog, not the subset a tuple-shaped parser reaches"*, *"every key beyond the W-11
+artifact is one an approved decision added"*, *"reaches every seeding syntax in the tree"*, *"the enforced set
+is exactly the artifact's, plus the approved additions"*), `capabilityTaxonomy` (1), and `grantSeedEnumeration`
+/ RL-8 (1). **They are not caused by this run** — the only file changed is `analyticsRouteGates.test.ts`, and
+none of the three failing suites references it. They are consistent with this plan's own record that **W-11 is
+measured, not applied**: M5 is withheld pending operator review and the live `seed_default_rbac()` literal
+still re-creates all 57 keys, so a lock asserting the reconciled set against the tree fails until M5 lands.
+Recorded against W-11 and W-12; **outside this assignment's scope**, and this record does not claim them fixed.
+
+**Not verified this run.** No live database query — W-0's run-4 counts are two days old and are the W-0 owner's
+to refresh, not Wave 1's. Wave 1 needs no live query.
 
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
@@ -2450,6 +2699,11 @@ collide with. **This is the only non-empty remediation population in the whole p
 Because W-5 is still open, this count **grows with every membership the product creates**. Re-run the census
 immediately before M1 rather than citing 2; the number is a snapshot, last taken 2026-08-04.
 
+**It grew. Run 4 (2026-09-04) returned 5, not 2** — of **11** distinct pairs across **13** membership rows. The
+paragraph above was right that the count grows and wrong about *what* grows it: W-5 closed the admin API path,
+and Q4 grew anyway, from **seed and QA tooling W-5's audit never covered** (§4, run 4). Read every "2" in this
+section as a record of runs 1–3.
+
 **The 2026-08-04 re-run returned 2 again — and that is not reassurance.** `q4_membership_rows` also held at 8,
 so no membership was created in the interval; the count was stable because the tenant was idle, not because
 the fail-open path was fixed. M1 still sizes itself from a fresh census, never from this line.
@@ -2479,6 +2733,20 @@ and the coincidence is precisely why the rule forbids citing — a cited 2 and a
 the record and prove entirely different things. RULES 1, 2 and 5 pass; both abort conditions are clear; RULE 4's
 precondition is clean; RULES 3 and 4's post-apply halves are unreachable until the apply. Evidence:
 [`w6-m1-preflight.json`](w6-m1-preflight.json).
+
+**⚠ THIS PREFLIGHT IS STALE, AND ITS AUTHORIZATION IS STILL STANDING (2026-09-06).** Every figure above is run
+3's. Run 4 (2026-09-04) returned **5** pairs without a profile, of **11** distinct pairs across **13** membership
+rows, orphans still **0**. The apply was authorized on 2026-08-07 and **never happened**, so RULE 5 — *"an aged
+preflight is not a preflight"* — has bitten for the first time.
+
+**The apply is not unsafe; do not re-authorize out of fear of the number.** M1 self-sizes in-transaction (above),
+so it would land 5 correctly. **What needs a ruling from this workstream's owner is `abort_conditions[0]`**,
+whose antecedent is now satisfied: three new fail-open pairs exist, the census cannot attribute them, and the
+writers `run_4_root_cause_analysis` names are seed/QA tooling — **not** the cert fixture RULE 5 anticipated. On
+that condition's own terms, *"a sixth membership writer exists and W-5's audit was incomplete."* Discharge it
+with a bounded row-level attribution census over the failing population only, which is the same re-run RULE 5
+requires before the apply. Full detail at the census file's `w6_m1_preflight.superseded_by_run_4`. **W-0 did not
+move this gate — `preflight.ok` is still `true` and unchanged, and it is yours to re-rule on.**
 
 **How it unblocked is the reusable lesson — and it was not worker effort.** Two dispatches diagnosed the
 blocker correctly and could not move it: the census channel is the Director-side trusted host action
@@ -2584,6 +2852,12 @@ is not a side effect of the switch — **it is lockout class L1 itself**, the cl
 under. §5's Q4 row already ruled on it: *"M1 is sized at exactly 2 rows. W-7 cannot precede it."* The flip was
 not made. **`(done)` in the dispatched objective is the only thing here that was stale**; the plan of record
 was right and the assignment text was wrong, so the plan won.
+
+**Updated 2026-09-06 — the block is unchanged, the population is larger.** Run 4 puts W-0 Q4 at **5** pairs with
+no profile, not 2. M1 is still `authorized_awaiting_apply` and still unapplied, so **flipping the fallback today
+would deny 5 principals rather than 2** — the same verdict, a bigger blast radius. **W-7's precondition is
+unchanged and is not a number**: it is *"M1 applied, Q4 re-derived to 0"*. Re-derive at switch time; the
+population is now a moving target (§4, run 4).
 
 **What was delivered instead is step 2, which is the half that is only buildable now.** A dual-read cannot be
 retrofitted after a switch — once the fallback is gone there is no second answer to compare against, and the

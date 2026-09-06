@@ -327,24 +327,28 @@ const ANALYTICS_FAMILY_DIRS = [
  * `bundle.portalEligible` (`lib/adminAuth.ts:43-45`). `getAdminContextCached` returns 403 on the
  * same condition. `requireAnalyticsV2Admin*` wrap the latter.
  *
- * **Known incomplete, 2026-09-04 (sixth issuance) — and deliberately not widened.** `lib/adminAuth.ts`
- * exports two further gates that enforce portal eligibility and are absent from this list:
- * `getAdminAuthCached` (returns null unless `bundle.ok && bundle.portalEligible`, `:43-45`) with its
- * `@deprecated` alias `getAdminAuth` (`:92`), and `requireAdmin` (`:98-107`, strictly stronger —
- * portal **and** `role === "admin"`).
+ * **The 2026-09-04 gap is closed, 2026-09-06 (seventh issuance).** The sixth issuance recorded that
+ * `lib/adminAuth.ts` exports three further portal-enforcing gates absent from this list, declined to
+ * add them, and named the durable repair: *require every export of `ACCESS_PRIMITIVE_MODULES` to be
+ * classified as gate, raw resolution, or reviewed non-gate.* It deferred that to "a run that can
+ * prove it red" because it could not execute the suite. This run can, so it is built below
+ * (*"every export of an access-primitive module is classified"*), and the three are now listed:
  *
- * This is the alias lock's own gap one level up. That lock asks whether an alias of an **already
- * listed** symbol is listed; it cannot notice a module exporting a wholly new gate, so `getAdminAuth`
- * is found by `exportedAliases` and correctly not flagged, because its target was never listed either.
+ * - `getAdminAuthCached` — verified at source, not cited: `loadAdminAuth` returns null unless
+ *   `bundle.ok && bundle.portalEligible` (`lib/adminAuth.ts:43-45`).
+ * - `getAdminAuth` — its `@deprecated` alias (`:92`), identical behaviour.
+ * - `requireAdmin` — strictly stronger (`:98-107`): portal **and** `role === "admin"`.
  *
- * The omission is in the **noisy, not unsafe** direction — an unlisted *gate* flags a correctly gated
- * route, it never hides an exposure — and it has **zero live victims**: every one of the 103 routes in
- * the class-wide subject calls a gate that IS listed. It is left unlisted on purpose. Adding entries
- * to this list is the *permissive* direction, and widening a lock speculatively, against no observed
- * failure and without the ability to execute the suite, is how a lock quietly stops locking. The
- * durable repair is the same change of question applied once more — require every export of
- * `ACCESS_PRIMITIVE_MODULES` to be classified as gate, raw resolution, or reviewed non-gate, so a new
- * export forces a decision instead of landing unlisted. That belongs with a run that can prove it red.
+ * Listing them is the *permissive* direction, which the sixth issuance rightly distrusted, so the
+ * two things that make it safe here are stated rather than assumed. It is **inert on today's
+ * corpus** — all 103 class-wide subject routes already call a gate that was listed, so no route's
+ * verdict changes — and it is no longer a *speculative* widening, because the classification lock
+ * now fails on any unclassified export. The permissive step and the restrictive step land together;
+ * neither is load-bearing alone.
+ *
+ * **The standing limit is unchanged and applies to these three too:** this proves a gate is
+ * *called*, never that its `null`/`Response` result is honoured — the same limit every other entry
+ * carries, and W-1's own two-resolution finding is exactly the error it cannot catch.
  */
 const SUFFICIENT_GATES = [
     "requireAnalyticsReadAccess",
@@ -357,6 +361,12 @@ const SUFFICIENT_GATES = [
     // scan able to flag a genuinely gated route. See the alias-completeness lock below.
     "getAdminContext",
     "loadAdminRouteGate",
+    // Listed 2026-09-06 (seventh issuance), closing the gap the sixth recorded. All three enforce
+    // portal eligibility through `loadAdminAuth` (`lib/adminAuth.ts:43-45`); `getAdminAuth` is the
+    // `@deprecated` alias of the first and `requireAdmin` is strictly stronger.
+    "getAdminAuthCached",
+    "getAdminAuth",
+    "requireAdmin",
 ] as const;
 
 /**
@@ -543,17 +553,22 @@ describe("W-1 — no route in web/app/api gates on a raw access resolution alone
         // fails rather than passing on an empty subject. Lowering it is therefore a decision, not
         // a retune — recorded here because a floor that drifts down quietly locks nothing.
         //
-        // **The 2026-09-04 ratchet was derived statically, not from a green run.** This worktree
-        // has no installed dependencies, so neither `npx vitest` nor `vac run test` could execute
-        // the suite (the latter exits `rc=1 class=config` — the command never ran). The count was
-        // re-derived by replicating `callsAny` over the same file set and separately proving that
-        // comment-stripping is a no-op on this corpus: **zero** raw-resolution calls appear in a
-        // comment, in either the line or the block form. Every divergence between that derivation
-        // and this predicate runs one way — `codeOnly` can join a match across a stripped block
-        // comment, `\s*` can span a newline, and `readdirSync` sees files ripgrep's gitignore
-        // filter does not — so the executed count is **≥ 103**, never below. Raising the floor can
-        // therefore only fail loudly, which this repository prefers to slack that fails silently.
-        // The next runner that can execute the suite should confirm the exact figure.
+        // **The 2026-09-04 ratchet was derived statically, and 2026-09-06 confirmed it exactly.**
+        // The sixth issuance could not execute this suite — that worktree had no installed
+        // dependencies — so it set the floor by replicating `callsAny` over the same file set and
+        // argued the result was a safe *lower* bound: every way the derivation could diverge from
+        // this predicate (`codeOnly` joining a match across a stripped block comment, `\s*`
+        // spanning a newline, `readdirSync` seeing files ripgrep's gitignore filter does not) moves
+        // the count up, never down. It closed by asking the next runner that could execute the
+        // suite to confirm the exact figure.
+        //
+        // **Confirmed 2026-09-06 (seventh issuance): the executed subject is exactly 103**, on a
+        // base 28 web commits later with the API route count unmoved at 603. So the bound was not
+        // merely safe, it was tight — all three divergence paths contributed zero, which is the
+        // evidence that comment-stripping really is a no-op on this corpus rather than an argument
+        // that it should be. The figure was read from this predicate itself (a temporary
+        // impossible floor makes `toBeGreaterThanOrEqual` report the live value), not from a
+        // second replication that could diverge the same way the first might have.
         //
         // W-8 removed the one route that left: `app/api/admin/departments/route.ts` called
         // `getAdminAccessContextCached` *only* to read `roleKeys` for
@@ -715,5 +730,138 @@ describe("W-1 — every alias of a listed symbol is listed too (RL-1 subject com
         // subject would be unchanged for the wrong reason and the 92 floor would go stale silently.
         expect(callsAny("const a = await getAdminAccessContextCached();", ["getAdminAccessContext"])).toBe(false);
         expect(callsAny("const a = await getAdminContextCached();", ["getAdminContext"])).toBe(false);
+    });
+});
+
+/* --------------------------------------------------------------------------------------------- *
+ * RL-1 subject completeness, one level up — a wholly new export defeats the alias lock
+ * --------------------------------------------------------------------------------------------- */
+
+/**
+ * **The fifth instance of this workstream's recurring escape class, and the first closed in the
+ * restrictive direction before it had a victim.**
+ *
+ * The pattern, four repairs deep: 2026-08-04 listed *directories*; 2026-08-06 moved the subject to
+ * the *primitive*; 2026-08-07 caught the *alias*; each repair left a hand-maintained list policing
+ * the layer beneath it. The alias lock asks whether an alias of an **already listed** symbol is
+ * listed — so a module exporting a *wholly new* gate or a *wholly new* raw resolution is invisible
+ * to every list here. `getAdminAuthCached` sat unlisted that way from the day it was written; the
+ * sixth issuance found it by hand, which is precisely the labour these locks exist to retire.
+ *
+ * This lock asks the last question left: **every runtime export of an access-primitive module must
+ * be classified.** Gate, raw resolution, capability gate, or an entry in `REVIEWED_NON_GATES` with
+ * a reason. A new `export async function requireSomethingNew()` fails this immediately, and the
+ * failure names the symbol — so the next contributor makes a decision instead of silently widening
+ * the blind spot. The list stops being hand-maintained against the module; the module drives it.
+ *
+ * Types are excluded deliberately: `export type` / `export interface` emit no runtime symbol and
+ * cannot be called, so they can neither gate nor resolve.
+ *
+ * **What it still cannot do.** It reads three named modules. A *fourth* module exporting an access
+ * primitive is outside its subject — the same "a lock naming N cannot notice the N+1th" limit, now
+ * at the module layer, which is where W-14's declared route table is the real answer. Recorded here
+ * so the next reader does not mistake this for completeness.
+ */
+const REVIEWED_NON_GATES: { symbol: string; reason: string }[] = [
+    {
+        symbol: "adminContextFailureResponse",
+        reason:
+            "Renders a failure into a NextResponse (`getAdminContext.ts:76`). It is the thing a gate " +
+            "returns, not a gate — it decides nothing about a principal.",
+    },
+    {
+        symbol: "logAdminAudit",
+        reason:
+            "Re-exported audit writer (`adminAuth.ts:132`, from `@/lib/admin/adminAuditLog`). Records " +
+            "that an action happened; authorizes nothing.",
+    },
+];
+
+/** Runtime (value) exports only — `export type` and `export interface` are erased at compile time. */
+function runtimeExports(source: string): string[] {
+    const code = codeOnly(source);
+    const found = new Set<string>();
+
+    // `export async function X`, `export function X`, `export const X`, `export class X`.
+    // The `(?!type|interface)` guard is unnecessary here because those forms are matched by keyword,
+    // but `export const` must not swallow `export const enum` (a type-level form).
+    const declared = /export\s+(?:async\s+)?(?:function|class)\s+(\w+)|export\s+const\s+(?!enum\b)(\w+)/g;
+    let match: RegExpExecArray | null;
+    while ((match = declared.exec(code)) !== null) found.add(match[1] ?? match[2]);
+
+    // `export { X }` and `export { X } from "…"` — but not `export type { X }`.
+    const braced = /export\s+(?!type\b)\{([^}]*)\}/g;
+    while ((match = braced.exec(code)) !== null) {
+        for (const part of match[1].split(",")) {
+            const name = part.trim().split(/\s+as\s+/).pop()?.trim();
+            // `export { type Foo }` — an inline type specifier emits no runtime symbol.
+            if (name && /^\w+$/.test(name) && !/^\s*type\s/.test(part)) found.add(name);
+        }
+    }
+
+    return [...found].sort();
+}
+
+describe("W-1 — every export of an access-primitive module is classified (RL-1 subject completeness)", () => {
+    const webRoot = path.resolve(__dirname, "../..");
+    const exportsByModule = ACCESS_PRIMITIVE_MODULES.map((mod) => ({
+        mod,
+        symbols: runtimeExports(fs.readFileSync(path.join(webRoot, mod), "utf8")),
+    }));
+
+    it("finds the exports, so the assertions below are not vacuous", () => {
+        // Anchored on one symbol of each classification, so an empty or collapsed scan fails here
+        // rather than passing the classification assertion on nothing.
+        const all = exportsByModule.flatMap((m) => m.symbols);
+        expect(all.length).toBeGreaterThanOrEqual(9);
+        expect(all).toContain("requireAdminOrOps"); // gate
+        expect(all).toContain("loadAdminAccessBundleCached"); // raw resolution
+        expect(all).toContain("adminContextFailureResponse"); // reviewed non-gate
+        expect(all).toContain("logAdminAudit"); // reviewed non-gate, via `export { X } from`
+    });
+
+    it("emits no runtime symbol for a type-only export", () => {
+        // The exclusion stated as a fact about the scanner rather than in prose. If `export type`
+        // leaked in, every module would carry unclassifiable symbols and the register below would
+        // fill up with types — classification theatre.
+        expect(runtimeExports("export type AdminRole = string;")).toEqual([]);
+        expect(runtimeExports("export interface AdminAuthResult { a: 1 }")).toEqual([]);
+        expect(runtimeExports('export type { Foo } from "./foo";')).toEqual([]);
+        expect(runtimeExports("export const enum E { A }")).toEqual([]);
+        // …and it does find the runtime forms it must.
+        expect(runtimeExports("export async function requireX() {}")).toEqual(["requireX"]);
+        expect(runtimeExports('export { logAdminAudit } from "@/x";')).toEqual(["logAdminAudit"]);
+        expect(runtimeExports("export { a as b };")).toEqual(["b"]);
+    });
+
+    it("classifies every runtime export as gate, raw resolution, or reviewed non-gate", () => {
+        const classified = new Set<string>([
+            ...SUFFICIENT_GATES,
+            ...RAW_RESOLUTIONS,
+            ...CAPABILITY_GATES,
+            ...REVIEWED_NON_GATES.map((entry) => entry.symbol),
+        ]);
+
+        const unclassified = exportsByModule.flatMap(({ mod, symbols }) =>
+            symbols.filter((symbol) => !classified.has(symbol)).map((symbol) => `${mod}:${symbol}`)
+        );
+
+        // A new export of an access primitive lands here by name. Adding it to a list is a
+        // security decision; `REVIEWED_NON_GATES` is where "it is not a gate" gets argued in
+        // writing rather than assumed by omission.
+        expect(unclassified).toEqual([]);
+    });
+
+    it("carries no stale entry in the reviewed non-gate register", () => {
+        // The register is an exemption list, so it must not outlive its subject — the failure mode
+        // W-4's ratchet and the family exception list both guard against.
+        const all = new Set(exportsByModule.flatMap((m) => m.symbols));
+        const stale = REVIEWED_NON_GATES.filter((entry) => !all.has(entry.symbol)).map((e) => e.symbol);
+        expect(stale).toEqual([]);
+    });
+
+    it("requires every reviewed non-gate to carry a reason", () => {
+        const unreasoned = REVIEWED_NON_GATES.filter((entry) => entry.reason.trim().length < 20);
+        expect(unreasoned).toEqual([]);
     });
 });
