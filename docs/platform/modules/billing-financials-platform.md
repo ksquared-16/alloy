@@ -19,6 +19,26 @@ supersedes: []
 
 ---
 
+
+## Billing does not own tuition resolution
+
+Tuition is **program pricing resolved as enrollment pricing**. Commercial Configuration authors the
+options, Commercial Execution decides which apply to an assignment and recommends one, and
+Enrollment records the operator's decision as an effective-dated `enrollment_pricing_terms` row on
+`opportunity_customer_members` — the assignment, which exists before any enrollment agreement does.
+
+Billing's role begins **after** that. A later charge-generation thread reads accepted terms through
+`readAcceptedPricingTerms` and turns them into obligations; it does not re-resolve a price, and no
+Financials surface authors one. The Financials card owns financial truth and financial actions —
+what is owed, what was paid, Add Charge — and owns no part of what tuition should be.
+
+**The stable downstream read.** An accepted term carries everything an obligation needs and nothing
+that IS one: the assignment and child, the enrollment agreement once it exists, amount and currency,
+billing cadence, effective start and end, the authored source option and config version, the payer
+type, whether it was accepted or overridden, the recommendation it departed from, and the reason.
+Accepting a price creates no charge, no invoice and no schedule.
+
+
 ## The problem this doctrine fixes
 
 Today's billing stack is welded to the cleaning/services (jobs) vertical:

@@ -1,5 +1,18 @@
 /**
- * Generate an immutable assignment quote/estimate from commercial tuition configuration.
+ * The assignment's tuition estimate snapshot — a PRESENTATION record, not a decision.
+ *
+ * "Quote" is this module's historical name, not a domain. There is no quote entity, no quote
+ * lifecycle and no quote workspace: a resolution for an assignment that is proposed or
+ * future-effective is still a resolution for that assignment. What an operator ACCEPTS is an
+ * effective-dated `enrollment_pricing_terms` row, written by the registered
+ * `enrollment.pricing.accept` / `.override` actions.
+ *
+ * This module no longer matches anything. It used to run its own resolver over
+ * `program_key` / `schedule_key` / `billing_period` — columns dropped from
+ * `commercial_tuition_rates` in July — which is how the estimate came to be computed against a
+ * shape the database did not have. It is now HANDED the option Commercial Execution resolved, and
+ * only records it.
+ *
  * Never posts ledger charges, invoices, or payments.
  */
 
@@ -7,20 +20,20 @@ import {
     appendAssignmentQuoteSnapshot,
     type AssignmentQuoteSnapshot,
 } from "@/lib/enrollment/assignmentQuoteSnapshot";
-import {
-    resolveEnrollmentTuitionRate,
-    type TuitionRateCandidate,
-} from "@/lib/adminV2/runtime/focusPanel/financialConfig/resolveEnrollmentTuitionRate";
-import type { TuitionBillingPeriod } from "@/lib/commercial/tuitionRates";
 
-function formatLabel(rateCents: number, billingPeriod: TuitionBillingPeriod): string {
-    const dollars = (rateCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
-    return `${dollars}/${billingPeriod}`;
-}
+/** The already-resolved option this snapshot records. Resolution happened in Commercial Execution. */
+export type ResolvedTuitionForSnapshot = {
+    rateId: string;
+    rateCents: number;
+    billingPeriod: string;
+    rateLabel: string;
+    isLocationOverride: boolean;
+};
 
 export type GenerateAssignmentQuoteInput = {
     metadata: Record<string, unknown> | null | undefined;
-    rates: TuitionRateCandidate[];
+    /** What Commercial Execution resolved. This module does not choose it. */
+    resolved: ResolvedTuitionForSnapshot | null;
     programKey: string | null;
     scheduleKey: string | null;
     locationId: string | null;
@@ -38,38 +51,13 @@ export type GenerateAssignmentQuoteResult =
     | { ok: true; metadata: Record<string, unknown>; snapshot: AssignmentQuoteSnapshot }
     | { ok: false; error: string };
 
-function resolveRateForQuote(input: GenerateAssignmentQuoteInput) {
-    const offeringId = input.offeringId?.trim() || null;
-    if (offeringId) {
-        const hit = input.rates.find((r) => r.id === offeringId);
-        if (hit) {
-            return {
-                rateId: hit.id,
-                rateCents: hit.rate_cents,
-                billingPeriod: hit.billing_period,
-                rateLabel: formatLabel(hit.rate_cents, hit.billing_period),
-                isLocationOverride: Boolean(
-                    input.locationId && hit.location_id === input.locationId,
-                ),
-            };
-        }
-    }
-    return resolveEnrollmentTuitionRate(
-        input.rates,
-        input.programKey,
-        input.scheduleKey,
-        input.locationId,
-        formatLabel,
-    );
-}
-
 /**
- * Resolve eligible rate, stamp tuition_plan_id onto metadata, append immutable snapshot.
+ * Stamp tuition_plan_id onto metadata and append the immutable snapshot for the resolved option.
  */
 export function generateAssignmentQuoteSnapshot(
     input: GenerateAssignmentQuoteInput,
 ): GenerateAssignmentQuoteResult {
-    const resolved = resolveRateForQuote(input);
+    const resolved = input.resolved;
     if (!resolved) {
         return {
             ok: false,
@@ -111,26 +99,4 @@ export function generateAssignmentQuoteSnapshot(
     });
 
     return { ok: true, metadata, snapshot };
-}
-
-/** List rates that match program+schedule (eligible pool for picker). */
-export function listEligibleTuitionPlans(args: {
-    rates: TuitionRateCandidate[];
-    programKey: string | null;
-    scheduleKey: string | null;
-    locationId: string | null;
-}): Array<TuitionRateCandidate & { resolvedLabel: string }> {
-    if (!args.programKey || !args.scheduleKey) return [];
-    return args.rates
-        .filter((r) => r.program_key === args.programKey && r.schedule_key === args.scheduleKey)
-        .map((r) => ({
-            ...r,
-            resolvedLabel: formatLabel(r.rate_cents, r.billing_period),
-        }))
-        .sort((a, b) => {
-            const aLoc = args.locationId && a.location_id === args.locationId ? 0 : 1;
-            const bLoc = args.locationId && b.location_id === args.locationId ? 0 : 1;
-            if (aLoc !== bLoc) return aLoc - bLoc;
-            return a.rate_cents - b.rate_cents;
-        });
 }

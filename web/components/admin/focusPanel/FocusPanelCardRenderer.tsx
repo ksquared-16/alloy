@@ -12,7 +12,7 @@ import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard
 import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
 import TourCard from "@/components/admin/focusPanel/cards/TourCard";
 import CommunicationsCard from "@/components/admin/focusPanel/cards/CommunicationsCard";
-import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPreviewCard";
+import AssignmentTuitionCard from "@/components/admin/focusPanel/cards/AssignmentTuitionCard";
 import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import MilestonesCard from "@/components/admin/focusPanel/cards/MilestonesCard";
 import AttendanceCard from "@/components/admin/focusPanel/cards/AttendanceCard";
@@ -260,7 +260,9 @@ export default function FocusPanelCardRenderer({
         );
     }
     if (model.key === "billing_preview") {
-        return <BillingPreviewCard model={model} context={context} receded={receded} coordination={coordination} />;
+        // The runtime key stays `billing_preview` for the same reason the Assignments card's key is
+        // still `scheduling`: a key is history, a label is the product. There is no Billing Card.
+        return <AssignmentTuitionCard model={model} context={context} receded={receded} coordination={coordination} />;
     }
     if (model.key === "milestones") {
         return (

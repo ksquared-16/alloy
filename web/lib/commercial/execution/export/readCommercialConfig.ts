@@ -133,7 +133,21 @@ export async function readPricing(ctx: ExportReadContext): Promise<TuitionRateDe
         .select(
             "id, location_id, variant_id, cadence_key, payer_type, rate_cents, not_offered, is_active, effective_start, effective_end, revenue_category_id",
         )
-        .eq("org_id", ctx.orgId);
+        .eq("org_id", ctx.orgId)
+        /*
+         * A DEACTIVATED RATE IS NOT IN THE CATALOG.
+         *
+         * `resolvePricing` documents that "is_active is folded into readers; not_offered stays
+         * visible so we can explain it" — and the folding was never done. `is_active` was selected
+         * and then dropped on the floor, `TuitionRateDef` has no field for it, and no evaluator
+         * checks one, so turning a rate off in Commercial Configuration left it pricing children.
+         * Found by certifying that an inactive option is excluded.
+         *
+         * Filtered HERE rather than in the evaluators, because that is what the doctrine already
+         * says and because an inactive rate has nothing to explain: `not_offered` is a deliberate
+         * statement about a scope and stays visible, while inactive simply means gone.
+         */
+        .eq("is_active", true);
     if (error) throw new Error(`readPricing: ${error.message}`);
 
     return (data ?? []).map((raw) => {

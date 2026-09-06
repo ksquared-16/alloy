@@ -1003,7 +1003,7 @@ function buildCardModels(input: {
             // `tuition_rate_label` are read here but written NOWHERE in the platform, so the old
             // `?? "Billing not configured"` asserted a business conclusion on every record from
             // fields nothing populates. The authoritative source is the financial-config API,
-            // resolved by `buildBillingPreviewCardEvidence` (which BillingPreviewCard renders);
+            // resolved by `buildBillingPreviewCardEvidence` (which the assignment Tuition card renders);
             // this base model only holds the cell until then. See CARD-READINESS-LIFECYCLE.md.
             insight: record["billing_configured"]
                 ? "Billing configured"

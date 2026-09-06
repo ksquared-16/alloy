@@ -198,11 +198,56 @@ Single-payer default: a plan with only `primary` → `residual = full net → pr
 
 **Billing consumes Commercial Execution (Phase 9, built — the convergence payoff).** The shipped Operational Consumption runtime now prices tuition from Commercial Execution instead of Substrate A: at the one seam in `resolveDirective` (the amount fed to the charge template), it calls `getCommercialTuitionValuation` — which maps the enrollment's `program_key` (agreement → placement → `location_program_categories.key`) + scheduleBasis → a Commercial offering/variant ([`resolveCommercialScope`](../../../web/lib/commercial/execution/billing/)), then runs `evaluate()` for the policy-adjusted `net`. **No flag, no fallback:** when Commercial can't resolve (ambiguous/unconfigured), the obligation surfaces `commercial pricing unresolved: <reason>` in review — never a Substrate-A price. Everything else is unchanged and FKs preserved: `consumption_events`, `resolved_obligations` (incl. `charge_template_id`/`service_id`), draft charges, `charge_line_items`, review, posting, idempotency. Substrate A tables/functions remain (retired later). This is the doctrine realized: *Billing consumes Commercial instead of redefining it.*
 
+**Enrollment consumes Commercial Execution to price an ASSIGNMENT (Thread 3, built).** The chain is
+`Commercial Configuration → Commercial Execution → assignment-associated effective-dated pricing
+terms → later financial consequences`, and each arrow is an ownership boundary:
+
+- **Commercial Configuration** authors the options.
+- **Commercial Execution** decides which apply, recommends one, or says the configuration is
+  **ambiguous**, or says **nothing applies** — `resolveAssignmentPricingOptions`, given canonical
+  assignment facts. It ranks nothing by array order: precedence is supersession (a site rate beats
+  the org default; within a cadence a later effective start beats an earlier one) and anything still
+  tied is returned AS a tie.
+- **Enrollment** owns the DECISION. `enrollment.pricing.accept` and `enrollment.pricing.override`
+  write `enrollment_pricing_terms`, effective-dated and superseding in the same shape
+  `child_placements` and `schedule_assignments` already use.
+- **Billing** later turns accepted terms into obligations. It does not resolve tuition, and
+  **Financials does not own tuition resolution**.
+
+**The assignment is the through-line, before and after enrollment.**
+`opportunity_customer_members` carries the program, schedule type, site and start date, and exists
+from the moment an assignment is proposed. Pricing may therefore be resolved and accepted **before
+any `child_enrollment_agreements` row exists** — which is the ordinary case, because a family is
+priced before it enrols. The agreement id is LEARNED onto the accepted term when the assignment
+enrols, once, and can never be re-pointed. Anchoring on the agreement instead was tried first and
+was wrong: the representative tenant holds 3000 assignments and zero agreements.
+
+**A future or proposed assignment's pricing resolution is not a Quote entity.** There is no quote
+table, no quote status lifecycle and no quote workspace. A resolution for an assignment that is
+proposed, future-effective, or not yet operational is still a resolution for that assignment.
+`/api/admin/enrollment/assignment-quote` keeps a historical name and records a presentation
+estimate; it resolves nothing itself.
+
+**Room is context, never pricing ownership.** Room may legitimately inform program, age grouping,
+eligibility, schedule and placement. It is not a commercial pricing dimension and authors no rate.
+
+**History does not move when configuration does.** An accepted term copies the amount, the cadence,
+the source option and the config version it was accepted under, so a later catalog edit — or an
+expiry — leaves it exactly as agreed. **Staleness is a comparison, not a flag:** the resolution key
+hashes the assignment facts and the config version, so a term is stale precisely when re-resolving
+today keys differently. Acceptance of a stale resolution is refused server-side.
+
+**An override selects another AUTHORED option, and preserves the recommendation.** It requires
+`enrollment.pricing.override`, checked against the actor's real grants, and a recorded reason. There
+is no override-by-amount anywhere in the platform: a price with no authored source could not be
+explained by any later reader.
+
 Commercial Execution never knows who consumes it. Each consumer reads the same resolution and (optionally) the same `expand()` timeline, then runs its own `materialize()`:
 
 | Consumer | Reads | Materializes into |
 |---|---|---|
-| **Billing** | lines + funding + schedule | Draft Charges → Obligations → Review → Posting |
+| **Enrollment** | applicable options + recommendation + explanation | Effective-dated `enrollment_pricing_terms` (a contract fact — never a charge) |
+| **Billing** | accepted pricing terms; lines + funding + schedule | Draft Charges → Obligations → Review → Posting |
 | **Revenue Forecasting** | net/gross + recognition, over `projected` contexts | Revenue curve |
 | **Quote Builder** | lines + schedule, `hypothetical` mode | Payment schedule / quote |
 | **Proposal / Contract Gen** | lines + explanation, version-pinned | Contract language |

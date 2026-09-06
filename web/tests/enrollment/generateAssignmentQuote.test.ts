@@ -1,168 +1,111 @@
+/**
+ * The assignment tuition ESTIMATE snapshot — a presentation record, not a decision.
+ *
+ * This module used to run its own resolver over `program_key` / `schedule_key` / `billing_period`,
+ * and this test used to hand it rows in that shape — columns dropped from `commercial_tuition_rates`
+ * two months before. Both are gone. The module is now HANDED the option Commercial Execution
+ * resolved and only records it, so what is left to test is the recording: what it stamps, what it
+ * preserves, and that a later snapshot never edits an earlier one.
+ *
+ * Nothing here is a quote entity, and there is no quote lifecycle. What an operator ACCEPTS is an
+ * `enrollment_pricing_terms` row, written by a registered action.
+ */
 import { describe, expect, it } from "vitest";
+
 import {
     generateAssignmentQuoteSnapshot,
-    listEligibleTuitionPlans,
+    type ResolvedTuitionForSnapshot,
 } from "@/lib/enrollment/generateAssignmentQuote";
-import {
-    assertQuoteSnapshotImmutable,
-    listAssignmentQuoteSnapshots,
-    activeAssignmentQuoteSnapshot,
-} from "@/lib/enrollment/assignmentQuoteSnapshot";
-import type { TuitionRateCandidate } from "@/lib/adminV2/runtime/focusPanel/financialConfig/resolveEnrollmentTuitionRate";
+import { listAssignmentQuoteSnapshots } from "@/lib/enrollment/assignmentQuoteSnapshot";
 
-const rates: TuitionRateCandidate[] = [
-    {
-        id: "rate-ft-org",
-        program_key: "preschool",
-        schedule_key: "full_day",
-        rate_cents: 120000,
-        billing_period: "monthly",
-        location_id: null,
-    },
-    {
-        id: "rate-ft-site",
-        program_key: "preschool",
-        schedule_key: "full_day",
-        rate_cents: 125000,
-        billing_period: "monthly",
-        location_id: "site-1",
-    },
-    {
-        id: "rate-pt",
-        program_key: "preschool",
-        schedule_key: "part_day",
-        rate_cents: 80000,
-        billing_period: "monthly",
-        location_id: null,
-    },
-];
+const RESOLVED: ResolvedTuitionForSnapshot = {
+    rateId: "rate-monthly-org",
+    rateCents: 120_000,
+    billingPeriod: "monthly",
+    rateLabel: "$1,200.00/monthly",
+    isLocationOverride: false,
+};
 
-describe("generateAssignmentQuoteSnapshot", () => {
-    it("resolves an eligible plan and stamps an immutable snapshot (no ledger fields)", () => {
-        const result = generateAssignmentQuoteSnapshot({
-            metadata: { start_date: "2026-09-01", location_id: "site-1" },
-            rates,
-            programKey: "preschool",
-            scheduleKey: "full_day",
-            locationId: "site-1",
-            effectiveDate: "2026-09-15",
-            actorUserId: "user-1",
-            snapshotId: "snap-1",
-            generatedAt: "2026-08-03T12:00:00Z",
-        });
+function input(over: Partial<Parameters<typeof generateAssignmentQuoteSnapshot>[0]> = {}) {
+    return {
+        metadata: null,
+        resolved: RESOLVED,
+        programKey: "toddler",
+        scheduleKey: "full_time",
+        locationId: "loc-lakeside",
+        effectiveDate: "2026-09-06",
+        actorUserId: "user-1",
+        snapshotId: "snap-1",
+        ...over,
+    };
+}
+
+describe("assignment tuition estimate snapshot", () => {
+    it("records the resolved option, and does not choose one", () => {
+        const result = generateAssignmentQuoteSnapshot(input());
         expect(result.ok).toBe(true);
         if (!result.ok) return;
-
-        expect(result.snapshot.offering_id).toBe("rate-ft-site");
-        expect(result.snapshot.amount_cents).toBe(125000);
-        expect(result.snapshot.status).toBe("generated");
-        expect(result.metadata.tuition_plan_id).toBe("rate-ft-site");
-        assertQuoteSnapshotImmutable(result.snapshot);
-
-        // Quote is commercial proposal only — never invents ledger/invoice/payment truth.
-        expect(result.snapshot).not.toHaveProperty("ledger_entry_id");
-        expect(result.snapshot).not.toHaveProperty("invoice_id");
-        expect(result.snapshot).not.toHaveProperty("payment_id");
-        expect(result.metadata).not.toHaveProperty("ledger_posted");
-        expect(JSON.stringify(result.metadata)).not.toMatch(/invoice_id|payment_id|ledger_entry/);
+        expect(result.snapshot).toMatchObject({
+            id: "snap-1",
+            offering_id: "rate-monthly-org",
+            amount_cents: 120_000,
+            currency: "USD",
+            effective_date: "2026-09-06",
+            created_by: "user-1",
+        });
+        expect(result.snapshot.pricing_inputs).toMatchObject({
+            rate_id: "rate-monthly-org",
+            rate_cents: 120_000,
+            billing_period: "monthly",
+            is_location_override: false,
+        });
     });
 
-    it("honors an explicit offering_id when present in the eligible pool", () => {
-        const result = generateAssignmentQuoteSnapshot({
-            metadata: {},
-            rates,
-            programKey: "preschool",
-            scheduleKey: "full_day",
-            locationId: "site-1",
-            offeringId: "rate-ft-org",
-            effectiveDate: "2026-09-15",
-            actorUserId: null,
-            snapshotId: "snap-pick",
-        });
-        expect(result.ok).toBe(true);
-        if (!result.ok) return;
-        expect(result.snapshot.offering_id).toBe("rate-ft-org");
-        expect(result.snapshot.amount_cents).toBe(120000);
-    });
-
-    it("refuses when no eligible plan matches", () => {
-        const result = generateAssignmentQuoteSnapshot({
-            metadata: {},
-            rates,
-            programKey: "infant",
-            scheduleKey: "full_day",
-            locationId: null,
-            effectiveDate: "2026-09-15",
-            actorUserId: null,
-            snapshotId: "snap-x",
-        });
+    it("refuses to invent an estimate when nothing was resolved", () => {
+        const result = generateAssignmentQuoteSnapshot(input({ resolved: null }));
         expect(result.ok).toBe(false);
-        if (result.ok) return;
-        expect(result.error).toMatch(/No eligible tuition plan/i);
+        expect(result.ok === false && result.error).toContain("No eligible tuition plan");
     });
 
-    it("supersedes prior generated snapshots without rewriting their amounts", () => {
-        const first = generateAssignmentQuoteSnapshot({
-            metadata: {},
-            rates,
-            programKey: "preschool",
-            scheduleKey: "full_day",
-            locationId: null,
-            effectiveDate: "2026-09-15",
-            actorUserId: "u1",
-            snapshotId: "q1",
-            generatedAt: "2026-08-01T00:00:00Z",
+    it("carries the resolution's identity, so what the operator saw stays checkable", () => {
+        const result = generateAssignmentQuoteSnapshot(
+            input({ pricingInputsExtra: { resolution_key: "abc123", config_version: "cfg-9" } }),
+        );
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.snapshot.pricing_inputs).toMatchObject({
+            resolution_key: "abc123",
+            config_version: "cfg-9",
         });
+    });
+
+    /*
+     * A SNAPSHOT IS IMMUTABLE ONCE TAKEN. A second estimate is appended; the first still says what
+     * it said, which is the whole reason to keep it.
+     */
+    it("appends rather than rewriting a previous snapshot", () => {
+        const first = generateAssignmentQuoteSnapshot(input());
         expect(first.ok).toBe(true);
         if (!first.ok) return;
-        const frozenAmount = first.snapshot.amount_cents;
-        assertQuoteSnapshotImmutable(first.snapshot);
-
-        const second = generateAssignmentQuoteSnapshot({
-            metadata: first.metadata,
-            rates: [
-                {
-                    id: "rate-ft-org-v2",
-                    program_key: "preschool",
-                    schedule_key: "full_day",
-                    rate_cents: 140000,
-                    billing_period: "monthly",
-                    location_id: null,
-                },
-            ],
-            programKey: "preschool",
-            scheduleKey: "full_day",
-            locationId: null,
-            effectiveDate: "2026-09-15",
-            actorUserId: "u1",
-            snapshotId: "q2",
-            generatedAt: "2026-08-02T00:00:00Z",
-        });
+        const second = generateAssignmentQuoteSnapshot(
+            input({
+                metadata: first.metadata,
+                snapshotId: "snap-2",
+                resolved: { ...RESOLVED, rateId: "rate-site", rateCents: 131_000 },
+            }),
+        );
         expect(second.ok).toBe(true);
         if (!second.ok) return;
-
-        const rows = listAssignmentQuoteSnapshots(second.metadata);
-        expect(rows.find((r) => r.id === "q1")?.status).toBe("superseded");
-        expect(rows.find((r) => r.id === "q1")?.amount_cents).toBe(frozenAmount);
-        expect(activeAssignmentQuoteSnapshot(second.metadata)?.id).toBe("q2");
-        expect(activeAssignmentQuoteSnapshot(second.metadata)?.amount_cents).toBe(140000);
+        const all = listAssignmentQuoteSnapshots(second.metadata);
+        expect(all.map((s) => s.id)).toEqual(["snap-1", "snap-2"]);
+        expect(all[0]!.amount_cents).toBe(120_000);
+        expect(all[1]!.amount_cents).toBe(131_000);
     });
 
-    it("lists eligible tuition plans for the picker without fabricating rates", () => {
-        const eligible = listEligibleTuitionPlans({
-            rates,
-            programKey: "preschool",
-            scheduleKey: "full_day",
-            locationId: "site-1",
-        });
-        expect(eligible.map((r) => r.id)).toEqual(["rate-ft-site", "rate-ft-org"]);
-        expect(
-            listEligibleTuitionPlans({
-                rates,
-                programKey: null,
-                scheduleKey: "full_day",
-                locationId: null,
-            }),
-        ).toEqual([]);
+    it("stamps the tuition plan the estimate was taken against", () => {
+        const result = generateAssignmentQuoteSnapshot(input());
+        expect(result.ok && (result.metadata as Record<string, unknown>).tuition_plan_id).toBe(
+            "rate-monthly-org",
+        );
     });
 });

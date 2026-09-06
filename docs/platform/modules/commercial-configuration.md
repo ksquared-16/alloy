@@ -75,22 +75,45 @@ relationships, or schedules.
 
 **Route:** `/admin/commercial/tuition`
 
-**Storage:** `commercial_tuition_rates` (new table, June 2026).
+**Storage:** `commercial_tuition_rates`.
 
-**Schema:** `(org_id, location_id, program_key, schedule_key, billing_period) → rate_cents`
+**Schema (V3, current):** `(org_id, location_id, variant_id, cadence_key, payer_type) → rate_cents`,
+effective-dated by `effective_start` / `effective_end`, with `is_active` and `not_offered`.
+
+> **The V1 shape is gone, and this doc used to describe it.** Until Thread 3 this section said the
+> schema was `(org_id, location_id, program_key, schedule_key, billing_period)`. Migration
+> `20260702000002_commercial_tuition_rates_v2` DROPPED `program_key`, `schedule_key` and
+> `billing_period` in July 2026, and `20260702000003_program_offering_variants` moved rates onto
+> `variant_id`. Two readers went on selecting the dropped columns for two months — every request
+> they served answered `42703 column commercial_tuition_rates.program_key does not exist` — and the
+> stale doctrine here is part of why nobody caught it. A guard test now refuses those column names
+> from returning: `web/tests/enrollment/droppedTuitionColumnsCannotReturn.test.ts`.
 
 - `location_id = NULL` = org default
 - `location_id = <site_id>` = location override
 
 **Ownership:** Org for defaults, Location for overrides.
 
-**Inheritance:** The tuition grid resolves: location override → org default. If a location has no override for a cell, it inherits the org rate. Implemented in `lib/commercial/tuitionRates.ts` via `buildTuitionRateMap`.
+**Inheritance:** A location override supersedes the org default. Within a cadence, a later
+`effective_start` supersedes an earlier one. Anything still tied afterwards is **ambiguous** and is
+reported as a tie — never resolved by array order.
 
-**Grid structure:** Rows = programs (`location_program_categories.key`), Columns = schedule types (`childcare_schedule_type` option set). Each cell = a rate in cents.
+**Where the eligibility dimensions live.** A rate hangs off a `program_offering_variant`, which
+hangs off a `program_offering` (`program_key` × `attendance_type`). So the dimensions this model
+actually has are **program × attendance type × quantity (days a week) × cadence × payer ×
+location × effective date**. Age banding is NOT one of them — it belongs to `childcare_rate_plans`,
+a separate system feeding draft charge resolution.
 
-**Billing periods:** weekly | biweekly | monthly | annual. Default: monthly.
+**`is_active` is folded into the readers.** `readPricing` excludes inactive rates from the
+Commercial Export, so a deactivated rate is not in the catalog at all. `not_offered` is different
+and stays visible: it is a deliberate statement that a scope is not sold, and the resolver explains
+it rather than hiding it.
 
-**Operator model:** "What do we charge for Infant full-time at this location?" Displayed as a spreadsheet-style grid with inline editing.
+**Billing cadence:** `billing_cadences` item keys (weekly | biweekly | monthly | annual). A cadence
+the operator has **not** chosen is not a wildcard: if more than one is offered, the resolution is
+ambiguous and the operator settles it.
+
+**Operator model:** "What do we charge for Infant full-time, five days a week, at this location?"
 
 ---
 

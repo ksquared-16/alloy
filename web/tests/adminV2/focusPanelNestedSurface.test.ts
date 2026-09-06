@@ -244,8 +244,8 @@ describe("builder + runtime seams", () => {
         expect(s).toContain("childDetailFieldKeys");
     });
 
-    it("runtime BillingPreviewCard consumes published financial nested config", () => {
-        const s = src("components/admin/focusPanel/cards/BillingPreviewCard.tsx");
+    it("runtime assignment Tuition card consumes published financial nested config", () => {
+        const s = src("components/admin/focusPanel/cards/AssignmentTuitionCard.tsx");
         expect(s).toContain("readFinancialNestedSurfaceGroupsFromDoc");
         expect(s).toContain("data-financial-nested-group");
     });
