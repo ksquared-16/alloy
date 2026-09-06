@@ -55,6 +55,12 @@ const inv = (over = {}) => T.buildInventory({
   versions: history(),
   currentSha: "v19",
   pins: { pins: {}, unresolved: [] },
+  // The fixture's clock, passed explicitly. Retention V2 added a rollback
+  // window measured in TIME, and this history is dated in 2027 — so against a
+  // real `Date.now()` every version was "installed in the future" and the
+  // window retained all twenty. The fixture was always meant to be evaluated at
+  // NOW; it simply never mattered while retention counted rather than aged.
+  now: NOW,
   ...over,
 });
 
@@ -83,12 +89,18 @@ await test("2 — the latest keep_n superseded versions are retained for rollbac
 
 await test("2b — keep_n lives in the policy and nowhere else", () => {
   assert.equal(T.RETENTION_POLICY_V1.keep_n, 10);
+  assert.equal(T.RETENTION_POLICY_V2.keep_n, 10);
   const src = readFileSync(new URL("../lib/vacilando/toolkit-retention.mjs", import.meta.url), "utf8")
     .split("\n").filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
   const literals = [...src.matchAll(/\bkeep\w*\s*[:=]\s*10\b/g)];
-  assert.equal(literals.length, 1, "the number 10 appears once, in the policy");
+  // Two policy declarations now, V1 and V2 — and still not one line of pruning
+  // logic. That is the property: the number lives where policy lives.
+  assert.equal(literals.length, 2, "the number 10 appears only in the two policy declarations");
   const three = inv({ keepN: 3 }).filter((r) => r.rollback_retained).length;
   assert.equal(three, 3, "and the resolver honours a different depth");
+  // The policy in force is V2, and it is the one the module defaults to.
+  assert.equal(T.RETENTION_POLICY.version, "v2");
+  assert.equal(T.RETENTION_POLICY.rollback_window_hours, 72);
 });
 
 await test("3 — a live Gateway pinning an OLDER non-current version protects it", () => {
@@ -166,10 +178,14 @@ await test("7 — an old, unreferenced, fully-accounted version becomes prunable
 });
 
 await test("7b — the minimum retention floor keeps a machine from pruning itself bare", () => {
-  const versions = history(3);
-  const records = T.buildInventory({ versions, currentSha: "v02", pins: { pins: {}, unresolved: [] }, keepN: 0 });
+  // Deliberately OUTSIDE the V2 rollback window, and with keep_n at zero, so
+  // nothing else is holding these three versions. The floor is a backstop: with
+  // a recent history the time window retains them first and the floor never has
+  // to engage, which is why the fixture ages them out on purpose.
+  const versions = history(3).map((v, i) => ({ ...v, installed_at: NOW - (30 - i) * DAY }));
+  const records = T.buildInventory({ versions, currentSha: "v02", pins: { pins: {}, unresolved: [] }, keepN: 0, now: NOW });
   const retained = records.filter((r) => !r.prunable);
-  assert.equal(retained.length, T.RETENTION_POLICY_V1.min_retained_versions);
+  assert.equal(retained.length, T.RETENTION_POLICY.min_retained_versions);
   // And the floor SAYS it was the floor rather than pretending to another reason.
   assert.ok(retained.some((r) => r.protection_reasons.includes("minimum_retention_floor")));
 });
@@ -345,7 +361,7 @@ await test("15 — health consumes the retention owner and never counts director
   const f = H.checkToolkitRetention({ plan, severity: T.retentionSeverity(plan) });
   assert.equal(f.measurements.total_installed, 20);
   assert.equal(f.measurements.prunable, 9);
-  assert.equal(f.measurements.policy_version, "v1");
+  assert.equal(f.measurements.policy_version, "v2");
   assert.equal(f.measurements.rollback_retained, 10);
   // With no plan it is INCOMPLETE — it must not answer without the owner.
   const none = H.checkToolkitRetention({ plan: null });

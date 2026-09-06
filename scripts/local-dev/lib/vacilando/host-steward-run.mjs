@@ -16,7 +16,7 @@ import { homedir, loadavg, cpus } from "node:os";
 import { join } from "node:path";
 import {
   acquireCycleLock, releaseCycleLock, buildCyclePlan, recordAction, resourceKey,
-  classifyHostAdmission,
+  classifyHostAdmission, hygieneDue, recordHygieneCycle,
 } from "./host-steward-cycle.mjs";
 import { residualHeavyCommands, asStewardResource } from "./heavy-command-registry.mjs";
 import { applyStewardPlan } from "./host-steward-execute.mjs";
@@ -192,4 +192,60 @@ export function runStewardCycle({
     admission_after: admissionAfter,
     record,
   };
+}
+
+/**
+ * One Steward cycle plus, when it is due, one hygiene cycle.
+ *
+ * WHY A SEPARATE ENTRY POINT RATHER THAN A STAGE INSIDE `runStewardCycle`.
+ * `runStewardCycle` is synchronous and ten call sites depend on that; hygiene
+ * reclamation is asynchronous. Making the existing function async to add a
+ * stage would change every caller's contract to gain nothing, so the async part
+ * wraps the sync part instead.
+ *
+ * WHY NOT A SECOND DAEMON. §13 is explicit. There is one resident loop on this
+ * host and hygiene is a stage of it, gated on its own far slower cadence
+ * because a hygiene observation costs a `du` over ~100 toolkit directories and
+ * an `lsof` per log — real work to reclaim bytes that were equally reclaimable
+ * six hours ago.
+ *
+ * HYGIENE NEVER FAILS THE STEWARD CYCLE. Its result is attached and its
+ * failures are recorded; the host's own health does not depend on it.
+ */
+export async function runStewardCycleWithHygiene({
+  root, nowMs = Date.now(), dryRun = false, groupAlive = defaultGroupAlive, exec = defaultExec,
+  stopDevServer = null, hygiene = true, forceHygiene = false, hygieneOptions = null,
+} = {}) {
+  const steward = runStewardCycle({ root, nowMs, dryRun, groupAlive, exec, stopDevServer });
+  if (!hygiene || !root) return { ...steward, hygiene: null };
+
+  const due = forceHygiene ? { due: true, reason: "forced" } : hygieneDue({ root, nowMs });
+  if (!due.due) return { ...steward, hygiene: { skipped: "not_due", last_ms: due.last_ms } };
+
+  let result = null;
+  try {
+    const { runHygieneCycle } = await import("./hygiene-cycle.mjs");
+    result = await runHygieneCycle({
+      root, nowMs, dryRun,
+      // Sizes cost a `du` over a 29 GB estate and no DECISION depends on them;
+      // only the scoreboard does, and that is what `vac hygiene` is for.
+      withBytes: false,
+      ...(hygieneOptions || {}),
+    });
+  } catch (e) {
+    result = { ok: false, error: "hygiene_cycle_threw", detail: String(e?.message || e) };
+  }
+  if (!dryRun) {
+    recordHygieneCycle({
+      root, nowMs,
+      summary: {
+        ok: result?.ok === true,
+        executed: result?.executed?.length ?? 0,
+        failed: result?.failed?.length ?? 0,
+        bytes_reclaimed: result?.bytes_reclaimed ?? 0,
+        error: result?.ok === false ? (result.error ?? null) : null,
+      },
+    });
+  }
+  return { ...steward, hygiene: result };
 }

@@ -2717,8 +2717,10 @@ export function createVacilandoServer() {
     if (stewardInFlight) return;
     stewardInFlight = true;
     try {
-      const { runStewardCycle } = await import("./vacilando/host-steward-run.mjs");
-      const out = runStewardCycle({ root: RUNTIME_ROOT_FOR_STEWARD() });
+      // The hygiene stage rides this loop rather than a second daemon, and is
+      // gated on its own six-hourly cadence inside the wrapper.
+      const { runStewardCycleWithHygiene } = await import("./vacilando/host-steward-run.mjs");
+      const out = await runStewardCycleWithHygiene({ root: RUNTIME_ROOT_FOR_STEWARD() });
       // An action means look again soon rather than waiting a whole sweep.
       if (out?.executed?.length) {
         const { RECHECK_MS } = await import("./vacilando/host-steward-cycle.mjs");

@@ -302,3 +302,236 @@ The decision model is certified; it is **not driven autonomously on a Steward cy
 unhealthy Gateway is therefore diagnosed, not repaired without a human. `director-forced-to-mac-mini`
 is accordingly **MITIGATED, not CLOSED** — closure requires that execution path live-verified, and
 recovery code existing is not evidence that recovery happens.
+
+---
+
+# Phase 4 — Retention, reclamation and hygiene lifecycle
+
+Owner modules: `artifact-retention.mjs`, `hygiene-classification.mjs`,
+`hygiene-observe.mjs`, `hygiene-reclaim.mjs`, `hygiene-execute.mjs`,
+`hygiene-cycle.mjs`. Surface: `vac hygiene`.
+
+Hygiene must never destroy work. A resource is reclaimed automatically only
+when Vacilando can positively prove why that is safe. Absence of evidence is
+not evidence of disposability, and UNKNOWN preserves.
+
+## Composed, not invented
+
+Nothing here re-decides a question an existing owner already answers.
+
+| Question | Owner | Phase 4's part |
+| --- | --- | --- |
+| Is this worktree safe to retire? | `worktree-retirement.mjs` (13 gates) | reads the verdict |
+| Retire it | `trusted-host-worktree-retirement.mjs` | calls it |
+| Which toolkit versions matter? | `toolkit-retention.mjs` | policy v2; reads the plan |
+| Prune them | `vac-toolkit-prune.mjs --yes` | invokes it |
+| Is this worktree known, and how? | `worktree-registration.mjs` | reads provenance |
+| What kind of state is this path? | `durable-state.mjs` `STATE_FAMILIES` | reads the declaration |
+| Where does a durable problem live? | `operational-findings.mjs` | writes to it |
+| What drives a bounded loop? | `host-steward-cycle.mjs` | one more stage in it |
+
+New code exists only where no owner did: retention classes for artefacts, the
+six-state hygiene vocabulary, the reclamation ledger, and a bounded log rewrite.
+
+## Classification
+
+Every managed resource ends in exactly one state. There is no default.
+
+| State | Meaning |
+| --- | --- |
+| `HEALTHY` | in active, correct use |
+| `EXPECTED` | nothing is using it and policy retains it anyway |
+| `RECONCILE` | metadata disagrees with reality; the correction touches only metadata |
+| `RECLAIMABLE` | every required proof is measured and passed |
+| `NEEDS_ATTENTION` | a decision or some work is owed |
+| `UNKNOWN` | evidence is missing — preserve |
+
+`HEALTHY` and `EXPECTED` both mean "do nothing", and collapsing them loses the
+reason. One answer is "it is working"; the other is "we decided to keep it", and
+only the second is ever worth revisiting.
+
+The evidence that produced a state is carried with it. A classification that
+cannot say what it was measured from cannot be audited later.
+
+## Positive-proof rules
+
+**Worktree retirement.** All thirteen gates in `SAFETY_GATES` measured and
+passed — `git_worktree_exists`, `no_live_provider`, `no_live_dev_server`,
+`no_active_execution_run`, `no_active_governed_action`, `no_active_lane`,
+`tree_clean_or_handled`, `branch_durability_proven`,
+`unique_commits_recoverable`, `no_untracked_unreproducible`,
+`not_self_retirement`, `no_operator_hold`, `no_governance_exception`. An
+unmeasured gate blocks exactly as a failed one does. Durability must be
+`merged`, `reachable_from_canonical_remote` or `pushed_not_merged`; a worktree
+holding unique local commits is never reclaimed and is never auto-merged,
+rebased, pushed or squashed to make it so. **A worktree with managed
+provenance is retained regardless** — see below. Execution re-measures every
+gate and refuses on any drift from the bound fingerprint, removes through
+`git worktree remove` without `--force`, and never deletes the branch.
+
+**Toolkit pruning.** A version is retained if it is `current`, referenced by a
+live process, explicitly pinned, inside the rollback window, retained for
+reproducibility, of unknown provenance, of unknown install time, or needed by
+the minimum-retention floor. It is pruned only when none of those applies. Any
+unresolved live pin blocks every prune, not only its own.
+
+**Artefact reclamation.** The path's retention class must be one of
+`RECENT_DIAGNOSTIC`, `TRANSIENT_QA` or `SCRATCH`; every evidence key its rule
+requires must be measured; no live writer, no active session or run reference,
+no retention hold; and it must be outside its window — or, for an unrotated
+log, over the size ceiling. Class comes from a declared relationship, never
+from a filename and never from an mtime.
+
+## Toolkit retention policy v2
+
+V1 kept the ten most recent superseded versions. Install cadence was then
+measured on this host: **17, 30, 22 and 23 installs on four consecutive sprint
+days, and 3 on a quiet one.** A depth of ten is therefore about eight hours of
+rollback during a sprint and about three days when nothing is happening — a
+window whose duration varies by a factor of ten with how busy the week was. The
+failure mode is specific: a regression noticed the next morning finds every
+candidate rollback target already gone.
+
+V2 states the window in the unit the requirement is actually in.
+
+* `rollback_window_hours: 72` — every version installed in the last 72 hours.
+* `keep_n: 10` — a floor in count terms, so a quiet week still has depth.
+* `min_retained_versions: 3` — a machine whose recovery path is one directory
+  deep is one bad install away from having none.
+* Unknown provenance or unknown install time protects on its own.
+
+The two rules are a union, not a choice. On the live host this moved retention
+from 11 of 98 versions to 41.
+
+## Artefact retention classes
+
+| Class | Window | Reclaimed by |
+| --- | --- | --- |
+| `DURABLE_EVIDENCE` | none | never automatically |
+| `ROLLBACK_SUPPORT` | while referenced | its own owner |
+| `RECENT_DIAGNOSTIC` | 14 days, or over an 8 MB ceiling | truncate to a 256 KB tail |
+| `TRANSIENT_QA` | 3 days | directory removal |
+| `SCRATCH` | 1 day | path removal |
+| `LIVE_STATE` | none | never |
+| `UNKNOWN` | none | never — preserved |
+
+`LIVE_STATE` is the seventh class and is not padding. `api-token` is a secret
+the Gateway authenticates with; `node.json` is this host's identity. Neither is
+evidence and neither is disposable, and letting them fall through to UNKNOWN
+would bury a real answer under a fail-closed one.
+
+Class comes first from `durable-state.mjs`: a path inside a declared family is
+that family's, and a directory that *contains* one is the directory that family
+lives in. Only then do the path rules apply. So a family added to
+`STATE_FAMILIES` is protected here automatically, and one removed there stops
+being silently protected here.
+
+**Why size may trigger a log rewrite when age may not trigger a delete.**
+Deleting an old file destroys the only copy of something on the strength of a
+date. Truncating an oversized log to its last 256 KB destroys nothing any
+reader consumes: `alloy-dev-supervise` reads `tail -50` and `tail -3`, and no
+reader in the toolkit opens a full history. The precondition is still positive
+proof of no live writer — rewriting a file an appender holds open is how a log
+becomes a sparse 26 MB of NULs.
+
+## Interruption and reconciliation
+
+There is no transaction across git, the filesystem and Vacilando's metadata,
+and inventing one would be a lie with a nice API. Instead:
+
+1. write the intention, with a before-state precise enough to recognise later;
+2. act;
+3. **measure** the postcondition — an action whose verifier cannot confirm the
+   end state is a failure, never a success with a caveat;
+4. write the outcome.
+
+Metadata is never updated before the filesystem action it describes: a record
+saying "retired" over a worktree still on disk is worse than no record, because
+the next cycle believes it.
+
+An intention with no outcome is an open reclamation. The first stage of every
+cycle re-measures each one and resolves it into `reconciled_completed`,
+`reconciled_not_performed` or `reconciled_partial`. A partial is reported and
+never retried automatically. A resource that cannot be measured **stays open** —
+closing it would be inventing an outcome, which is the one thing the ledger
+exists to prevent.
+
+## Bounds
+
+| Kind | Per cycle |
+| --- | --- |
+| worktree | 2 |
+| artifact | 10 |
+| registration | 5 |
+| toolkit | delegated |
+
+Not a performance limit — the blast radius. A classification defect that turns
+fifteen safe worktrees into fifteen wrong ones destroys fifteen in one sweep and
+two in a bounded one, and the second is recoverable by someone who notices.
+
+The toolkit carries no number because its prune is one delegated call that
+recomputes and verifies the whole plan; there is no interface for "remove
+twenty-five of fifty-seven", and inventing one would mean the hygiene cycle
+choosing which versions die. Stating it as a number would have implied an
+enforcement that does not exist.
+
+## Steward integration
+
+Hygiene is a stage of the existing Steward loop, not a second daemon, gated on
+its own six-hourly cadence — an observation costs a `du` over ~100 toolkit
+directories and an `lsof` per log, real work to reclaim bytes that were equally
+reclaimable six hours ago. It never fails the Steward cycle: its result is
+attached and its failures recorded, and the host's health does not depend on it.
+
+`vac host-steward --status` answers what the last hygiene cycle reclaimed and
+what remains open without measuring anything. The full scoreboard — every count
+§17 asks for — is `vac hygiene --json`.
+
+Routine success is silent. The Director hears only about ownership that cannot
+be resolved, work no retained history holds, repeated failure, or a blocked
+toolkit plan.
+
+## An authority change, recorded
+
+`retire_worktree` was in `OPERATOR_ONLY_ACTIONS` "whatever the evidence says".
+Phase 4 moved it to `AUTONOMOUS_ACTIONS`. The basis is that a worktree is a
+checkout and not the work: it is retired only where the commits are proven
+reachable from the canonical remote, so recreating it is one `git worktree add`.
+That is the reversible mechanism — not a quarantine directory, which would only
+move the bytes.
+
+`delete_branch` stayed operator-only. Retiring a checkout does not imply
+deleting its branch: two decisions, two blast radii.
+
+## Two defects this phase found before either fired
+
+**The population was measured by name.** `reconciliation-observe` lists
+worktrees with `filter(d => /^wt/.test(d.name))`. `financials`, `payments`,
+`troubleshooting` and `ui-vac` matched nothing, so they appeared in no
+classification at all — not preserved, not UNKNOWN, absent. The hygiene
+population is the union of git's registration list and the parent directory,
+with no name filter. The same comparison shape produced the accepted Phase 1
+figure of *3 stale registrations*: 39 registered minus 36 directories in the
+managed parent. All three exist — the canonical checkout and two
+`alloy-promotions` worktrees. **Actual stale registrations: zero.**
+
+**A managed slot can pass every gate.** `troubleshooting` (slot 8, port 3018)
+and `wt3-communications-inbound-sms` (slot 3, port 3013) both scored a clean
+retirement `candidate`: idle, clean, merged, unreferenced. Every git fact was
+true and retiring them would still have broken two slots, because
+`metadata/<name>.env` names their path and the thirteen gates do not read slot
+configuration. Managed provenance is now `EXPECTED` — intentionally retained.
+Releasing a slot is not a hygiene decision.
+
+## Limitations
+
+* The retirement gate set itself still cannot see slot configuration. The
+  protection lives in the hygiene layer, so a caller going straight to
+  `evaluateRetirementSafety` gets `candidate` for a managed worktree.
+* 24 runtime state paths are declared by no `STATE_FAMILIES` entry. They are
+  preserved as UNKNOWN, and they are also outside the durable backup unit.
+* `git worktree prune` is repository-wide; it cannot reconcile one registration
+  while leaving another stale one. The verifier checks the specific target and
+  the whole ref list, so this is safe, not silent.
+* Worktree byte totals come from `du` and cost about 20 seconds over a 29 GB
+  estate. Routine cycles run without them; only the scoreboard pays it.

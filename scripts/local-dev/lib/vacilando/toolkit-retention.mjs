@@ -36,15 +36,32 @@ import { createHash } from "node:crypto";
 export const TOOLKIT_RETENTION_SCHEMA = "vacilando.toolkit_retention.v1";
 
 /**
- * V1 retention policy. Versioned so the numbers can be revised without touching
- * a single line of pruning logic — `keep_n` appears here and nowhere else.
+ * V2 retention policy.
+ *
+ * WHAT CHANGED AND WHY, MEASURED. V1 kept the 10 most recent superseded
+ * versions. Install cadence on this host was then counted: 17, 30, 22 and 23
+ * installs on four consecutive sprint days, and 3 on a quiet one. A depth of
+ * ten is therefore about EIGHT HOURS of rollback during a sprint and about
+ * three DAYS when nothing is happening. A retention window whose duration
+ * varies by a factor of ten with how busy the week was is not a policy; it is
+ * an accident of arithmetic, and the failure mode is specific: a regression
+ * noticed the next morning finds every candidate rollback target already gone.
+ *
+ * So the window is stated in TIME, which is the unit the requirement is
+ * actually in — "long enough for a regression to be noticed" — and `keep_n`
+ * survives as a floor in count terms so a quiet week still has depth.
+ *
+ * 72 hours covers a weekend plus a working day either side. It is a judgement,
+ * but it is a judgement about the right quantity.
  */
-export const RETENTION_POLICY_V1 = Object.freeze({
-  version: "v1",
-  source: "capacity-doctrine-2026-08-26",
-  // Recent superseded versions kept for ordinary rollback depth, in addition to
-  // everything protected for another reason.
+export const RETENTION_POLICY_V2 = Object.freeze({
+  version: "v2",
+  source: "v3-phase-4-install-cadence-measurement-2026-09-06",
+  // Minimum rollback depth in COUNT, for periods with few installs.
   keep_n: 10,
+  // Minimum rollback depth in TIME. Every version installed inside this window
+  // is retained however many there are.
+  rollback_window_hours: 72,
   // A floor beneath the whole calculation. Even if every heuristic said
   // otherwise, a machine whose recovery path is one directory deep is a machine
   // one bad install away from having no working toolkit.
@@ -58,7 +75,25 @@ export const RETENTION_POLICY_V1 = Object.freeze({
   problem_prunable_ratio: 2.0,
 });
 
-export function configuredKeepN(env = process.env, policy = RETENTION_POLICY_V1) {
+/**
+ * The V1 policy, kept so the change above is legible and so a caller that
+ * genuinely wants count-only retention can still ask for it explicitly.
+ */
+export const RETENTION_POLICY_V1 = Object.freeze({
+  version: "v1",
+  source: "capacity-doctrine-2026-08-26",
+  keep_n: 10,
+  rollback_window_hours: 0,
+  min_retained_versions: 3,
+  protect_unknown: true,
+  watch_prunable_ratio: 0.5,
+  problem_prunable_ratio: 2.0,
+});
+
+/** The policy in force. Everything below defaults to it. */
+export const RETENTION_POLICY = RETENTION_POLICY_V2;
+
+export function configuredKeepN(env = process.env, policy = RETENTION_POLICY) {
   const raw = Number(env.ALLOY_TOOLKIT_KEEP_N);
   return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : policy.keep_n;
 }
@@ -188,7 +223,7 @@ export function buildInventory({
   pins = null,
   pinnedVersions = [],
   reproducibilityRequired = [],
-  policy = RETENTION_POLICY_V1,
+  policy = RETENTION_POLICY,
   keepN = null,
   now = Date.now(),
 } = {}) {
@@ -229,6 +264,18 @@ export function buildInventory({
     .filter((r) => !r.current && r.installed_at != null)
     .sort((a, b) => b.installed_at - a.installed_at);
   for (const r of orderable.slice(0, Math.max(0, keep))) r.rollback_retained = true;
+  // ...AND everything installed inside the time window, however many that is.
+  // The two rules are a union, not a choice: the count floor protects a quiet
+  // week and the time window protects a busy one, and a host can be in either.
+  const windowMs = Math.max(0, Number(policy.rollback_window_hours) || 0) * 3600_000;
+  if (windowMs > 0) {
+    for (const r of orderable) {
+      if (now - r.installed_at <= windowMs) {
+        r.rollback_retained = true;
+        r.rollback_reason = "inside the rollback time window";
+      }
+    }
+  }
 
   for (const r of records) {
     const reasons = [];
@@ -300,7 +347,7 @@ export function planPrune({
   inventory = [],
   currentSha = null,
   pins = null,
-  policy = RETENTION_POLICY_V1,
+  policy = RETENTION_POLICY,
   keepN = null,
   now = Date.now(),
 } = {}) {
@@ -315,6 +362,7 @@ export function planPrune({
     generated_at: now,
     policy_version: policy.version,
     keep_n: Number.isFinite(keepN) ? keepN : policy.keep_n,
+    rollback_window_hours: policy.rollback_window_hours ?? 0,
     current: currentSha,
     total_installed: inventory.length,
     retained_count: retained.length,
@@ -327,6 +375,7 @@ export function planPrune({
       version: r.version,
       reasons: r.protection_reasons,
       disk_bytes: r.disk_bytes,
+      installed_at: r.installed_at,
       live_pids: r.live_process_references.map((p) => p.pid),
     })),
     prune: blocked ? [] : prunable.map((r) => ({ version: r.version, path: r.path, disk_bytes: r.disk_bytes })),
@@ -381,7 +430,7 @@ export async function executePrune({
   recompute = null,
   remove = null,
   confirmed = false,
-  policy = RETENTION_POLICY_V1,
+  policy = RETENTION_POLICY,
   now = Date.now(),
 } = {}) {
   if (confirmed !== true) {
@@ -471,7 +520,7 @@ export function verifyAfterPrune({
   currentSha = null,
   pins = null,
   removed = [],
-  policy = RETENTION_POLICY_V1,
+  policy = RETENTION_POLICY,
   keepN = null,
 } = {}) {
   const gone = new Set(removed.map(String));
@@ -520,7 +569,7 @@ export function verifyAfterPrune({
  * where 18 are prunable and nothing has ever pruned them is not. The old check
  * counted directories and would have called both the same.
  */
-export function retentionSeverity(plan, { policy = RETENTION_POLICY_V1, diskPressure = false } = {}) {
+export function retentionSeverity(plan, { policy = RETENTION_POLICY, diskPressure = false } = {}) {
   if (!plan) return { severity: "problem", why: "retention state could not be determined" };
   if (plan.execution_blocked) {
     return { severity: "problem", why: plan.blocked_reason || "retention state cannot be safely determined" };
