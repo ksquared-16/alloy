@@ -747,4 +747,113 @@ SET label = EXCLUDED.label,
     is_active = EXCLUDED.is_active,
     effective_start = EXCLUDED.effective_start;
 
+-- ---------------------------------------------------------------------------
+-- PROGRAMS, AND WHAT THEY COST — so an assignment can be priced at all.
+--
+-- The tenant had 3000 assignments and ZERO programs: `location_program_categories`
+-- was empty, so every assignment's `program_category_id` was null, and an
+-- assignment with no program cannot be priced by anything. Commercial
+-- Configuration was empty too — no offerings, no variants, no tuition rates — so
+-- even a programmed assignment would have resolved to "no configured tuition".
+--
+-- A childcare organisation obviously has programs, and an inquiry is an inquiry
+-- FOR one. This is representative configuration, not a fixture that makes a test
+-- pass: the shape is exactly what an operator authors through
+-- /api/admin/location-program-categories, /api/admin/programs/offerings and
+-- /api/admin/commercial/tuition-rates.
+--
+-- The eligibility dimensions are the ones this commercial model actually has —
+-- program x attendance type x days-per-week variant. Age banding is NOT one of
+-- them (it belongs to the childcare rate plans), and none is invented here.
+--
+-- `drop_in` is deliberately left UNPRICED. A no-match has to be reachable on a
+-- real assignment, or "no configured tuition applies" is a state nobody can
+-- certify.
+-- ---------------------------------------------------------------------------
+INSERT INTO public.location_program_categories (id, org_id, location_id, key, label, sort_order, is_active)
+SELECT
+    ('00000000-0000-4000-8000-0000000c' || lpad(to_hex(s.n), 4, '0'))::uuid,
+    :'ORG_ID'::uuid,
+    s.location_id,
+    s.key,
+    s.label,
+    s.n,
+    true
+FROM (VALUES
+    (1, '00000000-0000-4000-8000-000000000010'::uuid, 'toddler',   'Toddler'),
+    (2, '00000000-0000-4000-8000-000000000010'::uuid, 'preschool', 'Preschool'),
+    (3, '00000000-0000-4000-8000-000000000011'::uuid, 'toddler',   'Toddler'),
+    (4, '00000000-0000-4000-8000-000000000011'::uuid, 'preschool', 'Preschool')
+) AS s(n, location_id, key, label)
+ON CONFLICT (id) DO UPDATE
+SET key = EXCLUDED.key, label = EXCLUDED.label, is_active = true;
+
+-- Every assignment is FOR a program, at the site it is already assigned to, and
+-- commits to a number of days. Both are facts the assignment owns; neither is
+-- copied onto the child.
+UPDATE public.opportunity_customer_members ocm
+SET program_category_id = c.id,
+    metadata = ocm.metadata || jsonb_build_object(
+        'requested_days_per_week',
+        CASE ocm.schedule_type WHEN 'full_time' THEN 5 WHEN 'part_time' THEN 3 ELSE 2 END
+    )
+FROM public.location_program_categories c
+WHERE ocm.org_id = :'ORG_ID'::uuid
+  AND c.org_id = :'ORG_ID'::uuid
+  AND c.location_id = ocm.location_id
+  AND c.key = CASE WHEN (('x' || substr(replace(ocm.id::text, '-', ''), 25, 8))::bit(32)::int % 2) = 0
+                   THEN 'toddler' ELSE 'preschool' END;
+
+-- program_offerings: a program in an attendance shape. `attendance_type` is the
+-- assignment's own `schedule_type` vocabulary, because that IS the fact Commercial
+-- authors against — no translation table exists and none is invented.
+INSERT INTO public.program_offerings (id, org_id, program_key, label, attendance_type, is_active, status)
+SELECT
+    ('00000000-0000-4000-8000-0000000d' || lpad(to_hex(s.n), 4, '0'))::uuid,
+    :'ORG_ID'::uuid, s.program_key, s.label, s.attendance_type, true, 'active'
+FROM (VALUES
+    (1, 'toddler',   'Toddler · full week', 'full_time'),
+    (2, 'toddler',   'Toddler · part week', 'part_time'),
+    (3, 'preschool', 'Preschool · full week', 'full_time'),
+    (4, 'preschool', 'Preschool · part week', 'part_time')
+) AS s(n, program_key, label, attendance_type)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label, is_active = true, status = 'active';
+
+-- program_offering_variants: the QUANTITY axis. Five days for a full week, three
+-- for a part week — the days each offering is actually sold in.
+INSERT INTO public.program_offering_variants (id, org_id, offering_id, label, quantity_type, quantity_value, is_active, status)
+SELECT
+    ('00000000-0000-4000-8000-0000000e' || lpad(to_hex(s.n), 4, '0'))::uuid,
+    :'ORG_ID'::uuid, s.offering_id, s.label, 'days', s.days, true, 'active'
+FROM (VALUES
+    (1, '00000000-0000-4000-8000-0000000d0001'::uuid, '5 days a week', 5),
+    (2, '00000000-0000-4000-8000-0000000d0002'::uuid, '3 days a week', 3),
+    (3, '00000000-0000-4000-8000-0000000d0003'::uuid, '5 days a week', 5),
+    (4, '00000000-0000-4000-8000-0000000d0004'::uuid, '3 days a week', 3)
+) AS s(n, offering_id, label, days)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label, is_active = true, status = 'active';
+
+-- commercial_tuition_rates: one monthly org-default rate per variant. ONE cadence
+-- on purpose, so the ordinary path resolves deterministically; a second cadence or
+-- a site override is what a certification authors when it wants to prove an
+-- override or an ambiguity.
+INSERT INTO public.commercial_tuition_rates
+    (id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, effective_start)
+SELECT
+    ('00000000-0000-4000-8000-0000000b' || lpad(to_hex(s.n), 4, '0'))::uuid,
+    :'ORG_ID'::uuid, NULL, s.variant_id, 'monthly', 'private_pay', s.cents, true, false, current_date - 365
+FROM (VALUES
+    (1, '00000000-0000-4000-8000-0000000e0001'::uuid, 168000),
+    (2, '00000000-0000-4000-8000-0000000e0002'::uuid, 112000),
+    (3, '00000000-0000-4000-8000-0000000e0003'::uuid, 155000),
+    (4, '00000000-0000-4000-8000-0000000e0004'::uuid, 103000)
+) AS s(n, variant_id, cents)
+ON CONFLICT (id) DO UPDATE
+SET rate_cents = EXCLUDED.rate_cents, is_active = true, not_offered = false,
+    effective_start = EXCLUDED.effective_start;
+
+ANALYZE public.opportunity_customer_members;
+
 \echo '== Seed complete =='
