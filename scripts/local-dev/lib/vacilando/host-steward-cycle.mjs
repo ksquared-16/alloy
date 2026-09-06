@@ -22,6 +22,7 @@ import { buildStewardPlan, OWNERSHIP } from "./host-steward.mjs";
 import { classifyHostAdmission } from "./host-admission.mjs";
 
 import { findingsForSteward } from "./operational-findings.mjs";
+import { ATTEMPT_CEILINGS, readEpisode } from "./control-plane-recovery.mjs";
 
 export const STEWARD_CYCLE_SCHEMA = "vacilando.host_steward_cycle.v1";
 
@@ -284,7 +285,40 @@ export function stewardStatus({ root, nowMs = Date.now(), staleMs = STALE_CYCLE_
      * it has to keep doing it when a satellite store is unavailable.
      */
     findings: stewardFindingsView(root),
+    /*
+     * The control-plane recovery scoreboard, composed here rather than given its
+     * own surface: §11 asks that the Director not have to read six JSON stores,
+     * and the Steward is already where host state is answered.
+     *
+     * Synchronous and evidence-free by design — this reports the LAST recorded
+     * episode, it does not probe. Probing belongs to whoever is driving a cycle,
+     * because a status call must never restart anything as a side effect.
+     */
+    control_plane_recovery: recoveryPosture(root),
   };
+}
+
+function recoveryPosture(root) {
+  try {
+    const read = readEpisode(root);
+    if (!read.ok) return { unavailable: true, reason: read.error };
+    const ep = read.episode;
+    if (!ep) return { episode_active: false, failure_class: null, recovery_level: 0, director_action_required: false };
+    return {
+      episode_active: !ep.resolved_at,
+      episode_id: ep.episode_id,
+      failure_class: ep.failure_class,
+      recovery_level: ep.level,
+      attempts_used: (ep.attempts || []).length,
+      attempts_allowed: ATTEMPT_CEILINGS[ep.failure_class] ?? 0,
+      first_observed_at: ep.first_observed_at,
+      resolved_at: ep.resolved_at,
+      last_known_good: ep.last_known_good,
+      director_action_required: Boolean(ep.escalated) || (ep.attempts || []).length >= (ATTEMPT_CEILINGS[ep.failure_class] ?? 0),
+    };
+  } catch {
+    return { unavailable: true };
+  }
 }
 
 function stewardFindingsView(root) {

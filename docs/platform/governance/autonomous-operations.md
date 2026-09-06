@@ -222,3 +222,83 @@ measured the capability still absent. It was never `CLOSED`, so no certification
 Severity is declared, not derived, so 22 migrated findings sit at the default `degrades` until
 evidence justifies moving them. Findings inform planning through `constraining_planning` but nothing
 consumes that yet — the scheduler is Phase 5.
+
+
+---
+
+# Phase 3 — Control-plane recovery
+
+> **The goal is not automatic restart.** A restart loop is worse than an outage: it looks like the
+> system is trying, it destroys the evidence of why, and it can mask a crash into what appears to be
+> failing hardware. The model is *diagnose → bounded repair → verify → escalate only when necessary*.
+
+## Composition
+
+Every recovery **action** already had an owner. Phase 3 adds the decision, not the repair:
+
+| Concern | Existing owner |
+|---|---|
+| process identity, owned restart | `control-plane-health.recoverOwnedVacilandoProcess` |
+| loopback health | `control-plane-health.probeVacilandoAccepting` |
+| installed/running convergence | `toolkit-convergence.mjs` |
+| tailnet address, retry policy | `vacilando-tailscale-bind.mjs` |
+| attempts, cooldown, audit | `host-steward-cycle.mjs` |
+| durable problem memory | `operational-findings.mjs` |
+
+The one thing that could **not** be composed is episode memory. Every existing attempt counter lives
+in the Gateway's own runtime, and the Gateway is the thing being restarted — so a restart loop would
+reset its own memory of looping each time round, and every iteration would look like a first attempt
+forever. Episode state is written to disk **before** the action that may kill the writer.
+
+## Failure classes
+
+Classification order is **certainty, not severity**. Host reachability first, because nothing else can
+be trusted without it. Missing process before health, because a dead process cannot answer a probe and
+would otherwise look merely "unhealthy". Drift before route, because a Gateway running the wrong
+toolkit may serve loopback perfectly and still be wrong.
+
+| Class | Evidence | Action | Level | Ceiling |
+|---|---|---|---|---|
+| `HEALTHY` | every measured signal healthy | none | 0 | — |
+| `PROCESS_DEAD` | no Gateway process | owned restart | 2 | 3 |
+| `PROCESS_ALIVE_UNHEALTHY` | alive, loopback down ≥ 60 s | owned restart | 2 | 2 |
+| `TOOLKIT_DRIFT` | running ≠ installed | converge then restart | 3 | 2 |
+| `SERVE_ROUTE_FAILURE` | loopback healthy, route down | reconcile Serve | 1 | 2 |
+| `SUPERVISOR_FAILURE` | Steward stale, Gateway healthy | restart Steward | 2 | 2 |
+| `TAILSCALE_FAILURE` | tailnet down | **none** | 4 | 0 |
+| `HOST_UNREACHABLE` | host silent | **none** | 5 | 0 |
+| `UNKNOWN` | incomplete or contradictory | **none** | 4 | 0 |
+
+**`UNKNOWN` fails closed**, and it is reached more often than one might expect: a single failed probe,
+an unreadable process table, or unreadable episode memory all land there. Never restart on
+`health = false` alone — slow bind, an unattempted probe, and a genuinely wedged process are three
+different things and only the third wants a restart.
+
+**A healthy Gateway behind a broken route is never restarted.** Restarting a working service to fix a
+network destroys the thing that works. **The tailnet is never repaired autonomously**, because it may
+be the only channel back to the host.
+
+## Live certification
+
+| Case | Result |
+|---|---|
+| A · dead Gateway | **PASS** — `kill -9`, caught `PROCESS_DEAD`, recovered within one 250 ms sample |
+| B · alive but unhealthy | **PASS** — SIGSTOP; launchd never fires; sustained → `PROCESS_ALIVE_UNHEALTHY`, single probe → `UNKNOWN` |
+| C · toolkit drift | **PASS** — certified against real drift observed this session, caught while loopback was healthy |
+| D · Serve route failure | **classification PASS; injection NOT RUN** — Serve is the Director's only remote channel |
+| E · retry exhaustion | **PASS** — ceiling honoured, escalates to L4, one obligation, no loop |
+| F · `UNKNOWN` | **PASS** — live during B, and on blind/contradictory evidence |
+| G · durability | **PASS** — 9 lanes and 27 findings byte-identical across the kill |
+
+**Live certification found a defect in its own observer.** curl exits non-zero when the service does
+not answer, so a generic guard turned "the Gateway did not respond" into "loopback was not measured",
+and a SIGSTOPped Gateway read as `UNKNOWN` instead of `PROCESS_ALIVE_UNHEALTHY` — the model's own
+conflation, inside the model. A printed status code is an answer; only curl being unusable is
+genuinely unmeasured.
+
+## What this does not yet do
+
+The decision model is certified; it is **not driven autonomously on a Steward cycle**. A real
+unhealthy Gateway is therefore diagnosed, not repaired without a human. `director-forced-to-mac-mini`
+is accordingly **MITIGATED, not CLOSED** — closure requires that execution path live-verified, and
+recovery code existing is not evidence that recovery happens.
