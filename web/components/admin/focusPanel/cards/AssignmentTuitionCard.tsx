@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import { readFinancialNestedSurfaceGroupsFromDoc } from "@/lib/adminV2/runtime/focusPanel/billingPreview/financialNestedSurfaceRuntime";
+import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 import type { AssignmentTuitionView, TuitionOptionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -141,6 +143,23 @@ export default function AssignmentTuitionCard({
 
     const assignments = useMemo(() => data?.assignments ?? [], [data]);
 
+    /*
+     * PUBLISHED NESTED SURFACE GROUPS — a platform contract this card keeps.
+     *
+     * The Focus Panel composer lets an operator author extra field groups onto this card, published
+     * as `metadata.nestedSurfaces["financial_configuration_surface"]`. Renaming the card's identity
+     * from Billing Preview to Tuition changes what it is ABOUT; it does not entitle it to stop
+     * honouring configuration somebody has already published against it.
+     */
+    const publishedDoc = usePublishedFocusPanelSummaryDoc(expanded);
+    const nestedSurfaceGroups = useMemo(
+        () =>
+            expanded
+                ? readFinancialNestedSurfaceGroupsFromDoc(publishedDoc, context, null)
+                : null,
+        [expanded, publishedDoc, context],
+    );
+
     /**
      * THE COMMIT — through the registered action, never a direct write.
      *
@@ -173,7 +192,16 @@ export default function AssignmentTuitionCard({
                             opportunity_customer_member_id: view.opportunityCustomerMemberId,
                             resolution_key: view.resolutionKey,
                             selected_source_id: option.sourceId,
-                            cadence_key: view.facts.cadenceKey ?? option.cadenceKey,
+                            /*
+                             * THE FACTS THIS RESOLUTION WAS COMPUTED FROM, ECHOED EXACTLY.
+                             *
+                             * Not the option's cadence: an unchosen billing frequency is a real
+                             * input, and substituting the recommendation's own cadence for it makes
+                             * the server re-resolve a DIFFERENT question and refuse the acceptance
+                             * as stale. Found by driving the real card — the payload has to say what
+                             * was asked, not what came back.
+                             */
+                            ...(view.facts.cadenceKey ? { cadence_key: view.facts.cadenceKey } : {}),
                             as_of: view.facts.asOf,
                             ...(reason ? { override_reason: reason } : {}),
                             // Replacing a live term on the same date is deliberate, never implicit.
@@ -225,6 +253,24 @@ export default function AssignmentTuitionCard({
                 <p className="alloy-os-tuition__empty">No assignment on this record to price.</p>
             ) : null}
 
+            {nestedSurfaceGroups?.map((group) => (
+                <section
+                    key={group.key}
+                    className="alloy-os-tuition__nested"
+                    data-financial-nested-group={group.key}
+                >
+                    <h4>{group.label}</h4>
+                    <ul data-financial-nested-fields={group.key}>
+                        {group.fields.map((field) => (
+                            <li key={field.key} data-financial-nested-field={field.key}>
+                                <span>{field.label}</span>
+                                <span>{field.value}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ))}
+
             {assignments.map((view) => {
                 const accepted = view.accepted;
                 const acceptedOption =
@@ -234,6 +280,7 @@ export default function AssignmentTuitionCard({
                         key={view.opportunityCustomerMemberId}
                         className="alloy-os-tuition__assignment"
                         data-tuition-assignment={view.opportunityCustomerMemberId}
+                        data-tuition-member={view.customerMemberId}
                         data-tuition-state={view.state}
                         data-tuition-accepted={accepted ? accepted.state : "none"}
                         data-tuition-stale={view.acceptedIsStale ? "true" : "false"}
