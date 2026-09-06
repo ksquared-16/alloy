@@ -127,3 +127,98 @@ The Capacity V2 incident was caused by test reset helpers defaulting to `runtime
 worker shell is the live Gateway root. `assertResettableRoot` now refuses any root ending in
 `/gateway` and throws rather than no-ops, because a silent skip would leave a suite reading
 production while believing it had a clean store. Production is no longer a convenient fixture.
+
+
+---
+
+# Phase 2 — Operational findings
+
+> **The canonical owner of durable operational knowledge.** A finding is not a ticket. A ticket is
+> work someone intends to do; a finding is a fact about how the system behaves, which may or may not
+> deserve work. That distinction is load-bearing: a ticket queue grows until someone grooms it, while
+> findings should shrink on their own as conditions disappear.
+
+## Composed, not invented
+
+A store already existed at `vacilando/operational-findings/findings.json` — 22 hand-written findings
+with real root causes, mitigations and promoted SHAs — and **no module referenced it**. Phase 2 is
+that store's owner, `operational-findings.mjs`. All 22 records were migrated in place, none
+discarded, and their `classification` vocabulary became the category model.
+
+Migration does not invent history. A record written before the severity model existed is defaulted to
+`degrades` and marked `severity_source: defaulted_on_migration`, because guessing the consequence of
+an old finding would put false confidence into the field the planner keys on.
+
+## Model
+
+| Dimension | Values |
+|---|---|
+| Status | `OPEN` → `MITIGATED` → `FIXED` → `CLOSED`, plus `ACCEPTED_DEBT` |
+| Category | `defect`, `design_gap`, `observability_gap`, `hardening_debt`, `operator_friction` |
+| Severity | `control_plane`, `blocks_work`, `degrades`, `debt`, `opportunity` |
+
+**`CLOSED` requires evidence.** Code changing is `FIXED`. Closing asserts the condition is *gone* —
+a claim about the running system — so it must carry something a later reader could check. The gap
+between "we fixed it" and "we proved it" is where regressions live.
+
+**Severity is consequence, never frequency.** A daily irritation is not severe; a rare event that
+loses data is. Frequency lives in `occurrences`, where it can inform priority without inflating
+severity.
+
+**`ACCEPTED_DEBT` is a decision, not a shrug.** The problem is real, understood, and deliberately not
+being fixed now. It stays on the board and stops interrupting.
+
+## Identity, and the duplicate this caught
+
+Identity is `(subsystem, key)` where the key names the **cause**, not the symptom — deterministic, so
+next week's observation lands on the same record, and explicit, so a vague symptom string cannot
+silently merge two distinct causes.
+
+Seeding immediately exposed a gap. The legacy records carry hand-written ids
+(`supervisor-without-scheduler`, not `dev-server-supervisor-without-scheduler`), so observations meant
+to update them **created duplicates** — the exact failure this system exists to prevent. Fixed by
+allowing an explicit `id` to target a known finding, plus `mergeFindings` to fold a duplicate into the
+record it should have been. Evidence and occurrences are additive; the duplicate is removed rather
+than tombstoned, because a store that accumulates markers for its own mistakes becomes the inbox this
+replaces.
+
+## Steward integration
+
+`host-steward-cycle.stewardStatus()` consumes `findingsForSteward()` and **never writes**, so findings
+cannot become a second source of operational truth beside the run, lane and health owners. A findings
+store that cannot be read degrades the Steward's awareness, never its cycle.
+
+`affecting_operation` means the condition is still live — `OPEN` and `MITIGATED` only. `FIXED` gets
+its own `awaiting_certification` bucket, because listing every past repair as still-hurting would turn
+a signal into a changelog, and "what should I verify" is a question the Steward can act on.
+
+## Director attention
+
+An `OPEN` finding is **not** an obligation. The Director is owed attention only when consequence is
+high and the system cannot proceed alone: `control_plane` or `blocks_work` severity, or a finding
+that was certified `CLOSED` and has recurred. That is the difference between a scoreboard and an
+inbox. Routine creation, update and mitigation are silent.
+
+## Seeding decisions
+
+Items evaluated and **made findings**: heavy work outside the validation broker; a run waiting on a
+reason no policy defines (`blocks_work`); toolkit retention never enforced; work continuation having
+no owner; lane memory not existing.
+
+Items evaluated and **deliberately not made findings**:
+
+* **3 stale worktree registrations** and **11 worktrees with unique local commits** — evidence on the
+  existing estate finding, not separate causes. The 11 blocked are the safety system *working*.
+* **The lane-registry destruction** — a closed incident whose prevention is promoted and certified.
+  Closed incidents stay closed; a finding would duplicate the record.
+* **Manual toolkit convergence** — the capability was built and promoted during Capacity V2.
+
+One status was **corrected**: `supervisor-without-scheduler` was marked `FIXED`, and the Phase 1 audit
+measured the capability still absent. It was never `CLOSED`, so no certification was invalidated —
+`FIXED` was simply premature.
+
+## Limitations
+
+Severity is declared, not derived, so 22 migrated findings sit at the default `degrades` until
+evidence justifies moving them. Findings inform planning through `constraining_planning` but nothing
+consumes that yet — the scheduler is Phase 5.
