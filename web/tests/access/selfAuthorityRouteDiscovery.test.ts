@@ -72,11 +72,40 @@ function resolveImport(spec: string, fromAbs: string): string | null {
     return null;
 }
 
+/**
+ * Comments removed, so a table or RPC *named in prose* cannot be mistaken for a write.
+ *
+ * Added 2026-09-06 (ninth issuance) after this lock went red on a comment. A doc-comment
+ * edit to `lib/admin/resolveAdminAccessCore.ts` — the resolver nearly every admin route
+ * imports — mentioned `create_membership_with_access_profile` while explaining that the
+ * RPC is *convention a direct INSERT bypasses*. No code changed. Because the predicates
+ * below read raw source, that one word made the resolver an authority writer and dragged
+ * **180 of 603** routes into the subject through import closure.
+ *
+ * This is the §10.2 failure mode — mention vs. call — and it is the same defect RL-1 fixed
+ * on 2026-08-06 in `analyticsRouteGates.test.ts`. The idiom is deliberately copied from
+ * there, including the rule that `//` is stripped only when not preceded by `:`, so a
+ * `http://` inside a string literal does not truncate the line and hide a real write.
+ */
+function codeOnly(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+}
+
+const codeCache = new Map<string, string>();
+function code(abs: string): string {
+    let src = codeCache.get(abs);
+    if (src === undefined) {
+        src = codeOnly(read(abs));
+        codeCache.set(abs, src);
+    }
+    return src;
+}
+
 const IMPORT_SPEC = /(?:from\s*|import\s*\(\s*)["']([^"']+)["']/g;
 
 function localImports(abs: string): string[] {
     const out: string[] = [];
-    for (const m of read(abs).matchAll(IMPORT_SPEC)) {
+    for (const m of code(abs).matchAll(IMPORT_SPEC)) {
         const resolved = resolveImport(m[1], abs);
         if (resolved) out.push(resolved);
     }
@@ -100,7 +129,7 @@ const TABLE_WRITE = new RegExp(
 const AUTHORITY_RPCS = /create_membership_with_access_profile|replace_membership_with_access_profile/;
 
 function writesAuthorityDirectly(abs: string): boolean {
-    const src = read(abs);
+    const src = code(abs);
     return TABLE_WRITE.test(src) || AUTHORITY_RPCS.test(src);
 }
 
@@ -135,13 +164,36 @@ function routeFiles(): string[] {
 const MUTATING_METHOD = /export\s+(?:async\s+)?function\s+(POST|PATCH|PUT|DELETE)\b/;
 
 /** A route targets a principal if it takes a userId route param or reads one from the body. */
+/**
+ * A route targets a principal if it takes a userId route param or reads one from the body.
+ *
+ * The leading `\b` was removed 2026-09-06 (ninth issuance), and that is not a cosmetic
+ * widening. `admin/dev/create-org/route.ts` reads its target from the body field
+ * `admin_user_id` (`:41`), and `\buser_?[iI]d\b` **cannot** match it: `_` is a word
+ * character, so there is no boundary before `user`. That route was in the subject only
+ * because its doc comment (`:18`) says *"upsert on user_id + org_id + role"* — i.e. the
+ * lock was holding a real membership writer through a sentence in prose, and stripping
+ * comments alone would have dropped it silently.
+ *
+ * Over-matching is safe here: this predicate is conjunctive with `reachesAuthorityWrite`,
+ * so a route that names a principal but writes no authority is still out of the subject.
+ */
 function targetsAPrincipal(abs: string): boolean {
     if (abs.includes("[userId]")) return true;
-    return /\buser_?[iI]d\b/.test(read(abs));
+    return /user_?[iI]d\b/.test(code(abs));
 }
 
+/**
+ * The guard must be *called*, not merely named.
+ *
+ * This is the permissive half of the same comment blindness, and it is the dangerous half:
+ * the form above credited any file containing the string, so a route carrying only
+ * `// TODO: isSelfAuthorityMutation` would have been recorded as guarded and dropped out of
+ * `unguarded` silently. All three real call sites use the call form (`role:33`, `remove:46`,
+ * `access-scope:81`), so requiring it costs nothing today and closes the escape.
+ */
 function appliesSelfGuard(abs: string): boolean {
-    return read(abs).includes("isSelfAuthorityMutation");
+    return code(abs).includes("isSelfAuthorityMutation(");
 }
 
 /**
@@ -170,10 +222,6 @@ const EXEMPT: { route: string; reason: string }[] = [
             "classifies as 'duplicate' rather than a widening. No existing grant is altered.",
     },
     {
-        route: "app/api/admin/settings/users-roles/members/route.ts",
-        reason: "Read-only roster projection for the Access screen; reaches no authority write.",
-    },
-    {
         route: "app/api/admin/lifecycle-catalog/delete/route.ts",
         reason:
             "Department teardown, and it only ever narrows. Discovered by this lock — it was in no " +
@@ -191,7 +239,7 @@ const EXEMPT: { route: string; reason: string }[] = [
 
 function authorityMutatingRoutes(): string[] {
     return routeFiles()
-        .filter((abs) => MUTATING_METHOD.test(read(abs)))
+        .filter((abs) => MUTATING_METHOD.test(code(abs)))
         .filter((abs) => targetsAPrincipal(abs))
         .filter((abs) => reachesAuthorityWrite(abs))
         .map((abs) => relative(webRoot, abs).split("\\").join("/"));
@@ -228,17 +276,78 @@ describe("W-2 / RL-11 — the self-authority ban's subject is discovered", () =>
         // `role/route.ts` mutates membership and contains no authority table name. This
         // is the exact escape that defeated the route-file census twice.
         const roleRoute = join(webRoot, "app/api/admin/users/[userId]/role/route.ts");
-        expect(TABLE_WRITE.test(read(roleRoute))).toBe(false);
+        expect(TABLE_WRITE.test(code(roleRoute))).toBe(false);
         expect(reachesAuthorityWrite(roleRoute)).toBe(true);
     });
 
-    it("the discovery scan is not vacuous", () => {
+    it("does not credit an authority write that appears only in a comment", () => {
+        // The regression that produced this assertion, stated as a fact about the source rather
+        // than a claim in prose. This is the shape of the edit that reddened the lock: a doc
+        // comment naming the atomic RPC while explaining that a direct INSERT bypasses it.
+        const commentOnly = `
+            /**
+             * \`create_membership_with_access_profile\` (20260807090001) is convention that a
+             * direct INSERT bypasses, so nothing in the tree enforces the invariant.
+             */
+            // We used to do supabase.from("user_roles").insert(row) here.
+            export const ABSENT_PROFILE_ENFORCEMENT = "legacy-all";
+        `;
+        expect(AUTHORITY_RPCS.test(codeOnly(commentOnly))).toBe(false);
+        expect(TABLE_WRITE.test(codeOnly(commentOnly))).toBe(false);
+        // …and the pre-repair form — the predicates over raw source — credited both.
+        expect(AUTHORITY_RPCS.test(commentOnly)).toBe(true);
+        expect(TABLE_WRITE.test(commentOnly)).toBe(true);
+    });
+
+    it("does not credit a self guard that appears only in a comment", () => {
+        // The permissive half, and the one that could have hidden a real unguarded writer.
+        const commentOnly = codeOnly(`// TODO: isSelfAuthorityMutation before shipping`);
+        expect(commentOnly.includes("isSelfAuthorityMutation(")).toBe(false);
+        expect(codeOnly(`if (isSelfAuthorityMutation({ callerUserId, targetUserId })) {`))
+            .toContain("isSelfAuthorityMutation(");
+    });
+
+    it("keeps a URL in a string literal out of the comment stripper", () => {
+        // `//` inside `http://` must not truncate the line and hide a real authority write.
+        const withUrl = `const r = new NextRequest("http://x/y"); await sb.from("user_roles").insert(row);`;
+        expect(TABLE_WRITE.test(codeOnly(withUrl))).toBe(true);
+    });
+
+    it("the discovery scan is not vacuous, and its subject is exact", () => {
         const routes = routeFiles();
         expect(routes.length).toBeGreaterThan(300);
-        // The closure must be selective: most routes are not authority writers.
-        const mutating = authorityMutatingRoutes();
-        expect(mutating.length).toBeGreaterThan(0);
-        expect(mutating.length).toBeLessThan(routes.length / 4);
+
+        // **Executed, not derived.** The old bound here was `< routes.length / 4` — 150 against a
+        // true subject of 6, i.e. 25× slack. That is what let the 2026-09-06 comment regression
+        // reach **180 of 603** before anything complained, and a narrower false positive would
+        // have passed in silence. The subject is asserted exactly instead: three guarded routes
+        // plus the three registered exemptions, and nothing else.
+        //
+        // A new authority writer therefore fails HERE with a name as well as failing the lock
+        // above with a remedy. Adding one is a decision, not a retune.
+        expect(authorityMutatingRoutes()).toEqual([
+            "app/api/admin/dev/create-org/route.ts",
+            "app/api/admin/lifecycle-catalog/delete/route.ts",
+            "app/api/admin/users/[userId]/access-scope/route.ts",
+            "app/api/admin/users/[userId]/remove/route.ts",
+            "app/api/admin/users/[userId]/role/route.ts",
+            "app/api/admin/users/route.ts",
+        ]);
+    });
+
+    it("every exemption is still in the discovered subject", () => {
+        // The stale-entry half of the exemption-register discipline, from W-4's ratchet and
+        // applied to `ACCESS_PRIMITIVE_MODULES` by the eighth issuance. An exemption for a route
+        // the scan no longer discovers is dead text that reads like live review, and it hides
+        // the fact that nobody has re-checked it. This found one on arrival:
+        // `settings/users-roles/members/route.ts`, exempted as a read-only roster projection —
+        // true, and therefore never in the subject, so the entry excused nothing.
+        const subject = new Set(authorityMutatingRoutes());
+        const stale = EXEMPT.map((e) => e.route).filter((route) => !subject.has(route));
+        expect(
+            stale,
+            "remove the entry — an exemption whose route is not discovered excuses nothing"
+        ).toEqual([]);
     });
 
     it("every exemption names a route that still exists", () => {

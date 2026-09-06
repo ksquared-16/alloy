@@ -24,6 +24,7 @@ import { classifyHostAdmission } from "./host-admission.mjs";
 import { findingsForSteward } from "./operational-findings.mjs";
 import { ATTEMPT_CEILINGS, readEpisode } from "./control-plane-recovery.mjs";
 import { hygienePosture } from "./hygiene-reclaim.mjs";
+import { observeScheduling } from "./work-scheduler-observe.mjs";
 
 export const STEWARD_CYCLE_SCHEMA = "vacilando.host_steward_cycle.v1";
 
@@ -349,7 +350,27 @@ export function stewardStatus({ root, nowMs = Date.now(), staleMs = STALE_CYCLE_
      * 29 GB estate would be a status call nobody dares make.
      */
     hygiene: hygienePostureFor(root, readState(root)),
+    /*
+     * SCHEDULING POSTURE — what would run next, and why nothing is.
+     *
+     * Read-only and derived, exactly like the hygiene and recovery rows beside
+     * it. The planner is pure and the observation is cheap: durable lanes,
+     * their active runs, and the notification store. It probes no provider and
+     * starts nothing, because a status call that dispatched work as a side
+     * effect would be the second scheduler §9 forbids.
+     */
+    scheduling: schedulingPostureFor(root),
   };
+}
+
+function schedulingPostureFor(root) {
+  try {
+    return observeScheduling({ root });
+  } catch (err) {
+    // A scheduling view that cannot be built must degrade the Steward's
+    // awareness, never its cycle.
+    return { unavailable: true, reason: String(err?.message || err) };
+  }
 }
 
 function hygienePostureFor(root, state) {

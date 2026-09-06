@@ -36,6 +36,11 @@
  *   PENDING_PROMPT_READINESS  temporarily undeliverable; try again on yield
  *   UNDELIVERABLE             permanently undeliverable; terminal, and says why
  *
+ * The PENDING value is named for the case that created it, and it now covers a
+ * second: a notification held back because another action on the same lane is
+ * still pending. `reason` says which, and the value is left alone rather than
+ * renamed, because it is written into every stored record on this host.
+ *
  * The redelivery signal is the lane's own run reaching a terminal state — the
  * canonical "I have yielded". No new scheduler, no sleeping a guessed number of
  * milliseconds, and no asking the worker to predict when its own pane goes idle.
@@ -88,6 +93,22 @@ export const TEMPORARY_DELIVERY_ERRORS = Object.freeze([
   "awaiting_instruction_receipt",
   "awaiting_provider_output",
   "duplicate_send",
+  /*
+   * ANOTHER ACTION ON THIS LANE IS STILL PENDING.
+   *
+   * MEASURED, on this host: 83 of 200 governed actions — 77 that COMPLETED and
+   * 6 that failed — carry no delivery record of any kind. Every one of the 83,
+   * without exception, resolved while a second action on the same lane was
+   * still pending. The notifier returned `{ deferred: true }` before the
+   * delivery owner was ever told, so the notification was not deferred; it was
+   * dropped, and the drain had nothing to find.
+   *
+   * From inside the lane that is indistinguishable from an action that was
+   * approved and never ran, which is exactly the report this fix answers: five
+   * refilings of a push that had in fact been refused within two seconds, each
+   * time for the same input error nobody could see.
+   */
+  "deferred_behind_pending_action",
 ]);
 
 /**
@@ -233,6 +254,7 @@ export async function redeliverGovernedNotification(requestId, {
   send,
   getLane = null,
   buildText,
+  isBlocked = null,
 } = {}) {
   const id = String(requestId || "");
   if (!id) return { ok: false, error: "missing_request_id" };
@@ -246,6 +268,28 @@ export async function redeliverGovernedNotification(requestId, {
     const pending = rec.notification_delivery;
     if (pending?.state !== DELIVERY_STATES.PENDING) {
       return { ok: false, error: "not_pending", skipped: true, state: pending?.state || null };
+    }
+
+    /*
+     * STILL BLOCKED IS NOT A FAILED ATTEMPT.
+     *
+     * The attempt budget exists for a busy pane, which becomes ready on its own
+     * within seconds. A notification waiting behind an `awaiting_operator`
+     * action is waiting on a human, and that can legitimately take hours — one
+     * on this host waited an hour and three quarters. Counting each conductor
+     * tick against the budget would expire a perfectly deliverable notification
+     * in six minutes and call it UNDELIVERABLE, which is a different lie from
+     * the one being fixed but a lie all the same.
+     *
+     * So a blocked record is SKIPPED: no send, no attempt, no state change. The
+     * bound still applies the moment it is actually deliverable.
+     */
+    if (typeof isBlocked === "function") {
+      let blocked = null;
+      try { blocked = await isBlocked(rec); } catch { blocked = null; }
+      if (blocked) {
+        return { ok: false, error: "still_blocked", skipped: true, blocked_by: blocked, state: pending.state };
+      }
     }
 
     // A lane that is gone or closed can never be told. That is a permanent
@@ -300,17 +344,21 @@ export async function drainGovernedNotifications({
   send,
   getLane = null,
   buildText,
+  isBlocked = null,
   limit = 25,
 } = {}) {
   const due = (await pendingNotificationDeliveries({ root, laneId })).slice(0, limit);
   const results = [];
   for (const rec of due) {
-    results.push(await redeliverGovernedNotification(rec.request_id, { root, nowMs, send, getLane, buildText }));
+    results.push(await redeliverGovernedNotification(rec.request_id, {
+      root, nowMs, send, getLane, buildText, isBlocked,
+    }));
   }
   return {
     ok: true,
     considered: due.length,
     delivered: results.filter((r) => r.ok).length,
+    skipped_blocked: results.filter((r) => r.error === "still_blocked").length,
     still_pending: results.filter((r) => r.state === DELIVERY_STATES.PENDING).length,
     results,
   };
