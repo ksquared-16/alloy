@@ -68,6 +68,7 @@ import { runReceiptConfirmed, runReceiptToken } from "./lanes.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
 import { SEND_BASELINE_WINDOW_MS, readLaneRuntimeStore } from "./lane-runtime.mjs";
 import { activeAgentSessionForLane } from "./agent-session.mjs";
+import { listGovernedActions } from "./governed-action-request.mjs";
 import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
@@ -98,6 +99,13 @@ export const STALE_SETTLE_MS = 20 * 60 * 1000;
 export const WORKER_HEARTBEAT_RECENT_MS = 45 * 60 * 1000;
 /** Worktree commits/index writes are protective for this long. */
 export const WORKTREE_ACTIVITY_RECENT_MS = 45 * 60 * 1000;
+/**
+ * How recently an orchestration run must have caused governed work to count as
+ * live. Matched to the worktree-activity window rather than the heartbeat one:
+ * both answer "has this run made something happen lately", and a control run
+ * legitimately spends minutes watching a cohort between dispatches.
+ */
+export const GOVERNED_ACTION_RECENT_MS = 45 * 60 * 1000;
 /**
  * A run that HAS reported has proven the protocol works on this lane, so its
  * silence is much stronger evidence than a run that never spoke. It is still
@@ -214,6 +222,9 @@ export function collectStaleRunFacts(run, { root, nowMs = Date.now(), sendStore,
     // from the claims owner rather than by looking for processes, because a
     // claim is what the broker actually arbitrates on.
     validation_in_flight: validationInFlight(run, worktree),
+    // Positive evidence that an ORCHESTRATION run is working. See
+    // governedActionActivityMs.
+    governed_action_ms: governedActionActivityMs(run, root),
     now_ms: nowMs,
   };
 }
@@ -252,6 +263,49 @@ export function resetClaimsReaderForTests() { claimsReader = null; }
 function requireClaims() {
   if (claimsReader) return claimsReader();
   return listResourceClaims();
+}
+
+/**
+ * WHEN THE RUN'S WORK HAPPENS IN OTHER LANES.
+ *
+ * THE DEFECT THIS CLOSES. Every liveness signal above assumes the run's worker
+ * touches its OWN lane: a heartbeat report, a busy session, movement in its own
+ * worktree. An orchestration run has none of those shapes. It dispatches bounded
+ * work to other lanes, watches telemetry and refills the cohort — its session
+ * rests in ACTIVE between actions (deliberately not "busy"), and it may never
+ * touch a git control file in its own worktree at all.
+ *
+ * So the Capacity lane's own run was repeatedly collected as ABANDONED *while it
+ * was dispatching the cohort it was measuring*. It then vanished from the
+ * observed cohort, which is the thing it existed to observe. Worse, it was being
+ * treated as disposable while holding live orchestration state.
+ *
+ * A governed action bound to this run is exactly the positive evidence this
+ * module already prefers over silence: a durable JSON fact, written by the
+ * governance layer, that this run caused work to happen. This is NOT a
+ * special case for the capacity lane — any control run that drives other lanes
+ * has this shape, and a worker whose governed actions stopped long ago still
+ * ages out normally.
+ */
+export function governedActionActivityMs(run, root) {
+  const id = run?.run_id;
+  if (!id) return null;
+  let records = [];
+  try {
+    records = listGovernedActions({ laneId: run.lane_id, root }) || [];
+  } catch { return null; }
+  let newest = null;
+  for (const r of records) {
+    if (r?.run_id !== id) continue;
+    const at = parseMs(r.updated_at) ?? parseMs(r.created_at);
+    if (at != null && (newest == null || at > newest)) newest = at;
+  }
+  return newest;
+}
+
+function governedActionRecent(facts) {
+  if (facts.governed_action_ms == null) return false;
+  return (facts.now_ms - facts.governed_action_ms) <= GOVERNED_ACTION_RECENT_MS;
 }
 
 function workerHeartbeatRecent(facts) {
@@ -366,6 +420,7 @@ export function classifyExecutionRunStale(run, facts = {}) {
     worker_heartbeat_recent: workerHeartbeatRecent(merged),
     worker_report_count: Number(run?.worker_report_count) || 0,
     worktree_activity_recent: worktreeActivityRecent(merged),
+    governed_action_recent: governedActionRecent(merged),
     past_settle: pastSettle(run, merged),
   };
 
@@ -443,6 +498,10 @@ export function classifyExecutionRunStale(run, facts = {}) {
   if (evidence.worktree_activity_recent) {
     return { class: "active", reason: "worktree_activity", evidence };
   }
+  // An orchestration run's work lands in other lanes, so this is its heartbeat.
+  if (evidence.governed_action_recent) {
+    return { class: "active", reason: "governed_action_activity", evidence };
+  }
   if (evidence.genuine_recent_activity) {
     return { class: "active", reason: "recent_output_activity", evidence };
   }
@@ -460,7 +519,8 @@ export function classifyExecutionRunStale(run, facts = {}) {
   // no worktree movement. A reported run that later goes silent stays
   // ambiguous for the operator unless the heartbeat-gone path fires.
   const sessionBusy = SESSION_BUSY.has(merged.session_state);
-  const noLiveSignals = !sessionBusy && !evidence.worktree_activity_recent;
+  const noLiveSignals = !sessionBusy && !evidence.worktree_activity_recent
+    && !evidence.governed_action_recent;
   // Tier 1: the run never spoke at all. Nothing on this lane has proven the
   // reporting protocol works, so an orphan is the likeliest reading.
   const neverReported = noLiveSignals && evidence.worker_report_count === 0;

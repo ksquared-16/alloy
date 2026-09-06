@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-04T18:06:11.536Z",
+  "captured_at": "2026-09-05T13:35:48.538Z",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -149,7 +149,7 @@
     {
       "name": "the inspector RUN block answers the six questions",
       "ok": true,
-      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 10:46 AM Stop lane RUNTIME Executin"
+      "detail": "RUN Working · 18m active Agent Claude / claude-opus-5 Slot 6 / 6 Context 38% Started 6:16 AM Stop lane RUNTIME Executing"
     },
     {
       "name": "a folded section opens on request",
