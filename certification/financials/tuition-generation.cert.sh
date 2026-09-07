@@ -40,4 +40,9 @@ psql "$DB" -tAc "select count(*) from public.financial_charge_templates where or
   | grep -q '^1$' || { echo "✗ no active 'tuition' charge template — the seed authors one"; exit 1; }
 
 echo "── running the live cases"
-( cd "$ROOT/web" && npx vitest run tests/financials/live/tuitionGeneration.live.test.ts --no-file-parallelism 2>&1 | tail -25 )
+# Serially and in this order: the slice establishes the happy path and the two lineage invariants,
+# the matrix then walks the edges. Both drive one tenant, so they cannot run in parallel.
+( cd "$ROOT/web" && npx vitest run \
+    tests/financials/live/tuitionGeneration.live.test.ts \
+    tests/financials/live/tuitionGenerationMatrix.live.test.ts \
+    --no-file-parallelism 2>&1 | tail -30 )

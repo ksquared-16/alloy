@@ -173,7 +173,11 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
             .from("charges")
             .select("id, amount_cents, currency_code, status, charge_category, billable_on, service_date, billable_source_type, billable_source_id, metadata")
             .eq("org_id", ORG)
-            .eq("charge_category", "tuition");
+            .eq("charge_category", "tuition")
+            // Scoped to THIS slice's service period. The tenant is shared with the matrix file, and
+            // "every tuition charge in the org" stopped being a useful question the moment a second
+            // certification started billing other months in it.
+            .eq("service_date", `${PERIOD}-01`);
         return (data ?? []) as Array<Record<string, unknown>>;
     }
 
