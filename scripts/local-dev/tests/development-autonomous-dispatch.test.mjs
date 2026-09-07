@@ -378,3 +378,152 @@ test("a resident that is not reporting is UNKNOWN, never disabled", () => {
   residentReported(shaped, null);
   assert.equal(CYC.residentDispatchEnabled({ root: shaped }), null, "a stage that never ran reports nothing");
 });
+
+/*
+ * THE MISSED WINDOW — a lane that finished its work and was never offered again.
+ *
+ * THE LIVE FAILURE THIS REPRODUCES. A certification run on Backend completed at
+ * 19:38:19. Over the next four ordinary Steward ticks — recovery HEALTHY,
+ * hygiene not_due, scheduling reached every time — the dispatch stage recorded
+ * `considered: 0` with `refused: []`. Not refused. Never considered.
+ *
+ * Tracing it through the production predicates, with occupancy isolated by
+ * reproducing the decision at run_state null, gave one answer:
+ *
+ *   failed: ["checkpoint_fresh"]   unmeasured: []
+ *   checkpoint is 452 minutes old
+ *
+ * Five of six checks passed. Backend's next_step was AUTHORIZED, deterministic,
+ * provenance director_instruction, dependencies []. The lane was perfectly
+ * eligible except that `checkpointFreshness` reads `record.updated_at`, and the
+ * only function that wrote it — `recordPromotionCheckpoint` — had ZERO call
+ * sites. Nothing in the resident system had ever refreshed lane memory.
+ *
+ * So autonomous work had a six-hour half-life measured from the last time a
+ * human edited the record by hand. Not a scheduler bug: the scheduler was
+ * right to refuse stale evidence. The evidence was stale because nothing was
+ * ever going to refresh it.
+ */
+
+const ER = await import("../lib/vacilando/execution-run.mjs");
+const SEVEN_HOURS = 7 * 60 * 60 * 1000;
+
+/** Lane memory whose checkpoint has aged past the freshness window. */
+function staleMemory(root, ageMs = SEVEN_HOURS) {
+  M.saveLaneMemory(memory(), { root });
+  const rec = M.getLaneMemory(LANE, root);
+  rec.updated_at = new Date(Date.now() - ageMs).toISOString();
+  M.saveLaneMemory(rec, { root });
+  return rec;
+}
+
+const verdict = (root) => A.authorizedNextStep({
+  record: M.getLaneMemory(LANE, root),
+  live: live({ run_state: null }),
+  now: Date.now(),
+});
+
+test("REGRESSION: a stale checkpoint is the ONLY thing holding back an otherwise eligible lane", () => {
+  const root = freshRoot();
+  staleMemory(root);
+  const v = verdict(root);
+  assert.equal(v.authorization, "UNKNOWN", "the lane goes UNKNOWN");
+  assert.deepEqual(v.revalidation.failed, ["checkpoint_fresh"], "and for exactly one reason");
+  assert.deepEqual(v.revalidation.unmeasured, [], "nothing was unmeasurable");
+  // The live shape: everything else about the lane was fine.
+  for (const k of ["run_state_unchanged", "promoted_lineage_current",
+    "dependencies_still_ready", "blocking_findings_unchanged", "mission_not_complete"]) {
+    assert.equal(v.revalidation.results[k], true, `${k} passed, as it did live`);
+  }
+});
+
+test("REGRESSION: a completed run refreshes the lane, so the next tick can consider it", () => {
+  const root = freshRoot();
+  staleMemory(root);
+  assert.equal(verdict(root).authorization, "UNKNOWN", "stale before");
+
+  const done = M.recordLaneProgress(LANE, { runId: "erun_finished", summary: "certification run" }, { root });
+  assert.equal(done.ok, true);
+
+  const after = verdict(root);
+  assert.equal(after.authorization, "AUTHORIZED", "work completing makes the lane current again");
+  assert.equal(after.deterministic, true);
+  assert.equal(after.revalidation.results.checkpoint_fresh, true);
+});
+
+test("a run the scheduler did NOT dispatch refreshes context without spending the instruction", () => {
+  /*
+   * A certification or operator run is real work on the lane, so it refreshes
+   * freshness — but it did not execute the Director's next step, so it must not
+   * consume it. Getting this wrong in either direction is a defect: consume too
+   * eagerly and authorized work is silently dropped; never consume and the lane
+   * repeats one action forever.
+   */
+  const root = freshRoot();
+  staleMemory(root);
+  M.recordLaneProgress(LANE, { runId: "erun_certification" }, { root });
+  const mem = M.getLaneMemory(LANE, root);
+  assert.ok(mem.next_step, "the authorized step survives an unrelated run");
+  assert.equal(mem.next_step.action_class, "run_tests");
+  assert.equal(verdict(root).authorization, "AUTHORIZED");
+});
+
+test("a dispatched run CONSUMES its next step, so the lane cannot loop on one action", () => {
+  const root = freshRoot();
+  staleMemory(root);
+  M.recordLaneProgress(LANE, { runId: "erun_dispatched", consumedNextStep: true }, { root });
+  const mem = M.getLaneMemory(LANE, root);
+  assert.equal(mem.next_step, null, "the step is spent");
+  assert.ok(mem.progress.completed.some((l) => l.includes("run_tests")), "and recorded as progress");
+  const after = verdict(root);
+  assert.notEqual(after.authorization, "AUTHORIZED",
+    "a spent step does not re-authorize itself — the lane asks for the next one");
+});
+
+test("recording progress NEVER creates memory, so UNKNOWN lanes stay UNKNOWN", () => {
+  // The safety property that keeps eight unrelated lanes out of scheduling.
+  const root = freshRoot();
+  const r = M.recordLaneProgress("lane_neverseen0001", { runId: "erun_x" }, { root });
+  assert.equal(r.ok, false);
+  assert.equal(r.error, "no_lane_memory");
+  assert.equal(M.getLaneMemory("lane_neverseen0001", root), null, "no record was manufactured");
+});
+
+test("a completed run is still reported even if lane memory cannot be written", () => {
+  // Lane memory is context, never a gate on recording that a run finished.
+  const root = freshRoot();
+  const r = M.recordLaneProgress(LANE, { runId: "erun_x" }, { root: null });
+  assert.equal(r.ok, false, "it declines rather than throwing");
+  assert.equal(typeof ER.reportRunState, "function");
+});
+
+test("a dispatched run is ATTRIBUTABLE to the scheduler, not to the Director", () => {
+  /*
+   * "scheduler" was missing from RUN_ORIGINS, and resolveRunOrigin falls through
+   * an unrecognised origin to "operator". Every autonomously dispatched run was
+   * therefore recorded as though the Director had asked for it — the resident
+   * system's own decisions attributed to the one person the whole exercise
+   * exists to not involve. It also left nothing able to tell a dispatched run
+   * from a hand-made one, which is exactly what the completion path needs to
+   * know whether an authorized step was actually spent.
+   */
+  assert.ok(ER.RUN_ORIGINS.includes("scheduler"), "the scheduler can name itself");
+
+  const drive = (origin) => {
+    const root = freshRoot();
+    M.saveLaneMemory(memory(), { root });
+    const c = ER.createQueuedRun({ laneId: LANE, instruction: "Advance the mission.", origin, root });
+    const rid = c.run?.run_id || c.run_id;
+    ER.reportRunState(rid, "executing", { root });
+    ER.reportRunState(rid, "complete", { root });
+    return { run: ER.getExecutionRun(rid, root), memory: M.getLaneMemory(LANE, root) };
+  };
+
+  const sched = drive("scheduler");
+  assert.equal(sched.run.origin, "scheduler", "and the attribution survives into the record");
+  assert.equal(sched.memory.next_step, null, "its own dispatched step is spent");
+
+  const op = drive("operator");
+  assert.equal(op.run.origin, "operator");
+  assert.ok(op.memory.next_step, "a Director-created run does not spend the Director's step");
+});

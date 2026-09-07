@@ -158,7 +158,23 @@ export function residentDispatchEnabled({ root, nowMs = Date.now(), staleMs = RE
 export function recordStageOutcome({ root, nowMs = Date.now(), outcome = null } = {}) {
   try {
     const state = readState(root);
-    state.last_stage_outcome = { at: new Date(nowMs).toISOString(), ...(outcome || {}) };
+    const entry = { at: new Date(nowMs).toISOString(), ...(outcome || {}) };
+    state.last_stage_outcome = entry;
+    /*
+     * AND KEEP THE HISTORY, not just the latest.
+     *
+     * Storing only the newest outcome answers "what is the Steward doing now"
+     * and cannot answer "why did lane X not run on tick Y" — which is the
+     * question an operator actually arrives with. Reconstructing four missed
+     * ticks from source code took an entire investigation; the decisions had
+     * happened and simply were not written down.
+     *
+     * The cycles ring is already bounded and already written every tick, so the
+     * verdict rides along on the cycle it belongs to. No new store, no new file.
+     */
+    const cycles = Array.isArray(state.cycles) ? state.cycles : [];
+    const last = cycles[cycles.length - 1];
+    if (last && !last.stage_outcome) last.stage_outcome = entry;
     writeState(root, state);
     return { ok: true };
   } catch { return { ok: false }; }
