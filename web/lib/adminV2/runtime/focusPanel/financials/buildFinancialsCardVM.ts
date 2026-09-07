@@ -35,6 +35,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
+import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import {
     billingPeriodForDate,
@@ -272,6 +273,27 @@ export type FinancialsCardVM = {
     };
     /** Expected funding attached to responsibility — never a receipt, never a balance. */
     expectedFunding: Array<{ label: string; sourceType: string; expectedCents: number | null; percentBasisPoints: number | null }>;
+    /**
+     * WHAT SHOULD ACTUALLY BE COLLECTED FROM THIS FAMILY RIGHT NOW.
+     *
+     * Thread 8's outstanding is unchanged and remains the authority for what a charge owes. This is
+     * the governed position beside it: a SUBMITTED subsidy claim may suppress collection for the
+     * amount it attributed, so a family is not chased for money an agency has been asked for. Every
+     * figure is derived server-side by `resolveFamilyCollectible` and simply rendered here — a card
+     * that recomputed any of it could disagree with the operator's own screen.
+     *
+     * `unresolvedVarianceCents` sits BESIDE the collectible figure and is never folded into it:
+     * when an agency short-pays, the difference is a decision somebody owes, not a bill the family
+     * silently inherits.
+     */
+    collectible: {
+        outstandingCents: number;
+        expectedSubsidyCents: number;
+        submittedClaimSuppressionCents: number;
+        actualSubsidyReceivedCents: number;
+        unresolvedVarianceCents: number;
+        currentlyCollectibleCents: number;
+    };
     /** Absent when the subject has no attendable/billable enrolment — the card renders no controls. */
     unavailableReason: string | null;
 };
@@ -308,6 +330,14 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         payers: [],
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         expectedFunding: [],
+        collectible: {
+            outstandingCents: 0,
+            expectedSubsidyCents: 0,
+            submittedClaimSuppressionCents: 0,
+            actualSubsidyReceivedCents: 0,
+            unresolvedVarianceCents: 0,
+            currentlyCollectibleCents: 0,
+        },
         subjects: [],
         rows: [],
         reconciliation: emptyReconciliation(),
@@ -870,6 +900,30 @@ export async function buildFinancialsCardVM(
      * come from the allocations, and what a party still owes is assigned less attributed.
      */
     const responsibilityRead = await readResponsibility(supabase, args.orgId, rows.map((r) => r.chargeId));
+
+    /*
+     * COLLECTIBILITY, SUMMED FROM THE PERIOD'S POSTED CHARGES.
+     *
+     * One resolver call per posted charge, added up — not a second implementation of the rule. Only
+     * posted charges are asked about, because a draft owes nothing yet and asking would report a
+     * suppression against money that is not owed.
+     */
+    const collectible = { outstandingCents: 0, expectedSubsidyCents: 0, submittedClaimSuppressionCents: 0, actualSubsidyReceivedCents: 0, unresolvedVarianceCents: 0, currentlyCollectibleCents: 0 };
+    for (const row of rows.filter((r) => r.lifecycleStatus === "posted" && r.periodKey === period.key)) {
+        try {
+            const position = await resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId });
+            collectible.outstandingCents += position.outstandingCents;
+            collectible.expectedSubsidyCents += position.expectedSubsidyCents;
+            collectible.submittedClaimSuppressionCents += position.submittedClaimSuppressionCents;
+            collectible.actualSubsidyReceivedCents += position.actualSubsidyReceivedCents;
+            collectible.unresolvedVarianceCents += position.unresolvedVarianceCents;
+            collectible.currentlyCollectibleCents += position.currentlyCollectibleCents;
+        } catch {
+            // A charge the resolver cannot speak for (a reduction row, a void) contributes nothing
+            // rather than failing the account — the same rule every other read on this card follows.
+        }
+    }
+    vm.collectible = collectible;
     vm.responsibility = responsibilityRead.responsibility;
     vm.payers = responsibilityRead.payers;
     vm.expectedFunding = responsibilityRead.expectedFunding;
