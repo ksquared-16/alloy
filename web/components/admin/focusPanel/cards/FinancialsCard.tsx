@@ -899,6 +899,30 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                         testId="responsibility-unassigned"
                                     />
                                 ) : null}
+                                {/* ── WHAT TO ACTUALLY COLLECT ──────────────────────────────
+                                    Stated only when a SUBMITTED claim is suppressing something, so
+                                    an ordinary family sees no extra line. Outstanding above is
+                                    unchanged and remains what the charge owes; this is the governed
+                                    position beside it, so nobody is chased for money an agency has
+                                    already been asked for. Both figures come from the read model. */}
+                                {vm.collectible.submittedClaimSuppressionCents > 0 ? (
+                                    <Line
+                                        label="Collectible now"
+                                        cents={vm.collectible.currentlyCollectibleCents}
+                                        currency={currency}
+                                        strong
+                                        testId="collectible-now"
+                                    />
+                                ) : null}
+                                {vm.collectible.unresolvedVarianceCents !== 0 ? (
+                                    <p className="alloy-os-financials__note" data-financials-subsidy-variance="true">
+                                        {/* BESIDE the figures, never inside one. An agency short-paying
+                                            is a decision somebody owes, not a bill this family
+                                            silently inherits. */}
+                                        Unresolved subsidy variance ·{" "}
+                                        {money(Math.abs(vm.collectible.unresolvedVarianceCents), currency)} · awaiting resolution
+                                    </p>
+                                ) : null}
                                 {vm.expectedFunding.length > 0 ? (
                                     <p className="alloy-os-financials__note" data-financials-expected-funding="true">
                                         {/* EXPECTED, and said so. Funding that has not arrived is not
