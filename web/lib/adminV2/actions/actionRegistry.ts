@@ -42,6 +42,7 @@ import {
 import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
 import { enrollmentPricingActions } from "@/lib/adminV2/actions/definitions/enrollmentPricingActions";
 import { financialChargeActions } from "@/lib/adminV2/actions/definitions/financialChargeActions";
+import { tuitionGenerationActions } from "@/lib/adminV2/actions/definitions/tuitionGenerationActions";
 import { financialPaymentActions } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
 import { healthFactActions } from "@/lib/adminV2/actions/definitions/healthFactActions";
 import { enrollmentRequirementExceptionActions } from "@/lib/adminV2/actions/definitions/enrollmentRequirementExceptionActions";
@@ -71,6 +72,7 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     ...childAttendanceActions,
     ...enrollmentPricingActions,
     ...financialChargeActions,
+    ...tuitionGenerationActions,
     ...financialPaymentActions,
     ...healthFactActions,
     // Governed requirement exception: make one requirement non-blocking, and put it back.

@@ -290,6 +290,20 @@ export async function writeTemplateDraftCharge(
         })
         .select("id")
         .single();
+    /*
+     * THE LOSER OF A RACE IS NOT AN ERROR.
+     *
+     * `charges_resolution_key_unique` makes the database the authority on "one charge per
+     * resolution key per billable source", so two runs generating the same occurrence collide here
+     * instead of both inserting. The read above cannot prevent that — it is a read — and the
+     * collision means the other writer already created exactly the charge this one was about to.
+     * So the winner is fetched and reported as `unchanged`, which is what a second identical run
+     * has always meant on this path.
+     */
+    if (error && (error as { code?: string }).code === "23505") {
+        const winner = await findExistingByResolutionKey(supabase, orgId, source, intent.resolutionKey);
+        if (winner) return { status: "unchanged", chargeId: winner.id, resolutionKey: intent.resolutionKey };
+    }
     if (error || !data) fail("db_error", error?.message ?? "draft create failed");
     return { status: "created", chargeId: (data as { id: string }).id, resolutionKey: intent.resolutionKey };
 }

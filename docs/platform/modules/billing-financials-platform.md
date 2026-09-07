@@ -27,10 +27,11 @@ options, Commercial Execution decides which apply to an assignment and recommend
 Enrollment records the operator's decision as an effective-dated `enrollment_pricing_terms` row on
 `opportunity_customer_members` — the assignment, which exists before any enrollment agreement does.
 
-Billing's role begins **after** that. A later charge-generation thread reads accepted terms through
+Billing's role begins **after** that. Charge generation reads accepted terms through
 `readAcceptedPricingTerms` and turns them into obligations; it does not re-resolve a price, and no
 Financials surface authors one. The Financials card owns financial truth and financial actions —
-what is owed, what was paid, Add Charge — and owns no part of what tuition should be.
+what is owed, what was paid, Add Charge — and owns no part of what tuition should be. Built in
+September 2026 — see *Charge generation from accepted pricing terms* below.
 
 **The stable downstream read.** An accepted term carries everything an obligation needs and nothing
 that IS one: the assignment and child, the enrollment agreement once it exists, amount and currency,
@@ -512,6 +513,81 @@ over.
 
 ---
 
+### Charge generation from accepted pricing terms (September 2026)
+
+One migration, and it is a constraint rather than a table: `charges_resolution_key_unique`. Thread 7
+is a convergence thread. Everything it needed existed — accepted terms, Operational Consumption,
+the charge template lifecycle, posting, accounting attribution, the Financials card — and what was
+missing was the path between them.
+
+**The pipeline, end to end.** An accepted `enrollment_pricing_terms` row becomes a billable
+occurrence for a service period; the occurrence becomes a consumption event and a resolved
+obligation; the obligation's draft charge is written through `writeTemplateDraftCharge` against the
+tenant's `tuition` charge template; Thread 1 posts it; Thread 5 attributes it to an accounting
+period; Thread 2 shows it. No stage was rebuilt, and no second recurring-billing engine exists.
+
+**The accepted term is the price. Full stop.** `OperationalFactDto.acceptedPricing` carries the
+amount, currency, cadence and the term's own lineage into the pipeline, and `resolveDirective` uses
+it when it is present — the commercial-catalog valuation is not consulted, and is structurally
+unreachable on this path rather than merely skipped. A term accepted in March is what March costs,
+whatever the catalog has since become. `billing.generate_tuition` REFUSES a payload carrying
+`amount_cents`, `amount`, `currency`, `currency_code`, `cadence_key` or `rate_cents` with
+`pricing_not_accepted_from_caller`; dropping them silently would let a caller believe it had set a
+price and leave the difference to be found in a ledger.
+
+**The occurrence is the ASSIGNMENT and the period, never the term.** `cev:tuition:<assignmentId>:<periodKey>`.
+Keying on the term id looked natural and was wrong: a successor term for the same month would open a
+SECOND occurrence, and the family would carry two live obligations for one month of care. The term
+travels as lineage on the event's context and in `accepted_pricing_term` refs; it is not identity.
+
+**A settled month is not re-entered.** Posted tuition is checked BEFORE `draftConsumption`, not
+after. `upsertConsumptionEvent` updates an event's context in place and the obligation re-resolves
+from it, so a retroactive term over an already posted period used to leave the charge at the old
+amount while the event and obligation claimed the new one — the money said one thing and its own
+provenance said another. The check moved ahead of the write, so a posted period reports
+`already_posted` and nothing in its history is touched. An UNPOSTED draft still reconciles to the
+successor in place, through the existing correction/reconciliation model; no second correction
+system was introduced.
+
+**Generation is a command, not a screen.** `billing.generate_tuition` is a registered action on the
+same runtime every operator intent uses — authorized through `fin.write` re-checked at execute,
+audited, previewable, and invocable without a surface, so Thread 4 can place one over it rather than
+have one rebuilt around it. The period is named by the caller as `YYYY-MM` and never inferred from
+"now": a run that silently means "this month" cannot be replayed or reasoned about at a month
+boundary.
+
+**Effective dating, cadence and proration are decisions, not side effects.**
+`resolveTuitionRecurrence` is a pure function returning `due`, `not_due` (no accepted term, not yet
+effective, already ended, cadence not billed by this run, assignment not enrolled) or `refused`
+(overlapping terms, proration policy required). Partial coverage REFUSES rather than guessing when
+no `proration` financial policy resolves — a prorated month is a policy decision, and inventing one
+invents money. Overlapping accepted terms refuse rather than pick.
+
+**Idempotency is the database's, not a read's.** See the constraint above: one charge per resolution
+key per billable source. Four concurrent identical runs leave one event, one obligation and one
+charge.
+
+**Attribution is unchanged and still separate.** A charge generated for billing month `2028-02`
+attributes to whatever 4/4/5 accounting period `financial_accounting_periods` says contains it —
+`FY2028-P02`, 2028-01-26 to 2028-02-22. Billing period and accounting period remain distinct
+identities, exactly as Thread 5 established.
+
+**Certified:** `certification/financials/tuition-generation.cert.sh` — 18 live cases against real
+persistence (the vertical slice, both lineage invariants, the effective-dating and refusal matrix,
+concurrency asserted on persisted rows, the uniqueness guarantee asserted directly, cross-org and
+out-of-scope isolation, and 4/4/5 attribution), 26 hermetic cases on the resolver and the command,
+and `certification/playwright/tuition-generation.cert.spec.ts` through the running application.
+
+**The honest shape of the browser proof.** Thread 7 builds no screen, so the certification says what
+it actually proves: the accepted price is visible in the Tuition card, generation is invoked through
+`/api/admin/actions/execute` from the operator's own authenticated session, the generated draft is
+visible in the existing Financials presentation and moves no balance, `charge.post` makes it owed,
+a reload proves all of it came from persistence, and a second run reports `already_posted` and adds
+nothing. There is no button that generates tuition. There is a command, and it is driven the way a
+command is driven.
+
+---
+
 ## What not to do
 
 - Do not build childcare billing before the financial core is generalized off `job_id`.
@@ -558,6 +634,13 @@ over.
 - Do not create a second payments table, a childcare-only payment ledger, a second balance calculation, a duplicate allocation model, or a parallel Stripe integration — the substrate is `payments` + `payment_allocations.charge_id`, and the balance rule is `jobPaymentBalances`'s.
 - Do not let a payment mutate a posted charge. Applying money writes an application row; the charge's principal, category and posting stamp are frozen, and `charges.status` is not advanced to reflect payment — outstanding is derived from the applications.
 - Do not count a pending or failed payment against a balance, and do not treat provider status as financial truth — only `payments.status = 'posted'` is money.
+- Do not derive a tuition occurrence from the accepted TERM's identity; key it on the assignment and the service period, or a successor term opens a second occurrence for a month already billed.
+- Do not re-price tuition from the commercial catalog at generation time — the accepted term is the price, and the catalog it came from is free to move.
+- Do not accept an amount, currency or cadence from the caller of a generation run; refuse the payload rather than ignoring the field.
+- Do not let a generation run touch a period whose tuition is already posted — check for the posted charge BEFORE writing the consumption event, or the event's context is rewritten under money that cannot move.
+- Do not prorate a partial month without a resolved `proration` policy; refuse, because a guessed method is invented money.
+- Do not infer the service period from "now"; a generation run names its period or it cannot be replayed.
+- Do not let a certification fixture leave an enrolment agreement standing in a shared tenant — the Financials card resolves a charge's subject from agreements, and the residue fails a neighbouring proof that has nothing to do with tuition.
 - Do not delete a payment or an application to undo one. A refund is a new outbound row via `refunds_payment_id`; an application is reversed, never removed.
 
 ---
@@ -583,3 +666,4 @@ over.
 - Invoice/statement modeling is introduced.
 - Billing moves from doctrine to implemented schema/runtime (record the model here).
 - The payment application contract changes — the balance predicate, the idempotency keys, the one-active-application bound, or the refund lineage rule.
+- The tuition generation contract changes — the occurrence key, the pricing authority, the posted-period boundary, the proration refusal, or the charge idempotency constraint.

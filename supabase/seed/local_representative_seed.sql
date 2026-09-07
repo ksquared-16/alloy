@@ -867,4 +867,41 @@ SET rate_cents = EXCLUDED.rate_cents, is_active = true, not_offered = false,
 
 ANALYZE public.opportunity_customer_members;
 
+-- ---------------------------------------------------------------------------
+-- THE TUITION CHARGE TEMPLATE — tenant configuration, because that is what a
+-- charge template IS.
+--
+-- `consumption_event_types` is a GLOBAL registry seeded by migration
+-- (20260706120100), and it deliberately does not carry money: it maps
+-- `schedule.recurring_tuition` to the charge template KEY 'tuition' and resolves
+-- the ORG's own template at runtime. Its own seed says so — "uses existing
+-- commercial configuration (the org's Charge Template with template_key =
+-- 'registration_fee')".
+--
+-- So no migration conjures a tuition template into anybody's tenant, and Thread 7
+-- does not add one that would. An organisation that has not authored this template
+-- is told which key it needs, by name, when generation runs. This row is the
+-- CERTIFICATION tenant authoring its own — the same act an operator performs in
+-- Commercial configuration, and the same thing this seed already does for the
+-- registration fee.
+--
+-- `rate_derived` on purpose: the amount comes from the accepted pricing term the
+-- generation service supplies, never from the template and never from a catalog
+-- lookup. A fixed template here would quietly become a second pricing authority.
+-- ---------------------------------------------------------------------------
+INSERT INTO public.financial_charge_templates
+    (id, org_id, template_key, label, charge_category, trigger_type, amount_strategy, amount_cents,
+     currency_code, occurs_on_strategy, billable_on_strategy, effective_start, review_required, is_active)
+VALUES
+    ('00000000-0000-4000-8000-0000000f0002'::uuid, :'ORG_ID'::uuid, 'tuition',
+     'Tuition', 'tuition', 'schedule', 'rate_derived', NULL, 'USD',
+     'service_period_start', 'immediate', current_date - 365, false, true)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label,
+    amount_strategy = EXCLUDED.amount_strategy,
+    occurs_on_strategy = EXCLUDED.occurs_on_strategy,
+    billable_on_strategy = EXCLUDED.billable_on_strategy,
+    is_active = EXCLUDED.is_active,
+    effective_start = EXCLUDED.effective_start;
+
 \echo '== Seed complete =='

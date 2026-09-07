@@ -327,6 +327,52 @@ A new review-required obligation starts in `review_required` (set on insert; the
 
 `mark_reviewed`, `flag`, `suppress` (+reason), `restore`, `recompute`. **Not** allowed (and not present): post, invoice, collect/allocate payment, create statement, write ledger. `recompute` replays the **existing pipeline in PREVIEW mode** (no charge writes) from the event's stored `fact_snapshot`, reports drift, and — when applied — updates the obligation amount and marks it `stale`. Consumption is recomputable by design.
 
+# Slice 5 — an accepted price is a fact input (September 2026)
+
+Consumption consumes pricing, it does not decide it — and until now the only pricing it consumed was
+the commercial catalog's. Tuition generation adds a second, higher authority for one directive kind,
+without adding a second pipeline.
+
+## Accepted pricing overrides Commercial Resolution, structurally
+
+`OperationalFactDto.acceptedPricing` (`AcceptedTuitionPricing`) carries the amount, currency,
+cadence and the accepted term's own lineage — source entity, source id, config version, resolution
+key. When it is present, `resolveDirective` takes the amount and currency FROM IT and pushes an
+`accepted_pricing_term` `CommercialObjectRef`; the `getCommercialTuitionValuation` branch is the
+`else`, not a fallback consulted afterwards. This is deliberate: a family accepted a price, and the
+catalog it was resolved from is free to change. A term accepted in March is what March costs.
+
+Step 1 of *Commercial Resolution* above therefore reads: Rate Resolution applies **when no accepted
+term governs the directive.** Steps 2 and 3 — Charge Template resolution and Financial Policy
+resolution — are unchanged and still run: an accepted price says what the month costs, not when it
+is billable, which category it lands in, or whether a partial month prorates.
+
+The schedule-basis gate relaxes for the same reason. A recurring directive with no resolvable basis
+is normally refused because nothing could price it; with an accepted term the price is already
+known, so the basis falls back to `full_day` rather than blocking a month whose cost is settled.
+
+## The occurrence key is the assignment and the period
+
+`cev:tuition:<assignmentId>:<periodKey>` — never the term id. A successor or retroactive term for a
+month already generated must RECONCILE the existing occurrence, and keying on the term would open a
+second one instead, leaving two live obligations for one month of care. The term is lineage on the
+event's context; it is not identity.
+
+## A posted consequence's history is closed
+
+`upsertConsumptionEvent` updates an event's context in place, and the obligation re-resolves from
+it. That is correct while money is still a draft and wrong once it is posted: the charge cannot
+move, so rewriting the event underneath it leaves the money saying one thing and its own provenance
+saying another. Tuition generation therefore checks for a posted charge BEFORE calling
+`draftConsumption` — a settled period never enters the pipeline at all. An unposted draft still
+reconciles to the successor through the existing correction/reconciliation model.
+
+**The general rule:** re-running a pipeline over a period whose consequence is posted must be
+refused at the boundary, not absorbed by the writer. `skipped_posted` protects the charge; nothing
+protected the event.
+
+---
+
 ## Explanation engine (reusable)
 
 `buildObligationExplanation` (in `obligationReviewService.ts`) assembles the normalized "why does this exist?" for an obligation, combining stored data with a fresh derivation: source operational fact, normalized candidate, consumption event, interpretation result, matched service / rate plan / rate rule / charge template, matched policies, amount calculation, suppression reason, and recompute (drift) status. It is intentionally structured for reuse by BOS later.

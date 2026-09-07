@@ -119,7 +119,7 @@ export type ConsumptionPreviewResult = {
 
 /** A Commercial Model object surfaced in the explanation (labels, not raw UUIDs). */
 export type CommercialObjectRef = {
-    kind: "rate_plan" | "rate_rule" | "charge_template" | "service" | "commercial_rate";
+    kind: "rate_plan" | "rate_rule" | "charge_template" | "service" | "commercial_rate" | "accepted_pricing_term";
     label: string;
     detail: string;
     matched: boolean;
@@ -771,7 +771,32 @@ async function resolveDirective(
     let rateAmount: number | null = null;
     let currency = "USD";
     let commercialUnresolvedReason: string | null = null;
-    if (directive.scheduleBasis) {
+    /*
+     * ── AN ACCEPTED TERM IS THE PRICE, AND THE CATALOG IS NOT CONSULTED ──
+     *
+     * When the fact was raised from an accepted `enrollment_pricing_terms` row, the amount is the
+     * one the family agreed to and the catalog lookup below is SKIPPED ENTIRELY — not consulted and
+     * overridden, skipped. Two reasons, and both are correctness rather than tidiness: an accepted
+     * term may be an OVERRIDE, deliberately not the recommendation, so re-resolving would bill a
+     * rate nobody agreed to; and a catalog edit would otherwise change what an already-agreed family
+     * owes next month, which is the drift the accepted term exists to prevent.
+     *
+     * Facts raised any other way are untouched and still price from Commercial Execution.
+     */
+    const accepted = fact.acceptedPricing ?? null;
+    if (accepted) {
+        rateAmount = accepted.amountCents;
+        currency = accepted.currencyCode;
+        commercialRefs.push({
+            kind: "accepted_pricing_term",
+            label: `term ${accepted.termId}`,
+            detail:
+                `${accepted.amountCents}¢ ${accepted.currencyCode} · ${accepted.state} · cadence `
+                + `${accepted.cadenceKey} · ${accepted.sourceEntity}:${accepted.sourceId}`
+                + `${accepted.configVersion ? ` · config ${accepted.configVersion}` : ""}`,
+            matched: true,
+        });
+    } else if (directive.scheduleBasis) {
         const cadenceKey =
             directive.obligationKind === "drop_in" || directive.obligationKind === "extra_day"
                 ? "daily"
