@@ -127,13 +127,24 @@ export async function configureResponsibilityArrangement(
     // ── CLOSE THE PREDECESSOR, THEN OPEN THE SUCCESSOR ──────────────────────────────────────
     const { data: priorRows, error: priorError } = await supabase
         .from("financial_responsibility_arrangements")
-        .select("id, effective_start, effective_end")
+        .select("id, effective_start, effective_end, customer_member_id")
         .eq("org_id", input.orgId)
         .eq("customer_id", input.customerId)
-        .eq("state", "active")
-        .is("customer_member_id", input.customerMemberId ?? null);
+        .eq("state", "active");
     if (priorError) throw new ResponsibilityError("db_error", priorError.message);
-    const prior = ((priorRows ?? []) as Array<{ id: string; effective_start: string; effective_end: string | null }>)
+    /*
+     * THE SAME SCOPE, compared in TypeScript rather than in a filter. PostgREST's `.is()` takes only
+     * null/true/false, so "this child, or the whole account" cannot be expressed as one predicate —
+     * and getting it wrong would supersede an account-wide arrangement when a child-specific one was
+     * meant, silently moving every other child's money.
+     */
+    const prior = ((priorRows ?? []) as Array<{
+        id: string;
+        effective_start: string;
+        effective_end: string | null;
+        customer_member_id: string | null;
+    }>)
+        .filter((p) => (p.customer_member_id ?? null) === (input.customerMemberId ?? null))
         .filter((p) => !p.effective_end || p.effective_end >= input.effectiveStart)[0] ?? null;
 
     let supersededId: string | null = null;

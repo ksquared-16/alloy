@@ -143,12 +143,14 @@ export function adaptFinancialsVmToFinancialsCard(input: {
     /*
      * PAYERS ARE CANONICAL; THE SPLIT IS NOT.
      *
-     * The read model names the account's payers from the `payer` contact role. It carries no
-     * `share`, because Alloy has no allocation store — nothing records that Jordan carries 70%. So
-     * a payer arrives here with a name and no percentage, the Responsibility line renders no split,
-     * and the payment zone lists who is responsible without claiming how much.
+     * THE SHARE IS REAL NOW. This comment used to say the opposite, and it was right at the time:
+     * the read model named payers from the `payer` CONTACT role and carried no `share`, because
+     * nothing anywhere recorded that Jordan carries 70%. Thread 6 built that record, so a payer
+     * arrives here because a persisted responsibility allocation named them, and their share is the
+     * cents that allocation assigned — never a percentage derived here.
      *
-     * `method` is null for the same reason: there is no per-payer payment method store either.
+     * `method` is still null, and for the original reason: there is no per-payer payment method
+     * store, and inventing one here would repeat exactly the mistake this note was written about.
      */
     const payers: FinancialsPayer[] = vm.payers.map((p) => ({
         name: p.name,
