@@ -354,6 +354,57 @@ describeLive("tuition generation — the certification matrix, live", () => {
         expect(await chargesOn("2027-10-01"), "one charge").toHaveLength(1);
     }, 180_000);
 
+    /*
+     * AND THE GUARANTEE ITSELF, DETERMINISTICALLY.
+     *
+     * The case above is a race, so a green run is weak evidence — it can pass with the protection
+     * removed. What the protection actually IS can be stated exactly: the database refuses a second
+     * charge carrying a resolution key another charge in the same billable source already holds.
+     * Asserting that directly is what makes the concurrency case above mean something.
+     */
+    it("the database refuses a second charge with the same resolution key in the same source", async () => {
+        await clearTerms();
+        await clearLineage();
+        await acceptTerm(TERM, 121_000);
+        await run("2027-11");
+        const [existing] = await chargesOn("2027-11-01");
+        expect(existing, "the run must have written the charge being duplicated").toBeTruthy();
+
+        const { data: row } = await supabase
+            .from("charges")
+            .select("billable_source_type, billable_source_id, metadata, currency_code, charge_template_id")
+            .eq("org_id", ORG).eq("id", (existing as { id: string }).id).single();
+        const source = row as {
+            billable_source_type: string;
+            billable_source_id: string;
+            metadata: Record<string, unknown>;
+            currency_code: string;
+            charge_template_id: string | null;
+        };
+
+        // The same key, the same source — a different amount and date, so nothing but the key can
+        // be what the database objects to.
+        const { error } = await supabase.from("charges").insert({
+            org_id: ORG,
+            billable_source_type: source.billable_source_type,
+            billable_source_id: source.billable_source_id,
+            charge_type: "fee",
+            charge_category: "tuition",
+            status: "draft",
+            currency_code: source.currency_code,
+            amount_cents: 999,
+            service_date: "2027-11-15",
+            occurs_on: "2027-11-15",
+            billable_on: "2027-11-15",
+            charge_template_id: source.charge_template_id,
+            description: "duplicate resolution key",
+            metadata: { resolution_key: source.metadata.resolution_key },
+        });
+        expect(error, "a duplicate resolution key must be refused").toBeTruthy();
+        expect(error!.code, "and refused as a uniqueness violation").toBe("23505");
+        expect(await chargesOn("2027-11-01"), "the original stands alone").toHaveLength(1);
+    }, 120_000);
+
     // ── SCOPE AND IDENTITY ───────────────────────────────────────────────────────────────────
 
     it("generates nothing for another organisation's terms", async () => {

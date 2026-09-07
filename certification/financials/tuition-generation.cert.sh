@@ -46,10 +46,13 @@ psql "$DB" -tAc "select count(*) from public.financial_charge_templates where or
 echo "── running the live cases"
 # Serially and in this order: the slice establishes the happy path and the two lineage invariants,
 # the matrix then walks the edges. Both drive one tenant, so they cannot run in parallel.
+# The exit status is the RUNNER'S, not the pipeline's: `| tail` would otherwise report success no
+# matter what vitest thought, and a harness that cannot fail is not a harness.
 ( cd "$ROOT/web" && npx vitest run \
     tests/financials/live/tuitionGeneration.live.test.ts \
     tests/financials/live/tuitionGenerationMatrix.live.test.ts \
-    --no-file-parallelism 2>&1 | tail -30 )
+    --no-file-parallelism 2>&1 | tail -30; exit "${PIPESTATUS[0]}" )
+check $? "the live cases — the vertical slice, the lineage invariants and the matrix"
 
 # =============================================================================
 # THE OPERATOR BOUNDARY, in the real application.
@@ -129,6 +132,31 @@ SQL
        CERT_TUITION_CUSTOMER="$CUSTOMER" \
        "$PW" test -c playwright.config.ts playwright/tuition-generation.cert.spec.ts --workers=1 --reporter=line >/dev/null 2>&1 )
   check $? "accepted price visible, generated through the command boundary, drafted, posted, retried"
+
+  # ── AND IT PUTS THE TENANT BACK ───────────────────────────────────────────────────────────────
+  #
+  # AFTER the product assertions, never before. The enrolment agreement this fixture creates is not
+  # inert: the Financials card resolves a charge's SUBJECT from the agreements a household has, so
+  # leaving it standing renamed an unrelated household-level charge in Thread 2's smoke and failed a
+  # certification that had nothing to do with tuition. A fixture that changes what a neighbouring
+  # proof reads is not setup, it is contamination.
+  #
+  # The trigger suspension is fixture cleanup only — posted tuition refuses DELETE, and that refusal
+  # is a product guarantee this thread asserts elsewhere and does not relax.
+  psql "$DB" -q -v ON_ERROR_STOP=1 <<SQL
+set session_replication_role = replica;
+delete from public.financial_journal_entries
+ where org_id = '$ORG'
+   and source_id in (select id from public.charges where org_id = '$ORG' and charge_category = 'tuition');
+delete from public.resolved_obligations
+ where consumption_event_id in (select id from public.consumption_events where org_id = '$ORG' and idempotency_key like 'cev:tuition:%');
+delete from public.consumption_events where org_id = '$ORG' and idempotency_key like 'cev:tuition:%';
+delete from public.charges where org_id = '$ORG' and charge_category = 'tuition';
+set session_replication_role = default;
+delete from public.enrollment_pricing_terms where id = '$TERM';
+delete from public.child_enrollment_agreements where id = '$AGREEMENT';
+SQL
+  check $? "the tenant is left as the browser proof found it"
 fi
 
 echo; echo "RESULT: ${pass:-0} passed, ${fail:-0} failed"
