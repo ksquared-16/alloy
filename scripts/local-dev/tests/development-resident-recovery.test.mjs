@@ -134,14 +134,33 @@ await test("UNKNOWN is never acted on", async () => {
 });
 
 await test("an action with no wired repair owner is reported, never improvised", async () => {
+    /*
+     * TOOLKIT_DRIFT used to be this test's example of an unowned action. It is
+     * owned now — the resident stage restarts through launchd — so the property
+     * needs a class that genuinely has no in-process repair. SUPERVISOR_FAILURE
+     * is one: its action is named and nothing performs it, which is exactly the
+     * state TOOLKIT_DRIFT was in while a verified install sat unused.
+     */
     const out = await S.runResidentRecoveryStage({
         root: freshRoot(),
-        observe: async () => obs({ toolkit_drift: true, running_sha: "aaaaaaaaaaaa", installed_sha: "bbbbbbbbbbbb" }),
-        repair: null,   // no injected owner, and converge is not wired in-process
+        observe: async () => obs({ loopback_healthy: true, supervisor_healthy: false }),
+        repair: null,
     });
     assert.equal(out.acted, false);
     assert.match(String(out.why), /no wired repair owner/);
     assert.equal(out.escalate, true);
+});
+
+await test("TOOLKIT_DRIFT is no longer among the unowned actions", async () => {
+    // The regression guard for the gap this closeout fixed: a classified drift
+    // must reach a repair owner rather than escalating as unimplemented.
+    const out = await S.runResidentRecoveryStage({
+        root: freshRoot(),
+        observe: async () => obs({ toolkit_drift: true, running_sha: "aaaaaaaaaaaa", installed_sha: "bbbbbbbbbbbb" }),
+        repair: async (plan) => ({ ok: true, saw: plan.action }),
+    });
+    assert.equal(out.acted, true, "the drift is acted on");
+    assert.ok(!/no wired repair owner/.test(String(out.why || "")), "and not as an unimplemented action");
 });
 
 /* ── Bounds and memory ───────────────────────────────────────────────────── */
@@ -331,4 +350,80 @@ test("a closed port is refused, and a refusal is also an answer", async () => {
   const port = s.port;
   await s.close();
   assert.equal(await RR.probeLoopbackInProcess({ root: mkdtempSync(join(tmpdir(), "probe-")), port }), false);
+});
+
+/*
+ * THE SECOND STEP OF AN INSTALL, AND WHO OWNS IT.
+ *
+ * `executeToolkitInstall` never restarts the Gateway from inside the Gateway —
+ * killing the process before its own completion record is durable would lose
+ * the one audit line nobody can reconstruct. That is correct and is unchanged.
+ *
+ * What was missing is the owner of the step it hands off to. TOOLKIT_DRIFT has
+ * been a classified failure class with a named action, a ceiling of 2, a
+ * cooldown and a verification list since Phase 3, and the resident stage
+ * supplied no repair for it — so every tick returned "no wired repair owner"
+ * and escalated. Measured live: a verified install of df81b7957dd8 sat unused
+ * for the better part of an hour while `planToolkitConvergence` reported
+ * `converged`, because that plan compares installed against promoted and never
+ * consults what is actually running.
+ *
+ * launchd is the independent context. The kickstart terminates the process that
+ * issues it, which is safe here and was not safe inside the installer: the
+ * episode is recorded BEFORE the action precisely because an action may kill
+ * the memory's holder, and bringing the job back is launchd's job. Verification
+ * lands on the next process's first cycle.
+ */
+const CPR = await import("../lib/vacilando/control-plane-recovery.mjs");
+
+test("a real toolkit drift is restarted through launchd, from the job it names", () => {
+  const calls = [];
+  const out = CPR.restartGatewayForConvergence({
+    installedSha: "df81b7957dd8", runningSha: "baea5812f4ae",
+    provenanceValid: true, rollbackRetained: true, uid: 501,
+    exec: (c, a) => { calls.push([c, ...a]); return ""; },
+  });
+  assert.equal(out.ok, true);
+  assert.equal(out.from, "baea5812f4ae");
+  assert.equal(out.to, "df81b7957dd8");
+  assert.deepEqual(calls, [["launchctl", "kickstart", "-k", "gui/501/com.alloy.vacilando-gateway"]],
+    "one bounded command against one named job");
+  assert.equal(out.verified_by, "next_cycle_observation",
+    "it does not claim to have verified a restart that kills the verifier");
+});
+
+test("it refuses anything short of provable drift", () => {
+  const never = () => { throw new Error("must not restart"); };
+  const cases = [
+    [{}, "convergence_unmeasured"],
+    [{ installedSha: "a", runningSha: "a" }, "no_drift"],
+    [{ installedSha: "a", runningSha: "b", provenanceValid: false, rollbackRetained: true }, "provenance_not_valid"],
+    [{ installedSha: "a", runningSha: "b", provenanceValid: true, rollbackRetained: false }, "no_rollback_target"],
+  ];
+  for (const [input, expected] of cases) {
+    const r = CPR.restartGatewayForConvergence({ ...input, uid: 501, exec: never });
+    assert.equal(r.ok, false);
+    assert.equal(r.error, expected);
+  }
+});
+
+test("a converged host is never restarted, so the same install is idempotent", () => {
+  // The property that stops a stale request becoming a restart loop: once
+  // running matches installed there is no drift, and no drift means no action.
+  const never = () => { throw new Error("must not restart"); };
+  const r = CPR.restartGatewayForConvergence({
+    installedSha: "df81b7957dd8", runningSha: "df81b7957dd8",
+    provenanceValid: true, rollbackRetained: true, uid: 501, exec: never,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.error, "no_drift");
+});
+
+test("UNKNOWN still carries no action, so it can never reach the restart owner", () => {
+  // Fail-closed by construction rather than by a check inside the repair.
+  const plan = CPR.planRecovery
+    ? CPR.planRecovery({ failure_class: "UNKNOWN" })
+    : { action: null };
+  assert.ok(!plan.action || plan.action === null, "UNKNOWN authorises nothing");
+  assert.equal(CPR.ATTEMPT_CEILINGS.UNKNOWN, 0);
 });
