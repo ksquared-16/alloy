@@ -46,6 +46,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "attendance.mark_absent",
     "enrollment.pricing.accept",
     "enrollment.pricing.override",
+    "billing.generate_tuition",
     "charge.add",
     "charge.post",
     "charge.reverse",
@@ -232,6 +233,27 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             "Chooses a DIFFERENT authored tuition option than the one recommended, with a recorded "
             + "reason, under `enrollment.pricing.override`. It cannot accept an amount: an override "
             + "picks from the catalog, so every accepted price stays traceable to a rate someone authored.",
+    }),
+    // ── Billing generation ─────────────────────────────────────────────────
+    def({
+        capabilityKey: "billing.generate_tuition",
+        canonicalCommandKey: "billing.generate_tuition",
+        operatorLabel: "Generate tuition",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.generate_tuition",
+        implementationStatus: "production",
+        reason:
+            "Turns ACCEPTED pricing terms into draft tuition charges for one named service period, "
+            + "through the Operational Consumption path that already owns consequence lineage. The "
+            + "amount is the term's, never the caller's and never a re-resolved catalog price; a "
+            + "payload carrying one is refused. Creates drafts only — posting stays separate — and is "
+            + "safe to retry, because the occurrence converges on a database unique index.",
     }),
     // ── Financials ─────────────────────────────────────────────────────────
     // One operator intent over the existing charge-lifecycle service. The adapter resolves the

@@ -167,16 +167,38 @@ export function resolveTuitionRecurrence(input: TuitionRecurrenceInput): Tuition
 }
 
 /**
- * THE OCCURRENCE'S NAME.
+ * THE OCCURRENCE'S NAME — the economic service period, not the agreement that priced it.
  *
- * One tuition occurrence per accepted term per service period, and the name says exactly that. It is
- * what the database's unique index on `consumption_events (org_id, idempotency_key)` converges on,
- * so a retry, an overlapping window and two concurrent identical runs all land on the same row
- * without any of them having to check first.
+ * ── WHY THE TERM IS NOT IN THE KEY ──
  *
- * The TERM is in the key, not just the assignment: a superseded term and its successor are different
- * agreements, and a period billed under one is not the period billed under the other.
+ * It was, in this function's first shape, and that was wrong. A tuition occurrence is "this child's
+ * September" — one economic consequence per assignment per service period. The accepted term is what
+ * PRICED that period, not what it IS, and putting it in the name makes a successor term open a
+ * SECOND occurrence for a month that already has one. The charge underneath would still converge
+ * (its own resolution key is period-based), but two live obligations would both claim it and neither
+ * would be retired: two active consequences for one economic period, which is exactly what must not
+ * happen. The term travels as lineage instead — in the event context and the obligation explanation
+ * — where it explains the price without competing to name the period.
+ *
+ * ── WHAT THIS BUYS, USING ONLY MACHINERY THAT ALREADY EXISTS ──
+ *
+ * A FUTURE UNGENERATED PERIOD under a successor term is a different `periodKey`, so it is a
+ * different occurrence and is CREATED. Correct.
+ *
+ * AN ALREADY-GENERATED PERIOD affected by a successor is the SAME occurrence.
+ * `upsertConsumptionEvent` finds it by `idempotency_key` and updates it in place; the obligation
+ * re-resolves; and `writeTemplateDraftCharge` finds the existing draft by the charge's own
+ * `resolution_key` — `tpl:<template>:<occursOn>:<scope>`, which is period-based and therefore stable
+ * across terms — and answers `recalculate`, editing that one draft to the successor's amount. One
+ * active draft, not two.
+ *
+ * A POSTED consequence answers `skipped_posted`. Posted money is immutable and stays exactly as
+ * posted; changing it is the existing correction/review path's job, not generation's.
+ *
+ * RETRIES, OVERLAPPING WINDOWS AND CONCURRENT IDENTICAL RUNS all converge on the UNIQUE index
+ * `consumption_events (org_id, idempotency_key)`. No application pre-check decides it, and none has
+ * to: the database refuses the second writer.
  */
-export function tuitionOccurrenceKey(termId: string, periodKey: string): string {
-    return `cev:tuition:${termId}:${periodKey}`;
+export function tuitionOccurrenceKey(assignmentId: string, periodKey: string): string {
+    return `cev:tuition:${assignmentId}:${periodKey}`;
 }

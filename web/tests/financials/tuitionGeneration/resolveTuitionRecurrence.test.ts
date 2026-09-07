@@ -153,17 +153,57 @@ describe("resolveTuitionRecurrence — what a service period owes", () => {
         expect(d.kind === "due" && d.coverage).toEqual({ coveredDays: 10, periodDays: 30, partial: true });
     });
 
-    // ── THE OCCURRENCE'S NAME ────────────────────────────────────────────────────────────────
+    // ── THE OCCURRENCE'S NAME, AND THE SUCCESSOR IT HAS TO SURVIVE ──────────────────────────
 
     /*
-     * The key is what the database converges on. It carries the TERM, not only the assignment: a
-     * superseded term and its successor are different agreements, and a period billed under one is
-     * not the period billed under the other.
+     * The key names the ECONOMIC SERVICE PERIOD — this child's September — not the agreement that
+     * priced it. The term is what priced the period, not what it is.
      */
-    it("names one occurrence per term per period", () => {
-        expect(tuitionOccurrenceKey("term-1", "2026-06")).toBe("cev:tuition:term-1:2026-06");
-        expect(tuitionOccurrenceKey("term-1", "2026-06")).toBe(tuitionOccurrenceKey("term-1", "2026-06"));
-        expect(tuitionOccurrenceKey("term-1", "2026-07")).not.toBe(tuitionOccurrenceKey("term-1", "2026-06"));
-        expect(tuitionOccurrenceKey("term-2", "2026-06")).not.toBe(tuitionOccurrenceKey("term-1", "2026-06"));
+    it("names one occurrence per assignment per service period", () => {
+        expect(tuitionOccurrenceKey("ocm-1", "2026-06")).toBe("cev:tuition:ocm-1:2026-06");
+        expect(tuitionOccurrenceKey("ocm-1", "2026-06")).toBe(tuitionOccurrenceKey("ocm-1", "2026-06"));
+        expect(tuitionOccurrenceKey("ocm-1", "2026-07")).not.toBe(tuitionOccurrenceKey("ocm-1", "2026-06"));
+        expect(tuitionOccurrenceKey("ocm-2", "2026-06")).not.toBe(tuitionOccurrenceKey("ocm-1", "2026-06"));
+    });
+
+    /*
+     * THE SUCCESSOR CASE, which is why the term is not in the key.
+     *
+     * Two different terms pricing the SAME month must land on ONE occurrence: the existing event is
+     * updated in place, its obligation re-resolves, and the draft charge is recalculated by its own
+     * period-based resolution key. Had the term been in the name, the successor would have opened a
+     * second occurrence and left two live obligations claiming one month.
+     */
+    it("gives a successor term the SAME occurrence for a period already generated", () => {
+        const before = resolve([term({ termId: "old", amountCents: 168_000 })], "2026-09");
+        const after = resolve(
+            [term({ termId: "new", amountCents: 181_000, effectiveStart: "2026-01-01" })],
+            "2026-09",
+        );
+        expect(before.kind).toBe("due");
+        expect(after.kind).toBe("due");
+        if (before.kind !== "due" || after.kind !== "due") return;
+        // Different agreements, different prices — one occurrence.
+        expect(before.term.termId).not.toBe(after.term.termId);
+        expect(before.amountCents).not.toBe(after.amountCents);
+        expect(tuitionOccurrenceKey(before.term.opportunityCustomerMemberId, before.period.key)).toBe(
+            tuitionOccurrenceKey(after.term.opportunityCustomerMemberId, after.period.key),
+        );
+    });
+
+    /*
+     * And the other half: a successor's FUTURE period is a different month, so it is a different
+     * occurrence and is created rather than colliding with the one already billed.
+     */
+    it("gives a successor's future period an occurrence of its own", () => {
+        const terms = [
+            term({ termId: "old", amountCents: 168_000, effectiveStart: "2026-01-01", effectiveEnd: "2026-08-31" }),
+            term({ termId: "new", amountCents: 181_000, effectiveStart: "2026-09-01" }),
+        ];
+        const august = resolve(terms, "2026-08");
+        const september = resolve(terms, "2026-09");
+        expect(august.kind === "due" && august.term.termId).toBe("old");
+        expect(september.kind === "due" && september.term.termId).toBe("new");
+        expect(tuitionOccurrenceKey("ocm-1", "2026-08")).not.toBe(tuitionOccurrenceKey("ocm-1", "2026-09"));
     });
 });
