@@ -47,6 +47,9 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "enrollment.pricing.accept",
     "enrollment.pricing.override",
     "billing.generate_tuition",
+    "billing.apply_discounts",
+    "billing.adjust_account",
+    "billing.reverse_adjustment",
     "charge.add",
     "charge.post",
     "charge.reverse",
@@ -254,6 +257,63 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             + "amount is the term's, never the caller's and never a re-resolved catalog price; a "
             + "payload carrying one is refused. Creates drafts only — posting stays separate — and is "
             + "safe to retry, because the occurrence converges on a database unique index.",
+    }),
+    // ── Reductions: what legitimately lowers what a family owes ────────────
+    def({
+        capabilityKey: "billing.apply_discounts",
+        canonicalCommandKey: "billing.apply_discounts",
+        operatorLabel: "Apply discounts",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "opportunity_customer_member"],
+        supportsPreview: false,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.apply_discounts",
+        implementationStatus: "production",
+        reason:
+            "Applies the organisation's AUTHORED discount policies to a period's gross tuition, "
+            + "writing each reduction as its own contra-revenue charge beside the gross rather than "
+            + "changing it. What a discount is worth comes from `commercial_policies`; who qualifies "
+            + "is proven server-side from enrolments and employments. A payload carrying an amount, a "
+            + "percentage or an eligibility claim is refused.",
+    }),
+    def({
+        capabilityKey: "billing.adjust_account",
+        canonicalCommandKey: "billing.adjust_account",
+        operatorLabel: "Adjust account",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "child"],
+        supportsPreview: false,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.adjust_account",
+        implementationStatus: "production",
+        reason:
+            "Records a manual credit, waiver or write-off with a reason, under `fin.adjust` — a "
+            + "different permission from billing, because deciding a family owes less is a different "
+            + "act from billing what was authored. Appends; never edits posted history.",
+    }),
+    def({
+        capabilityKey: "billing.reverse_adjustment",
+        canonicalCommandKey: "billing.reverse_adjustment",
+        operatorLabel: "Reverse adjustment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "child"],
+        supportsPreview: false,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.reverse_adjustment",
+        implementationStatus: "production",
+        reason:
+            "Undoes a manual reduction by appending its opposite and linking the two. The original "
+            + "stands, and a reduction is reversed once — the same bound a posted charge's correction "
+            + "already carries.",
     }),
     // ── Financials ─────────────────────────────────────────────────────────
     // One operator intent over the existing charge-lifecycle service. The adapter resolves the

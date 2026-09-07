@@ -179,7 +179,32 @@ Policy **definitions** are Commercial config (a new **Commercial-owned `commerci
 
 **Resolution-time types only:** `proration`, `discount`, `sibling_discount`, `waiver`, `eligibility`, `approval`. Payment-time policies (`late_fee`, `nsf_fee`, `grace_period`, `posting_review`, `refund`, `billing_cadence`) stay in the Billing/Money domain and never touch the commercial valuation.
 
-**Policies modify a resolution; they never create a charge.** The engine *selects* the winning policy (`resolvePolicy`); evaluation *applies* it as a `PolicyAdjustment` moving `gross → net` (`applyPolicies`) — waiver wins over discount, net never below zero. `sibling_discount` is **relational**, applied across a group in `evaluateSet()` (this is the primitive's reason to exist). `approval` is a non-mutating review signal recorded in `explanation.policiesConsidered` for the consumer's gate; `proration`/`eligibility` are recorded as considered-but-not-applied pending runtime inputs (day counts / subject data). Code: [`web/lib/commercial/execution/policy/`](../../../web/lib/commercial/execution/policy/).
+**Policies modify a resolution; they never create a charge.** *(And they still do not — see the
+Billing consumer below.)* The engine *selects* the winning policy (`resolvePolicy`); evaluation *applies* it as a `PolicyAdjustment` moving `gross → net` (`applyPolicies`) — waiver wins over discount, net never below zero. `sibling_discount` is **relational**, applied across a group in `evaluateSet()` (this is the primitive's reason to exist). `approval` is a non-mutating review signal recorded in `explanation.policiesConsidered` for the consumer's gate; `proration`/`eligibility` are recorded as considered-but-not-applied pending runtime inputs (day counts / subject data). Code: [`web/lib/commercial/execution/policy/`](../../../web/lib/commercial/execution/policy/).
+
+**The Billing consumer (Thread 10, September 2026).** Reductions to what a family OWES are resolved
+from these same authored policies and then recorded by Billing as separate contra-revenue charges —
+`web/lib/financials/reductions/`. The boundary is unchanged and worth stating precisely, because it
+is easy to read the addition as a violation of the rule above:
+
+- Commercial still decides WHAT a reduction is. The type vocabulary, the scope hierarchy, the
+  effective window, the most-specific-wins selection and the benefit arithmetic are all this layer's,
+  and Billing quotes them rather than re-deciding them. A percentage is taken on gross; a waiver wins
+  over a discount; the aggregate never drives a value below zero.
+- Commercial still creates no charge. `applyPolicies` moves `gross → net` on a RESOLUTION. Billing's
+  reduction path does not call it and does not produce a resolution; it takes the winning policies
+  for a scope and applies the same rules to a gross obligation that already exists.
+- The relational primitive stays here in principle and is not duplicated: sibling RANK is a fact
+  about concurrent enrolments, resolved server-side by Billing from `child_enrollment_agreements`,
+  and handed to the policy rather than re-derived from catalog lines. Billing must not re-price from
+  the catalog — the accepted term is the tuition authority — so `evaluateSet()` is the wrong entry
+  point for a bill that already exists.
+- Two active policies of one kind REFUSE rather than being ranked, on both sides of the boundary.
+  `resolvePolicy` returns a single winner by construction, and a configuration that defeats that has
+  expressed an ambiguity neither layer may resolve on the tenant's behalf.
+
+Doctrine for the money side: [`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md)
+§ *Discounts, credits and adjustments*.
 
 ### Funding stage (Phase 6, built)
 Funding **decorates** a resolution — a pure, standalone `attribute(resolution, plan) → resolution` (mirrors the `expand()`/`materialize()` split; **not** part of `evaluate()`). It allocates each resolved line's `net` across payers (private pay, government subsidy, employer sponsorship, scholarship, corporate) and records a **residual** to the primary. It **never changes `net`** and never creates a charge. Layer order: **Execution (priced) → Funding (attributed) → Billing (obligated).**
