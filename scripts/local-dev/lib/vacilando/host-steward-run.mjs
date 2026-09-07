@@ -241,7 +241,28 @@ export async function runStewardCycleWithHygiene({
   const due = forceHygiene ? { due: true, reason: "forced" } : hygieneDue({ root, nowMs });
   // Carry the recovery result on EVERY return path. Dropping it on the
   // hygiene-not-due branch made the resident stage look like it had not run.
-  if (!due.due) return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms } };
+  if (!due.due) {
+    /*
+     * SCHEDULING IS NOT ON HYGIENE'S CADENCE.
+     *
+     * THE DEFECT THIS FIXES, found by watching 50 real Steward cycles produce
+     * zero scheduling decisions. The dispatch stage was called only on the path
+     * where hygiene had actually run, so an ordinary five-minute tick returned
+     * here and never reached it. Hygiene is due every six hours; scheduling was
+     * therefore attempted at most four times a day, and only when hygiene
+     * happened to be due in the same tick.
+     *
+     * It is the same shape as every other "wired but never called" defect this
+     * programme has found — an evidence collector that existed and was not
+     * invoked, a recovery model that was certified and never driven. Building
+     * the stage is not the same as reaching it.
+     *
+     * Hygiene is expensive and rare. Scheduling is cheap and should happen every
+     * tick, which is what a five-minute cadence is for.
+     */
+    const dispatchOnly = await runSchedulerDispatchStage({ root, nowMs, dryRun });
+    return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms }, dispatch: dispatchOnly };
+  }
 
   let result = null;
   try {
