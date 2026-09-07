@@ -252,6 +252,26 @@ export type FinancialsCardVM = {
      * to real people on no record.
      */
     payers: Array<{ personId: string; name: string; share: string | null; method: string | null }>;
+    /**
+     * WHO OWES WHAT, from persisted allocations — never a share invented here.
+     *
+     * Thread 2 shipped `payers[]` with `share: null` for everyone and said so plainly: there was a
+     * payer contact ROLE and no allocation store, so a split rendered here would have assigned real
+     * money to real people on no record. Thread 6 built the record, and this is the read of it.
+     *
+     * `unassignedCents` is not a rounding artefact and is not zero by default: it is money for
+     * which no arrangement names anybody, held in the open rather than handed to whichever adult
+     * the platform could most plausibly blame.
+     */
+    responsibility: {
+        parties: Array<{ personId: string; name: string; assignedCents: number; attributedCents: number; remainingCents: number }>;
+        unassignedCents: number;
+        allocatedCents: number;
+        /** True when at least one charge in the period has no active allocation at all. */
+        hasUnresolvedCharges: boolean;
+    };
+    /** Expected funding attached to responsibility — never a receipt, never a balance. */
+    expectedFunding: Array<{ label: string; sourceType: string; expectedCents: number | null; percentBasisPoints: number | null }>;
     /** Absent when the subject has no attendable/billable enrolment — the card renders no controls. */
     unavailableReason: string | null;
 };
@@ -286,6 +306,8 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         account: null,
         period,
         payers: [],
+        responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
+        expectedFunding: [],
         subjects: [],
         rows: [],
         reconciliation: emptyReconciliation(),
@@ -328,48 +350,137 @@ function platformUnavailabilities(): FinancialsUnavailable[] {
  * answer and the card renders no split for it; when Processing gains an allocation, this is the one
  * place that has to learn to read it.
  */
-async function readAccountPayers(
+
+/**
+ * RESPONSIBILITY, READ FROM WHAT WAS PERSISTED.
+ *
+ * One query over the account's charges, then the attributions against those allocations, so a
+ * party's remaining share is DERIVED — assigned less attributed — rather than stored. A stored
+ * per-party balance would be the second balance Thread 6 is forbidden to create, and it would drift
+ * from Thread 8's the first time an application was reversed.
+ *
+ * This replaces the payer read Thread 2 shipped, which listed whoever held the `payer` CONTACT role
+ * and stated no share because no allocation store existed. That role is still a way to reach a
+ * human; it is no longer what makes somebody financially responsible.
+ */
+async function readResponsibility(
     supabase: SupabaseClient,
     orgId: string,
-    customerId: string,
-): Promise<FinancialsCardVM["payers"]> {
-    const { data: links, error } = await supabase
-        .from("customer_persons")
-        .select("person_id, role_type, is_primary")
+    chargeIds: readonly string[],
+): Promise<{
+    responsibility: FinancialsCardVM["responsibility"];
+    payers: FinancialsCardVM["payers"];
+    expectedFunding: FinancialsCardVM["expectedFunding"];
+}> {
+    const empty = {
+        responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
+        payers: [],
+        expectedFunding: [],
+    };
+    if (chargeIds.length === 0) return empty;
+
+    const { data: allocationRows, error } = await supabase
+        .from("financial_responsibility_allocations")
+        .select("id, charge_id, responsible_party_id, is_unassigned, assigned_amount_cents, share_id")
         .eq("org_id", orgId)
-        .eq("customer_id", customerId);
-    // A payer read that fails is an absence of payers on the card, never a reason to fail the account.
-    if (error) return [];
+        .eq("state", "active")
+        .in("charge_id", [...chargeIds]);
+    // A responsibility read that fails is an absence of responsibility on the card, never a reason
+    // to fail the account — the same rule the payer read has always followed.
+    if (error) return empty;
+    const allocations = (allocationRows ?? []) as Array<{
+        id: string;
+        charge_id: string;
+        responsible_party_id: string | null;
+        is_unassigned: boolean;
+        assigned_amount_cents: number;
+        share_id: string | null;
+    }>;
+    if (allocations.length === 0) {
+        return { ...empty, responsibility: { ...empty.responsibility, hasUnresolvedCharges: true } };
+    }
 
-    const rows = ((links ?? []) as Array<Record<string, unknown>>).filter(
-        (r) => t(r.role_type).toLowerCase() === "payer",
-    );
-    if (rows.length === 0) return [];
-
-    const personIds = [...new Set(rows.map((r) => t(r.person_id)).filter(Boolean))];
-    if (personIds.length === 0) return [];
-
-    const { data: people } = await supabase
-        .from("persons")
-        .select("id, first_name, last_name, display_name")
+    const { data: attributionRows } = await supabase
+        .from("payment_responsibility_attributions")
+        .select("responsibility_allocation_id, amount_cents")
         .eq("org_id", orgId)
-        .in("id", personIds);
+        .in("responsibility_allocation_id", allocations.map((a) => a.id));
+    const attributed = new Map<string, number>();
+    for (const row of (attributionRows ?? []) as Array<{ responsibility_allocation_id: string; amount_cents: number }>) {
+        attributed.set(row.responsibility_allocation_id, (attributed.get(row.responsibility_allocation_id) ?? 0) + Number(row.amount_cents));
+    }
 
+    const byParty = new Map<string, { assigned: number; attributed: number }>();
+    let unassignedCents = 0;
+    for (const a of allocations) {
+        const amount = Number(a.assigned_amount_cents);
+        if (a.is_unassigned || !a.responsible_party_id) {
+            unassignedCents += amount;
+            continue;
+        }
+        const seen = byParty.get(a.responsible_party_id) ?? { assigned: 0, attributed: 0 };
+        seen.assigned += amount;
+        seen.attributed += attributed.get(a.id) ?? 0;
+        byParty.set(a.responsible_party_id, seen);
+    }
+
+    const partyIds = [...byParty.keys()];
+    const { data: people } = partyIds.length
+        ? await supabase.from("persons").select("id, first_name, last_name, full_name").eq("org_id", orgId).in("id", partyIds)
+        : { data: [] };
     const nameById = new Map(
         ((people ?? []) as Array<Record<string, unknown>>).map((p) => [
             t(p.id),
-            t(p.display_name) || [t(p.first_name), t(p.last_name)].filter(Boolean).join(" ") || "Payer",
+            t(p.full_name) || [t(p.first_name), t(p.last_name)].filter(Boolean).join(" ") || "Responsible party",
         ]),
     );
 
-    return personIds.map((id) => ({
-        personId: id,
-        name: nameById.get(id) ?? "Payer",
-        // No allocation store, and no per-payer method store either. Both stay null rather than
-        // being filled with a plausible-looking default.
-        share: null,
-        method: null,
-    }));
+    const parties = partyIds.map((id) => {
+        const totals = byParty.get(id)!;
+        return {
+            personId: id,
+            name: nameById.get(id) ?? "Responsible party",
+            assignedCents: totals.assigned,
+            attributedCents: totals.attributed,
+            remainingCents: totals.assigned - totals.attributed,
+        };
+    });
+
+    const shareIds = [...new Set(allocations.map((a) => a.share_id).filter((v): v is string => !!v))];
+    const { data: fundingRows } = shareIds.length
+        ? await supabase
+              .from("financial_expected_funding")
+              .select("funding_source_label, funding_source_type, expected_amount_cents, percent_basis_points, state")
+              .eq("org_id", orgId)
+              .eq("state", "active")
+              .in("share_id", shareIds)
+        : { data: [] };
+
+    const allocatedCents = parties.reduce((acc, p) => acc + p.assignedCents, 0);
+    const chargesWithAllocations = new Set(allocations.map((a) => a.charge_id));
+    return {
+        responsibility: {
+            parties,
+            unassignedCents,
+            allocatedCents,
+            hasUnresolvedCharges: chargeIds.some((id) => !chargesWithAllocations.has(id)),
+        },
+        payers: parties.map((p) => ({
+            personId: p.personId,
+            name: p.name,
+            // A REAL share, because a real allocation assigned it.
+            share: `$${(p.assignedCents / 100).toFixed(2)}`,
+            // Still null: there is no per-payer payment-method store, and inventing one here would
+            // repeat exactly the mistake Thread 2 refused to make about shares.
+            method: null,
+        })),
+        expectedFunding: ((fundingRows ?? []) as Array<Record<string, unknown>>).map((f) => ({
+            label: t(f.funding_source_label),
+            sourceType: t(f.funding_source_type),
+            expectedCents: f.expected_amount_cents == null ? null : Number(f.expected_amount_cents),
+            percentBasisPoints: f.percent_basis_points == null ? null : Number(f.percent_basis_points),
+        })),
+    };
 }
 
 /**
@@ -569,7 +680,9 @@ export async function buildFinancialsCardVM(
     );
 
     vm.account = { customerId: resolvedCustomerId, label: null };
-    vm.payers = resolvedCustomerId ? await readAccountPayers(supabase, args.orgId, resolvedCustomerId) : [];
+    // `vm.payers` is filled from PERSISTED RESPONSIBILITY once the charges are known — see below.
+    // The `payer` contact role is no longer what makes somebody a payer on this card.
+    vm.payers = [];
     // A household with no enrolment still HAS an account. Financials answers for it.
     vm.subjects = agreements.map((a) => ({
         customerMemberId: a.customer_member_id,
@@ -748,6 +861,19 @@ export async function buildFinancialsCardVM(
     });
     // Newest first inside a period; the ledger reads downward through time.
     rows.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.chargeId.localeCompare(b.chargeId));
+    /*
+     * WHO OWES IT — read once, from what Thread 6 persisted, and shared by every density.
+     *
+     * This is the seam Thread 2 named and deliberately left open: it shipped `payers[]` with a null
+     * share because no allocation store existed, and said the card would have to learn to read one
+     * when Processing gained an allocation. This is that read. Nothing is computed here — the cents
+     * come from the allocations, and what a party still owes is assigned less attributed.
+     */
+    const responsibilityRead = await readResponsibility(supabase, args.orgId, rows.map((r) => r.chargeId));
+    vm.responsibility = responsibilityRead.responsibility;
+    vm.payers = responsibilityRead.payers;
+    vm.expectedFunding = responsibilityRead.expectedFunding;
+
     vm.rows = rows;
 
     /*

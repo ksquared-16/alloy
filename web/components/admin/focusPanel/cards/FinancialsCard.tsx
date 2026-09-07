@@ -869,6 +869,45 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     strong
                                     testId="responsibility"
                                 />
+                                {/* ── WHO OWES IT ────────────────────────────────────────────
+                                    Persisted allocations, named parties, real cents. Thread 2
+                                    shipped this seam empty on purpose — there was a payer contact
+                                    role and no allocation store, so any split rendered here would
+                                    have assigned real money to real people on no record. The
+                                    record exists now, and the card reads it rather than deriving
+                                    anything of its own.
+
+                                    UNASSIGNED IS SHOWN, not hidden. Money nobody has been made
+                                    responsible for is the operator's most actionable fact on this
+                                    card, and quietly attributing it to the household is the exact
+                                    behaviour the platform decided against. */}
+                                {vm.responsibility.parties.map((party) => (
+                                    <Line
+                                        key={party.personId}
+                                        label={party.name}
+                                        cents={party.assignedCents}
+                                        currency={currency}
+                                        muted
+                                        testId={`responsibility-party-${party.personId}`}
+                                    />
+                                ))}
+                                {vm.responsibility.unassignedCents !== 0 ? (
+                                    <Line
+                                        label="Unassigned"
+                                        cents={vm.responsibility.unassignedCents}
+                                        currency={currency}
+                                        testId="responsibility-unassigned"
+                                    />
+                                ) : null}
+                                {vm.expectedFunding.length > 0 ? (
+                                    <p className="alloy-os-financials__note" data-financials-expected-funding="true">
+                                        {/* EXPECTED, and said so. Funding that has not arrived is not
+                                            a payment and reduces nothing owed; stating it as a note
+                                            beside the figures keeps it out of every total. */}
+                                        Expected funding ·{" "}
+                                        {vm.expectedFunding.map((f) => f.label).join(", ")} · not yet received
+                                    </p>
+                                ) : null}
                                 {reconciliation!.scheduledCents !== 0 ? (
                                     /* STATED BESIDE the balance, never inside it: a scheduled charge
                                        is not yet owed, and folding it in would overstate the debt. */

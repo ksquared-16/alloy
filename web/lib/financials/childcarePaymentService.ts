@@ -266,6 +266,16 @@ export type RecordChildcarePaymentInput = {
     processor?: string | null;
     processorTransactionId?: string | null;
     referenceNumber?: string | null;
+    /*
+     * WHO ACTUALLY PAID — identity, never responsibility.
+     *
+     * `payments.payer_entity_type` / `payer_entity_id` have existed with a paired-null CHECK and no
+     * writer at all; Thread 6 is the first path that fills them, because a grandparent settling a
+     * bill has to be recordable without that making the grandparent responsible for it. Whose SHARE
+     * the money went against is a separate, explicit attribution.
+     */
+    payerEntityType?: string | null;
+    payerEntityId?: string | null;
     /** Required for a retry to be harmless. Unique per org. */
     idempotencyKey?: string | null;
     notes?: string | null;
@@ -367,6 +377,9 @@ export async function recordChildcarePayment(
             processor: trimOrNull(input.processor),
             processor_transaction_id: trimOrNull(input.processorTransactionId),
             reference_number: trimOrNull(input.referenceNumber),
+            // Both or neither — `payments_payer_entity_chk` refuses a half-identified payer.
+            payer_entity_type: trimOrNull(input.payerEntityId) ? (trimOrNull(input.payerEntityType) ?? "person") : null,
+            payer_entity_id: trimOrNull(input.payerEntityId),
             received_at: receivedAt,
             // `posted_at` is set only when the money IS truth. `payments_posted_at_status_chk`
             // refuses the pair being inconsistent, so the two can never drift.
