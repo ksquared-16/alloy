@@ -529,6 +529,33 @@ export async function runResidentRecoveryStage({
     else if (plan.action === "restart_owned_gateway") {
       const H = await import("./control-plane-health.mjs");
       performed = await H.recoverOwnedVacilandoProcess({ root, nowMs });
+    } else if (plan.action === "converge_toolkit_then_restart") {
+      /*
+       * THE SECOND STEP OF AN INSTALL, FINALLY OWNED.
+       *
+       * The installer flips the symlink and deliberately does not restart the
+       * Gateway from inside the Gateway. Nothing owned what came next, so a
+       * verified install sat unused while `planToolkitConvergence` reported
+       * `converged` — that plan compares installed against promoted and never
+       * consults what is actually running. TOOLKIT_DRIFT has been classified,
+       * with a ceiling, a cooldown and a verification list, since Phase 3; the
+       * repair was simply never supplied and every tick reported "no wired
+       * repair owner".
+       *
+       * The requirements are re-measured HERE rather than trusted from the
+       * observation, so the thing that restarts the host is reading the same
+       * evidence the gate does: provenance valid, a retained rollback target,
+       * and a real difference between installed and running.
+       */
+      const C = await import("./toolkit-convergence.mjs");
+      const ev = C.measureToolkitConvergence({});
+      const gw = C.observeGatewayExecution ? C.observeGatewayExecution({}) : { executing_sha: null };
+      performed = R.restartGatewayForConvergence({
+        installedSha: ev.installed_toolkit_sha,
+        runningSha: gw.executing_sha,
+        provenanceValid: ev.artifact_provenance_valid,
+        rollbackRetained: ev.previous_toolkit_retained,
+      });
     } else {
       // An action with no wired owner is REPORTED, never improvised. The wt1
       // dev server proved what ad hoc signalling costs.

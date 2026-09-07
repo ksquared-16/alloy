@@ -23,6 +23,7 @@
  * performs no repair it could delegate, and it never invents lane, run or
  * process truth.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -67,6 +68,64 @@ export const RECOVERY_LEVELS = Object.freeze({
  * works; it is to bound how long the system may believe its own theory of the
  * failure before handing the problem to someone who can form a better one.
  */
+/**
+ * THE SECOND STEP OF AN INSTALL, and who owns it.
+ *
+ * `executeToolkitInstall` deliberately never restarts the Gateway: it runs
+ * INSIDE the Gateway, and killing the process before its own completion record
+ * is durable would lose the one audit line nobody can reconstruct. That safety
+ * property is correct and is not changed here.
+ *
+ * What was missing is the owner of the step it hands off to. TOOLKIT_DRIFT has
+ * been a classified failure class with a named action, a ceiling, a cooldown
+ * and a verification list the whole time — and `runResidentRecoveryStage`
+ * supplies no repair for it, so every tick returned "no wired repair owner" and
+ * escalated. A verified install therefore sat unused while convergence reported
+ * `converged`, because that plan compares installed against promoted and never
+ * consults what is actually running. "The Director restarts it by hand, forever"
+ * is not an autonomous-operations architecture.
+ *
+ * WHY LAUNCHD IS THE INDEPENDENT CONTEXT. This call terminates the process that
+ * makes it. That is safe here and was not safe inside the installer, because by
+ * now the install result is durable and the recovery episode was recorded
+ * BEFORE the action — the stage does that precisely so an action may kill the
+ * memory's holder. launchd is the supervisor that survives, and bringing the
+ * job back is its job, not ours. Verification happens on the next process's
+ * first cycle, which observes no drift; we do not pretend to verify inline.
+ *
+ * It refuses on anything short of provable drift: an unmeasured sha, no drift,
+ * invalid provenance, or no retained rollback target. UNKNOWN never reaches
+ * here at all, because UNKNOWN carries no action.
+ */
+export const GATEWAY_LAUNCHD_LABEL = process.env.VACILANDO_LAUNCHD_LABEL || "com.alloy.vacilando-gateway";
+
+export function restartGatewayForConvergence({
+  installedSha = null,
+  runningSha = null,
+  provenanceValid = null,
+  rollbackRetained = null,
+  uid = null,
+  exec = null,
+  label = GATEWAY_LAUNCHD_LABEL,
+} = {}) {
+  if (!installedSha || !runningSha) return { ok: false, error: "convergence_unmeasured", installed: installedSha, running: runningSha };
+  if (installedSha === runningSha) return { ok: false, error: "no_drift", installed: installedSha };
+  if (provenanceValid !== true) return { ok: false, error: "provenance_not_valid" };
+  if (rollbackRetained !== true) return { ok: false, error: "no_rollback_target" };
+  const id = uid == null ? (typeof process.getuid === "function" ? process.getuid() : null) : uid;
+  if (id == null) return { ok: false, error: "no_launchd_domain" };
+
+  const run = exec || ((cmd, args) => execFileSync(cmd, args, { encoding: "utf8", timeout: 20_000 }));
+  try {
+    // `-k` kills the running instance and lets launchd start the new one, which
+    // is what picks up the freshly installed `current` symlink.
+    run("launchctl", ["kickstart", "-k", `gui/${id}/${label}`]);
+    return { ok: true, action: "launchd_kickstart", label, from: runningSha, to: installedSha, verified_by: "next_cycle_observation" };
+  } catch (e) {
+    return { ok: false, error: "kickstart_failed", detail: String(e?.stderr || e?.message || e).split("\n")[0].slice(0, 200) };
+  }
+}
+
 export const ATTEMPT_CEILINGS = Object.freeze({
   PROCESS_DEAD: 3,
   PROCESS_ALIVE_UNHEALTHY: 2,
