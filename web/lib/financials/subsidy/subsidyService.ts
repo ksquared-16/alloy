@@ -321,21 +321,39 @@ export async function buildSubsidyClaim(
 
     const { data: allocationRows } = await supabase
         .from("financial_responsibility_allocations")
-        .select("id, charge_id, assigned_amount_cents, is_unassigned")
+        .select("id, charge_id, share_id, assigned_amount_cents, is_unassigned")
         .eq("org_id", args.orgId)
         .eq("state", "active")
         .in("charge_id", charges.map((c) => c.id));
-    const allocations = (allocationRows ?? []) as Array<{ id: string; charge_id: string; is_unassigned: boolean }>;
+    const allocations = (allocationRows ?? []) as Array<{ id: string; charge_id: string; share_id: string | null; is_unassigned: boolean }>;
 
-    const { data: fundingRows } = allocations.length
-        ? await supabase
-              .from("financial_expected_funding")
-              .select("id, allocation_id, expected_amount_cents, percent_basis_points, basis, subsidy_authorization_id, state")
-              .eq("org_id", args.orgId)
-              .eq("state", "active")
-              .in("allocation_id", allocations.map((a) => a.id))
-        : { data: [] };
-    const funding = ((fundingRows ?? []) as Array<Record<string, unknown>>)
+    /*
+     * FUNDING ANCHORED TO THE SHARE COUNTS TOO.
+     *
+     * Thread 6 lets expected funding attach to a responsibility SHARE — which is how a tenant says
+     * "this agency covers $900 of this parent's share, every month" rather than re-entering it for
+     * each period. Reading only allocation-anchored rows made that form invisible and a claim built
+     * from it came back empty, which looks like a missing authorization rather than a missing join.
+     */
+    const shareIds = [...new Set(allocations.map((a) => a.share_id).filter((v): v is string => !!v))];
+    const [{ data: byAllocation }, { data: byShare }] = await Promise.all([
+        allocations.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("id, allocation_id, share_id, expected_amount_cents, percent_basis_points, basis, subsidy_authorization_id, state")
+                  .eq("org_id", args.orgId).eq("state", "active")
+                  .in("allocation_id", allocations.map((a) => a.id))
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        shareIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("id, allocation_id, share_id, expected_amount_cents, percent_basis_points, basis, subsidy_authorization_id, state")
+                  .eq("org_id", args.orgId).eq("state", "active")
+                  .is("allocation_id", null)
+                  .in("share_id", shareIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+    ]);
+    const funding = [...((byAllocation ?? []) as Array<Record<string, unknown>>), ...((byShare ?? []) as Array<Record<string, unknown>>)]
         .filter((f) => !f.subsidy_authorization_id || f.subsidy_authorization_id === authorization.id);
 
     const now = new Date().toISOString();
@@ -367,7 +385,7 @@ export async function buildSubsidyClaim(
     const lineRows: Array<Record<string, unknown>> = [];
     for (const allocation of allocations) {
         if (allocation.is_unassigned) continue; // nobody is responsible, so nothing is funded
-        const attached = funding.filter((f) => f.allocation_id === allocation.id);
+        const attached = funding.filter((f) => f.allocation_id === allocation.id || (f.share_id && f.share_id === allocation.share_id));
         if (attached.length === 0) continue;
         const charge = charges.find((c) => c.id === allocation.charge_id)!;
         const amount = attached.reduce((acc, f) => acc + Number(f.expected_amount_cents ?? 0), 0);

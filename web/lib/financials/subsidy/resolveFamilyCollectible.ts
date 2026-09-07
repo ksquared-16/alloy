@@ -136,12 +136,12 @@ export async function resolveFamilyCollectible(
     // ── RESPONSIBILITY (Thread 6) ───────────────────────────────────────────────────────────
     const { data: allocationRows, error: allocationError } = await supabase
         .from("financial_responsibility_allocations")
-        .select("id, assigned_amount_cents, is_unassigned")
+        .select("id, assigned_amount_cents, is_unassigned, share_id")
         .eq("org_id", args.orgId)
         .eq("charge_id", args.chargeId)
         .eq("state", "active");
     if (allocationError) throw new CollectibleError("db_error", allocationError.message);
-    const allocations = (allocationRows ?? []) as Array<{ id: string; assigned_amount_cents: number; is_unassigned: boolean }>;
+    const allocations = (allocationRows ?? []) as Array<{ id: string; assigned_amount_cents: number; is_unassigned: boolean; share_id: string | null }>;
     const assignedResponsibilityCents = allocations
         .filter((a) => !a.is_unassigned)
         .reduce((acc, a) => acc + Number(a.assigned_amount_cents), 0);
@@ -150,15 +150,24 @@ export async function resolveFamilyCollectible(
         .reduce((acc, a) => acc + Number(a.assigned_amount_cents), 0);
 
     // ── EXPECTED SUBSIDY (Thread 6's seam, with Thread 9's provenance) ──────────────────────
+    /* The same two anchors a claim reads: this period's allocation, or the share behind it. */
     const allocationIds = allocations.map((a) => a.id);
-    const { data: fundingRows } = allocationIds.length
-        ? await supabase
-              .from("financial_expected_funding")
-              .select("id, expected_amount_cents, percent_basis_points, basis, state, allocation_id, share_id")
-              .eq("org_id", args.orgId)
-              .eq("state", "active")
-              .in("allocation_id", allocationIds)
-        : { data: [] };
+    const shareIds = [...new Set(allocations.map((a) => a.share_id).filter((v): v is string => !!v))];
+    const [{ data: fundingByAllocation }, { data: fundingByShare }] = await Promise.all([
+        allocationIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("id, expected_amount_cents, percent_basis_points, basis, state, allocation_id, share_id")
+                  .eq("org_id", args.orgId).eq("state", "active").in("allocation_id", allocationIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        shareIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("id, expected_amount_cents, percent_basis_points, basis, state, allocation_id, share_id")
+                  .eq("org_id", args.orgId).eq("state", "active").is("allocation_id", null).in("share_id", shareIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+    ]);
+    const fundingRows = [...(fundingByAllocation ?? []), ...(fundingByShare ?? [])];
     const expectedSubsidyCents = ((fundingRows ?? []) as Array<Record<string, unknown>>).reduce((acc, f) => {
         if (f.basis === "fixed_amount") return acc + Number(f.expected_amount_cents ?? 0);
         // A percentage of the NET, the same convention every other percentage in Financials uses.
@@ -191,12 +200,23 @@ export async function resolveFamilyCollectible(
     const submittedClaimIds = [...new Set(submittedLines.map((l) => l.claim_id))];
 
     /*
-     * THE SMALLEST OF THE THREE. Each bound removes a specific lie, and the one that bound the
-     * answer is reported so an operator can be told which.
+     * SUPPRESSION IS ABOUT MONEY STILL EXPECTED TO ARRIVE, not money that already did.
+     *
+     * Once the agency has paid, its payment reduced outstanding through Thread 8 and the claim has
+     * done its job — continuing to suppress would hide the family's own copay behind a claim that is
+     * already settled, and the family would be asked for nothing at all. So what has been received
+     * is taken off the claim before it bounds anything.
+     */
+    const stillExpectedFromAgencyCents = Math.max(0, claimedCents - actualSubsidyReceivedCents);
+
+    /*
+     * THE SMALLEST OF THE THREE. Each bound removes a specific lie — claiming more than was expected,
+     * expecting more than was claimed, or suppressing money the family no longer owes — and the one
+     * that bound the answer is reported so an operator can be told which.
      */
     const bounds: Array<{ kind: CollectiblePosition["explanation"]["suppressionBoundBy"]; value: number }> = [
-        { kind: "claimed", value: claimedCents },
-        { kind: "expected", value: expectedSubsidyCents },
+        { kind: "claimed", value: stillExpectedFromAgencyCents },
+        { kind: "expected", value: Math.max(0, expectedSubsidyCents - actualSubsidyReceivedCents) },
         { kind: "outstanding", value: outstandingCents },
     ];
     const winner = bounds.reduce((lowest, candidate) => (candidate.value < lowest.value ? candidate : lowest));

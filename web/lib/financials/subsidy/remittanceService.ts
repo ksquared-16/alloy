@@ -220,7 +220,12 @@ export async function reconcileRemittance(
 
     const { error: upsertError } = await supabase
         .from("financial_subsidy_variances")
-        .upsert(rows, { onConflict: "org_id,idempotency_key" });
+        /*
+         * ON THE CLAIM LINE, not the idempotency key. Both indexes are unique and both would be
+         * violated, but only one can be the conflict target — and naming the other made a second
+         * reconciliation of the same advice fail instead of converging.
+         */
+        .upsert(rows, { onConflict: "org_id,claim_line_id" });
     if (upsertError) throw new SubsidyError("db_error", upsertError.message);
 
     const everythingMatched = rows.every((r) => r.state === "matched");

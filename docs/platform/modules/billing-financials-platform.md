@@ -777,6 +777,86 @@ than an enrolment-backed obligation.
 
 ---
 
+### Subsidy — authorized, claimed, remitted, and what is still missing (September 2026)
+
+Three migrations: the subsidy tables, `fin.subsidy`, and the correction that left one identity per
+variance. Thread 6 established that expected funding attaches to a responsible party's share and is
+not money; Thread 9 gives that expectation a provenance and a life.
+
+**The approved collection policy (Director decision B).** An authorization does not suppress family
+collection. A draft claim does not suppress family collection. A **submitted** claim may suppress
+collection for the amount it explicitly attributed — because submitting is the point at which the
+provider has done the thing that makes the money genuinely receivable from the agency.
+
+    authoritative outstanding − governed submitted-claim suppression = currently collectible
+
+- **Collectibility is derived, never stored.** `resolveFamilyCollectible` recomputes it from claim
+  state, claim-line amounts and Thread 8's outstanding on every read, so it cannot drift, cannot be
+  edited into something else, and vanishes by itself when a claim is voided or denied. A
+  materialised copy would be a second balance wearing a different hat.
+- **Suppression is bounded three ways**, and by what is still expected rather than what was claimed:
+  the smallest of (claimed − already received), (expected − already received) and outstanding. Each
+  bound removes a specific lie — claiming more than was expected, expecting more than was claimed,
+  and suppressing money somebody has already paid. **Once the agency pays, the claim stops
+  suppressing**, or the family's own copay would hide behind a settled claim and they would be asked
+  for nothing at all. The bound that decided the answer is reported so an operator can be told which.
+- **A shortfall resolves itself into nothing.** Reconciling writes a variance and stops: it does not
+  raise the family's collectible amount, write the difference off, resubmit, or move responsibility.
+  `financial_subsidy_variances.resolution_kind` is null until an operator names one of
+  `accept_family_responsibility`, `resubmit`, `write_off`, `hold_under_review`,
+  `correct_authorization`. There is no global default, deliberately. `write_off` forgives through
+  **Thread 10's** manual reduction rather than a subsidy-shaped copy of one;
+  `accept_family_responsibility` writes no money at all, because the family was always contractually
+  responsible for the net — what changes is that a claim nobody will fund stops suppressing.
+- **Subsidy is never a reduction.** `charge_category = 'subsidy_offset'` remains unwritten by
+  anything. The design lab models it as contra-revenue, which would make a subsidy indistinguishable
+  from a discount and would quietly forgive the family the moment an agency was late. **Do not
+  implement subsidy through it.**
+- **Advice is not cash.** A remittance records what the agency SAID; `payment_id` stays null until
+  Thread 8 has a receipt. Settlement REFUSES a payment whose payer is not the agency, so a family's
+  own money can never be recorded as the subsidy arriving.
+- **Agency cash is ordinary money.** It enters through Thread 8 with the agency on
+  `payments.payer_entity_type/id`, applies to posted obligations, may span children and periods
+  through per-charge applications, and attributes to an accounting period exactly like any other
+  receipt. Recoupment is Thread 8's application reversal, once.
+- **Agency identity is the narrowest thing that works.** `financial_funding_agencies` gives a funder
+  a stable id to be a payer, org isolation, provenance, and something a remittance can reconcile
+  against — the four things a bare string cannot. Not `customers` (a family-shaped account shell),
+  not `vendors` (the jobs vertical), and not a platform party redesign subsidy does not justify.
+- **Authorizations are effective-dated and superseded**, with the same gist exclusion constraint
+  Thread 6 uses, because two overlapping authorizations would make "how much is expected for March"
+  depend on row order. The agency's stated **family copay is recorded and never applied**: what a
+  family owes is Thread 6's, decided by an arrangement naming people, and an agency does not get to
+  reassign it.
+- **Expected funding stays Thread 6's**, extended by one column (`subsidy_authorization_id`) rather
+  than a second engine. Funding anchored to a SHARE — how a tenant says "this agency covers most of
+  this parent's share every month" — is read by claims and by collectibility alongside
+  allocation-anchored rows.
+- **`fin.subsidy` is a fourth financial authority.** Billing what was authored, forgiving what is
+  owed and deciding who owes it are already separate; administering subsidy is none of them, and
+  under this policy it decides what a family is billed this month.
+- **Processing is the ingestion seam, not rebuilt.** Authorizations and remittances carry
+  `source_document_id`, so the existing `processing_cases` / `processing_facts` / `documents` stack
+  can commit into these commands later. No OCR or extraction is required for this thread.
+
+**Certified:** `certification/financials/financial-subsidy.cert.sh` — 16 live cases against real
+persistence (effective dating and the database's overlap refusal, cross-org refusal, expected
+funding moving nothing, a draft suppressing nothing, a submitted claim suppressing exactly its
+amount, idempotent build and submit, exact settlement, a family payment refused as settlement, the
+$900/$825 shortfall with $75 held open and the family's collectible unchanged, resolution once and
+only when named, denial with no fictional payment, overpayment, one remittance across two children,
+recoupment reversing exactly once, concurrency converging, and 4/4/5 attribution), 15 hermetic cases
+on the commands, and `certification/playwright/financial-subsidy.cert.spec.ts` through the running
+app — the card shows *Collectible now* beside an unchanged balance, and the same command is refused
+BY THE SERVER with `fin.subsidy` revoked.
+
+**Intentionally not built:** subsidy eligibility as a separate financial owner (authorization is the
+operative decision); enrollment, renewal and appeal workflows; government integration; OCR; Stripe;
+the Financials workspace; collections and dunning; GL export; and any parent-facing subsidy
+visibility, which stays undecided.
+
+---
+
 ## What not to do
 
 - Do not build childcare billing before the financial core is generalized off `job_id`.
@@ -852,6 +932,16 @@ than an enrolment-backed obligation.
 - Do not infer a payment's responsibility attribution from who paid; state it explicitly, and never let an attribution reduce a charge's outstanding.
 - Do not gate deciding who owes behind `fin.write` or `fin.adjust`; billing, forgiving and reassigning are three different authorities.
 - Do not derive separated/co-parent visibility from household membership, guardianship or financial responsibility, and do not add parent-facing responsibility visibility — that policy is undecided and inventing it would be inventing law.
+- Do not implement subsidy as a `subsidy_offset` charge or any other reduction; a subsidy funds a share somebody still owes, and modelling it as contra-revenue forgives the family whenever an agency is late.
+- Do not let an authorization or a draft claim suppress family collection — submission is the event, because it is the point the money becomes genuinely receivable.
+- Do not keep suppressing after the agency has paid; suppression is about money still expected, and a settled claim would otherwise hide the family's own copay.
+- Do not persist a collectible amount; derive it, or it becomes a second balance that drifts from Thread 8's.
+- Do not resolve a subsidy shortfall automatically — not to the family, not as a write-off, not as a resubmission. It stays an unresolved variance until an operator names one.
+- Do not apply an agency's stated family copay to responsibility; record it, because what a family owes is decided by an arrangement naming people.
+- Do not treat a remittance advice as cash, and do not settle one with a payment whose payer is not the agency.
+- Do not build a subsidy-specific payment ledger; agency money is ordinary money through Thread 8, and recoupment is its application reversal.
+- Do not give a variance two unique identities — the claim line is the identity, and a second index makes concurrent reconciliation fail instead of converge.
+- Do not encode a jurisdiction, agency or statute in shared infrastructure; a tenant authors the programme and the platform learns no geography.
 - Do not delete a payment or an application to undo one. A refund is a new outbound row via `refunds_payment_id`; an application is reversed, never removed.
 
 ---
@@ -863,6 +953,10 @@ easiest to violate before anyone writes the first component:
 
 **The Financials workspace MUST compose the canonical `WorkspaceShell` and the shared workspace
 primitives already used by Processing, Communications/Inbox and Operations/Work Items.**
+
+It must consume `resolveFamilyCollectible` for what to collect and `resolveAllocatableNet` for net —
+never recompute either. Subsidy adds two more numbers a workspace will be tempted to derive for
+itself: the suppression and the unresolved variance. Both have owners.
 
 It must NOT create a Financials-specific shell, a competing KPI system, a second balance, its own
 responsibility math, or a module-specific visual hierarchy. Every number it shows already has an
@@ -896,3 +990,4 @@ that recomputes any of them will disagree with the card in front of a family.
 - The tuition generation contract changes — the occurrence key, the pricing authority, the posted-period boundary, the proration refusal, or the charge idempotency constraint.
 - The reduction contract changes — the discount-policy owner, the stacking order or basis, the eligibility sources, the snapshot rule, the manual-adjustment permission, or the balance authority.
 - The responsibility contract changes — the explicit-party rule, the unassigned representation, the net source, the cent/remainder rule, effective dating, posted reallocation, the funding seam, the payment-attribution bound, or the privacy non-decision.
+- The subsidy contract changes — the collection-suppression policy or its bounds, the shortfall non-default, agency identity, the advice/cash separation, the authorization supersession rule, or the Processing ingestion seam.

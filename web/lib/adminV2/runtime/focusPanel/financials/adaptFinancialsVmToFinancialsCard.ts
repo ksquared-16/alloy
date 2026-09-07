@@ -168,6 +168,18 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             lines: [
                 { label: "Responsibility", value: money(reconciliation.responsibilityCents, currency) },
                 { label: "Current balance", value: money(reconciliation.balanceCents, currency) },
+                /*
+                 * WHAT TO ACTUALLY ASK FOR, and only when there is something to say.
+                 *
+                 * A submitted subsidy claim suppresses collection for the amount it attributed, so
+                 * the balance above and the amount to collect stop being the same number. Both are
+                 * shown: the obligation has not shrunk, and pretending otherwise is how a subsidy
+                 * turns into a discount. An ordinary family's card is unchanged, because with
+                 * nothing suppressed the line is absent rather than repeating the balance.
+                 */
+                ...(vm.collectible.submittedClaimSuppressionCents > 0
+                    ? [{ label: "Collectible now", value: money(vm.collectible.currentlyCollectibleCents, currency) }]
+                    : []),
             ],
             paymentLine: vm.paymentSetup ?? "No payment method on file",
             paymentHealthy: Boolean(vm.paymentSetup),
