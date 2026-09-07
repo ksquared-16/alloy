@@ -253,3 +253,82 @@ await test("PROCESS_DEAD is honestly out of scope for an in-process stage", () =
     assert.match(src, /launchd/, "the independent execution path must be named");
     assert.match(src, /PROCESS_DEAD is not recoverable from here/);
 });
+
+/*
+ * AN IN-PROCESS OBSERVER MUST NOT PROBE ITSELF SYNCHRONOUSLY.
+ *
+ * The honest limit noted at the top of this file had a second half nobody had
+ * written down. The Steward runs inside the Gateway, so it cannot recover a dead
+ * process — that much was asserted. But it also cannot MEASURE the live one with
+ * a synchronous subprocess, because the event loop that would answer the probe
+ * is the one `execFileSync` is blocking. curl exits at its deadline, the guard
+ * reports "unmeasured", the classifier says UNKNOWN, and recovery — correctly —
+ * outranks and cancels all ordinary work.
+ *
+ * Measured on the live host: 7.5 hours of uptime, ~90 ticks, not one of them
+ * reaching hygiene or scheduling; Backend unoccupied and eligible for 33 minutes
+ * across eight ticks with no dispatch; an external poll answered 200 after
+ * 8064 ms while the internal probe gave up at 8000 ms.
+ *
+ * These tests pin the two properties that failure violated: the probe answers
+ * rather than blocking, and a silent service is measured as unhealthy rather
+ * than as unmeasured.
+ */
+import { createServer } from "node:http";
+
+const RR = await import("../lib/vacilando/host-steward-run.mjs");
+
+/** A server on an ephemeral port, so a test never touches the real Gateway. */
+function listen(handler) {
+  const server = createServer(handler);
+  return new Promise((res) => server.listen(0, "127.0.0.1", () => res({
+    server, port: server.address().port, close: () => new Promise((r) => server.close(r)),
+  })));
+}
+
+test("a Gateway that answers 200 is healthy", async () => {
+  const s = await listen((_req, res) => { res.writeHead(200); res.end("{}"); });
+  try {
+    assert.equal(await RR.probeLoopbackInProcess({ root: mkdtempSync(join(tmpdir(), "probe-")), port: s.port }), true);
+  } finally { await s.close(); }
+});
+
+test("a Gateway that accepts the connection and never answers is UNHEALTHY, not unmeasured", async () => {
+  // The live failure exactly: the socket is accepted, and nothing ever replies.
+  // Reporting `null` here is what let a wedged loop read as a blind spot.
+  const s = await listen(() => { /* deliberately never responds */ });
+  try {
+    const verdict = await RR.probeLoopbackInProcess({
+      root: mkdtempSync(join(tmpdir(), "probe-")), port: s.port, timeoutMs: 300,
+    });
+    assert.equal(verdict, false, "a service that did not answer is a measurement");
+    assert.notEqual(verdict, null, "and must never be reported as unmeasured");
+  } finally { await s.close(); }
+});
+
+test("the probe yields to the event loop instead of blocking it", async () => {
+  /*
+   * THE PROPERTY THE OLD PROBE VIOLATED. A synchronous probe cannot be answered
+   * by the process running it. This asserts the probe is genuinely async: a
+   * timer scheduled alongside it must fire while the probe is still outstanding.
+   * Under `execFileSync` this tick could not happen, which is precisely why the
+   * self-request was never served.
+   */
+  const s = await listen(() => { /* never responds, so the probe stays pending */ });
+  try {
+    let ticked = false;
+    const timer = setTimeout(() => { ticked = true; }, 50);
+    await RR.probeLoopbackInProcess({
+      root: mkdtempSync(join(tmpdir(), "probe-")), port: s.port, timeoutMs: 400,
+    });
+    clearTimeout(timer);
+    assert.equal(ticked, true, "the loop kept running while the probe was in flight");
+  } finally { await s.close(); }
+});
+
+test("a closed port is refused, and a refusal is also an answer", async () => {
+  const s = await listen((_req, res) => { res.writeHead(200); res.end("{}"); });
+  const port = s.port;
+  await s.close();
+  assert.equal(await RR.probeLoopbackInProcess({ root: mkdtempSync(join(tmpdir(), "probe-")), port }), false);
+});

@@ -217,6 +217,79 @@ One status was **corrected**: `supervisor-without-scheduler` was marked `FIXED`,
 measured the capability still absent. It was never `CLOSED`, so no certification was invalidated —
 `FIXED` was simply premature.
 
+## An in-process observer cannot probe itself synchronously
+
+`observeControlPlane` measures loopback health with a synchronous
+`curl --max-time 8` against `127.0.0.1:3030`. That is right for an external
+observer such as the CLI. It cannot work for the resident Steward, because the
+Steward runs **inside** the Gateway: `execFileSync` blocks the single event
+loop, the kernel accepts curl's connection into the listen backlog, and nothing
+ever dequeues it. curl waits its full eight seconds, exits non-zero, and the
+guard reports the loopback as *unmeasured*.
+
+Everything downstream then behaves correctly, which is what made it invisible.
+Unmeasured is UNKNOWN; UNKNOWN is not HEALTHY; recovery outranks ordinary work.
+So the cycle returned before hygiene and before scheduling — every tick, with no
+exception to log and no stage left half-finished.
+
+The cost, measured on the live host rather than reasoned about:
+
+- The Gateway had been up 7.5 hours and ~90 ticks without once reaching hygiene
+  or scheduling.
+- `hygiene_last` was 13.4 hours stale against a six-hour cadence.
+- Backend sat unoccupied, AUTHORIZED and eligible for 33 minutes across eight
+  ordinary ticks and was never dispatched.
+- An external poll during a tick returned 200 after **8064 ms** — the event loop
+  unblocking — while the in-process probe had already given up at **8000 ms**.
+
+Those 64 milliseconds were the entire difference between a working scheduler and
+a host that had done nothing all day. The same probe, made async, answers in
+23 ms.
+
+**The rule: an observer running inside the thing it observes must yield to the
+loop that has to answer it.** The Steward now injects an async `probeLoopback`;
+the synchronous curl remains the right implementation for observers that are
+genuinely external. The module's existing doctrine is preserved — a service that
+did not answer is a measurement, not a blind spot, so a refusal or a timeout is
+`false` and only being unable to attempt the probe is `null`.
+
+Note what this does *not* fix. A Gateway whose loop is genuinely wedged cannot
+run the Steward that would notice, so in-process self-recovery is bounded by
+construction and launchd still owns the dead-process case.
+
+## A protected process is not a working one
+
+The Gateway wraps its Steward call in a catch whose entire justification is that
+the Steward must never take the server down. That is right, and it is why the
+host stays up. But for a long stretch nothing recorded what was caught, and the
+failure mode that produced is worth stating plainly, because it is not the one
+anybody watches for:
+
+- Steward cycles kept appearing in the state file on their ordinary cadence.
+- `hygiene_last` sat thirteen hours stale with hygiene due every six.
+- No lane was ever dispatched, though the planner named an eligible one on every
+  tick when asked directly.
+
+The synchronous half of the cycle completed and wrote its record; everything
+after it — recovery, hygiene, scheduling — disappeared into the catch. From
+outside, a subsystem failing on every single tick looked exactly like a healthy
+host with nothing to do. Running the same code out-of-process reached every
+stage and planned a dispatch, which is precisely why reading the code could not
+find it and only the live host could.
+
+**The rule: a stage that is allowed to fail silently must still say that it
+failed.** `runStewardCycleWithHygiene` now records `last_stage_outcome` on every
+path — the recovery class, the hygiene verdict, the scheduling verdict, and, when
+a stage throws, the error itself. Swallowing an exception to protect the process
+is correct. Swallowing it without a trace is how a subsystem dies quietly for
+half a day while its supervisor reports normal cadence.
+
+This is the same shape as the defects logged above — an evidence collector that
+existed and was never invoked, a recovery model certified and never driven, a
+scheduling stage reachable only on the six-hourly tick. Building a thing,
+reaching a thing, and knowing whether it worked are three separate properties,
+and only the third one survives an operator asking "why has nothing happened?"
+
 ## Limitations
 
 Severity is declared, not derived, so 22 migrated findings sit at the default `degrades` until
@@ -523,6 +596,79 @@ true and retiring them would still have broken two slots, because
 configuration. Managed provenance is now `EXPECTED` — intentionally retained.
 Releasing a slot is not a hygiene decision.
 
+## An in-process observer cannot probe itself synchronously
+
+`observeControlPlane` measures loopback health with a synchronous
+`curl --max-time 8` against `127.0.0.1:3030`. That is right for an external
+observer such as the CLI. It cannot work for the resident Steward, because the
+Steward runs **inside** the Gateway: `execFileSync` blocks the single event
+loop, the kernel accepts curl's connection into the listen backlog, and nothing
+ever dequeues it. curl waits its full eight seconds, exits non-zero, and the
+guard reports the loopback as *unmeasured*.
+
+Everything downstream then behaves correctly, which is what made it invisible.
+Unmeasured is UNKNOWN; UNKNOWN is not HEALTHY; recovery outranks ordinary work.
+So the cycle returned before hygiene and before scheduling — every tick, with no
+exception to log and no stage left half-finished.
+
+The cost, measured on the live host rather than reasoned about:
+
+- The Gateway had been up 7.5 hours and ~90 ticks without once reaching hygiene
+  or scheduling.
+- `hygiene_last` was 13.4 hours stale against a six-hour cadence.
+- Backend sat unoccupied, AUTHORIZED and eligible for 33 minutes across eight
+  ordinary ticks and was never dispatched.
+- An external poll during a tick returned 200 after **8064 ms** — the event loop
+  unblocking — while the in-process probe had already given up at **8000 ms**.
+
+Those 64 milliseconds were the entire difference between a working scheduler and
+a host that had done nothing all day. The same probe, made async, answers in
+23 ms.
+
+**The rule: an observer running inside the thing it observes must yield to the
+loop that has to answer it.** The Steward now injects an async `probeLoopback`;
+the synchronous curl remains the right implementation for observers that are
+genuinely external. The module's existing doctrine is preserved — a service that
+did not answer is a measurement, not a blind spot, so a refusal or a timeout is
+`false` and only being unable to attempt the probe is `null`.
+
+Note what this does *not* fix. A Gateway whose loop is genuinely wedged cannot
+run the Steward that would notice, so in-process self-recovery is bounded by
+construction and launchd still owns the dead-process case.
+
+## A protected process is not a working one
+
+The Gateway wraps its Steward call in a catch whose entire justification is that
+the Steward must never take the server down. That is right, and it is why the
+host stays up. But for a long stretch nothing recorded what was caught, and the
+failure mode that produced is worth stating plainly, because it is not the one
+anybody watches for:
+
+- Steward cycles kept appearing in the state file on their ordinary cadence.
+- `hygiene_last` sat thirteen hours stale with hygiene due every six.
+- No lane was ever dispatched, though the planner named an eligible one on every
+  tick when asked directly.
+
+The synchronous half of the cycle completed and wrote its record; everything
+after it — recovery, hygiene, scheduling — disappeared into the catch. From
+outside, a subsystem failing on every single tick looked exactly like a healthy
+host with nothing to do. Running the same code out-of-process reached every
+stage and planned a dispatch, which is precisely why reading the code could not
+find it and only the live host could.
+
+**The rule: a stage that is allowed to fail silently must still say that it
+failed.** `runStewardCycleWithHygiene` now records `last_stage_outcome` on every
+path — the recovery class, the hygiene verdict, the scheduling verdict, and, when
+a stage throws, the error itself. Swallowing an exception to protect the process
+is correct. Swallowing it without a trace is how a subsystem dies quietly for
+half a day while its supervisor reports normal cadence.
+
+This is the same shape as the defects logged above — an evidence collector that
+existed and was never invoked, a recovery model certified and never driven, a
+scheduling stage reachable only on the six-hourly tick. Building a thing,
+reaching a thing, and knowing whether it worked are three separate properties,
+and only the third one survives an operator asking "why has nothing happened?"
+
 ## Limitations
 
 * The retirement gate set itself still cannot see slot configuration. The
@@ -660,6 +806,79 @@ Live cross-check: 141 notifications, 0 unseen, 102 output-class records, 0
 unseen — and the view reports 0 unread across 9 lanes. Derivation and store
 agree exactly.
 
+## An in-process observer cannot probe itself synchronously
+
+`observeControlPlane` measures loopback health with a synchronous
+`curl --max-time 8` against `127.0.0.1:3030`. That is right for an external
+observer such as the CLI. It cannot work for the resident Steward, because the
+Steward runs **inside** the Gateway: `execFileSync` blocks the single event
+loop, the kernel accepts curl's connection into the listen backlog, and nothing
+ever dequeues it. curl waits its full eight seconds, exits non-zero, and the
+guard reports the loopback as *unmeasured*.
+
+Everything downstream then behaves correctly, which is what made it invisible.
+Unmeasured is UNKNOWN; UNKNOWN is not HEALTHY; recovery outranks ordinary work.
+So the cycle returned before hygiene and before scheduling — every tick, with no
+exception to log and no stage left half-finished.
+
+The cost, measured on the live host rather than reasoned about:
+
+- The Gateway had been up 7.5 hours and ~90 ticks without once reaching hygiene
+  or scheduling.
+- `hygiene_last` was 13.4 hours stale against a six-hour cadence.
+- Backend sat unoccupied, AUTHORIZED and eligible for 33 minutes across eight
+  ordinary ticks and was never dispatched.
+- An external poll during a tick returned 200 after **8064 ms** — the event loop
+  unblocking — while the in-process probe had already given up at **8000 ms**.
+
+Those 64 milliseconds were the entire difference between a working scheduler and
+a host that had done nothing all day. The same probe, made async, answers in
+23 ms.
+
+**The rule: an observer running inside the thing it observes must yield to the
+loop that has to answer it.** The Steward now injects an async `probeLoopback`;
+the synchronous curl remains the right implementation for observers that are
+genuinely external. The module's existing doctrine is preserved — a service that
+did not answer is a measurement, not a blind spot, so a refusal or a timeout is
+`false` and only being unable to attempt the probe is `null`.
+
+Note what this does *not* fix. A Gateway whose loop is genuinely wedged cannot
+run the Steward that would notice, so in-process self-recovery is bounded by
+construction and launchd still owns the dead-process case.
+
+## A protected process is not a working one
+
+The Gateway wraps its Steward call in a catch whose entire justification is that
+the Steward must never take the server down. That is right, and it is why the
+host stays up. But for a long stretch nothing recorded what was caught, and the
+failure mode that produced is worth stating plainly, because it is not the one
+anybody watches for:
+
+- Steward cycles kept appearing in the state file on their ordinary cadence.
+- `hygiene_last` sat thirteen hours stale with hygiene due every six.
+- No lane was ever dispatched, though the planner named an eligible one on every
+  tick when asked directly.
+
+The synchronous half of the cycle completed and wrote its record; everything
+after it — recovery, hygiene, scheduling — disappeared into the catch. From
+outside, a subsystem failing on every single tick looked exactly like a healthy
+host with nothing to do. Running the same code out-of-process reached every
+stage and planned a dispatch, which is precisely why reading the code could not
+find it and only the live host could.
+
+**The rule: a stage that is allowed to fail silently must still say that it
+failed.** `runStewardCycleWithHygiene` now records `last_stage_outcome` on every
+path — the recovery class, the hygiene verdict, the scheduling verdict, and, when
+a stage throws, the error itself. Swallowing an exception to protect the process
+is correct. Swallowing it without a trace is how a subsystem dies quietly for
+half a day while its supervisor reports normal cadence.
+
+This is the same shape as the defects logged above — an evidence collector that
+existed and was never invoked, a recovery model certified and never driven, a
+scheduling stage reachable only on the six-hourly tick. Building a thing,
+reaching a thing, and knowing whether it worked are three separate properties,
+and only the third one survives an operator asking "why has nothing happened?"
+
 ## Limitations
 
 * Dispatch is planned, keyed for idempotency and bounded, but not enabled.
@@ -772,6 +991,79 @@ Enabling dispatch needs the §14 evidence on real lanes, and eight of nine lanes
 have no durable objective for anyone to authorize. Writing those records is a
 Director act, not a model act: inventing scope for a lane whose objective nobody
 recorded is the inference this whole design exists to prevent.
+
+## An in-process observer cannot probe itself synchronously
+
+`observeControlPlane` measures loopback health with a synchronous
+`curl --max-time 8` against `127.0.0.1:3030`. That is right for an external
+observer such as the CLI. It cannot work for the resident Steward, because the
+Steward runs **inside** the Gateway: `execFileSync` blocks the single event
+loop, the kernel accepts curl's connection into the listen backlog, and nothing
+ever dequeues it. curl waits its full eight seconds, exits non-zero, and the
+guard reports the loopback as *unmeasured*.
+
+Everything downstream then behaves correctly, which is what made it invisible.
+Unmeasured is UNKNOWN; UNKNOWN is not HEALTHY; recovery outranks ordinary work.
+So the cycle returned before hygiene and before scheduling — every tick, with no
+exception to log and no stage left half-finished.
+
+The cost, measured on the live host rather than reasoned about:
+
+- The Gateway had been up 7.5 hours and ~90 ticks without once reaching hygiene
+  or scheduling.
+- `hygiene_last` was 13.4 hours stale against a six-hour cadence.
+- Backend sat unoccupied, AUTHORIZED and eligible for 33 minutes across eight
+  ordinary ticks and was never dispatched.
+- An external poll during a tick returned 200 after **8064 ms** — the event loop
+  unblocking — while the in-process probe had already given up at **8000 ms**.
+
+Those 64 milliseconds were the entire difference between a working scheduler and
+a host that had done nothing all day. The same probe, made async, answers in
+23 ms.
+
+**The rule: an observer running inside the thing it observes must yield to the
+loop that has to answer it.** The Steward now injects an async `probeLoopback`;
+the synchronous curl remains the right implementation for observers that are
+genuinely external. The module's existing doctrine is preserved — a service that
+did not answer is a measurement, not a blind spot, so a refusal or a timeout is
+`false` and only being unable to attempt the probe is `null`.
+
+Note what this does *not* fix. A Gateway whose loop is genuinely wedged cannot
+run the Steward that would notice, so in-process self-recovery is bounded by
+construction and launchd still owns the dead-process case.
+
+## A protected process is not a working one
+
+The Gateway wraps its Steward call in a catch whose entire justification is that
+the Steward must never take the server down. That is right, and it is why the
+host stays up. But for a long stretch nothing recorded what was caught, and the
+failure mode that produced is worth stating plainly, because it is not the one
+anybody watches for:
+
+- Steward cycles kept appearing in the state file on their ordinary cadence.
+- `hygiene_last` sat thirteen hours stale with hygiene due every six.
+- No lane was ever dispatched, though the planner named an eligible one on every
+  tick when asked directly.
+
+The synchronous half of the cycle completed and wrote its record; everything
+after it — recovery, hygiene, scheduling — disappeared into the catch. From
+outside, a subsystem failing on every single tick looked exactly like a healthy
+host with nothing to do. Running the same code out-of-process reached every
+stage and planned a dispatch, which is precisely why reading the code could not
+find it and only the live host could.
+
+**The rule: a stage that is allowed to fail silently must still say that it
+failed.** `runStewardCycleWithHygiene` now records `last_stage_outcome` on every
+path — the recovery class, the hygiene verdict, the scheduling verdict, and, when
+a stage throws, the error itself. Swallowing an exception to protect the process
+is correct. Swallowing it without a trace is how a subsystem dies quietly for
+half a day while its supervisor reports normal cadence.
+
+This is the same shape as the defects logged above — an evidence collector that
+existed and was never invoked, a recovery model certified and never driven, a
+scheduling stage reachable only on the six-hourly tick. Building a thing,
+reaching a thing, and knowing whether it worked are three separate properties,
+and only the third one survives an operator asking "why has nothing happened?"
 
 ## Limitations
 
