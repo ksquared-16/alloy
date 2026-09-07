@@ -6,6 +6,13 @@
 # owns the parts a browser session cannot own: moving an assignment fact at its owner, and being a
 # second operator without the override grant.
 #
+# It GRANTS the override permission rather than assuming it. `enrollment.pricing.override` is defined
+# by its migration and granted there against role_definitions — and a clean representative reset
+# recreates those roles afterwards, so a freshly reset tenant has the permission DEFINED and granted
+# to nobody. `enrollment.requirement_exception.manage` behaves identically, which is how we know this
+# is the platform's existing provisioning convention rather than something Thread 3 introduced. The
+# harness therefore provisions what it needs and does not quietly depend on ambient tenant state.
+#
 # It does not touch pricing. Every tuition read, recommendation, acceptance and override in the
 # proof happens in the application, through the canonical resolver and the registered actions.
 # =============================================================================
@@ -27,6 +34,11 @@ step "A–E, M · resolve, accept, reload, retry"
 # A known starting tenant: no accepted terms, seeded day-counts, no stray cadences, grant restored.
 psql "$DB" -q -c "delete from public.enrollment_pricing_terms;" \
                 -c "delete from public.commercial_tuition_rates where org_id = '$ORG' and cadence_key <> 'monthly';" \
+                -c "insert into public.role_permission_grants (org_id, role_key, permission_key, allowed)
+                    select rd.org_id, rd.role_key, 'enrollment.pricing.override', true
+                      from public.role_definitions rd
+                     where rd.org_id = '$ORG' and rd.role_key = 'admin' and rd.is_active
+                    on conflict do nothing;" \
                 -c "update public.role_permission_grants set allowed = true where permission_key = 'enrollment.pricing.override';" \
                 -c "update public.opportunity_customer_members
                        set metadata = metadata || jsonb_build_object('requested_days_per_week',
@@ -113,8 +125,13 @@ psql "$DB" -q -c "update public.role_permission_grants set allowed = false
                    where org_id='$ORG' and permission_key='enrollment.pricing.override';"
 run env CERT_EXPECT_UNAUTHORIZED=1 "$PW" test -c playwright.config.ts "$SPEC" -g "the server refuses the override" --workers=1 --reporter=line >/dev/null 2>&1
 check $? "with the grant revoked, the override is refused server-side"
-psql "$DB" -q -c "update public.role_permission_grants set allowed = true
-                   where org_id='$ORG' and permission_key='enrollment.pricing.override';"
+psql "$DB" -q -c "insert into public.role_permission_grants (org_id, role_key, permission_key, allowed)
+                  select rd.org_id, rd.role_key, 'enrollment.pricing.override', true
+                    from public.role_definitions rd
+                   where rd.org_id = '$ORG' and rd.role_key = 'admin' and rd.is_active
+                  on conflict do nothing;" \
+                -c "update public.role_permission_grants set allowed = true
+                     where org_id='$ORG' and permission_key='enrollment.pricing.override';"
 # The site rate cannot be deleted while an accepted term still references it — which is the
 # RESTRICT guarantee working, not a teardown problem. Release the terms first.
 psql "$DB" -q -c "delete from public.enrollment_pricing_terms where org_id = '$ORG';" \
