@@ -50,6 +50,60 @@ export const CANONICAL_REPO = process.env.ALLOY_REPO || join(homedir(), "Alloy")
 export const CONVERGENCE_REF = "origin/staging";
 
 /**
+ * HOW FRESH TRUTH IS OBTAINED, and every way that can fail.
+ *
+ * THE DEFECT THIS EXISTS FOR, measured on the live host. This module resolved
+ * `origin/staging` in the canonical repository with a bare `rev-parse` and
+ * never refreshed it. A remote-tracking ref is a CACHE, and nothing here kept
+ * it current — so the gate compared a freshly promoted SHA against whatever
+ * `origin/staging` happened to say, which depended entirely on whether some
+ * unrelated person or process had run `git fetch` recently.
+ *
+ * The observed consequence: PR #735 merged to staging as 0305688057fa, and
+ * three separate install attempts were refused with "request names
+ * 0305688057fa; promoted staging is d8d680f48cb4" while that checkout's
+ * FETCH_HEAD sat an hour old. The same failure pair appears in the audit log a
+ * day earlier, before a third attempt happened to succeed — which is the tell.
+ * An install gate that works only when somebody else fetched recently is not a
+ * gate, it is a coincidence.
+ *
+ * The safety comparison was never wrong and is not relaxed here: a requested
+ * SHA must still be provably promoted staging. What changes is that this module
+ * now obtains that truth itself instead of reading a cache it does not own.
+ *
+ * FRESHNESS UNAVAILABLE MEANS REFUSE. Every state below except REFRESHED fails
+ * the provenance gate. Falling back to the cached ref when a refresh fails
+ * would reproduce the exact defect, quietly, on the one path where it matters
+ * most — so the fallback does not exist.
+ */
+export const REF_FRESHNESS_STATES = Object.freeze([
+  "REFRESHED",
+  "REPOSITORY_UNAVAILABLE",
+  "REF_MALFORMED",
+  "REFRESH_FAILED",
+  "UNRESOLVABLE_AFTER_REFRESH",
+]);
+
+/**
+ * THE NARROWEST FETCH THAT ANSWERS THE QUESTION.
+ *
+ * One remote branch into one remote-tracking ref. No tags, no prune, no other
+ * branches, and nothing that touches the working tree or index — the canonical
+ * checkout is shared, and a safety gate has no business rearranging it. The
+ * `+` forces the update so a non-fast-forward staging still yields current
+ * truth rather than a silently stale one.
+ *
+ * `--no-write-fetch-head` keeps concurrent gates off a shared FETCH_HEAD.
+ */
+export function promotedRefFetchArgs({ canonicalRepo, ref = CONVERGENCE_REF }) {
+  const parts = /^([^/]+)\/(.+)$/.exec(String(ref || ""));
+  if (!parts) return null;
+  const [, remote, branch] = parts;
+  return ["-C", canonicalRepo, "fetch", "--no-tags", "--no-write-fetch-head",
+    remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`];
+}
+
+/**
  * A restart budget, so "reconcile the Gateway" cannot become an unbounded
  * restart loop dressed as convergence.
  */
@@ -138,21 +192,59 @@ export function measureToolkitConvergence({
     previous_toolkit_retained: null,
     gateway_restart_bounded: restartsThisConvergence <= MAX_RESTARTS_PER_CONVERGENCE,
     current_toolkit_readable: null,
+    // What the cache said before this gate refreshed it, and whether the
+    // refresh worked. Recorded even on success so a stale-cache episode is
+    // visible afterwards rather than having to be reconstructed.
+    promoted_staging_sha_cached: null,
+    ref_freshness: null,
+    promoted_ref_fresh: null,
   };
 
   // Provenance first: a ref that does not resolve in the canonical repo means
   // the rest of the measurement is about a commit nobody can produce.
   if (!exists(join(canonicalRepo, ".git"))) {
     ev.artifact_provenance_valid = false;
+    ev.ref_freshness = "REPOSITORY_UNAVAILABLE";
+    ev.promoted_ref_fresh = false;
     ev.detail = `canonical repository not found at ${canonicalRepo}`;
     return ev;
   }
+
+  // Read the cache first, purely as evidence. Nothing decides on this value —
+  // it exists so a stale-cache episode can be seen after the fact.
+  const cached = exec("git", ["-C", canonicalRepo, "rev-parse", "--verify", `${ref}^{commit}`]);
+  ev.promoted_staging_sha_cached = cached.ok && /^[0-9a-f]{40}$/.test(cached.out) ? short(cached.out) : null;
+
+  const fetchArgs = promotedRefFetchArgs({ canonicalRepo, ref });
+  if (!fetchArgs) {
+    ev.artifact_provenance_valid = false;
+    ev.ref_freshness = "REF_MALFORMED";
+    ev.promoted_ref_fresh = false;
+    ev.detail = `convergence ref ${ref} is not <remote>/<branch>`;
+    return ev;
+  }
+  const fetched = exec("git", fetchArgs);
+  if (!fetched.ok) {
+    // The cached ref may well be sitting right there and may even be correct.
+    // Using it is exactly the defect: authority to install must not rest on
+    // whether someone else fetched recently.
+    ev.artifact_provenance_valid = false;
+    ev.ref_freshness = "REFRESH_FAILED";
+    ev.promoted_ref_fresh = false;
+    ev.detail = `cannot refresh ${ref} from origin: ${fetched.err || "fetch failed"}`;
+    return ev;
+  }
+
   const resolved = exec("git", ["-C", canonicalRepo, "rev-parse", "--verify", `${ref}^{commit}`]);
   if (!resolved.ok || !/^[0-9a-f]{40}$/.test(resolved.out)) {
     ev.artifact_provenance_valid = false;
-    ev.detail = `cannot resolve ${ref} in ${canonicalRepo}`;
+    ev.ref_freshness = "UNRESOLVABLE_AFTER_REFRESH";
+    ev.promoted_ref_fresh = false;
+    ev.detail = `cannot resolve ${ref} in ${canonicalRepo} even after refreshing it`;
     return ev;
   }
+  ev.ref_freshness = "REFRESHED";
+  ev.promoted_ref_fresh = true;
   ev.promoted_staging_sha = short(resolved.out);
   ev.promoted_staging_sha_full = resolved.out;
 
