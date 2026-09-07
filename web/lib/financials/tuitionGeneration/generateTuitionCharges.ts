@@ -217,34 +217,52 @@ export async function generateTuitionCharges(
             },
         };
 
+        /*
+         * ── A SETTLED MONTH IS NOT RE-GENERATED, AND ITS HISTORY IS NOT REWRITTEN ──
+         *
+         * This check has to come BEFORE the pipeline runs, not after it.
+         *
+         * The charge itself was always safe: `writeTemplateDraftCharge` answers `skipped_posted` and
+         * refuses to touch posted money. But `upsertConsumptionEvent` finds the occurrence by its
+         * idempotency key and updates the event's CONTEXT in place, and the obligation is
+         * re-resolved beneath it — so running generation over an already-posted period with a
+         * successor term left the posted charge at term A's amount while the event and obligation
+         * explaining it had been rewritten to say term B. The money was right and the record of why
+         * was a lie, which is the worse of the two failures: it is the half nobody re-reads until
+         * they need it.
+         *
+         * So a posted period is answered from the charge that already exists, and the pipeline is
+         * not entered at all. A successor term that affects settled money is the correction and
+         * review path's business — `charge.reverse` writing a new corrective row through
+         * `source_charge_id`, with the original left exactly as posted — and generation does not
+         * quietly stand in for it.
+         */
+        const alreadyPosted = await findPostedTuitionCharge(
+            supabase,
+            args.orgId,
+            term.enrollmentAgreementId,
+            decision.period.start,
+        );
+        if (alreadyPosted) {
+            outcomes.push({
+                kind: "already_posted",
+                assignmentId,
+                termId: term.termId,
+                chargeId: alreadyPosted.id,
+                amountCents: alreadyPosted.amount_cents,
+            });
+            continue;
+        }
+
         try {
             const drafted = await draftConsumption(supabase, args.orgId, fact, today, args.actorUserId ?? null);
             const chargeId = drafted.persisted.draftChargeId;
             if (!chargeId) {
                 /*
-                 * NO DRAFT LINK MEANS ONE OF TWO VERY DIFFERENT THINGS, and reporting them as one
-                 * would tell an operator to fix configuration that is already correct.
-                 *
-                 * The period may ALREADY BE POSTED. `writeTemplateDraftCharge` answers
-                 * `skipped_posted` and deliberately does not link a posted charge to a new
-                 * obligation — posted money is immutable, and a generation run over a settled month
-                 * is a no-op, not a failure.
-                 *
-                 * Or the organisation has not authored the tuition charge template the global event
-                 * registry resolves, in which case the obligation carries `no_charge` and the answer
-                 * is the template key it needs.
+                 * The settled-month case was answered above, so a missing draft link here means the
+                 * organisation has not authored the tuition charge template the global event
+                 * registry resolves. Named, rather than reported as a silent zero.
                  */
-                const posted = await findPostedTuitionCharge(supabase, args.orgId, term.enrollmentAgreementId, decision.period.start);
-                if (posted) {
-                    outcomes.push({
-                        kind: "already_posted",
-                        assignmentId,
-                        termId: term.termId,
-                        chargeId: posted.id,
-                        amountCents: posted.amount_cents,
-                    });
-                    continue;
-                }
                 outcomes.push({
                     kind: "refused",
                     assignmentId,
