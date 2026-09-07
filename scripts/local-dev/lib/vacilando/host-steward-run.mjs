@@ -16,7 +16,7 @@ import { homedir, loadavg, cpus } from "node:os";
 import { join } from "node:path";
 import {
   acquireCycleLock, releaseCycleLock, buildCyclePlan, recordAction, resourceKey,
-  classifyHostAdmission, hygieneDue, recordHygieneCycle,
+  classifyHostAdmission, hygieneDue, recordHygieneCycle, recordStageOutcome,
 } from "./host-steward-cycle.mjs";
 import { residualHeavyCommands, asStewardResource } from "./heavy-command-registry.mjs";
 import { applyStewardPlan } from "./host-steward-execute.mjs";
@@ -216,9 +216,24 @@ export async function runStewardCycleWithHygiene({
   root, nowMs = Date.now(), dryRun = false, groupAlive = defaultGroupAlive, exec = defaultExec,
   stopDevServer = null, hygiene = true, forceHygiene = false, hygieneOptions = null,
   recoveryStage = true,
+  // Injected like `exec` and `groupAlive` above it, for the same reason: the
+  // scheduling stage is the one async region with no catch of its own, so a
+  // test cannot certify the outer recorder without being able to make it fail.
+  dispatchStage = runSchedulerDispatchStage,
 } = {}) {
   const steward = runStewardCycle({ root, nowMs, dryRun, groupAlive, exec, stopDevServer });
+  try {
+    return await asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage });
+  } catch (err) {
+    // The server swallows this to stay up, which is right. Recording it is what
+    // makes the difference between a protected process and a silent one.
+    const detail = String(err?.stack || err?.message || err).slice(0, 600);
+    if (!dryRun) recordStageOutcome({ root, nowMs, outcome: { ok: false, threw: true, detail } });
+    return { ...steward, recovery: null, hygiene: { error: "stage_threw", detail }, dispatch: null };
+  }
+}
 
+async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage }) {
   /*
    * RECOVERY FIRST. A host that needs repairing must not spend its cycle
    * tidying, and a control plane at RECOVERY_REQUIRED must not be handing work
@@ -235,6 +250,11 @@ export async function runStewardCycleWithHygiene({
   if (recoveryBlocking) {
     // §13: recovery outranks ordinary work. Hygiene and scheduling wait for a
     // control plane that is not currently broken.
+    if (!dryRun) {
+      recordStageOutcome({ root, nowMs, outcome: {
+        ok: true, recovery: recovery.failure_class, hygiene: "skipped_control_plane_not_healthy", dispatch: null,
+      } });
+    }
     return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class } };
   }
 
@@ -260,7 +280,13 @@ export async function runStewardCycleWithHygiene({
      * Hygiene is expensive and rare. Scheduling is cheap and should happen every
      * tick, which is what a five-minute cadence is for.
      */
-    const dispatchOnly = await runSchedulerDispatchStage({ root, nowMs, dryRun });
+    const dispatchOnly = await dispatchStage({ root, nowMs, dryRun });
+    if (!dryRun) {
+      recordStageOutcome({ root, nowMs, outcome: {
+        ok: true, recovery: recovery?.failure_class ?? null, hygiene: "not_due",
+        dispatch: dispatchSummary(dispatchOnly),
+      } });
+    }
     return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms }, dispatch: dispatchOnly };
   }
 
@@ -289,8 +315,27 @@ export async function runStewardCycleWithHygiene({
       },
     });
   }
-  const dispatch = await runSchedulerDispatchStage({ root, nowMs, dryRun });
+  const dispatch = await dispatchStage({ root, nowMs, dryRun });
+  if (!dryRun) {
+    recordStageOutcome({ root, nowMs, outcome: {
+      ok: true, recovery: recovery?.failure_class ?? null, hygiene: result?.ok === true ? "ran" : "failed",
+      dispatch: dispatchSummary(dispatch),
+    } });
+  }
   return { ...steward, recovery, hygiene: result, dispatch };
+}
+
+/** A bounded shape for the state file: counts and refusals, never whole records. */
+function dispatchSummary(d) {
+  if (!d) return null;
+  if (d.enabled === false) return { enabled: false };
+  return {
+    enabled: true,
+    considered: d.considered ?? 0,
+    dispatched: (d.dispatched || []).map((x) => x.lane_id),
+    refused: (d.refused || []).map((x) => ({ lane_id: x.lane_id, refusal: x.refusal })),
+    error: d.error ?? null,
+  };
 }
 
 /**
@@ -377,6 +422,57 @@ async function liveSchedulingTruth(root) {
  * and not serving, which is exactly the condition
  * `director-forced-to-mac-mini` was opened for.
  */
+/**
+ * PROBE THE LOOPBACK WITHOUT BLOCKING THE LOOP THAT HAS TO ANSWER IT.
+ *
+ * THE DEFECT THIS EXISTS FOR, measured on the live host rather than reasoned
+ * about. `observeControlPlane` measures loopback health with a synchronous
+ * `curl --max-time 8` against 127.0.0.1:3030. That is correct for an external
+ * observer such as the CLI. It cannot work for the resident Steward, because
+ * the Steward runs INSIDE the Gateway: `execFileSync` blocks the single event
+ * loop, the kernel accepts curl's connection into the listen backlog, and
+ * nothing ever dequeues it. curl waits its full eight seconds, exits non-zero,
+ * and the guard reports the loopback as UNMEASURED.
+ *
+ * The classifier then does exactly the right thing with that: unmeasured is
+ * UNKNOWN, UNKNOWN is not HEALTHY, and recovery outranks ordinary work — so the
+ * cycle returns before hygiene and before scheduling. Every tick. Silently, with
+ * no exception to log and no stage left half-done.
+ *
+ * The cost of the confusion, measured: this Gateway had been up 7.5 hours and
+ * ~90 ticks without once reaching hygiene or scheduling. `hygiene_last` was 13.4
+ * hours stale against a six-hour cadence, and Backend sat unoccupied and
+ * eligible for 33 minutes across eight ticks without being dispatched. An
+ * external poll during a tick returned 200 after 8064 ms — the event loop
+ * unblocking — while the in-process probe had already given up at 8000 ms. Those
+ * 64 milliseconds were the whole difference between a scheduler and a host that
+ * had done nothing all day.
+ *
+ * The module's own doctrine still holds and is preserved here: a service that
+ * did not answer is a measurement, not a blind spot. A refusal or a timeout is
+ * `false`. Only being unable to attempt the probe at all is `null`.
+ */
+export async function probeLoopbackInProcess({ root, timeoutMs = 5_000, port = 3030 } = {}) {
+  let token = "";
+  try {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    token = readFileSync(join(root, "vacilando", "api-token"), "utf8").trim();
+  } catch { /* an unreadable token still lets the probe run and be refused */ }
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/control-plane/health`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.status === 200;
+  } catch (e) {
+    // Refused, reset, or timed out: the Gateway did not answer, and that is an
+    // answer. `fetch` only throws for reasons that mean exactly that.
+    if (e?.name === "AbortError" || e?.name === "TimeoutError" || e instanceof TypeError) return false;
+    return null;
+  }
+}
+
 export async function runResidentRecoveryStage({
   root,
   nowMs = Date.now(),
@@ -389,7 +485,8 @@ export async function runResidentRecoveryStage({
 
   let observation = null;
   try {
-    observation = observe ? await observe() : await R.observeControlPlane({ root, nowMs });
+    observation = observe ? await observe()
+      : await R.observeControlPlane({ root, nowMs, probeLoopback: () => probeLoopbackInProcess({ root }) });
   } catch (e) {
     return { ok: false, error: "observation_failed", detail: String(e?.message || e) };
   }
@@ -443,7 +540,10 @@ export async function runResidentRecoveryStage({
 
   // Verify by RE-OBSERVING, never by trusting the repair's own return value.
   let after = null;
-  try { after = observe ? await observe() : await R.observeControlPlane({ root, nowMs: Date.now() }); }
+  try {
+    after = observe ? await observe()
+      : await R.observeControlPlane({ root, nowMs: Date.now(), probeLoopback: () => probeLoopbackInProcess({ root }) });
+  }
   catch { after = null; }
   const verdict = after ? R.classifyControlPlane({ ...after, now_ms: Date.now() }) : null;
   const recovered = verdict?.failure_class === "HEALTHY";

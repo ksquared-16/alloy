@@ -107,6 +107,63 @@ export function hygieneDue({ root, nowMs = Date.now(), cadenceMs = HYGIENE_CADEN
   return { due: (nowMs - at) >= cadenceMs, last_ms: at, reason: null };
 }
 
+/**
+ * RECORD WHAT THE ASYNC STAGES DID, INCLUDING WHEN THEY THREW.
+ *
+ * THE DEFECT THIS EXISTS FOR, found by watching a live host rather than reading
+ * code. The server wraps its Steward call in a catch whose whole body is the
+ * comment "the steward must never take the server down", which is right — but
+ * nothing recorded the exception, so a wrapper failing on every tick looked
+ * exactly like a healthy quiet one. Four cycles ran after a restart, `hygiene_last` stayed thirteen
+ * hours stale with hygiene due every six, and no dispatch happened: the sync
+ * part completed and released its lock, and everything after it vanished
+ * without a trace.
+ *
+ * Swallowing an exception to protect the process is correct. Swallowing it
+ * without recording it is how a subsystem dies quietly for half a day.
+ */
+/**
+ * A REPORT ABOUT THE RESIDENT MUST COME FROM THE RESIDENT.
+ *
+ * THE DEFECT THIS EXISTS FOR. `vac scoreboard` printed `dispatch_enabled` by
+ * reading `VACILANDO_AUTONOMOUS_DISPATCH` out of its OWN process environment.
+ * The scoreboard is the operator's view of the resident Gateway, so the value
+ * read as system state while actually describing whichever shell happened to
+ * invoke the CLI — and it printed `disabled` for hours while the Gateway had
+ * dispatch enabled the whole time. An operator debugging why nothing was being
+ * dispatched was being shown the answer to a different question.
+ *
+ * This introduces no new owner of that truth. The Steward already writes what
+ * each stage decided on every tick, so the resident's own record is the
+ * authority and this only reads it.
+ *
+ * STALENESS IS NOT FALSE. A record older than a few cadences means the Steward
+ * is not reporting, which is unknown — never `disabled`. Same rule as
+ * everywhere else here: absence of evidence is not evidence of absence.
+ */
+export const RESIDENT_REPORT_STALE_MS = 15 * 60_000;
+
+export function residentDispatchEnabled({ root, nowMs = Date.now(), staleMs = RESIDENT_REPORT_STALE_MS } = {}) {
+  try {
+    const outcome = readState(root).last_stage_outcome;
+    if (!outcome?.at) return null;
+    const at = Date.parse(outcome.at);
+    if (!Number.isFinite(at) || nowMs - at > staleMs) return null;
+    const dispatch = outcome.dispatch;
+    if (dispatch == null || typeof dispatch.enabled !== "boolean") return null;
+    return dispatch.enabled;
+  } catch { return null; }
+}
+
+export function recordStageOutcome({ root, nowMs = Date.now(), outcome = null } = {}) {
+  try {
+    const state = readState(root);
+    state.last_stage_outcome = { at: new Date(nowMs).toISOString(), ...(outcome || {}) };
+    writeState(root, state);
+    return { ok: true };
+  } catch { return { ok: false }; }
+}
+
 export function recordHygieneCycle({ root, nowMs = Date.now(), summary = null } = {}) {
   const state = readState(root);
   state.hygiene_last_ms = nowMs;
@@ -126,9 +183,10 @@ function readState(root) {
       schema_version: STEWARD_CYCLE_SCHEMA,
       cycles: j.cycles || [], cooldowns: j.cooldowns || {}, running: j.running || null,
       hygiene_last_ms: j.hygiene_last_ms ?? null, hygiene_last: j.hygiene_last ?? null,
+      last_stage_outcome: j.last_stage_outcome ?? null,
     };
   } catch {
-    return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: [], cooldowns: {}, running: null, hygiene_last_ms: null, hygiene_last: null };
+    return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: [], cooldowns: {}, running: null, hygiene_last_ms: null, hygiene_last: null, last_stage_outcome: null };
   }
 }
 
@@ -350,6 +408,9 @@ export function stewardStatus({ root, nowMs = Date.now(), staleMs = STALE_CYCLE_
      * 29 GB estate would be a status call nobody dares make.
      */
     hygiene: hygienePostureFor(root, readState(root)),
+    // What the async stages last did — including a thrown error. Without this a
+    // wrapper failing every tick is indistinguishable from a quiet healthy one.
+    last_stage_outcome: readState(root).last_stage_outcome ?? null,
     /*
      * SCHEDULING POSTURE — what would run next, and why nothing is.
      *

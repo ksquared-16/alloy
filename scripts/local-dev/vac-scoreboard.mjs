@@ -138,7 +138,11 @@ process.stdout.write(`  control plane ${cp?.episode_active ? `episode ${cp.failu
 const L = board.lanes;
 process.stdout.write(`  lanes         ${L.total} · executing ${L.executing} · authorized ${L.authorized} · needs Director ${L.requires_director} · complete ${L.mission_complete} · unknown ${L.unknown} (${L.without_memory} with no memory)\n`);
 const S = board.scheduling;
-process.stdout.write(`  scheduling    eligible ${S.eligible ?? "?"} · next ${S.scheduled_next ?? "—"} · dispatch ${S.dispatch_enabled ? "enabled" : "disabled"}\n`);
+// Three states. `null` is the resident not reporting, which must not print as
+// "disabled" — that reads as a deliberate setting rather than a blind spot.
+const dispatchWord = S.dispatch_enabled === true ? "enabled"
+  : S.dispatch_enabled === false ? "disabled" : "unknown (resident not reporting)";
+process.stdout.write(`  scheduling    eligible ${S.eligible ?? "?"} · next ${S.scheduled_next ?? "—"} · dispatch ${dispatchWord}\n`);
 if (S.idle_capacity_explained) process.stdout.write(`                idle: ${S.idle_capacity_explained.reason} — ${S.idle_capacity_explained.detail}\n`);
 const H = board.hygiene;
 process.stdout.write(`  hygiene       last ${H?.last_cycle?.ended_at ?? "never"}${H?.last_cycle ? ` · reclaimed ${H.last_cycle.reclaimed.length}` : ""}\n`);

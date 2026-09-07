@@ -16,7 +16,7 @@
  * path runs.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -201,7 +201,9 @@ await test("every refusal reason is a declared one", () => {
 
 /* ── The stage must actually be REACHED ──────────────────────────────────── */
 
-await test("SCHEDULING IS NOT ON HYGIENE'S CADENCE — the stage is reached on an ordinary tick", () => {
+const RUN2 = await import("../lib/vacilando/host-steward-run.mjs");
+
+await test("SCHEDULING IS NOT ON HYGIENE'S CADENCE — the stage is reached on an ordinary tick", async () => {
     // THE DEFECT THIS COVERS, found by watching 50 real Steward cycles produce
     // zero scheduling decisions. The dispatch stage was called only on the path
     // where hygiene had actually run, so an ordinary five-minute tick returned
@@ -225,7 +227,154 @@ await test("SCHEDULING IS NOT ON HYGIENE'S CADENCE — the stage is reached on a
     const notDue = hygieneReturns.find((r) => r.includes("not_due"));
     assert.ok(notDue, "the hygiene-not-due path exists");
     assert.match(notDue, /dispatch:/, "and it must still carry a dispatch verdict");
-    // The stage is invoked on that path, not only on the hygiene-ran path.
-    const calls = [...wrapper.matchAll(/runSchedulerDispatchStage\(/g)];
-    assert.ok(calls.length >= 2, "the dispatch stage is invoked on more than one path");
+    /*
+     * AND THE STAGE IS ACTUALLY REACHED, on both paths, driven rather than read.
+     *
+     * This was a count of `runSchedulerDispatchStage(` occurrences in the
+     * source, which proved only that the name appeared twice. It could not tell
+     * a reached stage from an unreachable one, which is the exact confusion
+     * that produced the defect above. Now the wrapper is run and the stage
+     * records its own invocation.
+     */
+    const seen = [];
+    const spy = async () => { seen.push("called"); return { enabled: false }; };
+    const drive = (root, over = {}) => RUN2.runStewardCycleWithHygiene({
+        root, recoveryStage: false, dispatchStage: spy,
+        groupAlive: () => false, exec: () => ({ ok: true, stdout: "", stderr: "" }),
+        ...over,
+    });
+
+    const ranRoot = freshRoot();
+    await drive(ranRoot, { forceHygiene: true });
+    assert.equal(seen.length, 1, "reached on the tick where hygiene ran");
+
+    // Hygiene has just run in this root, so the next tick is the ordinary
+    // not-due one — the tick that used to return before scheduling.
+    await drive(ranRoot);
+    assert.equal(seen.length, 2, "and reached again on the ordinary not-due tick");
+});
+
+
+/*
+ * THE SILENT SUBSYSTEM.
+ *
+ * Found on a live host, not in a review. The Gateway wraps its Steward call in
+ * a catch that exists so the Steward can never take the server down — correct,
+ * and the reason the host is resilient. But nothing recorded what was caught,
+ * so a wrapper that threw on every tick was indistinguishable from a quiet
+ * healthy one: cycles kept appearing on schedule while `hygiene_last` went
+ * thirteen hours stale with hygiene due every six, and no lane was ever
+ * dispatched. The sync half completed and wrote its cycle; everything after it
+ * vanished.
+ *
+ * Protecting the process is not the same as knowing it is working. These two
+ * tests certify the difference: the outcome is written down on the ordinary
+ * path AND on the throwing one, so the next operator to ask "why has nothing
+ * happened for six hours" gets an answer from the state file instead of a
+ * fourteen-step reconstruction.
+ */
+const RUN = await import("../lib/vacilando/host-steward-run.mjs");
+const CYC = await import("../lib/vacilando/host-steward-cycle.mjs");
+
+test("a throwing async stage is recorded rather than swallowed silently", async () => {
+  const root = freshRoot();
+  const out = await RUN.runStewardCycleWithHygiene({
+    root,
+    // Recovery is caught internally, so the throw has to come from a stage that
+    // is not: hygiene's own options are forwarded into the cycle, and a getter
+    // that throws reproduces an in-process failure faithfully.
+    recoveryStage: false,
+    forceHygiene: true,
+    // The scheduling stage is the one async region with no catch of its own, so
+    // it is the region the outer recorder actually has to cover.
+    dispatchStage: () => { throw new Error("stage exploded"); },
+    groupAlive: () => false,
+    exec: () => ({ ok: true, stdout: "", stderr: "" }),
+  });
+  assert.equal(out.hygiene?.error, "stage_threw", "the caller is told the stage failed");
+  const recorded = JSON.parse(readFileSync(CYC.stewardStatePath(root), "utf8")).last_stage_outcome;
+  assert.ok(recorded, "the throw is written to the state file");
+  assert.equal(recorded.ok, false);
+  assert.equal(recorded.threw, true);
+  assert.match(recorded.detail, /stage exploded/, "the actual error survives, not just the fact of one");
+});
+
+test("an ordinary cycle records what each stage decided", async () => {
+  const root = freshRoot();
+  await RUN.runStewardCycleWithHygiene({
+    root, recoveryStage: false, forceHygiene: true,
+    groupAlive: () => false,
+    exec: () => ({ ok: true, stdout: "", stderr: "" }),
+  });
+  const recorded = JSON.parse(readFileSync(CYC.stewardStatePath(root), "utf8")).last_stage_outcome;
+  assert.ok(recorded, "a healthy cycle is recorded too — silence must not be the only signal");
+  assert.equal(recorded.ok, true);
+  assert.equal(recorded.hygiene, "ran");
+  assert.ok("dispatch" in recorded, "the scheduling stage's verdict is part of the record");
+  assert.ok(recorded.at, "and it is timestamped, so staleness is visible");
+});
+
+/*
+ * THE SCOREBOARD REPORTS THE RESIDENT, NOT THE SHELL THAT ASKED.
+ *
+ * `vac scoreboard` printed `dispatch_enabled` by reading
+ * VACILANDO_AUTONOMOUS_DISPATCH out of its OWN process environment. For the
+ * dispatcher that is right — it is the switch, read where the switch lives. For
+ * a scoreboard it is wrong: the operator is asking about the Gateway, and the
+ * CLI's shell is not the Gateway. It printed "disabled" for hours while the
+ * resident had dispatch enabled the entire time, which is the worst possible
+ * answer to give someone debugging why nothing is being dispatched.
+ *
+ * The control the Director asked for is the first test: no flag in this
+ * process, dispatch enabled on the resident, and the answer must be enabled.
+ */
+const OBS = await import("../lib/vacilando/work-scheduler-observe.mjs");
+
+/** Stand in for the resident having ticked, without touching a live root. */
+function residentReported(root, dispatch, at = new Date().toISOString()) {
+  CYC.recordStageOutcome({ root, outcome: { ok: true, hygiene: "not_due", dispatch } });
+  const p = CYC.stewardStatePath(root);
+  const state = JSON.parse(readFileSync(p, "utf8"));
+  state.last_stage_outcome.at = at;
+  writeFileSync(p, JSON.stringify(state));
+}
+
+test("CLI environment absent + Gateway dispatch enabled reports ENABLED, not false", () => {
+  const root = freshRoot();
+  residentReported(root, { enabled: true, considered: 1, dispatched: [], refused: [] });
+  const had = process.env.VACILANDO_AUTONOMOUS_DISPATCH;
+  delete process.env.VACILANDO_AUTONOMOUS_DISPATCH;
+  try {
+    assert.equal(CYC.residentDispatchEnabled({ root }), true, "the resident's own record is the authority");
+    const board = OBS.observeScheduling({ root });
+    assert.equal(board.dispatch_enabled, true, "and the scoreboard carries it through");
+    assert.match(board.dispatch_note, /resident Gateway/);
+  } finally { if (had !== undefined) process.env.VACILANDO_AUTONOMOUS_DISPATCH = had; }
+});
+
+test("the calling shell's flag cannot make a disabled resident look enabled", () => {
+  const root = freshRoot();
+  residentReported(root, { enabled: false });
+  const had = process.env.VACILANDO_AUTONOMOUS_DISPATCH;
+  process.env.VACILANDO_AUTONOMOUS_DISPATCH = "1";
+  try {
+    assert.equal(CYC.residentDispatchEnabled({ root }), false, "the CLI environment is not authoritative either way");
+  } finally {
+    if (had === undefined) delete process.env.VACILANDO_AUTONOMOUS_DISPATCH;
+    else process.env.VACILANDO_AUTONOMOUS_DISPATCH = had;
+  }
+});
+
+test("a resident that is not reporting is UNKNOWN, never disabled", () => {
+  const silent = freshRoot();
+  assert.equal(CYC.residentDispatchEnabled({ root: silent }), null, "no record at all is unknown");
+
+  const stale = freshRoot();
+  residentReported(stale, { enabled: true }, new Date(Date.now() - 60 * 60_000).toISOString());
+  assert.equal(CYC.residentDispatchEnabled({ root: stale }), null, "an hour-old record is unknown, not false");
+  assert.match(OBS.observeScheduling({ root: stale }).dispatch_note, /NOT the same as disabled/);
+
+  const shaped = freshRoot();
+  residentReported(shaped, null);
+  assert.equal(CYC.residentDispatchEnabled({ root: shaped }), null, "a stage that never ran reports nothing");
 });
