@@ -157,10 +157,15 @@ const generateTuition: RegisteredAction = {
                     detail: {
                         period_key: result.periodKey,
                         service_period: result.servicePeriod,
+                        /*
+                         * COUNTS STAY COUNTS. `refused` and `errors` were both a number and a list
+                         * here, and the list won — so a caller reading `errors` got an array where
+                         * it expected a total. The outcomes an operator has to act on are named
+                         * separately rather than overwriting the tally.
+                         */
                         ...result.counts,
-                        // The outcomes an operator has to act on, named rather than counted away.
-                        refused: result.outcomes.filter((o) => o.kind === "refused"),
-                        errors: result.outcomes.filter((o) => o.kind === "error"),
+                        refused_outcomes: result.outcomes.filter((o) => o.kind === "refused"),
+                        error_outcomes: result.outcomes.filter((o) => o.kind === "error"),
                     },
                 },
             };
