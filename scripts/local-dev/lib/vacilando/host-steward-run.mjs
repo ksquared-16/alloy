@@ -268,7 +268,66 @@ export async function runStewardCycleWithHygiene({
       },
     });
   }
-  return { ...steward, recovery, hygiene: result };
+  const dispatch = await runSchedulerDispatchStage({ root, nowMs, dryRun });
+  return { ...steward, recovery, hygiene: result, dispatch };
+}
+
+/**
+ * THE SCHEDULING STAGE — bounded, last, and off unless enabled.
+ *
+ * Last on purpose. Recovery and hygiene both run first, because a host that
+ * needs repairing or tidying should not be handed new work, and §13 requires
+ * safety to outrank scheduling pressure.
+ *
+ * It selects through the planner and starts through the canonical admission
+ * chain. It holds no policy of its own: every gate is re-derived inside
+ * `dispatchCandidate` from live truth at the moment of acting, so a plan that
+ * has gone stale between planning and dispatching refuses rather than acts.
+ */
+export async function runSchedulerDispatchStage({
+  root, nowMs = Date.now(), dryRun = false, maxDispatch = 1, liveTruth = null,
+} = {}) {
+  const { dispatchEnabled, dispatchCandidate } = await import("./work-scheduler-dispatch.mjs");
+  if (!dispatchEnabled()) return { enabled: false, dispatched: [], considered: 0 };
+
+  const { observeScheduling } = await import("./work-scheduler-observe.mjs");
+  const truth = liveTruth || (await liveSchedulingTruth(root));
+  let view = null;
+  try { view = observeScheduling({ root, now: nowMs, liveTruth: truth, withBytes: false }); }
+  catch (e) { return { enabled: true, error: "observation_failed", detail: String(e?.message || e), dispatched: [] }; }
+
+  // The planner's own choice, not a re-derivation. `scheduled_next` is the
+  // highest-ranked eligible candidate; anything else would be a second policy.
+  const plan = view.scheduled_next ? [view.scheduled_next] : [];
+  if (dryRun) return { enabled: true, dry_run: true, considered: plan.length, planned: plan, dispatched: [] };
+
+  const dispatched = [];
+  const refused = [];
+  for (const laneId of plan.slice(0, Math.max(0, maxDispatch))) {
+    let out = null;
+    try { out = await dispatchCandidate({ laneId, root, nowMs, liveTruth: truth }); }
+    catch (e) { out = { ok: false, refusal: "dispatch_threw", detail: String(e?.message || e) }; }
+    (out?.dispatched ? dispatched : refused).push({ lane_id: laneId, ...out });
+  }
+  return { enabled: true, considered: plan.length, dispatched, refused };
+}
+
+/** The live facts authorization revalidation needs. Absent stays absent, never assumed. */
+async function liveSchedulingTruth(root) {
+  const truth = { dependency_states: {}, finding_statuses: {} };
+  try {
+    const { listFindings } = await import("./operational-findings.mjs");
+    truth.finding_statuses = Object.fromEntries((listFindings(root) || []).map((f) => [f.id, f.status]));
+  } catch { /* unmeasured stays unmeasured */ }
+  try {
+    const { execFileSync } = await import("node:child_process");
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    truth.staging_sha = execFileSync("git", ["rev-parse", "origin/staging"], {
+      cwd: join(homedir(), "Alloy"), encoding: "utf8", timeout: 15_000,
+    }).trim();
+  } catch { /* leaving it undefined makes revalidation unmeasurable, which blocks */ }
+  return truth;
 }
 
 /**

@@ -24,6 +24,7 @@
  */
 import { listDurableLanes } from "./development-lane.mjs";
 import { authorizedNextStep, candidateFieldsFor } from "./authorized-next-step.mjs";
+import { dispatchEnabled } from "./work-scheduler-dispatch.mjs";
 import { getLaneMemory } from "./lane-memory.mjs";
 import { activeRunForLane } from "./execution-run.mjs";
 import { findingsForSteward } from "./operational-findings.mjs";
@@ -129,12 +130,15 @@ export function observeScheduling({
     lanes_with_unread_output: views.filter((v) => v.has_unread_output).map((v) => v.lane_id),
     lanes_requiring_director: views.filter((v) => v.requires_director).map((v) => v.lane_id),
     // Named so a reader is not left wondering why nothing is eligible.
-    // Phase 6 supplies the evidence; enabling dispatch is a separate, evidenced
-    // decision and is not taken here.
-    dispatch_enabled: false,
-    dispatch_note: "The authorization contract is wired and consumed. Dispatch stays disabled until the "
-      + "§14 enablement evidence is met on real lanes; a lane with no memory, a stale checkpoint or an "
-      + "unprovenanced authorization still resolves UNKNOWN and refuses.",
+    // Phase 8: dispatch is real, and off unless explicitly enabled. The switch
+    // lives in the environment so this module cannot enable itself.
+    dispatch_enabled: dispatchEnabled(),
+    dispatch_note: dispatchEnabled()
+      ? "Bounded autonomous dispatch is enabled. Every candidate is re-derived from live truth at the moment "
+        + "of dispatch; an occupying run, an open admission, a stale checkpoint, an unprovenanced authorization "
+        + "or anything short of AUTHORIZED + READY + deterministic refuses."
+      : "The authorization contract is wired and consumed. Autonomous dispatch is off; set "
+        + "VACILANDO_AUTONOMOUS_DISPATCH=1 to enable it once the activation gate has passed.",
     authorization_summary: authorizationSummary(candidates, root, now, liveTruth),
   };
 }
