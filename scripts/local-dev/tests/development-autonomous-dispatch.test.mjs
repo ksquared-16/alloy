@@ -198,3 +198,34 @@ await test("every refusal reason is a declared one", () => {
     assert.ok(D.DISPATCH_REFUSALS.includes("not_authorized"));
     assert.ok(D.DISPATCH_REFUSALS.includes("mission_not_remaining"));
 });
+
+/* ── The stage must actually be REACHED ──────────────────────────────────── */
+
+await test("SCHEDULING IS NOT ON HYGIENE'S CADENCE — the stage is reached on an ordinary tick", () => {
+    // THE DEFECT THIS COVERS, found by watching 50 real Steward cycles produce
+    // zero scheduling decisions. The dispatch stage was called only on the path
+    // where hygiene had actually run, so an ordinary five-minute tick returned
+    // early and never reached it. Hygiene is due every six hours; scheduling was
+    // therefore attempted at most four times a day.
+    //
+    // Same shape as every other "wired but never called" defect in this
+    // programme: an evidence collector that existed and was not invoked, a
+    // recovery model that was certified and never driven. Building a stage is
+    // not the same as reaching it.
+    const src = readFileSync(new URL("../lib/vacilando/host-steward-run.mjs", import.meta.url), "utf8");
+    const wrapper = src.slice(
+        src.indexOf("export async function runStewardCycleWithHygiene"),
+        src.indexOf("export async function runSchedulerDispatchStage"),
+    );
+    // Every return that carries a hygiene verdict must also carry a dispatch
+    // verdict — otherwise there is a tick on which scheduling silently does not
+    // happen.
+    const hygieneReturns = [...wrapper.matchAll(/return \{ \.\.\.steward, recovery, hygiene: [^\n]*\}/g)].map((m) => m[0]);
+    assert.ok(hygieneReturns.length >= 2, "the wrapper has several hygiene return paths");
+    const notDue = hygieneReturns.find((r) => r.includes("not_due"));
+    assert.ok(notDue, "the hygiene-not-due path exists");
+    assert.match(notDue, /dispatch:/, "and it must still carry a dispatch verdict");
+    // The stage is invoked on that path, not only on the hygiene-ran path.
+    const calls = [...wrapper.matchAll(/runSchedulerDispatchStage\(/g)];
+    assert.ok(calls.length >= 2, "the dispatch stage is invoked on more than one path");
+});
