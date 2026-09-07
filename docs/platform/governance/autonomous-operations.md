@@ -217,6 +217,40 @@ One status was **corrected**: `supervisor-without-scheduler` was marked `FIXED`,
 measured the capability still absent. It was never `CLOSED`, so no certification was invalidated —
 `FIXED` was simply premature.
 
+## A gate that depends on remote truth must refresh that truth itself
+
+`toolkit-convergence` resolved `origin/staging` in the canonical repository with
+a bare `git rev-parse` and never refreshed it. A remote-tracking ref is a
+**cache**. Nothing kept it current, so the install gate compared a freshly
+promoted SHA against whatever that cache happened to hold — which depended
+entirely on whether some unrelated person or process had run `git fetch`
+recently.
+
+Measured: PR #735 merged to staging as `0305688057fa`, and three install
+attempts were refused with *"request names 0305688057fa; promoted staging is
+d8d680f48cb4"* while the checkout's FETCH_HEAD sat an hour old. The audit log
+shows the identical failure pair a day earlier, before a third attempt happened
+to succeed. That is the tell: **an install gate that works only when somebody
+else fetched recently is not a gate, it is a coincidence.**
+
+The safety comparison was never the defect and is not relaxed — a requested SHA
+must still be provably promoted staging. What changed is that the gate now
+obtains that truth itself, with the narrowest fetch that answers the question:
+one remote branch into one remote-tracking ref, no tags, no prune, no other
+branches, and nothing that touches the working tree or index of a checkout other
+sessions share.
+
+**Freshness unavailable means refuse.** `REPOSITORY_UNAVAILABLE`,
+`REF_MALFORMED`, `REFRESH_FAILED` and `UNRESOLVABLE_AFTER_REFRESH` all fail the
+provenance gate. Falling back to the cached ref when a refresh fails would
+reproduce the defect silently, on the one path where being wrong matters most,
+so the fallback does not exist — even when the cached value happens to be
+correct.
+
+Note the shape this shares with the two defects below it: the mechanism existed
+and was right, and the input it read was not being kept current. Building a
+check, reaching it, and feeding it live truth are three separate properties.
+
 ## A report about the resident must come from the resident
 
 `vac scoreboard` printed `dispatch_enabled` by reading
@@ -612,6 +646,40 @@ true and retiring them would still have broken two slots, because
 configuration. Managed provenance is now `EXPECTED` — intentionally retained.
 Releasing a slot is not a hygiene decision.
 
+## A gate that depends on remote truth must refresh that truth itself
+
+`toolkit-convergence` resolved `origin/staging` in the canonical repository with
+a bare `git rev-parse` and never refreshed it. A remote-tracking ref is a
+**cache**. Nothing kept it current, so the install gate compared a freshly
+promoted SHA against whatever that cache happened to hold — which depended
+entirely on whether some unrelated person or process had run `git fetch`
+recently.
+
+Measured: PR #735 merged to staging as `0305688057fa`, and three install
+attempts were refused with *"request names 0305688057fa; promoted staging is
+d8d680f48cb4"* while the checkout's FETCH_HEAD sat an hour old. The audit log
+shows the identical failure pair a day earlier, before a third attempt happened
+to succeed. That is the tell: **an install gate that works only when somebody
+else fetched recently is not a gate, it is a coincidence.**
+
+The safety comparison was never the defect and is not relaxed — a requested SHA
+must still be provably promoted staging. What changed is that the gate now
+obtains that truth itself, with the narrowest fetch that answers the question:
+one remote branch into one remote-tracking ref, no tags, no prune, no other
+branches, and nothing that touches the working tree or index of a checkout other
+sessions share.
+
+**Freshness unavailable means refuse.** `REPOSITORY_UNAVAILABLE`,
+`REF_MALFORMED`, `REFRESH_FAILED` and `UNRESOLVABLE_AFTER_REFRESH` all fail the
+provenance gate. Falling back to the cached ref when a refresh fails would
+reproduce the defect silently, on the one path where being wrong matters most,
+so the fallback does not exist — even when the cached value happens to be
+correct.
+
+Note the shape this shares with the two defects below it: the mechanism existed
+and was right, and the input it read was not being kept current. Building a
+check, reaching it, and feeding it live truth are three separate properties.
+
 ## A report about the resident must come from the resident
 
 `vac scoreboard` printed `dispatch_enabled` by reading
@@ -838,6 +906,40 @@ Live cross-check: 141 notifications, 0 unseen, 102 output-class records, 0
 unseen — and the view reports 0 unread across 9 lanes. Derivation and store
 agree exactly.
 
+## A gate that depends on remote truth must refresh that truth itself
+
+`toolkit-convergence` resolved `origin/staging` in the canonical repository with
+a bare `git rev-parse` and never refreshed it. A remote-tracking ref is a
+**cache**. Nothing kept it current, so the install gate compared a freshly
+promoted SHA against whatever that cache happened to hold — which depended
+entirely on whether some unrelated person or process had run `git fetch`
+recently.
+
+Measured: PR #735 merged to staging as `0305688057fa`, and three install
+attempts were refused with *"request names 0305688057fa; promoted staging is
+d8d680f48cb4"* while the checkout's FETCH_HEAD sat an hour old. The audit log
+shows the identical failure pair a day earlier, before a third attempt happened
+to succeed. That is the tell: **an install gate that works only when somebody
+else fetched recently is not a gate, it is a coincidence.**
+
+The safety comparison was never the defect and is not relaxed — a requested SHA
+must still be provably promoted staging. What changed is that the gate now
+obtains that truth itself, with the narrowest fetch that answers the question:
+one remote branch into one remote-tracking ref, no tags, no prune, no other
+branches, and nothing that touches the working tree or index of a checkout other
+sessions share.
+
+**Freshness unavailable means refuse.** `REPOSITORY_UNAVAILABLE`,
+`REF_MALFORMED`, `REFRESH_FAILED` and `UNRESOLVABLE_AFTER_REFRESH` all fail the
+provenance gate. Falling back to the cached ref when a refresh fails would
+reproduce the defect silently, on the one path where being wrong matters most,
+so the fallback does not exist — even when the cached value happens to be
+correct.
+
+Note the shape this shares with the two defects below it: the mechanism existed
+and was right, and the input it read was not being kept current. Building a
+check, reaching it, and feeding it live truth are three separate properties.
+
 ## A report about the resident must come from the resident
 
 `vac scoreboard` printed `dispatch_enabled` by reading
@@ -1039,6 +1141,40 @@ Enabling dispatch needs the §14 evidence on real lanes, and eight of nine lanes
 have no durable objective for anyone to authorize. Writing those records is a
 Director act, not a model act: inventing scope for a lane whose objective nobody
 recorded is the inference this whole design exists to prevent.
+
+## A gate that depends on remote truth must refresh that truth itself
+
+`toolkit-convergence` resolved `origin/staging` in the canonical repository with
+a bare `git rev-parse` and never refreshed it. A remote-tracking ref is a
+**cache**. Nothing kept it current, so the install gate compared a freshly
+promoted SHA against whatever that cache happened to hold — which depended
+entirely on whether some unrelated person or process had run `git fetch`
+recently.
+
+Measured: PR #735 merged to staging as `0305688057fa`, and three install
+attempts were refused with *"request names 0305688057fa; promoted staging is
+d8d680f48cb4"* while the checkout's FETCH_HEAD sat an hour old. The audit log
+shows the identical failure pair a day earlier, before a third attempt happened
+to succeed. That is the tell: **an install gate that works only when somebody
+else fetched recently is not a gate, it is a coincidence.**
+
+The safety comparison was never the defect and is not relaxed — a requested SHA
+must still be provably promoted staging. What changed is that the gate now
+obtains that truth itself, with the narrowest fetch that answers the question:
+one remote branch into one remote-tracking ref, no tags, no prune, no other
+branches, and nothing that touches the working tree or index of a checkout other
+sessions share.
+
+**Freshness unavailable means refuse.** `REPOSITORY_UNAVAILABLE`,
+`REF_MALFORMED`, `REFRESH_FAILED` and `UNRESOLVABLE_AFTER_REFRESH` all fail the
+provenance gate. Falling back to the cached ref when a refresh fails would
+reproduce the defect silently, on the one path where being wrong matters most,
+so the fallback does not exist — even when the cached value happens to be
+correct.
+
+Note the shape this shares with the two defects below it: the mechanism existed
+and was right, and the input it read was not being kept current. Building a
+check, reaching it, and feeding it live truth are three separate properties.
 
 ## A report about the resident must come from the resident
 
