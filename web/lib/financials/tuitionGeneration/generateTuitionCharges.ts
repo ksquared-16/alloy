@@ -57,13 +57,14 @@ export type TuitionGenerationOutcome =
     | { kind: "generated"; assignmentId: string; termId: string; chargeId: string | null; amountCents: number; currencyCode: string; obligationId: string | null }
     | { kind: "not_due"; assignmentId: string; reason: string }
     | { kind: "refused"; assignmentId: string; reason: string; detail: string }
+    | { kind: "already_posted"; assignmentId: string; termId: string; chargeId: string; amountCents: number }
     | { kind: "error"; assignmentId: string; message: string };
 
 export type TuitionGenerationResult = {
     periodKey: string;
     servicePeriod: { start: string; end: string };
     /** Counts an operator can act on, not a log to read. */
-    counts: { generated: number; notDue: number; refused: number; errors: number };
+    counts: { generated: number; alreadyPosted: number; notDue: number; refused: number; errors: number };
     outcomes: TuitionGenerationOutcome[];
 };
 
@@ -82,6 +83,27 @@ export type TuitionGenerationArgs = {
 
 function todayYmd(): string {
     return new Date().toISOString().slice(0, 10);
+}
+
+/** A posted tuition charge already covering this service period — the settled-month case. */
+async function findPostedTuitionCharge(
+    supabase: SupabaseClient,
+    orgId: string,
+    agreementId: string,
+    servicePeriodStart: string,
+): Promise<{ id: string; amount_cents: number } | null> {
+    const { data } = await supabase
+        .from("charges")
+        .select("id, amount_cents, status")
+        .eq("org_id", orgId)
+        .eq("billable_source_type", "enrollment_agreement")
+        .eq("billable_source_id", agreementId)
+        .eq("charge_category", "tuition")
+        .eq("service_date", servicePeriodStart);
+    const posted = ((data ?? []) as Array<{ id: string; amount_cents: number; status: string }>).find(
+        (c) => c.status !== "draft",
+    );
+    return posted ? { id: posted.id, amount_cents: posted.amount_cents } : null;
 }
 
 /**
@@ -199,9 +221,30 @@ export async function generateTuitionCharges(
             const drafted = await draftConsumption(supabase, args.orgId, fact, today, args.actorUserId ?? null);
             const chargeId = drafted.persisted.draftChargeId;
             if (!chargeId) {
-                // The pipeline resolved no chargeable obligation. The overwhelmingly common cause is
-                // that the organisation has not authored the tuition charge template the global
-                // event registry resolves — so it is named rather than reported as a silent zero.
+                /*
+                 * NO DRAFT LINK MEANS ONE OF TWO VERY DIFFERENT THINGS, and reporting them as one
+                 * would tell an operator to fix configuration that is already correct.
+                 *
+                 * The period may ALREADY BE POSTED. `writeTemplateDraftCharge` answers
+                 * `skipped_posted` and deliberately does not link a posted charge to a new
+                 * obligation — posted money is immutable, and a generation run over a settled month
+                 * is a no-op, not a failure.
+                 *
+                 * Or the organisation has not authored the tuition charge template the global event
+                 * registry resolves, in which case the obligation carries `no_charge` and the answer
+                 * is the template key it needs.
+                 */
+                const posted = await findPostedTuitionCharge(supabase, args.orgId, term.enrollmentAgreementId, decision.period.start);
+                if (posted) {
+                    outcomes.push({
+                        kind: "already_posted",
+                        assignmentId,
+                        termId: term.termId,
+                        chargeId: posted.id,
+                        amountCents: posted.amount_cents,
+                    });
+                    continue;
+                }
                 outcomes.push({
                     kind: "refused",
                     assignmentId,
@@ -233,6 +276,7 @@ export async function generateTuitionCharges(
 
     const counts = {
         generated: outcomes.filter((o) => o.kind === "generated").length,
+        alreadyPosted: outcomes.filter((o) => o.kind === "already_posted").length,
         notDue: outcomes.filter((o) => o.kind === "not_due").length,
         refused: outcomes.filter((o) => o.kind === "refused").length,
         errors: outcomes.filter((o) => o.kind === "error").length,

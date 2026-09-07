@@ -83,6 +83,7 @@ export async function previewTuitionGeneration(
             generated: outcomes.filter((o) => o.kind === "generated").length,
             notDue: outcomes.filter((o) => o.kind === "not_due").length,
             refused: outcomes.filter((o) => o.kind === "refused").length,
+            alreadyPosted: 0,
             errors: 0,
         },
         outcomes,
