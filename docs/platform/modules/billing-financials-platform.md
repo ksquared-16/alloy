@@ -588,6 +588,101 @@ command is driven.
 
 ---
 
+### Discounts, credits and adjustments — the net, without touching the gross (September 2026)
+
+Two migrations, neither of them a new balance: `financial_reduction_applications` and the
+`fin.adjust` permission. Thread 10 is mostly a convergence thread, because far more of this existed
+than a first look suggests.
+
+**What the census found already present.** `buildFinancialsCardVM` ALREADY computed
+`gross + discounts + funding + adjustments = responsibility` and rendered the reduction lines;
+`charges` already carried `discount`, `credit`, `adjustment` and `subsidy_offset` as code-owned
+taxonomy with GL mapping keys; `createChildcareDraftCharge` already accepted a SIGNED amount, so a
+negative contra-revenue row needed no schema at all; `commercial_policies` already owned `discount`,
+`sibling_discount` and `waiver` with an authoring registry and a most-specific-wins resolver; and
+`employments` + `customer_persons` already made an employee household provable. The gross→net
+arithmetic was never the gap.
+
+**The gap was the seam.** Nothing resolved eligibility from canonical facts, and nothing turned a
+resolved policy into money. A tenant could author a sibling discount and no family would ever see it.
+
+**Three discount concepts exist in this repository, and only one is childcare's.**
+`discount_programs` / `discount_applications` / `discount_commitments` are the **jobs and booking**
+vertical: they target `customer_id / opportunity_id / job_id / customer_subscription_id`, qualify on
+service counts and first-time customers, and carry no charge, obligation, child or service period.
+`commercial_policies` is the **childcare** owner, as Commercial Execution doctrine states.
+`financial_policies` owns payment-time policy and is not a discount model. These are not duplicates
+to be merged; they are different domains, and the failure mode is using the wrong one.
+
+- **The canonical discount-policy owner is `commercial_policies`.** Commercial says WHAT a reduction
+  is; Billing says what it does to money owed. That is the same seam Thread 7 opened for pricing,
+  and it is why nothing in the reduction path reads a rate.
+- **The arithmetic is Commercial's, quoted rather than re-decided.** Waiver wins over discount
+  outright; a percentage is taken on GROSS so two percentages ADD rather than compound; the
+  aggregate is clamped so a balance never goes below zero. Every one of those is what
+  `applyPolicies.ts` already does for a quote. Re-deciding any of them would let a quote and an
+  invoice disagree about the same authored policy.
+- **Stacking is deterministic by construction, not by tie-breaking.** `resolvePolicy` returns ONE
+  winner per type, so stacking is across types in the fixed order waiver → sibling_discount →
+  discount. Two active policies of one kind REFUSE rather than being ranked, because ranking them
+  would invent a precedence the configuration never expressed. Unreadable configuration refuses too.
+- **Eligibility is proven, never asserted.** A sibling is a child of the same account whose enrolment
+  COVERS the service period — one who left in June is not a sibling in September — ranked by
+  enrolment start then id so the same household ranks the same way on every run. An employee
+  household is an `employments` row covering the period for a person linked to the account. Employee
+  gating is expressed as policy CONFIGURATION (`value.requires = "employee_household"`), not as a
+  childcare discount type hard-coded into shared infrastructure.
+- **The applied consequence is money AND a decision.** The money is a `discount`-category charge
+  against the same billable source as the gross, so the existing card picks it up in the same
+  period and Thread 5 attributes it exactly like any other posted consequence.
+  `financial_reduction_applications` records the decision: the policy, a SNAPSHOT of it as it stood,
+  what the benefit was calculated on, whether a cap bound it, the attribution, and an idempotency
+  key backed by a unique index. A −$150.00 row labelled "Sibling discount" with no provenance is
+  money nobody can explain a year later.
+- **Editing a policy does not rewrite what it already applied.** The snapshot is the reason, and it
+  is the same instinct that freezes a posted charge's accounting period key on the row.
+- **Draft reconciles; posted appends.** A draft reduction recalculates in place when its inputs
+  move. A posted one is reported as `already_posted` and nothing about it is touched — the check
+  runs BEFORE the write, which is the lesson Thread 7 paid for.
+- **`fin.adjust` is a new permission, deliberately not `fin.write`.** Billing what was authored and
+  deciding by hand that a family owes less are different acts; one grant for both means everyone who
+  can bill can also forgive, with nothing in the record to tell them apart. A manual reduction
+  requires a reason (service, action and a table CHECK all say so) and is undone by appending its
+  opposite, once.
+
+**Vacation credit: the seam ships, the upstream owner does not exist.** `financial_policies`
+already admits `vacation_credit`, and a tenant can author one today. What does not exist anywhere in
+this schema is the fact it must be computed from: an entitlement (how many days a family gets), a
+notice rule, and an APPROVED absence. `child_attendance_events` records that a child was absent; it
+does not record that the absence was an approved vacation day drawn against an allowance. Thread 10
+therefore ships the policy/application seam and NAMES the gap rather than inventing an entitlement
+model inside Billing, which would make the money domain the owner of a childcare attendance concern.
+**The missing upstream owner is Attendance/Enrollment, not Billing.**
+
+**Balance authority is unchanged.** `buildFinancialsCardVM` is still the one place a balance is
+computed, and it still reads charges and active allocations of posted payments. Nothing sums
+`financial_reduction_applications` to answer what a family owes; that table explains reduction
+charges, it never totals them.
+
+**Certified:** `certification/financials/financial-reductions.cert.sh` — 17 live cases against real
+persistence (sibling rank and attribution, employee eligibility before and after the canonical fact,
+stacking, waiver exclusivity, caps and the floor, ambiguity refusal, effective dating, snapshot
+immutability under a policy edit, retry and four-way concurrency, a distinct month, org isolation,
+posted immutability, 4/4/5 attribution on a period that opens in July for an August bill, manual
+credit with reason and provenance, and reversal by appending), 38 hermetic cases on the resolver and
+the commands, and `certification/playwright/financial-reductions.cert.spec.ts` through the running
+app — gross and reduction as separate ledger rows with a correct net, and the same command refused
+BY THE SERVER with `fin.adjust` revoked.
+
+**Intentionally not built, and named rather than half-drawn:** responsibility splitting (Thread 6),
+subsidy as expected funding (Thread 9), a reductions surface (Thread 4), promotional codes and
+usage-limited campaigns, approval workflows for adjustments (`financial_policies.adjustment_approval`
+is the seam), vacation entitlement, and fees/deposits — registration, waitlist, deposit, field-trip,
+late and cancellation fees remain charge-template work and want their own thread, because their
+question is when a fee is INCURRED, not what reduces it.
+
+---
+
 ## What not to do
 
 - Do not build childcare billing before the financial core is generalized off `job_id`.
@@ -641,6 +736,16 @@ command is driven.
 - Do not prorate a partial month without a resolved `proration` policy; refuse, because a guessed method is invented money.
 - Do not infer the service period from "now"; a generation run names its period or it cannot be replayed.
 - Do not let a certification fixture leave an enrolment agreement standing in a shared tenant — the Financials card resolves a charge's subject from agreements, and the residue fails a neighbouring proof that has nothing to do with tuition.
+- Do not implement a discount by changing what tuition costs; the accepted term is what a family agreed to, and a net that cannot be decomposed is a number nobody can defend.
+- Do not author childcare discounts in `discount_programs` — that stack is the jobs/booking vertical and its applications cannot name a charge, an obligation, a child or a period.
+- Do not re-decide discount arithmetic in Billing; a percentage is taken on gross and a waiver wins, because that is what Commercial Execution already does for the quote of the same policy.
+- Do not rank two active policies of the same kind — refuse. Choosing one silently is the platform inventing a precedence the tenant never expressed.
+- Do not trust a caller's claim of eligibility, an amount or a percentage on a reduction command; prove eligibility from enrolments and employments, and refuse the payload rather than ignoring it.
+- Do not apply a policy without snapshotting it; editing a live policy must never rewrite money it already reduced.
+- Do not gate a manual credit, waiver or write-off behind `fin.write` — billing what was authored and forgiving what is owed are different acts and need different grants.
+- Do not record a manual reduction without a reason, and do not undo one with an UPDATE or a DELETE; append the opposite and link the two, once.
+- Do not sum `financial_reduction_applications` to compute a balance; it explains reduction charges, and `buildFinancialsCardVM` remains the only balance authority.
+- Do not build vacation entitlement inside Billing; the policy seam is Billing's, the entitlement and the approved absence are not.
 - Do not delete a payment or an application to undo one. A refund is a new outbound row via `refunds_payment_id`; an application is reversed, never removed.
 
 ---
@@ -667,3 +772,4 @@ command is driven.
 - Billing moves from doctrine to implemented schema/runtime (record the model here).
 - The payment application contract changes — the balance predicate, the idempotency keys, the one-active-application bound, or the refund lineage rule.
 - The tuition generation contract changes — the occurrence key, the pricing authority, the posted-period boundary, the proration refusal, or the charge idempotency constraint.
+- The reduction contract changes — the discount-policy owner, the stacking order or basis, the eligibility sources, the snapshot rule, the manual-adjustment permission, or the balance authority.
