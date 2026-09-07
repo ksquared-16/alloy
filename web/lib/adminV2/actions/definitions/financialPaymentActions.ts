@@ -260,6 +260,10 @@ const recordPayment: RegisteredAction = {
                 status: t(payload.status) === "pending" ? "pending" : "posted",
                 receivedAt: t(payload.received_at) || null,
                 referenceNumber: t(payload.reference_number) || null,
+                // Identity of who actually paid. Optional, and it confers no responsibility:
+                // attributing a payment to somebody's SHARE is a separate, explicit act.
+                payerEntityType: t(payload.payer_entity_type) || null,
+                payerEntityId: t(payload.payer_entity_id) || null,
                 processor: t(payload.processor) || null,
                 processorTransactionId: t(payload.processor_transaction_id) || null,
                 notes: t(payload.notes) || null,

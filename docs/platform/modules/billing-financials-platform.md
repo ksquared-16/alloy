@@ -683,6 +683,100 @@ question is when a fee is INCURRED, not what reduces it.
 
 ---
 
+### Responsibility and funding — who owes it, and where their share comes from (September 2026)
+
+Two migrations: `financial_responsibility_*` (arrangements, shares, allocations) plus
+`financial_expected_funding` and `payment_responsibility_attributions`, and the `fin.responsibility`
+permission. Thread 10 finished *what* a family owes; this answers *who owes it*.
+
+**The Director's decision, and it governs everything below.** Responsibility resolves to an
+EXPLICIT NAMED PARTY. It is never inferred from account ownership, from being the primary contact,
+from being a parent or guardian, from the `payer` contact role, from
+`resolved_obligations.responsibility_key = 'household'`, or from who happened to pay. **There is no
+automatic primary responsible parent.**
+
+**Unassigned is a real row.** When no arrangement in force accounts for the whole net, the leftover
+is persisted as an allocation with a null party and `is_unassigned = true`. No person is invented,
+the reconciliation invariant still holds exactly, and the card shows it. Every billing system's
+instinct is to hand the remainder to "the parent"; this one holds it in the open, which is the whole
+point of the decision.
+
+- **Arrangement is intent; allocation is consequence.** An arrangement says how a scope's
+  responsibility divides over an effective window; an allocation says that for THIS charge THIS
+  party owes exactly these cents, against a snapshot of the net. Arrangements are superseded, never
+  edited: recording a successor closes its predecessor the day before and links the two.
+- **Ambiguity is refused by the database.** A `btree_gist` EXCLUDE constraint forbids two active
+  arrangements whose effective windows overlap for one scope (account + child, with a sentinel for
+  "the whole account"). Without it, which parent owes money would depend on row order.
+- **The net comes from one server resolver.** `resolveAllocatableNet` = the gross charge plus its
+  active Thread 10 reduction APPLICATIONS, joined by `source_charge_id`. No command accepts a net, a
+  gross or an assigned amount; a payload carrying one is refused. This is NOT a balance —
+  `buildFinancialsCardVM` remains the single balance authority and Thread 8 the only thing that
+  reduces outstanding.
+- **The cent rule.** Percentages are floored on the net. A `remainder` share takes what is left. A
+  complete 100% arrangement with no fixed share distributes rounding dust one cent at a time in
+  priority order, so a 70/30 of an odd number sums exactly and no stray one-cent "unassigned" line
+  misrepresents a complete arrangement. Anything else left over is unassigned. A fixed share larger
+  than the net is REFUSED rather than clamped: shrinking it would tell an operator the family is
+  covered when the arrangement cannot be honoured.
+- **Responsibility ≠ funding.** Expected funding attaches to a responsible party's SHARE. An
+  employer, scholarship or subsidy agency does not become responsible by funding something; making
+  an external party responsible takes an arrangement share like anyone else. Expected funding is not
+  a payment, reduces nothing owed, creates no receipt, and never appears in a total.
+- **The funding ENGINE stays Commercial Execution's.** `toFundingPlan` adapts persisted expected
+  funding into the `FundingPlan` that `fundingAttribute.ts` already takes, with the RESPONSIBLE
+  PARTY as the plan's `primary` — so the residual is what that party still expects to pay
+  themselves, and an unfunded gap never reads as somebody else's. Thread 6 supplies the consumer
+  input Commercial's doctrine always said a consumer would supply; it reimplements no arithmetic.
+  The responsibility split itself is Thread 6's own, because the engine's residual-to-primary rule
+  presumes someone is always there to absorb what is left — exactly the assumption the Director
+  removed.
+- **Responsibility ≠ payment.** `payments.payer_entity_type/id` existed with a paired CHECK and no
+  writer at all; the canonical payment path now records who ACTUALLY paid. Whose share that
+  satisfied is a separate, EXPLICIT attribution — never guessed from the payer, because a
+  grandparent settling a bill does not become responsible for it. An attribution moves no balance
+  and may not exceed what its application applied.
+- **Draft re-resolves; posted is chosen.** Before posting, re-resolving simply follows the
+  arrangement now in force and supersedes the prior division with lineage. On a POSTED charge a
+  different answer means one real person now owes what another owed, so the background path returns
+  `reallocation_required` and only `billing.reallocate_responsibility` — permissioned, reasoned,
+  previewed — moves it. Superseded allocations stay readable; nothing is rewritten.
+- **`fin.responsibility` is a third authority.** `fin.write` bills what was authored;
+  `fin.adjust` forgives what is owed; neither describes moving contractual position between two real
+  people, where the total does not change and the answer to "who owes it" does.
+- **Privacy is a non-decision, and stays one.** Separated/co-parent visibility policy is deliberately
+  undecided. Responsibility configuration and inspection are OPERATOR work under existing financial
+  authorization; no parent-facing visibility was added, and nothing grants one parent sight of
+  another's position merely because both are guardians. `arrangements.visibility_policy_key` exists
+  as a place for a future decision to land without a migration that moves money — nothing reads it
+  and nothing branches on it. **It claims no semantics.**
+
+**The Thread 2 seam is now truthful.** That thread shipped `payers[]` with `share: null` for
+everyone and wrote down why — a payer contact ROLE existed and no allocation store did, so a split
+rendered there would have assigned real money to real people on no record. It said the card would
+have to learn to read one. It has: payers are the parties an arrangement named, their share is the
+cents an allocation assigned, and `method` is still null because there is still no per-payer payment
+method store. The `payer` contact role remains a way to reach a human and was NOT promoted into
+financial authority.
+
+**Certified:** `certification/financials/financial-responsibility.cert.sh` — 16 live cases against
+real persistence (70/30 to the cent, fixed plus remainder, the unassigned gap, a charge with no
+arrangement at all, two children of one household divided differently, division of a Thread 10 net
+with the gross untouched, a non-responsible third party paying with the actual payer recorded and
+the share explained, draft re-division and posted reallocation with lineage, effective dating,
+invalid configuration, cross-org refusal, four-way concurrency, expected funding feeding Commercial's
+engine, and a zero net), 14 hermetic cases on the split resolver, and
+`certification/playwright/financial-responsibility.cert.spec.ts` through the running app — persisted
+shares shown in the card, no fabricated payer before an arrangement exists, and the same command
+refused BY THE SERVER with `fin.responsibility` revoked.
+
+**Intentionally not built:** subsidy eligibility, authorization, remittance, attendance claiming,
+variance and reconciliation (Thread 9 consumes this funding seam); Stripe collection; the Financials
+workspace (Thread 4); parent-facing visibility of any kind; and responsibility for anything other
+than an enrolment-backed obligation.
+
+---
+
 ## What not to do
 
 - Do not build childcare billing before the financial core is generalized off `job_id`.
@@ -746,7 +840,35 @@ question is when a fee is INCURRED, not what reduces it.
 - Do not record a manual reduction without a reason, and do not undo one with an UPDATE or a DELETE; append the opposite and link the two, once.
 - Do not sum `financial_reduction_applications` to compute a balance; it explains reduction charges, and `buildFinancialsCardVM` remains the only balance authority.
 - Do not build vacation entitlement inside Billing; the policy seam is Billing's, the entitlement and the approved absence are not.
+- Do not infer a responsible party from account ownership, a primary contact, a guardian relationship, the `payer` contact role, `responsibility_key`, or who paid — an arrangement names the party or nobody is responsible.
+- Do not invent a person, or fall back to the household, for the part of a net no arrangement covers; record it as an unassigned allocation and let an operator see it.
+- Do not let a UI, a view model or a second table compute what a party owes; one resolver divides the net, and remaining responsibility is assigned less attributed, derived on read.
+- Do not accept a net, a gross or an assigned amount from a caller; the allocatable net is derived from the charge and its reductions, server-side.
+- Do not clamp a fixed share that exceeds the net — refuse it, or the operator believes a family is covered when the arrangement cannot be honoured.
+- Do not resolve two active arrangements for one scope by picking one; the database refuses the overlap, and a resolver that broke the tie would make money depend on row order.
+- Do not re-divide a POSTED charge in a background run; a different answer moves one real person's obligation to another and needs an explicit, reasoned, permissioned act.
+- Do not treat expected funding as money: it is not a payment, it reduces no outstanding, it creates no receipt, and it does not make the funder responsible.
+- Do not make the Commercial funding engine the system of record for responsibility — its residual presumes a primary who always absorbs the remainder, which is the assumption this thread removed.
+- Do not infer a payment's responsibility attribution from who paid; state it explicitly, and never let an attribution reduce a charge's outstanding.
+- Do not gate deciding who owes behind `fin.write` or `fin.adjust`; billing, forgiving and reassigning are three different authorities.
+- Do not derive separated/co-parent visibility from household membership, guardianship or financial responsibility, and do not add parent-facing responsibility visibility — that policy is undecided and inventing it would be inventing law.
 - Do not delete a payment or an application to undo one. A refund is a new outbound row via `refunds_payment_id`; an application is reversed, never removed.
+
+---
+
+## Thread 4 — the Financials workspace, when it is built
+
+Binding, recorded here because Thread 6 is what makes the workspace possible and the constraint is
+easiest to violate before anyone writes the first component:
+
+**The Financials workspace MUST compose the canonical `WorkspaceShell` and the shared workspace
+primitives already used by Processing, Communications/Inbox and Operations/Work Items.**
+
+It must NOT create a Financials-specific shell, a competing KPI system, a second balance, its own
+responsibility math, or a module-specific visual hierarchy. Every number it shows already has an
+owner: `buildFinancialsCardVM` for balance, `resolveAllocatableNet` for net,
+`financial_responsibility_allocations` for who owes it, Thread 8 for what was received. A workspace
+that recomputes any of them will disagree with the card in front of a family.
 
 ---
 
@@ -773,3 +895,4 @@ question is when a fee is INCURRED, not what reduces it.
 - The payment application contract changes — the balance predicate, the idempotency keys, the one-active-application bound, or the refund lineage rule.
 - The tuition generation contract changes — the occurrence key, the pricing authority, the posted-period boundary, the proration refusal, or the charge idempotency constraint.
 - The reduction contract changes — the discount-policy owner, the stacking order or basis, the eligibility sources, the snapshot rule, the manual-adjustment permission, or the balance authority.
+- The responsibility contract changes — the explicit-party rule, the unassigned representation, the net source, the cent/remainder rule, effective dating, posted reallocation, the funding seam, the payment-attribution bound, or the privacy non-decision.

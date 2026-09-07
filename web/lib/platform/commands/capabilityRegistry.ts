@@ -50,6 +50,11 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "billing.apply_discounts",
     "billing.adjust_account",
     "billing.reverse_adjustment",
+    "billing.configure_responsibility",
+    "billing.resolve_responsibility",
+    "billing.reallocate_responsibility",
+    "billing.configure_expected_funding",
+    "billing.attribute_payment",
     "charge.add",
     "charge.post",
     "charge.reverse",
@@ -314,6 +319,101 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             "Undoes a manual reduction by appending its opposite and linking the two. The original "
             + "stands, and a reduction is reversed once — the same bound a posted charge's correction "
             + "already carries.",
+    }),
+    // ── Responsibility: who owes it, and where their share is funded from ──
+    def({
+        capabilityKey: "billing.configure_responsibility",
+        canonicalCommandKey: "billing.configure_responsibility",
+        operatorLabel: "Configure responsibility",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.configure_responsibility",
+        implementationStatus: "production",
+        reason:
+            "Records which NAMED parties contractually bear a family's obligations, from a date, "
+            + "under `fin.responsibility` — a separate grant, because moving a contractual position "
+            + "between two real people changes who owes rather than what is owed. Responsibility is "
+            + "never inferred from account ownership, a contact role or who paid.",
+    }),
+    def({
+        capabilityKey: "billing.resolve_responsibility",
+        canonicalCommandKey: "billing.resolve_responsibility",
+        operatorLabel: "Resolve responsibility",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.resolve_responsibility",
+        implementationStatus: "production",
+        reason:
+            "Divides a charge's allocatable net — gross less its Thread 10 reductions, derived "
+            + "server-side — between the parties the arrangement in force names. Ordinary billing "
+            + "work under `fin.write`: it decides nothing. Where no arrangement is in force the "
+            + "whole net is recorded as UNASSIGNED rather than given to the household.",
+    }),
+    def({
+        capabilityKey: "billing.reallocate_responsibility",
+        canonicalCommandKey: "billing.reallocate_responsibility",
+        operatorLabel: "Reallocate responsibility",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.reallocate_responsibility",
+        implementationStatus: "production",
+        reason:
+            "Moves a POSTED charge's responsibility onto the arrangement now in force, with a reason "
+            + "and full lineage. Deliberately explicit and permissioned: on posted money a different "
+            + "division means one real person now owes what another owed, and that is chosen, never "
+            + "converged into by a background run.",
+    }),
+    def({
+        capabilityKey: "billing.configure_expected_funding",
+        canonicalCommandKey: "billing.configure_expected_funding",
+        operatorLabel: "Configure expected funding",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.configure_expected_funding",
+        implementationStatus: "production",
+        reason:
+            "Records where a responsible party's share is EXPECTED to be funded from — an employer, "
+            + "a scholarship, a subsidy agency. Attached to responsibility, never a substitute for "
+            + "it: expected funding is not a payment, reduces nothing owed, and does not make the "
+            + "funder responsible. Subsidy eligibility and remittance stay Thread 9's.",
+    }),
+    def({
+        capabilityKey: "billing.attribute_payment",
+        canonicalCommandKey: "billing.attribute_payment",
+        operatorLabel: "Attribute payment to responsibility",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.attribute_payment",
+        implementationStatus: "production",
+        reason:
+            "Explains whose share a payment application satisfied, stated explicitly rather than "
+            + "guessed from who paid. Thread 8 remains the only authority that reduces outstanding; "
+            + "an attribution moves no balance and cannot exceed what its application applied.",
     }),
     // ── Financials ─────────────────────────────────────────────────────────
     // One operator intent over the existing charge-lifecycle service. The adapter resolves the
