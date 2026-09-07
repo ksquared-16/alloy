@@ -217,6 +217,22 @@ One status was **corrected**: `supervisor-without-scheduler` was marked `FIXED`,
 measured the capability still absent. It was never `CLOSED`, so no certification was invalidated —
 `FIXED` was simply premature.
 
+## A report about the resident must come from the resident
+
+`vac scoreboard` printed `dispatch_enabled` by reading
+`VACILANDO_AUTONOMOUS_DISPATCH` out of its **own** process environment. For the
+dispatcher that is right — it is the switch, read where the switch lives. For a
+scoreboard it is wrong: the operator is asking about the Gateway, and the CLI's
+shell is not the Gateway. It printed `disabled` for hours while the resident had
+dispatch enabled the whole time, which is the worst possible answer to give
+someone debugging why nothing is being dispatched.
+
+The value now comes from the Steward's own per-tick record, so the resident is
+the authority and the scoreboard only reads it. No new owner of that truth was
+introduced. **Staleness is unknown, not false:** a record older than a few
+cadences means the Steward is not reporting, and the note says so explicitly
+rather than printing `disabled`, which would read as a deliberate setting.
+
 ## An in-process observer cannot probe itself synchronously
 
 `observeControlPlane` measures loopback health with a synchronous
@@ -596,6 +612,22 @@ true and retiring them would still have broken two slots, because
 configuration. Managed provenance is now `EXPECTED` — intentionally retained.
 Releasing a slot is not a hygiene decision.
 
+## A report about the resident must come from the resident
+
+`vac scoreboard` printed `dispatch_enabled` by reading
+`VACILANDO_AUTONOMOUS_DISPATCH` out of its **own** process environment. For the
+dispatcher that is right — it is the switch, read where the switch lives. For a
+scoreboard it is wrong: the operator is asking about the Gateway, and the CLI's
+shell is not the Gateway. It printed `disabled` for hours while the resident had
+dispatch enabled the whole time, which is the worst possible answer to give
+someone debugging why nothing is being dispatched.
+
+The value now comes from the Steward's own per-tick record, so the resident is
+the authority and the scoreboard only reads it. No new owner of that truth was
+introduced. **Staleness is unknown, not false:** a record older than a few
+cadences means the Steward is not reporting, and the note says so explicitly
+rather than printing `disabled`, which would read as a deliberate setting.
+
 ## An in-process observer cannot probe itself synchronously
 
 `observeControlPlane` measures loopback health with a synchronous
@@ -806,6 +838,22 @@ Live cross-check: 141 notifications, 0 unseen, 102 output-class records, 0
 unseen — and the view reports 0 unread across 9 lanes. Derivation and store
 agree exactly.
 
+## A report about the resident must come from the resident
+
+`vac scoreboard` printed `dispatch_enabled` by reading
+`VACILANDO_AUTONOMOUS_DISPATCH` out of its **own** process environment. For the
+dispatcher that is right — it is the switch, read where the switch lives. For a
+scoreboard it is wrong: the operator is asking about the Gateway, and the CLI's
+shell is not the Gateway. It printed `disabled` for hours while the resident had
+dispatch enabled the whole time, which is the worst possible answer to give
+someone debugging why nothing is being dispatched.
+
+The value now comes from the Steward's own per-tick record, so the resident is
+the authority and the scoreboard only reads it. No new owner of that truth was
+introduced. **Staleness is unknown, not false:** a record older than a few
+cadences means the Steward is not reporting, and the note says so explicitly
+rather than printing `disabled`, which would read as a deliberate setting.
+
 ## An in-process observer cannot probe itself synchronously
 
 `observeControlPlane` measures loopback health with a synchronous
@@ -991,6 +1039,22 @@ Enabling dispatch needs the §14 evidence on real lanes, and eight of nine lanes
 have no durable objective for anyone to authorize. Writing those records is a
 Director act, not a model act: inventing scope for a lane whose objective nobody
 recorded is the inference this whole design exists to prevent.
+
+## A report about the resident must come from the resident
+
+`vac scoreboard` printed `dispatch_enabled` by reading
+`VACILANDO_AUTONOMOUS_DISPATCH` out of its **own** process environment. For the
+dispatcher that is right — it is the switch, read where the switch lives. For a
+scoreboard it is wrong: the operator is asking about the Gateway, and the CLI's
+shell is not the Gateway. It printed `disabled` for hours while the resident had
+dispatch enabled the whole time, which is the worst possible answer to give
+someone debugging why nothing is being dispatched.
+
+The value now comes from the Steward's own per-tick record, so the resident is
+the authority and the scoreboard only reads it. No new owner of that truth was
+introduced. **Staleness is unknown, not false:** a record older than a few
+cadences means the Steward is not reporting, and the note says so explicitly
+rather than printing `disabled`, which would read as a deliberate setting.
 
 ## An in-process observer cannot probe itself synchronously
 

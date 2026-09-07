@@ -16,7 +16,7 @@
  * path runs.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -312,4 +312,69 @@ test("an ordinary cycle records what each stage decided", async () => {
   assert.equal(recorded.hygiene, "ran");
   assert.ok("dispatch" in recorded, "the scheduling stage's verdict is part of the record");
   assert.ok(recorded.at, "and it is timestamped, so staleness is visible");
+});
+
+/*
+ * THE SCOREBOARD REPORTS THE RESIDENT, NOT THE SHELL THAT ASKED.
+ *
+ * `vac scoreboard` printed `dispatch_enabled` by reading
+ * VACILANDO_AUTONOMOUS_DISPATCH out of its OWN process environment. For the
+ * dispatcher that is right — it is the switch, read where the switch lives. For
+ * a scoreboard it is wrong: the operator is asking about the Gateway, and the
+ * CLI's shell is not the Gateway. It printed "disabled" for hours while the
+ * resident had dispatch enabled the entire time, which is the worst possible
+ * answer to give someone debugging why nothing is being dispatched.
+ *
+ * The control the Director asked for is the first test: no flag in this
+ * process, dispatch enabled on the resident, and the answer must be enabled.
+ */
+const OBS = await import("../lib/vacilando/work-scheduler-observe.mjs");
+
+/** Stand in for the resident having ticked, without touching a live root. */
+function residentReported(root, dispatch, at = new Date().toISOString()) {
+  CYC.recordStageOutcome({ root, outcome: { ok: true, hygiene: "not_due", dispatch } });
+  const p = CYC.stewardStatePath(root);
+  const state = JSON.parse(readFileSync(p, "utf8"));
+  state.last_stage_outcome.at = at;
+  writeFileSync(p, JSON.stringify(state));
+}
+
+test("CLI environment absent + Gateway dispatch enabled reports ENABLED, not false", () => {
+  const root = freshRoot();
+  residentReported(root, { enabled: true, considered: 1, dispatched: [], refused: [] });
+  const had = process.env.VACILANDO_AUTONOMOUS_DISPATCH;
+  delete process.env.VACILANDO_AUTONOMOUS_DISPATCH;
+  try {
+    assert.equal(CYC.residentDispatchEnabled({ root }), true, "the resident's own record is the authority");
+    const board = OBS.observeScheduling({ root });
+    assert.equal(board.dispatch_enabled, true, "and the scoreboard carries it through");
+    assert.match(board.dispatch_note, /resident Gateway/);
+  } finally { if (had !== undefined) process.env.VACILANDO_AUTONOMOUS_DISPATCH = had; }
+});
+
+test("the calling shell's flag cannot make a disabled resident look enabled", () => {
+  const root = freshRoot();
+  residentReported(root, { enabled: false });
+  const had = process.env.VACILANDO_AUTONOMOUS_DISPATCH;
+  process.env.VACILANDO_AUTONOMOUS_DISPATCH = "1";
+  try {
+    assert.equal(CYC.residentDispatchEnabled({ root }), false, "the CLI environment is not authoritative either way");
+  } finally {
+    if (had === undefined) delete process.env.VACILANDO_AUTONOMOUS_DISPATCH;
+    else process.env.VACILANDO_AUTONOMOUS_DISPATCH = had;
+  }
+});
+
+test("a resident that is not reporting is UNKNOWN, never disabled", () => {
+  const silent = freshRoot();
+  assert.equal(CYC.residentDispatchEnabled({ root: silent }), null, "no record at all is unknown");
+
+  const stale = freshRoot();
+  residentReported(stale, { enabled: true }, new Date(Date.now() - 60 * 60_000).toISOString());
+  assert.equal(CYC.residentDispatchEnabled({ root: stale }), null, "an hour-old record is unknown, not false");
+  assert.match(OBS.observeScheduling({ root: stale }).dispatch_note, /NOT the same as disabled/);
+
+  const shaped = freshRoot();
+  residentReported(shaped, null);
+  assert.equal(CYC.residentDispatchEnabled({ root: shaped }), null, "a stage that never ran reports nothing");
 });

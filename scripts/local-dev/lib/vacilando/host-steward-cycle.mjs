@@ -122,6 +122,39 @@ export function hygieneDue({ root, nowMs = Date.now(), cadenceMs = HYGIENE_CADEN
  * Swallowing an exception to protect the process is correct. Swallowing it
  * without recording it is how a subsystem dies quietly for half a day.
  */
+/**
+ * A REPORT ABOUT THE RESIDENT MUST COME FROM THE RESIDENT.
+ *
+ * THE DEFECT THIS EXISTS FOR. `vac scoreboard` printed `dispatch_enabled` by
+ * reading `VACILANDO_AUTONOMOUS_DISPATCH` out of its OWN process environment.
+ * The scoreboard is the operator's view of the resident Gateway, so the value
+ * read as system state while actually describing whichever shell happened to
+ * invoke the CLI — and it printed `disabled` for hours while the Gateway had
+ * dispatch enabled the whole time. An operator debugging why nothing was being
+ * dispatched was being shown the answer to a different question.
+ *
+ * This introduces no new owner of that truth. The Steward already writes what
+ * each stage decided on every tick, so the resident's own record is the
+ * authority and this only reads it.
+ *
+ * STALENESS IS NOT FALSE. A record older than a few cadences means the Steward
+ * is not reporting, which is unknown — never `disabled`. Same rule as
+ * everywhere else here: absence of evidence is not evidence of absence.
+ */
+export const RESIDENT_REPORT_STALE_MS = 15 * 60_000;
+
+export function residentDispatchEnabled({ root, nowMs = Date.now(), staleMs = RESIDENT_REPORT_STALE_MS } = {}) {
+  try {
+    const outcome = readState(root).last_stage_outcome;
+    if (!outcome?.at) return null;
+    const at = Date.parse(outcome.at);
+    if (!Number.isFinite(at) || nowMs - at > staleMs) return null;
+    const dispatch = outcome.dispatch;
+    if (dispatch == null || typeof dispatch.enabled !== "boolean") return null;
+    return dispatch.enabled;
+  } catch { return null; }
+}
+
 export function recordStageOutcome({ root, nowMs = Date.now(), outcome = null } = {}) {
   try {
     const state = readState(root);

@@ -23,8 +23,8 @@
  * supplying evidence, never by defaulting the absence of it to `true`.
  */
 import { listDurableLanes } from "./development-lane.mjs";
+import { residentDispatchEnabled } from "./host-steward-cycle.mjs";
 import { authorizedNextStep, candidateFieldsFor } from "./authorized-next-step.mjs";
-import { dispatchEnabled } from "./work-scheduler-dispatch.mjs";
 import { getLaneMemory } from "./lane-memory.mjs";
 import { activeRunForLane } from "./execution-run.mjs";
 import { findingsForSteward } from "./operational-findings.mjs";
@@ -129,16 +129,22 @@ export function observeScheduling({
     attention: attentionRollup(views),
     lanes_with_unread_output: views.filter((v) => v.has_unread_output).map((v) => v.lane_id),
     lanes_requiring_director: views.filter((v) => v.requires_director).map((v) => v.lane_id),
-    // Named so a reader is not left wondering why nothing is eligible.
-    // Phase 8: dispatch is real, and off unless explicitly enabled. The switch
-    // lives in the environment so this module cannot enable itself.
-    dispatch_enabled: dispatchEnabled(),
-    dispatch_note: dispatchEnabled()
-      ? "Bounded autonomous dispatch is enabled. Every candidate is re-derived from live truth at the moment "
-        + "of dispatch; an occupying run, an open admission, a stale checkpoint, an unprovenanced authorization "
-        + "or anything short of AUTHORIZED + READY + deterministic refuses."
-      : "The authorization contract is wired and consumed. Autonomous dispatch is off; set "
-        + "VACILANDO_AUTONOMOUS_DISPATCH=1 to enable it once the activation gate has passed.",
+    /*
+     * THE RESIDENT'S ANSWER, NOT THIS PROCESS'S.
+     *
+     * This read `dispatchEnabled()`, which inspects the CALLING process's
+     * environment. For the dispatcher itself that is exactly right — it is the
+     * switch, read where the switch lives. For a scoreboard it is wrong: the
+     * operator is asking about the Gateway, and the CLI's shell is not the
+     * Gateway. It printed "disabled" for hours while the resident had dispatch
+     * enabled, which is the worst possible answer to give someone debugging why
+     * nothing is being dispatched.
+     *
+     * `null` means the resident is not reporting. That is unknown, not off, and
+     * the note says which.
+     */
+    dispatch_enabled: residentDispatchEnabled({ root, nowMs: now }),
+    dispatch_note: dispatchNote(residentDispatchEnabled({ root, nowMs: now })),
     authorization_summary: authorizationSummary(candidates, root, now, liveTruth),
   };
 }
@@ -163,4 +169,20 @@ function authorizationSummary(candidates, root, now, liveTruth) {
     out[contract.authorization] = (out[contract.authorization] || 0) + 1;
   }
   return out;
+}
+
+/** Three states, because "not measured" is not "off". */
+function dispatchNote(enabled) {
+  if (enabled === true) {
+    return "Bounded autonomous dispatch is enabled on the resident Gateway. Every candidate is re-derived from "
+      + "live truth at the moment of dispatch; an occupying run, an open admission, a stale checkpoint, an "
+      + "unprovenanced authorization or anything short of AUTHORIZED + READY + deterministic refuses.";
+  }
+  if (enabled === false) {
+    return "The authorization contract is wired and consumed. The resident Gateway reports autonomous dispatch "
+      + "off; set VACILANDO_AUTONOMOUS_DISPATCH=1 in the Gateway's environment to enable it.";
+  }
+  return "Unknown: the resident Steward has not reported a scheduling stage recently, so whether dispatch is "
+    + "enabled cannot be measured from here. This is NOT the same as disabled — check that the Steward is "
+    + "ticking and reaching its scheduling stage.";
 }
