@@ -242,6 +242,75 @@ export function recordPromotionCheckpoint(laneId, checkpoint, { root, nowMs = Da
   return saveLaneMemory(existing, { root });
 }
 
+/**
+ * RECORD THAT A RUN FINISHED ON THIS LANE.
+ *
+ * THE DEFECT THIS EXISTS FOR, traced live rather than reasoned about.
+ * `checkpointFreshness` measures `record.updated_at`, and revalidation fails
+ * `checkpoint_fresh` once that is older than six hours. The only function that
+ * wrote it, `recordPromotionCheckpoint`, had ZERO call sites — exported,
+ * tested, never invoked. So nothing in the resident system ever refreshed lane
+ * memory, and six hours after a human last wrote it by hand EVERY lane's
+ * authorization revalidated to UNKNOWN and stayed there.
+ *
+ * Measured: Backend sat with next_step AUTHORIZED, deterministic, provenance
+ * director_instruction, dependencies [], five of six revalidation checks
+ * passing and none unmeasured — and was never once considered by the scheduler,
+ * because the sixth check said its checkpoint was 452 minutes old. Autonomous
+ * work had a six-hour half-life measured from the last manual edit.
+ *
+ * WHY COMPLETION IS THE RIGHT MOMENT, and a tick is not. Refreshing freshness
+ * on every scheduler tick would make the check circular and gut it: the act of
+ * asking "is this still current?" would answer yes forever. A run finishing is
+ * real work actually happening on the lane, so the context genuinely is current
+ * — and a lane where nothing completes still ages out, which is the property
+ * the freshness window exists to provide.
+ *
+ * IT NEVER CREATES MEMORY. A lane with no memory is UNKNOWN and must stay
+ * UNKNOWN; manufacturing a record here would silently enrol every unrelated
+ * lane into scheduling. Absent memory returns `no_lane_memory` and changes
+ * nothing.
+ */
+export function recordLaneProgress(laneId, { runId = null, summary = null, consumedNextStep = false } = {}, { root, nowMs = Date.now() } = {}) {
+  if (!root) return { ok: false, error: "missing_runtime_root" };
+  const existing = getLaneMemory(laneId, root);
+  if (!existing) return { ok: false, error: "no_lane_memory" };
+
+  const at = new Date(nowMs).toISOString();
+  const entry = {
+    at,
+    run_id: runId ? String(runId) : null,
+    summary: summary ? String(summary).slice(0, 300) : null,
+    consumed_next_step: consumedNextStep === true,
+    action_class: consumedNextStep === true ? (existing.next_step?.action_class ?? null) : null,
+  };
+  const kept = (existing.promotion_checkpoints || []).filter((c) => !(entry.run_id && c.run_id === entry.run_id));
+  existing.promotion_checkpoints = [...kept, entry].slice(-PROMOTION_CHECKPOINT_LIMIT);
+
+  /*
+   * A CONSUMED STEP IS NOT A REPEATABLE ONE.
+   *
+   * Only a run the SCHEDULER dispatched for this next step consumes it. Without
+   * that, refreshing freshness alone would re-authorize the same action every
+   * cycle and the lane would run it forever — trading a system that never acts
+   * for one that cannot stop, which is worse. Clearing it means authorization
+   * becomes REQUIRES_DIRECTOR: the lane says "I finished the step I was given
+   * and need the next one", which is a truthful wait reason instead of silently
+   * ageing out.
+   */
+  if (consumedNextStep === true && existing.next_step) {
+    existing.progress = existing.progress || {};
+    const done = Array.isArray(existing.progress.completed) ? existing.progress.completed : [];
+    const line = `${existing.next_step.action_class || "step"}: ${existing.next_step.description || ""}`.trim();
+    existing.progress.completed = [...done, line].slice(-40);
+    existing.progress.current_state = summary ? String(summary).slice(0, 300) : existing.progress.current_state;
+    existing.next_step = null;
+  }
+
+  existing.updated_at = at;
+  return saveLaneMemory(existing, { root });
+}
+
 export function getLaneMemory(laneId, root) {
   const read = readLaneMemoryGuarded(root);
   if (!read.ok) return null;

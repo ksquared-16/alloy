@@ -16,6 +16,7 @@ import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsFor
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
 import * as attachmentsModule from "./lane-attachments.mjs";
+import { recordLaneProgress } from "./lane-memory.mjs";
 
 export const EXECUTION_RUN_SCHEMA = "vacilando.execution_run.v1";
 /**
@@ -229,7 +230,19 @@ export const BLOCKED_RUN_STATES = Object.freeze(["NEEDS_INPUT", "WAITING_RESOURC
 export const SWEEPING_ORIGINS = Object.freeze(["system", "governor"]);
 /** Truly irreversible. ABANDONED is terminal for scheduling, but recoverable. */
 export const IRREVERSIBLE_RUN_STATES = Object.freeze(["COMPLETE", "FAILED"]);
-export const RUN_ORIGINS = Object.freeze(["operator", "agent", "governor", "system", "certification"]);
+/*
+ * WHO CAUSED THIS RUN.
+ *
+ * "scheduler" was missing, and its absence was not inert. work-scheduler-dispatch
+ * creates its runs with origin "scheduler"; resolveRunOrigin falls through an
+ * unrecognised origin to "operator". So every autonomously dispatched run was
+ * recorded as though the Director had asked for it — the resident system's own
+ * decisions attributed to the person the whole point was to not involve. It also
+ * left nothing able to tell a dispatched run from a hand-made one, which is what
+ * the completion path needs in order to know whether an authorized next step was
+ * actually spent.
+ */
+export const RUN_ORIGINS = Object.freeze(["operator", "agent", "governor", "system", "certification", "scheduler"]);
 
 const LEGAL = Object.freeze({
   // QUEUED -> NEEDS_INPUT: the pane was not at an actionable prompt, so the
@@ -1060,6 +1073,41 @@ export function transitionExecutionRun(runId, toState, {
   touchWorkerLiveness(found, { nowMs, origin });
   appendTransition(found, { from, to, reason, origin, nowMs });
   writeStore(putRun(store, found), root);
+
+  /*
+   * A FINISHED RUN IS PROGRESS THE LANE SHOULD REMEMBER.
+   *
+   * THE DEFECT THIS CLOSES, traced live. Lane authorization revalidates
+   * `checkpoint_fresh` against lane memory's `updated_at`, and nothing in the
+   * resident system ever wrote it — `recordPromotionCheckpoint` had zero call
+   * sites. Six hours after a human last edited lane memory by hand, every lane
+   * revalidated to UNKNOWN and the scheduler stopped considering it. Backend
+   * was measured with five of six checks passing, none unmeasured, and was
+   * never once offered to the planner.
+   *
+   * Completion is the honest place to record it: real work finished on this
+   * lane, so its context genuinely is current. A lane where nothing completes
+   * still ages out, which is what the freshness window is for.
+   *
+   * Only a run the scheduler dispatched consumes the authorized next step.
+   * `origin` is the discriminator: work-scheduler-dispatch is the sole creator
+   * of "scheduler" runs. A certification or operator run refreshes the lane's
+   * context without spending the Director's instruction, which is why this is
+   * not simply "clear next_step on any completion".
+   *
+   * It never creates memory, so lanes that are UNKNOWN stay UNKNOWN, and it can
+   * never fail the transition: the run really did complete.
+   */
+  if (to === "COMPLETE" && found.lane_id) {
+    try {
+      recordLaneProgress(found.lane_id, {
+        runId: found.run_id,
+        summary: found.completion_report?.summary || found.latest_progress?.summary || null,
+        consumedNextStep: found.origin === "scheduler",
+      }, { root, nowMs });
+    } catch { /* lane memory is context, never a gate on reporting a finished run */ }
+  }
+
   const push = emitOutcomeEvent(found, root);
   try {
     onExecutionRunTransition({
