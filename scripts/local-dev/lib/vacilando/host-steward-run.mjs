@@ -215,12 +215,33 @@ export function runStewardCycle({
 export async function runStewardCycleWithHygiene({
   root, nowMs = Date.now(), dryRun = false, groupAlive = defaultGroupAlive, exec = defaultExec,
   stopDevServer = null, hygiene = true, forceHygiene = false, hygieneOptions = null,
+  recoveryStage = true,
 } = {}) {
   const steward = runStewardCycle({ root, nowMs, dryRun, groupAlive, exec, stopDevServer });
-  if (!hygiene || !root) return { ...steward, hygiene: null };
+
+  /*
+   * RECOVERY FIRST. A host that needs repairing must not spend its cycle
+   * tidying, and a control plane at RECOVERY_REQUIRED must not be handing work
+   * to a scheduler. Failures here are attached and never abort the cycle.
+   */
+  let recovery = null;
+  if (root && recoveryStage !== false) {
+    try { recovery = await runResidentRecoveryStage({ root, nowMs, dryRun }); }
+    catch (e) { recovery = { ok: false, error: "recovery_stage_threw", detail: String(e?.message || e) }; }
+  }
+  const recoveryBlocking = recovery?.failure_class && recovery.failure_class !== "HEALTHY" && !recovery.verified;
+
+  if (!hygiene || !root) return { ...steward, recovery, hygiene: null };
+  if (recoveryBlocking) {
+    // §13: recovery outranks ordinary work. Hygiene and scheduling wait for a
+    // control plane that is not currently broken.
+    return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class } };
+  }
 
   const due = forceHygiene ? { due: true, reason: "forced" } : hygieneDue({ root, nowMs });
-  if (!due.due) return { ...steward, hygiene: { skipped: "not_due", last_ms: due.last_ms } };
+  // Carry the recovery result on EVERY return path. Dropping it on the
+  // hygiene-not-due branch made the resident stage look like it had not run.
+  if (!due.due) return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms } };
 
   let result = null;
   try {
@@ -247,5 +268,118 @@ export async function runStewardCycleWithHygiene({
       },
     });
   }
-  return { ...steward, hygiene: result };
+  return { ...steward, recovery, hygiene: result };
+}
+
+/**
+ * THE RESIDENT RECOVERY STAGE — the second of Phase 7's two narrow blockers.
+ *
+ * `control-plane-recovery` has been certified since Phase 3 and was never
+ * called by anything on a cadence. That is why `director-forced-to-mac-mini`
+ * stayed MITIGATED for four phases: the decision model existed, and nothing
+ * drove it. Recovery code existing is not evidence that recovery happens.
+ *
+ * WHAT THIS STAGE OWNS: sequencing. Nothing else. The classification is
+ * `control-plane-recovery.classifyControlPlane`, the decision is `planRecovery`,
+ * the repair is whichever owner the policy names, and the episode memory is the
+ * recovery module's. No recovery rule is written here, because a rule written
+ * in the caller is a rule the decision owner cannot be tested against.
+ *
+ * ORDER: recovery runs BEFORE hygiene and before scheduling. A host that needs
+ * repairing must not spend the cycle tidying, and §13 requires safety to outrank
+ * scheduling pressure.
+ *
+ * THE HONEST LIMIT, stated because it decides what this can ever certify. The
+ * Steward runs INSIDE the Gateway process. If that process dies, this stage
+ * dies with it, so PROCESS_DEAD is not recoverable from here — launchd's
+ * KeepAlive owns that, and it is the independent execution path §14 asks about.
+ * What this stage adds is the class launchd cannot see: a Gateway that is alive
+ * and not serving, which is exactly the condition
+ * `director-forced-to-mac-mini` was opened for.
+ */
+export async function runResidentRecoveryStage({
+  root,
+  nowMs = Date.now(),
+  dryRun = false,
+  observe = null,
+  repair = null,
+} = {}) {
+  if (!root) return { ok: false, error: "missing_runtime_root" };
+  const R = await import("./control-plane-recovery.mjs");
+
+  let observation = null;
+  try {
+    observation = observe ? await observe() : await R.observeControlPlane({ root, nowMs });
+  } catch (e) {
+    return { ok: false, error: "observation_failed", detail: String(e?.message || e) };
+  }
+
+  const plan = R.planRecovery(observation, { root, nowMs });
+  const base = {
+    ok: true,
+    failure_class: plan.failure_class,
+    level: plan.level,
+    reason: plan.reason,
+    escalate: Boolean(plan.escalate),
+    action: plan.action ?? null,
+    owner: plan.owner ?? null,
+  };
+
+  if (plan.failure_class === "HEALTHY") return { ...base, acted: false, why: "nothing to repair" };
+  // No action means the decision owner has said this is not ours to fix —
+  // Tailscale, an unreachable host, or authority already exhausted. Escalation
+  // is the outcome, and it is already on the plan.
+  if (!plan.action) {
+    // Carry the decision owner's own explanation. Replacing it with a generic
+    // word here is how "within attempt cooldown; a faster retry would be a loop"
+    // became the unhelpful "waiting".
+    return {
+      ...base,
+      acted: false,
+      waiting: Boolean(plan.waiting),
+      why: plan.reason || (plan.escalate ? "escalated; no autonomous action applies" : "waiting"),
+    };
+  }
+  if (dryRun) return { ...base, acted: false, dry_run: true, why: "dry run" };
+
+  // The attempt is recorded BEFORE the action, because the action may kill the
+  // process holding the memory.
+  const episode = R.recordAttempt(plan.episode, { action: plan.action, nowMs, root });
+
+  let performed = null;
+  try {
+    if (repair) performed = await repair(plan);
+    else if (plan.action === "restart_owned_gateway") {
+      const H = await import("./control-plane-health.mjs");
+      performed = await H.recoverOwnedVacilandoProcess({ root, nowMs });
+    } else {
+      // An action with no wired owner is REPORTED, never improvised. The wt1
+      // dev server proved what ad hoc signalling costs.
+      return { ...base, acted: false, episode, why: `no wired repair owner for ${plan.action}`, escalate: true };
+    }
+  } catch (e) {
+    performed = { ok: false, error: String(e?.message || e) };
+  }
+
+  // Verify by RE-OBSERVING, never by trusting the repair's own return value.
+  let after = null;
+  try { after = observe ? await observe() : await R.observeControlPlane({ root, nowMs: Date.now() }); }
+  catch { after = null; }
+  const verdict = after ? R.classifyControlPlane({ ...after, now_ms: Date.now() }) : null;
+  const recovered = verdict?.failure_class === "HEALTHY";
+  const finalEpisode = R.recordVerification(episode, {
+    ok: recovered,
+    detail: verdict ? verdict.why : "the control plane could not be re-observed after the attempt",
+    nowMs: Date.now(),
+    root,
+  });
+
+  return {
+    ...base,
+    acted: true,
+    performed,
+    verified: recovered,
+    after_class: verdict?.failure_class ?? null,
+    episode: finalEpisode,
+  };
 }
