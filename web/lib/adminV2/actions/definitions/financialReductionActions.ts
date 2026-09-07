@@ -25,7 +25,9 @@ import { randomUUID } from "crypto";
 
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
+import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { applyFinancialReductions } from "@/lib/financials/reductions/applyFinancialReductions";
+import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
 import {
     MANUAL_REDUCTION_CATEGORIES,
     ManualReductionError,
@@ -61,8 +63,15 @@ const POLICY_FORBIDDEN_FIELDS = [
     "eligible",
 ];
 
-async function permitted(supabase: SupabaseClient, orgId: string, userId: string | null, key: string): Promise<boolean> {
-    const grants = await resolveActorPermissionGrants(supabase, orgId, userId);
+async function permitted(
+    supabase: SupabaseClient,
+    orgId: string,
+    // The runtime hands `userId` as optional; a missing actor must reach the grant read as null and
+    // be DENIED there, not be coerced into looking like an anonymous-but-valid one here.
+    userId: string | null | undefined,
+    key: string,
+): Promise<boolean> {
+    const grants = await resolveActorPermissionGrants(supabase, orgId, userId ?? null);
     return (grants.permissionKeys ?? []).includes(key);
 }
 
@@ -72,7 +81,13 @@ const applyDiscounts: RegisteredAction = {
     description:
         "Apply the organisation's authored discount policies to a service period's gross tuition. "
         + "Creates reduction drafts only; posting stays a separate, authoritative step.",
-    supportedEntityTypes: ["customer", "opportunity_customer_member", "opportunity", "child", "person"],
+    /*
+     * `customer` is NOT an action entity type in this runtime, and adding one to the shared union to
+     * suit this thread would be the money domain widening a platform vocabulary for its own
+     * convenience. The household travels in the payload — which is where the services already read
+     * it from — and the SUBJECT an operator names is the child or the assignment, as everywhere else.
+     */
+    supportedEntityTypes: ["opportunity_customer_member", "opportunity", "child", "person"],
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -108,6 +123,32 @@ const applyDiscounts: RegisteredAction = {
             blockers: ok ? [] : [{ code: "billing_permission_required", message: `Applying discounts requires ${BILLING_APPLY_DISCOUNTS_PERMISSION}.` }],
             availableTransitions: [],
             requiredInputs: [],
+        };
+    },
+
+    /** What the run would consider: the policies actually in force for that period. No writes. */
+    async buildPreview({ supabase, ctx, payload }) {
+        const periodKey = t(payload?.period_key);
+        const period = billingPeriodBounds(periodKey);
+        const policies = await readPolicies({ supabase, orgId: ctx.orgId } as never);
+        const inForce = policies.filter(
+            (p) =>
+                p.isActive
+                && (["waiver", "sibling_discount", "discount"] as readonly string[]).includes(p.kind)
+                && (!p.effective.start || p.effective.start <= period.end)
+                && (!p.effective.end || p.effective.end >= period.start),
+        );
+        return {
+            summary:
+                inForce.length === 0
+                    ? `No discount policy is in force for ${periodKey}.`
+                    : `${inForce.length} discount ${inForce.length === 1 ? "policy" : "policies"} in force for ${periodKey}.`,
+            /*
+             * The POLICIES, not a predicted set of amounts. Who qualifies depends on enrolments and
+             * employments read at execution, and a preview that guessed at eligibility would be
+             * telling an operator a number the run might not produce.
+             */
+            changes: inForce.map((p) => `${p.kind} · ${JSON.stringify(p.params)}`),
         };
     },
 
@@ -157,7 +198,7 @@ const adjustAccount: RegisteredAction = {
     actionKey: BILLING_ADJUST_ACCOUNT_ACTION_KEY,
     defaultLabel: "Adjust account",
     description: "Record a manual credit, waiver or write-off against a family's account, with a reason.",
-    supportedEntityTypes: ["customer", "child", "person", "opportunity_customer_member"],
+    supportedEntityTypes: ["child", "person", "opportunity_customer_member"],
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -197,6 +238,17 @@ const adjustAccount: RegisteredAction = {
             blockers: ok ? [] : [{ code: "adjust_permission_required", message: `Adjusting an account requires ${BILLING_ADJUST_PERMISSION}.` }],
             availableTransitions: [],
             requiredInputs: [],
+        };
+    },
+
+    /** The operator's own numbers, read back before they commit them. */
+    async buildPreview({ payload }) {
+        const amount = Number(payload?.amount_cents);
+        const direction = Number.isFinite(amount) && amount < 0 ? "reduces" : "increases";
+        const money = Number.isFinite(amount) ? `$${(Math.abs(amount) / 100).toFixed(2)}` : "an unstated amount";
+        return {
+            summary: `${t(payload?.charge_category) || "credit"} of ${money} — ${direction} what the family owes.`,
+            changes: [`Effective ${t(payload?.effective_date) || "—"}`, `Reason: ${t(payload?.reason) || "—"}`],
         };
     },
 
@@ -261,7 +313,7 @@ const reverseAdjustment: RegisteredAction = {
     actionKey: BILLING_REVERSE_ADJUSTMENT_ACTION_KEY,
     defaultLabel: "Reverse adjustment",
     description: "Undo a manual reduction by appending its opposite. The original is left standing.",
-    supportedEntityTypes: ["customer", "child", "person", "opportunity_customer_member"],
+    supportedEntityTypes: ["child", "person", "opportunity_customer_member"],
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -286,6 +338,26 @@ const reverseAdjustment: RegisteredAction = {
             blockers: ok ? [] : [{ code: "adjust_permission_required", message: `Reversing an adjustment requires ${BILLING_ADJUST_PERMISSION}.` }],
             availableTransitions: [],
             requiredInputs: [],
+        };
+    },
+
+    /** What stands today, so the operator reverses the reduction they meant to. */
+    async buildPreview({ supabase, ctx, payload }) {
+        const { data } = await (supabase as SupabaseClient)
+            .from("financial_reduction_applications")
+            .select("amount_cents, currency_code, reason, period_key, reversed_by_id")
+            .eq("org_id", ctx.orgId)
+            .eq("id", t(payload?.application_id))
+            .maybeSingle();
+        const row = data as
+            | { amount_cents: number; reason: string | null; period_key: string | null; reversed_by_id: string | null }
+            | null;
+        if (!row) return { summary: "No such reduction on this account.", changes: [] };
+        return {
+            summary: row.reversed_by_id
+                ? "This reduction has already been reversed."
+                : `Reverses $${(Math.abs(row.amount_cents) / 100).toFixed(2)} from ${row.period_key ?? "an unstated period"}.`,
+            changes: [`Original reason: ${row.reason ?? "—"}`, "The original stays in the ledger; its opposite is appended."],
         };
     },
 

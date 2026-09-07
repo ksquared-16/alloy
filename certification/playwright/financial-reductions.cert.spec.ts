@@ -124,7 +124,7 @@ test.describe("financial reductions, in the mounted application", () => {
         // ── THE REDUCTION, THROUGH ITS OWN COMMAND ──────────────────────────────────────────
         const discounted = await execute({
             action_key: "billing.apply_discounts",
-            entity_type: "customer",
+            entity_type: "child",
             entity_id: CUSTOMER,
             mode: "execute",
             confirmation: { confirmed: true },
@@ -221,7 +221,7 @@ test.describe("financial reductions, in the mounted application", () => {
         const res = await page.request.post("/api/admin/actions/execute", {
             data: {
                 action_key: "billing.adjust_account",
-                entity_type: "customer",
+                entity_type: "child",
                 entity_id: CUSTOMER,
                 mode: "execute",
                 confirmation: { confirmed: true },
