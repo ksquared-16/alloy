@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
-import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { resolveFinancialWorkQueue } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -19,8 +19,10 @@ export const dynamic = "force-dynamic";
  * with the rights the gate resolved. A client asking for a site it does not hold gets nothing, and
  * asking for none gets only what org-wide rights would already have shown.
  *
- * Reading financial work is `fin.read`. Acting on it is the registered action's own permission, and
- * this route executes nothing.
+ * Reading financial work is `fin.read`, enforced through `assertFinancialsReadAllowed` — a named
+ * helper rather than an inline lookup, so the declared route-capability table can bind the claim to
+ * the guard that actually makes it true. Acting on the work is the registered action's own
+ * permission; this route executes nothing.
  */
 export async function GET(request: NextRequest) {
     const gate = await loadAdminRouteGate();
@@ -28,9 +30,9 @@ export async function GET(request: NextRequest) {
     const ctx = gate.access;
 
     const supabase = createAdminClient();
-    const grants = await resolveActorPermissionGrants(supabase, ctx.orgId, ctx.userId ?? null);
-    if (!(grants.permissionKeys ?? []).includes("fin.read")) {
-        return NextResponse.json({ error: "Viewing financial work requires fin.read." }, { status: 403 });
+    const allowed = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
+    if (!allowed.ok) {
+        return NextResponse.json({ error: allowed.message }, { status: 403 });
     }
 
     const requestedSite = new URL(request.url).searchParams.get("site_location_id")?.trim() || null;
