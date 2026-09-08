@@ -24,7 +24,7 @@
  * failure would be destructive rather than merely wasteful.
  */
 import { createQueuedRun, occupyingRunForLane, activeRunForLane } from "./execution-run.mjs";
-import { createAdmissionRequest, admissionForLane } from "./execution-admission.mjs";
+import { createAdmissionRequest, admissionForLane, admissionOwnsLiveWork } from "./execution-admission.mjs";
 import { authorizedNextStep } from "./authorized-next-step.mjs";
 import { getLaneMemory } from "./lane-memory.mjs";
 import { dispatchKey } from "./work-scheduler.mjs";
@@ -104,8 +104,16 @@ export async function dispatchCandidate({
 
   // 2. Idempotency: one open admission per lane means this work is already
   //    in flight, and a second run would be the duplicate dispatch §6 forbids.
+  //    An admission only means "in flight" while the run it names is live. It
+  //    is never closed when that run reaches a terminal state, so the record
+  //    outlives the work — measured at 44 ACTIVE admissions across this estate,
+  //    every one naming a COMPLETE, ABANDONED or missing run. Testing presence
+  //    rather than liveness made every lane that had ever run permanently
+  //    undispatchable.
   const open = admissionForLane(laneId, root);
-  if (open) return refuse("admission_open", { admission_id: open.admission_id, state: open.state });
+  if (open && admissionOwnsLiveWork(open, root)) {
+    return refuse("admission_open", { admission_id: open.admission_id, state: open.state, run_id: open.run_id });
+  }
 
   // 3. Re-derive authority from live truth. The plan does not carry it.
   const record = getLaneMemory(laneId, root);
