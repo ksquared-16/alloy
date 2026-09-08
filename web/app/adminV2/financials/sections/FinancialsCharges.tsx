@@ -26,6 +26,7 @@ import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
+import FinancialsBulkCharge from "@/app/adminV2/financials/sections/FinancialsBulkCharge";
 import { moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialWorkQueueState } from "@/app/adminV2/financials/useFinancialWorkQueue";
 import type { FinancialWorkRow } from "@/lib/financials/workspace/resolveFinancialWorkQueue";
@@ -33,9 +34,12 @@ import type { FinancialWorkRow } from "@/lib/financials/workspace/resolveFinanci
 export default function FinancialsCharges({
     queue,
     scopeLabel,
+    siteSelected,
 }: {
     queue: FinancialWorkQueueState;
     scopeLabel: string;
+    /** True when a site is chosen — the bulk run does not obey it, and says so. */
+    siteSelected: boolean;
 }) {
     const [selected, setSelected] = useState<FinancialWorkRow | null>(null);
     const [posting, setPosting] = useState(false);
@@ -94,6 +98,11 @@ export default function FinancialsCharges({
     return (
         <div className="flex min-h-0 flex-1 gap-3" data-testid="financials-charges-section">
             <WorkspaceSurface className="flex min-h-0 w-[22rem] shrink-0 flex-col overflow-hidden">
+                {/*
+                 * BULK CHARGING SITS ABOVE THE QUEUE IT FILLS. One server-owned run, previewed and
+                 * confirmed — never a client loop over Add Charge.
+                 */}
+                <FinancialsBulkCharge onCommitted={queue.refresh} siteSelected={siteSelected} />
                 <div className="min-h-0 flex-1 overflow-y-auto" data-financials-work-queue="true">
                     {queue.loading && rows.length === 0 ? (
                         <p className="px-3 py-4 text-xs text-alloy-midnight/50">Loading financial work…</p>

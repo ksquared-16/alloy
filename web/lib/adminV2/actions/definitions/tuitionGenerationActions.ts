@@ -122,6 +122,27 @@ const generateTuition: RegisteredAction = {
                         ? `${o.assignmentId} · ${(o.amountCents / 100).toFixed(2)} ${o.currencyCode}`
                         : `${o.assignmentId} · ${o.kind === "refused" ? o.reason : o.kind === "not_due" ? o.reason : "error"}`,
                 ),
+            /*
+             * STRUCTURED, BECAUSE A SURFACE HAS TO SHOW THE EXCEPTIONS, NOT JUST COUNT THEM.
+             *
+             * `summary` and `changes` are prose and a caller can only render them. A bulk run
+             * needs the tally and the rows that will NOT be billed, so an operator confirms
+             * knowing what is being left behind rather than discovering it afterwards. The
+             * exceptions are carried whole; the generated rows stay in `changes`, since a
+             * hundred successful lines are a log and the failures are the decision.
+             */
+            after: {
+                period_key: periodKey,
+                counts: result.counts,
+                total_amount_cents: result.outcomes.reduce(
+                    (sum, o) => sum + (o.kind === "generated" ? o.amountCents : 0),
+                    0,
+                ),
+                refused_outcomes: result.outcomes.filter((o) => o.kind === "refused"),
+                not_due_outcomes: result.outcomes.filter((o) => o.kind === "not_due"),
+                error_outcomes: result.outcomes.filter((o) => o.kind === "error"),
+                already_posted_outcomes: result.outcomes.filter((o) => o.kind === "already_posted"),
+            },
         };
     },
 

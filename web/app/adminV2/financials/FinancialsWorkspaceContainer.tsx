@@ -108,6 +108,7 @@ export default function FinancialsWorkspaceContainer({ onClose }: { onClose?: ()
                 flow={flow}
                 activity={activity}
                 scopeLabel={scopeLabel}
+                siteSelected={Boolean(siteId)}
                 onOpenSection={openWorkSection}
             />
         </FinancialsWorkspaceShell>

@@ -33,6 +33,7 @@ export default function FinancialsWorkspace({
     flow,
     activity,
     scopeLabel,
+    siteSelected,
     onOpenSection,
 }: {
     section: FinancialsSection;
@@ -42,6 +43,7 @@ export default function FinancialsWorkspace({
     flow: FinancialsReadState<FinancialPaymentFlow>;
     activity: FinancialsReadState<FinancialActivityFeed>;
     scopeLabel: string;
+    siteSelected: boolean;
     onOpenSection: (section: FinancialsWorkSection) => void;
 }) {
     switch (section) {
@@ -50,7 +52,7 @@ export default function FinancialsWorkspace({
         case "accounts":
             return <FinancialsAccounts position={position} scopeLabel={scopeLabel} />;
         case "charges":
-            return <FinancialsCharges queue={queue} scopeLabel={scopeLabel} />;
+            return <FinancialsCharges queue={queue} scopeLabel={scopeLabel} siteSelected={siteSelected} />;
         case "payments":
             return <FinancialsPayments flow={flow} scopeLabel={scopeLabel} />;
         case "subsidy":
