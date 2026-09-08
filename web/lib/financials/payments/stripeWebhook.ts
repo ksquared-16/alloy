@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { postProviderConfirmedCollection, type AttemptForPosting } from "./canonicalPosting";
 import { mapStripeStatus } from "./collectionAttempt";
 import { resolveOrgForConnectedAccount } from "./providerMerchant";
+import { mapStripeRefundStatus, recognizeProviderRefund } from "./refundCollection";
 
 export type WebhookOutcome =
     | "applied"
@@ -101,6 +102,11 @@ const SUPPORTED = new Set([
     "payment_intent.succeeded",
     "payment_intent.payment_failed",
     "payment_intent.canceled",
+    // Slice G. `refund.*` carries the refund object itself, which is the only event family that
+    // names a `re_…` directly; `charge.refunded` names a CHARGE and is therefore evidence that a
+    // refund happened rather than evidence of which one, so it stays observed-but-unmodelled.
+    "refund.created",
+    "refund.updated",
 ]);
 
 const TERMINAL = new Set(["succeeded", "failed", "canceled"]);
@@ -210,6 +216,69 @@ export async function handleStripeWebhook(
             "unattributed",
             "connected account is not bound to any organization; failing closed",
         );
+    }
+
+    /*
+     * ── 4a. A REFUND EVENT (Slice G) ─────────────────────────────────────────────────────────────
+     *
+     * Same discipline as a collection: the refund is resolved through Alloy's own record under the
+     * org the merchant binding produced, never from the payload. A `pending` refund converges the
+     * provider state and stops — a balance is not restored because a refund was requested.
+     */
+    if (eventType.startsWith("refund.")) {
+        if (!providerTransactionId) {
+            return await finish("unsupported", "refund event carries no refund id", { org_id: orgId });
+        }
+        const { data: refundRow } = await supabase
+            .from("payment_provider_refunds")
+            .select("id, provider_state, provider_account_ref, canonical_refund_payment_id")
+            .eq("org_id", orgId)
+            .eq("processor", "stripe")
+            .eq("provider_refund_id", providerTransactionId)
+            .maybeSingle();
+        const refundRecord = refundRow as {
+            id: string; provider_state: string; provider_account_ref: string;
+            canonical_refund_payment_id: string | null;
+        } | null;
+        if (!refundRecord) {
+            return await finish("unattributed", "no refund record in this organization owns that provider refund", { org_id: orgId });
+        }
+        if (refundRecord.provider_account_ref !== connectedAccountRef) {
+            return await finish("rejected", "refund event connected account does not match the refund's merchant", { org_id: orgId });
+        }
+
+        const refundState = mapStripeRefundStatus(object.status ? String(object.status) : undefined);
+        const awaitingRecognition = refundState === "succeeded" && !refundRecord.canonical_refund_payment_id;
+
+        if (refundRecord.provider_state !== refundState) {
+            const { error: refundTransitionError } = await supabase
+                .from("payment_provider_refunds")
+                .update({
+                    provider_state: refundState,
+                    provider_state_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", refundRecord.id);
+            if (refundTransitionError && !String(refundTransitionError.message).includes("is terminal at")) {
+                throw new Error(`could not converge the provider refund: ${refundTransitionError.message}`);
+            }
+            if (refundTransitionError) {
+                return await finish("stale", "another delivery reached a terminal refund state first", { org_id: orgId });
+            }
+        } else if (!awaitingRecognition) {
+            return await finish("duplicate", `provider refund is already ${refundState}`, { org_id: orgId });
+        }
+
+        if (refundState !== "succeeded") {
+            return await finish("applied", `provider refund converged to ${refundState}; no money has moved back`, { org_id: orgId });
+        }
+
+        // THE REVERSAL BOUNDARY. Thread 8 performs it; nothing here restores a balance.
+        const recognized = await recognizeProviderRefund(supabase, refundRecord.id);
+        const refundDetail = recognized.recognized
+            ? `provider refund succeeded and canonical refund ${recognized.canonicalRefundId} was recorded`
+            : `provider refund succeeded; canonical recognition did not occur: ${recognized.reason} — ${recognized.detail}`;
+        return await finish("applied", refundDetail, { org_id: orgId });
     }
 
     // ── 4. THE ATTEMPT, UNDER THAT ORG ───────────────────────────────────────────────────────────
