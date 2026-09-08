@@ -36,10 +36,14 @@ import {
     refundChildcarePayment,
     type ChildcarePaymentMethod,
 } from "@/lib/financials/childcarePaymentService";
+import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
+import { resolveCollectionMerchant } from "@/lib/financials/payments/providerMerchant";
+import { recognizeProviderRefund, requestProviderRefund } from "@/lib/financials/payments/refundCollection";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const PAYMENT_RECORD_ACTION_KEY = "payment.record";
 export const PAYMENT_REFUND_ACTION_KEY = "payment.refund";
+export const PAYMENT_COLLECT_CARD_ACTION_KEY = "payment.collect_card";
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -369,9 +373,76 @@ const refundPayment: RegisteredAction = {
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
         try {
+            const paymentId = t(payload.payment_id);
+
+            /*
+             * ── MONEY EXECUTED BY A PROCESSOR MUST BE GIVEN BACK BY THAT PROCESSOR ───────────────
+             *
+             * Calling Thread 8 directly for a CARD payment would create the canonical reversal and
+             * put the family's balance back up while the money stayed in the provider's Stripe
+             * account — the family told they owe it again, and nobody refunded. That is the one
+             * outcome a refund must never produce, so a Stripe-executed receipt is routed through
+             * the provider refund path first and Thread 8 recognises it afterwards.
+             *
+             * Manual rails fall through unchanged: cash handed back has no executor to ask.
+             */
+            const { data: originalRow } = await (supabase as SupabaseClient)
+                .from("payments")
+                .select("processor")
+                .eq("org_id", ctx.orgId)
+                .eq("id", paymentId)
+                .maybeSingle();
+            const processor = (originalRow as { processor?: string | null } | null)?.processor ?? null;
+
+            if (processor === "stripe") {
+                const requested = await requestProviderRefund(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    paymentId,
+                    amountCents: payload.amount_cents == null ? undefined : Number(payload.amount_cents),
+                    // Distinguishes a retry of THIS refund from a later, deliberate second partial
+                    // one. The operator's own intent identity when supplied; otherwise the amount.
+                    intentDiscriminator: t(payload.refund_intent) || undefined,
+                    reason: t(payload.reason) || null,
+                    actorUserId: ctx.userId ?? null,
+                });
+                if (!requested.ok) {
+                    return { ok: false, correlationId, status: 409, error: requested.message };
+                }
+
+                /*
+                 * Recognise inline when the provider already settled, so the operator sees canonical
+                 * truth rather than a spinner. The webhook remains authoritative and will find it
+                 * already recognised — both paths share the same idempotency anchor, so whichever
+                 * arrives second changes nothing.
+                 */
+                const recognised = requested.providerState === "succeeded"
+                    ? await recognizeProviderRefund(supabase as SupabaseClient, requested.refundRecordId)
+                    : null;
+
+                return {
+                    ok: true,
+                    correlationId,
+                    result: {
+                        actionKey: PAYMENT_REFUND_ACTION_KEY,
+                        entityType: invocation.entityType,
+                        entityId: t(invocation.entityId),
+                        affectedId: recognised?.recognized ? recognised.canonicalRefundId : requested.refundRecordId,
+                        detail: {
+                            refunds_payment_id: paymentId,
+                            amount_cents: requested.amountCents,
+                            provider_state: requested.providerState,
+                            // Diagnostics only. An operator never needs to read a `re_`.
+                            provider_refund_id: requested.providerRefundId,
+                            recognized: recognised?.recognized ?? false,
+                            refund_payment_id: recognised?.recognized ? recognised.canonicalRefundId : null,
+                        },
+                    },
+                };
+            }
+
             const result = await refundChildcarePayment(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
-                paymentId: t(payload.payment_id),
+                paymentId,
                 amountCents: payload.amount_cents == null ? undefined : Number(payload.amount_cents),
                 reason: t(payload.reason) || null,
                 idempotencyKey: idempotencyKeyFor(payload, "payment.refund"),
@@ -401,4 +472,150 @@ const refundPayment: RegisteredAction = {
     },
 };
 
-export const financialPaymentActions: RegisteredAction[] = [recordPayment, refundPayment];
+
+/**
+ * COLLECT BY CARD — the operator asks the family's card for money that is already owed.
+ *
+ * Deliberately shaped like `payment.record` rather than like a Stripe screen: the operator's intent
+ * is "collect what is owed", and the executor is an implementation detail of that intent. Nothing in
+ * the label, the description or the blockers mentions a PaymentIntent, a connected account or a
+ * processor transaction — those appear only in `detail`, for diagnostics.
+ *
+ * It creates no money. The result carries what the browser needs to complete a tokenized card entry;
+ * a receipt exists only once the provider confirms and Thread 8 recognises it.
+ */
+const collectCardPayment: RegisteredAction = {
+    actionKey: PAYMENT_COLLECT_CARD_ACTION_KEY,
+    defaultLabel: "Collect by card",
+    description: "Collect an amount that is owed by charging a card, through the provider's own merchant account.",
+    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        if (!t(src.charge_id)) {
+            return {
+                ok: false,
+                blockers: [{ code: "missing_charge", message: "A charge is required.", field: "charge_id" }],
+            };
+        }
+        if (src.amount_cents != null) {
+            const amount = Number(src.amount_cents);
+            if (!Number.isInteger(amount) || amount <= 0) {
+                return {
+                    ok: false,
+                    blockers: [{ code: "invalid_amount", message: "An amount must be greater than zero.", field: "amount_cents" }],
+                };
+            }
+        }
+        return { ok: true, value: src };
+    },
+
+    /*
+     * MERCHANT READINESS IS A BLOCKER, NOT AN ERROR.
+     *
+     * An organisation that has not finished Stripe onboarding cannot collect, and the operator needs
+     * to be told THAT rather than "payment failed". The blocker codes carry the readiness state so
+     * the surface can say something true and actionable; there is no branch that falls back to the
+     * platform account.
+     */
+    async resolveEligibility({ supabase, ctx, payload }) {
+        const chargeId = t(payload?.charge_id);
+        if (!chargeId) {
+            return {
+                eligible: false,
+                blockers: [{ code: "missing_charge", message: "A charge is required." }],
+                availableTransitions: [],
+                requiredInputs: [],
+            };
+        }
+        const merchant = await resolveCollectionMerchant(supabase as SupabaseClient, ctx.orgId, "stripe");
+        if (!merchant.ok) {
+            return {
+                eligible: false,
+                blockers: [{ code: `merchant_${merchant.reason}`, message: merchant.message }],
+                availableTransitions: [],
+                requiredInputs: [],
+            };
+        }
+        return { eligible: true, blockers: [], availableTransitions: [], requiredInputs: [] };
+    },
+
+    async buildPreview({ supabase, ctx, payload }) {
+        const chargeId = t(payload?.charge_id);
+        try {
+            const charge = await readChargeBalance(supabase as SupabaseClient, ctx.orgId, chargeId);
+            const amount = payload?.amount_cents == null ? charge.outstandingCents : Number(payload.amount_cents);
+            return {
+                summary: `Collect ${money(amount)} by card against a balance of ${money(charge.outstandingCents)}.`,
+                changes: [
+                    "The card is charged through the provider's own Stripe account.",
+                    "No payment is recorded until the provider confirms it.",
+                ],
+            };
+        } catch (err) {
+            return { summary: err instanceof Error ? err.message : "This collection cannot be previewed.", changes: [] };
+        }
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        try {
+            const chargeId = t(payload.charge_id);
+            // The amount is the SERVER's, always. An omitted amount means "whatever is collectible",
+            // and a supplied one is measured against canonical truth inside the service.
+            const charge = await readChargeBalance(supabase as SupabaseClient, ctx.orgId, chargeId);
+            const requested = payload.amount_cents == null
+                ? charge.outstandingCents
+                : Number(payload.amount_cents);
+
+            const created = await createCardCollection(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                chargeId,
+                requestedAmountCents: requested,
+                actorUserId: ctx.userId ?? null,
+                payerPersonId: t(payload.payer_person_id) || null,
+            });
+
+            if (!created.ok) {
+                return { ok: false, correlationId, status: 409, error: created.message };
+            }
+
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: PAYMENT_COLLECT_CARD_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: t(invocation.entityId),
+                    affectedId: created.attemptId,
+                    /*
+                     * `client_secret` is the browser's handle on the card entry — Stripe's own
+                     * token, not an Alloy credential, and useless without the publishable key. The
+                     * provider identifiers below are diagnostics: an operator never needs to read a
+                     * `pi_` to use Financials.
+                     */
+                    detail: {
+                        collection_attempt_id: created.attemptId,
+                        amount_cents: created.amountCents,
+                        currency: created.currency,
+                        client_secret: created.clientSecret,
+                        connected_account: created.connectedAccountRef,
+                        provider_transaction_id: created.providerTransactionId,
+                        reused: created.reused,
+                        // The honest state: a request, not a receipt.
+                        recognized: false,
+                    },
+                },
+            };
+        } catch (err) {
+            return mapError(err, correlationId);
+        }
+    },
+};
+
+export const financialPaymentActions: RegisteredAction[] = [recordPayment, refundPayment, collectCardPayment];
