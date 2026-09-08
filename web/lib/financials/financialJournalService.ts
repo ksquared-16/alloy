@@ -551,6 +551,43 @@ export async function readAccountJournal(
  * happens to equal the outstanding total only when nothing has been written outside the journal;
  * that coincidence is not a contract, and no consumer should build on it.
  */
+/**
+ * THE RECENT HISTORY, ACROSS ACCOUNTS — newest first, bounded.
+ *
+ * `readAccountJournal` answers for one payer and `readPeriodMovement` for one closed period.
+ * A workspace needs the third question neither answers: what has happened lately, anywhere.
+ *
+ * It returns ROWS and nothing else — no totals, no movement, no balance. That is not a
+ * limitation of the query, it is the file's rule: `obligation_delta_cents` summed over an
+ * arbitrary recent slice is not a balance, and returning one here would put a second answer in
+ * front of an operator who already has the authoritative one on the account card.
+ *
+ * Location is NOT resolved here. Each row carries the same polymorphic billable source a charge
+ * does, and placing it is the workspace projection's job — the same contract, in one place.
+ */
+export async function readRecentJournal(
+    supabase: SupabaseClient,
+    params: {
+        orgId: string;
+        limit?: number;
+        entryTypes?: readonly JournalEntryType[];
+        billingPeriodKey?: string | null;
+    }
+): Promise<FinancialJournalEntryRow[]> {
+    const limit = Math.min(Math.max(params.limit ?? 200, 1), 500);
+    let query = supabase
+        .from(TABLE)
+        .select("*")
+        .eq("org_id", params.orgId)
+        .order("posted_at", { ascending: false })
+        .limit(limit);
+    if (params.entryTypes?.length) query = query.in("entry_type", [...params.entryTypes]);
+    if (params.billingPeriodKey) query = query.eq("billing_period_key", params.billingPeriodKey);
+    const { data, error } = await query;
+    if (error) throw translateJournalError(error.message);
+    return (data ?? []) as FinancialJournalEntryRow[];
+}
+
 export async function readPeriodMovement(
     supabase: SupabaseClient,
     params: { orgId: string; accountingPeriodKey: string }

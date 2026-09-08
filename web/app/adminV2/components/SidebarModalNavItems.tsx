@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 // Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
-import { Inbox, ListChecks, BarChart3, Layers, Contact, Wallet } from "lucide-react";
+import { Inbox, ListChecks, BarChart3, Layers, Contact, Banknote } from "lucide-react";
 
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
@@ -282,7 +282,7 @@ export function SidebarFinancialsNavItem({ collapsed }: { collapsed: boolean }) 
             collapsed={collapsed}
             title="Financials — the financial work waiting on an operator, and the accounts it belongs to"
             label="Financials"
-            icon={<Wallet size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            icon={<Banknote size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={null}
             active={activeModal === "financials"}
             dataAttr="financials"
