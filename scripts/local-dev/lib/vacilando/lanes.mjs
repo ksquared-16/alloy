@@ -108,7 +108,12 @@ function runTmux(args, timeoutOrOpts = 4000) {
   const maxBuffer = opts.maxBuffer ?? 2 * 1024 * 1024;
   const input = opts.input;
   return new Promise((res) => {
-    const child = execFile(tmuxBin(), args, { timeout, maxBuffer, windowsHide: true }, (err, stdout, stderr) => {
+    // A tmux command can START the server, and the server inherits this
+    // process's cwd forever. The Gateway runs from toolkit/<sha>, which
+    // retention eventually reclaims — that is how a live server came to hold a
+    // deleted directory and every new pane inherited it. Anchor to $HOME, the
+    // one path retention will never take.
+    const child = execFile(tmuxBin(), args, { timeout, maxBuffer, windowsHide: true, cwd: homedir() }, (err, stdout, stderr) => {
       res({
         ok: !err,
         stdout: stdout || "",
