@@ -8,19 +8,69 @@ function read(rel: string): string {
     return fs.readFileSync(path.join(root, rel), "utf8");
 }
 
-describe("Workspace expand + BOS stacking", () => {
-    it("WorkspaceShell uses shared expand control (not Assignment-only CSS)", () => {
+/**
+ * EXPAND IS GONE, AND THIS IS THE RECORD OF IT.
+ *
+ * These assertions previously required the shared expand control, the provider and the
+ * expanded z-order. Expand gave every operational workspace a SECOND chrome — a different
+ * height cap, a different stacking order against the BOS command surface, a different
+ * Escape meaning — that nothing outside the shell reasoned about, and it put a control in
+ * the header rail whose label ("Expand Workspace") was the widest thing in the band.
+ *
+ * The assertions are inverted rather than deleted, so the removal stays enforced: a future
+ * shell cannot quietly reintroduce a second layout of the same workspace.
+ */
+describe("Workspace chrome — one layout, one header line", () => {
+    it("WorkspaceShell renders no expand control and no expanded state", () => {
         const shell = read("components/workspace/WorkspaceShell.tsx");
-        expect(shell).toContain("WorkspaceExpandControl");
-        expect(shell).toContain("data-workspace-expanded");
+        expect(shell).not.toContain("WorkspaceExpandControl");
+        expect(shell).not.toContain("data-workspace-expanded");
+        // The module's own secondary actions reach the header unwrapped.
+        expect(shell).toContain("secondaryActions={header.secondaryActions}");
     });
 
-    it("BosModalShell owns expand state and keeps BOS above expanded workspace", () => {
+    it("the shared expand primitives no longer exist", () => {
+        for (const rel of [
+            "components/workspace/WorkspaceExpandControl.tsx",
+            "components/workspace/WorkspaceExpandContext.tsx",
+        ]) {
+            expect(fs.existsSync(path.join(root, rel))).toBe(false);
+        }
+    });
+
+    it("BosModalShell has one geometry, one z-order, and Escape closes", () => {
         const bos = read("app/adminV2/components/AdminV2WorkspaceBosModalShell.tsx");
-        expect(bos).toContain("WorkspaceExpandProvider");
-        expect(bos).toContain("data-workspace-expanded");
-        expect(bos).toContain("ADMINV2_COMMAND_SURFACE_Z");
+        expect(bos).not.toContain("WorkspaceExpandProvider");
+        expect(bos).not.toContain("data-workspace-expanded");
+        expect(bos).not.toContain("ADMINV2_COMMAND_SURFACE_Z");
         expect(bos).toMatch(/Escape/);
+    });
+
+    /**
+     * The header band is one line in every workspace. The rail never wraps and never
+     * shrinks; the title truncates instead. Close carries its own `shrink-0` so the exit
+     * cannot be compressed away.
+     */
+    it("the shared header rail cannot wrap onto a second control row", () => {
+        const header = read("app/adminV2/components/OperationalModalHeader.tsx");
+        expect(header).toContain("flex-nowrap");
+        expect(header).toContain("whitespace-nowrap");
+        expect(header).toMatch(/ml-auto flex shrink-0 flex-nowrap items-center gap-1\.5 whitespace-nowrap/);
+        expect(header).toMatch(/inline-flex shrink-0 items-center gap-1 whitespace-nowrap/);
+    });
+
+    /**
+     * The site filter is a select in that rail. The primitive's base `width: 100%` collapses
+     * in a shrink-to-fit parent, so the header placement gets a content floor — shared, by
+     * data attribute, so every workspace inherits it.
+     */
+    it("the site selector holds one line inside the header rail", () => {
+        const css = read("components/workspace/alloySelect.css");
+        expect(css).toContain('[data-operational-modal-header-actions="true"] .alloy-select');
+        expect(css).toMatch(/min-width:\s*11rem/);
+        expect(css).toMatch(/max-width:\s*18rem/);
+        // The value still ellipsises past the ceiling rather than wrapping.
+        expect(css).toMatch(/\.alloy-select__value \{[^}]*white-space: nowrap/s);
     });
 
     it("Operations / Processing / Communications / Work Items share BosModalShell", () => {
