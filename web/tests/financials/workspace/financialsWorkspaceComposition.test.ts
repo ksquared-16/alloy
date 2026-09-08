@@ -153,6 +153,30 @@ describe("Financials workspace — the words that would create a semantic the da
     });
 });
 
+describe("Financials workspace — BOS may explain, and may not decide money", () => {
+    /*
+     * The seam is a DISPLAY LINE. A figure handed to a reasoning surface is a figure it can
+     * restate, and a restated balance is a second answer with no owner.
+     */
+    it("seeds a surface label and never a figure", () => {
+        const seam = read("app/adminV2/financials/useFinancialsBosSurface.ts");
+        expect(seam).toContain("setSurfaceOperationalLabel");
+        // No entity context: `entity_type` is the single value "opportunities", so seeding a
+        // household there would tell BOS the household was an opportunity.
+        expect(seam).not.toContain("setAssistantContext");
+        expect(seam).not.toContain("openAssistantWithContext");
+        // No amounts reach it: the hook takes labels, not cents.
+        expect(seam).not.toMatch(/Cents\b/);
+        expect(seam).not.toMatch(/outstanding|collectible|amount_cents/i);
+    });
+
+    it("hands BOS the section and scope, not the money on screen", () => {
+        const container = read("app/adminV2/financials/FinancialsWorkspaceContainer.tsx");
+        expect(container).toContain("useFinancialsBosSurface");
+        expect(container).toMatch(/sectionLabel,\s*scopeLabel/);
+    });
+});
+
 describe("Financials workspace — the reads are gated and scoped by the server", () => {
     it("every new route is gated by fin.read through the named helper", () => {
         for (const rel of NEW_ROUTES) {

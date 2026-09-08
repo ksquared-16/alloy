@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import FinancialsKpiStrip from "@/app/adminV2/financials/FinancialsKpiStrip";
 import FinancialsWorkspace from "@/app/adminV2/financials/FinancialsWorkspace";
 import FinancialsWorkspaceShell, { type FinancialsSite } from "@/app/adminV2/financials/FinancialsWorkspaceShell";
+import { useFinancialsBosSurface } from "@/app/adminV2/financials/useFinancialsBosSurface";
 import { useFinancialWorkQueue } from "@/app/adminV2/financials/useFinancialWorkQueue";
 import {
     useFinancialsActivity,
@@ -33,6 +34,7 @@ import {
 } from "@/app/adminV2/financials/useFinancialsReads";
 import {
     defaultFinancialsSection,
+    financialsSectionsForMode,
     type FinancialsMode,
     type FinancialsSection,
     type FinancialsWorkSection,
@@ -83,6 +85,19 @@ export default function FinancialsWorkspaceContainer({ onClose }: { onClose?: ()
         if (!siteId) return "All sites";
         return sites?.find((s) => s.id === siteId)?.label ?? "Selected site";
     }, [siteId, sites]);
+
+    const sectionLabel = useMemo(
+        () => financialsSectionsForMode(mode).find((s) => s.key === section)?.label ?? "Overview",
+        [mode, section],
+    );
+
+    /*
+     * BOS IS TOLD WHAT THE OPERATOR IS LOOKING AT, AND NO FIGURE.
+     *
+     * A display line — workspace, section, scope. Never an amount: a number handed to a reasoning
+     * surface is a number it can restate, and a restated balance is a second answer with no owner.
+     */
+    useFinancialsBosSurface({ open: true, sectionLabel, scopeLabel });
 
     return (
         <FinancialsWorkspaceShell
