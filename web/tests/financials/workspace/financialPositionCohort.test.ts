@@ -103,6 +103,11 @@ const BASE_TABLES: Tables = {
         { id: "agreement-b", org_id: ORG, customer_id: "customer-b", site_location_id: SITE_B },
         { id: "agreement-nosite", org_id: ORG, customer_id: "customer-d", site_location_id: null },
     ],
+    customers: [
+        { id: "customer-a", org_id: "org-1", name: "Alvarez" },
+        { id: "customer-b", org_id: "org-1", name: "Bell" },
+        { id: "customer-c", org_id: "org-1", name: "Chen" },
+    ],
     financial_reduction_applications: [],
     payment_allocations: [],
     payments: [],
@@ -119,6 +124,8 @@ describe("resolveFinancialPositionCohort — location", () => {
     it("shows an org-wide operator every childcare charge it can place, and no job charge", async () => {
         const cohort = await resolveFinancialPositionCohort(fakeSupabase(BASE_TABLES), orgWide);
         expect(cohort.rows.map((r) => r.position.chargeId).sort()).toEqual(["charge-a", "charge-b", "charge-c"]);
+        // Households are named, so an accounts list reads as families rather than ids.
+        expect(cohort.rows.find((r) => r.position.chargeId === "charge-a")!.householdName).toBe("Alvarez");
         // 100k + 50k + 20k. The job charge's 999k and the unplaceable 777k are not in it.
         expect(cohort.totals.outstandingCents).toBe(170_000);
     });

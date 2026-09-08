@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 # =============================================================================
-# THREAD 4 — FINANCIALS WORKSPACE: navigation, composition, projection, action.
+# THREADS 4 + 4A — FINANCIALS WORKSPACE: navigation, composition, projection, money, action.
 #
-# The live cases prove the projection selects and scopes truthfully; the browser proof drives the
-# operator path end to end. This harness owns what neither can: clearing POSTED money between runs,
-# so a cohort that should contain draft work is not empty because an earlier run already posted it.
+# Thread 4's live cases prove the projection SELECTS and scopes truthfully. Thread 4A's prove the
+# thing Thread 4 deliberately had none of — figures — and the property that makes them safe: every
+# total is `computeCollectiblePosition`, the same arithmetic the account card renders, asserted
+# against `resolveFamilyCollectible` on the same charge rather than against a number written into
+# a test.
+#
+# The browser proofs drive the operator path end to end, and the shared-chrome proof runs across
+# EVERY workspace, because the Expand removal and the one-line header band were repairs to shared
+# primitives — proving them in Financials alone would prove nothing about the other four.
+#
+# This harness owns what none of them can: clearing POSTED money between runs, so a cohort that
+# should contain draft work is not empty because an earlier run already posted it.
 #
 # The trigger suspension is fixture cleanup only. Posted money is immutable by design, and this
 # thread asserts that immutability rather than relaxing it.
@@ -46,11 +55,38 @@ psql "$DB" -tAc "select count(*) from public.financial_charge_templates where or
 psql "$DB" -tAc "select count(*) from public.locations where org_id='$ORG' and location_type='site'" \
   | grep -qvE '^(0|1)$' || { echo "✗ two sites are needed to prove location scope"; exit 1; }
 
-echo "── running the live cases"
+echo "── the accounting calendar the history cases depend on"
+# Thread 5's attribution trigger REFUSES a journal entry whose effective date falls outside every
+# period on the active calendar. A run whose service period sits outside it would post charges and
+# silently record no history, so the productization cases would assert nothing at all.
+psql "$DB" -tAc "select count(*) from public.financial_accounting_periods p
+                   join public.financial_accounting_calendars c on c.id = p.calendar_id
+                  where c.org_id = '$ORG' and c.is_active" \
+  | grep -qv '^0$' || { echo "✗ the active calendar has no periods; history cannot be attributed"; exit 1; }
+
+echo "── running the live cases (Thread 4: selection and scope)"
 ( cd "$ROOT/web" && npx vitest run \
     tests/financials/live/financialWorkspaceQueue.live.test.ts \
     --no-file-parallelism 2>&1 | tail -30; exit "${PIPESTATUS[0]}" )
 check $? "the live cases — cohort, location provenance, site scope, restriction, posting, isolation"
+
+teardown
+
+echo "── running the live cases (Thread 4A: position, payments, history, metrics)"
+( cd "$ROOT/web" && npx vitest run \
+    tests/financials/live/financialsWorkspaceProductization.live.test.ts \
+    --no-file-parallelism 2>&1 | tail -30; exit "${PIPESTATUS[0]}" )
+check $? "the live cases — canonical agreement, site scope, unapplied money, history, metric parity"
+
+echo "── the hermetic cases the projections and the composition rest on"
+( cd "$ROOT/web" && npx vitest run \
+    tests/financials/subsidy/collectiblePosition.test.ts \
+    tests/financials/workspace/financialPositionCohort.test.ts \
+    tests/financials/workspace/financialWorkLocation.test.ts \
+    tests/financials/workspace/financialsWorkspaceComposition.test.ts \
+    tests/adminV2/scheduling/assignmentsWorkspaceRuntimeConvergence.test.ts \
+    2>&1 | tail -12; exit "${PIPESTATUS[0]}" )
+check $? "one calculation, one location contract, one shell family, no Expand"
 
 if [ "${CERT_BROWSER:-0}" = "1" ]; then
   echo
@@ -95,7 +131,13 @@ SQL
        CERT_WS_PERIOD="$PERIOD" CERT_WS_CUSTOMER="$CUSTOMER" CERT_WS_ASSIGNMENT="$OCM" \
        CERT_WS_MEMBER="$MEMBER" CERT_WS_SITE="$SITE" \
        "$PW" test -c playwright.config.ts playwright/financials-workspace.cert.spec.ts --workers=1 --reporter=line )
-  check $? "navigation, shell, overview, queue, selection, Thread 2 detail, posting, refresh, reload"
+  check $? "navigation, shell, money overview, sections, Studio, bulk preview, queue, Thread 2 detail, posting, reload"
+
+  echo "── the shared chrome, in every workspace that wears it"
+  ( cd "$ROOT/certification" \
+    && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" \
+       "$PW" test -c playwright.config.ts playwright/workspace-chrome.cert.spec.ts --workers=1 --reporter=line )
+  check $? "no Expand, a reachable Close, a one-line header band and a readable site filter — everywhere"
 
   # `fin.read` is the permission THIS thread's server surface owns. Thread 1's `charge.post`
   # declares none — it is gated by the admin/ops route gate — which is reported as a finding rather

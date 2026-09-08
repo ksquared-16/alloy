@@ -34,6 +34,7 @@ import type { FinancialPositionCohort } from "@/lib/financials/workspace/resolve
 
 type AccountRow = {
     customerId: string;
+    householdName: string | null;
     currencyCode: string;
     outstandingCents: number;
     collectibleCents: number;
@@ -52,6 +53,7 @@ function groupByAccount(cohort: FinancialPositionCohort | null): AccountRow[] {
         if (!row.customerId) continue;
         const existing = byAccount.get(row.customerId) ?? {
             customerId: row.customerId,
+            householdName: row.householdName,
             currencyCode: row.position.currencyCode,
             outstandingCents: 0,
             collectibleCents: 0,
@@ -111,7 +113,9 @@ export default function FinancialsAccounts({
                                 }`}
                             >
                                 <span className="flex items-baseline justify-between gap-2">
-                                    <span className="truncate text-sm text-alloy-midnight">Household</span>
+                                    <span className="truncate text-sm text-alloy-midnight">
+                                        {account.householdName ?? "Household"}
+                                    </span>
                                     <span
                                         className="shrink-0 text-sm tabular-nums text-alloy-midnight"
                                         data-financials-account-outstanding={account.customerId}

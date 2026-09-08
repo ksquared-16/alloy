@@ -71,17 +71,62 @@ test.describe("financials workspace, in the mounted application", () => {
         // ── THE SHELL IS THE SHARED ONE ─────────────────────────────────────────────────────
         await expect(shell).toHaveAttribute("data-adminv2-financials-workspace", "true");
         await expect(page.locator("#financials-workspace-title")).toBeVisible();
-        // One mode is furniture: the rail is deliberately off, and no Studio exists.
         await expect(page.locator('[data-testid="financials-workspace-shell"] [role="tablist"]').first()).toBeVisible();
+        // Thread 4A: the rail is on, because there are now two modes to switch between.
+        await expect(shell).toHaveAttribute("data-financials-mode", "work");
 
-        // ── OVERVIEW ANSWERS WHAT NEEDS ATTENTION ──────────────────────────────────────────
+        // ── OVERVIEW IS A LANDING PAGE, AND THE FIGURES ARE MONEY ──────────────────────────
         await expect(shell).toHaveAttribute("data-financials-section", "overview");
         const activity = page.locator('[data-testid="financials-overview-activity-kpis"]');
         await expect(activity, "Overview uses the canonical activity band").toBeVisible({ timeout: 30_000 });
         // The tiles are the shared KPI primitive, not a Financials card.
         await expect(activity.locator("[data-work-unit-header-kpi]").first()).toBeVisible({ timeout: 30_000 });
+        /*
+         * EVERY HEADLINE TILE IS A REGISTERED FINANCIALS METRIC, resolved by the metric engine.
+         * `data-calculation-key` is the shared primitive's own provenance attribute, so asserting
+         * it proves the number came through the registry rather than from a count in a component.
+         */
+        for (const key of [
+            "financials.outstanding_amount",
+            "financials.currently_collectible_amount",
+            "financials.gross_charges_posted_amount",
+            "financials.payments_received_amount",
+        ]) {
+            await expect(
+                activity.locator(`[data-calculation-key="${key}"]`),
+                `${key} is on the landing page`,
+            ).toHaveCount(1, { timeout: 30_000 });
+        }
+        // At least one figure is money, not an inventory count.
+        await expect(activity.getByText(/\$/).first(), "Overview shows money").toBeVisible({ timeout: 30_000 });
+
+        // The exception band is the operator's work, and each entry opens the section that owns it.
+        const exceptions = page.locator('[data-financials-overview-exceptions="true"]');
+        await expect(exceptions).toBeVisible({ timeout: 30_000 });
+        await expect(
+            exceptions.locator('[data-financials-overview-exception="financials.unapplied_payments_amount"]'),
+        ).toBeVisible();
+
         const overviewText = await page.locator('[data-financials-overview-scope="true"]').innerText();
-        expect(overviewText, "the Overview states the scope its counts obey").toMatch(/All sites|site/i);
+        expect(overviewText, "the Overview states the scope its figures obey").toMatch(/All sites|site/i);
+
+        // ── THE WORK SECTIONS EACH MOUNT THEIR OWN SURFACE ─────────────────────────────────
+        for (const [tab, section, testId] of [
+            ["Accounts", "accounts", "financials-accounts-section"],
+            ["Payments", "payments", "financials-payments-section"],
+            ["Subsidy", "subsidy", "financials-subsidy-section"],
+            ["Activity", "activity", "financials-activity-section"],
+        ] as const) {
+            await page.getByRole("tab", { name: tab }).click();
+            await page.waitForTimeout(6_000);
+            await expect(shell, `${tab} is a real section`).toHaveAttribute("data-financials-section", section);
+            await expect(page.locator(`[data-testid="${testId}"]`)).toBeVisible({ timeout: 40_000 });
+        }
+
+        // Activity is history and says so — no balance is summed onto that surface.
+        await expect(page.locator('[data-financials-activity-footer="true"]')).toContainText(
+            /not summed from this list/i,
+        );
 
         // ── THE OPERATIONAL SECTION ────────────────────────────────────────────────────────
         await page.getByRole("tab", { name: "Charges" }).click();
@@ -153,6 +198,70 @@ test.describe("financials workspace, in the mounted application", () => {
         expect(await page.locator("[data-financials-metric-tile]").count(), "no Financials metric tile").toBe(0);
         // The workspace is hosted in the shared modal, like every other one.
         await expect(page.locator('[data-adminv2-financials-modal="true"]')).toBeVisible();
+    });
+
+    /*
+     * STUDIO LAUNCHES CANONICAL CONFIGURATION AND HOLDS NO SECOND COPY OF IT.
+     *
+     * The proof is the href: every tile points at `/organization/financials`, the page that
+     * actually persists the setting. A Studio that had begun to author configuration would have
+     * grown a control that saves, and the footer would be a lie.
+     */
+    test("Studio is a launch surface over the canonical configuration, not a second one", async ({ page }) => {
+        test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
+        test.setTimeout(600_000);
+        const shell = await openFinancialsWorkspace(page);
+
+        await page.getByRole("tab", { name: "Studio" }).click();
+        await page.waitForTimeout(6_000);
+        await expect(shell).toHaveAttribute("data-financials-mode", "studio");
+        await expect(shell).toHaveAttribute("data-financials-section", "setup");
+
+        const tiles = page.locator("[data-financials-studio-tile]");
+        await expect(tiles.first()).toBeVisible({ timeout: 30_000 });
+        expect(await tiles.count(), "every configuration chapter is offered").toBeGreaterThanOrEqual(6);
+        for (const href of await tiles.evaluateAll((nodes) => nodes.map((n) => n.getAttribute("href")))) {
+            expect(href, "a Studio tile navigates to the canonical configuration page").toMatch(
+                /^\/organization\/financials/,
+            );
+        }
+        await expect(page.locator('[data-financials-studio-footer="true"]')).toContainText(
+            /does not hold a second copy/i,
+        );
+
+        // Returning to Work lands on Work's own section, not a Studio key.
+        await page.getByRole("tab", { name: "Work" }).click();
+        await page.waitForTimeout(4_000);
+        await expect(shell).toHaveAttribute("data-financials-section", "overview");
+    });
+
+    /*
+     * BULK CHARGING IS ONE SERVER-OWNED RUN. The preview reports what WOULD happen, states its
+     * own scope, and nothing is written until it is confirmed.
+     */
+    test("bulk charging previews a period before it writes anything", async ({ page }) => {
+        test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
+        test.setTimeout(900_000);
+        await openFinancialsWorkspace(page);
+        await page.getByRole("tab", { name: "Charges" }).click();
+        await page.waitForTimeout(6_000);
+
+        await page.locator('[data-financials-bulk-open="true"]').click();
+        const panel = page.locator('[data-financials-bulk-panel="true"]');
+        await expect(panel).toBeVisible({ timeout: 20_000 });
+
+        // The scope is stated BEFORE the run, not discovered from its result.
+        await expect(panel.locator('[data-financials-bulk-scope="org_wide"]')).toContainText(
+            /Organization-wide for this period/i,
+        );
+
+        await panel.locator('[data-financials-bulk-period="true"]').fill(PERIOD);
+        await panel.locator('[data-financials-bulk-preview="true"]').click();
+        await expect(
+            panel.locator('[data-financials-bulk-preview-result="true"]'),
+            "the preview reports a tally an operator can confirm against",
+        ).toBeVisible({ timeout: 60_000 });
+        await expect(panel.locator('[data-financials-bulk-preview-result="true"]')).toContainText(/to bill/i);
     });
 
     /*

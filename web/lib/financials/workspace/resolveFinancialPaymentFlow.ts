@@ -47,6 +47,8 @@ export type FinancialPaymentRow = {
     unappliedCents: number;
     currencyCode: string;
     customerId: string | null;
+    /** The household's own name, so a payments list names families rather than ids. */
+    householdName: string | null;
     receivedAt: string | null;
     postedAt: string | null;
     locationScope: FinancialWorkLocationScope;
@@ -179,6 +181,15 @@ export async function resolveFinancialPaymentFlow(
     });
     if (visible.length === 0) return { ...empty, truncated };
 
+    /* Names, so a list of receipts reads as families. Presentation only — never a key. */
+    const customerIds = [...new Set(visible.map((v) => v.customerId).filter((v): v is string => !!v))];
+    const { data: customerRows } = customerIds.length
+        ? await supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", customerIds)
+        : { data: [] };
+    const customerNames = new Map(
+        (((customerRows ?? []) as unknown) as Array<{ id: string; name: string | null }>).map((c) => [c.id, c.name]),
+    );
+
     /* APPLIED IS THE CARD'S DEFINITION: active allocations of this payment, summed. */
     const paymentIds = visible.map((v) => v.payment.id);
     const { data: allocationRows } = await supabase
@@ -203,6 +214,7 @@ export async function resolveFinancialPaymentFlow(
             unappliedCents: v.payment.direction === "inbound" ? Math.max(0, amountCents - appliedCents) : 0,
             currencyCode: v.payment.currency,
             customerId: v.customerId,
+            householdName: v.customerId ? customerNames.get(v.customerId) ?? null : null,
             receivedAt: v.payment.received_at,
             postedAt: v.payment.posted_at,
             locationScope: v.locationScope,

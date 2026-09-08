@@ -128,7 +128,9 @@ export default function FinancialsSubsidy({
                                     }`}
                                 >
                                     <span className="flex items-baseline justify-between gap-2">
-                                        <span className="truncate text-sm text-alloy-midnight">{REASON_LABEL[reason]}</span>
+                                        <span className="truncate text-sm text-alloy-midnight">
+                                            {row.householdName ?? "Household"} · {REASON_LABEL[reason]}
+                                        </span>
                                         <span className="shrink-0 text-sm tabular-nums text-alloy-midnight">
                                             {reason === "variance"
                                                 ? signedMoney(row.position.unresolvedVarianceCents, row.position.currencyCode)

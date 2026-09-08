@@ -53,6 +53,8 @@ export const FINANCIAL_POSITION_SCAN_CAP = 2000;
 export type FinancialPositionRow = {
     position: CollectiblePosition;
     customerId: string | null;
+    /** The household's own name, so an accounts list names families rather than ids. */
+    householdName: string | null;
     enrollmentAgreementId: string | null;
     serviceDate: string | null;
     postedAt: string | null;
@@ -263,6 +265,15 @@ export async function resolveFinancialPositionCohort(
     const chargeIds = visible.map((v) => v.charge.id);
     const facts = await readPositionFacts(supabase, args.orgId, chargeIds);
 
+    /* Names, so a list of accounts reads as families. Presentation only — never a key. */
+    const customerIds = [...new Set(visible.map((v) => v.customerId).filter((v): v is string => !!v))];
+    const { data: customerRows } = customerIds.length
+        ? await supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", customerIds)
+        : { data: [] };
+    const customerNames = new Map(
+        (((customerRows ?? []) as unknown) as Array<{ id: string; name: string | null }>).map((c) => [c.id, c.name]),
+    );
+
     const rows: FinancialPositionRow[] = visible.map((v) => {
         const reductions = facts.reductionsByCharge.get(v.charge.id) ?? [];
         const reductionsCents = reductions.reduce((acc, r) => acc + r, 0);
@@ -290,6 +301,7 @@ export async function resolveFinancialPositionCohort(
         return {
             position,
             customerId: v.customerId,
+            householdName: v.customerId ? customerNames.get(v.customerId) ?? null : null,
             enrollmentAgreementId: v.enrollmentAgreementId,
             serviceDate: v.charge.service_date,
             postedAt: v.charge.posted_at,

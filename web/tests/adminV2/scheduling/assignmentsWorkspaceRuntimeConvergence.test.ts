@@ -69,8 +69,9 @@ describe("Workspace chrome — one layout, one header line", () => {
         expect(css).toContain('[data-operational-modal-header-actions="true"] .alloy-select');
         expect(css).toMatch(/min-width:\s*11rem/);
         expect(css).toMatch(/max-width:\s*18rem/);
-        // The value still ellipsises past the ceiling rather than wrapping.
-        expect(css).toMatch(/\.alloy-select__value \{[^}]*white-space: nowrap/s);
+        // The value still ellipsises past the ceiling rather than wrapping. `[\s\S]` rather
+        // than the `s` flag: this file compiles under an ES2017 target.
+        expect(css).toMatch(/\.alloy-select__value \{[\s\S]*?white-space: nowrap/);
     });
 
     it("Operations / Processing / Communications / Work Items share BosModalShell", () => {

@@ -114,7 +114,7 @@ export default function FinancialsPayments({
                             >
                                 <span className="flex items-baseline justify-between gap-2">
                                     <span className="truncate text-sm text-alloy-midnight">
-                                        {shortDate(row.receivedAt)} · received
+                                        {row.householdName ?? "Household"} · {shortDate(row.receivedAt)}
                                     </span>
                                     <span className="shrink-0 text-sm tabular-nums text-alloy-midnight">
                                         {moneyExact(row.amountCents, row.currencyCode)}
