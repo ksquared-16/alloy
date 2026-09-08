@@ -13,6 +13,7 @@ import { basename, join } from "node:path";
 import { gitFactsForPath, readAllMetadata, resolveRuntimeConfig, TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { isRuntimeAdoptionBlocked, listDurableLanes } from "./development-lane.mjs";
 import { localNodeId } from "./execution-node.mjs";
+import { readCeiling } from "./capacity-experiment-ceiling.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
 import {
   inferAgentPresence,
@@ -22,6 +23,27 @@ import {
   parseTmuxPaneLines,
   TMUX_SESSION_RE,
 } from "./lanes.mjs";
+
+/**
+ * env override > governed config value > built-in floor.
+ *
+ * Exported so the same answer is available to anything that needs to explain a
+ * capacity refusal, rather than each caller re-deriving it and disagreeing.
+ */
+export const PROVIDER_CEILING_FLOOR = 3;
+
+export function resolveProviderCeiling({ env = process.env, configCeiling = undefined } = {}) {
+  const raw = String(env.ALLOY_MAX_ACTIVE_PROVIDERS || "").trim();
+  if (raw && Number.isFinite(Number(raw)) && Number(raw) > 0) {
+    return Number(raw);
+  }
+  let fromConfig = configCeiling;
+  if (fromConfig === undefined) {
+    try { fromConfig = readCeiling(); } catch { fromConfig = null; }
+  }
+  if (Number.isFinite(Number(fromConfig)) && Number(fromConfig) > 0) return Number(fromConfig);
+  return PROVIDER_CEILING_FLOOR;
+}
 
 export function candidateIdFor(worktreeName) {
   const name = String(worktreeName || "").trim();
@@ -222,7 +244,7 @@ export function agentBearingWorktreePaths(providerPanes = []) {
  * which cannot go stale. Metadata is still the fallback when pane facts are not
  * available, but "unknown status" no longer means "active".
  */
-export function assessProvisionCapacity({ cfg = null, metadata = null, providerPanes = null } = {}) {
+export function assessProvisionCapacity({ cfg = null, metadata = null, providerPanes = null, ceiling = null } = {}) {
   const runtime = cfg || resolveRuntimeConfig();
   const meta = metadata || readAllMetadata(runtime);
   const occupied = meta.filter((m) => {
@@ -237,7 +259,27 @@ export function assessProvisionCapacity({ cfg = null, metadata = null, providerP
   // reading. Free slots are still reported (a fixed-port task needs one) but
   // running out of them no longer blocks admission: see FIXED_SLOT_RANGE.
   const freeSlots = Math.max(0, FIXED_SLOT_RANGE - occupied.length);
-  const maxProviders = Number(process.env.ALLOY_MAX_ACTIVE_PROVIDERS || 3);
+  /*
+   * THE CEILING HAS TO BE READ WHERE IT IS WRITTEN.
+   *
+   * THE DEFECT, reported from the Attendance lane and traced here. The governed
+   * capacity.set_provider_ceiling action writes ALLOY_MAX_ACTIVE_PROVIDERS into
+   * ~/.config/alloy-dev/config — that is the file capacity-experiment-ceiling
+   * owns, audits and can roll back. This line read process.env instead. The
+   * Gateway is started by launchd and carries no such variable, so the raise
+   * landed in the config, the admission gate kept falling through to 3, and a
+   * new lane was refused for capacity while the operator was looking at a
+   * configured ceiling of 8. Measured: config 8, process env unset, enforced 3.
+   *
+   * An explicit environment variable still wins, because that is a deliberate
+   * per-process override and the operator who sets it means it. What changes is
+   * that its ABSENCE no longer erases the governed value.
+   */
+  // Injectable for the same reason `metadata` and `providerPanes` are: without
+  // it a fixture reads the operator's real ~/.config/alloy-dev/config and its
+  // expectations change with the host, which is how a capacity test came to
+  // depend on this machine's ceiling being ignored.
+  const maxProviders = ceiling == null ? resolveProviderCeiling() : Number(ceiling);
 
   let activeProviders;
   let holders;
