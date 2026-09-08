@@ -322,7 +322,20 @@ function StructuredFactEditor({
         return shown;
     });
 
-    const field = "w-full min-w-0 rounded-lg border border-alloy-midnight/20 bg-white px-2.5 py-1.5 text-[14px] text-alloy-midnight";
+    /*
+     * 16px AND 44px ARE THE HOUSE RULE ON THIS SURFACE, and the correction editor was under both.
+     *
+     * The participant turn control below sets `text-[16px] min-h-[44px]` deliberately: iOS zooms
+     * the page whenever a focused input is under 16px, and 44px is the tap target. This editor —
+     * the one a parent reaches by tapping Edit to correct a fact — was `text-[14px]` with `py-1.5`,
+     * so at 375px a parent correcting their child's birthday got a ~32px control that zoomed the
+     * whole page on focus and then left them scrolled somewhere they did not ask to be.
+     *
+     * Measured at 375x812 on the live participant runtime: date input font-size 14px against 16px
+     * on every other input in the same journey. Same class of miss as the `initial` prop this
+     * editor already carries a comment about — the editor is fine, the wiring around it was not.
+     */
+    const field = "w-full min-w-0 min-h-[44px] rounded-lg border border-alloy-midnight/20 bg-white px-2.5 py-1.5 text-[16px] text-alloy-midnight";
     const caption = "mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40";
 
     let body: ReactNode;
@@ -427,7 +440,9 @@ function NewPartyForm({
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
-    const field = "w-full rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[15px] text-alloy-midnight";
+    // Same rule, same reason: 15px still zooms on iOS. The party editor is a parent-facing input
+    // like any other on this surface.
+    const field = "w-full min-h-[44px] rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[16px] text-alloy-midnight";
     const caption = "mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40";
     return (
         <div className="flex flex-col gap-3" data-participant-party-form={roleLabel}>
