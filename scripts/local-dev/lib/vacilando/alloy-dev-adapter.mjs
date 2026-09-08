@@ -567,12 +567,36 @@ export function resetAlloyAdapterImplForTests() {
   sessionStartImpl = null;
 }
 
+/*
+ * A TMUX SERVER OUTLIVES THE TOOLKIT THAT STARTED IT.
+ *
+ * THE DEFECT THIS CLOSES, and it took the whole host down for a day. tmux
+ * starts its server implicitly on the first command, and that server inherits
+ * the CALLING PROCESS'S working directory. The Gateway runs from
+ * toolkit/<sha>, so the server was born inside a versioned directory. Toolkit
+ * retention later reclaimed that version, and a server cannot change its cwd —
+ * so every pane created afterwards inherited a deleted directory and failed the
+ * canonical cwd check. Proven by control: a fresh server on its own socket
+ * places panes correctly, the poisoned one cannot, and neither `new-session -c`
+ * nor `respawn-pane -c` works around it.
+ *
+ * The server is long-lived infrastructure and must not be anchored to a
+ * disposable, versioned path. $HOME is chosen because it is the one directory
+ * on this host that retention will never reclaim.
+ *
+ * This does not change where PANES live: those are placed explicitly with
+ * `-c <worktree>`. It only decides where the SERVER stands when tmux has to
+ * start one.
+ */
+const STABLE_TMUX_CWD = homedir();
+
 function runTmuxSync(args, { timeout = 8000 } = {}) {
   if (tmuxRunImpl) return tmuxRunImpl(args);
   try {
     const stdout = execFileSync(tmuxBin(), args, {
       encoding: "utf8",
       timeout,
+      cwd: STABLE_TMUX_CWD,
       stdio: ["ignore", "pipe", "pipe"],
     });
     return { ok: true, stdout: String(stdout || ""), stderr: "" };
