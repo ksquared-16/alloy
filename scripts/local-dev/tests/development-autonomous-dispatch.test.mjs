@@ -527,3 +527,54 @@ test("a dispatched run is ATTRIBUTABLE to the scheduler, not to the Director", (
   assert.equal(op.run.origin, "operator");
   assert.ok(op.memory.next_step, "a Director-created run does not spend the Director's step");
 });
+
+/*
+ * AN ADMISSION IS ONLY "IN FLIGHT" WHILE ITS RUN IS LIVE.
+ *
+ * THE LIVE FAILURE. With Backend unoccupied, AUTHORIZED, deterministic and its
+ * checkpoint fresh, four consecutive ordinary ticks recorded considered=1 and
+ * refused=[{lane_db3431e755a8, admission_open}]. The named admission was ACTIVE
+ * and its run had reached COMPLETE twenty minutes earlier.
+ *
+ * Nothing closes an ACTIVE admission when its run terminates. Measured across
+ * the estate at the time: 44 ACTIVE admissions, every one naming a run that was
+ * COMPLETE, ABANDONED or no longer in the store. Not one was live. Every lane
+ * that had ever run was permanently undispatchable — the idempotency guard,
+ * which exists to prevent a duplicate dispatch, was preventing the FIRST one.
+ */
+const ADM = await import("../lib/vacilando/execution-admission.mjs");
+
+test("an admission whose run has completed no longer owns live work", () => {
+  const root = freshRoot();
+  M.saveLaneMemory(memory(), { root });
+  const c = ER.createQueuedRun({ laneId: LANE, instruction: "Advance the mission.", origin: "scheduler", root });
+  const rid = c.run?.run_id || c.run_id;
+  const adm = ADM.createAdmissionRequest({ laneId: LANE, runId: rid, provider: "claude", root });
+  const record = adm.admission || adm.request || ADM.admissionForLane(LANE, root);
+
+  assert.equal(ADM.admissionOwnsLiveWork(record, root), true, "live while the run is live");
+
+  ER.reportRunState(rid, "executing", { root });
+  ER.reportRunState(rid, "complete", { root });
+  assert.equal(ADM.admissionOwnsLiveWork(ADM.admissionForLane(LANE, root), root), false,
+    "and not once the run is terminal");
+});
+
+test("the stale record is still VISIBLE, so cleanup owners can find it", () => {
+  // Deliberately not hidden inside admissionForLane: the capacity release path
+  // cancels these, and hiding them there would strand the cleanup.
+  const root = freshRoot();
+  M.saveLaneMemory(memory(), { root });
+  const c = ER.createQueuedRun({ laneId: LANE, instruction: "Advance.", origin: "scheduler", root });
+  const rid = c.run?.run_id || c.run_id;
+  ADM.createAdmissionRequest({ laneId: LANE, runId: rid, provider: "claude", root });
+  ER.reportRunState(rid, "executing", { root });
+  ER.reportRunState(rid, "complete", { root });
+  assert.ok(ADM.admissionForLane(LANE, root), "the record is still returned to other owners");
+});
+
+test("an admission naming no run still counts as occupied", () => {
+  // Unprovable means occupied. Refusing to dispatch is the safe direction.
+  assert.equal(ADM.admissionOwnsLiveWork({ admission_id: "eadm_x", state: "ACTIVE", run_id: null }, freshRoot()), true);
+  assert.equal(ADM.admissionOwnsLiveWork(null, freshRoot()), false, "but no admission at all is not occupancy");
+});

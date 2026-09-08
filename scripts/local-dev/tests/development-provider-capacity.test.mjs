@@ -114,6 +114,9 @@ test("a real ceiling still refuses, and says so", () => {
   const full = assessProvisionCapacity({
     metadata: META,
     providerPanes: [pane(META[0].path, "claude"), pane(META[1].path, "claude"), pane(META[3].path, "claude")],
+    // Pinned, so this fixture asserts the refusal behaviour rather than
+    // whatever ceiling this particular machine happens to have configured.
+    ceiling: 3,
   });
   assert.equal(full.active_providers, 3);
   assert.equal(full.max_providers, 3);
