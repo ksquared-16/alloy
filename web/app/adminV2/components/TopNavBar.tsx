@@ -18,6 +18,7 @@ import InboxModal from "@/app/adminV2/components/InboxModal";
 import AnalyticsModal from "@/app/adminV2/components/AnalyticsModal";
 import ProcessingModal from "@/app/adminV2/processing/ProcessingModal";
 import OperationsModal from "@/app/adminV2/components/OperationsModal";
+import FinancialsModal from "@/app/adminV2/components/FinancialsModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
@@ -134,6 +135,7 @@ export default function TopNavBar() {
   const analyticsModalOpen = activeWorkspaceModal === "analytics";
   const processingModalOpen = activeWorkspaceModal === "processing";
   const operationsModalOpen = activeWorkspaceModal === "operations";
+  const financialsModalOpen = activeWorkspaceModal === "financials";
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -255,6 +257,7 @@ export default function TopNavBar() {
         }}
       />
       <OperationsModal open={operationsModalOpen} onClose={() => closeWorkspaceModal("operations")} />
+      <FinancialsModal open={financialsModalOpen} onClose={() => closeWorkspaceModal("financials")} />
     </header>
   );
 }

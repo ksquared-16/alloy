@@ -174,6 +174,11 @@ export function dispatchAdminV2OpenOperationsModal(detail?: OpenRosterModalDetai
     openWorkspaceModal("operations");
 }
 
+/** Open the Financials workspace — the same coordinator every other workspace modal uses. */
+export function dispatchAdminV2OpenFinancialsModal(): void {
+    openWorkspaceModal("financials");
+}
+
 /** COMPATIBILITY ALIAS for the retired Roster workspace key. Operations owns those sections now. */
 export function dispatchAdminV2OpenRosterModal(detail?: OpenRosterModalDetail): void {
     dispatchAdminV2OpenOperationsModal(detail);

@@ -22,7 +22,8 @@ export type AdminV2WorkspaceModalKey =
     | "quick_message"
     | "analytics"
     | "processing"
-    | "operations";
+    | "operations"
+    | "financials";
 
 export type AdminV2WorkspaceModalSnapshot = {
     active: AdminV2WorkspaceModalKey | null;

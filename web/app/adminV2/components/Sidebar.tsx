@@ -34,6 +34,7 @@ import {
     SidebarAnalyticsNavItem,
     SidebarInboxNavItem,
     SidebarProcessingNavItem,
+    SidebarFinancialsNavItem,
     SidebarOperationsNavItem,
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
@@ -248,6 +249,13 @@ function SidebarNav({
      * conditionally rendered, so there is no state in which two buttons open the same workspace.
      */
     const operationsLink = <SidebarOperationsNavItem collapsed={collapsed} />;
+
+    /*
+     * FINANCIALS sits after Operations: the operating day is run first, and the money that day
+     * produces is worked afterwards. It is a workspace entry like the others, not a route — the
+     * `/adminV2/finance` placeholder is not the product path and is not linked from here.
+     */
+    const financialsLink = <SidebarFinancialsNavItem collapsed={collapsed} />;
 
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
@@ -496,6 +504,7 @@ function SidebarNav({
                                 {inboxLink}
                                 {processingLink}
                                 {operationsLink}
+                                {financialsLink}
                                 {tasksLink}
                                 {analyticsLink}
                             </>
@@ -516,6 +525,7 @@ function SidebarNav({
                                     {inboxLink}
                                     {processingLink}
                                     {operationsLink}
+                                    {financialsLink}
                                     {tasksLink}
                                     {analyticsLink}
                                     {lifecycleNavExpanded}
