@@ -159,6 +159,36 @@ export function getAdmission(admissionId, root = runtimeRoot()) {
   return readAdmissionStore(root).requests.find((r) => r.admission_id === admissionId) || null;
 }
 
+/**
+ * Does this admission still represent work that is actually in flight?
+ *
+ * THE DEFECT THIS ANSWERS. The dispatcher refuses a lane when an admission is
+ * open, for idempotency: "this work is already in flight, and a second run
+ * would be the duplicate dispatch §6 forbids." Correct — but nothing closes an
+ * ACTIVE admission when its run reaches a terminal state, so the record outlives
+ * the work it describes and the guard then refuses the lane forever.
+ *
+ * Measured across this estate: 44 ACTIVE admissions, and every single one named
+ * a run that was COMPLETE, ABANDONED, or no longer in the store. Not one was
+ * live. Every lane that had ever run was permanently undispatchable.
+ *
+ * This is deliberately NOT folded into `admissionForLane`, which several other
+ * owners use precisely to find stale records — the capacity release path cancels
+ * them, and hiding them there would strand the cleanup. The question "is a
+ * record present" and "does it still own live work" are different, and only the
+ * second one is an idempotency guard.
+ *
+ * Unprovable means occupied: an admission naming no run cannot be shown to be
+ * finished, so it still counts. The safe direction is refusing to dispatch.
+ */
+export function admissionOwnsLiveWork(admission, root = runtimeRoot()) {
+  if (!admission) return false;
+  if (!admission.run_id) return true;
+  const run = getExecutionRun(admission.run_id, root);
+  if (!run) return false;
+  return !isTerminalRunState(run.state);
+}
+
 export function admissionForLane(laneId, root = runtimeRoot()) {
   const id = canonicalLaneStoreId(laneId, root);
   const list = readAdmissionStore(root).requests.filter((r) => r.lane_id === id || r.lane_id === laneId);
