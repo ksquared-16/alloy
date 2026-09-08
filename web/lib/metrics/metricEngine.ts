@@ -39,6 +39,15 @@ import {
     resolveOpsReadinessGapCount,
 } from "@/lib/metrics/resolvers/operationalHealthMetrics";
 import {
+    resolveFinancialsChargesAwaitingPostCount,
+    resolveFinancialsCurrentlyCollectibleAmount,
+    resolveFinancialsGrossChargesPostedAmount,
+    resolveFinancialsOutstandingAmount,
+    resolveFinancialsPaymentsReceivedAmount,
+    resolveFinancialsUnappliedPaymentsAmount,
+    resolveFinancialsUnresolvedSubsidyVarianceAmount,
+} from "@/lib/metrics/resolvers/financialsMetrics";
+import {
     resolveTrustDeterministicResolutionRate,
     resolveTrustEscalatedDecisionCount,
     resolveTrustExecutionsCommittedCount,
@@ -87,6 +96,20 @@ async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): 
             return resolveOpsNeedsAttentionCount(ctx);
         case "ops.readiness_gap_count":
             return resolveOpsReadinessGapCount(ctx);
+        case "financials.outstanding_amount":
+            return resolveFinancialsOutstandingAmount(ctx);
+        case "financials.currently_collectible_amount":
+            return resolveFinancialsCurrentlyCollectibleAmount(ctx);
+        case "financials.gross_charges_posted_amount":
+            return resolveFinancialsGrossChargesPostedAmount(ctx);
+        case "financials.payments_received_amount":
+            return resolveFinancialsPaymentsReceivedAmount(ctx);
+        case "financials.unapplied_payments_amount":
+            return resolveFinancialsUnappliedPaymentsAmount(ctx);
+        case "financials.unresolved_subsidy_variance_amount":
+            return resolveFinancialsUnresolvedSubsidyVarianceAmount(ctx);
+        case "financials.charges_awaiting_post_count":
+            return resolveFinancialsChargesAwaitingPostCount(ctx);
         case "trust.governed_decisions_created":
             return resolveTrustGovernedDecisionsCreated(ctx);
         case "trust.governed_decisions_completed":
