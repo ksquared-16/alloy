@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
-import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
+import { getRegisteredAction, listRegisteredActionKeys } from "@/lib/adminV2/actions/actionRegistry";
 import {
     SUBJECTLESS_ACTION_ENTITY_ID,
     isSubjectlessEntityId,
@@ -60,5 +60,92 @@ describe("the transport honours the registry's declaration", () => {
         const source = read("lib/adminV2/actions/definitions/tuitionGenerationActions.ts");
         expect(source).toContain("isSubjectlessEntityId");
         expect(source).toMatch(/isSubjectlessEntityId\(entityId\)\s*\?\s*""/);
+    });
+});
+
+/*
+ * ── THE CENSUS ────────────────────────────────────────────────────────────────────────────────
+ *
+ * Generalising the transport from "create_lead only" to "whatever the registry declares" widened
+ * the door for EVERY action with `requiresEntityId: false` — TWENTY-FIVE of them, not the two
+ * the change was written for. Most are billing/subsidy factories, so the count is not visible
+ * by reading the definition files; it has to be enumerated from the registry. Each now reaches the Command Runtime carrying the sentinel, because the
+ * runtime rejects an empty subject (`missing_entity`) and something has to satisfy it.
+ *
+ * That makes the sentinel a transport artefact travelling through a subject-shaped hole, and the
+ * handlers were never told. They express "no subject" as the empty string — `t(entityId) ||
+ * <fallback>` — so a truthy sentinel silently defeats the fallback and puts an id that cannot
+ * exist onto results, refresh targets and opened records; a child-grain handler reading the
+ * subject as a filter would narrow to that non-existent record.
+ *
+ * The repair is one normalisation in `registeredActionExecutionAdapter`, not twenty-five
+ * guards. This census is executable so that a twenty-sixth subjectless action cannot be added
+ * without this proof being revisited.
+ */
+describe("the subjectless action census", () => {
+    const subjectless = listRegisteredActionKeys()
+        .map((key) => getRegisteredAction(key)!)
+        .filter((a) => a.requiredContext.requiresEntityId === false)
+        .map((a) => a.actionKey)
+        .sort();
+
+    it("is the set this proof was written against", () => {
+        expect(subjectless).toEqual([
+            "billing.adjust_account",
+            "billing.apply_discounts",
+            "billing.attribute_payment",
+            "billing.configure_expected_funding",
+            "billing.configure_responsibility",
+            "billing.generate_tuition",
+            "billing.reallocate_responsibility",
+            "billing.resolve_responsibility",
+            "billing.reverse_adjustment",
+            "charge.post",
+            "charge.reverse",
+            "child.add",
+            "create_lead",
+            "payment.record",
+            "payment.refund",
+            "staff.add",
+            "subsidy.build_claim",
+            "subsidy.configure_agency",
+            "subsidy.configure_program",
+            "subsidy.reconcile_remittance",
+            "subsidy.record_authorization",
+            "subsidy.record_remittance",
+            "subsidy.resolve_variance",
+            "subsidy.settle_remittance",
+            "subsidy.submit_claim",
+        ]);
+    });
+
+    /*
+     * The runtime's subject contract is why the sentinel exists at all. If this ever stops being
+     * true the sentinel should be deleted, not carried further.
+     */
+    it("the runtime still refuses an empty execution subject, which is why a sentinel is needed", () => {
+        const runtime = read("lib/platform/commands/runtime/executeCommandInvocation.ts");
+        expect(runtime).toContain("missing_entity");
+    });
+
+    /*
+     * One normalisation, at the single point where a RegisteredAction is handed its subject.
+     * Not one guard per action — that would be twenty-five chances to forget.
+     */
+    it("the adapter normalises the sentinel away before any handler sees it", () => {
+        const adapter = read("lib/platform/commands/runtime/adapters/registeredActionExecutionAdapter.ts");
+        expect(adapter).toContain("isSubjectlessEntityId");
+        expect(adapter).toMatch(/isSubjectlessEntityId\(input\.executionSubject\.entityId\)\s*\?\s*""/);
+    });
+
+    /*
+     * create_lead keeps its own sentinel. That is a genuinely different contract — it names a
+     * record that does not exist YET, rather than an action that has no record subject at all —
+     * so it is not folded into this one.
+     */
+    it("leaves the create_lead sentinel alone as a distinct contract", () => {
+        const constants = read("lib/admin/actions/createLeadActionConstants.ts");
+        expect(constants).toContain("__create_lead__");
+        expect(SUBJECTLESS_ACTION_ENTITY_ID).not.toBe("__create_lead__");
     });
 });
