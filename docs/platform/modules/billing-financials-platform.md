@@ -857,6 +857,76 @@ visibility, which stays undecided.
 
 ---
 
+### The Financials workspace — composition, not a new authority (September 2026)
+
+No migration. Thread 4 is a composition thread: it gives financial work a front door, and it adds no
+money truth at all.
+
+**What it owns.** Navigation, workspace composition, and one projection that SELECTS.
+`resolveFinancialWorkQueue` answers which draft charges are actionable, who they belong to, where
+they live and what to call them. It carries no outstanding, no net, no responsibility, no
+collectible-now — a queue row shows the amount already written on the charge, and every derived
+figure appears after selection, from the thread that owns it. A projection that quietly learned to
+total things would become a financial authority by accident, which is the specific failure it is
+written to avoid.
+
+**Location is provenance, not a guess.** Most financial tables carry no `location_id`, and every
+convenient fix is a different lie: denormalising a site for a filter's benefit, inferring one from
+whichever child is easiest to find, or showing org-wide rows under a site heading. The contract in
+`financialWorkLocation.ts`:
+
+| Billable source | Location | Why |
+|---|---|---|
+| `enrollment_agreement` | its OWN agreement's `site_location_id` (**NOT NULL**) | A charge names one source, so it cannot span sites — and a household with children at two sites is divided per charge by construction, not by a rule somebody must remember. |
+| `customer` | **org-scoped** | A registration or waitlist fee is incurred before, across or outside any one enrolment. It belongs to no site, so it is not guessed into one and not shown inside one. |
+| `job` | excluded | The other vertical. Not childcare financial work. |
+| enrolment with no site | **withheld** | A missing site is a broken agreement, not an org-wide charge; resolving it to "everywhere" would quietly widen who can act on a family's money. |
+
+Org-scoped work is visible at org scope to operators with org-wide rights, and **not** to a
+site-restricted operator — their authority is bounded to the sites they hold, and a charge inside
+none of them is not theirs to act on. That choice is explicit and tested rather than emergent.
+
+**The filter narrows and never widens.** Site rights come from the route gate; the requested site is
+intersected with them server-side, so asking for a site you do not hold returns nothing.
+
+**Scope is labelled rather than assumed.** The queue is site-scoped. The account detail is not, and
+cannot be: Thread 2 answers for a household across every site it is enrolled at, and a site filter
+there would change what its numbers MEAN rather than which of them are shown. The detail zone is
+labelled *Account-wide* for exactly that reason, and hosts Thread 2 unforked through the smallest
+adapter that builds its two Focus Panel props.
+
+**One read feeds every number.** Overview tiles, the section health band and the queue all come from
+the same fetch, and the counts are derived from the rows returned. A tile showing 7 above a list of 6
+is not something an operator can be asked to reconcile.
+
+**Shared primitives, and no others.** `WorkspaceShell`, `WorkspaceOverviewActivityBand` +
+`SurfaceHeaderKpiCard`, `WorkspaceOperationalHealth`, `WorkspaceSurface`, `WorkspaceCard`,
+`WorkspaceEmptyState`, the shared workspace modal. The mode rail is OFF because one mode is
+furniture, and there is no Studio because configuration already has a home at
+`/organization/financials`. The browser certification asserts the absence of a Financials shell, KPI
+card or metric tile in the DOM, because the way a second shell arrives is one component at a time.
+
+**Posting goes through `charge.post`.** The registered action already owns eligibility,
+authorization, idempotency and audit; a page-local write would have none of them. After it commits,
+committed truth is re-read — queue and card both — rather than the row being removed optimistically.
+
+**Certified:** `certification/financials/financials-workspace.cert.sh` — 7 live cases against real
+persistence (the cohort, per-agreement location provenance, a multi-site household divided correctly,
+site filtering, a site-restricted operator refused another site's work with and without a filter,
+org-scoped household work visible only at org scope, posting leaving the cohort while moving no
+money, org isolation, and the job vertical excluded), 10 hermetic cases on the location contract, and
+`certification/playwright/financials-workspace.cert.spec.ts` through the running app — left
+navigation, canonical shell, Overview activity tiles, section health band, queue selection, Thread 2
+detail labelled account-wide, posting, refresh, cold reload, no competing primitives, and the
+work-queue API refused server-side without `fin.read`.
+
+**Two findings recorded rather than patched.** `charge.post` declares **no permission** and is gated
+by the admin/ops route gate alone — revoking `fin.write` does not stop it. That is Thread 1's action
+contract and not a workspace's to change. And `/api/admin/financials/snapshot` still derives org
+balances by summing `gl_journal_entries`; nothing in this workspace reaches it.
+
+---
+
 ## What not to do
 
 - Do not build childcare billing before the financial core is generalized off `job_id`.
@@ -942,14 +1012,24 @@ visibility, which stays undecided.
 - Do not build a subsidy-specific payment ledger; agency money is ordinary money through Thread 8, and recoupment is its application reversal.
 - Do not give a variance two unique identities — the claim line is the identity, and a second index makes concurrent reconciliation fail instead of converge.
 - Do not encode a jurisdiction, agency or statute in shared infrastructure; a tenant authors the programme and the platform learns no geography.
+- Do not let the Financials workspace compute a financial value; it selects and composes, and every number it shows has an owner elsewhere.
+- Do not denormalise a location onto financial rows for a filter's convenience; resolve it from the billable source's own provenance.
+- Do not infer a charge's site from the household or from a sibling's enrolment — a charge names one source and that source names the site.
+- Do not show org-scoped financial work under a site heading, and do not guess a site for work that belongs to none.
+- Do not let a site filter widen what an operator can see; intersect it with the rights the route gate resolved.
+- Do not apply the workspace's site filter to Thread 2's account detail — it would change what those numbers mean, not which are shown. Label the scope instead.
+- Do not count a queue with a second query; derive the counts from the rows that were returned.
+- Do not add a Financials shell, KPI card, metric tile, navigation grammar or accent; compose the shared primitives or the workspace family is one only until somebody changes the real one.
+- Do not write from the workspace; posting goes through the registered action that already owns eligibility, authorization, idempotency and audit.
+- Do not use `/api/admin/financials/snapshot` for any workspace figure; it sums GL journal entries to produce a balance.
 - Do not delete a payment or an application to undo one. A refund is a new outbound row via `refunds_payment_id`; an application is reversed, never removed.
 
 ---
 
-## Thread 4 — the Financials workspace, when it is built
+## Thread 4 — the Financials workspace (built, September 2026)
 
-Binding, recorded here because Thread 6 is what makes the workspace possible and the constraint is
-easiest to violate before anyone writes the first component:
+The requirement below was recorded before the workspace existed, and the workspace was built to it.
+It stays because it governs every later expansion of the same shell:
 
 **The Financials workspace MUST compose the canonical `WorkspaceShell` and the shared workspace
 primitives already used by Processing, Communications/Inbox and Operations/Work Items.**
@@ -991,3 +1071,4 @@ that recomputes any of them will disagree with the card in front of a family.
 - The reduction contract changes — the discount-policy owner, the stacking order or basis, the eligibility sources, the snapshot rule, the manual-adjustment permission, or the balance authority.
 - The responsibility contract changes — the explicit-party rule, the unassigned representation, the net source, the cent/remainder rule, effective dating, posted reallocation, the funding seam, the payment-attribution bound, or the privacy non-decision.
 - The subsidy contract changes — the collection-suppression policy or its bounds, the shortfall non-default, agency identity, the advice/cash separation, the authorization supersession rule, or the Processing ingestion seam.
+- The workspace contract changes — the location provenance rules, the org-scoped visibility choice, the site-filter intersection, the account-wide detail labelling, or the single-read counts.
