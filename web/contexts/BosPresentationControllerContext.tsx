@@ -309,7 +309,16 @@ export function BosPresentationControllerProvider({
             const forbidden: ObstacleRect[] = [];
             for (const el of Array.from(
                 document.querySelectorAll<HTMLElement>(
-                    ".alloy-os-focus-panel-mode-switch,[data-inline-focus-panel-header],.alloy-os-process__work-actions",
+                    ".alloy-os-focus-panel-mode-switch"
+                        + ",[data-inline-focus-panel-header]"
+                        + ",.alloy-os-process__work-actions"
+                        // An OPEN command surface is the most actionable thing on the page.
+                        // Send form renders inline and unelevated (position: static, z-index auto),
+                        // so unlike the subject selector at z=60 it has nothing to lift it above the
+                        // rail at z=95. Measured: the rail's "Operational Intelligence" label sat on
+                        // the surface's Close button, so the operator could not dismiss the composer.
+                        + ",[data-work-action-panel]"
+                        + ",[data-work-action-surface]",
                 ),
             )) {
                 if (panel?.contains(el)) continue;
