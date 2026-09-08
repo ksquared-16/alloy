@@ -24,7 +24,15 @@ export type StageOutcomeExecutionResult = {
     errors: string[];
     /** Declared out-of-boundary effects that did not run. Surfaced, never swallowed. */
     degraded: string[];
-    queue_refresh_opportunity_id: string;
+    /*
+     * Null for a context-free subject: there is no Opportunity queue to refresh.
+     *
+     * Declared `string` while the subject's `opportunity_id` became `string | null`. Both consumers
+     * already treat it as optional — the client type has it `?: string` and the hook guards with
+     * `if (result.queue_refresh_opportunity_id)` — so the declaration was the only thing insisting
+     * a value always exists.
+     */
+    queue_refresh_opportunity_id: string | null;
     needs_attention_set: boolean;
     status_updated: boolean;
     /**

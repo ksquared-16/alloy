@@ -1637,7 +1637,10 @@ const completeEnrollment: Phase = {
                 detail: (result.errors ?? []).join("; ") || "completion outcome failed",
                 evidence: {
                     departmentId,
-                    subjectOpportunityId: pathA.opportunityId ?? null,
+                    // Path A is context-free by construction, so there is no acquisition episode
+                    // to name here. Stated rather than read off the entry facts, which do not
+                    // carry an opportunity id for this path at all.
+                    subjectOpportunityId: null,
                     participationId: pathA.participationId,
                     journeyId: pathA.journeyId,
                     childId: pathA.childId,
@@ -1984,17 +1987,35 @@ const operationalHandoff: Phase = {
         const { materializeEnrollmentForChildScope } = await import(
             "@/lib/childcareOperational/materializeEnrollmentFromProcessInstance"
         );
-        let retryDetail = "retry ran";
-        try {
-            await materializeEnrollmentForChildScope(ctx.supabase, {
-                orgId: ctx.orgId,
-                // Context-free Path A has no Opportunity; absence is null, never "".
-                opportunityId: null,
-                customerMemberId: pathA.childId,
-                userId: ctx.actorUserId ?? null,
-            } as Parameters<typeof materializeEnrollmentForChildScope>[1]);
-        } catch (e) {
-            retryDetail = `retry threw: ${e instanceof Error ? e.message : String(e)}`;
+        /*
+         * THE RETRY BOUNDARY IS OPPORTUNITY-SCOPED, AND PATH A HAS NO OPPORTUNITY.
+         *
+         * This used to pass `opportunityId: null` through an `as` cast to a parameter declared
+         * `string`. The cast is what let it compile; it did not make the call meaningful, and a
+         * null would have reached the same uuid predicate this suite exists to keep out.
+         *
+         * `materializeEnrollmentForChildScope` genuinely requires an acquisition episode, so for a
+         * context-free child the honest exercise of the boundary is that materialization does not
+         * run at all — which is exactly what the target executor now records as a degraded effect
+         * rather than attempting. The non-duplication assertion below still holds and is still
+         * checked: nothing ran, so nothing may have been duplicated.
+         */
+        const retryOpportunityId = (pathA as { opportunityId?: string | null }).opportunityId ?? null;
+        let retryDetail =
+            "retry not applicable: context-free Path A has no acquisition episode to materialize "
+            + "against, and the materializer requires one";
+        if (retryOpportunityId) {
+            retryDetail = "retry ran";
+            try {
+                await materializeEnrollmentForChildScope(ctx.supabase, {
+                    orgId: ctx.orgId,
+                    opportunityId: retryOpportunityId,
+                    customerMemberId: pathA.childId,
+                    userId: ctx.actorUserId ?? null,
+                });
+            } catch (e) {
+                retryDetail = `retry threw: ${e instanceof Error ? e.message : String(e)}`;
+            }
         }
 
         const after = await countsFor();

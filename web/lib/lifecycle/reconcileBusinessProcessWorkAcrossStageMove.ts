@@ -83,7 +83,13 @@ async function stampCarryForward(params: {
     supabase: SupabaseClient;
     orgId: string;
     workId: string;
-    opportunityId?: string | null;
+    /*
+     * Required here, and narrowed by the caller. The entry point returns `missing_scope` before
+     * reaching this helper when the subject carries no Opportunity, so by this point one exists —
+     * and the call site already passes the narrowed local. Only the type still said otherwise,
+     * which put a possibly-null id into a fingerprint that throws on an empty entity id.
+     */
+    opportunityId: string;
     fromStageKey: string;
     toStageKey: string;
     destinationTemplate: StageWorkTemplateV1;

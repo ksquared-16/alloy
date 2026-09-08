@@ -307,6 +307,24 @@ export async function applyStageOutcomeRuleTarget(
             if (!statusKey) return { error: "Missing family case status key" };
             const closeReasonKey = target.close_reason_key?.trim();
 
+            /*
+             * THE FAMILY CASE IS THE OPPORTUNITY. With none, this target has no subject.
+             *
+             * `opportunity_id` became `string | null` so a context-free caller could state absence
+             * instead of encoding it as `""`. This target then still read it as a `string`, and the
+             * two paths below — the close guard's enumeration and the status write — would both
+             * have carried a null into an `.eq()` on a uuid column.
+             *
+             * Refusing here, by name, is the honest answer and the one the executor already gives
+             * for every other unsatisfiable target. Letting it fall through to the guard would have
+             * produced `child_track_enumeration_failed` instead, which says the guard could not see
+             * the children — when the truth is that there is no family case to close.
+             */
+            const familyCaseId = subject.opportunity_id;
+            if (!familyCaseId) {
+                return { error: "update_family_case_status needs a family case, and this subject has none" };
+            }
+
             /**
              * A family case cannot close out from under its children.
              *
@@ -322,7 +340,7 @@ export async function applyStageOutcomeRuleTarget(
             if (familyCaseStatusCloses(statusKey)) {
                 const read = await readEnrollmentInstancesForLead(supabase, {
                     orgId,
-                    opportunityId: subject.opportunity_id,
+                    opportunityId: familyCaseId,
                 });
                 const decision = evaluateFamilyCloseGuard(read);
                 if (!decision.allowed) {
@@ -343,13 +361,13 @@ export async function applyStageOutcomeRuleTarget(
             const { data: priorStatus } = await supabase
                 .from("opportunities")
                 .select("status_key, close_reason_key")
-                .eq("id", subject.opportunity_id)
+                .eq("id", familyCaseId)
                 .eq("org_id", orgId)
                 .maybeSingle();
             const res = await updateOpportunityStatusWithEvent({
                 supabase,
                 orgId,
-                opportunityId: subject.opportunity_id,
+                opportunityId: familyCaseId,
                 newStatusKey: statusKey,
                 actorUserId: userId,
                 normalizeContext: "stage_operating_plan_outcome",
@@ -622,18 +640,37 @@ export async function applyStageOutcomeRuleTarget(
             // schedule assignment). The process produces the facts; it does not own them. Non-blocking
             // and idempotent — a failure here must not roll back the state transition (retryable).
             if (dispositionKey === "enrolled" && (await isChildcareOperationalEnrollmentV1EnabledForOrg(supabase, orgId))) {
-                try {
-                    await materializeEnrollmentForChildScope(supabase, {
-                        orgId,
-                        opportunityId: subject.opportunity_id,
-                        customerMemberId: childId,
-                        userId,
-                    });
-                } catch (e) {
-                    console.error("[stageOutcomeRuleTargetExecutor] enrollment materialization", e);
+                /*
+                 * MATERIALIZATION IS OPPORTUNITY-SCOPED; THE STATE TRANSITION IS NOT.
+                 *
+                 * `update_child_enrollment_status` is child-grain and must succeed for a
+                 * context-free child — it is one of the three targets that were already applying
+                 * correctly while the outcome reported failure. Only this trailing step needs an
+                 * Opportunity, and it is already declared non-blocking and retryable.
+                 *
+                 * So absence is recorded as a degraded effect, exactly like a materialization that
+                 * throws, rather than being refused (which would roll back a durable enrolment) or
+                 * passed through as null (which is what reached Postgres as an invalid uuid).
+                 */
+                const materializeScopeId = subject.opportunity_id;
+                if (!materializeScopeId) {
                     degradedEffects.push(
-                        `enrollment materialization did not run: ${e instanceof Error ? e.message : String(e)}`,
+                        "enrollment materialization did not run: this child has no acquisition episode to materialize against",
                     );
+                } else {
+                    try {
+                        await materializeEnrollmentForChildScope(supabase, {
+                            orgId,
+                            opportunityId: materializeScopeId,
+                            customerMemberId: childId,
+                            userId,
+                        });
+                    } catch (e) {
+                        console.error("[stageOutcomeRuleTargetExecutor] enrollment materialization", e);
+                        degradedEffects.push(
+                            `enrollment materialization did not run: ${e instanceof Error ? e.message : String(e)}`,
+                        );
+                    }
                 }
             }
             return {
@@ -835,11 +872,21 @@ export async function applyStageOutcomeRuleTarget(
             if (!templateKey) return { error: "Missing work template key" };
             const workTpl = plan.work_templates.find((t) => t.template_key === templateKey);
             if (!workTpl) return { error: `Unknown work template: ${templateKey}` };
+            /*
+             * Stage work hangs off the Opportunity, so there is nowhere to hang it without one.
+             * Named refusal for the same reason as `update_family_case_status`: the executor
+             * reports failed targets by name, and "create_next_work" is a far more useful answer
+             * than the uuid-syntax error a null produced one layer down.
+             */
+            const nextWorkScopeId = subject.opportunity_id;
+            if (!nextWorkScopeId) {
+                return { error: "create_next_work needs an acquisition episode, and this subject has none" };
+            }
             const result = await instantiateStageWorkFromTemplate({
                 supabase,
                 orgId,
                 userId,
-                opportunityId: subject.opportunity_id,
+                opportunityId: nextWorkScopeId,
                 stageKey,
                 departmentId,
                 template: workTpl,
