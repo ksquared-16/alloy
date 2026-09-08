@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 // Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
-import { Inbox, ListChecks, BarChart3, Layers, Contact } from "lucide-react";
+import { Inbox, ListChecks, BarChart3, Layers, Contact, Wallet } from "lucide-react";
 
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
@@ -10,6 +10,7 @@ import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { warmOperationsWorkspace } from "@/lib/scheduling/operationsWorkspaceWarmCache";
+import { dispatchAdminV2OpenFinancialsModal } from "@/lib/adminV2/workspaceModalEvents";
 import { warmOipAnalyticsModal } from "@/lib/metrics/oipWorkspaceWarmCache";
 import { warmOperationalIntelligence } from "@/lib/analytics/runtime/operationalIntelligenceWarmCache";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
@@ -269,6 +270,24 @@ export function SidebarOperationsNavItem({ collapsed }: { collapsed: boolean }) 
             onClick={() => {
                 warmOperationsWorkspace();
                 dispatchAdminV2OpenOperationsModal();
+            }}
+        />
+    );
+}
+
+export function SidebarFinancialsNavItem({ collapsed }: { collapsed: boolean }) {
+    const activeModal = useActiveAdminV2WorkspaceModal();
+    return (
+        <SidebarModalNavButton
+            collapsed={collapsed}
+            title="Financials — the financial work waiting on an operator, and the accounts it belongs to"
+            label="Financials"
+            icon={<Wallet size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            badge={null}
+            active={activeModal === "financials"}
+            dataAttr="financials"
+            onClick={() => {
+                dispatchAdminV2OpenFinancialsModal();
             }}
         />
     );

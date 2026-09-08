@@ -624,3 +624,24 @@ Operational refresh: `dispatchOperationalWorkRefresh` — see `web/lib/workItems
 - `../operator/interaction-grammar.md` — drawer preserves workspace/perspective/queue context
 - `../operator/queue-system.md`
 - `../../system/navigation-doctrine.md` (expanded reference — prefer this file)
+
+## Financials (September 2026) — the newest module to compose the doctrine unchanged
+
+Financials joined as a sidebar workspace modal keyed `financials`, composing `WorkspaceShell`,
+`WorkspaceOverviewActivityBand` + `SurfaceHeaderKpiCard` for Overview activity, and
+`WorkspaceOperationalHealth` through a data-only strip for section metrics. It introduces no shell,
+KPI primitive, navigation grammar or accent of its own, and its browser certification asserts the
+ABSENCE of those in the DOM — because the way a second shell arrives is one component at a time.
+
+Two decisions worth carrying to the next module:
+
+**The mode rail stayed off.** Financials has one mode, and a switch with one position in it is
+furniture — the same reasoning Operations recorded when it turned the rail back on only once it
+genuinely had two things to switch between.
+
+**No Studio was added.** Financials configuration already has a home at `/organization/financials`.
+A Studio here would either move that product or duplicate it, and neither is a navigation decision.
+
+Doctrine for what the workspace may and may not compute:
+[`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md)
+§ *The Financials workspace*.
