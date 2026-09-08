@@ -82,8 +82,24 @@ async function stripeGet(path: string): Promise<{ status: number; body: Record<s
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 }
 
+/**
+ * Merchants are pinned by the attempts that used them — `merchant_id` is ON DELETE RESTRICT,
+ * because the account that collected money must stay nameable. So teardown removes the dependents
+ * first, and ASSERTS the delete rather than ignoring its error: a silently failed cleanup leaves the
+ * previous merchant active and makes the next case fail for a reason that has nothing to do with it,
+ * which is exactly how this file first went red.
+ */
 async function clearMerchants(client: SupabaseClient) {
-    await client.from("payment_provider_merchants").delete().in("org_id", [ORG, OTHER_ORG]);
+    const { data: attempts } = await client
+        .from("payment_collection_attempts").select("id").in("org_id", [ORG, OTHER_ORG]);
+    const attemptIds = ((attempts ?? []) as Array<{ id: string }>).map((a) => a.id);
+    if (attemptIds.length) {
+        await client.from("payment_provider_events").delete().in("collection_attempt_id", attemptIds);
+        await client.from("payment_collection_attempts").delete().in("id", attemptIds);
+    }
+    const { error } = await client
+        .from("payment_provider_merchants").delete().in("org_id", [ORG, OTHER_ORG]);
+    if (error) throw new Error(`merchant teardown failed, so the next case would lie: ${error.message}`);
 }
 
 describeLive("Slice C — the collecting merchant, live against Postgres and Stripe", () => {

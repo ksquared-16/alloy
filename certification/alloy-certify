@@ -229,7 +229,13 @@ NEXT_PUBLIC_ALLOY_OS_RUNTIME=1
 # objective result (queued/sent) but nothing leaves the machine. Auth emails are
 # caught locally by the stack's mail catcher (inbucket :54424).
 ALLOY_CERTIFICATION=1
+# Stripe. The publishable key is public by Stripe's design and is the only one the browser build
+# reads. The secret and the webhook signing secret are SERVER-only: Next exposes a variable to the
+# browser only when it is prefixed NEXT_PUBLIC_, so these two stay inside the server process. The
+# file is gitignored and regenerated, and never leaves the node.
 ${CERT_STRIPE_PUBLISHABLE_KEY:+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${CERT_STRIPE_PUBLISHABLE_KEY}}
+${STRIPE_SECRET_KEY:+STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}}
+${STRIPE_WEBHOOK_SECRET:+STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}}
 # The ingress quarantine is RLS-locked to service_role, so the only way to prove
 # it retains an unattributable message WITHOUT exposing the parent's words is to
 # read the diagnostic projection. Enabled here so that withholding is certified
