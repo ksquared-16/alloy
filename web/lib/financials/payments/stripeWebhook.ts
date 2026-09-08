@@ -21,6 +21,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { postProviderConfirmedCollection, type AttemptForPosting } from "./canonicalPosting";
 import { mapStripeStatus } from "./collectionAttempt";
 import { resolveOrgForConnectedAccount } from "./providerMerchant";
 
@@ -217,15 +218,16 @@ export async function handleStripeWebhook(
     }
     const { data: attemptRow } = await supabase
         .from("payment_collection_attempts")
-        .select("id, processor_state, provider_account_ref")
+        .select(
+            "id, org_id, processor_state, provider_account_ref, charge_id, currency, "
+            + "requested_amount_cents, payer_person_id, provider_transaction_id, canonical_payment_id",
+        )
         .eq("org_id", orgId)
         .eq("processor", "stripe")
         .eq("provider_transaction_id", providerTransactionId)
         .maybeSingle();
 
-    const attempt = attemptRow as
-        | { id: string; processor_state: string; provider_account_ref: string }
-        | null;
+    const attempt = attemptRow as (AttemptForPosting & { provider_account_ref: string }) | null;
     if (!attempt) {
         return await finish(
             "unattributed",
@@ -255,14 +257,27 @@ export async function handleStripeWebhook(
      */
     const nextState = stateForEvent(eventType, object.status ? String(object.status) : undefined);
 
-    if (attempt.processor_state === nextState) {
+    /*
+     * Already at this state. Normally a duplicate and nothing to do — EXCEPT for a success that has
+     * not yet been recognised as money.
+     *
+     * Certification caught this: an attempt can sit at `succeeded` with no canonical receipt because
+     * the first posting was refused (an amount disagreement) or failed transiently. Returning
+     * "duplicate" here would make that permanent — the provider's money would be stranded, with a
+     * later correct delivery unable to recover it. So a succeeded-but-unposted attempt falls through
+     * to the posting boundary, where the idempotency anchor makes a redundant attempt harmless.
+     */
+    const awaitingPosting = nextState === "succeeded" && !attempt.canonical_payment_id;
+    if (attempt.processor_state === nextState && !awaitingPosting) {
         return await finish("duplicate", `attempt is already ${nextState}`, {
             org_id: orgId,
             collection_attempt_id: attempt.id,
         });
     }
 
-    if (TERMINAL.has(attempt.processor_state)) {
+    // A DIFFERENT terminal state arriving is a regression and is refused. The SAME one arriving
+    // again, for a success Alloy has not yet recognised, is the recovery path above — not stale.
+    if (TERMINAL.has(attempt.processor_state) && !awaitingPosting) {
         return await finish(
             "stale",
             `attempt is terminal at ${attempt.processor_state}; ${nextState} is older provider truth and was not applied`,
@@ -270,7 +285,9 @@ export async function handleStripeWebhook(
         );
     }
 
-    const { error: transitionError } = await supabase
+    const { error: transitionError } = attempt.processor_state === nextState
+        ? { error: null }
+        : await supabase
         .from("payment_collection_attempts")
         .update({
             processor_state: nextState,
@@ -292,9 +309,47 @@ export async function handleStripeWebhook(
         throw new Error(`could not converge the collection attempt: ${transitionError.message}`);
     }
 
-    const result = await finish("applied", `attempt converged to ${nextState}`, {
+    /*
+     * ── THE AUTHORITY BOUNDARY (Slice F) ─────────────────────────────────────────────────────────
+     *
+     * Only a provider-CONFIRMED success crosses it, and it crosses through Thread 8's canonical
+     * entry rather than by writing anything financial here. Everything else this handler does stops
+     * at evidence, exactly as Slice E established.
+     *
+     * A refusal to post is not a webhook failure: the provider really did collect, and telling
+     * Stripe otherwise would earn redelivery of an event that is already correctly recorded. The
+     * disposition carries what happened so it can be found and retried.
+     */
+    if (nextState !== "succeeded") {
+        const applied = await finish("applied", `attempt converged to ${nextState}`, {
+            org_id: orgId,
+            collection_attempt_id: attempt.id,
+        });
+        return { ...applied, attemptId: attempt.id, orgId };
+    }
+
+    const posting = await postProviderConfirmedCollection(
+        supabase,
+        { ...attempt, processor_state: "succeeded" },
+        {
+            amountCents: typeof object.amount_received === "number"
+                ? (object.amount_received as number)
+                : typeof object.amount === "number"
+                    ? (object.amount as number)
+                    : null,
+            currency: object.currency ? String(object.currency) : null,
+        },
+    );
+
+    const detail = posting.posted
+        ? `attempt converged to succeeded and posted canonical payment ${posting.paymentId}`
+        : posting.reason === "already_posted"
+            ? `attempt converged to succeeded; canonical payment ${posting.paymentId} already existed`
+            : `attempt converged to succeeded but canonical posting did not occur: ${posting.reason} — ${posting.detail}`;
+
+    const applied = await finish("applied", detail, {
         org_id: orgId,
         collection_attempt_id: attempt.id,
     });
-    return { ...result, attemptId: attempt.id, orgId };
+    return { ...applied, attemptId: attempt.id, orgId };
 }

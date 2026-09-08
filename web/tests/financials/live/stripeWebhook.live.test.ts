@@ -267,8 +267,12 @@ describeLive("Slice E — the webhook boundary, live", () => {
         expect((allocations ?? []).length).toBe(0);
         expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(7_500);
 
-        const { data: anyReceipt } = await client
-            .from("payments").select("id").eq("org_id", ORG).eq("processor", "stripe");
-        expect((anyReceipt ?? []).length, "Slice E creates no Thread 8 receipt at all").toBe(0);
+        // Scoped to THIS collection rather than to the whole tenant. Slice F deliberately made
+        // provider-confirmed SUCCESS create a receipt, so "no stripe receipt exists anywhere" is no
+        // longer the claim — and asserting it would fail for the right reason, which is the worst
+        // kind of red. What Slice E still owns is that a FAILED collection recognises nothing.
+        const { data: failReceipt } = await client
+            .from("payments").select("id").eq("org_id", ORG).eq("processor_transaction_id", piId);
+        expect((failReceipt ?? []).length, "a failed collection creates no Thread 8 receipt").toBe(0);
     });
 });
