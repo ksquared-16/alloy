@@ -744,11 +744,37 @@ export function FormEmbedClient({
                 packetName={packetProgress?.packet_name}
                 previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
             >
-                <IntakeCompletion
-                    tone="neutral"
-                    title="Packet already completed"
-                    body="This packet has already been submitted. You can close this window."
-                />
+                {/* A PARENT WHO COMES BACK IS STILL A PARENT, and was the only one still told
+                    about "a packet".
+
+                    The two other terminal states — finishing the last document, and submitting —
+                    already speak in the journey's own words. This branch, the one a parent reaches
+                    by reopening their link after they are done, kept the generic copy: "Packet
+                    already completed. This packet has already been submitted." That is the only
+                    place the word reaches a family, and it reaches them on a return visit, when
+                    they are most likely to be checking whether their paperwork actually landed.
+
+                    It also has to keep the distinction the completion message makes: paperwork
+                    submitted is not the child enrolled, and staff review is still to come. Saying
+                    only "already been submitted" drops that, so a returning parent could read a
+                    finished packet as a finished enrolment.
+
+                    Same conditional as the other two terminal states, and the generic copy stays
+                    byte-identical for every non-enrollment link. */}
+                {enrollmentObjective ? (
+                    <IntakeCompletion
+                        tone="neutral"
+                        title="You're all set."
+                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has already been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        hint="You can close this window."
+                    />
+                ) : (
+                    <IntakeCompletion
+                        tone="neutral"
+                        title="Packet already completed"
+                        body="This packet has already been submitted. You can close this window."
+                    />
+                )}
             </IntakeFrame>
         );
     }
