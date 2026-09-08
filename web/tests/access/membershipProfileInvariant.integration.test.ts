@@ -12,13 +12,18 @@
  *   1. A membership created through the product path has exactly one profile row.
  *   2. A second membership for the same (user, org) does not add a second profile.
  *   3. A failure inside the atomic block leaves NO orphan membership row.
- *   4. The W-0 Q4 anti-join returns zero for the org afterwards.
+ *   4. A failure AFTER the profile insert leaves NO orphan profile row either.
+ *   5. The W-0 Q4 anti-join returns zero for the org afterwards.
  *
- * Note on (3): the RPC is a single transaction, so the failure is injected by
- * making a write inside it violate a constraint (a non-existent org_id) rather
- * than by stubbing the profile insert — there is no seam inside a Postgres
- * function to stub. The property under test is the one that matters: a partial
- * failure never leaves a membership without a profile.
+ * Note on (3) and (4): the RPC is a single transaction, so failure is injected by
+ * making a write inside it violate a constraint rather than by stubbing the
+ * profile insert — there is no seam inside a Postgres function to stub. The two
+ * cases inject at different statements on purpose: (3) uses a missing org_id, which
+ * fails the FIRST statement (the profile insert, via the profiles→orgs FK); (4)
+ * uses an undefined role, which fails the SECOND (the membership insert, via W-16's
+ * role FK) once the profile row is already written. Together they cover both sides
+ * of the pair — a partial failure leaves neither a membership without a profile nor
+ * a profile without a membership.
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -163,6 +168,47 @@ describe.skipIf(!hasEnv)("W-5 — membership + access profile are atomic (integr
             .eq("org_id", missingOrgId);
         expect(error).toBeNull();
         expect(count ?? 0).toBe(0);
+    });
+
+    /**
+     * The other direction, and the one the orphan test above cannot reach.
+     *
+     * `user_access_profiles.org_id` references `orgs(id)`, so passing a missing
+     * org makes the PROFILE insert — the first statement in the function — fail.
+     * That proves a membership is never left behind, but it says nothing about
+     * the profile insert being inside the transaction, because it never lands.
+     *
+     * W-16 (`20260818190000`, added after W-5's last issuance) constrains
+     * `user_roles (org_id, role)` to `role_definitions (org_id, role_key)`. A
+     * real org with an undefined role therefore fails at the SECOND statement,
+     * after the profile row has already been written. Without a transaction the
+     * profile survives with no membership — which is `q4_profiles_without_membership`,
+     * the orphan count W-0 measured at zero. Nothing else in this suite covers it.
+     *
+     * The assertion is on the invariant, not on the SQLSTATE: whatever makes the
+     * membership insert fail, the profile written moments earlier must be gone.
+     */
+    it("leaves no orphan profile when the membership insert fails after it", async () => {
+        const supabase = createAdminClient();
+        const userId = await makeUser(supabase, "orphan-profile");
+        const undefinedRole = `w5-no-such-role-${crypto.randomUUID().slice(0, 8)}`;
+
+        // Nothing pre-exists, so anything found afterwards was written by this call.
+        expect(await profileCount(supabase, userId)).toBe(0);
+        expect(await membershipCount(supabase, userId)).toBe(0);
+
+        const res = await createMembershipWithAccessProfile(supabase, {
+            userId,
+            orgId: orgId!,
+            role: undefinedRole,
+        });
+        expect(res.ok).toBe(false);
+
+        expect(await membershipCount(supabase, userId)).toBe(0);
+        expect(
+            await profileCount(supabase, userId),
+            "the profile insert ran before the failing membership insert and must have rolled back with it"
+        ).toBe(0);
     });
 
     it("replace keeps the profile and never drops the membership on failure", async () => {

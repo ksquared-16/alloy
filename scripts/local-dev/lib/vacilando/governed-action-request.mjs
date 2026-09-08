@@ -9,6 +9,7 @@
  * decisions, and trusted-host actions.
  */
 import { createHash, randomBytes } from "node:crypto";
+import { measureMergePullRequestGates } from "./trusted-host-repository-housekeeping.mjs";
 import { describeWait } from "./run-wait.mjs";
 import { evaluateDirectorAuthority } from "./director-authority.mjs";
 import { collectDirectorEvidence } from "./director-evidence.mjs";
@@ -40,6 +41,8 @@ import {
 import {
   findAuthorization,
   grantMissionAuthorization,
+  standingGrantEligible,
+  SUBJECT_SCOPES,
   grantExactRequestAuthorization,
   revokeAuthorization,
 } from "./trusted-host-authz.mjs";
@@ -49,6 +52,7 @@ import {
   fulfillApplyReconciliationPlanForMission,
   fulfillRetireWorktreeForMission,
   fulfillDeleteRemoteBranchForMission,
+  fulfillRestoreDeployedQaSessionForMission,
   fulfillRestoreQaSessionForMission,
   fulfillProvisionQaIdentityForMission,
   fulfillAssignQaAccessForMission,
@@ -56,8 +60,12 @@ import {
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
+  fulfillSetProviderCeilingForMission,
+  fulfillInstallToolkitForMission,
+  fulfillLaneDispatchForMission,
   previewTrustedHostAuthorization,
 } from "./trusted-host-actions.mjs";
+import { resolveDeployedTarget } from "./deployed-target-registry.mjs";
 import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
 import { ACCESS_IDENTITY_STAGING_MIGRATIONS } from "./trusted-host-migrate.mjs";
 import { createDecision, listDecisions, answerDecision } from "./decisions.mjs";
@@ -90,7 +98,7 @@ import {
   releaseMissionDelegation,
   reserveMissionDelegation,
 } from "./mission-delegation.mjs";
-import { classForGovernedStatus, upsertNotification } from "./lane-notifications.mjs";
+import { classForGovernedStatus, isRoutineProgress, upsertNotification } from "./lane-notifications.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -118,9 +126,42 @@ export const PENDING_GOVERNED_STATUSES = Object.freeze([
   "requested",
   "awaiting_director",
   "awaiting_control_plane_refresh",
+  // A merge whose CI checks have not been reported yet. See enterCheckWait.
+  "awaiting_checks",
   "awaiting_operator",
   "executing",
 ]);
+
+/**
+ * Gates that can only be answered once CI has reported.
+ *
+ * MEASURED. Three merges in one session escalated with "Required gates did not
+ * pass: required_checks_successful, certification_suite_passed" and every one
+ * was approved by hand. Re-measuring the same two PRs afterwards returns
+ * certification_suite_passed TRUE, 8/8 and 9/9 checks passing, none failing,
+ * none pending. The evidence was never missing and the plumbing was never
+ * absent — `measureMergePullRequestGates` is wired for exactly this action.
+ *
+ * The gates were measured ONCE, seconds after the pull request was opened,
+ * before GitHub had registered a single check run. With no checks reported,
+ * `required_checks_total` is 0, which the predicate scores FALSE — deliberately,
+ * because zero checks is not "all checks passed" — and the certification filter
+ * matches nothing, which is NULL. Both correct. Both permanent, because
+ * `tickGovernedActions` re-processes `requested`, `awaiting_director` and
+ * `awaiting_control_plane_refresh` and never `awaiting_operator`. A minute later
+ * the checks went green and nobody looked again.
+ *
+ * So the defect is not a missing producer. It is a measurement taken too early
+ * and never repeated.
+ */
+export const CHECK_AVAILABILITY_GATES = Object.freeze([
+  "required_checks_successful",
+  "certification_suite_passed",
+]);
+
+/** Bounded. A wait that never resolves must become a visible escalation, not a hang. */
+export const MAX_CHECK_WAIT_ATTEMPTS = 20;
+export const MAX_CHECK_WAIT_MS = 20 * 60_000;
 
 const STALE_REGISTRY_FAILURES = new Set([
   "unauthorized_action_key",
@@ -331,6 +372,28 @@ export function presentationForGovernedAction(req = {}) {
       wait_label: "Waiting on Director — QA identity provisioning",
       mission_need: `Needs approval — Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`,
       detail: `Create the managed, non-production QA account ${identity}${slot ? ` for Slot ${slot}` : ""} in hosted staging · lane ${lane} · no email is sent · no human-managed password is created · creates no browser session`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    /*
+     * A deployed approval must READ as deployed. The hazard here is the exact inverse of the one the
+     * local branch below was written for: an operator shown "Restore QA session on Slot 1" while
+     * approving an action that authenticates a public host has approved something they were not
+     * told about. The card therefore names the environment and the host, because those are the two
+     * facts that decide whether this approval is the right one.
+     */
+    const key2 = inputs.deployed_target || inputs.deployedTarget || inputs.target_key || "";
+    const resolved = resolveDeployedTarget(key2);
+    const t = resolved.ok ? resolved.target : null;
+    const host = t?.host || "the registered deployed target";
+    const env = t?.environment || "deployed";
+    const identity = t?.qa_identity || "the target's registered QA identity";
+    return {
+      approve_label: "Authorize deployed QA session restore",
+      deny_label: "Deny",
+      wait_label: `Waiting on Director — deployed QA session restore (${env})`,
+      mission_need: `Needs approval — Restore QA session on ${host}`,
+      detail: `Restore the browser session for ${identity} on ${host} · ${env} · target resolved from the registry, not from the request · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
     };
   }
   if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
@@ -736,6 +799,13 @@ export function operatorLabel(rec) {
     const slot = operatorSlotHint(rec);
     return `Restore QA browser session${slot ? ` on Slot ${slot}` : ""}`;
   }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    const k = inputs.deployed_target || inputs.deployedTarget || inputs.target_key || "";
+    const resolved = resolveDeployedTarget(k);
+    return resolved.ok
+      ? `Restore QA browser session on ${resolved.target.host}`
+      : "Restore QA browser session on a deployed target";
+  }
   if (key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
     const n = Array.isArray(inputs.corrections) ? inputs.corrections.length : 0;
     return n ? `Apply Vacilando reconciliation metadata — ${n} correction${n === 1 ? "" : "s"}` : "Apply Vacilando reconciliation metadata";
@@ -749,6 +819,18 @@ export function operatorLabel(rec) {
     const b = inputs.branch || inputs.branchName || "";
     if (work) return `Delete ${work} branch`;
     return b ? `Delete remote branch ${b}` : "Delete a remote branch";
+  }
+  if (key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    const from = inputs.expected_ceiling ?? inputs.expectedCeiling;
+    const to = inputs.requested_ceiling ?? inputs.requestedCeiling;
+    const back = inputs.rollback_ceiling ?? inputs.rollbackCeiling;
+    // The operator is approving a specific transition, so the numbers belong in
+    // the sentence. "Change the provider ceiling" hides the only detail that
+    // decides whether this is routine or alarming.
+    if (from != null && to != null) {
+      return `Set provider ceiling ${from} to ${to}${back != null ? ` (rollback ${back})` : ""}`;
+    }
+    return "Set the provider capacity ceiling";
   }
   if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
     if (work) return `Read-only census — ${work}`;
@@ -874,6 +956,32 @@ export function publicGovernedAction(req) {
     director_approval: req.director_approval || null,
     director_decision: req.director_decision || null,
     escalation_reason: req.escalation_reason || null,
+    /*
+     * "I APPROVED IT" IS NOT "THE LANE KNOWS."
+     *
+     * The status field already separates awaiting_operator from executing from
+     * complete, and the audit trail shows approval and execution as distinct
+     * events. What the record could NOT say is whether the requester was ever
+     * told the outcome — and that was the whole of the incident: two actions
+     * that failed in seconds, correctly and with good reasons, and a lane that
+     * refiled them five times because it never heard either reason.
+     *
+     * So the delivery state is projected beside the action state. DELIVERED
+     * means the lane knows. PENDING means it is owed and will be paid when the
+     * lane clears. UNDELIVERABLE means it can never be told, and says why.
+     * `null` means nothing has been attempted yet — which, after this fix, only
+     * happens before an action resolves.
+     */
+    notification_delivery: req.notification_delivery
+      ? {
+        state: req.notification_delivery.state,
+        kind: req.notification_delivery.kind || null,
+        reason: req.notification_delivery.reason || null,
+        attempts: req.notification_delivery.attempts || 0,
+        delivered_at: req.notification_delivery.delivered_at || null,
+      }
+      : null,
+    requester_informed: req.notification_delivery?.state === "DELIVERED",
     created_at: req.created_at,
     updated_at: req.updated_at,
   };
@@ -979,11 +1087,41 @@ export function pendingGovernedActionForRun(runId, root = runtimeRoot()) {
   return newestPending(readGovernedActionStore(root).requests.filter((r) => r.run_id === runId));
 }
 
+/** Statuses after which a request will never need the operator again. */
+export const SETTLED_GOVERNED_STATUSES = Object.freeze(["complete", "failed"]);
+const SETTLED = new Set(SETTLED_GOVERNED_STATUSES);
+
+/**
+ * Retention that cannot evict an unanswered request.
+ *
+ * This was `slice(-200)`, which keeps the newest 200 records whatever state
+ * they are in — so a request still awaiting the Director could be dropped by
+ * 200 unrelated requests arriving after it. The card then disappears from the
+ * queue, and a pending approval that vanishes is indistinguishable from one
+ * that was resolved: the lane waits on a decision nobody can see any more.
+ *
+ * Only settled records are disposable, so only settled records are counted
+ * against the cap. Unsettled ones are kept regardless of age and of how many
+ * there are — an unbounded backlog is a problem to SHOW the operator, never
+ * one to fix by forgetting the oldest of it.
+ */
+export function retainGovernedRequests(requests, cap = 200) {
+  if (!Array.isArray(requests) || requests.length <= cap) return requests;
+  const unsettled = requests.filter((r) => !SETTLED.has(r.status));
+  const settled = requests.filter((r) => SETTLED.has(r.status));
+  // Budget can be zero once the unsettled backlog alone fills the cap, and
+  // `slice(-0)` is `slice(0)` — it returns EVERYTHING. Guard the zero case
+  // explicitly rather than letting a negative-index idiom decide it.
+  const budget = Math.max(0, cap - unsettled.length);
+  const keep = new Set(budget === 0 ? [] : settled.slice(-budget).map((r) => r.request_id));
+  return requests.filter((r) => !SETTLED.has(r.status) || keep.has(r.request_id));
+}
+
 function putRequest(store, rec) {
   const idx = store.requests.findIndex((r) => r.request_id === rec.request_id);
   if (idx >= 0) store.requests[idx] = rec;
   else store.requests.push(rec);
-  if (store.requests.length > 200) store.requests = store.requests.slice(-200);
+  store.requests = retainGovernedRequests(store.requests);
   return store;
 }
 
@@ -1068,27 +1206,82 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
   try {
     const cls = classForGovernedStatus(rec.status);
     if (cls) {
-      upsertNotification({
+      // ROUTINE PROGRESS DOES NOT OPEN A RECORD.
+      //
+      // Measured on this host: `governed_action_worker_resumed` was 232 of the
+      // 500 records in the store and pushed zero times — pure feed noise from
+      // actions running inside policy. It is suppressed at CREATION only. If a
+      // record for this request already exists it is still updated, because the
+      // completion of an approved action is what resolves the approval that
+      // opened it.
+      // THE OPERATOR NAMED THIS LANE; THE NOTIFICATION SHOULD USE THAT NAME.
+      //
+      // This passed `laneId` and no `laneName`, and `upsertNotification` falls
+      // back to the id — so every governed record stored `lane_2cea84351d90` as
+      // its display name and the phone push, whose title is
+      // `record.lane_name || record.lane_id`, showed the id. Measured on this
+      // host: 22 of 74 live records carried an id where a name belongs, and all
+      // of them came through this path. The run-outcome path already resolves
+      // the durable lane for exactly this reason (execution-run.mjs:608).
+      let laneName = null;
+      try {
+        laneName = rec.lane_id ? (getDurableLane(rec.lane_id, root)?.name || null) : null;
+      } catch { /* an unnamed or unreadable lane keeps the id — never break the action */ }
+      const noted = upsertNotification({
         subjectKey: `governed:${rec.request_id}`,
         requestId: rec.request_id,
         laneId: rec.lane_id || null,
+        laneName,
         eventType: type,
         state: rec.status || null,
         attentionClass: cls,
+        createIfMissing: !isRoutineProgress(type),
         summary: title || rec.title || rec.action_key,
         path: rec.mission_id
           ? `/#/missions/${encodeURIComponent(rec.mission_id)}`
           : (rec.lane_id ? `/#/lanes/${encodeURIComponent(rec.lane_id)}` : "/#/lanes"),
         root,
       });
+      // ANNOUNCE A NEW DEMAND, NOT AN UNREAD ONE.
+      //
+      // The guard was `noted.created || noted.record.seen_at === null`, and
+      // `seen_at === null` is true of every unread record — so each routine
+      // progress event on an unread approval pushed the phone again with
+      // nothing new to say. That is the "nothing to do, nothing completed"
+      // notification. Only a record that was just opened, or that has genuinely
+      // become actionable again, is worth a push.
+      if (noted?.record && (noted.created || noted.becameActionable)) {
+        import("./lane-push.mjs")
+          .then((mod) => mod.pushGovernedNotification(noted.record, { root }))
+          .catch(() => { /* push is best-effort; the record is the truth */ });
+      }
     }
   } catch { /* the canonical record is best-effort too; never break the action */ }
   return event;
 }
 
-function artifactPathFrom(refs = []) {
+/**
+ * THE QUERY A CENSUS RUNS IS NEVER INFERRED.
+ *
+ * THE INCIDENT THIS CLOSES. This returned Q15_CENSUS_ARTIFACT when a request
+ * carried no artifact_refs, so a census filed WITHOUT naming a query silently
+ * became the Q15 authority census and ran it against the deployed primary. The
+ * substitution was then written into the request record, so the store showed a
+ * query the filer had never asked for. Observed for real: gar_a1d647be39e8b6
+ * was filed with no refs and executed q15-authority-census.json.
+ *
+ * A privileged read whose SUBJECT is guessed is not a governed action; it is an
+ * unreviewed one wearing a governed action's record. Absence now returns null,
+ * which validateInputs turns into `missing_query_artifact`, and the request
+ * fails closed before any database is touched. Every legitimate census in the
+ * store already names its own artifact, so nothing that was explicit changes.
+ *
+ * `fallback` exists for the two DISPLAY callers — a label and a filename in a
+ * summary — which want a readable string and can never cause execution.
+ */
+function artifactPathFrom(refs = [], { fallback = null } = {}) {
   const first = Array.isArray(refs) ? refs.find(Boolean) : refs;
-  return first ? String(first) : Q15_CENSUS_ARTIFACT;
+  return first ? String(first) : fallback;
 }
 
 /**
@@ -1134,7 +1327,7 @@ function identityFromInputs(input = {}) {
   const versions = Array.isArray(inputs.migrations)
     ? inputs.migrations.map((m) => m.version || m.prefix || m.path || "").join(",")
     : "";
-  return [pr, sha, versions].filter(Boolean).join(":") || artifactPathFrom(input.artifact_refs);
+  return [pr, sha, versions].filter(Boolean).join(":") || artifactPathFrom(input.artifact_refs, { fallback: "" });
 }
 
 function dedupeKey(input) {
@@ -1404,12 +1597,22 @@ function defaultModeForAction(actionKey, requested) {
   // promotion nor a migration. Inventing a mode name instead fails `invalid_mode`, and widening the
   // enum would add governance vocabulary for one action that already has a home.
   if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
   if (actionKey === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) return "other";
+  if (actionKey === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) return "other";
+  /*
+   * Both of these shipped without a default and worked anyway, because every payload that ever
+   * proposed them set `requested_mode` explicitly. That is precisely the latent form of the trap
+   * NC14 exists to catch: the first caller that omits the mode gets `policy_denied`, which reads as
+   * the operator forbidding the action rather than nobody having assigned it one.
+   */
+  if (actionKey === ACTION_TYPES.HOST_INSTALL_TOOLKIT) return "other";
+  if (actionKey === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) return "other";
   return "read_only";
 }
 
@@ -1634,8 +1837,9 @@ function policyDecision(rec, { nowMs } = {}) {
   // Same identity the mint and the execution boundary use — including the
   // environment, which this call used to leave out entirely while passing
   // `rec.target` as the database target.
+  const identity = authorizationIdentityFor(rec);
   const auth = findAuthorization({
-    ...authorizationIdentityFor(rec).lookup,
+    ...identity.lookup,
     nowMs: nowMs ?? Date.now(),
   });
   if (auth) {
@@ -1645,6 +1849,31 @@ function policyDecision(rec, { nowMs } = {}) {
       authorization_id: auth.authorizationId,
       reason: "existing_mission_authorization",
     };
+  }
+  // STANDING AUTHORITY THIS LANE ALREADY HOLDS.
+  //
+  // A separate probe rather than a widening of the one above, deliberately.
+  // The lookup above is filed under mission-or-repository; reordering it to
+  // prefer the lane would have re-homed every existing grant. This asks a
+  // strictly narrower question — "has the operator already approved THIS
+  // capability for THIS lane, in this repository and environment?" — and can
+  // only ever match a grant that was minted with an explicitly declared
+  // wildcard subject scope, for one of STANDING_ELIGIBLE_ACTIONS.
+  const standingScope = standingScopeFor(rec);
+  if (standingScope && standingGrantEligible(rec.action_key, { environment: identity.environment })) {
+    const standing = findAuthorization({
+      ...identity.lookup,
+      missionId: standingScope,
+      nowMs: nowMs ?? Date.now(),
+    });
+    if (standing) {
+      return {
+        auto_execute: true,
+        operator_approval_required: false,
+        authorization_id: standing.authorizationId,
+        reason: "existing_lane_standing_authorization",
+      };
+    }
   }
   // Production / deployed-primary reads require an operator grant.
   if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS && rec.target === DEFAULT_TARGET) {
@@ -1769,6 +1998,46 @@ export function requestGovernedAction(input = {}, {
   const laneId = canonicalLaneStoreId(shape.laneId, storeRoot) || shape.laneId;
   const runId = input.run_id || input.runId || activeRunForLane(laneId, storeRoot)?.run_id || null;
   const run = runId ? getExecutionRun(runId, storeRoot) : null;
+
+  /*
+   * ONE CANONICAL OWNER OF RUN IDENTITY.
+   *
+   * THE SPLIT-BRAIN THIS CLOSES. `runId` is whatever the CALLER passed on the
+   * command line. The canonical store was already consulted on the line above
+   * — and its answer was then thrown away. So a worker could name a run the
+   * execution-run store had never heard of, and this layer would file it,
+   * authorize it and execute it.
+   *
+   * Measured, not imagined: after run erun_9bccef4667cc68ef vanished from the
+   * canonical store, FOURTEEN governed actions stayed bound to it and TWELVE of
+   * them COMPLETED — push, pull request, merge, toolkit install, cross-lane
+   * dispatch — every one of them authorized against a run that
+   * `getExecutionRun` reported as absent. Meanwhile `checkpoint-create` asked
+   * the same question, got the honest answer, and refused. Two subsystems
+   * disagreed about whether the same run existed, and the one that could
+   * promote code to staging was the one that had stopped checking.
+   *
+   * The invariant: no subsystem may authorize work against a run the canonical
+   * owner considers nonexistent. A caller that names a run gets that name
+   * VERIFIED, not trusted. Naming nothing is still fine — plenty of governed
+   * work legitimately has no run — but naming a ghost is now a refusal rather
+   * than a silent parallel universe.
+   *
+   * This deliberately fails closed. If canonical run truth is ever lost again,
+   * governed actions stop instead of proceeding on stale identity, which is the
+   * behaviour that would have surfaced the durability defect on its first
+   * occurrence instead of its third.
+   */
+  const namedRun = Boolean(input.run_id || input.runId);
+  if (namedRun && !run) {
+    return {
+      ok: false,
+      error: "run_not_found",
+      failure_code: "run_not_found",
+      detail: `run ${runId} is not present in the canonical execution-run store; governed work may not be authorized against a run the run owner does not have`,
+    };
+  }
+
   const worktreePath = resolveWorktreePath(input, laneId, run, storeRoot);
   const artifactRefs = shape.artifactRefs.length
     ? shape.artifactRefs
@@ -2010,7 +2279,7 @@ export function governedActionSubjectKey(rec) {
     return `migration:${versions.join(",")}`;
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS) {
-    const artifact = artifactPathFrom(rec.artifact_refs) || "";
+    const artifact = artifactPathFrom(rec.artifact_refs, { fallback: "" }) || "";
     if (!rec.target) return null;
     return `census:${rec.target}:${artifact.split("/").pop()}`;
   }
@@ -2133,7 +2402,7 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
         rec.purpose,
         "",
         "Artifact:",
-        artifactPathFrom(rec.artifact_refs).split("/").pop(),
+        String(artifactPathFrom(rec.artifact_refs, { fallback: "" }) || "").split("/").pop(),
         "",
         "Data mode:",
         rec.requested_mode === "read_only" ? "Read-only" : rec.requested_mode,
@@ -2281,6 +2550,26 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
  */
 function authorityScopeFor(rec) {
   return rec?.mission_id || rec?.authority?.repository_id || null;
+}
+
+/**
+ * THE SCOPE A STANDING GRANT IS FILED AND FOUND UNDER — THE LANE, AND ONLY THE LANE.
+ *
+ * The first attempt reused `authorityScopeFor`, and a certification caught it:
+ * that resolver falls back to `authority.repository_id`, so one lane's approved
+ * push minted a grant every OTHER lane on the same repository could inherit.
+ * The test that failed was "the requesting lane cannot approve its own push" —
+ * a fresh lane was auto-executing on authority nobody had given it.
+ *
+ * A repository is not an owner; it is a shared resource. The lane is the
+ * narrowest thing that owns work and outlives a single request, so a standing
+ * grant is filed under the lane and found under the lane. A request with no
+ * lane gets no standing grant at all, because there would be nothing to bound
+ * it to and "unbounded" is not a scope.
+ */
+function standingScopeFor(rec) {
+  const lane = String(rec?.lane_id || "").trim();
+  return lane || null;
 }
 
 /**
@@ -2470,6 +2759,52 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       exactContext,
     });
   }
+  /*
+   * THE MISSING BRANCH. capacity.set_provider_ceiling was registered, mode-mapped,
+   * policy-covered, capability-granted and operator-APPROVED — and still failed
+   * `action_unavailable`, because execution fell through to the guard below.
+   * fulfillSetProviderCeilingForMission already existed in trusted-host-actions;
+   * it was simply never imported or dispatched, so the action has never been
+   * executable since it shipped. This is the exact failure the comment on that
+   * fallthrough describes: the action existed everywhere except in this dispatch,
+   * and the error names the registry rather than the missing branch.
+   */
+  if (rec.action_key === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
+    return fulfillLaneDispatchForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
+    return fulfillInstallToolkitForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    return fulfillSetProviderCeilingForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
   if (rec.action_key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
     return fulfillDeleteRemoteBranchForMission(scope, {
       assignmentId: rec.run_id || null,
@@ -2527,6 +2862,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    return fulfillRestoreDeployedQaSessionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}) },
       actor,
       nowMs,
       grant,
@@ -2985,6 +3332,9 @@ export function processGovernedAction(requestId, {
   saveRequest(rec, root);
 
   if (policy.operator_approval_required) {
+    // Wait for CI before waking a human, when waiting is the whole answer.
+    const wait = checkWaitDecision(rec, { nowMs });
+    if (wait.wait) return enterCheckWait(rec, { nowMs, root, detail: wait.detail });
     rec.status = "awaiting_operator";
     rec.updated_at = iso(nowMs);
     openApprovalDecision(rec, { nowMs, root });
@@ -2995,6 +3345,90 @@ export function processGovernedAction(requestId, {
   }
 
   return executeGovernedAction(rec.request_id, { nowMs, root, actor });
+}
+
+/**
+ * Should this escalation be a WAIT instead?
+ *
+ * Only when every gate that stopped it is one CI answers, and CI has not
+ * answered yet. A single failing check, a gate outside that set, or an
+ * exhausted budget all fall through to the operator exactly as before — this
+ * narrows when a human is woken, never whether one can be.
+ */
+export function checkWaitDecision(rec, { nowMs = Date.now(), measure = null } = {}) {
+  if (rec?.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return { wait: false };
+  const reason = String(rec.escalation_reason || "");
+  const named = reason.match(/Required gates did not pass:\s*(.+?)\.?$/);
+  if (!named) return { wait: false, why: "the escalation does not name gates" };
+  const gates = named[1].split(",").map((g) => g.trim()).filter(Boolean);
+  if (!gates.length || !gates.every((g) => CHECK_AVAILABILITY_GATES.includes(g))) {
+    return { wait: false, why: "a gate outside CI availability also failed" };
+  }
+  const attempts = Number(rec.check_wait?.attempts || 0);
+  const firstAt = rec.check_wait?.started_at ? Date.parse(rec.check_wait.started_at) : nowMs;
+  if (attempts >= MAX_CHECK_WAIT_ATTEMPTS) return { wait: false, why: "check wait exhausted its attempts" };
+  if (nowMs - firstAt > MAX_CHECK_WAIT_MS) return { wait: false, why: "check wait exceeded its window" };
+
+  // A RED CHECK IS NOT A SLOW ONE. Waiting is only right while the answer is
+  // absent; once CI has failed something, the operator is the correct audience
+  // and delaying that helps nobody.
+  const ev = typeof measure === "function" ? measure(rec) : mergeCheckState(rec);
+  if (ev == null) return { wait: true, detail: "pull-request checks could not be read yet" };
+  if (Number(ev.required_checks_failing || 0) > 0) {
+    return { wait: false, why: `${ev.required_checks_failing} required check(s) are failing` };
+  }
+  const total = ev.required_checks_total;
+  const pending = Number(ev.required_checks_pending || 0);
+  if (total == null || total === 0) return { wait: true, detail: "no checks have been reported yet" };
+  if (pending > 0) return { wait: true, detail: `${pending} check(s) still running` };
+  if (ev.certification_suite_passed == null) return { wait: true, detail: "no certification check has reported yet" };
+  // Everything CI owes has arrived. Re-processing will now measure the gates.
+  return { wait: true, detail: "checks have reported; re-measuring" };
+}
+
+/*
+ * Read the pull request's own check state, through the module that already
+ * owns that measurement. `trusted-host-repository-housekeeping` imports nothing
+ * from here, so the dependency runs one way and a static import is safe.
+ */
+function mergeCheckState(rec) {
+  try {
+    const inputs = rec?.inputs || {};
+    const n = Number(inputs.pullRequestNumber ?? inputs.pull_request_number);
+    if (!Number.isFinite(n)) return null;
+    return measureMergePullRequestGates({
+      repository: inputs.repository,
+      pullRequestNumber: n,
+      expectedHeadSha: inputs.expectedHeadSha || inputs.expected_head_sha || null,
+    });
+  } catch { return null; }
+}
+
+/**
+ * Park a merge until CI reports, and re-measure on the tick.
+ *
+ * This is NOT a softer approval. The request stays pending, no grant is minted,
+ * nothing executes, and when the budget runs out it escalates to the operator
+ * with the same question it would have asked immediately. What changes is that
+ * the question is asked once CI has actually answered, instead of two seconds
+ * after the pull request was opened when it could not have.
+ */
+export function enterCheckWait(rec, { nowMs = Date.now(), root = runtimeRoot(), detail = null } = {}) {
+  const attempts = Number(rec.check_wait?.attempts || 0) + 1;
+  rec.status = "awaiting_checks";
+  rec.check_wait = {
+    attempts,
+    started_at: rec.check_wait?.started_at || iso(nowMs),
+    last_attempt_at: iso(nowMs),
+    detail,
+    attempts_allowed: MAX_CHECK_WAIT_ATTEMPTS,
+    window_ms: MAX_CHECK_WAIT_MS,
+  };
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  attachRunWait(rec, { nowMs, root });
+  appendAudit(rec, "awaiting_checks", { nowMs, extra: { attempts, detail } }, root);
+  return { ok: true, request: publicGovernedAction(rec), awaiting_checks: true, detail };
 }
 
 export function executeGovernedAction(requestId, {
@@ -3290,6 +3724,41 @@ export async function approveGovernedAction(requestId, {
   // Director never saw. It gets a single-use grant pinned to this exact
   // proposal instead: this PR, this head SHA, this target, this method, this
   // run. A different SHA is a different decision.
+  // A STANDING GRANT FOR A NARROW ALLOWLIST — the reason the operator was asked
+  // 153 redundant times in 17 hours.
+  //
+  // Approving a bounded, repeatable capability granted authority over ONE
+  // content fingerprint, so the next identical push, PR or session restore
+  // asked again. The authorization model already had MISSION_STANDING with an
+  // explicit subject scope and nothing ever minted one. This routes it, for the
+  // three capabilities STANDING_ELIGIBLE_ACTIONS justifies and no others.
+  //
+  // The grant is scoped to the SAME identity the lookup uses — capability,
+  // repository, environment, and the lane or mission that owns it — so it
+  // cannot reach another lane, another repository or another environment. It
+  // expires, it is auditable, and it is revocable. Everything not on that
+  // allowlist keeps the single-use grant pinned to this exact proposal.
+  const standingScope = standingScopeFor(rec);
+  const sIdentity = authorizationIdentityFor(rec);
+  if (standingScope && standingGrantEligible(rec.action_key, { environment: sIdentity.environment })) {
+    grantMissionAuthorization({
+      // The LANE. Never the mission and never the repository: a grant filed
+      // under a shared resource is inheritable by everything sharing it.
+      missionId: standingScope,
+      actionType: rec.action_key,
+      databaseTarget: sIdentity.databaseTarget || rec.target,
+      actor,
+      // Explicitly reusable for any subject of THIS capability inside THIS
+      // scope. Declared, never inferred: absence is not a wildcard.
+      subjectScope: SUBJECT_SCOPES.ANY_WITHIN_MISSION,
+      repository: sIdentity.repository || null,
+      environment: sIdentity.environment || null,
+      sourceDecisionId: rec.decision_id,
+      note: `Operator approved ${rec.action_key}; standing for this lane, repository and environment.`,
+      nowMs,
+    });
+  }
+
   if (rec.mission_id) {
     // Subject and target from the SAME resolver the lookup uses. This site kept
     // `actionQueryHash` and `rec.target`, a fourth spelling of a subject key
@@ -3504,6 +3973,9 @@ export function tickGovernedActions({
       && r.operator_approval?.decision === "approved"
       && r.action_key === ACTION_TYPES.DATABASE_READ_CENSUS)
     || (r.status === "awaiting_control_plane_refresh" && Boolean(getActionDefinition(r.action_key)))
+    // The whole point of the wait: look again. Without this line the status is
+    // a nicer name for the same silence.
+    || r.status === "awaiting_checks"
   );
   const out = [...recovered];
   const seen = new Set(recovered.map((r) => r?.request?.request_id).filter(Boolean));
@@ -3703,6 +4175,19 @@ export async function drainGovernedNotificationsForLane(laneId, {
     nowMs,
     send,
     getLane: (id) => getDevelopmentLane(id, { includeGitFacts: false }),
+    /*
+     * A notification held behind another action is skipped, not attempted.
+     *
+     * The attempt budget is sized for a busy pane, which clears in seconds. A
+     * notification waiting on an `awaiting_operator` action is waiting on a
+     * person — one on this host waited an hour and three quarters — and
+     * spending an attempt per conductor tick would expire it as UNDELIVERABLE
+     * long before it was ever undeliverable.
+     */
+    isBlocked: (rec) => {
+      const next = pendingGovernedActionForLane(rec.lane_id, root);
+      return next && next.request_id !== rec.request_id ? next.request_id : null;
+    },
     buildText: async (rec) => {
       if (rec.notification_delivery?.kind === "governed_action_failed") {
         return continuationTextForFailedGovernedAction(rec);
@@ -3713,6 +4198,46 @@ export async function drainGovernedNotificationsForLane(laneId, {
       return continuationTextForGovernedAction(rec, action);
     },
   });
+}
+
+/**
+ * A DEFERRED NOTIFICATION IS OWED, NOT DROPPED.
+ *
+ * Both resume paths hold a notification back while another action on the same
+ * lane is still pending, which is right: pasting a second instruction into a
+ * lane that is mid-decision interleaves two conversations. What was wrong is
+ * that they returned `{ deferred: true }` and told nobody, so the notification
+ * left no trace and the drain — which exists, and works — had nothing to find.
+ *
+ * MEASURED: 83 of 200 governed actions on this host, 77 of them SUCCESSFUL,
+ * resolved with no delivery record at all, and every single one had a
+ * co-pending action on its lane at that moment. From inside the lane that is
+ * indistinguishable from an action that was approved and never executed.
+ *
+ * Registering the deferral with the delivery owner is the whole fix: the record
+ * enters PENDING, the drain finds it when the lane clears, and if it can never
+ * be delivered it becomes UNDELIVERABLE with a reason. Silence stops being one
+ * of the outcomes.
+ */
+async function oweNotification(rec, { kind, waitingOn, nowMs, root }) {
+  try {
+    const { recordDeliveryAttempt } = await import("./governed-notification-delivery.mjs");
+    recordDeliveryAttempt(rec, { ok: false, error: "deferred_behind_pending_action" }, {
+      kind,
+      nowMs,
+      save: (r) => saveRequest(r, root),
+    });
+    appendAudit(rec, "notification_deferred", { nowMs, extra: { waiting_on: waitingOn, kind } }, root);
+  } catch (err) {
+    // Failing to RECORD the debt must not also hide it. The audit line is the
+    // last thing standing between a deferral and silence.
+    try {
+      appendAudit(rec, "notification_deferral_unrecorded", {
+        nowMs,
+        extra: { waiting_on: waitingOn, error: String(err?.message || err) },
+      }, root);
+    } catch { /* nothing further is available */ }
+  }
 }
 
 export async function resumeLaneAfterFailedGovernedAction(requestId, {
@@ -3727,7 +4252,13 @@ export async function resumeLaneAfterFailedGovernedAction(requestId, {
   const pendingNext = pendingGovernedActionForLane(rec.lane_id, root);
   if (pendingNext && pendingNext.request_id !== rec.request_id) {
     attachRunWait(pendingNext, { nowMs, root });
-    return { ok: true, deferred: true, waiting_on: pendingNext.request_id };
+    await oweNotification(rec, {
+      kind: "governed_action_failed",
+      waitingOn: pendingNext.request_id,
+      nowMs,
+      root,
+    });
+    return { ok: true, deferred: true, waiting_on: pendingNext.request_id, notification_owed: true };
   }
   releaseRunAfterGovernedFailure(rec, { nowMs, root });
   const { sendLaneInstruction } = await import("./lanes.mjs");
@@ -3768,13 +4299,34 @@ export async function resumeLaneAfterFailedGovernedAction(requestId, {
     save: (r) => saveRequest(r, root),
   });
   appendAudit(rec, "failed_notified", { nowMs, detail: { ...rec.resume_delivery, delivery: rec.notification_delivery } }, root);
+  const drained = await drainOwedAfterResolution(rec, { nowMs, root });
   return {
     ok: Boolean(delivered?.ok),
     request: publicGovernedAction(rec),
     delivered,
     startedSession,
     same_lane: true,
+    drained,
   };
+}
+
+/**
+ * THE MOMENT THE QUEUE CLEARS IS THE MOMENT TO PAY THE DEBT.
+ *
+ * A deferral is registered when another action on the lane is still pending, so
+ * the natural time to redeliver is when an action resolves — right here, rather
+ * than waiting for the lane's run to end or for the next conductor tick thirty
+ * seconds later. Those remain the safety net; this is the direct path.
+ *
+ * Best-effort by construction: the action itself has already succeeded or
+ * failed, and a redelivery problem must not rewrite that outcome.
+ */
+async function drainOwedAfterResolution(rec, { nowMs, root }) {
+  try {
+    return await drainGovernedNotificationsForLane(rec.lane_id, { root, nowMs });
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
 }
 
 export async function resumeLaneAfterGovernedAction(requestId, {
@@ -3790,7 +4342,13 @@ export async function resumeLaneAfterGovernedAction(requestId, {
   const pendingNext = pendingGovernedActionForLane(rec.lane_id, root);
   if (pendingNext && pendingNext.request_id !== rec.request_id) {
     attachRunWait(pendingNext, { nowMs, root });
-    return { ok: true, deferred: true, waiting_on: pendingNext.request_id };
+    await oweNotification(rec, {
+      kind: "governed_action_resume",
+      waitingOn: pendingNext.request_id,
+      nowMs,
+      root,
+    });
+    return { ok: true, deferred: true, waiting_on: pendingNext.request_id, notification_owed: true };
   }
   const { sendLaneInstruction } = await import("./lanes.mjs");
   const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
@@ -3850,6 +4408,7 @@ export async function resumeLaneAfterGovernedAction(requestId, {
     body: `Continuing ${rec.lane_id} with governed-action results.`,
     root,
   });
+  const drained = await drainOwedAfterResolution(rec, { nowMs, root });
   return {
     ok: Boolean(delivered?.ok),
     request: publicGovernedAction(rec),
@@ -3857,6 +4416,7 @@ export async function resumeLaneAfterGovernedAction(requestId, {
     startedSession,
     same_lane: true,
     same_worktree: true,
+    drained,
   };
 }
 

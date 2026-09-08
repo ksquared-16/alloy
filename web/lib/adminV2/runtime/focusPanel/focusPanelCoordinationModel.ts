@@ -16,7 +16,12 @@
  */
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import { cardDefinition, cardSuccessor, cardTitle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import {
+    cardDefinition,
+    cardSuccessor,
+    cardTitle,
+    resolveCardIdentity,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
@@ -214,6 +219,40 @@ export function isFocusRequestFor(
  * what supersession means. Consulting the registry here keeps that in one place rather than making
  * every caller translate keys before asking.
  */
+/**
+ * The cell a surface can ACTUALLY raise, out of the cells it actually renders.
+ *
+ * `resolveElevatedCellKey` answers "which cell does this card want", and ends by returning
+ * the card key itself when the resolution map knows nothing about it. That answer is a
+ * request, not a fact, and a renderer that treats it as a fact activates its depth layer
+ * for a cell that does not exist: the scrim paints and NOTHING carries `data-fp-elevated`,
+ * so every cell falls under the receded rule (`opacity` + `filter` + `pointer-events:none`).
+ * Opacity and filter each open a stacking context, so the cell hosting the command the
+ * operator just launched cannot rise above the scrim at ANY z-index — the command surface
+ * renders behind its own backdrop, dimmed and inert.
+ *
+ * Measured on Send Tour Invitation: the requested key was `current_work` while the surface
+ * rendered `business_process, financials, attendance, children, household, health_safety`.
+ * `current_work` is `supersededBy: "business_process"` in the card registry and the Process
+ * card is where its command surface is hosted, so the request resolves onto that cell
+ * through the supersession the registry already declares — no second notion of identity.
+ *
+ * Returning `null` when nothing matches is the invariant: never dim a canvas without
+ * raising something out of it.
+ */
+export function resolveRaisedCellKey(
+    requestedCellKey: string | null | undefined,
+    renderedCellKeys: readonly string[],
+): string | null {
+    if (!requestedCellKey) return null;
+    if (renderedCellKeys.includes(requestedCellKey)) return requestedCellKey;
+    const wanted = resolveCardIdentity(requestedCellKey as FocusPanelCardKey);
+    for (const key of renderedCellKeys) {
+        if (resolveCardIdentity(key as FocusPanelCardKey) === wanted) return key;
+    }
+    return null;
+}
+
 export function resolveElevatedCellKey(
     activeCard: FocusPanelCardKey | null | undefined,
     cellResolution: ReadonlyMap<string, { typeKey: FocusPanelCardKey }>,

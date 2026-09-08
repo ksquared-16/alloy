@@ -35,6 +35,14 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import type { CardCompositionPreference } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { resolveRaisedCellKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+
+/** The room a raised card has inside the visible Focus Panel, published to the depth CSS. */
+const FP_RAISED_AVAILABLE_VAR = "--alloy-os-fp-raised-available";
+/** Matches the `top` inset the depth CSS gives a raised card; charged at head AND foot. */
+const FP_RAISED_INSET_PX = 22;
+/** Never publish a cap so small the card cannot show its own header and footer. */
+const FP_RAISED_MIN_AVAILABLE_PX = 320;
 
 type Props = {
     rows: FocusPanelGridRow[];
@@ -88,11 +96,46 @@ export default function FocusPanelCardGrid({
     preferLanesFromGrid,
     composeCards,
     compositionOverrides,
-    elevatedCellKey,
+    elevatedCellKey: requestedElevatedCellKey,
     closing,
     onBackdropClick,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
+    /*
+     * THE GRID IS THE AUTHORITY ON WHAT IS RAISED.
+     *
+     * A caller names the card it wants raised; only this component knows which cells it
+     * actually paints. When the two disagreed the depth layer still activated — scrim on,
+     * nothing elevated — and the receded rule then buried the very cell hosting the command
+     * the operator had just launched. `resolveRaisedCellKey` reconciles the request against
+     * the rendered cells (through card supersession) and answers `null` when nothing can be
+     * raised, so the scrim and the elevation are decided by one value that cannot disagree
+     * with itself. Every use below reads this reconciled key.
+     */
+    const renderedCellKeys = useMemo(() => {
+        const keys: string[] = [];
+        const add = (key: string | null | undefined) => {
+            if (key && !keys.includes(key)) keys.push(key);
+        };
+        // Mirrors the render branching below: published layout wins, then composition, then rows.
+        if (publishedLayout) {
+            for (const area of publishedLayout.grid?.areas ?? []) add(area.card);
+            for (const row of publishedLayout.rows ?? []) {
+                for (const cell of row.cells) for (const card of cell.cards) add(card);
+            }
+            return keys;
+        }
+        if (composeCards && composeCards.length > 0) {
+            for (const card of composeCards) add(card.key);
+            return keys;
+        }
+        for (const row of rows ?? []) for (const cell of row.cells) add(cell.key);
+        return keys;
+    }, [publishedLayout, composeCards, rows]);
+    const elevatedCellKey = useMemo(
+        () => resolveRaisedCellKey(requestedElevatedCellKey, renderedCellKeys),
+        [requestedElevatedCellKey, renderedCellKeys],
+    );
     const [columns, setColumns] = useState<1 | 2 | 3 | 4>(2);
     const [widthPx, setWidthPx] = useState(0);
     const composed = !!composeCards && composeCards.length > 0;
@@ -143,6 +186,55 @@ export default function FocusPanelCardGrid({
         card.style.setProperty("--fp-from-x", `${dx}px`);
         card.style.setProperty("--fp-from-y", `${dy}px`);
         card.style.setProperty("--fp-from-scale", `${scale.toFixed(3)}`);
+    }, [elevatedCellKey]);
+
+    /*
+     * THE ROOM A RAISED CARD ACTUALLY HAS.
+     *
+     * The depth CSS caps a raised card with viewport units (`75vh`, `100dvh - 64px`). The card
+     * does not start at the top of the viewport though — it lands at the top of the CANVAS, which
+     * sits below the shell header, the subject identity block and the mode tabs. Measured at
+     * 1680x1050 the canvas began 283px down, so a 787px cap put the card's foot at 1092 — 42px
+     * BELOW the visible panel, taking the command footer with it. The viewport was never the
+     * budget; the visible Focus Panel region is.
+     *
+     * Measured here rather than assumed, because that chrome is configuration-driven and no
+     * hardcoded pixel offset can stay true across surfaces. The card CSS takes this as one more
+     * term in its existing `min()`, so a card still never exceeds the cap its KIND declares.
+     */
+    useEffect(() => {
+        const grid = containerRef.current;
+        if (!grid) return;
+        if (!elevatedCellKey) {
+            grid.style.removeProperty(FP_RAISED_AVAILABLE_VAR);
+            return;
+        }
+        const apply = () => {
+            const gridTop = grid.getBoundingClientRect().top;
+            let visibleBottom = window.innerHeight;
+            let node: HTMLElement | null = grid.parentElement;
+            while (node) {
+                const style = window.getComputedStyle(node);
+                if (style.overflowY === "auto" || style.overflowY === "scroll") {
+                    visibleBottom = Math.min(visibleBottom, node.getBoundingClientRect().bottom);
+                    break;
+                }
+                node = node.parentElement;
+            }
+            const available = Math.round(visibleBottom - gridTop - FP_RAISED_INSET_PX * 2);
+            grid.style.setProperty(
+                FP_RAISED_AVAILABLE_VAR,
+                `${Math.max(FP_RAISED_MIN_AVAILABLE_PX, available)}px`,
+            );
+        };
+        apply();
+        // The scroll-to-top below is smooth, so the first reading can predate it.
+        const settle = window.setTimeout(apply, 420);
+        window.addEventListener("resize", apply);
+        return () => {
+            window.clearTimeout(settle);
+            window.removeEventListener("resize", apply);
+        };
     }, [elevatedCellKey]);
 
     // The focused card anchors near the top of the canvas. If the panel was scrolled,
@@ -338,6 +430,12 @@ export default function FocusPanelCardGrid({
         "data-fp-collapsed": diag.collapsed ? "true" : "false",
         "data-fp-published-cards": diag.publishedCards,
         "data-fp-render-strategy": diag.strategy,
+        // Which cell the depth layer believes it raised. A scrim with no matching cell is
+        // the shape of the Focus Panel command-surface defect, and it is invisible without this.
+        "data-fp-elevated-key": elevatedCellKey ?? undefined,
+        // What the caller ASKED for. Differs from the raised key when a request names a
+        // superseded card (or no rendered cell at all) — the shape of the buried-surface defect.
+        "data-fp-elevated-requested": requestedElevatedCellKey ?? undefined,
     } as const;
 
     // Shared cell box — identical attributes in both paths so the depth/elevation CSS

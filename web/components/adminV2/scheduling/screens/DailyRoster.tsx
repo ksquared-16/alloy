@@ -289,10 +289,33 @@ export default function DailyRoster({
     /* Latest intent wins — one gate for THIS load. See lib/runtime/latestWins.ts. */
     const requestGate = useRef(createLatestWinsGate());
 
+    /*
+     * WHICH DAY THE MODEL IN HAND ALREADY IS.
+     *
+     * The first request deliberately omits the date, because the org's service date is the server's to
+     * decide and never the browser clock's. The response carries it, and the host adopts it — which
+     * changed `date`, which is one of this loader's own dependencies, so the SAME roster was fetched a
+     * second time. Measured on a real click: `site` at 153ms, then `site&date=2026-09-03` at 1280ms —
+     * ~340ms of duplicate work that pushed the surface's stable point from ~1.28s out to ~1.60s.
+     *
+     * The adopted date is not new intent; it is the server naming the day the answer already describes.
+     * So the loader remembers which `(site, day)` its current model satisfies and declines to ask again
+     * for that exact pair. A real operator date change is a different pair and issues exactly one
+     * request, which is the invariant this keeps: ONE authoritative request per day actually asked for.
+     *
+     * This is not a cache — nothing is stored or replayed here, and the shared warm cache with its
+     * `invalidateOperationsDay()` drop is untouched. It is the loader declining to re-ask a question it
+     * is currently displaying the answer to.
+     */
+    const satisfiedKeyRef = useRef<string | null>(null);
+
     const load = useCallback(async () => {
         // The workspace mounts this before a site resolves; fetching on "" is a
         // guaranteed 400 and it fired twice on every open.
         if (!siteLocationId) return;
+        // The pair being asked for. An empty day means "whatever the server calls today".
+        const requestedKey = `${siteLocationId}|${date ?? ""}`;
+        if (satisfiedKeyRef.current === requestedKey) return;
         const seq = requestGate.current.issue();
         setError(null);
         setModel(null);
@@ -313,10 +336,15 @@ export default function DailyRoster({
             if (loadError) throw new Error(loadError);
             setModel(json.roster ?? null);
             if (json.todayYmd) setServerToday(json.todayYmd);
+            // Record the day this model IS, using the server's answer when we asked without one — so
+            // the adoption below re-enters with a pair we already satisfy instead of re-asking.
+            satisfiedKeyRef.current = `${siteLocationId}|${json.roster?.date ?? date ?? ""}`;
             // Adopt the org-local service date the server resolved.
             if (!date && json.roster?.date) setDate(json.roster.date);
         } catch (e) {
             if (!requestGate.current.isCurrent(seq)) return;
+            // A failure satisfies nothing: leave the pair unmarked so the next run may try again.
+            satisfiedKeyRef.current = null;
             setError(e instanceof Error ? e.message : "Could not load the roster");
         }
     }, [siteLocationId, date, setDate, setServerToday]);

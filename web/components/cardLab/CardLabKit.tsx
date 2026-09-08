@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import clsx from "clsx";
 
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
@@ -70,16 +70,9 @@ export function ActionRow({ children }: { children: ReactNode }) {
     return <div className="alloy-os-currentwork__helpful-row">{children}</div>;
 }
 
-export function Action({
-    children,
-    primary = false,
-    onClick,
-    disabled = false,
-    title,
-}: {
+type ActionProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "className"> & {
     children: ReactNode;
     primary?: boolean;
-    onClick?: () => void;
     /**
      * Configured but not currently executable. The platform decides this; the card only renders it.
      * A configured command is never removed for being unavailable — an operator who cannot see a
@@ -88,23 +81,47 @@ export function Action({
     disabled?: boolean;
     /** The stated unavailable reason, surfaced on the control itself. */
     title?: string;
-}) {
+};
+
+/*
+ * OPEN AT THE DOM SEAM, CLOSED AT THE DESIGN SEAM.
+ *
+ * `type` and `className` stay owned here — the visual contract is the point of this kit, and a
+ * caller must not be able to restyle a command. Everything else a button legitimately carries is
+ * forwarded, along with the ref, because two callers need exactly that and neither is cosmetic:
+ *
+ *   1. Radix `<DropdownMenuTrigger asChild>` attaches its ref, its pointer/keyboard handlers and
+ *      its `aria-expanded`/`aria-haspopup` to the child it wraps. A child that accepts none of
+ *      them renders a button that LOOKS like a menu trigger and cannot open — which is precisely
+ *      what the Tour control did, and why it could not be driven from a browser at all.
+ *   2. `data-process-action` / `data-process-action-group` are how a command's provenance is
+ *      checkable from outside the React tree. Dropped silently, they made the Process card's
+ *      projected commands indistinguishable from any other button on the surface.
+ *
+ * Both were being passed already. The props were simply not on the list, so they vanished with no
+ * type error and no runtime warning.
+ */
+export const Action = forwardRef<HTMLButtonElement, ActionProps>(function Action(
+    { children, primary = false, disabled = false, title, ...rest },
+    ref,
+) {
     // The family's primary action is FILLED bend-pine (What's Next's `primary-action`), not a
     // tinted outline. State decides which action earns it, and only one does.
     return (
         <button
+            {...rest}
+            ref={ref}
             type="button"
             className={
                 primary ? "alloy-os-currentwork__primary-action" : "alloy-os-currentwork__helpful-action"
             }
-            onClick={onClick}
             disabled={disabled}
             title={title}
         >
             {children}
         </button>
     );
-}
+});
 
 /** Footer link — the platform's card action. */
 export function FooterAction({ children, onClick }: { children: ReactNode; onClick?: () => void }) {

@@ -4,6 +4,7 @@
  */
 
 import { comparePlacementSortTuples } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
+import { readRowManualPinOrdinal } from "@/lib/orchestration/placement/applyCohortLocalManualPositions";
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 import {
@@ -19,10 +20,11 @@ export type WaitlistRuntimePositionMode = "preview" | "live";
 /**
  * Typed precedence outcomes. Copy lives at the presentation owner, never in the ordering engine.
  *
- * `pin_scoped_to_cohort` — the row's pin IS in force: it is first within its own cohort. The section
- * it is displayed in simply lists an earlier cohort first, so the section-scoped position is not 1.
- * Derived only from this row's own pin and cohort plus the cohort keys ahead of it; it never depends
- * on the identity, accessibility or contested state of whichever row is actually ahead.
+ * `pin_scoped_to_cohort` — the row's pin IS in force: it sits at exactly the ordinal the operator
+ * chose within its own cohort. The section it is displayed in lists an earlier cohort first, so the
+ * section-scoped position is a different (larger) number than the one they picked. Derived only
+ * from this row's own pin and cohort plus the cohort keys ahead of it; it never depends on the
+ * identity, accessibility or contested state of whichever row is actually ahead.
  */
 export type WaitlistRuntimePrecedenceReason = "pin_scoped_to_cohort";
 
@@ -37,6 +39,20 @@ export type WaitlistRuntimePositionFields = {
     runtime_position_precedence_note?: string;
     /** Operator-safe typed precedence outcome — NOT shadow-gated. */
     runtime_position_precedence_reason?: WaitlistRuntimePrecedenceReason;
+    /*
+     * THE GROUP-LOCAL RANGE — the only range a manual position may legally express.
+     *
+     * `runtime_position` / `runtime_position_total` are SECTION-scoped: they answer "where does this
+     * row sit in the list the operator is reading". A pin is COHORT-scoped: `pin_ordinal` orders a
+     * candidate inside its own program/room cohort, and a section can hold several cohorts.
+     *
+     * Publishing both is what stops the Adjust control offering a position the command cannot mean.
+     * Bounding that control on the section total let it offer "12" to a candidate whose cohort holds
+     * 11 — the write then clamped, and the operator's number silently became a different number.
+     * The control must read THIS, and no client may recompute it: one placement authority.
+     */
+    runtime_group_position?: number;
+    runtime_group_total?: number;
 };
 
 export function formatWaitlistRuntimePositionLabel(
@@ -245,21 +261,47 @@ export function assignWaitlistCandidateRuntimePositions(
              * inaccessible neighbour cannot leak through this reason.
              */
             const ownCohort = readWaitlistRowCohortKey(rows[rowIdx]!);
-            const firstWithinOwnCohort =
-                ownCohort != null &&
-                !rankIndices
-                    .slice(0, rank)
-                    .some((higherIdx) => readWaitlistRowCohortKey(rows[higherIdx]!) === ownCohort);
+            const requestedOrdinal = readRowManualPinOrdinal(rows[rowIdx]!);
+            // Where the row actually sits among its OWN cohort members in this section.
+            const cohortLocalPosition =
+                ownCohort == null
+                    ? null
+                    : rankIndices
+                          .slice(0, rank)
+                          .filter((higherIdx) => readWaitlistRowCohortKey(rows[higherIdx]!) === ownCohort)
+                          .length + 1;
+            /*
+             * The pin is honoured — the row is exactly where the operator put it within its cohort —
+             * but the SECTION lists an earlier cohort first, so the number on screen is larger than
+             * the number they chose. Say so.
+             *
+             * This used to require the row to be FIRST in its cohort, which meant the one case that
+             * most needs explaining went unexplained: a row pinned to 2, correctly second in its
+             * cohort, displaying 3/12, with no indication the pin had taken. Now the test is the
+             * honest one — "you asked for N, you got N in your group, the section says something
+             * else" — and it never consults the identity of whichever row is ahead.
+             */
             const pinScopedToCohort =
-                position > 1 &&
-                rowHasManualPinOverride(rows[rowIdx]!) &&
-                firstWithinOwnCohort;
+                requestedOrdinal != null &&
+                cohortLocalPosition != null &&
+                cohortLocalPosition === requestedOrdinal &&
+                position !== requestedOrdinal;
+            // How many candidates share this row's cohort in this section — the legal range a manual
+            // position may address. Counted from the same `rankIndices` the positions come from, so
+            // the control can never be bounded by a number this engine did not produce.
+            const cohortTotal =
+                ownCohort == null
+                    ? null
+                    : rankIndices.filter((idx) => readWaitlistRowCohortKey(rows[idx]!) === ownCohort).length;
             writeRuntimePositionOnRow(rows[rowIdx]!, {
                 runtime_position: position,
                 runtime_position_total: total,
                 runtime_position_label: formatWaitlistRuntimePositionLabel(mode, position, total),
                 runtime_position_mode: mode,
                 runtime_position_section_key: sectionKey,
+                ...(cohortLocalPosition != null && cohortTotal != null
+                    ? { runtime_group_position: cohortLocalPosition, runtime_group_total: cohortTotal }
+                    : {}),
                 ...(beatenByManualPin ?
                     {
                         runtime_position_precedence_note:

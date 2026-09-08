@@ -1,0 +1,371 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-09-03
+---
+
+# Vacilando UI V2 — Desktop & Mobile Certification
+
+Evidence for the UI Foundation mission. Screenshots and the machine-checked
+results live in [`certification/`](certification/).
+
+## How to reproduce
+
+```bash
+node scripts/local-dev/apps/vacilando/certification/capture-ui-v2.mjs
+```
+
+It writes PNGs and `results.json` into `certification/` and exits non-zero if any
+check fails.
+
+### Why it runs against a fixture
+
+The harness serves the **real browser bundle** (`apps/vacilando/public`) against
+a deterministic fixture API on an OS-assigned ephemeral loopback port
+(`ui-v2-fixture-server.mjs`).
+
+Two reasons, both load-bearing:
+
+1. **The live gateway is shared.** One instance on this machine serves every
+   lane. Certification must not restart it, take a slot, or claim a permanent
+   port. This harness claims none.
+2. **A certification whose screenshots change with whatever the fleet happens to
+   be doing certifies nothing.** The fixtures are fixed, so two runs a week apart
+   produce comparable evidence.
+
+The fixture returns the shapes the canonical owners return — that is part of what
+is being certified. If a projection's shape drifts, the certification breaks,
+which is the intended behaviour.
+
+The fixture lanes deliberately cover the states the operator must be able to tell
+apart: one **working with a live progress estimate**, one **blocked on a governed
+action**, one **ready** with a completed previous run, one **offline**.
+
+### The fixture must be at least as ugly as production
+
+This is the rule the harness keeps breaking, and it has now cost three defects.
+A fixture tidier than reality certifies a product that does not exist.
+
+The completed lane's report used to be one sentence — "Validation completed; 312
+tests passed." The four-line preview passed against it because a one-sentence
+report needs no preview. Given a real multi-paragraph final report, the same
+check failed instantly and correctly: **875px of provider output on an 844px
+phone.** The fixture now carries the long report, and the certification asserts
+it is genuinely long (>900 characters) before asserting anything about how it is
+displayed — a check that silently starts passing because its subject got smaller
+is worse than no check.
+
+## Viewports
+
+| Name | Size | Why |
+|---|---|---|
+| desktop | 1440 × 950 | The working width |
+| mobile | 390 × 844 | iPhone-class |
+| narrow | 320 × 568 | iPhone SE-class — the width that finds clipping |
+| keyboard | 390 × 380 | The visual viewport with a phone keyboard open |
+
+## Result
+
+**199 checks, 199 passed, 0 failed.** See
+[`certification/results.json`](certification/results.json) for the machine record.
+
+### Desktop
+
+| Screen | Evidence | Checks |
+|---|---|---|
+| Home | `01-desktop-home.png` | Five command-centre blocks; two-column layout; **no Needs You card**; **Active lanes is a bounded subset, not the directory** (3 of 5), with *View all lanes*; **no invented effectiveness number**; nav badge; nav carries no diagnostics |
+| Lanes | `02-desktop-lanes.png` | Every lane state is one of the four operator words; **no operator-facing surface says suspended** (asserted against the `WAITING_RESOURCE` fixture lane, which could fail it); **Home and the Lanes rail agree, by word, about all five lanes they both show** |
+| Lane | `03-desktop-lane.png` | Breadcrumb, state, identity (`Claude · claude-opus-5 · Slot 6 · Started …`); six tabs; progress qualifies the status in **one line** (`Working · ~62% · Claude`), marked as an estimate; **no second progress subsystem**; **no ETA anywhere on the page**; **no standalone Current Work card**, and the instruction survives as the first authored YOU message |
+| Lane Inspector | `04-desktop-lane-inspector.png` | A permanent column, not a drawer; **no folded section is open on a healthy lane**; RUN answers agent / slot / context / started / stop; a folded section opens on request |
+| Activity | `05-desktop-activity.png` | — |
+| System | `06-desktop-system.png` | — |
+| Needs You | `07-desktop-needs-you.png` | The tray sits **immediately above the composer**, below the agent output, and is under 90px tall |
+| Placeholder mode | `08-desktop-home-placeholders.png` | The page announces the mode; every placeholder value carries its own `sample` chip; values are auditable in the DOM via `data-maturity` |
+| Unbuilt tab | — | Renders the shell, says "Not implemented", names `source-control.mjs` as the owner |
+
+### Mobile — 390 and 320
+
+Every check below ran at **both** widths.
+
+| Check | Result |
+|---|---|
+| No horizontal scrolling on Home, Lanes, Lane, Activity, System | PASS |
+| Bottom navigation present with four destinations | PASS |
+| Bottom-nav tap targets | 56px at both widths |
+| Home stacks to one column, same hierarchy (Needs You first) | PASS |
+| Lane composer fully on screen | PASS |
+| Lane shows progress and state | PASS |
+| Diagnostics hidden from the primary lane screen | PASS |
+| "Lane details" opens the inspector | PASS |
+
+Screens: `10-…-home`, `11-…-lanes`, `12-…-lane`, `13-…-lane-inspector`,
+`14-…-activity`, `15-…-system` at both `mobile390` and `mobile320`.
+
+### Keyboard open
+
+`16-mobile390-lane-keyboard.png` — with the visual viewport at 390 × 380, the
+composer **and its Send button** remain inside the viewport, and nothing scrolls
+sideways.
+
+## Defects the certification found and this mission fixed
+
+Certification is only worth running if it can fail. It did, six times.
+
+1. **The global approvals bar rendered a 241px card at the top of every route.**
+   Measured at 390 × 844: it pushed the lane header, the work and the composer
+   down until the Send button sat **27px below the viewport**. It is the exact
+   "large alert card in the middle of the work" the V2 lane replaced with an
+   anchored tray. Fixed: the bar is now a bounded, compact strip; it is
+   suppressed on Home, where the Needs You block is the canonical summary; and it
+   steps aside on a mobile lane, where the tray states the request and
+   `.gw-decision-bar` renders the same canonical approve control above the
+   composer.
+
+2. **The lane-list header did not wrap.** At 320px, "+ Add Lane" sat 50px past
+   the right edge. Fixed with `flex-wrap`.
+
+3. **The lane breadcrumb cost 36px of a phone's header** for information the back
+   control already gives. Hidden below 861px.
+
+4. **The four-line clamp never worked, on any message.** `.vmsg` is a flex
+   container, so `display:-webkit-box` on `.vmsg-clamp` was blockified to
+   `flow-root` and `-webkit-line-clamp:4` computed to `4` and did nothing. Every
+   message rendered full height with a **Show more** button underneath claiming
+   otherwise. The geometry checks had not caught it because they were asserting
+   against the same broken layout. Fixed by moving the clamp to the child.
+
+5. **A provider report escaped the clamp even after that fix.** Its prose is
+   `.gw-report-body` inside `.gw-report`, and a clamp counts *line* boxes — the
+   whole report counted as one block child. A real 1,600-character report
+   rendered **875px tall on an 844px phone**, which is precisely the complaint
+   the preview existed to answer. Fixed by flattening `.gw-report` to a block
+   while collapsed and clamping the prose. This one was only visible once the
+   fixture was made as long as production.
+
+6. **The certification still asserted the removed progress subsystem.** It
+   waited 30s for a `.vprogress-label` that no longer exists and aborted the run
+   — a certification that cannot finish reports nothing at all. Rewritten to
+   assert the current contract: progress inside the status line, and **no**
+   `.vprogress` element anywhere.
+
+Three further findings were **check defects, not product defects**, and each
+check was made precise rather than loosened:
+
+- Lane tabs are inside a container that scrolls horizontally on purpose. The
+  overflow check now ignores descendants of a deliberate scroller.
+- A closed mobile drawer is parked off-canvas and is `inert`. The check now
+  ignores `inert` / `aria-hidden` subtrees.
+
+- The clamp check asserted `getComputedStyle().display === "-webkit-box"` and
+  failed a clamp that was working perfectly: current Chromium reports the used
+  display as `flow-root` while still clamping. It now asserts the **effect** —
+  the prose occupies fewer than five line boxes — which is the contract, and
+  which is what caught defects 4 and 5. The threshold is "fewer than five
+  lines", not "four lines plus a tolerance": padding a tolerance until a check
+  passes is how a five-line clamp gets certified as four.
+
+Both scroll exclusions are narrow, and `document.documentElement.scrollWidth` is
+still asserted separately, so neither can hide a page that actually scrolls.
+
+## What the certification does not prove
+
+- **Live data.** Every value is a fixture. What is and is not wired to canonical
+  truth is the subject of [DATA-CONTRACT.md](DATA-CONTRACT.md), not of this run.
+- **Real devices.** Chromium at device-scale 3 with `isMobile`/`hasTouch` is not
+  an iPhone. Safari-specific viewport behaviour, and the real on-device keyboard,
+  are not covered.
+- **Accessibility beyond structure.** Roles, `aria-current`, `aria-valuenow` and
+  tap-target size are asserted; screen-reader flow and colour-contrast
+  measurement of the new V2 components are not.
+- **Provider adoption.** The progress bar is certified against an estimate the
+  fixture supplies. No provider sends one yet — see
+  [TELEMETRY-BACKLOG.md](TELEMETRY-BACKLOG.md) item 1.
+
+## Unit coverage alongside this
+
+`scripts/local-dev/tests/development-gateway-ui-v2.test.mjs` — 41 tests over data
+maturity, the progress contract, navigation, Needs You, the lane, Activity,
+System, the visual system and mobile. Registered in
+`tests/run-execution-durability-tests.sh`.
+
+## Visual review findings (screenshot inspection, beyond the assertions)
+
+Machine checks catch structure; they do not catch a dashboard that is merely
+ugly. These were found by reading the captures and fixed in the same pass.
+
+4. **Metric labels truncated instead of wrapping.** `nowrap` + ellipsis on a
+   four-across grid produced `SWAP TRA…`, `SLOT CAPA…`, `AUTONOM…`,
+   `TESTS PAS…` — a dashboard whose labels the operator has to guess at. Labels
+   now wrap to two lines.
+
+5. **Tile density ignored the available width.** Measured at 1440, Home's side
+   column is ~400px, so a four-across grid gave each tile 70px and broke words
+   mid-syllable (`AUTONOMOU / S`, `responsiv / e`). The narrow column now uses
+   two tracks; the wide column and System keep four.
+
+6. **`overflow-wrap: anywhere` split values mid-word.** Changed to `break-word`,
+   which only breaks a word that genuinely cannot fit.
+
+7. **Navigation carried provider and context percentage.** The rail rendered
+   `Claude · Context 38%` under every lane name — diagnostic information in the
+   one surface that has to stay scannable, and explicitly excluded by the IA.
+   Rows now carry name, recency and canonical state.
+
+8. **The rail rendered an `UNATTRIBUTED 4` heading** above every lane when there
+   was one repository group — the repository equivalent of prominently rendering
+   "No folder". With one group, lanes render directly.
+
+9. **The inspector shouted "No folder" and "Not attributed" (in red)** from its
+   always-visible area. Absent optional organisation is not a problem to report;
+   rename, folder and repository are now a folded Organisation section, and
+   remain on the Settings tab where an operator goes to change them.
+
+10. **The rail collapsed an observation-only lane to "Ready".** Removing the
+    provider label from navigation removed the only signal that a Cursor
+    observation-only lane cannot be instructed. Read-only is a *state*, not a
+    provider internal — it changes what the operator can do — so it now travels
+    with the canonical state in the rail and in Home's lane list, while the
+    provider and model stay one click away in the lane header and Inspector.
+
+11. **Attention and danger painted the same pink.** Measured side by side, the
+    first attention tint (`#f9ebe3`) and the danger tint (`#f6e4e0`) were three
+    points apart in hue, so "a decision is waiting" and "something is broken"
+    were distinguishable only by reading the words. Attention was pulled toward
+    the desert/sand end of the brand and danger toward red.
+
+12. **System left a ~380px hole.** A two-track grid sizes every row to its
+    tallest cell, so Host (eleven rows) stranded empty space under Capacity
+    (five). System now stacks two independent columns, like Home.
+
+## Promotion-time regression comparison
+
+The four known durability failures were re-measured against `origin/staging`
+itself, in matched conditions, so "not a regression" is a measurement rather
+than an assertion.
+
+| Tree | Result |
+|---|---|
+| `origin/staging` (real git worktree) | PASS=79 FAIL=4 |
+| candidate rebased onto it | PASS=80 FAIL=4 |
+
+Same four suites (`development-gateway-ui`, `development-lane-provisioning`,
+`development-certification-fixture`, `development-director-execution-bridge`),
+one new passing suite (`development-gateway-ui-v2`), zero new failures.
+
+**A first attempt at this comparison was wrong and is recorded because it
+matters how.** The baseline was taken from a `git archive` extract rather than a
+git worktree, and reported PASS=77 FAIL=6 — two *extra* failures that made the
+candidate look better than staging. The cause was environmental:
+`development-execution-run` asserts that resource-governance files are frozen
+outside their owning slice, which needs repository context the bare extract does
+not have. Re-run from a real detached worktree at the same commit, staging gives
+the expected four. A baseline that flatters the candidate is as much a defect as
+one that condemns it.
+
+## The final convergence pass
+
+Eighty-two checks were added for this pass. The ones that matter most are the
+ones asserting that something is ABSENT — a number not shown, a card not
+rendered, a payload not dumped — because every one of those was previously
+present and wrong.
+
+### Compose Mode — `17-mobile390-compose.png`, `18-mobile390-compose-long.png` (and 320)
+
+Certified at **390×380** and **320×300**, idle and with a long multi-paragraph
+instruction.
+
+| Check | 390 | 320 |
+|---|---|---|
+| Focus enters compose mode | PASS | PASS |
+| Field opens at a third of the writing area | 133px / 35% | 105px / 35% |
+| Field grows toward half of it | 171px / 45% | 124px / 41% |
+| Past its ceiling the field scrolls itself | PASS | PASS |
+| Conversation keeps a readable tail | 65px, 5 messages | 40px, 5 messages |
+| Field owns its own line, not a slot beside Send | PASS | PASS |
+| Send and attach immediately reachable | PASS | PASS |
+| Provider reachable while writing | PASS | PASS |
+| Orientation chrome stands down (tabs, bottom nav, meta, Details) | PASS | PASS |
+| No sideways scroll | PASS | PASS |
+| Blurring the field returns the lane | PASS | PASS |
+
+The 320 figures are the interesting ones: 45% of that viewport overflowed, and
+the field is measured against the stage after layout and yields. Without that,
+the interaction zone ended 27px below the screen with Send inside it.
+
+### Copy — `19-desktop-copy.png`
+
+Asserted against the 1,418-character Payments final report, **while collapsed**:
+
+| Check | Result |
+|---|---|
+| Copy visible without opening an overflow | PASS |
+| The report under test is genuinely clamped | PASS |
+| Copy takes the WHOLE message while collapsed | 1,418 characters |
+| Paragraphs preserved | 5 |
+| No UI metadata (byline, "Final report") | PASS |
+| Confirms itself in place | "Copied" |
+| Does not expand the message to read it | PASS |
+| Needs no *Show more* first | PASS |
+
+### Needs You — `20-desktop-needs-you.png`, `20-mobile390-needs-you.png`
+
+Two pending requests, two lanes, two capabilities, two ages — a one-request
+fixture certified a list that never had to group.
+
+| Check | Desktop | Mobile |
+|---|---|---|
+| Home renders no permanent Needs You content | PASS | PASS |
+| Lanes renders no permanent Needs You content | PASS | PASS |
+| Exactly one global control per route | PASS | PASS |
+| The panel opens from the shell | PASS | PASS |
+| Opening it is not navigation (route unchanged) | PASS | PASS |
+| Every blocker listed, identified by lane | 2 of 2 | 2 of 2 |
+| Each states the ask, one line of why, and its age | PASS | PASS |
+| The governed payload stays behind Review | PASS | PASS |
+
+### Home vs Lanes
+
+Home shows 3 of the 5 lanes the directory lists, titled **Active lanes**, with
+*View all lanes →*, and keeps health, usage and activity.
+
+### Back preserves the entry origin
+
+| Journey | Back | Breadcrumb |
+|---|---|---|
+| Home → lane | `#/home` | Home |
+| Lanes → lane | `#/lanes` | Lanes |
+| Deep link → lane | `#/lanes` | Lanes |
+
+Certified on desktop and mobile.
+
+### Lane resources — `21-desktop-lane-resources.png`
+
+| Check | Result |
+|---|---|
+| Memory the lane's own process tree holds | 1.7 GB |
+| How it was attributed | "by process ancestry from this lane's provider seat" |
+| **CPU declared absent, not estimated** | "Not sampled", and no figure anywhere |
+| Peak memory names its unwired source | "Not projected yet" |
+
+### Re-verification — the prior pass, not assumed
+
+The instruction asked for these to be proved again rather than taken on trust.
+
+| Claim | Evidence |
+|---|---|
+| A fresh estimate rides with the lane's state | `Working · ~62% · Claude` |
+| A **stale** estimate is dropped, not left attached | `Ready · Claude` — the fixture's estimate is 95 minutes old against a 30-minute floor |
+| No estimate invents no percentage, and never `0%` | `Ready · Claude` |
+| No ETA anywhere | PASS |
+| Expanding a message keeps it where the reader was looking | moved 0px |
+| *Show less* collapses it again | PASS |
+| A repaint does not slam an expanded message shut | PASS |
+| A repaint does not throw the thread back to the top | PASS |
+| Copy takes the full output while collapsed | 1,418 characters |
+
+**"Suspended" is now asserted on every surface, not one route.** The original
+check ran on `/lanes` alone. It now runs on Home, Lanes, Activity, System and
+three lanes — including the `WAITING_RESOURCE` lane and the one carrying a
+provider suspension — with the Lane Inspector excluded from the search, because
+Details is exactly where scheduler and provider internals belong. Seven routes,
+no leak.

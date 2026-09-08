@@ -21,6 +21,11 @@ import { createHash } from "node:crypto";
 import { buildStewardPlan, OWNERSHIP } from "./host-steward.mjs";
 import { classifyHostAdmission } from "./host-admission.mjs";
 
+import { findingsForSteward } from "./operational-findings.mjs";
+import { ATTEMPT_CEILINGS, readEpisode } from "./control-plane-recovery.mjs";
+import { hygienePosture } from "./hygiene-reclaim.mjs";
+import { observeScheduling } from "./work-scheduler-observe.mjs";
+
 export const STEWARD_CYCLE_SCHEMA = "vacilando.host_steward_cycle.v1";
 
 /**
@@ -35,6 +40,18 @@ export const RECHECK_MS = 30_000;
 export const CYCLE_TIMEOUT_MS = 4 * 60_000;
 /** A steward that has not completed a cycle within this window is a health finding. */
 export const STALE_CYCLE_MS = 3 * CADENCE_MS;
+
+/**
+ * Hygiene runs on its own, far slower cadence inside the same loop.
+ *
+ * NOT because it is unimportant — because it is expensive and the estate moves
+ * slowly. One hygiene observation costs a toolkit `du` over ~100 directories
+ * and an `lsof` per log; running that every five minutes would take the
+ * steward's duty cycle from under 1% to something worth noticing, to reclaim
+ * bytes that were equally reclaimable six hours ago. Four sweeps a day is the
+ * cadence the resource actually has.
+ */
+export const HYGIENE_CADENCE_MS = 6 * 60 * 60_000;
 
 /**
  * Anti-thrash. A resource acted on may not be acted on again until its cooldown
@@ -56,6 +73,11 @@ export const ACTION_PRIORITY = Object.freeze({
   prune_policy_eligible_toolkit: 3,
   reclaim_idle_provider_seat: 4,
   stop_terminal_dev_server: 5,
+  // Hygiene is last on purpose. Nothing about the host's health depends on it,
+  // and a cycle under pressure should spend its budget on live resources.
+  reconcile_stale_worktree_registration: 6,
+  reclaim_diagnostic_log: 7,
+  retire_worktree: 8,
 });
 
 /**
@@ -71,7 +93,100 @@ export const ACTION_OWNERS = Object.freeze({
   // worktree, and the steward's raw signal executor must not become the
   // permanent dev-server lifecycle API.
   stop_terminal_dev_server: { owner: "canonical-dev-server-lifecycle", authority: "operator", certified: false },
+  // V3 Phase 4. Each names the certified executor it delegates to; none of them
+  // contains a removal of its own except the bounded log rewrite.
+  reconcile_stale_worktree_registration: { owner: "hygiene-execute:git-worktree-prune", authority: "automatic", certified: true },
+  reclaim_diagnostic_log: { owner: "hygiene-execute:truncate-to-tail", authority: "automatic", certified: true },
+  retire_worktree: { owner: "trusted-host-worktree-retirement", authority: "automatic", certified: true },
 });
+
+/** When did hygiene last complete, and is it due? Recorded in the steward's own state. */
+export function hygieneDue({ root, nowMs = Date.now(), cadenceMs = HYGIENE_CADENCE_MS } = {}) {
+  const at = readState(root).hygiene_last_ms ?? null;
+  if (at == null) return { due: true, last_ms: null, reason: "hygiene has never run in this root" };
+  return { due: (nowMs - at) >= cadenceMs, last_ms: at, reason: null };
+}
+
+/**
+ * RECORD WHAT THE ASYNC STAGES DID, INCLUDING WHEN THEY THREW.
+ *
+ * THE DEFECT THIS EXISTS FOR, found by watching a live host rather than reading
+ * code. The server wraps its Steward call in a catch whose whole body is the
+ * comment "the steward must never take the server down", which is right — but
+ * nothing recorded the exception, so a wrapper failing on every tick looked
+ * exactly like a healthy quiet one. Four cycles ran after a restart, `hygiene_last` stayed thirteen
+ * hours stale with hygiene due every six, and no dispatch happened: the sync
+ * part completed and released its lock, and everything after it vanished
+ * without a trace.
+ *
+ * Swallowing an exception to protect the process is correct. Swallowing it
+ * without recording it is how a subsystem dies quietly for half a day.
+ */
+/**
+ * A REPORT ABOUT THE RESIDENT MUST COME FROM THE RESIDENT.
+ *
+ * THE DEFECT THIS EXISTS FOR. `vac scoreboard` printed `dispatch_enabled` by
+ * reading `VACILANDO_AUTONOMOUS_DISPATCH` out of its OWN process environment.
+ * The scoreboard is the operator's view of the resident Gateway, so the value
+ * read as system state while actually describing whichever shell happened to
+ * invoke the CLI — and it printed `disabled` for hours while the Gateway had
+ * dispatch enabled the whole time. An operator debugging why nothing was being
+ * dispatched was being shown the answer to a different question.
+ *
+ * This introduces no new owner of that truth. The Steward already writes what
+ * each stage decided on every tick, so the resident's own record is the
+ * authority and this only reads it.
+ *
+ * STALENESS IS NOT FALSE. A record older than a few cadences means the Steward
+ * is not reporting, which is unknown — never `disabled`. Same rule as
+ * everywhere else here: absence of evidence is not evidence of absence.
+ */
+export const RESIDENT_REPORT_STALE_MS = 15 * 60_000;
+
+export function residentDispatchEnabled({ root, nowMs = Date.now(), staleMs = RESIDENT_REPORT_STALE_MS } = {}) {
+  try {
+    const outcome = readState(root).last_stage_outcome;
+    if (!outcome?.at) return null;
+    const at = Date.parse(outcome.at);
+    if (!Number.isFinite(at) || nowMs - at > staleMs) return null;
+    const dispatch = outcome.dispatch;
+    if (dispatch == null || typeof dispatch.enabled !== "boolean") return null;
+    return dispatch.enabled;
+  } catch { return null; }
+}
+
+export function recordStageOutcome({ root, nowMs = Date.now(), outcome = null } = {}) {
+  try {
+    const state = readState(root);
+    const entry = { at: new Date(nowMs).toISOString(), ...(outcome || {}) };
+    state.last_stage_outcome = entry;
+    /*
+     * AND KEEP THE HISTORY, not just the latest.
+     *
+     * Storing only the newest outcome answers "what is the Steward doing now"
+     * and cannot answer "why did lane X not run on tick Y" — which is the
+     * question an operator actually arrives with. Reconstructing four missed
+     * ticks from source code took an entire investigation; the decisions had
+     * happened and simply were not written down.
+     *
+     * The cycles ring is already bounded and already written every tick, so the
+     * verdict rides along on the cycle it belongs to. No new store, no new file.
+     */
+    const cycles = Array.isArray(state.cycles) ? state.cycles : [];
+    const last = cycles[cycles.length - 1];
+    if (last && !last.stage_outcome) last.stage_outcome = entry;
+    writeState(root, state);
+    return { ok: true };
+  } catch { return { ok: false }; }
+}
+
+export function recordHygieneCycle({ root, nowMs = Date.now(), summary = null } = {}) {
+  const state = readState(root);
+  state.hygiene_last_ms = nowMs;
+  state.hygiene_last = summary ? { at: new Date(nowMs).toISOString(), ...summary } : { at: new Date(nowMs).toISOString() };
+  writeState(root, state);
+  return { ok: true };
+}
 
 export function stewardStatePath(root) {
   return join(root, "host-steward", "state.json");
@@ -80,8 +195,15 @@ export function stewardStatePath(root) {
 function readState(root) {
   try {
     const j = JSON.parse(readFileSync(stewardStatePath(root), "utf8"));
-    return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: j.cycles || [], cooldowns: j.cooldowns || {}, running: j.running || null };
-  } catch { return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: [], cooldowns: {}, running: null }; }
+    return {
+      schema_version: STEWARD_CYCLE_SCHEMA,
+      cycles: j.cycles || [], cooldowns: j.cooldowns || {}, running: j.running || null,
+      hygiene_last_ms: j.hygiene_last_ms ?? null, hygiene_last: j.hygiene_last ?? null,
+      last_stage_outcome: j.last_stage_outcome ?? null,
+    };
+  } catch {
+    return { schema_version: STEWARD_CYCLE_SCHEMA, cycles: [], cooldowns: {}, running: null, hygiene_last_ms: null, hygiene_last: null, last_stage_outcome: null };
+  }
 }
 
 function writeState(root, state) {
@@ -222,6 +344,9 @@ const POSTCONDITIONS = Object.freeze({
   prune_policy_eligible_toolkit: "current, live pins and rollback window still present",
   repair_stale_port_registration: "correction absent from the next S7 plan",
   reclaim_idle_provider_seat: "seat released and dormancy/resume state preserved",
+  reconcile_stale_worktree_registration: "registration absent and every ref unchanged",
+  reclaim_diagnostic_log: "file smaller than before with its tail intact",
+  retire_worktree: "path and registration absent, branch still resolvable",
 });
 
 function countBy(base, total) {
@@ -268,7 +393,108 @@ export function stewardStatus({ root, nowMs = Date.now(), staleMs = STALE_CYCLE_
       .map((s) => ({ at: c.ended_at, resource: s.resource_key, why: s.suppressed_because, action: s.action }))).slice(-10),
     admission_before: last?.admission_before ?? null,
     admission_after: last?.admission_after ?? null,
+    /*
+     * FINDINGS ARE CONSUMED HERE, AND OWNED ELSEWHERE.
+     *
+     * The Steward needs to know which durable operational problems currently
+     * affect operation, which constrain planning, and which are owed to the
+     * Director. It reads that view and never writes to it, so findings cannot
+     * become a second source of operational truth beside the run, lane and
+     * health owners the Steward already coordinates.
+     *
+     * Read defensively: a findings store that cannot be read must degrade the
+     * Steward's awareness, never its cycle. The Steward's job is the host, and
+     * it has to keep doing it when a satellite store is unavailable.
+     */
+    findings: stewardFindingsView(root),
+    /*
+     * The control-plane recovery scoreboard, composed here rather than given its
+     * own surface: §11 asks that the Director not have to read six JSON stores,
+     * and the Steward is already where host state is answered.
+     *
+     * Synchronous and evidence-free by design — this reports the LAST recorded
+     * episode, it does not probe. Probing belongs to whoever is driving a cycle,
+     * because a status call must never restart anything as a side effect.
+     */
+    control_plane_recovery: recoveryPosture(root),
+    /*
+     * HYGIENE, ANSWERED WITHOUT MEASURING. §13 asks the Steward to be able to
+     * say what was reclaimed and what is blocked. It reports the LAST recorded
+     * hygiene cycle and never observes — a status call that ran a `du` over a
+     * 29 GB estate would be a status call nobody dares make.
+     */
+    hygiene: hygienePostureFor(root, readState(root)),
+    // What the async stages last did — including a thrown error. Without this a
+    // wrapper failing every tick is indistinguishable from a quiet healthy one.
+    last_stage_outcome: readState(root).last_stage_outcome ?? null,
+    /*
+     * SCHEDULING POSTURE — what would run next, and why nothing is.
+     *
+     * Read-only and derived, exactly like the hygiene and recovery rows beside
+     * it. The planner is pure and the observation is cheap: durable lanes,
+     * their active runs, and the notification store. It probes no provider and
+     * starts nothing, because a status call that dispatched work as a side
+     * effect would be the second scheduler §9 forbids.
+     */
+    scheduling: schedulingPostureFor(root),
   };
+}
+
+function schedulingPostureFor(root) {
+  try {
+    return observeScheduling({ root });
+  } catch (err) {
+    // A scheduling view that cannot be built must degrade the Steward's
+    // awareness, never its cycle.
+    return { unavailable: true, reason: String(err?.message || err) };
+  }
+}
+
+function hygienePostureFor(root, state) {
+  try {
+    return {
+      ...hygienePosture(root),
+      last_cycle_at: state.hygiene_last?.at ?? null,
+      last_recorded_cycle: state.hygiene_last ?? null,
+      due: state.hygiene_last_ms == null ? true : (Date.now() - state.hygiene_last_ms) >= HYGIENE_CADENCE_MS,
+      cadence_ms: HYGIENE_CADENCE_MS,
+    };
+  } catch {
+    return { unavailable: true };
+  }
+}
+
+function recoveryPosture(root) {
+  try {
+    const read = readEpisode(root);
+    if (!read.ok) return { unavailable: true, reason: read.error };
+    const ep = read.episode;
+    if (!ep) return { episode_active: false, failure_class: null, recovery_level: 0, director_action_required: false };
+    return {
+      episode_active: !ep.resolved_at,
+      episode_id: ep.episode_id,
+      failure_class: ep.failure_class,
+      recovery_level: ep.level,
+      attempts_used: (ep.attempts || []).length,
+      attempts_allowed: ATTEMPT_CEILINGS[ep.failure_class] ?? 0,
+      first_observed_at: ep.first_observed_at,
+      resolved_at: ep.resolved_at,
+      last_known_good: ep.last_known_good,
+      director_action_required: Boolean(ep.escalated) || (ep.attempts || []).length >= (ATTEMPT_CEILINGS[ep.failure_class] ?? 0),
+    };
+  } catch {
+    return { unavailable: true };
+  }
+}
+
+function stewardFindingsView(root) {
+  try {
+    return findingsForSteward(root);
+  } catch {
+    // A findings store that cannot be read must degrade the Steward's
+    // awareness, never its cycle. The Steward's job is the host.
+    return { schema_version: "vacilando.findings_steward_view.v1", unavailable: true };
+  }
 }
 
 export { classifyHostAdmission, OWNERSHIP };

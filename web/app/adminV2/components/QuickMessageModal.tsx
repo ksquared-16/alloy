@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ADMINV2_DRAWER_ACTION_MODAL_Z } from "@/components/admin/Drawer";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import { fetchCommunicationsBindingsCached } from "@/lib/communications/communicationsBindingsCache";
 import { launchAdminV2OpenOpportunityFromContext } from "@/lib/adminV2/contextualRecordOpen";
 import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
@@ -608,7 +608,24 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     const dialog = (
         <div
             className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-alloy-midnight/45 px-3 py-6 backdrop-blur-[2px] sm:px-4 sm:py-8"
-            style={{ zIndex: ADMINV2_DRAWER_ACTION_MODAL_Z }}
+            /*
+             * THE NESTED-OVERLAY LAYER, NOT THE DRAWER-ACTION ONE.
+             *
+             * This portals to `document.body`, which escapes the shell's stacking context, so its
+             * value is read against the shell's own layers rather than against the drawer's. At
+             * `ADMINV2_DRAWER_ACTION_MODAL_Z` (80) it sat UNDER the BOS rail (95) and the shell
+             * chrome (100): launched from Manage on a record, the composer opened with its whole
+             * right edge — Send included — behind the rail, which reads to an operator as
+             * "Message does nothing". Measured: modal z-index 80, rail z-index 95, rail occupying
+             * everything from x=1256 rightward across the composer.
+             *
+             * `ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z` is the platform's existing answer for
+             * exactly this — a `document.body` portal opened from inside a workspace — and
+             * `communicationsOverlayAuthority` has asserted it for the Communications composers
+             * since the last time this shipped. This file sits outside that test's roots, which is
+             * why it kept the wrong number; the test now covers it too.
+             */
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
             data-adminv2-quick-message-modal="true"
         >
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close modal" onClick={onClose} />

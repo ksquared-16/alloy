@@ -46,6 +46,15 @@ import {
 export type ChildRowIdentity = ChildParticipationIdentity & { subjectId: string };
 
 export type ChildProvisioningRow = ChildRowIdentity & {
+    /**
+     * `opportunities.customer_id` — the HOUSEHOLD ACCOUNT the family case belongs to.
+     *
+     * The provider already reads the context opportunity in full (`OPP_SELECT` carries `customer_id`)
+     * to resolve the effective stage; this row simply stops discarding the column. A child has no
+     * customer of their own, so there is nothing ambiguous to choose between — and no read is added.
+     * Null where the family case carries no customer, which is a real state and stays one.
+     */
+    familyCustomerId: string | null;
     /** Effective stage: the child's own stage, else the family's (resolved upstream by the provider). */
     stageKey: string | null;
     /** `process_instances.state` — null for a child that has not been dispositioned. */
@@ -144,10 +153,12 @@ export function normalizeChildRow(raw: RawChildRow): ChildProvisioningRow | null
     if (!subjectId) return null; // no child identity → not a child row; never guess one
     const rowId = str(raw.id);
     const participationId = str(raw._process_instance_id) ?? rowId;
+    const opp = one(raw.opportunities as Record<string, unknown> | Record<string, unknown>[] | null);
     return {
         subjectId,
         participationId,
         contextId: str(raw.opportunity_id),
+        familyCustomerId: str(opp?.customer_id),
         legacyOcmId: rowId && participationId && rowId !== participationId ? rowId : null,
         stageKey: effectiveStage(raw),
         statusKey: str(raw.outcome_status_key),

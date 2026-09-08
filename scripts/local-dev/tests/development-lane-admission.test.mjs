@@ -248,6 +248,53 @@ await test("create refuses arbitrary worktree/path/branch input", async () => {
   assert.equal(slot.status, 400);
 });
 
+await test("substrate fields stay refused in every workspace mode", async () => {
+  reset();
+  for (const mode of ["new_worktree", "connect_existing", "planning"]) {
+    for (const field of ["slot", "tmux_session", "port", "command", "argv", "cwd", "path", "worktree"]) {
+      const out = await createNewLaneRequest({ name: "X", workspace_mode: mode, [field]: "3" });
+      assert.equal(out.status, 400, `${mode} accepted ${field}`);
+      assert.equal(out.body.error, "path_refused");
+      assert.deepEqual(out.body.fields, [field]);
+    }
+  }
+});
+
+await test("a workspace field is refused outside the mode that uses it", async () => {
+  reset();
+  const branchOnPlanning = await createNewLaneRequest({ name: "X", workspace_mode: "planning", branch: "agent/x" });
+  assert.equal(branchOnPlanning.body.error, "path_refused");
+  const pathOnNew = await createNewLaneRequest({ name: "X", workspace_mode: "new_worktree", worktree_path: "/tmp/evil" });
+  assert.equal(pathOnNew.body.error, "path_refused");
+  const baseOnConnect = await createNewLaneRequest({
+    name: "X", workspace_mode: "connect_existing", worktree_path: "/tmp/ok", base_ref: "origin/staging",
+  });
+  assert.equal(baseOnConnect.body.error, "path_refused");
+  assert.deepEqual(baseOnConnect.body.fields, ["base_ref"]);
+});
+
+await test("the wizard's own new-worktree request is NOT refused", async () => {
+  // The reported defect: the Add lane sheet sends the branch it previewed and
+  // was answered "That path contains characters Vacilando will not open."
+  reset();
+  const out = await createNewLaneRequest({
+    name: "ui", provider: "claude", workspace_mode: "new_worktree", branch: "agent/vui", base_ref: "origin/staging",
+  });
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.equal(out.body.lane.name, "ui");
+});
+
+await test("an unusable branch or base ref is named before a lane is created", async () => {
+  reset();
+  const bad = await createNewLaneRequest({ name: "X", workspace_mode: "new_worktree", branch: "agent/../evil" });
+  assert.equal(bad.status, 400);
+  assert.equal(bad.body.error, "invalid_branch_name");
+  const badBase = await createNewLaneRequest({ name: "X", workspace_mode: "new_worktree", base_ref: "origin/staging;rm -rf /" });
+  assert.equal(badBase.body.error, "invalid_base_ref");
+  const relative = await createNewLaneRequest({ name: "X", workspace_mode: "connect_existing", worktree_path: "../../etc" });
+  assert.equal(relative.body.error, "path_refused");
+});
+
 await test("idle durable lane allowed without an Execution Run", async () => {
   reset();
   const out = await createNewLaneRequest({ name: "Billing" });

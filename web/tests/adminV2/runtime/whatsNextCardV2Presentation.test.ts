@@ -120,7 +120,7 @@ function surfaceStub(partial: Partial<CurrentWorkSurfaceVM> & Pick<CurrentWorkSu
 const NULL_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
     attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+    tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
     communications: {
         scheduledSendCount: 0,
         nextFollowUpAt: null,
@@ -370,7 +370,7 @@ describe("What's Next Card V2 scenario presentations", () => {
                     tour: {
                         scheduled: true,
                         startAt: "2026-08-13T17:00:00.000Z",
-                        statusLabel: "Invitation sent",
+                        statusLabel: "Invitation sent", statusKey: null,
                         bookingId: "bk-1",
                     },
                 },

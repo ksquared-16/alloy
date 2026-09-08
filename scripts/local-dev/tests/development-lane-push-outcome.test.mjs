@@ -22,6 +22,7 @@ import {
   pushRunOutcome,
   savePushSubscription,
 } from "../lib/vacilando/lane-push.mjs";
+import { setNotificationCategories } from "../lib/vacilando/notification-preferences.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WT = "/Users/Kelly/Code/alloy-worktrees/wt1-access-identity-v2";
@@ -43,6 +44,15 @@ function root() {
   const r = mkdtempSync(join(tmpdir(), "vac-push-out-"));
   process.env.ALLOY_RUNTIME_ROOT = r;
   resetExecutionRunsForTests(r);
+  // THIS SUITE TESTS THE TRANSPORT, NOT THE POLICY.
+  //
+  // Completions stopped being push-eligible by default once the operator got
+  // category preferences — 185 of 252 push-eligible events were completions,
+  // and a finished run is rarely worth a phone buzz. These cases drive
+  // delivery mechanics (retry, dedupe, 404/410 pruning) through COMPLETE
+  // outcomes, so they opt the category back on explicitly. Without this they
+  // pass vacuously: nothing is ever sent, so nothing can be pruned.
+  setNotificationCategories({ completions: true }, { root: r });
   return r;
 }
 

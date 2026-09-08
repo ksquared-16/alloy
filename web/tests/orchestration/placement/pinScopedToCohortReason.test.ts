@@ -22,7 +22,15 @@ function row(id: string, cohort: string, overrideKinds: string[], ordinal = 1) {
             child_display_name: id,
             program_room_cohort_key: cohort,
             program_room_group_label: "Infant",
-            placement_priority_v2: { active_override_kinds: overrideKinds, sort_tuple: [cohort, ordinal, 0] },
+            placement_priority_v2: {
+                active_override_kinds: overrideKinds,
+                // The ordinal now travels as its own projected field. It is NOT a sort_tuple slot —
+                // see `applyCohortLocalManualPositions` for why a position cannot be a sort key.
+                ...(overrideKinds.includes("pin") ? { manual_pin_ordinal: ordinal } : {}),
+                // `ordinal` doubles as a generic priority component here so fixtures can have
+                // DISTINCT tuples; it is no longer the pin slot it once was.
+                sort_tuple: [cohort, ordinal, 0],
+            },
         },
     } as Record<string, unknown>;
 }
@@ -48,9 +56,9 @@ describe("R12 — pin_scoped_to_cohort", () => {
         assignWaitlistCandidateRuntimePositions(rows, false, null);
         expect(proj(rows[1]!).runtime_position).toBe(2);
         expect(reasonOf(rows[1]!)).toBe("pin_scoped_to_cohort");
-        expect(waitlistPrecedenceReasonCopy(reasonOf(rows[1]!) as string)).toBe(
-            "Pinned within this group. Groups are ordered separately.",
-        );
+        // The reason code is still emitted and still typed; it simply carries no operator prose.
+        // The row shows no helper sentence — scope is stated by the control's field label instead.
+        expect(waitlistPrecedenceReasonCopy(reasonOf(rows[1]!) as string)).toBeNull();
     });
 
     it("3 + 6: a pin behind ANOTHER row of its own cohort is not a cohort-scope case", () => {
@@ -87,7 +95,10 @@ describe("R12 — pin_scoped_to_cohort", () => {
         assignWaitlistCandidateRuntimePositions(a, false, null);
         assignWaitlistCandidateRuntimePositions(b, false, null);
         expect(reasonOf(a[1]!)).toBe(reasonOf(b[1]!));
-        const copy = waitlistPrecedenceReasonCopy(reasonOf(a[1]!) as string)!;
+        // The reason now carries no operator prose at all, so there is trivially nothing to leak.
+        // The assertion is kept in the stronger form — whatever copy a future surface attaches must
+        // still name no neighbouring row, cohort or child.
+        const copy = waitlistPrecedenceReasonCopy(reasonOf(a[1]!) as string) ?? "";
         for (const leak of ["contested-passa", "some-other-child", "infant_0_18_months", "infant"]) {
             expect(copy).not.toContain(leak);
         }

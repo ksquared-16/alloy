@@ -7,6 +7,23 @@ export type FocusPanelCardSpan = 1 | 2 | "row";
 
 export type FocusPanelCardDensity = "micro" | "compact" | "standard" | "expanded";
 
+/**
+ * HOW MANY ITEMS OF A COLLECTION A FOCUS PANEL SUMMARY SHOWS.
+ *
+ * A Focus Panel card is a summary with a route to the whole thing, not the whole thing. The number
+ * was already decided — `childrenCollectionItems` and its sibling in `deriveOpportunityFocusPanelCards`
+ * both took the first three and reported a truthful overflow count — but it lived as a bare `3` in
+ * two places and the settled Children card honoured neither, rendering every row. Measured on a
+ * production build, a 17-child family took that cell from 120px to 2319px: 86% of the panel's whole
+ * 406px -> 2968px growth, so the surface reflowed around one collection.
+ *
+ * Stating it once makes the contract enforceable: cards bound their summary density here, and a
+ * collection larger than it reaches its full form through the card's own detail affordance. This is
+ * a DENSITY, not a truncation of truth — the count beside it always states the total, and the card
+ * owns how it overflows. The grid owns placement and knows nothing about what is being counted.
+ */
+export const FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY = 3;
+
 export type FocusPanelGridCell = {
     key: string;
     span: FocusPanelCardSpan;

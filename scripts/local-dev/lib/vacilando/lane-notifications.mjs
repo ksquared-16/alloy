@@ -25,8 +25,8 @@
  * read. External delivery is a best-effort projection of it.
  */
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 export const NOTIFICATION_STORE_SCHEMA = "vacilando.notifications.v1";
@@ -152,6 +152,193 @@ export function classForGovernedStatus(status) {
   return null;
 }
 
+/**
+ * THE DIRECTOR'S FOUR QUESTIONS.
+ *
+ * The notification stream answers exactly one thing: do I need to know, or do
+ * something? Everything the Director is shown resolves to one of these, and
+ * anything that resolves to none of them is not a notification — it is
+ * activity, and belongs in the lane history and the audit log.
+ *
+ * These are deliberately about the OPERATOR'S OBLIGATION rather than about
+ * what the system did. "Governed action executed" describes the system;
+ * "nothing is required of you" describes the obligation, and only the second
+ * one helps someone decide whether to look.
+ */
+export const DIRECTOR_CATEGORIES = Object.freeze([
+  "needs_answer",  // a decision or missing information only the Director has
+  "stuck",         // cannot continue autonomously
+  "attention",     // state looks unhealthy and cannot safely self-reconcile
+  "completed",     // meaningful work finished
+]);
+
+/**
+ * Routine progress that must NEVER page the Director.
+ *
+ * Each of these was a real notification before the Director Attention Model,
+ * and not one of them asked anything of anybody. A push completing is the
+ * system working; being told about it is the system interrupting.
+ *
+ * Note what is NOT here: nothing that failed, and nothing awaiting an
+ * operator. Suppression covers success and progress only.
+ */
+const ROUTINE_PROGRESS_EVENTS = Object.freeze([
+  "pull_request_opened", "push_completed", "authorization_satisfied",
+  "governed_action_started", "governed_action_approved", "toolkit_install_started",
+  "lane_queued", "lane_admitted", "server_restarted", "reconciliation_completed",
+  "provider_seat_released", "capacity_decision_succeeded",
+  // MEASURED, NOT GUESSED. A 500-record audit of this host's own store found
+  // `governed_action_worker_resumed` was 232 of them — 46% of every
+  // notification Vacilando had ever recorded — and it pushed exactly zero
+  // times. It was never paging anybody; it was burying the 33 records that
+  // needed a human. A worker picking work back up is the system running.
+  "governed_action_worker_resumed",
+  // 13 records. An action that already carried its own approval reaching
+  // `complete` is the successful end of something nobody was asked about.
+  // It still RESOLVES an existing record (see `createIfMissing`) — it just
+  // does not open a new one.
+  "governed_action_complete",
+]);
+
+/**
+ * Does this event deserve the Director's attention at all?
+ *
+ * Auto-authorisation is the case that matters. Once routine actions execute
+ * inside policy they never reach `awaiting_operator`, so the approval flood
+ * disappears by construction rather than by filtering — but a governed action
+ * that ran automatically still must not announce itself on the way past.
+ */
+export function isRoutineProgress(event) {
+  return ROUTINE_PROGRESS_EVENTS.includes(String(event || "").toLowerCase());
+}
+/**
+ * THE DELIVERY CLASSES — one semantic question, asked once.
+ *
+ * Every surface used to decide independently whether something was worth
+ * sending, which is how the store ended up inverted: 188 routine completions
+ * pushed every time while all 33 approval requests — the only records that
+ * asked a human for anything — pushed zero times. Not one of those decisions
+ * was wrong on its own; there was simply no single place where "does this
+ * deserve to reach someone who is not looking at Vacilando?" was answered.
+ *
+ * This is that place. It classifies on CANONICAL METADATA — attention class,
+ * run state, event type — never on the identity of an action. A rule that
+ * names `repository.push` is a rule that will be wrong for the next capability
+ * nobody remembered to add to it.
+ *
+ *   human_action_required — the operator is blocking something. Always
+ *                           eligible; this is what push is FOR.
+ *   important_terminal    — work the operator asked for reached its end,
+ *                           well or badly. Eligible.
+ *   routine_automatic     — the system operating inside policy. Never
+ *                           eligible, and it does not open a record either.
+ *   diagnostic            — health and self-test. Never eligible unless the
+ *                           operator explicitly asked for it right now.
+ */
+export const DELIVERY_CLASSES = Object.freeze([
+  "human_action_required", "important_terminal", "routine_automatic", "diagnostic",
+]);
+
+/** Classes that may reach a device the operator is not currently looking at. */
+const PUSH_ELIGIBLE_CLASSES = Object.freeze(["human_action_required", "important_terminal"]);
+
+/**
+ * Classify a notification for delivery.
+ *
+ * ORDER MATTERS, and it is deliberate: obligation beats routine. If something
+ * is genuinely waiting on a human it stays deliverable even when it arrived
+ * through an event that is normally routine — the alternative is a suppression
+ * list that can silence a real question by accident, which is the failure this
+ * whole pass exists to correct.
+ */
+export function deliveryClassFor({
+  eventType = null,
+  attentionClass = null,
+  state = null,
+  governedStatus = null,
+} = {}) {
+  const cls = String(attentionClass || "").toLowerCase();
+  const evt = String(eventType || "").toLowerCase();
+
+  // Already answered, or owned by a later record. Nothing to deliver.
+  if (cls === "resolved" || cls === "superseded") return "routine_automatic";
+
+  if (evt.startsWith("diagnostic") || evt === "test_push") return "diagnostic";
+
+  // Obligation first — including a governed action that reached a status only
+  // a person can clear.
+  if (cls === "actionable") return "human_action_required";
+  if (classForGovernedStatus(governedStatus) === "actionable") return "human_action_required";
+
+  if (isRoutineProgress(evt)) return "routine_automatic";
+
+  const st = String(state || "").toUpperCase();
+  if (["COMPLETE", "FAILED", "ABANDONED", "NEEDS_INPUT"].includes(st)) return "important_terminal";
+
+  // An unrecognised event is not promoted to the operator's phone. Silence is
+  // the safe default for something this policy has never been taught about.
+  return "routine_automatic";
+}
+
+/** Is this notification allowed to leave the app, before preferences apply? */
+export function isPushEligible(input = {}) {
+  return PUSH_ELIGIBLE_CLASSES.includes(deliveryClassFor(input));
+}
+
+
+/**
+ * Collapse related events onto ONE finding.
+ *
+ * A stale Payments run holding a provider seat while Surfaces waits behind it
+ * is one problem with three symptoms. Notifying per symptom pages the Director
+ * three times about a single thing and hides the causal link, which is the
+ * only part that helps. When an issue key is known, the notification is keyed
+ * on the ISSUE, so the follow-on symptoms update that finding in place —
+ * diagnosed, recovering, resolved — instead of stacking beside it.
+ *
+ * Falls back to the run when no issue is named, which preserves the existing
+ * one-notification-per-prompt behaviour exactly.
+ */
+export function collapseKeyFor({ issueKey = null, runId = null } = {}) {
+  const issue = String(issueKey || "").trim();
+  if (issue) return `issue:${issue}`;
+  const run = String(runId || "").trim();
+  return run ? `run:${run}` : null;
+}
+
+/**
+ * Map a run state to the Director's obligation.
+ *
+ * FAILED and ABANDONED are deliberately different. A failure is "stuck": the
+ * work wanted to continue and could not, and somebody has to unblock it. An
+ * abandoned run is "attention": nothing is asking to proceed, but the state is
+ * not something the system could settle by itself.
+ */
+export function directorCategoryForRunState(state) {
+  const s = String(state || "").toUpperCase();
+  if (s === "NEEDS_INPUT") return "needs_answer";
+  if (s === "FAILED") return "stuck";
+  if (s === "ABANDONED") return "attention";
+  if (s === "COMPLETE") return "completed";
+  return null;
+}
+
+/**
+ * Map a governed-action status to the Director's obligation.
+ *
+ * `awaiting_operator` survives as "needs_answer" because it is now RARE and
+ * therefore meaningful: under the attention model it is reached only by
+ * something a policy genuinely does not cover, or whose gates could not be
+ * measured. Every routine status returns null — not a quieter notification, no
+ * notification.
+ */
+export function directorCategoryForGovernedStatus(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "awaiting_operator") return "needs_answer";
+  if (s === "failed") return "stuck";
+  return null;
+}
+
 export function isNotifyingState(state) {
   return NOTIFY_STATES.includes(String(state || "").toUpperCase());
 }
@@ -255,6 +442,7 @@ export function recordRunNotification(run, {
   laneName = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
+  issueKey = null,
 } = {}) {
   const state = String(run?.state || "").toUpperCase();
   if (!run?.run_id) return { ok: false, error: "missing_run", created: false };
@@ -270,13 +458,17 @@ export function recordRunNotification(run, {
   // needed. It is still one notification per prompt — it now stops demanding
   // attention when the prompt stops needing it.
   const out = upsertNotification({
-    subjectKey: `run:${run.run_id}`,
+    subjectKey: collapseKeyFor({ issueKey, runId: run.run_id }),
     runId: run.run_id,
     laneId: laneId || null,
     laneName,
     eventType: eventTypeForState(state),
     state,
     attentionClass: classForRunState(state) || "informational",
+    // What the Director is actually being asked for, alongside the older
+    // class. The class says how loud; this says which of the four questions
+    // it answers, which is what decides whether it is worth looking at.
+    directorCategory: directorCategoryForRunState(state),
     summary: summaryForRun(run, state),
     path: laneId ? `/#/lanes/${encodeURIComponent(laneId)}` : "/#/lanes",
     nowMs,
@@ -411,6 +603,20 @@ export function notificationCounts(root = runtimeRoot()) {
  * Re-classifying to informational or resolved clears `seen_at` only when the
  * item becomes actionable again — an approval that failed must come back.
  */
+/**
+ * Record a notification, or update the one that already owns this subject.
+ *
+ * `createIfMissing: false` is how routine progress stays honest. Suppressing
+ * these events outright was the obvious fix and it is a bug: the record for a
+ * governed action is keyed on the REQUEST, so the approval opens it as
+ * `actionable` and the later `complete` is what turns it informational. Drop
+ * the completion and the operator keeps a Needs You item for work that
+ * finished — which is exactly the stale-item defect this system has already
+ * been burned by once.
+ *
+ * So routine events do not OPEN a conversation. They are still allowed to
+ * close one.
+ */
 export function upsertNotification({
   subjectKey,
   laneId = null,
@@ -422,6 +628,7 @@ export function upsertNotification({
   attentionClass = "informational",
   summary = "",
   path = null,
+  createIfMissing = true,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
@@ -435,16 +642,38 @@ export function upsertNotification({
   if (existing) {
     const wasActionable = existing.attention_class === "actionable";
     existing.attention_class = attentionClass;
-    existing.event_type = eventType || existing.event_type;
+    // ROUTINE PROGRESS MAY RESOLVE A RECORD; IT MAY NOT RENAME IT.
+    //
+    // `existing.event_type = eventType` let a routine event overwrite the
+    // identity of the record it was only meant to settle. Observed on this
+    // host: an approval opened `governed:gar_x` as
+    // `governed_action_approval_required`, a later `worker_resumed` updated the
+    // same subject, and the operator's record became "Worker resumed" — an item
+    // describing nothing they had to do and nothing that had finished. The
+    // record still resolves (its class updates above); it keeps the name of the
+    // thing it is about.
+    if (eventType && createIfMissing) existing.event_type = eventType;
     if (state) existing.state = state;
-    if (summary) existing.summary = bound(summary);
+    if (summary && createIfMissing) existing.summary = bound(summary);
     if (path) existing.path = path;
+    // A lane NAME is worth adopting whenever one arrives: the governed path
+    // historically supplied none, and a record that learned the real name later
+    // should keep it rather than stay an id forever.
+    if (laneName) existing.lane_name = bound(laneName, 80);
     existing.updated_at = iso(nowMs);
     // Becoming actionable again is a NEW demand on the operator, so it returns
     // to unread. Every other transition leaves an acknowledged item acknowledged.
-    if (!wasActionable && attentionClass === "actionable") existing.seen_at = null;
+    const becameActionable = !wasActionable && attentionClass === "actionable";
+    if (becameActionable) existing.seen_at = null;
     writeStore(store, root);
-    return { ok: true, created: false, updated: true, record: existing };
+    // `becameActionable` is the ONLY reason an update is worth announcing.
+    // Callers previously inferred that from `seen_at === null`, which is true of
+    // every unread record — so routine progress on an unread approval pushed
+    // again, and again, with nothing new to say.
+    return { ok: true, created: false, updated: true, becameActionable, record: existing };
+  }
+  if (!createIfMissing) {
+    return { ok: true, created: false, updated: false, skipped: "routine_progress" };
   }
   const rec = {
     schema_version: NOTIFICATION_STORE_SCHEMA,
@@ -509,6 +738,49 @@ export function markAllNotificationsSeen({ nowMs = Date.now(), root = runtimeRoo
   return { ok: true, marked, unseen_count: 0 };
 }
 
+/**
+ * A TEST HELPER MUST NOT BE ABLE TO WIPE A REAL STORE.
+ *
+ * THE INCIDENT THIS CLOSES. During live acceptance this function was called
+ * with ALLOY_RUNTIME_ROOT pointed at the Gateway's own runtime root, to check
+ * one behaviour. It emptied the operator's live notification store: 500
+ * durable records, including their read state, gone in one call. The
+ * authoritative audit log survived — the record store is a bounded derived
+ * projection — but the operator's unread state did not, and nothing about the
+ * call site looked dangerous.
+ *
+ * The name said "ForTests" and that was the entire protection. A name is not a
+ * guard. This refuses unless the root is clearly disposable: an OS temp
+ * directory, or a root that explicitly opts in. Every real deployment root —
+ * ~/.local/state/alloy-dev and anything under a home directory — is refused,
+ * loudly, having changed nothing.
+ */
+function assertDisposableRoot(root, fnName) {
+  const r = String(root || "");
+  if (process.env.VACILANDO_ALLOW_DESTRUCTIVE_RESET === "1") return;
+  // Compare BOTH the raw and the symlink-resolved form of each side. On macOS
+  // tmpdir() is /var/folders/... which realpaths to /private/var/folders/...,
+  // and a path that does not exist yet cannot be resolved at all — so a
+  // one-sided comparison rejects legitimate temp roots.
+  const candidates = new Set([tmpdir(), realpathSyncSafe(tmpdir()), "/tmp", "/private/tmp"].filter(Boolean));
+  const forms = [r, realpathSyncSafe(r)].filter(Boolean);
+  for (const form of forms) {
+    for (const tmp of candidates) {
+      if (form === tmp || form.startsWith(tmp.endsWith("/") ? tmp : tmp + "/")) return;
+    }
+  }
+  throw new Error(
+    `${fnName} refused: ${r} is not a disposable test root. `
+    + "This helper empties the store; point ALLOY_RUNTIME_ROOT at a mkdtempSync() "
+    + "directory, or set VACILANDO_ALLOW_DESTRUCTIVE_RESET=1 if you truly mean it.",
+  );
+}
+
+function realpathSyncSafe(p) {
+  try { return realpathSync(String(p || "")); } catch { return String(p || ""); }
+}
+
 export function resetNotificationsForTests(root = runtimeRoot()) {
+  assertDisposableRoot(root, "resetNotificationsForTests");
   writeStore(emptyStore(), root);
 }

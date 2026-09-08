@@ -147,6 +147,32 @@ export function resolveActionAuthorizationIdentity({
   };
   if (!type) return finish(base);
 
+  /*
+   * A DISPATCH IS IDENTIFIED BY WHERE IT GOES, NOT JUST BY WHAT IT IS.
+   *
+   * Without this case the resolver produced an empty identity for every
+   * dispatch, so dedupeKey collapsed to mission|lane|action_key|target for all
+   * of them. Fanning out to six lanes therefore produced ONE request: the
+   * second call returned the first request's id, reported ok, and queued
+   * nothing for the second lane. A cohort would have counted lanes that never
+   * received work — exactly the failure the coordinator refuses to make,
+   * arriving underneath it.
+   *
+   * The identity of a dispatch is the target lane within a measurement. Two
+   * dispatches to different lanes are different actions; a repeat to the same
+   * lane in the same measurement is genuinely the same one and should dedupe.
+   */
+  if (type === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
+    const targetLane = norm(firstOf(inputs, ["target_lane_id", "targetLaneId"])) || null;
+    const measurement = norm(firstOf(inputs, ["measurement_id", "measurementId"])) || null;
+    return finish({
+      ...base,
+      environment: norm(target) || null,
+      targetRef: targetLane,
+      subjectKey: targetLane && measurement ? `${measurement}:${targetLane}` : null,
+    });
+  }
+
   if (type === ACTION_TYPES.DATABASE_READ_CENSUS) {
     const dbTarget = norm(firstOf(inputs, ["databaseTarget", "database_target"]) || target) || DEFAULT_TARGET;
     return finish({

@@ -84,6 +84,7 @@ function buildTourSignal(record: Record<string, unknown>): OperationalTourSignal
         scheduled: Boolean(tourBooking?.start_at),
         startAt: trimOrNull(tourBooking?.start_at),
         statusLabel: trimOrNull(tourBooking?.status_key),
+        statusKey: (trimOrNull(tourBooking?.status_key) as OperationalTourSignal["statusKey"]) ?? null,
         bookingId: trimOrNull(tourBooking?.id),
     };
 }

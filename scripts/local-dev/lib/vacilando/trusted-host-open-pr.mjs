@@ -20,7 +20,7 @@
  */
 import { spawnSync } from "node:child_process";
 
-import { allowlistedRepositories, repositoryRefusalDetail, ALLOWED_TARGET_BRANCHES } from "./trusted-host-merge.mjs";
+import { isAllowlistedRepository, normalizeRepositorySlug, repositoryRefusalDetail, ALLOWED_TARGET_BRANCHES } from "./trusted-host-merge.mjs";
 import { BRANCH_RE, PROTECTED_REFS, SHA_RE } from "./trusted-host-push.mjs";
 import { liveRemoteMutationPermitted } from "./trusted-host-remote-guard.mjs";
 
@@ -29,9 +29,8 @@ export const PR_BODY_MAX = 60_000;
 
 const SECRET_RE = /(ghp_|github_pat_|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY|postgres(ql)?:\/\/[^\s]*:[^\s]*@)/i;
 
-function normRepo(v) {
-  return String(v || "").trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/i, "");
-}
+// One normal form for repository identity. See normalizeRepositorySlug.
+const normRepo = normalizeRepositorySlug;
 function normSha(v) { return String(v || "").trim().toLowerCase(); }
 
 export function defaultGh(args, { timeout = 60_000 } = {}) {
@@ -48,7 +47,7 @@ export function validateOpenPrInputs(inputs = {}) {
   }
   const repository = normRepo(inputs.repository || inputs.repo);
   if (!repository) return { ok: false, code: "missing_repository", detail: "repository is required" };
-  if (!allowlistedRepositories().includes(repository)) {
+  if (!isAllowlistedRepository(repository)) {
     return { ok: false, code: "repository_not_allowlisted", detail: repositoryRefusalDetail(repository) };
   }
 

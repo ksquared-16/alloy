@@ -16,7 +16,7 @@ import { homedir, loadavg, cpus } from "node:os";
 import { join } from "node:path";
 import {
   acquireCycleLock, releaseCycleLock, buildCyclePlan, recordAction, resourceKey,
-  classifyHostAdmission,
+  classifyHostAdmission, hygieneDue, recordHygieneCycle, recordStageOutcome,
 } from "./host-steward-cycle.mjs";
 import { residualHeavyCommands, asStewardResource } from "./heavy-command-registry.mjs";
 import { applyStewardPlan } from "./host-steward-execute.mjs";
@@ -191,5 +191,402 @@ export function runStewardCycle({
     admission_before: admissionBefore,
     admission_after: admissionAfter,
     record,
+  };
+}
+
+/**
+ * One Steward cycle plus, when it is due, one hygiene cycle.
+ *
+ * WHY A SEPARATE ENTRY POINT RATHER THAN A STAGE INSIDE `runStewardCycle`.
+ * `runStewardCycle` is synchronous and ten call sites depend on that; hygiene
+ * reclamation is asynchronous. Making the existing function async to add a
+ * stage would change every caller's contract to gain nothing, so the async part
+ * wraps the sync part instead.
+ *
+ * WHY NOT A SECOND DAEMON. §13 is explicit. There is one resident loop on this
+ * host and hygiene is a stage of it, gated on its own far slower cadence
+ * because a hygiene observation costs a `du` over ~100 toolkit directories and
+ * an `lsof` per log — real work to reclaim bytes that were equally reclaimable
+ * six hours ago.
+ *
+ * HYGIENE NEVER FAILS THE STEWARD CYCLE. Its result is attached and its
+ * failures are recorded; the host's own health does not depend on it.
+ */
+export async function runStewardCycleWithHygiene({
+  root, nowMs = Date.now(), dryRun = false, groupAlive = defaultGroupAlive, exec = defaultExec,
+  stopDevServer = null, hygiene = true, forceHygiene = false, hygieneOptions = null,
+  recoveryStage = true,
+  // Injected like `exec` and `groupAlive` above it, for the same reason: the
+  // scheduling stage is the one async region with no catch of its own, so a
+  // test cannot certify the outer recorder without being able to make it fail.
+  dispatchStage = runSchedulerDispatchStage,
+} = {}) {
+  const steward = runStewardCycle({ root, nowMs, dryRun, groupAlive, exec, stopDevServer });
+  try {
+    return await asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage });
+  } catch (err) {
+    // The server swallows this to stay up, which is right. Recording it is what
+    // makes the difference between a protected process and a silent one.
+    const detail = String(err?.stack || err?.message || err).slice(0, 600);
+    if (!dryRun) recordStageOutcome({ root, nowMs, outcome: { ok: false, threw: true, detail } });
+    return { ...steward, recovery: null, hygiene: { error: "stage_threw", detail }, dispatch: null };
+  }
+}
+
+async function asyncStages(steward, { root, nowMs, dryRun, hygiene, forceHygiene, hygieneOptions, recoveryStage, dispatchStage }) {
+  /*
+   * RECOVERY FIRST. A host that needs repairing must not spend its cycle
+   * tidying, and a control plane at RECOVERY_REQUIRED must not be handing work
+   * to a scheduler. Failures here are attached and never abort the cycle.
+   */
+  let recovery = null;
+  if (root && recoveryStage !== false) {
+    try { recovery = await runResidentRecoveryStage({ root, nowMs, dryRun }); }
+    catch (e) { recovery = { ok: false, error: "recovery_stage_threw", detail: String(e?.message || e) }; }
+  }
+  const recoveryBlocking = recovery?.failure_class && recovery.failure_class !== "HEALTHY" && !recovery.verified;
+
+  if (!hygiene || !root) return { ...steward, recovery, hygiene: null };
+  if (recoveryBlocking) {
+    // §13: recovery outranks ordinary work. Hygiene and scheduling wait for a
+    // control plane that is not currently broken.
+    if (!dryRun) {
+      recordStageOutcome({ root, nowMs, outcome: {
+        ok: true, recovery: recovery.failure_class, hygiene: "skipped_control_plane_not_healthy", dispatch: null,
+      } });
+    }
+    return { ...steward, recovery, hygiene: { skipped: "control_plane_not_healthy", failure_class: recovery.failure_class } };
+  }
+
+  const due = forceHygiene ? { due: true, reason: "forced" } : hygieneDue({ root, nowMs });
+  // Carry the recovery result on EVERY return path. Dropping it on the
+  // hygiene-not-due branch made the resident stage look like it had not run.
+  if (!due.due) {
+    /*
+     * SCHEDULING IS NOT ON HYGIENE'S CADENCE.
+     *
+     * THE DEFECT THIS FIXES, found by watching 50 real Steward cycles produce
+     * zero scheduling decisions. The dispatch stage was called only on the path
+     * where hygiene had actually run, so an ordinary five-minute tick returned
+     * here and never reached it. Hygiene is due every six hours; scheduling was
+     * therefore attempted at most four times a day, and only when hygiene
+     * happened to be due in the same tick.
+     *
+     * It is the same shape as every other "wired but never called" defect this
+     * programme has found — an evidence collector that existed and was not
+     * invoked, a recovery model that was certified and never driven. Building
+     * the stage is not the same as reaching it.
+     *
+     * Hygiene is expensive and rare. Scheduling is cheap and should happen every
+     * tick, which is what a five-minute cadence is for.
+     */
+    const dispatchOnly = await dispatchStage({ root, nowMs, dryRun });
+    if (!dryRun) {
+      recordStageOutcome({ root, nowMs, outcome: {
+        ok: true, recovery: recovery?.failure_class ?? null, hygiene: "not_due",
+        dispatch: dispatchSummary(dispatchOnly),
+      } });
+    }
+    return { ...steward, recovery, hygiene: { skipped: "not_due", last_ms: due.last_ms }, dispatch: dispatchOnly };
+  }
+
+  let result = null;
+  try {
+    const { runHygieneCycle } = await import("./hygiene-cycle.mjs");
+    result = await runHygieneCycle({
+      root, nowMs, dryRun,
+      // Sizes cost a `du` over a 29 GB estate and no DECISION depends on them;
+      // only the scoreboard does, and that is what `vac hygiene` is for.
+      withBytes: false,
+      ...(hygieneOptions || {}),
+    });
+  } catch (e) {
+    result = { ok: false, error: "hygiene_cycle_threw", detail: String(e?.message || e) };
+  }
+  if (!dryRun) {
+    recordHygieneCycle({
+      root, nowMs,
+      summary: {
+        ok: result?.ok === true,
+        executed: result?.executed?.length ?? 0,
+        failed: result?.failed?.length ?? 0,
+        bytes_reclaimed: result?.bytes_reclaimed ?? 0,
+        error: result?.ok === false ? (result.error ?? null) : null,
+      },
+    });
+  }
+  const dispatch = await dispatchStage({ root, nowMs, dryRun });
+  if (!dryRun) {
+    recordStageOutcome({ root, nowMs, outcome: {
+      ok: true, recovery: recovery?.failure_class ?? null, hygiene: result?.ok === true ? "ran" : "failed",
+      dispatch: dispatchSummary(dispatch),
+    } });
+  }
+  return { ...steward, recovery, hygiene: result, dispatch };
+}
+
+/** A bounded shape for the state file: counts and refusals, never whole records. */
+function dispatchSummary(d) {
+  if (!d) return null;
+  if (d.enabled === false) return { enabled: false };
+  return {
+    enabled: true,
+    considered: d.considered ?? 0,
+    dispatched: (d.dispatched || []).map((x) => x.lane_id),
+    refused: (d.refused || []).map((x) => ({ lane_id: x.lane_id, refusal: x.refusal })),
+    error: d.error ?? null,
+  };
+}
+
+/**
+ * THE SCHEDULING STAGE — bounded, last, and off unless enabled.
+ *
+ * Last on purpose. Recovery and hygiene both run first, because a host that
+ * needs repairing or tidying should not be handed new work, and §13 requires
+ * safety to outrank scheduling pressure.
+ *
+ * It selects through the planner and starts through the canonical admission
+ * chain. It holds no policy of its own: every gate is re-derived inside
+ * `dispatchCandidate` from live truth at the moment of acting, so a plan that
+ * has gone stale between planning and dispatching refuses rather than acts.
+ */
+export async function runSchedulerDispatchStage({
+  root, nowMs = Date.now(), dryRun = false, maxDispatch = 1, liveTruth = null,
+} = {}) {
+  const { dispatchEnabled, dispatchCandidate } = await import("./work-scheduler-dispatch.mjs");
+  if (!dispatchEnabled()) return { enabled: false, dispatched: [], considered: 0 };
+
+  const { observeScheduling } = await import("./work-scheduler-observe.mjs");
+  const truth = liveTruth || (await liveSchedulingTruth(root));
+  let view = null;
+  try { view = observeScheduling({ root, now: nowMs, liveTruth: truth, withBytes: false }); }
+  catch (e) { return { enabled: true, error: "observation_failed", detail: String(e?.message || e), dispatched: [] }; }
+
+  // The planner's own choice, not a re-derivation. `scheduled_next` is the
+  // highest-ranked eligible candidate; anything else would be a second policy.
+  const plan = view.scheduled_next ? [view.scheduled_next] : [];
+  if (dryRun) return { enabled: true, dry_run: true, considered: plan.length, planned: plan, dispatched: [] };
+
+  const dispatched = [];
+  const refused = [];
+  for (const laneId of plan.slice(0, Math.max(0, maxDispatch))) {
+    let out = null;
+    try { out = await dispatchCandidate({ laneId, root, nowMs, liveTruth: truth }); }
+    catch (e) { out = { ok: false, refusal: "dispatch_threw", detail: String(e?.message || e) }; }
+    (out?.dispatched ? dispatched : refused).push({ lane_id: laneId, ...out });
+  }
+  return { enabled: true, considered: plan.length, dispatched, refused };
+}
+
+/** The live facts authorization revalidation needs. Absent stays absent, never assumed. */
+async function liveSchedulingTruth(root) {
+  const truth = { dependency_states: {}, finding_statuses: {} };
+  try {
+    const { listFindings } = await import("./operational-findings.mjs");
+    truth.finding_statuses = Object.fromEntries((listFindings(root) || []).map((f) => [f.id, f.status]));
+  } catch { /* unmeasured stays unmeasured */ }
+  try {
+    const { execFileSync } = await import("node:child_process");
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    truth.staging_sha = execFileSync("git", ["rev-parse", "origin/staging"], {
+      cwd: join(homedir(), "Alloy"), encoding: "utf8", timeout: 15_000,
+    }).trim();
+  } catch { /* leaving it undefined makes revalidation unmeasurable, which blocks */ }
+  return truth;
+}
+
+/**
+ * THE RESIDENT RECOVERY STAGE — the second of Phase 7's two narrow blockers.
+ *
+ * `control-plane-recovery` has been certified since Phase 3 and was never
+ * called by anything on a cadence. That is why `director-forced-to-mac-mini`
+ * stayed MITIGATED for four phases: the decision model existed, and nothing
+ * drove it. Recovery code existing is not evidence that recovery happens.
+ *
+ * WHAT THIS STAGE OWNS: sequencing. Nothing else. The classification is
+ * `control-plane-recovery.classifyControlPlane`, the decision is `planRecovery`,
+ * the repair is whichever owner the policy names, and the episode memory is the
+ * recovery module's. No recovery rule is written here, because a rule written
+ * in the caller is a rule the decision owner cannot be tested against.
+ *
+ * ORDER: recovery runs BEFORE hygiene and before scheduling. A host that needs
+ * repairing must not spend the cycle tidying, and §13 requires safety to outrank
+ * scheduling pressure.
+ *
+ * THE HONEST LIMIT, stated because it decides what this can ever certify. The
+ * Steward runs INSIDE the Gateway process. If that process dies, this stage
+ * dies with it, so PROCESS_DEAD is not recoverable from here — launchd's
+ * KeepAlive owns that, and it is the independent execution path §14 asks about.
+ * What this stage adds is the class launchd cannot see: a Gateway that is alive
+ * and not serving, which is exactly the condition
+ * `director-forced-to-mac-mini` was opened for.
+ */
+/**
+ * PROBE THE LOOPBACK WITHOUT BLOCKING THE LOOP THAT HAS TO ANSWER IT.
+ *
+ * THE DEFECT THIS EXISTS FOR, measured on the live host rather than reasoned
+ * about. `observeControlPlane` measures loopback health with a synchronous
+ * `curl --max-time 8` against 127.0.0.1:3030. That is correct for an external
+ * observer such as the CLI. It cannot work for the resident Steward, because
+ * the Steward runs INSIDE the Gateway: `execFileSync` blocks the single event
+ * loop, the kernel accepts curl's connection into the listen backlog, and
+ * nothing ever dequeues it. curl waits its full eight seconds, exits non-zero,
+ * and the guard reports the loopback as UNMEASURED.
+ *
+ * The classifier then does exactly the right thing with that: unmeasured is
+ * UNKNOWN, UNKNOWN is not HEALTHY, and recovery outranks ordinary work — so the
+ * cycle returns before hygiene and before scheduling. Every tick. Silently, with
+ * no exception to log and no stage left half-done.
+ *
+ * The cost of the confusion, measured: this Gateway had been up 7.5 hours and
+ * ~90 ticks without once reaching hygiene or scheduling. `hygiene_last` was 13.4
+ * hours stale against a six-hour cadence, and Backend sat unoccupied and
+ * eligible for 33 minutes across eight ticks without being dispatched. An
+ * external poll during a tick returned 200 after 8064 ms — the event loop
+ * unblocking — while the in-process probe had already given up at 8000 ms. Those
+ * 64 milliseconds were the whole difference between a scheduler and a host that
+ * had done nothing all day.
+ *
+ * The module's own doctrine still holds and is preserved here: a service that
+ * did not answer is a measurement, not a blind spot. A refusal or a timeout is
+ * `false`. Only being unable to attempt the probe at all is `null`.
+ */
+export async function probeLoopbackInProcess({ root, timeoutMs = 5_000, port = 3030 } = {}) {
+  let token = "";
+  try {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    token = readFileSync(join(root, "vacilando", "api-token"), "utf8").trim();
+  } catch { /* an unreadable token still lets the probe run and be refused */ }
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/control-plane/health`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.status === 200;
+  } catch (e) {
+    // Refused, reset, or timed out: the Gateway did not answer, and that is an
+    // answer. `fetch` only throws for reasons that mean exactly that.
+    if (e?.name === "AbortError" || e?.name === "TimeoutError" || e instanceof TypeError) return false;
+    return null;
+  }
+}
+
+export async function runResidentRecoveryStage({
+  root,
+  nowMs = Date.now(),
+  dryRun = false,
+  observe = null,
+  repair = null,
+} = {}) {
+  if (!root) return { ok: false, error: "missing_runtime_root" };
+  const R = await import("./control-plane-recovery.mjs");
+
+  let observation = null;
+  try {
+    observation = observe ? await observe()
+      : await R.observeControlPlane({ root, nowMs, probeLoopback: () => probeLoopbackInProcess({ root }) });
+  } catch (e) {
+    return { ok: false, error: "observation_failed", detail: String(e?.message || e) };
+  }
+
+  const plan = R.planRecovery(observation, { root, nowMs });
+  const base = {
+    ok: true,
+    failure_class: plan.failure_class,
+    level: plan.level,
+    reason: plan.reason,
+    escalate: Boolean(plan.escalate),
+    action: plan.action ?? null,
+    owner: plan.owner ?? null,
+  };
+
+  if (plan.failure_class === "HEALTHY") return { ...base, acted: false, why: "nothing to repair" };
+  // No action means the decision owner has said this is not ours to fix —
+  // Tailscale, an unreachable host, or authority already exhausted. Escalation
+  // is the outcome, and it is already on the plan.
+  if (!plan.action) {
+    // Carry the decision owner's own explanation. Replacing it with a generic
+    // word here is how "within attempt cooldown; a faster retry would be a loop"
+    // became the unhelpful "waiting".
+    return {
+      ...base,
+      acted: false,
+      waiting: Boolean(plan.waiting),
+      why: plan.reason || (plan.escalate ? "escalated; no autonomous action applies" : "waiting"),
+    };
+  }
+  if (dryRun) return { ...base, acted: false, dry_run: true, why: "dry run" };
+
+  // The attempt is recorded BEFORE the action, because the action may kill the
+  // process holding the memory.
+  const episode = R.recordAttempt(plan.episode, { action: plan.action, nowMs, root });
+
+  let performed = null;
+  try {
+    if (repair) performed = await repair(plan);
+    else if (plan.action === "restart_owned_gateway") {
+      const H = await import("./control-plane-health.mjs");
+      performed = await H.recoverOwnedVacilandoProcess({ root, nowMs });
+    } else if (plan.action === "converge_toolkit_then_restart") {
+      /*
+       * THE SECOND STEP OF AN INSTALL, FINALLY OWNED.
+       *
+       * The installer flips the symlink and deliberately does not restart the
+       * Gateway from inside the Gateway. Nothing owned what came next, so a
+       * verified install sat unused while `planToolkitConvergence` reported
+       * `converged` — that plan compares installed against promoted and never
+       * consults what is actually running. TOOLKIT_DRIFT has been classified,
+       * with a ceiling, a cooldown and a verification list, since Phase 3; the
+       * repair was simply never supplied and every tick reported "no wired
+       * repair owner".
+       *
+       * The requirements are re-measured HERE rather than trusted from the
+       * observation, so the thing that restarts the host is reading the same
+       * evidence the gate does: provenance valid, a retained rollback target,
+       * and a real difference between installed and running.
+       */
+      const C = await import("./toolkit-convergence.mjs");
+      const ev = C.measureToolkitConvergence({});
+      const gw = C.observeGatewayExecution ? C.observeGatewayExecution({}) : { executing_sha: null };
+      performed = R.restartGatewayForConvergence({
+        installedSha: ev.installed_toolkit_sha,
+        runningSha: gw.executing_sha,
+        provenanceValid: ev.artifact_provenance_valid,
+        rollbackRetained: ev.previous_toolkit_retained,
+      });
+    } else {
+      // An action with no wired owner is REPORTED, never improvised. The wt1
+      // dev server proved what ad hoc signalling costs.
+      return { ...base, acted: false, episode, why: `no wired repair owner for ${plan.action}`, escalate: true };
+    }
+  } catch (e) {
+    performed = { ok: false, error: String(e?.message || e) };
+  }
+
+  // Verify by RE-OBSERVING, never by trusting the repair's own return value.
+  let after = null;
+  try {
+    after = observe ? await observe()
+      : await R.observeControlPlane({ root, nowMs: Date.now(), probeLoopback: () => probeLoopbackInProcess({ root }) });
+  }
+  catch { after = null; }
+  const verdict = after ? R.classifyControlPlane({ ...after, now_ms: Date.now() }) : null;
+  const recovered = verdict?.failure_class === "HEALTHY";
+  const finalEpisode = R.recordVerification(episode, {
+    ok: recovered,
+    detail: verdict ? verdict.why : "the control plane could not be re-observed after the attempt",
+    nowMs: Date.now(),
+    root,
+  });
+
+  return {
+    ...base,
+    acted: true,
+    performed,
+    verified: recovered,
+    after_class: verdict?.failure_class ?? null,
+    episode: finalEpisode,
   };
 }

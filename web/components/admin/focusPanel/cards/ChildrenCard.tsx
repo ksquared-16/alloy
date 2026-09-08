@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import clsx from "clsx";
 import {
     BadgeCheck,
@@ -1136,6 +1137,31 @@ export default function ChildrenCard({
         );
     } else {
         lifecycle = "summary";
+        /*
+         * SUMMARY DEPTH IS BOUNDED. CONTEXT DEPTH OWNS THE COLLECTION.
+         *
+         * This card already has three depths — summary, context, details — and only the deepest two
+         * are the collection's home. The summary depth was nevertheless rendering `evidence.children`
+         * in full. Measured on a production build with a 17-child family: the Children cell settles
+         * from 120px to 2319px, which is 86% of the panel's entire 406px -> 2968px growth. Every other
+         * card settles by 55-241px, the ordinary cost of content arriving; only this one grows with
+         * the size of a collection, so the panel reflows around it and the operator watches the page
+         * rebuild itself after entry.
+         *
+         * The platform already decided what a Focus Panel summary of a collection is:
+         * `childrenCollectionItems` in `deriveOpportunityFocusPanelCards` shows the first three and a
+         * truthful overflow count, and this card already carries "View children →" into the context
+         * depth that holds them all. Nothing new is invented here — the summary depth is simply held
+         * to the density the rest of the platform already uses, and the count above it
+         * ("17 children · 2 waitlisted") continues to state the whole truth so nothing is hidden.
+         *
+         * The BOUND is the card's, deliberately. The grid owns placement; a card owns how its own
+         * content summarises. Shared runtime still knows nothing about what a child is.
+         */
+        const summaryRoster = {
+            rows: evidence.children.slice(0, FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY),
+            overflow: Math.max(0, evidence.children.length - FOCUS_PANEL_SUMMARY_COLLECTION_DENSITY),
+        };
         body = (
             <ComposableRegionShell
                 surfaceId={CHILDREN_SURFACE_ID}
@@ -1145,7 +1171,7 @@ export default function ChildrenCard({
                 dataAttrs={{ "data-children-roster-region": "true", "data-identity-depth": "summary" }}
             >
                 <div className="alloy-os-children__roster" data-children-roster>
-                        {evidence.children.map((child) => (
+                        {summaryRoster.rows.map((child) => (
                             <ChildSummaryRow
                                 key={child.id}
                                 child={child}
@@ -1176,6 +1202,14 @@ export default function ChildrenCard({
                                 }
                             />
                         ))}
+                        {summaryRoster.overflow > 0 ? (
+                            <p
+                                className="alloy-os-children__roster-overflow"
+                                data-children-roster-overflow={summaryRoster.overflow}
+                            >
+                                {`${summaryRoster.overflow} more ${summaryRoster.overflow === 1 ? "child" : "children"} — View children below`}
+                            </p>
+                        ) : null}
                     </div>
             </ComposableRegionShell>
         );

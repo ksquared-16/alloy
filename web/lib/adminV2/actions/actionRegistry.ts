@@ -40,7 +40,13 @@ import {
     staffPresenceRecordAction,
 } from "@/lib/adminV2/actions/definitions/staffPresenceActions";
 import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
+import { enrollmentPricingActions } from "@/lib/adminV2/actions/definitions/enrollmentPricingActions";
 import { financialChargeActions } from "@/lib/adminV2/actions/definitions/financialChargeActions";
+import { financialReductionActions } from "@/lib/adminV2/actions/definitions/financialReductionActions";
+import { financialResponsibilityActions } from "@/lib/adminV2/actions/definitions/financialResponsibilityActions";
+import { financialSubsidyActions } from "@/lib/adminV2/actions/definitions/financialSubsidyActions";
+import { tuitionGenerationActions } from "@/lib/adminV2/actions/definitions/tuitionGenerationActions";
+import { financialPaymentActions } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
 import { healthFactActions } from "@/lib/adminV2/actions/definitions/healthFactActions";
 import { enrollmentRequirementExceptionActions } from "@/lib/adminV2/actions/definitions/enrollmentRequirementExceptionActions";
 
@@ -67,7 +73,13 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     staffPresenceCorrectAction,
     // Child attendance: five operator intents over the existing invariant-owning services.
     ...childAttendanceActions,
+    ...enrollmentPricingActions,
     ...financialChargeActions,
+    ...tuitionGenerationActions,
+    ...financialReductionActions,
+    ...financialResponsibilityActions,
+    ...financialSubsidyActions,
+    ...financialPaymentActions,
     ...healthFactActions,
     // Governed requirement exception: make one requirement non-blocking, and put it back.
     ...enrollmentRequirementExceptionActions,

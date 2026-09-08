@@ -6,16 +6,17 @@
  * not a resource scheduler.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { LANE_ID_RE, LANE_INSTRUCTION_MAX, runReceiptToken, textProvesInstructionReceipt } from "./lanes.mjs";
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { assertResettableRoot, canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
 import * as attachmentsModule from "./lane-attachments.mjs";
+import { recordLaneProgress } from "./lane-memory.mjs";
 
 export const EXECUTION_RUN_SCHEMA = "vacilando.execution_run.v1";
 /**
@@ -29,6 +30,182 @@ export const EXECUTION_RUN_MAX_PER_LANE = 16;
 export const EXECUTION_RUN_MAX_TRANSITIONS = 40;
 export const EXECUTION_RUN_SUMMARY_MAX = 2000;
 export const EXECUTION_RUN_REASON_MAX = 500;
+
+/**
+ * PROVIDER PROGRESS CONTRACT.
+ *
+ * The run already carried `latest_progress` — a worker-reported *sentence*. It
+ * answered "what is happening" and never "how far along". The operator could
+ * read a lane for twenty minutes and still not know whether it was starting or
+ * finishing, which is the single question the Lane surface exists to answer.
+ *
+ * This extends the SAME field family rather than opening a second progress
+ * system: `latest_progress` keeps its meaning, and `progress_estimate` carries
+ * the bounded estimate beside it.
+ *
+ * It is deliberately an ESTIMATE. The provider is the only party that knows how
+ * much of its own plan remains, and it knows that only approximately. Every
+ * consumer must render it as an estimate and must never derive an ETA from it —
+ * there is no estimator, and a percentage divided by elapsed time is a lie with
+ * a decimal point on it.
+ */
+export const PROGRESS_CONFIDENCES = Object.freeze(["low", "medium", "high"]);
+
+export const PROGRESS_SOURCES = Object.freeze([
+  "provider_estimate",
+  "deterministic",
+  "operator",
+  "derived",
+]);
+
+/**
+ * Progress is reported at MILESTONES, not per message. A worker that has not
+ * reported inside this window is not "62% and frozen" — it is unknown, and the
+ * UI is required to say so rather than keep painting a stale bar.
+ */
+export const PROGRESS_STALE_MS = 30 * 60 * 1000;
+
+export const PROGRESS_SUMMARY_MAX = 240;
+export const PROGRESS_REMAINING_MAX = 480;
+
+/**
+ * THE FINISH ESTIMATE IS REPORTED, NEVER DERIVED.
+ *
+ * The rule above still stands: elapsed time divided by a provider's own guess
+ * is a lie with a decimal point on it, and this function will not compute one.
+ * What it accepts is a provider SAYING how much longer it needs — which is a
+ * different claim, made by the only party with a plan, and it travels with its
+ * own confidence and its own timestamp so a consumer can see how much to trust
+ * it and how old it is.
+ *
+ * `estimated_remaining_minutes` and `estimated_finish_at` are two spellings of
+ * one answer. A worker mid-task naturally knows "about twenty more minutes";
+ * a scheduled or queued one naturally knows a wall-clock time. Both normalise
+ * to an absolute instant, because "20 minutes" read forty minutes later is
+ * worse than useless — it is confidently wrong. Converting minutes to an
+ * instant against the report's own timestamp is arithmetic on reported data,
+ * not an invented schedule.
+ *
+ * Absent is a legitimate, renderable state. Nothing here invents a value.
+ */
+function normalizeFinishEstimate({
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
+  source = null,
+  nowMs = Date.now(),
+} = {}) {
+  let finishMs = null;
+  const mins = estimated_remaining_minutes === null || estimated_remaining_minutes === undefined
+    || estimated_remaining_minutes === ""
+    ? null
+    : Number(estimated_remaining_minutes);
+  if (Number.isFinite(mins) && mins >= 0) {
+    // Anchored to the moment of the report, not to read time.
+    finishMs = nowMs + Math.round(mins) * 60_000;
+  }
+  if (finishMs === null && estimated_finish_at) {
+    const at = Date.parse(estimated_finish_at);
+    if (Number.isFinite(at)) finishMs = at;
+  }
+  if (finishMs === null) return null;
+  const conf = String(estimate_confidence || "").trim().toLowerCase();
+  const src = String(source || "").trim().toLowerCase();
+  return {
+    estimated_finish_at: iso(finishMs),
+    // Kept as reported so a consumer can say "about 20 minutes" without doing
+    // subtraction the operator would then have to check.
+    estimated_remaining_minutes: Number.isFinite(mins) && mins >= 0
+      ? Math.round(mins)
+      : Math.max(0, Math.round((finishMs - nowMs) / 60_000)),
+    estimate_confidence: PROGRESS_CONFIDENCES.includes(conf) ? conf : "low",
+    estimate_source: PROGRESS_SOURCES.includes(src) ? src : "provider_estimate",
+    estimate_updated_at: iso(nowMs),
+  };
+}
+
+/**
+ * Normalise a reported estimate. Returns null when there is nothing usable —
+ * an absent estimate is a legitimate, renderable state ("Progress estimate
+ * unavailable"), so this never invents a value to avoid returning null.
+ */
+export function normalizeProgressEstimate({
+  percent = null,
+  confidence = null,
+  summary = null,
+  source = null,
+  remaining_work = null,
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
+  nowMs = Date.now(),
+} = {}) {
+  const pct = percent === null || percent === undefined || percent === ""
+    ? null
+    : Number(percent);
+  const hasPct = Number.isFinite(pct);
+  const conf = String(confidence || "").trim().toLowerCase();
+  const src = String(source || "").trim().toLowerCase();
+  const sum = bound(summary, PROGRESS_SUMMARY_MAX);
+  const rem = bound(remaining_work, PROGRESS_REMAINING_MAX);
+  const finish = normalizeFinishEstimate({
+    estimated_remaining_minutes, estimated_finish_at,
+    estimate_confidence: estimate_confidence ?? confidence,
+    source, nowMs,
+  });
+  // A finish estimate on its own is a complete answer: "about an hour left" is
+  // useful even from a provider that will not put a number on percent done.
+  if (!hasPct && !sum && !rem && !finish) return null;
+  return {
+    percent: hasPct ? Math.max(0, Math.min(100, Math.round(pct))) : null,
+    confidence: PROGRESS_CONFIDENCES.includes(conf) ? conf : "low",
+    summary: sum,
+    remaining_work: rem,
+    source: PROGRESS_SOURCES.includes(src) ? src : "provider_estimate",
+    updated_at: iso(nowMs),
+    ...(finish || {}),
+  };
+}
+
+/**
+ * Is this estimate still worth showing? Separated from rendering so the server,
+ * the view and the tests all agree on one answer.
+ */
+export function progressEstimateIsStale(estimate, { nowMs = Date.now(), staleMs = PROGRESS_STALE_MS } = {}) {
+  if (!estimate?.updated_at) return true;
+  const at = Date.parse(estimate.updated_at);
+  if (!Number.isFinite(at)) return true;
+  return nowMs - at > staleMs;
+}
+
+/**
+ * Should Vacilando ask this run for a fresh progress estimate?
+ *
+ * WHY IT ASKS RATHER THAN GUESSES. A stale estimate is not a rendering
+ * problem to be smoothed over; it is a question nobody has answered lately,
+ * and the only party who can answer it is the provider. The UI's job is to say
+ * "unknown" honestly, and this predicate's job is to make "unknown" temporary.
+ *
+ * WHO IS ASKED. The provider, through the orientation and continuation text it
+ * already receives. Not the operator — they are the one waiting for the
+ * answer, and interrupting them to ask how long their own agent will take is
+ * exactly backwards.
+ *
+ * Only ACTIVE runs are solicited. A run that is finished, failed or waiting on
+ * a human has no remaining plan to estimate, and asking would produce a number
+ * about nothing.
+ */
+export const PROGRESS_SOLICIT_STATES = Object.freeze([
+  "EXECUTING", "VALIDATING", "RECOVERING",
+]);
+
+export function progressSolicitationDue(run, { nowMs = Date.now(), staleMs = PROGRESS_STALE_MS } = {}) {
+  if (!PROGRESS_SOLICIT_STATES.includes(String(run?.state || "").toUpperCase())) return false;
+  const est = run?.progress_estimate || null;
+  // Never reported at all is the strongest case for asking.
+  if (!est) return true;
+  return progressEstimateIsStale(est, { nowMs, staleMs });
+}
 
 export const RUN_STATES = Object.freeze([
   "QUEUED",
@@ -53,7 +230,19 @@ export const BLOCKED_RUN_STATES = Object.freeze(["NEEDS_INPUT", "WAITING_RESOURC
 export const SWEEPING_ORIGINS = Object.freeze(["system", "governor"]);
 /** Truly irreversible. ABANDONED is terminal for scheduling, but recoverable. */
 export const IRREVERSIBLE_RUN_STATES = Object.freeze(["COMPLETE", "FAILED"]);
-export const RUN_ORIGINS = Object.freeze(["operator", "agent", "governor", "system", "certification"]);
+/*
+ * WHO CAUSED THIS RUN.
+ *
+ * "scheduler" was missing, and its absence was not inert. work-scheduler-dispatch
+ * creates its runs with origin "scheduler"; resolveRunOrigin falls through an
+ * unrecognised origin to "operator". So every autonomously dispatched run was
+ * recorded as though the Director had asked for it — the resident system's own
+ * decisions attributed to the person the whole point was to not involve. It also
+ * left nothing able to tell a dispatched run from a hand-made one, which is what
+ * the completion path needs in order to know whether an authorized next step was
+ * actually spent.
+ */
+export const RUN_ORIGINS = Object.freeze(["operator", "agent", "governor", "system", "certification", "scheduler"]);
 
 const LEGAL = Object.freeze({
   // QUEUED -> NEEDS_INPUT: the pane was not at an actionable prompt, so the
@@ -62,7 +251,22 @@ const LEGAL = Object.freeze({
   QUEUED: ["EXECUTING", "NEEDS_INPUT", "FAILED", "ABANDONED"],
   EXECUTING: ["WAITING_RESOURCE", "VALIDATING", "NEEDS_INPUT", "RECOVERING", "COMPLETE", "FAILED", "ABANDONED"],
   WAITING_RESOURCE: ["EXECUTING", "VALIDATING", "NEEDS_INPUT", "FAILED"],
-  VALIDATING: ["EXECUTING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT", "COMPLETE", "FAILED"],
+  // ABANDONED is reachable from VALIDATING for exactly the reason spelled out
+  // for RECOVERING below, and its absence was the same ONE-WAY TRAP.
+  //
+  // MEASURED. The Payments run sat in VALIDATING for three hours after a
+  // finished turn. Nothing was validating: no heavy process in its worktree and
+  // zero broker claims on the host. The classifier had been corrected to stop
+  // protecting it, and idle-turn completion correctly declined to file a
+  // completion whose summary the transcript did not corroborate — so the
+  // governor's only remaining conclusion was to abandon it, and abandon was
+  // ILLEGAL from here. The run could not leave VALIDATING by any path, and even
+  // the operator's Close stale run returned illegal_transition.
+  //
+  // As with RECOVERING, this does not make ABANDONED cheap. It stays terminal
+  // for scheduling and recoverable, and it is still reached only with positive
+  // evidence — the classifier must first find no claim and no live signals.
+  VALIDATING: ["EXECUTING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT", "COMPLETE", "FAILED", "ABANDONED"],
   // COMPLETE is reachable from RECOVERING: work that finished must never be
   // impossible to close merely because Vacilando abandoned the run mid-sprint.
   //
@@ -120,18 +324,85 @@ function atomicWrite(path, obj) {
 }
 
 export function readExecutionRunStore(root = runtimeRoot()) {
+  const read = readExecutionRunStoreGuarded(root);
+  // Readers stay lenient: a dashboard that cannot read the store should render
+  // empty rather than throw. MUTATIONS must not, which is what the guarded form
+  // below exists for.
+  return read.store;
+}
+
+/**
+ * DURABLE RUN IDENTITY MUST OUTLIVE THE GATEWAY PROCESS.
+ *
+ * The lenient read above returned `emptyStore()` for every failure, and every
+ * mutation is read → modify → atomic whole-file overwrite. So a single transient
+ * unreadable read — a partial file observed mid-rename, an interrupted write
+ * during Gateway shutdown, EMFILE under concurrency — made the very NEXT write
+ * replace the entire store with one run. Not a lane's history: every lane's.
+ *
+ * That is not theoretical. It stranded a completed implementation: run
+ * erun_34e080af44cc2c5d vanished, `current_run_id` went null, `vac run-status`
+ * and `checkpoint-create` both answered `run_not_found`, and finished work on
+ * disk had no run to be committed under. The store afterwards held five lanes
+ * with exactly one run each — the signature of a reset, not of the 16-per-lane
+ * retention cap doing its job.
+ *
+ * ABSENT AND UNREADABLE ARE DIFFERENT ANSWERS. A missing file is legitimately
+ * an empty store: first boot has no history to lose. A file that EXISTS and
+ * cannot be parsed is a fact we do not have, and writing over it converts a
+ * recoverable problem into a permanent one. Mutations therefore fail closed and
+ * say so, leaving the bytes on disk for recovery.
+ */
+export function readExecutionRunStoreGuarded(root = runtimeRoot()) {
+  const path = executionRunStorePath(root);
+  if (!existsSync(path)) {
+    // Genuinely nothing to lose.
+    return { ok: true, store: emptyStore(), absent: true };
+  }
+  let text;
   try {
-    const raw = JSON.parse(readFileSync(executionRunStorePath(root), "utf8"));
-    if (!raw || typeof raw !== "object") return emptyStore();
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    return { ok: false, error: "run_store_unreadable", detail: e?.message || String(e), store: emptyStore() };
+  }
+  try {
+    const raw = JSON.parse(text);
+    if (!raw || typeof raw !== "object") {
+      return { ok: false, error: "run_store_malformed", detail: "top level is not an object", store: emptyStore() };
+    }
     const lanes = raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {};
-    return { schema_version: EXECUTION_RUN_SCHEMA, lanes };
-  } catch {
-    return emptyStore();
+    return { ok: true, store: { schema_version: EXECUTION_RUN_SCHEMA, lanes } };
+  } catch (e) {
+    return { ok: false, error: "run_store_malformed", detail: e?.message || String(e), store: emptyStore() };
   }
 }
 
+/**
+ * Read the store for a MUTATION, or refuse.
+ *
+ * Returns null when the caller must not proceed. Every write path goes through
+ * this, so "we could not read it" can never again be silently spelled "there was
+ * nothing there".
+ */
+function readStoreForMutation(root) {
+  const read = readExecutionRunStoreGuarded(root);
+  return read.ok ? read.store : null;
+}
+
 function writeStore(store, root) {
-  atomicWrite(executionRunStorePath(root), store);
+  /*
+   * Keep one generation behind the current file.
+   *
+   * The write itself is atomic, so this is not about torn files — it is about
+   * the case where a mutation was already wrong before it got here. A single
+   * `.prev` copy is what makes a bad generation recoverable at all; without it
+   * the only copy of run history is the one being replaced.
+   */
+  const path = executionRunStorePath(root);
+  try {
+    if (existsSync(path)) copyFileSync(path, `${path}.prev`);
+  } catch { /* a missing backup must never block the write that keeps runs alive */ }
+  atomicWrite(path, store);
   return store;
 }
 
@@ -198,6 +469,36 @@ export function activeRunForLane(laneId, root = runtimeRoot()) {
   const run = (pack.runs || []).find((r) => r.run_id === pack.current_run_id);
   if (!run || isTerminalRunState(run.state)) return null;
   return run;
+}
+
+/**
+ * States in which the lane's current run OCCUPIES its provider.
+ *
+ * QUEUED is deliberately absent, and that absence is the whole point: a queued
+ * run is work waiting to be HANDED to a provider, not work the provider is
+ * doing. Treating it as occupancy is what let an idle resident session refuse
+ * the very run it was supposed to pick up.
+ *
+ * Everything else non-terminal is occupancy, including the blocked states. A
+ * provider parked on NEEDS_INPUT or WAITING_RESOURCE looks idle by CPU and is
+ * not free: someone is waiting on that run, and delivering a different one over
+ * it would silently displace them.
+ */
+export const OCCUPYING_RUN_STATES = Object.freeze([
+  "EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING",
+]);
+
+/**
+ * The run that makes this lane genuinely busy, or null when its provider is
+ * resident-but-free.
+ *
+ * "Does a session exist" and "does this lane have conflicting productive work"
+ * are different questions. Admission needs the second one, and this is it.
+ */
+export function occupyingRunForLane(laneId, root = runtimeRoot()) {
+  const run = activeRunForLane(laneId, root);
+  if (!run) return null;
+  return OCCUPYING_RUN_STATES.includes(String(run.state)) ? run : null;
 }
 
 export function getExecutionRun(runId, root = runtimeRoot()) {
@@ -294,13 +595,14 @@ function appendTransition(run, { from, to, reason, origin, nowMs }) {
  * on an already-EXECUTING run was discarded as a noop, so a working agent left
  * no evidence at all and the governor read it as an orphan.
  */
-function touchWorkerLiveness(run, { nowMs, origin, progress = null }) {
+function touchWorkerLiveness(run, { nowMs, origin, progress = null, progressEstimate = null }) {
   if (origin !== "agent") return false;
   run.last_worker_report_at = iso(nowMs);
   run.worker_report_count = (Number(run.worker_report_count) || 0) + 1;
   if (progress) {
     run.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
   }
+  if (progressEstimate) run.progress_estimate = progressEstimate;
   return true;
 }
 
@@ -401,6 +703,10 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     worktree_path: run.worktree_path || null,
     node_id: run.node_id || null,
     latest_progress: run.latest_progress || null,
+    // The bounded provider estimate. Projected verbatim, including its
+    // updated_at, so the consumer — not the store — decides whether it is still
+    // fresh enough to draw.
+    progress_estimate: run.progress_estimate || null,
     completion_report: run.completion_report || null,
     git_baseline: run.git_baseline || null,
     checkpoint_readiness: run.checkpoint_readiness || null,
@@ -556,7 +862,9 @@ export function createQueuedRun({
   const text = String(instruction ?? "");
   if (!text.trim()) return { ok: false, error: "instruction_empty" };
   if (text.length > LANE_INSTRUCTION_MAX) return { ok: false, error: "instruction_too_large" };
-  const store = readExecutionRunStore(root);
+  // Refuse rather than found a new store on top of one we could not read.
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
   const pack = store.lanes[id];
   const current = pack?.current_run_id
     ? (pack.runs || []).find((r) => r.run_id === pack.current_run_id)
@@ -579,6 +887,7 @@ export function createQueuedRun({
     state_reason: null,
     origin: resolvedOrigin,
     latest_progress: null,
+    progress_estimate: null,
     completion_report: null,
     agent_session_id: null,
     resource_wait: null,
@@ -621,6 +930,8 @@ export function transitionExecutionRun(runId, toState, {
   root = runtimeRoot(),
   phase = undefined,
   progress = null,
+  // The bounded provider progress estimate, already normalized by the caller.
+  progress_estimate = null,
   completion_report = null,
   resource_wait = null,
   fingerprint = null,
@@ -629,7 +940,8 @@ export function transitionExecutionRun(runId, toState, {
   // BLOCKED_STATES guard below.
   execution_failure = false,
 } = {}) {
-  const store = readExecutionRunStore(root);
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
   let found = null;
   let packId = null;
   for (const [laneId, pack] of Object.entries(store.lanes || {})) {
@@ -642,11 +954,16 @@ export function transitionExecutionRun(runId, toState, {
   if (found.state === to) {
     // Same-state report. Not a transition, but still liveness evidence: persist
     // it so the stale governor can tell a working agent from an orphan.
-    const touched = touchWorkerLiveness(found, { nowMs, origin, progress });
-    if (touched || progress) {
+    const touched = touchWorkerLiveness(found, { nowMs, origin, progress, progressEstimate: progress_estimate });
+    if (touched || progress || progress_estimate) {
       if (progress && !touched) {
         found.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
       }
+      // An estimate is worth persisting whoever reported it. A same-state
+      // report is the ONLY moment most estimates arrive — a worker at 62% is
+      // by definition still EXECUTING — so dropping it here would have made
+      // the whole contract unreachable in practice.
+      if (progress_estimate && !touched) found.progress_estimate = progress_estimate;
       found.updated_at = iso(nowMs);
       if (phase !== undefined) found.current_phase = bound(phase, 80);
       writeStore(putRun(store, found), root);
@@ -703,6 +1020,20 @@ export function transitionExecutionRun(runId, toState, {
   if (progress) {
     found.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
   }
+  if (progress_estimate) found.progress_estimate = progress_estimate;
+  // A run that has ENDED has no estimate to make. Leaving 62% on a COMPLETE run
+  // is the exact false precision this contract exists to refuse.
+  if (to === "COMPLETE") {
+    found.progress_estimate = normalizeProgressEstimate({
+      percent: 100,
+      confidence: "high",
+      summary: found.progress_estimate?.summary || null,
+      source: "deterministic",
+      nowMs,
+    });
+  } else if (to === "FAILED" || to === "ABANDONED") {
+    found.progress_estimate = null;
+  }
   if (completion_report) {
     found.completion_report = {
       // A bounded one-liner for rows and lists. It is NOT the user-facing final
@@ -742,6 +1073,41 @@ export function transitionExecutionRun(runId, toState, {
   touchWorkerLiveness(found, { nowMs, origin });
   appendTransition(found, { from, to, reason, origin, nowMs });
   writeStore(putRun(store, found), root);
+
+  /*
+   * A FINISHED RUN IS PROGRESS THE LANE SHOULD REMEMBER.
+   *
+   * THE DEFECT THIS CLOSES, traced live. Lane authorization revalidates
+   * `checkpoint_fresh` against lane memory's `updated_at`, and nothing in the
+   * resident system ever wrote it — `recordPromotionCheckpoint` had zero call
+   * sites. Six hours after a human last edited lane memory by hand, every lane
+   * revalidated to UNKNOWN and the scheduler stopped considering it. Backend
+   * was measured with five of six checks passing, none unmeasured, and was
+   * never once offered to the planner.
+   *
+   * Completion is the honest place to record it: real work finished on this
+   * lane, so its context genuinely is current. A lane where nothing completes
+   * still ages out, which is what the freshness window is for.
+   *
+   * Only a run the scheduler dispatched consumes the authorized next step.
+   * `origin` is the discriminator: work-scheduler-dispatch is the sole creator
+   * of "scheduler" runs. A certification or operator run refreshes the lane's
+   * context without spending the Director's instruction, which is why this is
+   * not simply "clear next_step on any completion".
+   *
+   * It never creates memory, so lanes that are UNKNOWN stay UNKNOWN, and it can
+   * never fail the transition: the run really did complete.
+   */
+  if (to === "COMPLETE" && found.lane_id) {
+    try {
+      recordLaneProgress(found.lane_id, {
+        runId: found.run_id,
+        summary: found.completion_report?.summary || found.latest_progress?.summary || null,
+        consumedNextStep: found.origin === "scheduler",
+      }, { root, nowMs });
+    } catch { /* lane memory is context, never a gate on reporting a finished run */ }
+  }
+
   const push = emitOutcomeEvent(found, root);
   try {
     onExecutionRunTransition({
@@ -780,7 +1146,8 @@ export function transitionExecutionRun(runId, toState, {
 }
 
 export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
-  const store = readExecutionRunStore(root);
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
   for (const pack of Object.values(store.lanes || {})) {
     const found = (pack.runs || []).find((r) => r.run_id === runId);
     if (!found) continue;
@@ -790,6 +1157,10 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
     if (fields.state_reason !== undefined) found.state_reason = fields.state_reason == null ? null : bound(fields.state_reason, EXECUTION_RUN_REASON_MAX);
     if (fields.governed_action !== undefined) found.governed_action = fields.governed_action || null;
     if (fields.recovery_state !== undefined) found.recovery_state = fields.recovery_state || null;
+    // Allowlisted like every other patchable field. The value is normalized by
+    // normalizeProgressEstimate before it reaches here, so what lands is always
+    // bounded, clamped 0-100 and carries its own source and timestamp.
+    if (fields.progress_estimate !== undefined) found.progress_estimate = fields.progress_estimate || null;
     if (fields.recovered_count !== undefined) found.recovered_count = Number(fields.recovered_count) || 0;
     if (fields.completed_at !== undefined) found.completed_at = fields.completed_at || null;
     if (fields.instruction !== undefined) {
@@ -883,7 +1254,8 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
 }
 
 export function patchRunResourceWait(runId, resourceWait, root = runtimeRoot()) {
-  const store = readExecutionRunStore(root);
+  const store = readStoreForMutation(root);
+  if (!store) return { ok: false, error: "run_store_unreadable" };
   for (const pack of Object.values(store.lanes || {})) {
     const found = (pack.runs || []).find((r) => r.run_id === runId);
     if (!found) continue;
@@ -1064,6 +1436,18 @@ export function reportRunState(runId, state, {
   checkpoint_ready = false,
   checkpoint_summary = null,
   payload = null,
+  // Provider progress. Reported alongside a state report because that is the
+  // path workers already use; see PROGRESS_SOURCES.
+  progress_percent = null,
+  progress_confidence = null,
+  progress_summary = null,
+  progress_source = null,
+  remaining_work = null,
+  // The provider's own claim about how much longer it needs. Reported, never
+  // derived from progress_percent — see normalizeFinishEstimate.
+  estimated_remaining_minutes = null,
+  estimated_finish_at = null,
+  estimate_confidence = null,
 } = {}) {
   const found = root
     ? { run: getExecutionRun(runId, root), root }
@@ -1096,6 +1480,17 @@ export function reportRunState(runId, state, {
     autoRecovered = rec.recovered ? rec.ownership_proof : null;
     Object.assign(run, getExecutionRun(run.run_id, storeRoot) || run);
   }
+  const estimate = normalizeProgressEstimate({
+    percent: progress_percent,
+    confidence: progress_confidence,
+    summary: progress_summary,
+    source: progress_source,
+    remaining_work,
+    estimated_remaining_minutes,
+    estimated_finish_at,
+    estimate_confidence,
+    nowMs,
+  });
   const ready = checkpoint_ready === true || String(checkpoint_ready).toLowerCase() === "true" || String(checkpoint_ready) === "1";
   if (ready) {
     patchRunFields(run.run_id, {
@@ -1103,12 +1498,27 @@ export function reportRunState(runId, state, {
       checkpoint_summary: checkpoint_summary || summary,
     }, { nowMs, root: storeRoot });
   }
+  // A PROGRESS-ONLY REPORT IS LEGAL.
+  //
+  // "I am 62% through" is not a state change, and forcing the worker to restate
+  // EXECUTING to carry it would make every milestone a transition report. This
+  // writes the estimate on its own and returns, without touching state.
+  if (estimate) {
+    patchRunFields(run.run_id, { progress_estimate: estimate }, { nowMs, root: storeRoot });
+    Object.assign(run, getExecutionRun(run.run_id, storeRoot) || run);
+  }
   const to = state ? normalizeReportedState(state) : null;
   if (!to && ready) {
     return afterCheckpointReport({
       ok: true,
       run: getExecutionRun(run.run_id, storeRoot) || run,
     }, run.lane_id, storeRoot, nowMs, summary || checkpoint_summary);
+  }
+  // Progress alone, with no state argument, is a complete report. It was
+  // already persisted above; returning invalid_state here would have made the
+  // milestone form of the contract unusable.
+  if (!to && estimate) {
+    return { ok: true, run: getExecutionRun(run.run_id, storeRoot) || run, progress_only: true };
   }
   if (!to || !REPORT_STATES.has(to)) return { ok: false, error: "invalid_state" };
   // A completion may only close an instruction that was actually delivered.
@@ -1132,6 +1542,7 @@ export function reportRunState(runId, state, {
     root: storeRoot,
     phase: to === "VALIDATING" ? "validation" : (to === "WAITING_RESOURCE" ? "resource_wait" : undefined),
     progress,
+    progress_estimate: estimate,
     completion_report: completion,
     resource_wait: resource ? {
       resource_key: resource,
@@ -1401,7 +1812,17 @@ export function executionEnvelope(runId, instruction, { laneId = null } = {}) {
   ].join("\n");
 }
 
+/**
+ * The same landmine as the lane store's reset, and the same refusal.
+ *
+ * Defaulting to `runtimeRoot()` means `ALLOY_RUNTIME_ROOT`, which in a worker
+ * shell is the LIVE gateway root. Every test calling this without an explicit
+ * root wiped the real run registry — which is what actually emptied runs.json
+ * alongside lanes.json, twice, moments after a test sweep. Not a transient I/O
+ * fault; the helper doing exactly what it was told, against production.
+ */
 export function resetExecutionRunsForTests(root = runtimeRoot()) {
+  assertResettableRoot(root, "execution run store");
   writeStore(emptyStore(), root);
   try {
     const p = executionRunEventsPath(root);

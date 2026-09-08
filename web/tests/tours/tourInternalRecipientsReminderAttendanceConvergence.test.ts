@@ -193,7 +193,7 @@ describe("What's Next Tour facts", () => {
                     tour: {
                         scheduled: true,
                         startAt: "2026-08-14T16:00:00.000Z",
-                        statusLabel: "confirmed",
+                        statusLabel: "confirmed", statusKey: null,
                         bookingId: "b1",
                         parentConfirmationLabel: "Awaiting response",
                     },

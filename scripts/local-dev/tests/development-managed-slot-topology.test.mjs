@@ -131,11 +131,22 @@ test("SHRINKING must not silently orphan a live slot", () => {
 
 test("capacity POLICY derives its slot bound from the topology", () => {
   const cap = { logical_cores: 12, memory_total_gb: 48 };
-  const six = P.computeCapacityPolicy(cap);
-  assert.equal(six.axes.dev_server_capacity.by_slots, 6);
-  // At 48 GB and 8 GB per server, memory allows 6 — so six is slot-bounded and
-  // twelve becomes memory-bounded. The point is that the SLOT term moved.
+  // BOTH halves state their topology. This half used to rely on the ambient
+  // default being six, which stopped being true the moment production moved to
+  // twelve — the assertion then failed for a reason that had nothing to do with
+  // what it was testing. The point of the test is that the SLOT term FOLLOWS
+  // topology, so topology has to be said out loud on both sides.
   const prev = process.env.ALLOY_MAX_AGENTS;
+  const prevPort0 = process.env.VACILANDO_PORT;
+  process.env.ALLOY_MAX_AGENTS = "6";
+  process.env.VACILANDO_PORT = "3030";
+  let six;
+  try {
+    six = P.computeCapacityPolicy(cap);
+  } finally {
+    if (prevPort0 == null) delete process.env.VACILANDO_PORT; else process.env.VACILANDO_PORT = prevPort0;
+  }
+  assert.equal(six.axes.dev_server_capacity.by_slots, 6);
   // Isolate the Gateway port as well: this test drives the real process.env, and
   // an ambient VACILANDO_PORT inside the agent range would legitimately shrink
   // the topology out from under the assertion.
@@ -145,8 +156,14 @@ test("capacity POLICY derives its slot bound from the topology", () => {
   try {
     const twelve = P.computeCapacityPolicy(cap);
     assert.equal(twelve.axes.dev_server_capacity.by_slots, 12, "the slot bound must follow topology");
-    assert.equal(twelve.axes.dev_server_capacity.bounded_by, "memory",
-      "at twelve slots the binding constraint becomes RAM, which is the honest answer");
+    // This asserted "memory" while a dev server was assumed to cost 8 GB, which
+    // made 48 GB allow only six. The assumption was replaced by measurement —
+    // ~2 GB steady-state working set — so 48 GB now allows far more than twelve
+    // and SLOTS are the honest binding constraint at this topology. The test's
+    // real subject is unchanged: the bound is named truthfully rather than
+    // asserted to be a particular resource.
+    assert.equal(twelve.axes.dev_server_capacity.bounded_by, "slots",
+      "with the measured working set, twelve slots bind before 48 GB does");
   } finally {
     if (prev == null) delete process.env.ALLOY_MAX_AGENTS; else process.env.ALLOY_MAX_AGENTS = prev;
     if (prevPort == null) delete process.env.VACILANDO_PORT; else process.env.VACILANDO_PORT = prevPort;
@@ -273,6 +290,58 @@ test("slot 10 becomes legitimately allocatable once the Gateway moves", () => {
   assert.equal(T.portForSlot(10, env), 3020);
   assert.equal(T.topologyPortConflicts(12, env).length, 0);
 });
+
+// ── an ambient caller shell must not reinterpret production topology ────────
+//
+// gatewayPort answers "what port should THIS process serve on", and
+// VACILANDO_PORT is a legitimate input to that: launchd hands it to the Gateway,
+// the installer takes it as an explicit override, alloy-vacilando-app forwards
+// it. Topology asks a different question — which ports are reserved, so how many
+// slots are safe — and that must not depend on who invoked the CLI.
+//
+// MEASURED: a shell carrying a stale VACILANDO_PORT=3020 from the Gateway's old
+// port made resolveManagedSlotCount report NINE slots instead of twelve, through
+// a phantom reserved-port conflict on slot 10, while the Gateway was serving
+// 3030. It misled three investigations in one day.
+
+test("a stale AMBIENT VACILANDO_PORT no longer shrinks the topology", () => {
+  // The contamination arrives through process.env, which is what a shell was
+  // carrying — not something any caller chose to state.
+  const prev = process.env.VACILANDO_PORT;
+  const prevMax = process.env.ALLOY_MAX_AGENTS;
+  try {
+    process.env.VACILANDO_PORT = "3020";   // the Gateway's OLD port
+    process.env.ALLOY_MAX_AGENTS = "12";
+    assert.equal(T.authoritativeGatewayPort(), 3030,
+      "topology reads the host fact, not the invoking shell");
+    assert.equal(T.reservedControlPlanePorts().has(3020), false,
+      "a stale ambient value must not reserve a lane port");
+    assert.deepEqual(T.topologyPortConflicts(12), [],
+      "twelve slots stay safe regardless of the invoking shell");
+    assert.equal(T.resolveManagedSlotCount().count, 12,
+      "this is the exact case that reported nine instead of twelve");
+  } finally {
+    if (prev == null) delete process.env.VACILANDO_PORT; else process.env.VACILANDO_PORT = prev;
+    if (prevMax == null) delete process.env.ALLOY_MAX_AGENTS; else process.env.ALLOY_MAX_AGENTS = prevMax;
+  }
+});
+
+test("a DELIBERATELY supplied env is still honoured", () => {
+  // The distinction is ambient vs deliberate. An env object a caller built and
+  // handed over states which port the Gateway is on, and the topology tests
+  // depend on being able to say that.
+  assert.equal(T.authoritativeGatewayPort({ VACILANDO_PORT: "3014" }), 3014,
+    "an explicit injection is a statement, not contamination");
+  assert.equal(T.authoritativeGatewayPort({}, { explicit: 3099 }), 3099);
+});
+
+test("the process-port contract is deliberately unchanged", () => {
+  // POSITIVE CONTROL. Without this, "ignore VACILANDO_PORT" could spread and
+  // silently break launchd handing the Gateway its own port to serve on.
+  assert.equal(T.gatewayPort({ VACILANDO_PORT: "3020" }), 3020,
+    "a process told which port to serve on must still obey");
+});
+
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

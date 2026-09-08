@@ -168,7 +168,14 @@ describe("What's Next config fidelity + Tour grouping + Send Invitation compose"
         const workspace = read("components/admin/focusPanel/cards/CurrentWorkWorkspace.tsx");
         expect(card).toContain("CurrentWorkTourGroupedActions");
         expect(workspace).toContain("CurrentWorkTourGroupedActions");
-        expect(read("components/admin/focusPanel/cards/CurrentWorkTourGroupedActions.tsx")).toContain("Tour ▾");
+        // The trigger is no longer a literal: it carries the current booking state, resolved by
+        // the shared `resolveTourCommandPresentation` so Current Work and the Process card name
+        // the same state identically. Assert the contract, not the glyph — a `toContain("Tour ▾")`
+        // here now passes on this file's own doc comment.
+        const groupedSrc = read("components/admin/focusPanel/cards/CurrentWorkTourGroupedActions.tsx");
+        expect(groupedSrc).toContain("{triggerLabel} ▾");
+        expect(groupedSrc).toContain('const triggerLabel = (label ?? "").trim() || "Tour";');
+        expect(card).toContain("resolveTourCommandPresentation");
     });
 
     it("does not invent Send Tour Invitation beside Schedule Tour", () => {

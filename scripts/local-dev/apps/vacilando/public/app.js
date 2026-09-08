@@ -237,6 +237,7 @@ const CRUMBS = {
   settings: "Settings",
   director: "Legacy Director", command: "Legacy Board", history: "Work History",
   policies: "Policies", trust: "Runtime Trust",
+  home: "Home", activity: "Activity", system: "System", lanes: "Development Lanes",
 };
 function setActiveNav(name) {
   const r = parseRoute();
@@ -249,7 +250,8 @@ function setActiveNav(name) {
   document.querySelectorAll(".ruser[data-route]").forEach((a) => {
     a.classList.toggle("active", a.dataset.route === name);
   });
-  $("#crumb").textContent = name === "lanes" && r.sub ? "Lane" : (CRUMBS[name] || "Development Lanes");
+  const crumb = $("#crumb");
+  if (crumb) crumb.textContent = name === "lanes" && r.sub ? "Lane" : (CRUMBS[name] || "Vacilando");
 }
 
 function escRail(s) {
@@ -357,7 +359,7 @@ window.renderMissionRail = function renderMissionRail(missions) {
 
 async function fetchMissionRail() {
   try {
-    if (parseRoute().name === "lanes" || parseRoute().name === "settings") return;
+    if (isGatewayRouteName(parseRoute().name)) return;
     const r = await fetch("/api/v2/views/mission-rail", { cache: "no-store" });
     const j = await r.json();
     if (j?.missions) window.renderMissionRail(j.missions);
@@ -369,7 +371,24 @@ window.fetchMissionRail = fetchMissionRail;
  * Cutover: empty hash lands on Development Lanes (Gateway V2).
  */
 const LEGACY_HOME_ROUTES = new Set(["director", "command", "history", "policies", "trust"]);
-const GATEWAY_HOME = "#/lanes";
+/**
+ * V2 lands on HOME, not on the lane list.
+ *
+ * The lane list was the default because it was the only destination that
+ * existed. Home answers the question the operator actually arrives with.
+ */
+const GATEWAY_HOME = "#/home";
+/**
+ * The routes the Gateway SPA owns.
+ *
+ * ONE predicate, used at every hand-off point. It was five separate
+ * `r.name === "lanes" || r.name === "settings"` comparisons, and adding a
+ * destination meant finding all five — which is how a new route ends up
+ * half-rendered by the legacy board.
+ */
+const GATEWAY_ROUTE_NAMES = new Set(["home", "lanes", "activity", "system", "settings"]);
+function isGatewayRouteName(name) { return GATEWAY_ROUTE_NAMES.has(name); }
+window.isGatewayRouteName = isGatewayRouteName;
 function enforceMissionControlHome() {
   const hash = location.hash || "";
   const empty = !hash || hash === "#" || hash === "#/";
@@ -438,12 +457,18 @@ function render(force) {
   const r = parseRoute();
   const V2 = window.VacilandoV2;
 
-  if (r.name === "lanes" || r.name === "settings") {
+  if (isGatewayRouteName(r.name)) {
     setActiveNav(r.name);
     const gw = window.VacilandoGateway;
     if (!gw?.show) return;
     if (r.name === "settings") {
       gw.show({ name: "settings" });
+      return;
+    }
+    // Home, Activity and System are standalone destinations, not a mode of the
+    // lane view, so they hand straight over without the lane sameness check.
+    if (r.name === "home" || r.name === "activity" || r.name === "system") {
+      gw.show({ name: r.name });
       return;
     }
     const same = gw._state?.visible && gw._state.selected === (r.sub || null);
@@ -2213,7 +2238,7 @@ function onSnap(s) {
   if (!adoptSnapshot(s)) return;
   chrome();
   const r = parseRoute();
-  if (r.name === "lanes" || r.name === "settings") return;
+  if (isGatewayRouteName(r.name)) return;
   if (window.VacilandoV2?.enabled && MC_ROUTES.has(r.name)) {
     const now = Date.now();
     const last = window.VacilandoV2.state?._lastSseRevisionSync || 0;
@@ -2226,7 +2251,7 @@ function onSnap(s) {
 }
 async function poll() {
   try {
-    if (parseRoute().name === "lanes" || parseRoute().name === "settings") {
+    if (isGatewayRouteName(parseRoute().name)) {
       setLive(sseOk ? "live" : "polling");
       return;
     }

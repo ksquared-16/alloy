@@ -57,6 +57,26 @@ export function familyStageDestinationOperability(
             reason: `stage "${stage.key}" offers no work templates — the answer will not claim operational on identity alone`,
         };
     }
+    /*
+     * OUTCOME-LED WORK IS REACHABLE WITHOUT A PRIMARY ACTION — that is what the mode MEANS.
+     *
+     * `resolveWorkTemplateExecutionMode` states the product contract: `direct_action` has an
+     * executable Primary Action, `outcome_led` "intentionally has no Primary Action; Record Outcome
+     * leads". This rule predated the mode and read absence as unreachability, so a stage that had
+     * deliberately declared itself outcome-led was called inoperable — and because one inoperable
+     * stage refuses the WHOLE Work View, a correctly configured process rendered no queues, no rows
+     * and no selectable subject at all.
+     *
+     * The test is the EXPLICIT declaration, not the resolved mode. `resolveWorkTemplateExecutionMode`
+     * also returns `outcome_led` when nothing is declared and no action is present, which is exactly
+     * the legacy shape this rule is right to refuse: a template that says nothing and offers nothing
+     * has not claimed to be outcome-led, it is simply incomplete. Malformed values never reach here
+     * as a mode either — `stageOperatingPlanV1`'s parser only keeps a value in EXECUTION_MODES, so a
+     * junk mode arrives as `undefined` and keeps failing closed on the check below.
+     */
+    if (template.execution_mode === "outcome_led") {
+        return { ok: true };
+    }
     const actionRef = template.primary_action?.action_ref ?? null;
     if (!actionRef && !opts.missionDerivedFromEffectiveParticipants) {
         return {

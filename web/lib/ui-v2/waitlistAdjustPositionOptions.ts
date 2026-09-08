@@ -41,9 +41,39 @@ export type WaitlistAdjustPositionModel = {
 export function waitlistAdjustPositionModel(
     positionLabel: string | null | undefined,
     precedenceReason?: string | null,
+    /**
+     * The GROUP-LOCAL range published by the placement engine
+     * (`runtime_group_position` / `runtime_group_total`). When present it WINS over the section
+     * label, because that is the range the command can actually express.
+     *
+     * The section label answers "where am I in the list I am reading" — a different question. A
+     * section holding `infant` and `infant_0_18_months` shows 12 while the pinned candidate's own
+     * cohort holds 11, so bounding on the label offered a "12" the write had to clamp: the
+     * operator's number silently became a different number. Nothing is recomputed here; this only
+     * prefers the authority that already answered.
+     */
+    group?: { position?: number | null; total?: number | null } | null,
 ): WaitlistAdjustPositionModel {
-    const parts = parseWaitlistRankParts(positionLabel);
     const scopedToGroup = precedenceReason === "pin_scoped_to_cohort";
+    const groupTotal = typeof group?.total === "number" && group.total > 0 ? Math.trunc(group.total) : null;
+    const groupPosition =
+        typeof group?.position === "number" && group.position > 0 ? Math.trunc(group.position) : null;
+    if (groupTotal != null) {
+        const listed = Math.min(groupTotal, WAITLIST_ADJUST_MAX_LISTED);
+        const options: number[] = [];
+        for (let i = 1; i <= listed; i++) options.push(i);
+        if (groupPosition != null && groupPosition > listed && groupPosition <= groupTotal) options.push(groupPosition);
+        return {
+            options,
+            total: groupTotal,
+            current: groupPosition,
+            scopedToGroup,
+            customReachesFurther: groupTotal > listed,
+        };
+    }
+    // No group range published (non-candidate row, or an engine that did not rank it): fall back to
+    // the section label rather than inventing a range.
+    const parts = parseWaitlistRankParts(positionLabel);
     if (!parts) {
         return { options: [], total: null, current: null, scopedToGroup, customReachesFurther: true };
     }

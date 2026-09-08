@@ -72,6 +72,9 @@ export type PlacementWaitlistCandidateRowProjection = {
     runtime_position_section_key?: string;
     runtime_position_precedence_note?: string;
     runtime_position_precedence_reason?: WaitlistRuntimePrecedenceReason;
+    /** Group-local range from the placement engine — the legal span of a manual position. */
+    runtime_group_position?: number;
+    runtime_group_total?: number;
 };
 
 export function placementCandidateQueueRowId(opportunityId: string, candidateId: string): string {

@@ -731,10 +731,26 @@ export async function evaluateAdmissionQueue({
       transitionAdmission(head.admission_id, "ADMITTED", {
         nowMs,
         root,
-        provisioning_state: started.adopted ? "adopted" : "session_starting",
+        provisioning_state: started.adopted
+          ? "adopted"
+          : (started.reused ? "reused" : "session_starting"),
       });
+      /*
+       * A REUSED SESSION IS READY NOW, SO DELIVER NOW.
+       *
+       * Delivery used to be gated on `adopted` alone, which meant it only ever
+       * fired when this tick had just taken over an unclaimed pane. A lane whose
+       * healthy provider was already up and free fell to the deferred branch and
+       * waited for a later tick to notice — the run stayed QUEUED, the provider
+       * stayed idle, and neither side moved.
+       *
+       * `reused` carries the same guarantee `adopted` does: startLaneAgentSession
+       * proved the binding, the provider identity and the absence of an occupying
+       * run before returning it. Nothing weaker reaches here — a session that is
+       * merely STARTING still returns not-ok and lands in the branch above.
+       */
       let delivery = { ok: true, deferred: true };
-      if (head.run_id && started.adopted) {
+      if (head.run_id && (started.adopted || started.reused)) {
         delivery = await deliverRun({ run_id: head.run_id, lane_id: lane.lane_id }, { lane, root, nowMs });
       }
       const rec = getAdmission(head.admission_id, root);

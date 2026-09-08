@@ -227,9 +227,7 @@ DROP TABLE IF EXISTS _childcare_mvp_seed_target_orgs;  -- see note above
 \ir ../migrations/20260430253000_enrollment_right_rail_dept_scope.sql
 \ir ../migrations/20260501193000_workspace_kpi_placement.sql
 \ir ../migrations/20260502100000_kpi_v1_context_placement_seeds.sql
-\ir ../migrations/20260505120100_settings_users_roles_permission.sql
 \ir ../migrations/20260505153000_backfill_default_role_definitions.sql
-\ir ../migrations/20260505164000_permission_grid_keys.sql
 \ir ../migrations/20260513103000_childcare_opportunity_drawer_append_tour_scheduling.sql
 \ir ../migrations/20260520120000_inquiry_child_desired_start_and_field_defs.sql
 \ir ../migrations/20260526153000_action_buttons_phase2_message_ask_bos.sql
@@ -264,7 +262,39 @@ DROP TABLE IF EXISTS _childcare_mvp_seed_target_orgs;  -- see note above
 \ir ../migrations/20260624120200_analytics_v2_surface_placements.sql
 \ir ../migrations/20260707120100_header_metric_definitions_activation.sql
 \ir ../migrations/20260711153100_person_child_relationship_type_option_set.sql
-\ir ../migrations/20260722000000_operational_expectations_authority_model_p1_wave_c.sql
+
+-- ---------------------------------------------------------------------------
+-- RBAC FOR THIS ORG, THROUGH THE PLATFORM'S OWN ROUTINE.
+--
+-- Three of the replayed migrations above used to live here and no longer can:
+--
+--   20260505120100_settings_users_roles_permission
+--   20260505164000_permission_grid_keys
+--   20260722000000_operational_expectations_authority_model_p1_wave_c
+--
+-- Each writes `public.permissions` and `public.permission_keys`, and the catalog
+-- they were written against is GONE by the end of the migration sequence:
+-- `20260729120000` dropped both tables for compatibility views, and
+-- `20260818240000` dropped those views. Replaying them against a fully migrated
+-- database therefore aborted the whole seed under ON_ERROR_STOP with
+-- `relation "public.permissions" does not exist` — which is why this tenant had
+-- no organization, and so no Opportunity and no mountable Financials card.
+--
+-- They were replayed for one reason: their org-scoped tail grants permissions
+-- with `SELECT ... FROM public.orgs`, which matches NOTHING at migration time
+-- because the org is created here, afterwards. That job now belongs to
+-- `public.seed_default_rbac`, which `20260807170000` (W-12) rewrote for the
+-- current catalog: it writes `permission_definitions` and
+-- `role_permission_grants` only, and that migration REFUSES to install if its
+-- enumeration omits any active catalog key. So this stays correct as the
+-- catalog grows, without copying a single grant list into this file — the same
+-- zero-hand-copy-drift rule the replay block above is built on.
+--
+-- `role_definitions` needs no help: `20260729120000` also installed the
+-- `orgs_seed_default_role_definitions` AFTER INSERT trigger on `public.orgs`,
+-- so this org received its four system roles the moment it was created.
+-- ---------------------------------------------------------------------------
+SELECT public.seed_default_rbac(:'ORG_ID'::uuid);
 
 \echo '== Section 4: department process configuration (authoritative, post-replay) =='
 
@@ -686,5 +716,192 @@ ANALYZE public.persons;
 ANALYZE public.customer_members;
 ANALYZE public.customer_persons;
 ANALYZE public.operational_tasks;
+
+-- ---------------------------------------------------------------------------
+-- ONE CHARGE TEMPLATE, SO THE FINANCIALS CARD IS OPERABLE AND NOT MERELY VISIBLE.
+--
+-- `FinancialsCard` gates its Add-charge control on `vm.chargeTemplates.length > 0`
+-- (the card renders the balance either way), and `buildFinancialsCardVM` builds
+-- that list from `financial_charge_templates` effective today. With none, the
+-- mounted card can be READ but no operator command can be executed from it — so
+-- the browser certification could prove the mount and nothing beyond it.
+--
+-- This is configuration, not behaviour: the shape is the one
+-- `certification/fixtures/financials-charge-spine.sql` already uses for the same
+-- purpose, and `charge.add` resolves it through the ordinary template path. A
+-- fixed manual fee is deliberately the least interesting template that still
+-- exercises the whole spine — resolve, draft, post, correct.
+--
+-- Deterministic id and ON CONFLICT so a seed rerun changes nothing.
+-- ---------------------------------------------------------------------------
+INSERT INTO public.financial_charge_templates
+    (id, org_id, template_key, label, charge_category, trigger_type, amount_strategy, amount_cents,
+     currency_code, occurs_on_strategy, billable_on_strategy, effective_start, review_required, is_active)
+VALUES
+    ('00000000-0000-4000-8000-0000000f0001'::uuid, :'ORG_ID'::uuid, 'representative_registration_fee',
+     'Registration fee', 'fee', 'manual', 'fixed', 15000, 'USD', 'now', 'immediate',
+     current_date - 365, false, true)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label,
+    amount_cents = EXCLUDED.amount_cents,
+    is_active = EXCLUDED.is_active,
+    effective_start = EXCLUDED.effective_start;
+
+-- ---------------------------------------------------------------------------
+-- PROGRAMS, AND WHAT THEY COST — so an assignment can be priced at all.
+--
+-- The tenant had 3000 assignments and ZERO programs: `location_program_categories`
+-- was empty, so every assignment's `program_category_id` was null, and an
+-- assignment with no program cannot be priced by anything. Commercial
+-- Configuration was empty too — no offerings, no variants, no tuition rates — so
+-- even a programmed assignment would have resolved to "no configured tuition".
+--
+-- A childcare organisation obviously has programs, and an inquiry is an inquiry
+-- FOR one. This is representative configuration, not a fixture that makes a test
+-- pass: the shape is exactly what an operator authors through
+-- /api/admin/location-program-categories, /api/admin/programs/offerings and
+-- /api/admin/commercial/tuition-rates.
+--
+-- The eligibility dimensions are the ones this commercial model actually has —
+-- program x attendance type x days-per-week variant. Age banding is NOT one of
+-- them (it belongs to the childcare rate plans), and none is invented here.
+--
+-- `drop_in` is deliberately left UNPRICED. A no-match has to be reachable on a
+-- real assignment, or "no configured tuition applies" is a state nobody can
+-- certify.
+-- ---------------------------------------------------------------------------
+INSERT INTO public.location_program_categories (id, org_id, location_id, key, label, sort_order, is_active)
+SELECT
+    ('00000000-0000-4000-8000-0000000c' || lpad(to_hex(s.n), 4, '0'))::uuid,
+    :'ORG_ID'::uuid,
+    s.location_id,
+    s.key,
+    s.label,
+    s.n,
+    true
+FROM (VALUES
+    (1, '00000000-0000-4000-8000-000000000010'::uuid, 'toddler',   'Toddler'),
+    (2, '00000000-0000-4000-8000-000000000010'::uuid, 'preschool', 'Preschool'),
+    (3, '00000000-0000-4000-8000-000000000011'::uuid, 'toddler',   'Toddler'),
+    (4, '00000000-0000-4000-8000-000000000011'::uuid, 'preschool', 'Preschool')
+) AS s(n, location_id, key, label)
+ON CONFLICT (id) DO UPDATE
+SET key = EXCLUDED.key, label = EXCLUDED.label, is_active = true;
+
+-- Every assignment is FOR a program, at the site it is already assigned to, and
+-- commits to a number of days. Both are facts the assignment owns; neither is
+-- copied onto the child.
+UPDATE public.opportunity_customer_members ocm
+SET program_category_id = c.id,
+    metadata = ocm.metadata || jsonb_build_object(
+        'requested_days_per_week',
+        CASE ocm.schedule_type WHEN 'full_time' THEN 5 WHEN 'part_time' THEN 3 ELSE 2 END
+    )
+FROM public.location_program_categories c
+WHERE ocm.org_id = :'ORG_ID'::uuid
+  AND c.org_id = :'ORG_ID'::uuid
+  AND c.location_id = ocm.location_id
+  AND c.key = CASE WHEN (('x' || substr(replace(ocm.id::text, '-', ''), 25, 8))::bit(32)::int % 2) = 0
+                   THEN 'toddler' ELSE 'preschool' END;
+
+-- program_offerings: a program in an attendance shape. `attendance_type` is the
+-- assignment's own `schedule_type` vocabulary, because that IS the fact Commercial
+-- authors against — no translation table exists and none is invented.
+INSERT INTO public.program_offerings (id, org_id, program_key, label, attendance_type, is_active, status)
+SELECT
+    ('00000000-0000-4000-8000-0000000d' || lpad(to_hex(s.n), 4, '0'))::uuid,
+    :'ORG_ID'::uuid, s.program_key, s.label, s.attendance_type, true, 'active'
+FROM (VALUES
+    (1, 'toddler',   'Toddler · full week', 'full_time'),
+    (2, 'toddler',   'Toddler · part week', 'part_time'),
+    (3, 'preschool', 'Preschool · full week', 'full_time'),
+    (4, 'preschool', 'Preschool · part week', 'part_time')
+) AS s(n, program_key, label, attendance_type)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label, is_active = true, status = 'active';
+
+-- program_offering_variants: the QUANTITY axis. Five days for a full week, three
+-- for a part week — the days each offering is actually sold in.
+INSERT INTO public.program_offering_variants (id, org_id, offering_id, label, quantity_type, quantity_value, is_active, status)
+SELECT
+    ('00000000-0000-4000-8000-0000000e' || lpad(to_hex(s.n), 4, '0'))::uuid,
+    :'ORG_ID'::uuid, s.offering_id, s.label, 'days', s.days, true, 'active'
+FROM (VALUES
+    (1, '00000000-0000-4000-8000-0000000d0001'::uuid, '5 days a week', 5),
+    (2, '00000000-0000-4000-8000-0000000d0002'::uuid, '3 days a week', 3),
+    (3, '00000000-0000-4000-8000-0000000d0003'::uuid, '5 days a week', 5),
+    (4, '00000000-0000-4000-8000-0000000d0004'::uuid, '3 days a week', 3),
+    -- The OTHER day-count each offering also sells. Without these a schedule change falls off the
+    -- catalog entirely instead of re-pricing, and "changing a fact changes the answer" could only
+    -- ever be proved as a no-match.
+    (5, '00000000-0000-4000-8000-0000000d0001'::uuid, '3 days a week', 3),
+    (6, '00000000-0000-4000-8000-0000000d0002'::uuid, '5 days a week', 5),
+    (7, '00000000-0000-4000-8000-0000000d0003'::uuid, '3 days a week', 3),
+    (8, '00000000-0000-4000-8000-0000000d0004'::uuid, '5 days a week', 5)
+) AS s(n, offering_id, label, days)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label, is_active = true, status = 'active';
+
+-- commercial_tuition_rates: one monthly org-default rate per variant. ONE cadence
+-- on purpose, so the ordinary path resolves deterministically; a second cadence or
+-- a site override is what a certification authors when it wants to prove an
+-- override or an ambiguity.
+INSERT INTO public.commercial_tuition_rates
+    (id, org_id, location_id, variant_id, cadence_key, payer_type, rate_cents, is_active, not_offered, effective_start)
+SELECT
+    ('00000000-0000-4000-8000-0000000b' || lpad(to_hex(s.n), 4, '0'))::uuid,
+    :'ORG_ID'::uuid, NULL, s.variant_id, 'monthly', 'private_pay', s.cents, true, false, current_date - 365
+FROM (VALUES
+    (1, '00000000-0000-4000-8000-0000000e0001'::uuid, 168000),
+    (2, '00000000-0000-4000-8000-0000000e0002'::uuid, 112000),
+    (3, '00000000-0000-4000-8000-0000000e0003'::uuid, 155000),
+    (4, '00000000-0000-4000-8000-0000000e0004'::uuid, 103000),
+    (5, '00000000-0000-4000-8000-0000000e0005'::uuid, 121000),
+    (6, '00000000-0000-4000-8000-0000000e0006'::uuid, 149000),
+    (7, '00000000-0000-4000-8000-0000000e0007'::uuid, 112000),
+    (8, '00000000-0000-4000-8000-0000000e0008'::uuid, 138000)
+) AS s(n, variant_id, cents)
+ON CONFLICT (id) DO UPDATE
+SET rate_cents = EXCLUDED.rate_cents, is_active = true, not_offered = false,
+    effective_start = EXCLUDED.effective_start;
+
+ANALYZE public.opportunity_customer_members;
+
+-- ---------------------------------------------------------------------------
+-- THE TUITION CHARGE TEMPLATE — tenant configuration, because that is what a
+-- charge template IS.
+--
+-- `consumption_event_types` is a GLOBAL registry seeded by migration
+-- (20260706120100), and it deliberately does not carry money: it maps
+-- `schedule.recurring_tuition` to the charge template KEY 'tuition' and resolves
+-- the ORG's own template at runtime. Its own seed says so — "uses existing
+-- commercial configuration (the org's Charge Template with template_key =
+-- 'registration_fee')".
+--
+-- So no migration conjures a tuition template into anybody's tenant, and Thread 7
+-- does not add one that would. An organisation that has not authored this template
+-- is told which key it needs, by name, when generation runs. This row is the
+-- CERTIFICATION tenant authoring its own — the same act an operator performs in
+-- Commercial configuration, and the same thing this seed already does for the
+-- registration fee.
+--
+-- `rate_derived` on purpose: the amount comes from the accepted pricing term the
+-- generation service supplies, never from the template and never from a catalog
+-- lookup. A fixed template here would quietly become a second pricing authority.
+-- ---------------------------------------------------------------------------
+INSERT INTO public.financial_charge_templates
+    (id, org_id, template_key, label, charge_category, trigger_type, amount_strategy, amount_cents,
+     currency_code, occurs_on_strategy, billable_on_strategy, effective_start, review_required, is_active)
+VALUES
+    ('00000000-0000-4000-8000-0000000f0002'::uuid, :'ORG_ID'::uuid, 'tuition',
+     'Tuition', 'tuition', 'schedule', 'rate_derived', NULL, 'USD',
+     'service_period_start', 'immediate', current_date - 365, false, true)
+ON CONFLICT (id) DO UPDATE
+SET label = EXCLUDED.label,
+    amount_strategy = EXCLUDED.amount_strategy,
+    occurs_on_strategy = EXCLUDED.occurs_on_strategy,
+    billable_on_strategy = EXCLUDED.billable_on_strategy,
+    is_active = EXCLUDED.is_active,
+    effective_start = EXCLUDED.effective_start;
 
 \echo '== Seed complete =='

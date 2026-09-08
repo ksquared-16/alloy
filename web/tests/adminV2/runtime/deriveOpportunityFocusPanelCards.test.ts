@@ -23,6 +23,7 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
                 ],
             },
             active_tour_bookings: [],
+            operator_relevant_tour_booking: null,
             reminders: { state: "empty", next_follow_up_iso: null, scheduled_send_count: 0, scheduled_sends: [] },
             bos: null,
             attention: {

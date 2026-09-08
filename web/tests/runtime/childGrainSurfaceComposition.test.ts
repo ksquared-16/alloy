@@ -78,6 +78,7 @@ function childRow(over: Partial<ChildProvisioningRow> = {}): ChildProvisioningRo
         subjectId: "cm-1",
         participationId: "pi-1",
         contextId: "opp-1",
+        familyCustomerId: null,
         legacyOcmId: null,
         stageKey: "lead",
         statusKey: null,
@@ -182,11 +183,11 @@ describe("child Runtime ViewModel — composition only", () => {
             stages: STAGES,
             familyNamesByOpportunityId: new Map([["opp-1", "Kurzman"]]),
         });
-        expect(withName.ok && withName.composition.family).toEqual({ opportunityId: "opp-1", name: "Kurzman" });
+        expect(withName.ok && withName.composition.family).toEqual({ opportunityId: "opp-1", name: "Kurzman", customerId: null });
 
         // No entry for this opportunity → the id is still true, the name is honestly absent.
         const without = composeChildGrainSurface({ row: childRow(), stages: STAGES });
-        expect(without.ok && without.composition.family).toEqual({ opportunityId: "opp-1", name: null });
+        expect(without.ok && without.composition.family).toEqual({ opportunityId: "opp-1", name: null, customerId: null });
     });
 });
 

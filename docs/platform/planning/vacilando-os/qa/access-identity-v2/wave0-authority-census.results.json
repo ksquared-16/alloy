@@ -1,0 +1,485 @@
+{
+  "trusted_host_action_id": "tha_836b248cacf951",
+  "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+  "results": {
+    "database": "postgres",
+    "org_count": 2,
+    "census_run_at": "2026-09-04T11:28:53.506411+00:00",
+    "target_identity": {
+      "org_ids": [
+        "7803388d-cdee-4afb-89cf-23a137f39423",
+        "93667019-bd28-49b5-a688-acc9bb1e0a19"
+      ],
+      "org_slugs": [
+        "alloy-bend",
+        "demo-childcare-co-c144769f"
+      ],
+      "server_addr": "2600:1f13:838:6e21:288f:4aa6:65bf:f446/128",
+      "cluster_name": "main",
+      "server_version": "17.6",
+      "org_fingerprint": "ab7e5dde2e229d5c46e251456e4d9534"
+    },
+    "q2_via_app_users": 0,
+    "q4_membership_rows": 13,
+    "q2_via_user_profiles": 0,
+    "q1_auth_users_triggers": [
+      {
+        "tgname": "RI_ConstraintTrigger_a_16689",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16690",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16717",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16718",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16753",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16754",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16944",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16945",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17023",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17024",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17042",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17043",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17137",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17138",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17154",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17155",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_19306",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_19307",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20386",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20387",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20396",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20397",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20516",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20517",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_40276",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_40277",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49536",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49537",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49787",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49788",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49854",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49855",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50083",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50084",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50088",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50089",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50125",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50126",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50130",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50131",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50135",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50136",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50168",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50169",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50203",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50204",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50360",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50361",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51130",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51131",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51135",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51136",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51165",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51166",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51722",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51723",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51761",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51762",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51766",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51767",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51771",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51772",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53336",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53337",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53887",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53888",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53897",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_53898",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54030",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54031",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54035",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54036",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54045",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_54046",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      }
+    ],
+    "q4_pairs_without_profile": 5,
+    "q2_legacy_only_authorized": 0,
+    "q1_handle_new_user_defined": 1,
+    "q4_distinct_user_org_pairs": 11,
+    "q3_distinct_undefined_roles": [],
+    "q5_admin_ops_org_role_pairs": 3,
+    "q5_pairs_with_no_definition": 0,
+    "q3_undefined_membership_rows": 0,
+    "q5_pairs_defined_but_inactive": 0,
+    "q6_restricted_admin_ops_pairs": 1,
+    "q4_profiles_without_membership": 0,
+    "q6_restricted_site_scope_pairs": 2,
+    "q2_principals_without_membership": 0
+  }
+}

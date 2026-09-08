@@ -7,7 +7,7 @@ import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { drawerFirstPaintDependenciesSettled } from "@/lib/adminV2/viewModel/drawer/drawerFirstPaint";
-import { loadOpportunityActiveTourBookingsForViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityActiveTourBookingsForViewModel";
+import { loadOpportunityTourProjectionForViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityActiveTourBookingsForViewModel";
 import { loadOpportunityScheduledSendsPreview } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityScheduledSendsPreview";
 import { loadSchedulingProjectionsForFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
 import {
@@ -150,8 +150,8 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
             }))
         :   Promise.resolve(null),
         needsTourBookings ?
-            timedLeg("tour_bookings", loadOpportunityActiveTourBookingsForViewModel(params.supabase, params.gate.orgId, params.opportunityId))
-        :   Promise.resolve([] as TourBookingRow[]),
+            timedLeg("tour_bookings", loadOpportunityTourProjectionForViewModel(params.supabase, params.gate.orgId, params.opportunityId))
+        :   Promise.resolve({ active: [] as TourBookingRow[], operatorRelevant: null }),
         needsScheduling ?
             timedLeg("scheduling", loadSchedulingProjectionsForFirstPaint(params.supabase, params.gate.orgId, params.record))
         :   Promise.resolve(null),
@@ -240,9 +240,10 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
     }
 
     if (planIncludes(params.dependencies, "tour_bookings")) {
-        const bookings = tourBookings ?? [];
-        data.tour_bookings = bookings;
-        finalize("tour_bookings", readyState("tour_bookings", bookings.length === 0, "server_fetch"));
+        // The leg now carries both answers; readiness still speaks about the active list.
+        const projection = tourBookings ?? { active: [] as TourBookingRow[], operatorRelevant: null };
+        data.tour_bookings = projection;
+        finalize("tour_bookings", readyState("tour_bookings", projection.active.length === 0, "server_fetch"));
     }
 
     if (needsScheduling) {
@@ -276,9 +277,22 @@ export function headerActionsFromFirstPaintData(
     return raw as ResolvedActionsBySlot;
 }
 
+/** The bookings the family may still attend. Unchanged meaning, now read off the projection. */
 export function tourBookingsFromFirstPaintData(
     data: Partial<Record<OpportunityDrawerFirstPaintDependencyKey, unknown>>
 ): TourBookingRow[] {
-    const raw = data.tour_bookings;
-    return Array.isArray(raw) ? (raw as TourBookingRow[]) : [];
+    const raw = data.tour_bookings as { active?: unknown } | unknown;
+    // Tolerates the pre-projection shape (a bare array) so a cached leg cannot break first paint.
+    if (Array.isArray(raw)) return raw as TourBookingRow[];
+    const active = (raw as { active?: unknown } | null)?.active;
+    return Array.isArray(active) ? (active as TourBookingRow[]) : [];
+}
+
+/** The one booking the Tour concept speaks for, terminal states included. */
+export function operatorRelevantTourBookingFromFirstPaintData(
+    data: Partial<Record<OpportunityDrawerFirstPaintDependencyKey, unknown>>
+): TourBookingRow | null {
+    const raw = data.tour_bookings as { operatorRelevant?: unknown } | unknown;
+    if (Array.isArray(raw)) return null; // pre-projection shape carried no such answer
+    return ((raw as { operatorRelevant?: TourBookingRow | null } | null)?.operatorRelevant) ?? null;
 }

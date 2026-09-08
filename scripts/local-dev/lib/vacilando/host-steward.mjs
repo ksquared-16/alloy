@@ -73,6 +73,31 @@ export const AUTONOMOUS_ACTIONS = Object.freeze([
   "reclaim_idle_provider_seat",
   "repair_stale_port_registration",
   "prune_policy_eligible_toolkit",
+  /*
+   * V3 PHASE 4 — AN AUTHORITY CHANGE, RECORDED RATHER THAN SLIPPED IN.
+   *
+   * `retire_worktree` was operator-only here "whatever the evidence says". It
+   * moved because Phase 4 asked that routine safe reclamation stop requiring a
+   * Director, and because the evidence bar it now runs behind is not a
+   * heuristic: every one of thirteen safety gates measured and passed, an
+   * unmeasured gate blocking exactly as a failed one does, the executor
+   * re-measuring and refusing on any drift from the bound fingerprint, removal
+   * through `git worktree remove` WITHOUT --force so Git's own refusal is the
+   * last gate, and the branch never deleted with the checkout.
+   *
+   * The basis for calling it safe at all is that a worktree is a checkout and
+   * not the work: it is retired only where the commits are proven reachable
+   * from the canonical remote, so recreating it is one `git worktree add`. The
+   * moment durability is unproven, the gate fails and this list is irrelevant.
+   *
+   * The residue planner still has no `worktree` entry in ACTION_FOR_CLASS, so
+   * this does not make process-residue classification a retirement authority.
+   * Retirement is planned by the hygiene cycle from retirement-safety evidence,
+   * which is the only evidence that ever justified it.
+   */
+  "retire_worktree",
+  "reconcile_stale_worktree_registration",
+  "reclaim_diagnostic_log",
 ]);
 
 /** Actions that always require the operator, whatever the evidence says. */
@@ -81,7 +106,8 @@ export const OPERATOR_ONLY_ACTIONS = Object.freeze([
   "terminate_foreign_process",
   "stop_docker_or_supabase",
   "terminate_interactive_agent",
-  "retire_worktree",
+  // Deleting a branch remains operator-only and is deliberately NOT implied by
+  // retiring the worktree that checked it out. Two decisions, two blast radii.
   "delete_branch",
   "delete_outside_retention_policy",
   "change_security_control",

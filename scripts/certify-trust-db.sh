@@ -54,6 +54,12 @@ SUITES=(
     # invariant is trigger-, index- or FK-made, so each is proven by a write the database
     # accepts or refuses.
     "certification/process-instance-revision-pin/run.sh"
+    # Placement/Waitlist invariants. The database is the ONLY enforcement of candidate
+    # uniqueness, one-active-pin, cross-tenant refusal and the person_id back-fill the
+    # application depends on — and an audit of the whole test tree found zero references to
+    # any of those objects by name. Every assertion here is a write a real database accepts
+    # or refuses; none of them restates a constraint in test-only logic.
+    "certification/placement-invariants/run.sh"
 )
 
 if ! command -v docker >/dev/null 2>&1; then

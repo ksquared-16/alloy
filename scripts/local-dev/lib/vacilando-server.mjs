@@ -27,6 +27,7 @@
  *   GET  /api/attachments/:id → the image bytes, same auth as the conversation
  *   GET  /api/notifications   → durable notification records + unseen counts
  *   POST /api/notifications/seen → acknowledge by notification_id | lane_id | all
+ *   GET/POST /api/notifications/preferences → the operator phone-push switch
  *   GET  /api/lane-folders    → lane folders (organisation only; never a lifecycle)
  *   POST /api/lane-folders/create|:id/rename|:id/delete → folder CRUD (delete unfiles, never deletes lanes)
  *   POST /api/lanes/:id/folder → file a lane into a folder (folder_id: null unfiles)
@@ -1237,6 +1238,37 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "attachment_remove_failed", detail: String(e && e.message || e) });
         }
       }
+      // THE OPERATOR'S PHONE SWITCH — the write half.
+      //
+      // It sits inside the POST block deliberately. An earlier revision put the
+      // whole route in the GET section, below
+      // `if (req.method !== "GET") return 405`, so READING the preference
+      // worked and every attempt to CHANGE it answered method_not_allowed: the
+      // switch rendered, moved, and silently snapped back. The unit tests
+      // exercised the module, not the routing, so they passed throughout.
+      //
+      // It is its own endpoint rather than a field on the push subscription:
+      // unsubscribing a device is a different act from asking not to be
+      // interrupted, and conflating them means "notifications off" silently
+      // uninstalls the ability to turn them back on from that device.
+      if (path === "/api/notifications/preferences") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const value = body.value || {};
+        const hasSwitch = typeof value.push_enabled === "boolean";
+        const hasCats = value.categories && typeof value.categories === "object";
+        if (!hasSwitch && !hasCats) {
+          return sendJson(res, 400, { ok: false, error: "push_enabled_or_categories_required" });
+        }
+        try {
+          const prefs = await import("./vacilando/notification-preferences.mjs");
+          if (hasSwitch) prefs.setPushEnabled(value.push_enabled);
+          if (hasCats) prefs.setNotificationCategories(value.categories);
+          return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "preferences_failed", detail: String(e && e.message || e) });
+        }
+      }
       if (path === "/api/notifications/seen") {
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
@@ -2008,6 +2040,15 @@ export function createVacilandoServer() {
           const withComplete = await applyIdleTurnCompletions(withActivity);
           for (let i = 0; i < lanes.length; i += 1) lanes[i] = withComplete[i];
         } catch { /* status still renders from the run alone */ }
+        // WHICH LANE IS HOLDING THE MACHINE. Joined from canonical owners —
+        // seat from provider-capacity, tree from process-attribution ancestry,
+        // resident memory from health-probes. Secondary to discovery, like every
+        // other attacher here: a slow `ps` must never fail the lane list.
+        try {
+          const { attachLaneResourceUse } = await import("./vacilando/lane-resource-use.mjs");
+          const withResources = await attachLaneResourceUse(lanes);
+          for (let i = 0; i < lanes.length; i += 1) lanes[i] = withResources[i];
+        } catch { /* a lane without a resource reading still renders */ }
         let repositories = [];
         try {
           const R = await import("./vacilando/repository-registry.mjs");
@@ -2085,6 +2126,15 @@ export function createVacilandoServer() {
         } catch (e) {
           return sendJson(res, 500, { ok: false, error: "attachment_list_failed", detail: String(e && e.message || e) });
         }
+      }
+    }
+    // The read half of the phone switch; the write half is in the POST block.
+    if (path === "/api/notifications/preferences") {
+      try {
+        const prefs = await import("./vacilando/notification-preferences.mjs");
+        return sendJson(res, 200, { ok: true, preferences: prefs.publicNotificationPreferences() });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "preferences_failed", detail: String(e && e.message || e) });
       }
     }
     if (path === "/api/notifications") {
@@ -2667,8 +2717,10 @@ export function createVacilandoServer() {
     if (stewardInFlight) return;
     stewardInFlight = true;
     try {
-      const { runStewardCycle } = await import("./vacilando/host-steward-run.mjs");
-      const out = runStewardCycle({ root: RUNTIME_ROOT_FOR_STEWARD() });
+      // The hygiene stage rides this loop rather than a second daemon, and is
+      // gated on its own six-hourly cadence inside the wrapper.
+      const { runStewardCycleWithHygiene } = await import("./vacilando/host-steward-run.mjs");
+      const out = await runStewardCycleWithHygiene({ root: RUNTIME_ROOT_FOR_STEWARD() });
       // An action means look again soon rather than waiting a whole sweep.
       if (out?.executed?.length) {
         const { RECHECK_MS } = await import("./vacilando/host-steward-cycle.mjs");

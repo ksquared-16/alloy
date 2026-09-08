@@ -14,6 +14,12 @@ import { partitionTourGroupedActions } from "@/lib/adminV2/runtime/focusPanel/cu
 
 type Props = {
     actions: CurrentWorkActionVM[];
+    /**
+     * The state-bearing label from `resolveTourCommandPresentation`. Optional so existing
+     * callers keep the previous "Tour" trigger; when supplied, Current Work and the Process
+     * card name the same state the same way, from one resolver.
+     */
+    label?: string | null;
     onAction: (action: CurrentWorkActionVM) => void;
     onWarm?: (action: CurrentWorkActionVM) => void;
     /** Summary row uses compact buttons; workspace uses list rows. */
@@ -40,8 +46,10 @@ export default function CurrentWorkTourGroupedActions({
     actions,
     onAction,
     onWarm,
+    label,
     variant = "summary",
 }: Props) {
+    const triggerLabel = (label ?? "").trim() || "Tour";
     const { tour, rest } = partitionTourGroupedActions(actions);
     const [open, setOpen] = useState(false);
 
@@ -72,7 +80,7 @@ export default function CurrentWorkTourGroupedActions({
                                     data-work-tour-menu-trigger="true"
                                     aria-expanded={open}
                                 >
-                                    Tour ▾
+                                    {triggerLabel} ▾
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -134,7 +142,7 @@ export default function CurrentWorkTourGroupedActions({
                                     for (const action of tour) onWarm?.(action);
                                 }}
                             >
-                                Tour ▾
+                                {triggerLabel} ▾
                             </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent

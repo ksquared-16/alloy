@@ -78,7 +78,7 @@ function baseContext(runtime: StageWorkRuntimeProjection, overrides?: Partial<Op
         signals: {
             work: { primary: null, items: [], openCount: 1, overdueCount: 0, nextActionLabel: null },
             attention: { needsAttention: true, primaryReason: "First contact overdue", reasonCount: 1 },
-            tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+            tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
             communications: {
                 scheduledSendCount: 0,
                 nextFollowUpAt: null,

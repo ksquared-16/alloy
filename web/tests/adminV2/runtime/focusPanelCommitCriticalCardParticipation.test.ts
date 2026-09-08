@@ -20,8 +20,17 @@
  *
  * The allowlist lives in the test, not in runtime code, so this carries no runtime behaviour change.
  *
- * KNOWN LIMIT OF THIS TEST — learned the hard way. It checks participation against the DEFAULT
- * composition, which is the only composition available statically. A TENANT-PUBLISHED composition can
+ * WHICH COMPOSITION IT ASKS — corrected. It used to read `FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION`
+ * and call that "the default composition". That constant is the `opportunity` MEMBER of a family of
+ * code-owned compositions (case, person, child, child-with-family, household), so a card placed only
+ * at child grain read here as placed NOWHERE — `health_safety`, which the case surface omits on
+ * purpose (a panel covering several children has no single health subject) and the child-with-family
+ * composition places on purpose. Participation is now asked of the whole family, through the same
+ * `focusPanelDefaultCompositionForGrain` the runtime resolves with, so one grain's answer can never
+ * again be reported as the platform's.
+ *
+ * KNOWN LIMIT OF THIS TEST — learned the hard way. It checks participation against the CODE-OWNED
+ * compositions, which are the only compositions available statically. A TENANT-PUBLISHED composition can
  * exclude a card that the default includes, making that card dormant at runtime for that tenant while
  * this test stays green. That is exactly what happened with `scheduling`: it participates in the
  * default composition (so this test passed) but Firefly's published doc resolves to four cards without
@@ -34,7 +43,10 @@ import { describe, expect, it } from "vitest";
 
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
 import { cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
-import { FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
+import {
+    FOCUS_PANEL_CODE_OWNED_COMPOSITION_CARD_KEYS,
+    FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION,
+} from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 /**
@@ -50,11 +62,10 @@ const DECLARED_DORMANT_COMMIT_CRITICAL: Readonly<Record<string, string>> = {
 };
 
 describe("commit-critical cards must participate, or declare their dormancy", () => {
-    const placed = new Set<FocusPanelCardKey>(
-        FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.map((entry) => entry.key),
-    );
+    /** Every card any code-owned composition places, at any grain. */
+    const placed: ReadonlySet<FocusPanelCardKey> = FOCUS_PANEL_CODE_OWNED_COMPOSITION_CARD_KEYS;
 
-    it("every commit-critical spec either participates in the default composition or is declared dormant", () => {
+    it("every commit-critical spec either participates in a code-owned composition or is declared dormant", () => {
         const undeclared = COMMIT_CRITICAL_CARD_SPECS
             .map((spec) => spec.key)
             .filter((key) => !placed.has(key) && !(key in DECLARED_DORMANT_COMMIT_CRITICAL));
@@ -65,6 +76,14 @@ describe("commit-critical cards must participate, or declare their dormancy", ()
                 `them, remove their commit-critical spec, or declare them in ` +
                 `DECLARED_DORMANT_COMMIT_CRITICAL with a reason: ${undeclared.join(", ")}`,
         ).toEqual([]);
+    });
+
+    it("the case composition is one MEMBER of the participation set, never the whole of it", () => {
+        // Stated so the correction cannot be silently undone by narrowing back to one constant.
+        for (const entry of FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION) {
+            expect(placed.has(entry.key), `${entry.key} is placed by the case surface`).toBe(true);
+        }
+        expect(placed.size).toBeGreaterThan(FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.length);
     });
 
     it("readiness_kpi is the only declared-dormant card, and it is genuinely unplaced", () => {

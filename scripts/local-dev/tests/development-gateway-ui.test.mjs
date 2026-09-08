@@ -56,6 +56,9 @@ import {
   parseGatewayHash,
   presenceLine,
   railHtml,
+  laneIdentityMeta,
+  laneOperatorStatus,
+  operatorStatusLine,
   renderConnectFlow,
   renderCreateLaneFlow,
   renderCopyControl,
@@ -164,8 +167,12 @@ await test("selecting a lane opens the correct detail hash", () => {
 });
 
 await test("list and detail share one lane_id existence contract", () => {
-  assert.deepEqual(parseGatewayHash("#/lanes/alloy-identity"), { name: "lanes", sub: "alloy-identity" });
-  assert.deepEqual(parseGatewayHash("#/lanes/alloy-identity?_=1"), { name: "lanes", sub: "alloy-identity" });
+  // The lane tab is part of the address in V2, so a lane view is linkable and
+  // survives a reload on the tab the operator was reading.
+  assert.deepEqual(parseGatewayHash("#/lanes/alloy-identity"), { name: "lanes", sub: "alloy-identity", tab: "overview" });
+  assert.deepEqual(parseGatewayHash("#/lanes/alloy-identity/commits"), { name: "lanes", sub: "alloy-identity", tab: "commits" });
+  assert.deepEqual(parseGatewayHash("#/lanes/alloy-identity/nope"), { name: "lanes", sub: "alloy-identity", tab: "overview" });
+  assert.deepEqual(parseGatewayHash("#/lanes/alloy-identity?_=1"), { name: "lanes", sub: "alloy-identity", tab: "overview" });
   assert.equal(parseGatewayHash("#/lanes").sub, null);
   assert.equal(detailViewKind({ selectedId: "alloy-identity", lanes: [identity], lane: null, loading: true, listReady: false }), "loading");
   assert.equal(detailViewKind({ selectedId: "alloy-identity", lanes: [identity], lane: null, loading: false, listReady: true }), "load_error");
@@ -278,18 +285,30 @@ await test("mobile layout collapses to a single column without forcing horizonta
 });
 
 await test("old Mission Director is not the default primary experience", () => {
-  assert.equal(defaultGatewayHash(), "#/lanes");
-  assert.equal(GATEWAY_HOME, "#/lanes");
-  assert.equal(isGatewayRoute("lanes"), true);
-  assert.equal(isGatewayRoute("settings"), true);
+  // THE CONTRACT: the legacy Mission Director board is never what the operator
+  // lands on. UI V2 changed WHICH modern surface that is — Home, not the lane
+  // list. The lane list was only ever the default because it was the only
+  // destination that existed; Home answers the question the operator actually
+  // arrives with.
+  assert.equal(defaultGatewayHash(), "#/home");
+  assert.equal(GATEWAY_HOME, "#/home");
+  for (const r of ["home", "lanes", "activity", "system", "settings"]) {
+    assert.equal(isGatewayRoute(r), true, `${r} is a gateway destination`);
+  }
   assert.equal(isGatewayRoute("missions"), false);
+  assert.equal(isGatewayRoute("command"), false);
+  assert.equal(isGatewayRoute("director"), false);
   assert.equal(isPrimaryGatewayHash(""), true);
+  assert.equal(isPrimaryGatewayHash("#/home"), true);
   assert.equal(isPrimaryGatewayHash("#/lanes/alloy-identity"), true);
+  assert.equal(isPrimaryGatewayHash("#/activity"), true);
+  assert.equal(isPrimaryGatewayHash("#/system"), true);
   assert.equal(isPrimaryGatewayHash("#/settings"), true);
+  assert.equal(isPrimaryGatewayHash("#/command"), false);
   assert.match(htmlSrc, /Development Gateway/);
   assert.equal(htmlSrc.includes("Vacilando<b>OS</b>"), false);
   assert.equal(htmlSrc.includes("Engineering Operating System"), false);
-  assert.match(appSrc, /name: p\[0\] \|\| "lanes"/);
+  assert.match(appSrc, /const GATEWAY_HOME = "#\/home"/);
   assert.match(appSrc, /location\.hash = GATEWAY_HOME/);
   assert.match(htmlSrc, /Missions \(legacy\)/);
   assert.match(htmlSrc, /manifest\.webmanifest/);
@@ -308,7 +327,18 @@ await test("resource/status calls do not introduce expensive polling fan-out", (
   assert.equal(viewSrc.includes('fetch("/api/state")'), false);
   assert.equal(gwSrc.includes('fetch("/api/resources")'), false);
   assert.equal(gwSrc.includes('fetch("/api/state")'), false);
-  assert.match(appSrc, /if \(parseRoute\(\)\.name === "lanes" \|\| parseRoute\(\)\.name === "settings"\)/);
+  // The legacy board must not poll /api/state while the Gateway SPA owns the
+  // screen. That gate was five copies of the same comparison; adding a
+  // destination meant finding all five, which is how a new route ends up
+  // half-rendered by the legacy board. It is now ONE predicate, used at every
+  // hand-off point.
+  assert.match(appSrc, /function isGatewayRouteName\(name\) \{ return GATEWAY_ROUTE_NAMES\.has\(name\); \}/);
+  assert.match(appSrc, /if \(isGatewayRouteName\(parseRoute\(\)\.name\)\) \{/);
+  assert.equal(/parseRoute\(\)\.name === "lanes" \|\| parseRoute\(\)\.name === "settings"/.test(appSrc), false,
+    "the duplicated route gate must be gone, not merely joined by a sixth copy");
+  for (const r of ["home", "lanes", "activity", "system", "settings"]) {
+    assert.ok(appSrc.includes(`"${r}"`), `${r} must be in GATEWAY_ROUTE_NAMES`);
+  }
   assert.equal(shouldPollOutput({ hidden: true, routeName: "lanes", laneId: "alloy-identity" }), false);
   assert.equal(shouldPollOutput({ hidden: false, routeName: "lanes", laneId: "alloy-identity" }), true);
   assert.equal(shouldPollList({ hidden: false, routeName: "missions" }), false);
@@ -363,8 +393,10 @@ await test("output hydrates separately from lane identity", () => {
     outputPending: true,
     listReady: true,
   });
-  assert.match(pending, /gw-chat-title/);
-  assert.match(pending, /gw-aside-id/);
+  // V2 renamed the lane identity markup: the chat title became the lane header
+  // title, and the aside identity block became the inspector's RUN block.
+  assert.match(pending, /vlane-title/);
+  assert.match(pending, /vinsp-run/);
   assert.match(pending, /Refreshing output/);
   const ready = renderGatewayShell({
     lanes: [identity],
@@ -393,7 +425,7 @@ await test("stale detail cannot replace a newer selected lane", () => {
 });
 
 await test("direct deep-link still works", () => {
-  assert.deepEqual(parseGatewayHash("#/lanes/alloy-identity"), { name: "lanes", sub: "alloy-identity" });
+  assert.deepEqual(parseGatewayHash("#/lanes/alloy-identity"), { name: "lanes", sub: "alloy-identity", tab: "overview" });
   const cold = renderGatewayShell({
     lanes: [],
     selectedId: "alloy-identity",
@@ -587,7 +619,12 @@ await test("telemetry does not block instant lane shell", () => {
   });
   assert.match(html, /Access Identity V2/);
   assert.equal(html.includes("data-gw-loading"), false);
-  assert.equal(html.includes("data-gw-context"), false);
+  // The shell paints before telemetry arrives. V2 renders the Context row
+  // regardless and says "Not reported" — which is the data contract's rule for
+  // an absent value, and is what stops an empty row reading as 0%.
+  assert.match(html, /data-gw-context/);
+  assert.match(html, /<span class="vrow-label">Context<\/span><span class="vrow-value">Not reported<\/span>/);
+  assert.equal(/vrow-value">\d+%/.test(html), false, "no context percentage may appear before telemetry");
   assert.match(gwSrc, /fetchTelemetry\(hydrateId\)/);
   assert.equal(/Promise\.all\(\[[^\]]*fetchTelemetry/.test(gwSrc), false);
 });
@@ -603,8 +640,11 @@ await test("context hydrates quietly; mobile status stays compact", () => {
     statusOpen: false,
     listReady: true,
   });
+  // Context is still on the lane, and still quiet: it moved from a loose line
+  // under the thread into the inspector's RUN block, where lane facts belong.
+  // The hook survives so the same thing is still being asserted.
   assert.match(html, /data-gw-context/);
-  assert.match(html, /Context 41%/);
+  assert.match(html, /<span class="vrow-label">Context<\/span><span class="vrow-value">41%<\/span>/);
   assert.match(html, /claude-opus-5/);
   assert.match(html, /Session cost/);
   assert.match(html, /Not reported · Claude Max subscription/);
@@ -639,24 +679,35 @@ await test("Copy copies active lane output text only", () => {
     listReady: true,
   });
   assert.match(html, /VISIBLE_PANE_OUTPUT/);
-  assert.match(html, /data-gw-copy/);
-  assert.equal(html.includes("do not copy me") && html.includes("data-gw-copy"), true);
-  const copyBtn = html.slice(html.indexOf("data-gw-copy") - 80, html.indexOf("data-gw-copy") + 80);
-  assert.equal(copyBtn.includes("do not copy me"), false);
-  assert.equal(copyBtn.includes("wt1-access-identity"), false);
+  // THE THREAD-LEVEL COPY IS GONE, AND THE RULE IT ENFORCED IS NOT.
+  //
+  // This asserted a Copy control in the Conversation card header. Measured on
+  // the installed product, that control rendered above BOTH messages while each
+  // message already carried its own — the duplication this pass removed
+  // everywhere else — and it copied "the active output" rather than the message
+  // the operator was looking at. What must still hold is what the rule was for:
+  // a copy never carries the operator's own instruction, and every message
+  // carries its own control.
+  assert.equal(/data-gw-copy/.test(html), false, "no thread-level Copy in the V2 lane");
+  assert.match(html, /data-v-msg-copy/, "every message owns its own Copy instead");
+  const perMessage = [...html.matchAll(/data-v-copy-text="([^"]*)"/g)].map((m) => m[1]);
+  assert.ok(perMessage.length > 0);
+  assert.equal(perMessage.some((t) => t.includes("VISIBLE_PANE_OUTPUT")), true,
+    "the provider message copies what the provider said");
   assert.equal(copyableOutputText({
     selectedId: "alloy-identity",
     output: { ok: true, lane_id: "alloy-other", text: "OTHER_LANE" },
   }), null);
   assert.equal(copyableOutputText({ selectedId: "alloy-identity", output: { ok: false, lane_id: "alloy-identity", text: "nope" } }), null);
   assert.equal(copyableOutputText({ selectedId: "alloy-identity", output: { ok: true, lane_id: "alloy-identity", text: "   " } }), null);
+  // renderCopyControl is still the canonical control for surfaces that copy an
+  // OUTPUT rather than a message; it is simply no longer mounted over the thread.
   const empty = renderCopyControl({ text: null });
   assert.match(empty, /disabled/);
   const copied = renderCopyControl({ text: "x", feedback: "copied" });
   assert.match(copied, />Copied</);
   const failed = renderCopyControl({ text: "x", feedback: "failed" });
   assert.match(failed, /Copy failed/);
-  assert.match(gwSrc, /copyActiveOutput/);
   // Copy must yield the COMPLETE assistant response. In "recent" mode the
   // visible text is a bounded pane snapshot, so copying it handed over a
   // fragment; the copy path now fetches the complete text for the SELECTED lane
@@ -778,11 +829,29 @@ await test("lane detail shows current work; needs input, complete, and failed ar
     listReady: true,
     nowMs: now,
   });
-  assert.match(html, /Current work/);
+  // THE INSTRUCTION IS THE WORK CONTEXT, and it is shown once — as the
+  // operator's own message in the thread. The Current Work card printed it a
+  // second time as a titled card above that thread, and the duplicate owned the
+  // top of every phone screen. Progress moved into the lane's status line.
+  assert.equal(html.includes("vcard-work"), false, "no standalone Current Work card");
   assert.match(html, /Complete the remaining Communications ingress/);
   assert.match(html, /Working/);
-  assert.match(html, /Started 18m ago/);
-  assert.equal(html.includes("%"), false);
+  // Elapsed time is still on screen. V2 moved it out of the Current Work card
+  // and into the two places it belongs: the header states when the run started,
+  // and the inspector's RUN block states how long it has been active.
+  assert.match(html, /Started \d+:\d\d [AP]M/);
+  assert.match(html, /18m active/);
+  // NO INVENTED PROGRESS. This run reported no estimate, so the lane says so in
+  // words and draws NO BAR — an empty track reads as "0% done", which is a
+  // claim nobody made.
+  // PROGRESS MOVED INTO THE LANE'S STATUS LINE, and an absent estimate is now
+  // OMITTED rather than announced: "Progress estimate unavailable" was copy the
+  // Current Work card carried, and there is no card. The invariant is
+  // unchanged and is what is asserted — nothing invents a number, and there is
+  // still no ETA.
+  assert.equal(/vprogress-fill/.test(html), false, "no bar without an estimate");
+  assert.equal(/~\d+%/.test(html), false, "no percentage may be invented");
+  assert.equal(/\bETA\b/.test(html), false, "there is no estimator, so there is no ETA");
   assert.match(html, /data-gw-aside/);
   assert.match(html, /data-gw-stage-status/);
   assert.match(css, /grid-template-columns:minmax\(0, 66fr\) minmax\(0, 33fr\)/);
@@ -1139,7 +1208,12 @@ await test("session rotation overlay and refresh control stay in Development Sta
   assert.match(readyShell, /data-gw-aside/);
   assert.match(readyShell, /data-gw-aside-toggle/);
   assert.equal(readyShell.includes("data-gw-lane-fold"), false);
-  assert.equal(readyShell.includes("Lane details"), false);
+  // ONE details panel, not an inline <details> plus a second fold showing a
+  // different subset of the same lane. V2 names the single panel "Lane details";
+  // what the original assertion guarded was the SECOND one, so this counts
+  // panels instead of forbidding the words.
+  assert.equal((readyShell.match(/data-gw-aside(?![-\w])/g) || []).length, 1, "exactly one details panel");
+  assert.equal((readyShell.match(/id="gw-details-panel"/g) || []).length, 1);
   assert.match(readyShell, /data-gw-session-refresh/);
   assert.match(css, /gw-lane-aside/);
   assert.equal(css.includes("max-height:22vh"), false);
@@ -1217,8 +1291,8 @@ await test("knownLane matches aliases and redirects hash", () => {
   const lane = { ...identity, lane_id: "lane_abc123abc123", label: "Access & Identity", aliases: ["alloy-identity"], binding: { tmux_session: "alloy-identity" } };
   assert.equal(laneMatchesId(lane, "alloy-identity"), true);
   assert.equal(knownLane([lane], "alloy-identity")?.lane_id, "lane_abc123abc123");
-  assert.deepEqual(parseGatewayHash("#/lanes/connect"), { name: "lanes", sub: "connect", candidateId: null });
-  assert.deepEqual(parseGatewayHash("#/lanes/create"), { name: "lanes", sub: "create" });
+  assert.deepEqual(parseGatewayHash("#/lanes/connect"), { name: "lanes", sub: "connect", candidateId: null, tab: "overview" });
+  assert.deepEqual(parseGatewayHash("#/lanes/create"), { name: "lanes", sub: "create", tab: "overview" });
   assert.equal(detailViewKind({ selectedId: "connect", lanes: [lane], lane: null, loading: false, listReady: true }), "connect");
   assert.equal(detailViewKind({ selectedId: "create", lanes: [lane], lane: null, loading: false, listReady: true }), "create");
 });
@@ -1226,7 +1300,7 @@ await test("knownLane matches aliases and redirects hash", () => {
 await test("rename control is on desktop and mobile detail", () => {
   const html = renderGatewayShell({ lanes: [identity], selectedId: identity.lane_id, lane: identity, outputText: "hi" });
   assert.match(html, /data-gw-rename/);
-  assert.match(html, /Rename Lane/);
+  assert.match(html, /Rename lane/);
   assert.match(gwSrc, /\/rename/);
 });
 
@@ -1450,9 +1524,12 @@ await test("idle lane shows No active work / Ready for instruction", () => {
   assert.match(html, /Current work/);
   assert.match(html, /No active work/);
   assert.match(html, /Ready for instruction/);
+  // renderCurrentWork still answers for the surfaces that ask it (Details), but
+  // the lane Overview no longer renders a Current Work card at all — an idle
+  // lane simply shows its conversation and its composer.
   const shell = renderGatewayShell({ lanes: [identity], selectedId: identity.lane_id, lane: identity, outputText: "hi" });
-  assert.match(shell, /No active work/);
-  assert.match(shell, /Ready for instruction/);
+  assert.equal(shell.includes("vcard-work"), false);
+  assert.match(shell, /gw-composer/);
 });
 
 await test("governed wait shows Waiting on Director, not Ready for instruction", () => {
@@ -1912,9 +1989,21 @@ await test("queued and connected lanes are not collapsed to Idle or Running", ()
   };
   const idleHint = deriveLaneStatus({ lane: queued, viewing: false });
   assert.equal(idleHint.listHint, "Queued for capacity");
+  // THE CONTRACT: a lane queued for capacity must never read as Idle — the work
+  // is accepted and waiting on the machine, not absent.
+  //
+  // WHAT CHANGED: navigation now speaks the OPERATOR vocabulary — Working,
+  // Needs you, Ready, Failed — because the runtime phrase was leaking scheduler
+  // machinery into it ("Needs input · suspended" told the operator that a
+  // provider process is not resident). Queued for capacity projects to Working:
+  // the machine is getting on with it and the operator has nothing to do. The
+  // runtime phrase itself is unchanged and remains in Details.
   const rail = railHtml([queued], queued.lane_id, { [queued.lane_id]: { listHint: "Idle" } });
-  assert.match(rail, /Queued for capacity/);
+  assert.match(rail, /Working/);
   assert.doesNotMatch(rail, />○ Idle</);
+  assert.equal(rail.includes("Ready"), false, "queued work is not an idle lane");
+  assert.equal(deriveLaneStatus({ lane: queued, viewing: false }).listHint, "Queued for capacity",
+    "the runtime phrase is preserved for Details");
   const executing = deriveLaneExecutionPosture({
     claude: { presence: "present" },
     execution_run: { state: "EXECUTING" },
@@ -1947,9 +2036,29 @@ await test("queued and connected lanes are not collapsed to Idle or Running", ()
     ...cursorLive,
     execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
   }).label, "Working");
+  // THE CONTRACT: an observation-only lane must never read as a plain, ready,
+  // instructable lane. "Ready" alone is a promise it cannot keep.
+  //
+  // UI V2 CHANGED HOW THAT IS SAID. The rail used to carry the PROVIDER LABEL
+  // under every lane name ("Cursor (read-only)", and for every other lane
+  // "Claude · Context 38%"), which put provider internals and a context
+  // percentage into the one surface that has to stay scannable — and neither
+  // changes which lane you open. Navigation now carries the STATE, and
+  // read-only travels with it, because read-only changes what the operator can
+  // DO. The provider and model stay one click away in the lane header and
+  // Inspector.
   assert.match(railHtml([cursorLive], cursorLive.lane_id), /read-only/);
   assert.doesNotMatch(renderLaneSessionCallout(cursorLive), /Start Session/);
-  assert.match(railHtml([cursorLive], cursorLive.lane_id), /Cursor/);
+  // The provider moved OUT of the identity meta and INTO the status line, so
+  // the header reads "Ready · Cursor (read-only)" rather than repeating the
+  // provider twice. Same fact, one place.
+  assert.match(
+    operatorStatusLine(laneOperatorStatus(cursorLive, canonicalLaneWorkState(cursorLive)), laneProviderLabel(cursorLive)),
+    /Cursor \(read-only\)/,
+  );
+  assert.equal(/Context \d+%/.test(railHtml([cursorLive], cursorLive.lane_id, {}, {
+    [cursorLive.lane_id]: { available: true, context: { percent_used: 38 } },
+  })), false, "a context percentage must never appear in navigation");
   const leftover = deriveLaneExecutionPosture({
     label: "Communications",
     claude: { presence: "present" },
@@ -2093,8 +2202,20 @@ await test("conversation detail has user and assistant messages with icon copy, 
     lastInstruction: last,
     listReady: true,
   });
-  assert.match(html, /gw-msg-user/);
+  // AUTHORSHIP IS THE CONTRACT; the class names carrying it changed.
+  //
+  // The lane body is now a chronological thread with an explicit role per
+  // entry, because V2's first cut rendered the operator's instruction, the
+  // provider's output and system events as similarly weighted cards and you
+  // could not tell who had said what. What is asserted is what always
+  // mattered: the operator's words are present and attributed to YOU, and the
+  // provider's output is present and attributed to the provider.
+  assert.match(html, /vmsg-user/);
+  assert.match(html, /data-v-role="user"/);
+  assert.match(html, /vmsg-who">You</);
   assert.match(html, /Ship the composer/);
+  assert.match(html, /vmsg-provider/);
+  assert.match(html, /data-v-role="provider"/);
   assert.match(html, /gw-msg-assistant/);
   assert.match(html, /function ok\(\) \{\}/);
   assert.match(html, /data-gw-provider-opt="claude"/);
@@ -2160,7 +2281,7 @@ await test("Cursor composer option is enabled when Cursor is authenticated", () 
 });
 
 await test("Gateway settings renders Claude and Cursor connect cards", () => {
-  assert.deepEqual(parseGatewayHash("#/settings"), { name: "settings", sub: null });
+  assert.deepEqual(parseGatewayHash("#/settings"), { name: "settings", sub: null, tab: "overview" });
   const html = renderGatewayShell({
     lanes: [identity],
     settings: true,
@@ -2350,57 +2471,79 @@ test("the desktop details pane is never inert", () => {
   assert.doesNotMatch(view, /\$\{asideOpen \? "" : ' aria-hidden="true" inert'\}/);
 });
 
-test("controls that gate progress live in the conversation, not the rail", () => {
+test("controls that gate progress are reachable, and reference state is folded", () => {
   // THE FAILURE THIS ENCODES. The session callout, the runtime keep/release
-  // controls and the context refresh sat in the details rail. The rail is a
-  // reference column: the Director can collapse it, it is the first thing to run
-  // out of room, and while it was inert it could not be scrolled or clicked at
-  // all — so every one of these actions was unreachable exactly when it mattered.
-  // An action the operator cannot reach is the same as no action.
+  // controls and the context refresh sat inside a collapsible reference column
+  // that could be closed, could run out of room, and while it was inert could
+  // not be scrolled or clicked at all — so every one of these actions was
+  // unreachable exactly when it mattered. An action the operator cannot reach
+  // is the same as no action.
+  //
+  // UI V2 ANSWERS IT MORE DIRECTLY THAN THE ORIGINAL FIX DID. The three
+  // controls now live in the Lane Inspector's RUN block, which is the one
+  // section that is ALWAYS OPEN — not inside a <details> the operator has to
+  // find. Everything that merely reports state is folded behind Environment,
+  // Git, Browser session and Diagnostics, so the healthy lane is quiet and the
+  // conversation is never pushed off the screen by reference material.
   const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
-  const railStart = view.indexOf("const detailsPanel = ");
-  assert.ok(railStart > 0, "details rail template must exist");
-  const railEnd = view.indexOf("</aside>`;", railStart);
-  assert.ok(railEnd > railStart, "details rail template must terminate");
-  const rail = view.slice(railStart, railEnd);
 
-  // The conversation column carries approvals and the composer, and nothing that
-  // merely reports state — those pushed the chat off the screen entirely.
+  const inspStart = view.indexOf("export function renderLaneInspector(");
+  assert.ok(inspStart > 0, "the lane inspector must exist");
+  const inspEnd = view.indexOf("\n}\n", view.indexOf("</aside>`;", inspStart));
+  assert.ok(inspEnd > inspStart, "the lane inspector must terminate");
+  const insp = view.slice(inspStart, inspEnd);
+
   for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
     assert.ok(view.includes(`${fn}(`), `${fn} must still be rendered somewhere`);
+    assert.ok(insp.includes(`${fn}(`), `${fn} belongs in the lane inspector`);
   }
 
-  // They belong beside the approval cards, above the composer.
+  // They are ONE subject — whether this lane can keep working — and they are in
+  // the ALWAYS-VISIBLE run block, ahead of the first folded section.
+  const actionsAt = insp.indexOf("const actions = [");
+  const firstFold = insp.indexOf('section("environment"');
+  assert.ok(actionsAt > 0 && firstFold > actionsAt,
+    "progress-gating actions must precede every folded section");
+  assert.match(insp, /\$\{actions \? `<div class="vinsp-actions">/,
+    "the actions render inside the run block, not inside a <details>");
+
+  // Reference state is FOLDED. Each of these is a <details> that starts closed.
+  for (const key of ["environment", "git", "diagnostics"]) {
+    assert.match(insp, new RegExp(`section\\("${key}"`), `${key} must be an inspector section`);
+  }
+  const sectionDef = insp.slice(insp.indexOf("const section = ("));
+  assert.match(sectionDef, /open = false/, "inspector sections are closed by default");
+  // Browser session is the exception: when it renders at all, something is
+  // wrong with the QA identity and the operator needs to see it.
+  assert.match(insp, /section\("browser", "Browser session", browser, \{ open: Boolean\(browser\) \}\)/);
+
+  // The decision bar still precedes the composer, and the reference material
+  // does not sit between them.
   const bar = view.indexOf("renderOperatorDecisionBar(operatorDecisionRun(lane)");
   const composer = view.indexOf("${renderComposer({", bar);
   assert.ok(bar > 0 && composer > bar, "decision bar precedes the composer");
-  for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
-    assert.ok(rail.includes(`${fn}(`), `${fn} belongs in the rail`);
+  const interaction = view.slice(bar, composer);
+  for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderTerminalDiagnostics", "renderStatus"]) {
+    assert.equal(interaction.includes(`${fn}(`), false,
+      `${fn} must not block the human interaction zone`);
   }
 
-  // They are ONE subject — whether this lane can keep working — so they render
-  // as one section, and that section lives in the rail: stacked in the
-  // conversation it pushed the chat itself off the screen.
-  assert.ok(rail.includes("gw-runtime-section"), "runtime section belongs in the rail");
-  assert.equal(view.slice(bar, composer).includes("gw-runtime-section"), false,
-    "the runtime section must not block the conversation");
+  // NEEDS YOU IS AN INTERRUPTION, NOT A SECTION. The tray renders inside the
+  // interaction zone, immediately before the composer — never between Current
+  // Work and the agent's output.
+  const tray = interaction.indexOf("${tray}");
+  assert.ok(tray > 0, "the needs-you tray belongs in the interaction zone");
+  const overviewAt = view.indexOf("const overview = `");
+  assert.ok(overviewAt > 0 && view.slice(overviewAt, view.indexOf("const tabBody", overviewAt)).includes("${tray}") === false,
+    "the tray must not be rendered inside the work narrative");
 
-  // The browser session card is reference state, not a progress gate: it belongs
-  // in the rail, directly under the folder and notification controls.
-  // Checked by POSITION of every call site, not by slicing one region: a card
-  // placed just ABOVE the decision bar is still in the conversation and would
-  // slip past a range check that starts at the bar.
+  // The browser session card still has exactly one call site, and it is in the
+  // inspector rather than in the conversation.
   const authCalls = [];
-  for (let at = view.indexOf("${renderBrowserAuthRecovery("); at !== -1;
-       at = view.indexOf("${renderBrowserAuthRecovery(", at + 1)) authCalls.push(at);
-  assert.equal(authCalls.length, 1, "exactly one browser-session call site");
-  assert.ok(authCalls[0] > railStart && authCalls[0] < railEnd,
-    "the browser session card belongs in the details rail");
-  const folderAt = rail.indexOf("renderLaneFolderPicker(");
-  const notifyAt = rail.indexOf("renderNotificationControls(");
-  const authAt = rail.indexOf("renderBrowserAuthRecovery(");
-  assert.ok(folderAt >= 0 && notifyAt > folderAt && authAt > notifyAt,
-    "browser session sits below folder and notifications");
+  for (let at = view.indexOf("renderBrowserAuthRecovery("); at !== -1;
+       at = view.indexOf("renderBrowserAuthRecovery(", at + 1)) authCalls.push(at);
+  assert.equal(authCalls.filter((a) => a > inspStart && a < inspEnd).length, 1,
+    "exactly one browser-session call site, in the inspector");
 });
 
 test("the authorize button exists on every screen, not just mobile", () => {

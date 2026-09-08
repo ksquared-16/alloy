@@ -109,6 +109,52 @@ discovery. These answer "what does this configuration say NOW?", not "what gover
 particular child?", and they deliberately keep reading the live projection. They pass no
 governing payload.
 
+### The carve-out: command placement is live, not pinned
+
+Class A is about what already-created work **means**. Process-card commands are not that. They
+answer "what can the operator do now?" — placement, not historical transaction truth — and they
+were pinned only because `helpful_actions` happens to sit inside the work-template payload.
+
+The consequence was a real product defect: an operator edited an Enrollment stage's commands in
+`/process`, published, and nothing changed for records already in that stage. Measured on a pinned
+Waitlist instance, live configuration read
+`[send_tour_invitation, schedule_tour, add_family_member, send_form]` while the pinned revision
+still read `[…, quick_message, …]`, and the operator saw the revision. Removing a command did not
+remove it; adding one did not add it.
+
+So the pin is split:
+
+```
+  Pinned revision          work identity, subject grain, completion policy,
+                           outcomes and their targets, governing requirements
+
+  Current published config command refs (helpful_actions)
+```
+
+`overlayLiveCommandPlacementOntoPinnedRevision` performs that resolution at read time, in
+`resolvePublishedStageInputsForCurrentWork`. Three properties make it safe:
+
+- **Stored revisions are never rewritten.** Historical configuration stays historical evidence;
+  this is resolution, not backfill.
+- **Matching is by stable identity** — process key, then stage key, then work-template key. Never
+  by label, display order or array position. A template the live stage no longer configures
+  resolves to no commands rather than borrowing its neighbour's.
+- **Pinned refs remain the compatibility fallback**, used only when no live counterpart exists
+  (the process or stage is gone from current configuration). Provenance is reported as
+  `commandConfiguration.source: "live_published" | "pinned_fallback"`, alongside
+  `workSemanticsSource`. After this split a pinned instance reporting
+  `workSemanticsSource: "pinned_revision"` with `source: "live_published"` is correct, not
+  contradictory.
+
+Live placement weakens no invariant. A newly configured command still runs the whole
+server-authoritative path — registered capability → context → subject → eligibility → required
+inputs → preview → confirmation → execution. Configuration decides what is **offered**; the runtime
+decides what can **run**. That is precisely why placement can be live while semantics stay pinned.
+
+Publishing busts the tenant config cache (`invalidateTenantConfigReadCache`, on a projection that
+actually moved), so the next answer reads live configuration and the new placement takes effect
+without recreating the process instance.
+
 ## Where the pin is applied
 
 `createEnrollmentProcessInstance` is the sole production creator, so the pin is applied

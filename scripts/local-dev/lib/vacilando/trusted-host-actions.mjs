@@ -48,9 +48,14 @@ import {
   publicMergeResult,
 } from "./trusted-host-merge.mjs";
 import { executeRestoreQaSessionSync } from "./qa-session-restore-action.mjs";
+import { executeRestoreDeployedQaSessionSync } from "./deployed-qa-session-restore-action.mjs";
 import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
 import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
+import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
+import { executeToolkitInstall } from "./toolkit-convergence.mjs";
+import { executeLaneDispatch } from "./lane-dispatch.mjs";
+import { createQueuedRun } from "./execution-run.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
 import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
@@ -630,6 +635,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   if (action.actionType === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
     return executeRestoreQaSessionTrustedHostAction(action, { actor, nowMs, grant });
   }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION) {
+    return executeRestoreDeployedQaSessionTrustedHostAction(action, { actor, nowMs, grant });
+  }
   if (action.actionType === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
     return executeProvisionQaIdentityTrustedHostAction(action, { actor, nowMs, grant });
   }
@@ -647,6 +655,15 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.VACILANDO_RETIRE_WORKTREE) {
     return executeRetireWorktreeTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING) {
+    return executeSetProviderCeilingTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.HOST_INSTALL_TOOLKIT) {
+    return executeInstallToolkitTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION) {
+    return executeLaneDispatchTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -1366,6 +1383,38 @@ export function executeRestoreQaSessionTrustedHostAction(action, { actor = "dire
   return completeTrustedAction(action, out, { nowMs });
 }
 
+/**
+ * Restore a managed session on a DEPLOYED target.
+ *
+ * Same guarantees as the local restore and one more: `payloadHasSecrets` still guards the way out,
+ * but the result shape here is allow-listed at the source, so there is no field for a cookie to
+ * occupy even if that guard were removed. Synchronous, because `processGovernedAction` does not
+ * await its executor and scores a returned Promise as a failure.
+ */
+export function executeRestoreDeployedQaSessionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeRestoreDeployedQaSessionSync({
+    action,
+    grant,
+    grantCheck: grantAuthorizesAction,
+    nowMs: nowMs || Date.now(),
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Deployed restore result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "deployed_restore_failed", out?.failure_detail || "Deployed QA session restore failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
 /** Provision the managed QA identity, in the `{ ok, action }` shape applyExecuteResult requires. */
 export function executeProvisionQaIdentityTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
@@ -1475,6 +1524,28 @@ export function fulfillRestoreQaSessionForMission(missionId, {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
     actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillRestoreDeployedQaSessionForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION, inputs, nowMs,
     authorizationContext: exactContext,
   });
   if (!req.ok) return req;
@@ -1625,6 +1696,229 @@ export function executeRetireWorktreeTrustedHostAction(action, { actor = "direct
     postconditions: out.postconditions, removal_method: out.removal_method,
     branch_deleted: out.branch_deleted, credentialsExposed: false,
   }, { nowMs });
+}
+
+/**
+ * Execute the ceiling move by invoking the canonical command.
+ *
+ * This function adds authority and an audit trail. It adds NO behaviour: the
+ * constant key, the range, compare-and-set, readback verification and the
+ * change log all belong to `vac capacity set-provider-ceiling`. Re-implementing
+ * any of them here would create a second path to the same file that the tests
+ * for the first path do not cover, and the more permissive of two such paths is
+ * the one that eventually gets used.
+ */
+export function executeSetProviderCeilingTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    // THE NORMALIZED NAMES COME FIRST, because they are what is actually
+    // stored. validateProviderCeilingInputs rewrites the request into
+    // {key, expected, requested, rollbackTo, ...} and THAT is what lands in
+    // action.inputs — so reading only expected_ceiling/expectedCeiling yielded
+    // undefined, Number(undefined) is NaN, and every ceiling move invoked
+    // `--expected NaN --to NaN`, hit the CLI's usage() and died with no stdout.
+    // The caller saw `command_failed` and no number ever moved. The raw names
+    // are kept as fallbacks so a request that skipped normalization still works.
+    out = executeProviderCeiling({
+      expected: Number(i.expected ?? i.expected_ceiling ?? i.expectedCeiling),
+      requested: Number(i.requested ?? i.requested_ceiling ?? i.requestedCeiling),
+      rollbackTo: Number(i.rollbackTo ?? i.rollback_ceiling ?? i.rollbackCeiling),
+      reason: i.reason,
+      experimentId: i.experiment_id ?? i.experimentId ?? null,
+    }, { vacPath: i.vacPath || null });
+  } catch (e) {
+    return failTrustedAction(action, "ceiling_change_failed", String(e?.message || e), { nowMs });
+  }
+  if (!out.ok) {
+    return failTrustedAction(action, out.error || "ceiling_change_refused",
+      out.detail || `provider ceiling change refused: ${out.error}`, { nowMs });
+  }
+  // A write reported without a readback is exactly the uncertainty this whole
+  // capability exists to remove, so it fails rather than reporting success.
+  if (out.readback_verified !== true) {
+    return failTrustedAction(action, "readback_not_verified",
+      `config did not read back as ${i.requested_ceiling}`, { nowMs });
+  }
+  return completeTrustedAction(action, {
+    key: out.key,
+    previous_value: out.previous_value,
+    new_value: out.new_value,
+    rollback_value: out.rollback_value,
+    readback_verified: true,
+    reason: out.reason,
+    experiment_id: out.experiment_id,
+    audited_at: out.audited_at,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+export function fulfillSetProviderCeilingForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * Converge the installed toolkit onto promoted staging.
+ *
+ * The restart is NOT done here. The Gateway is the process executing this
+ * action; restarting it from inside itself kills the write that records what
+ * just happened, and the completion line for an install is the one piece of
+ * audit nobody can reconstruct afterwards. The result therefore reports
+ * `gateway_restart_required` and leaves reconciliation to a separate bounded
+ * step, keeping installed and running as the two distinct facts they are.
+ */
+export function executeInstallToolkitTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    // Normalized name first: action.inputs holds validateInputs' `normalized`
+    // object, exactly as it does for the provider ceiling. Raw names are kept
+    // as fallbacks for a request that skipped normalization.
+    out = executeToolkitInstall({
+      expectedStagingSha: i.expectedStagingSha ?? i.expected_staging_sha ?? null,
+    });
+  } catch (e) {
+    out = { ok: false, error: "install_threw", detail: String(e?.message || "").slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = out.error;
+    action.completed_at = iso(nowMs);
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: out.error, detail: out.detail || null, action };
+  }
+
+  action.state = "completed";
+  action.executionState = "completed";
+  action.result = {
+    installed_sha: out.installed_sha,
+    previous_sha: out.previous_sha,
+    already_converged: out.already_converged,
+    readback_verified: out.readback_verified,
+    rollback_target: out.rollback_target,
+    gateway_restart_required: out.gateway_restart_required,
+    credentialsExposed: false,
+  };
+  action.completed_at = iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action };
+}
+
+export function fulfillInstallToolkitForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.HOST_INSTALL_TOOLKIT, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * Deliver one bounded certification task into one idle lane.
+ *
+ * The delivery primitive is createQueuedRun, injected here rather than
+ * reimplemented: it already refuses to displace an active run, which is the
+ * property that keeps a measurement from destroying the work it is measuring.
+ */
+export function executeLaneDispatchTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const i = action.inputs || {};
+  let out;
+  try {
+    out = executeLaneDispatch({
+      targetLaneId: i.targetLaneId ?? i.target_lane_id,
+      instruction: i.instruction,
+      measurementId: i.measurementId ?? i.measurement_id,
+      purpose: i.purpose,
+      sourceMission: i.sourceMission ?? i.source_mission_id,
+      sourceLane: i.sourceLane ?? i.source_lane_id ?? null,
+    }, { createRun: createQueuedRun, nowMs });
+  } catch (e) {
+    out = { ok: false, error: "dispatch_threw", detail: String(e?.message || "").slice(0, 300) };
+  }
+
+  if (!out.ok) {
+    action.state = "failed";
+    action.executionState = "failed";
+    action.failureReason = out.error;
+    action.completed_at = iso(nowMs);
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: out.error, detail: out.detail || null, action };
+  }
+
+  action.state = "completed";
+  action.executionState = "completed";
+  action.result = { ...out, credentialsExposed: false };
+  action.completed_at = iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action };
+}
+
+export function fulfillLaneDispatchForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, inputs, nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillRetireWorktreeForMission(missionId, {

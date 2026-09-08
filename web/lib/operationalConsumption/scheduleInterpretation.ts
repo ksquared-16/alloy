@@ -89,7 +89,20 @@ export function interpretSchedule(fact: OperationalFactDto): ScheduleInterpretat
         return { scheduleChangeKind: kind, directives: [], noImpactReason: "reversal of prior fact — obligations reconciled by supersession" };
     }
 
-    const basis = isScheduleBasis(fact.scheduleBasis) ? fact.scheduleBasis : weekdaysToScheduleBasis(fact.weekdays);
+    /*
+     * THE BASIS GATE EXISTS BECAUSE OF PRICING, AND AN ACCEPTED TERM ALREADY HAS THE PRICE.
+     *
+     * A recurring schedule fact normally needs a rate-resolvable basis, because the basis is what
+     * Rate Resolution prices from — no basis, no rate, no honest tuition. A fact raised from an
+     * accepted `enrollment_pricing_terms` row is the exception: the amount the family agreed to
+     * travels with it, so there is nothing left for the basis to resolve. Making an agreed price
+     * depend on a schedule pattern the assignment may not have committed yet would refuse to bill
+     * tuition that has already been settled.
+     */
+    const acceptedPricedRecurring = Boolean(fact.acceptedPricing) && kind === "recurring";
+    const basis = isScheduleBasis(fact.scheduleBasis)
+        ? fact.scheduleBasis
+        : (weekdaysToScheduleBasis(fact.weekdays) ?? (acceptedPricedRecurring ? "full_day" : null));
     const priorBasis = isScheduleBasis(fact.priorScheduleBasis) ? fact.priorScheduleBasis : null;
 
     switch (kind) {

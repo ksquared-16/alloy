@@ -286,19 +286,34 @@ export function checkGatewayResponsive({ thresholds, gateway }) {
   });
 }
 
-export function checkProviderCapacity({ capacity = null, seats = [], configuredMax = null }) {
+export function checkProviderCapacity({ capacity = null, seats = [], configuredMax = null, holdingCapacity = null }) {
   // The ceiling comes from the canonical capacity policy; the configured
   // operator override still wins when present.
   const derived = capacity?.axes?.provider_capacity?.ceiling ?? null;
   const max = Number.isFinite(configuredMax) ? configuredMax : (derived ?? 1);
-  const active = seats.length;
+  const resident = seats.length;
+  /*
+   * RESIDENCY IS NOT OCCUPANCY.
+   *
+   * This counted live provider PROCESSES against the productive ceiling. On a
+   * host with 9 resident providers and 2 actually executing, it reported a
+   * saturated machine that was in fact ~78% idle — and `lanes.consistency`
+   * simultaneously called the same condition "normal, and reclaimable under
+   * contention". Three checks, one condition, two verdicts.
+   *
+   * Capacity V2 established that a resident idle session is the resting state of
+   * a persistent agent, not a consumed seat. Severity now follows seats that
+   * actually HOLD capacity; residency stays reported, because it is useful
+   * information and its absence is what made this hard to see.
+   */
+  const active = Number.isFinite(holdingCapacity) ? holdingCapacity : resident;
   const sev = active > max ? "problem" : active === max ? "watch" : "healthy";
   return finding({
     check: "provider.capacity",
     severity: sev,
     owner_resource: "vacilando.provider_capacity",
     measurements: {
-      active_seats: active, max_active: max, derived_max: derived,
+      active_seats: active, resident_seats: resident, max_active: max, derived_max: derived,
       bounded_by: capacity?.axes?.provider_capacity?.bounded_by ?? null,
       remaining: capacity?.axes?.provider_capacity?.remaining ?? null,
       capacity_policy_version: capacity?.policy_version ?? null,
@@ -347,15 +362,36 @@ export function checkProviderSeats({
   if (waiting > 0 && idleReclaimable > 0 && reclaimsInFlight.length === 0) {
     problems.push(`${waiting} admission(s) blocked on provider capacity while ${idleReclaimable} reclaimable idle seat(s) exist and no reclaim is running`);
   }
-  if (Number.isFinite(ceiling) && holding > ceiling) {
-    problems.push(`${holding} seats hold capacity against a ceiling of ${ceiling}`);
+  /*
+   * OVER CAPACITY MATTERS WHEN IT DENIES WORK.
+   *
+   * This fired whenever resident seats exceeded the ceiling, with no reference
+   * to whether anything was actually blocked. Live, it reported "9 seats hold
+   * capacity against a ceiling of 8" as a PROBLEM while
+   * provider_admission_waiting was 0 and 7 of those 9 were idle_reclaimable —
+   * capacity denied to nobody, and reclaimable the moment it was wanted.
+   *
+   * The check above already encodes the correct rule: blocked admissions beside
+   * reclaimable idle seats. That is the failure worth waking someone for. Raw
+   * excess with no waiter is the resting state of a persistent fleet, which is
+   * what `lanes.consistency` calls "normal, and reclaimable under contention".
+   *
+   * Seats that CANNOT be reclaimed are different: if active occupancy alone
+   * exceeds the ceiling, the ceiling is not being honoured, and that is a
+   * problem regardless of who is waiting.
+   */
+  const activeHolding = Number.isFinite(counts?.active) ? counts.active : (holding - idleReclaimable);
+  if (Number.isFinite(ceiling) && activeHolding > ceiling) {
+    problems.push(`${activeHolding} seats are actively executing against a ceiling of ${ceiling}`);
   }
   if (resumeFailures.length) {
     problems.push(`${resumeFailures.length} dormant lane(s) failed to resume`);
   }
 
+  const reclaimableExcess = Number.isFinite(ceiling) && holding > ceiling && activeHolding <= ceiling;
   const severity = problems.length ? "problem"
-    : (reclaimsInFlight.length || idleReclaimable) ? (reclaimsInFlight.length ? "watch" : idleSeverity)
+    : (reclaimableExcess || reclaimsInFlight.length || idleReclaimable)
+      ? (reclaimsInFlight.length ? "watch" : idleSeverity)
       : "healthy";
 
   return finding({
@@ -956,13 +992,29 @@ export function composeReport({
   safe("memory.pressure", () => checkMemoryPressure({ hw, thresholds, memory: probeResults.memory }));
   safe("disk.headroom", () => checkDiskHeadroom({ thresholds, disk: probeResults.disk }));
   safe("gateway.responsive", () => checkGatewayResponsive({ thresholds, gateway: probeResults.gateway }));
-  safe("provider.capacity", () => checkProviderCapacity({ capacity: probeResults.capacity, seats: probeResults.seats || [], configuredMax: probeResults.configured_max }));
+  safe("provider.capacity", () => checkProviderCapacity({
+    capacity: probeResults.capacity,
+    seats: probeResults.seats || [],
+    configuredMax: probeResults.configured_max,
+    // Executing occupancy, not holding_capacity: the latter sums active AND
+    // idle_reclaimable, so it counts resting agents as consumed seats.
+    holdingCapacity: probeResults.seat_summary?.counts?.active ?? null,
+  }));
   safe("provider.seats", () => checkProviderSeats({
     seats: probeResults.seat_states || [],
     summary: probeResults.seat_summary || null,
     waitingOnProviderCapacity: probeResults.provider_capacity_waits || [],
     reclaimsInFlight: probeResults.reclaims_in_flight || [],
-    ceiling: probeResults.capacity?.axes?.provider_capacity?.ceiling ?? probeResults.configured_max ?? null,
+    // CONFIGURED WINS, DERIVED IS THE FALLBACK — the same precedence
+    // checkProviderCapacity already uses. This had it backwards, so this check
+    // measured against the derived floor(cores/3) = 4 while its sibling measured
+    // against the configured 8, and reported "9 seats hold capacity against a
+    // ceiling of 4". Capacity V2 retired that heuristic against direct
+    // measurement; a health check that contradicts promoted doctrine teaches its
+    // reader to ignore health, which is how a real problem gets missed later.
+    ceiling: Number.isFinite(probeResults.configured_max)
+      ? probeResults.configured_max
+      : (probeResults.capacity?.axes?.provider_capacity?.ceiling ?? null),
     policy: probeResults.idle_grace_policy || null,
   }));
   safe("validation.collisions", () => checkValidationCollisions({

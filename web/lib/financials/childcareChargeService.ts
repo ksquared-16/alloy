@@ -42,6 +42,15 @@ import {
     type ChargeCategory,
 } from "@/lib/financials/billableSource";
 import type { ChargeIntent } from "@/lib/financials/chargeLifecycle/resolveChargeFromTemplate";
+import { placeInBillingPeriod } from "@/lib/financials/billingPeriod";
+import {
+    chargeCorrectedEntry,
+    chargeEffectiveOn,
+    chargePostedEntry,
+    findEntryForSource,
+    tryRecordFinancialJournalEntry,
+    type JournalOutcome,
+} from "@/lib/financials/financialJournalService";
 
 /** Subset of the charges row this service reads/writes. */
 export type ChargeRow = {
@@ -58,6 +67,13 @@ export type ChargeRow = {
     amount_cents: number;
     service_date: string | null;
     due_date: string | null;
+    /**
+     * Optional because they arrived after this type did and the service reads `*`; they are read
+     * here so period placement uses the DECLARED dates rather than falling back through them.
+     * `billable_on` decides the billing period, `service_date` the accounting one.
+     */
+    billable_on?: string | null;
+    occurs_on?: string | null;
     posted_at: string | null;
     voided_at: string | null;
     description: string | null;
@@ -339,6 +355,11 @@ export type PostChildcareChargeResult = {
      * answer being an error.
      */
     alreadyPosted: boolean;
+    /**
+     * What the posted history recorded. Reported on BOTH paths, so a retry of a charge whose journal
+     * entry failed the first time repairs it rather than reporting `alreadyPosted` and moving on.
+     */
+    journal: JournalOutcome;
 };
 
 /**
@@ -361,7 +382,11 @@ export async function postChildcareCharge(
     const charge = await loadCharge(supabase, input.orgId, input.chargeId);
     assertChildcareCharge(charge);
     if (isPostedStatus(charge.status)) {
-        return { charge, alreadyPosted: true };
+        return {
+            charge,
+            alreadyPosted: true,
+            journal: await recordChargePostedEntry(supabase, charge, input.actorUserId ?? null),
+        };
     }
     const now = new Date().toISOString();
     const { data, error } = await supabase
@@ -384,9 +409,49 @@ export async function postChildcareCharge(
     }
     if (!data) {
         // Someone else won the race. Their posting is the one that stands.
-        return { charge: await loadCharge(supabase, input.orgId, input.chargeId), alreadyPosted: true };
+        const winner = await loadCharge(supabase, input.orgId, input.chargeId);
+        return {
+            charge: winner,
+            alreadyPosted: true,
+            journal: await recordChargePostedEntry(supabase, winner, input.actorUserId ?? null),
+        };
     }
-    return { charge: data as ChargeRow, alreadyPosted: false };
+    const posted = data as ChargeRow;
+    return {
+        charge: posted,
+        alreadyPosted: false,
+        journal: await recordChargePostedEntry(supabase, posted, input.actorUserId ?? null),
+    };
+}
+
+/**
+ * The posted-charge consequence, recorded once per charge.
+ *
+ * Idempotent by `charge_posted:<charge id>`, so calling it on the already-posted path — which every
+ * retry and every loser of a posting race takes — converges rather than duplicating. That is why it
+ * is safe to call here unconditionally, and why a journal entry lost to a transient failure is
+ * repaired by the next attempt instead of needing a backfill.
+ */
+async function recordChargePostedEntry(
+    supabase: SupabaseClient,
+    charge: ChargeRow,
+    actorUserId: string | null
+): Promise<JournalOutcome> {
+    return tryRecordFinancialJournalEntry(
+        supabase,
+        chargePostedEntry({
+            orgId: charge.org_id,
+            chargeId: charge.id,
+            amountCents: charge.amount_cents,
+            currency: charge.currency_code,
+            billableSourceType: charge.billable_source_type,
+            billableSourceId: charge.billable_source_id,
+            effectiveOn: chargeEffectiveOn(charge),
+            billingPeriodKey: placeInBillingPeriod(charge).key,
+            actorUserId,
+            metadata: { charge_category: charge.charge_category },
+        })
+    );
 }
 
 /**
@@ -520,5 +585,34 @@ export async function createChildcareCorrection(
     if (error) {
         throw new OperationalEnrollmentServiceError("db_error", error.message);
     }
-    return data as ChargeRow;
+    const correction = data as ChargeRow;
+
+    // The corrective consequence, linked to the entry it corrects. `reverses_entry_id` points at the
+    // ORIGINAL charge's posted entry — the journal repeats the lineage `source_charge_id` already
+    // states, so posted history can be walked without joining back to `charges`.
+    const originalEntry = await findEntryForSource(supabase, {
+        orgId: input.orgId,
+        entryType: "charge_posted",
+        sourceId: source.id,
+    });
+    await tryRecordFinancialJournalEntry(
+        supabase,
+        chargeCorrectedEntry({
+            orgId: correction.org_id,
+            correctionChargeId: correction.id,
+            signedAmountCents: correction.amount_cents,
+            currency: correction.currency_code,
+            billableSourceType: correction.billable_source_type,
+            billableSourceId: correction.billable_source_id,
+            // A correction is effective WHEN IT IS MADE, not when the original was serviced. That is
+            // what puts it in the corrective period instead of reopening one that has reported.
+            effectiveOn: now.slice(0, 10),
+            billingPeriodKey: placeInBillingPeriod(correction).key,
+            reversesEntryId: originalEntry?.id ?? null,
+            actorUserId: input.actorUserId ?? null,
+            metadata: { correction_kind: input.kind, source_charge_id: source.id },
+        })
+    );
+
+    return correction;
 }

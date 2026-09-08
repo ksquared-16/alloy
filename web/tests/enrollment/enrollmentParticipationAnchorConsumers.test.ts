@@ -103,10 +103,13 @@ describe("enrollment-date stamping reaches journeys under EITHER anchor", () => 
          * from a healthy no-op. An acquisition outcome would have recorded an enrollment date onto
          * nobody, and nothing would have said so.
          */
+        // `enrollment_outcome` was never a member of EnrollmentDateStamp["source"].
+        // The canonical outcome-driven stamp is `paperwork_completion_outcome`,
+        // which is what stageOutcomeRuleTargetExecutor passes in production.
         const rows = [pi("pi-participation", ENROLLMENT_PARTICIPATION_CONTEXT_TYPE, OCM)];
         const result = await stampEnrollmentDateOnProcessInstances(
             client(rows, [{ id: OCM, opportunity_id: OPPORTUNITY }]),
-            { orgId: ORG, opportunityId: OPPORTUNITY, enrollmentDate: "2026-09-01", source: "enrollment_outcome" },
+            { orgId: ORG, opportunityId: OPPORTUNITY, enrollmentDate: "2026-09-01", source: "paperwork_completion_outcome" },
         );
         expect(result.error).toBeUndefined();
         expect(result.stamped.map((r) => r.processInstanceId)).toEqual(["pi-participation"]);
@@ -119,7 +122,7 @@ describe("enrollment-date stamping reaches journeys under EITHER anchor", () => 
             orgId: ORG,
             opportunityId: OPPORTUNITY,
             enrollmentDate: "2026-09-01",
-            source: "enrollment_outcome",
+            source: "paperwork_completion_outcome",
         });
         expect(result.stamped.map((r) => r.processInstanceId)).toEqual(["pi-legacy"]);
     });
@@ -129,7 +132,7 @@ describe("enrollment-date stamping reaches journeys under EITHER anchor", () => 
         const rows = [pi("pi-other", ENROLLMENT_PARTICIPATION_CONTEXT_TYPE, "99999999-9999-4999-8999-999999999999")];
         const result = await stampEnrollmentDateOnProcessInstances(
             client(rows, [{ id: OCM, opportunity_id: OPPORTUNITY }]),
-            { orgId: ORG, opportunityId: OPPORTUNITY, enrollmentDate: "2026-09-01", source: "enrollment_outcome" },
+            { orgId: ORG, opportunityId: OPPORTUNITY, enrollmentDate: "2026-09-01", source: "paperwork_completion_outcome" },
         );
         expect(result.stamped).toEqual([]);
     });

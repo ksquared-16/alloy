@@ -51,6 +51,30 @@ export const SAFETY_GATES = Object.freeze([
   "not_self_retirement",
   "no_operator_hold",
   "no_governance_exception",
+  /*
+   * THE FOURTEENTH GATE — closing a correctness gap Phase 4 found and Phase 4
+   * could only work around.
+   *
+   * A managed worktree is the checkout half of a durable slot configuration:
+   * `metadata/<name>.env` names its path, its slot and its port. Retiring the
+   * checkout does not surrender the slot, so every git fact can be true and the
+   * outcome still wrong — a slot configured against a path that no longer
+   * exists.
+   *
+   * MEASURED. On this host `troubleshooting` (slot 8, port 3018) and
+   * `wt3-communications-inbound-sms` (slot 3, port 3013) both scored a clean
+   * `candidate`: idle, clean, merged into origin/staging, no live reference.
+   *
+   * Phase 4 protected them one layer up, in the hygiene classifier. That was a
+   * PLANNER, and the executor re-measures through this evaluator — so anything
+   * reaching the executor directly with a valid fingerprint retired a managed
+   * slot unopposed. Not hypothetical: gate A retired wt-attrib through the
+   * governed action, bypassing hygiene entirely.
+   *
+   * The invariant belongs here, at the authoritative boundary. Hygiene still
+   * classifies; it is no longer the only thing standing in the way.
+   */
+  "no_managed_slot_binding",
 ]);
 
 /**
@@ -146,6 +170,7 @@ export function evaluateRetirementSafety({
   requestingWorktree = null,
   operatorHold = null,
   governanceException = null,
+  managedSlot = null,
 } = {}) {
   const dur = durability && typeof durability === "object" ? durability.durability : durability;
   const gates = [
@@ -174,6 +199,9 @@ export function evaluateRetirementSafety({
     ),
     gate("no_operator_hold", operatorHold == null ? null : operatorHold === false, { operator_hold: operatorHold }),
     gate("no_governance_exception", governanceException == null ? null : governanceException === false, { governance_exception: governanceException }),
+    // Unmeasured blocks, exactly as every other gate does. "We could not read
+    // the slot store" is not "there is no slot".
+    gate("no_managed_slot_binding", managedSlot == null ? null : managedSlot === false, { managed_slot: managedSlot }),
   ];
 
   const unmeasured = gates.filter((g) => !g.measured).map((g) => g.gate);

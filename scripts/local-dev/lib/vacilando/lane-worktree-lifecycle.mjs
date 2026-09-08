@@ -97,9 +97,33 @@ export function normalizeBranchName(b) {
   return v || null;
 }
 
+/**
+ * A slot number, bounded by the TOPOLOGY OWNER rather than by a literal.
+ *
+ * This read `n <= 6`, which was true when the host had six slots and silently
+ * false from the moment topology moved to twelve. It is not a cosmetic bound:
+ * asSlot is the gate on every slot this module handles, so slots 7-12 were
+ * being read as `null` in seven places at once — registrations, bindings and
+ * the free-slot computation alike.
+ *
+ * MEASURED CONSEQUENCE, on the live host. `payments` held slot 7 and
+ * `troubleshooting` held slot 8, both active and both registered. freeSlots()
+ * dropped them from `taken` and reported 7 as the first FREE slot, so creating
+ * a lane through the Director tried to adopt a slot a real lane was using. The
+ * only reason two lanes did not end up on one port is that alloy-worktree-adopt
+ * refuses an assigned slot — a fail-closed guard in the other language caught
+ * what this one got wrong.
+ *
+ * The visible symptom was the opposite of the cause: every lane created through
+ * the UI came out with `registered: false` and no slot, which is exactly the
+ * Financials failure the registration code above exists to prevent.
+ *
+ * isManagedSlot was already imported into this module. The bound was available
+ * and simply not used.
+ */
 const asSlot = (v) => {
   const n = Number(v);
-  return Number.isInteger(n) && n >= 1 && n <= 6 ? n : null;
+  return Number.isInteger(n) && isManagedSlot(n) ? n : null;
 };
 const asPort = (v) => {
   const n = Number(v);
@@ -789,7 +813,14 @@ export async function registerCreatedWorktree({
     // Saying this is the point. A lane created with no slot left is a lane that
     // cannot run, and the operator has to be told at creation rather than
     // discovering it on the first message.
-    return { ok: false, error: "no_free_slot", detail: "All six managed slots are registered; free one before creating another lane that needs a worktree." };
+    // Counted from the topology owner, not asserted. The literal "six" here
+    // outlived the six-slot host and would have told an operator with twelve
+    // slots something plainly untrue.
+    return {
+      ok: false,
+      error: "no_free_slot",
+      detail: `All ${managedSlots().length} managed slots are registered; free one before creating another lane that needs a worktree.`,
+    };
   }
   const bin = join(toolkitDir || join(process.env.HOME || "", ".local", "share", "alloy", "toolkit", "current"), "alloy-worktree-adopt");
   const run = registerImpl || ((cmd, args, opts) => spawnSync(cmd, args, opts));

@@ -146,6 +146,12 @@ describe("an authored date cannot degrade into a text box", () => {
                 options: [],
                 optional: false,
                 field_ids: [],
+                // next_turn requires these three. editor and party are
+                // nullable and evidence is a list, so the empty shape is
+                // exact rather than a placeholder.
+                editor: null,
+                party: null,
+                evidence: [],
             });
             expect(control).toMatchObject({ kind: "value", inputType: "date" });
         }

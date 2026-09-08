@@ -127,6 +127,21 @@ export type ConsumptionEventTypeRow = {
  * runtime contract — NOT a charge. Source-family-shaped fields are optional so
  * the same DTO carries enrollment, attendance, schedule, etc. facts later.
  */
+/** The accepted term's money and its lineage, carried into consumption as authority. */
+export type AcceptedTuitionPricing = {
+    termId: string;
+    amountCents: number;
+    currencyCode: string;
+    cadenceKey: string;
+    /** `accepted` or `overridden` — an override is why this may not match the catalog. */
+    state: string;
+    /** The authored option the term names, for provenance. */
+    sourceEntity: string;
+    sourceId: string;
+    configVersion: string | null;
+    resolutionKey: string;
+};
+
 export type OperationalFactDto = {
     sourceFamily: string;
     eventKey: string;
@@ -166,6 +181,15 @@ export type OperationalFactDto = {
     /** Proration inputs (consumed with the proration policy method). */
     proratedDays?: number | null;
     periodDays?: number | null;
+    /**
+     * THE PRICE THE FAMILY AGREED TO, when the fact was raised from an accepted pricing term.
+     *
+     * Present only on the tuition-generation path. When it is present the catalog is NOT consulted:
+     * an accepted term may be an OVERRIDE, and re-resolving the catalog would bill the family the
+     * rate they did not agree to — and would let a catalog edit move what an already-agreed family
+     * owes next month. Absent, everything behaves exactly as before.
+     */
+    acceptedPricing?: AcceptedTuitionPricing | null;
 
     // --- Attendance consumption (Slice 3) ---
     /** Normalized attendance fact type; routes the fact through the attendance interpreter. */

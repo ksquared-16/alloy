@@ -31,7 +31,10 @@
  */
 
 import type { FocusPanelCardKey, FocusPanelCardTier } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
+import {
+    OPERATIONAL_SUBJECT_TYPES,
+    type OperationalSubjectType,
+} from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import type { FocusPanelCardDensity, FocusPanelCardSpan } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import {
     FOCUS_PANEL_GRID_COLUMNS,
@@ -513,4 +516,45 @@ export function focusPanelSummaryGridForGrain(
     context?: SummaryCompositionContext,
 ): FocusPanelGridLayout {
     return gridFromComposition(focusPanelDefaultCompositionForGrain(grain, context));
+}
+
+/**
+ * ── THE CANONICAL PARTICIPATION SET ────────────────────────────────────────────────────────────
+ *
+ * "May this card participate in a composition the platform owns?" has ONE answer, and it is the
+ * whole family of code-owned compositions above — not any single member of it.
+ *
+ * That distinction was not academic. `FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION` is the `opportunity`
+ * member; runtime guards read it and called it "the default composition", so a card placed only at
+ * child grain read as placed NOWHERE. `health_safety` is exactly that card: the case surface omits
+ * it deliberately — a panel covering several children has no single health subject — while the
+ * child-with-family composition places it at 4/12 in the reference band. The guard was not wrong
+ * about its own question; it was asking one grain's question and reporting a platform answer.
+ *
+ * Derived by ENUMERATION, never restated: every grain, in both settlement contexts, through the same
+ * `focusPanelDefaultCompositionForGrain` the runtime resolves with. A new grain, a new composition or
+ * a moved card is picked up here with no edit, so this cannot drift from what actually renders.
+ *
+ * ── WHAT THIS IS NOT ───────────────────────────────────────────────────────────────────────────
+ *
+ * It is not the RESOLVED composition. A tenant-published `LayoutDoc` overrides a default wholesale,
+ * and may place fewer cards (`scheduling` at Firefly) — so participation here stays NECESSARY and not
+ * sufficient, exactly as before. The published doc is bounded the other way by the card catalog: it
+ * can only place a card the platform declares. There are not two notions of participation to keep in
+ * step — there is one set of code-owned compositions, and a tenant selects within it.
+ */
+const CODE_OWNED_COMPOSITIONS: readonly (readonly SummaryCompositionEntry[])[] =
+    OPERATIONAL_SUBJECT_TYPES.flatMap((grain) => [
+        focusPanelDefaultCompositionForGrain(grain),
+        focusPanelDefaultCompositionForGrain(grain, { familySettlement: true }),
+    ]);
+
+/** Every card key any code-owned composition places, at any grain. */
+export const FOCUS_PANEL_CODE_OWNED_COMPOSITION_CARD_KEYS: ReadonlySet<FocusPanelCardKey> = new Set(
+    CODE_OWNED_COMPOSITIONS.flatMap((composition) => composition.map((entry) => entry.key)),
+);
+
+/** Does any composition the platform owns place this card, at any grain? */
+export function focusPanelCardParticipatesInACodeOwnedComposition(key: FocusPanelCardKey): boolean {
+    return FOCUS_PANEL_CODE_OWNED_COMPOSITION_CARD_KEYS.has(key);
 }

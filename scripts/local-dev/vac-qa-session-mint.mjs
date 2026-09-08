@@ -67,14 +67,44 @@ const identity = arg("identity");
 const storagePath = arg("storage");
 const envSource = arg("env-source");
 const baseUrl = arg("base-url");
+/*
+ * Optional, and trusted when present. The caller that may set it is the governed
+ * deployed-session executor, which resolves it from the deployed-target
+ * registry — never from worker input. Absent, the local loopback pair is used
+ * and behaviour is exactly what it was.
+ */
+const cookieDomain = arg("cookie-domain");
 if (!identity || !storagePath || !envSource || !baseUrl) fail("bad_arguments", "identity, storage, env-source and base-url are required");
+if (cookieDomain && !/^[a-z0-9.-]+$/i.test(cookieDomain)) fail("bad_arguments", "cookie-domain must be a hostname");
 
-// The real resolved target is known here, so this is a boundary that must refuse a non-loopback or
-// production target. Refusing later would be refusing after the link already existed.
+/*
+ * THE LAST BOUNDARY BEFORE A LINK EXISTS. Refusing after this point is refusing
+ * after the magic link has already been created, so the target is checked here.
+ *
+ * It now admits exactly two shapes and nothing between them: loopback, or the
+ * ONE deployed host the caller resolved from the trusted registry and passed as
+ * --cookie-domain. A base whose host is neither is refused as before.
+ *
+ * The pairing is what makes this safe. A deployed base is only accepted when it
+ * matches the cookie domain the governed executor resolved, so this file cannot
+ * be aimed at an arbitrary host by supplying a base URL alone — the two would
+ * disagree and the mint would refuse.
+ */
 try {
     const h = new URL(baseUrl).hostname;
-    if (!["127.0.0.1", "localhost", "::1"].includes(h)) fail("not_loopback_base", h);
+    const loopback = ["127.0.0.1", "localhost", "::1"].includes(h);
+    if (!loopback) {
+        if (!cookieDomain) fail("not_loopback_base", h);
+        if (h !== cookieDomain) fail("base_cookie_domain_mismatch", "resolved target and base url disagree");
+        if (new URL(baseUrl).protocol !== "https:") fail("deployed_base_not_https", h);
+    } else if (cookieDomain && !["127.0.0.1", "localhost", "::1"].includes(cookieDomain)) {
+        // A loopback base may not write cookies for a deployed host: that is a
+        // localhost session wearing a deployed domain.
+        fail("base_cookie_domain_mismatch", "loopback base may not write a deployed cookie domain");
+    }
 } catch {
+    // fail() exits the process, so nothing above can land here; only a genuine
+    // URL parse error reaches this branch.
     fail("not_loopback_base", "unparseable base url");
 }
 
@@ -150,16 +180,34 @@ const encoded = `base64-${stringToBase64URL(JSON.stringify(session))}`;
 // The library decides whether this is one cookie or several; we do not guess a threshold.
 const parts = createChunks(cookieName, encoded);
 const expires = session.expires_at ? Number(session.expires_at) : -1;
+/*
+ * COOKIE DOMAINS COME FROM THE RESOLVED TARGET, NOT FROM THIS FILE.
+ *
+ * This wrote `localhost` and `127.0.0.1` literally, which was the third and
+ * final reason a deployed session could not exist. Even with a deployed base
+ * URL and a deployed-aware validator, the storage written here would still have
+ * been scoped to loopback — so the session verified against the local dev server
+ * and could never authenticate the deployed host.
+ *
+ * The deployed host is still not named here. It arrives as --cookie-domain,
+ * resolved upstream from the trusted deployed-target registry, so this file
+ * cannot be pointed at an arbitrary domain by editing a constant.
+ */
+const secure = new URL(baseUrl).protocol === "https:";
 const cookiesFor = (domain) => parts.map((p) => ({
     name: p.name, value: p.value, domain, path: "/",
-    expires, httpOnly: false, secure: false, sameSite: "Lax",
+    // Secure follows the scheme rather than a flag: a Secure cookie on http is
+    // silently dropped, and a non-Secure cookie on https is a downgrade.
+    expires, httpOnly: false, secure, sameSite: "Lax",
 }));
+
+const domains = cookieDomain ? [cookieDomain] : ["localhost", "127.0.0.1"];
 
 try {
     mkdirSync(dirname(storagePath), { recursive: true, mode: 0o700 });
     writeFileSync(
         storagePath,
-        JSON.stringify({ cookies: [...cookiesFor("localhost"), ...cookiesFor("127.0.0.1")], origins: [] }),
+        JSON.stringify({ cookies: domains.flatMap((d) => cookiesFor(d)), origins: [] }),
         { mode: 0o600 },
     );
     chmodSync(storagePath, 0o600);
@@ -173,7 +221,7 @@ process.stdout.write(`${JSON.stringify({
     identity_matched: true,
     mechanism: "single_use_magiclink",
     password_involved: false,
-    cookie_domains: ["localhost", "127.0.0.1"],
+    cookie_domains: domains,
     cookie_parts: parts.length,
     storage_mode: "0600",
     expires_at: session.expires_at ? new Date(Number(session.expires_at) * 1000).toISOString() : null,

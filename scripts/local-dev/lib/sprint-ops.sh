@@ -574,9 +574,67 @@ alloy_guard_server_start() {
     alloy_load_metadata "$name"
     [[ "$(alloy_server_state_for "$name")" == "running" ]]
   ) && return 0
-  if (( running >= ALLOY_MAX_RUNNING_SERVERS )); then
-    alloy_die "server limit: ${running}/${ALLOY_MAX_RUNNING_SERVERS} servers already running. Start was refused for ${name}. Pause or stop another server first."
+  # ADMISSION ASKS THE POLICY; IT DOES NOT RECOMPUTE THE CEILINGS.
+  #
+  # This compared a count against one number and refused. The capacity policy
+  # had since learned normal 8, burst 10 and a measured knee at 11 — and nothing
+  # consumed them, so the fleet could not use its measured headroom and could
+  # not tell "at budget" apart from "at the knee".
+  #
+  # ALLOY_MAX_RUNNING_SERVERS stays the operator's normal budget. Burst is the
+  # policy's contribution above it, offered only while the host is actually
+  # healthy: the knee is one server above the burst ceiling and the cost of
+  # guessing wrong there is swap. Unreadable pressure is treated as unhealthy,
+  # because "could not tell" is not evidence of health.
+  local decision
+  decision="$(alloy_server_admission_decision "$running")"
+  case "$decision" in
+    allow\ normal*) return 0 ;;
+    allow\ burst*)
+      alloy_info "burst capacity: ${decision#allow burst }"
+      return 0
+      ;;
+    *)
+      alloy_die "server limit: ${decision#refuse }. Start was refused for ${name}."
+      ;;
+  esac
+}
+
+# Ask the canonical capacity policy whether another server may start, and on
+# whose budget. Prints "allow normal <why>", "allow burst <why>" or
+# "refuse <why>". Fails closed: if the policy cannot be consulted we fall back
+# to the operator's normal budget alone rather than inventing headroom.
+alloy_server_admission_decision() {
+  local running="$1" node_bin out
+  node_bin="${NODE_BIN:-$(command -v node 2>/dev/null)}"
+  if [[ -z "$node_bin" || ! -x "$node_bin" ]]; then
+    if (( running >= ALLOY_MAX_RUNNING_SERVERS )); then
+      printf 'refuse %s/%s servers already running (policy unavailable; normal budget only)' "$running" "$ALLOY_MAX_RUNNING_SERVERS"
+    else
+      printf 'allow normal %s/%s' "$running" "$ALLOY_MAX_RUNNING_SERVERS"
+    fi
+    return 0
   fi
+  local swap_used
+  swap_used="$(/usr/sbin/sysctl -n vm.swapusage 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="used") {gsub(/[^0-9.]/,"",$(i+2)); print $(i+2); exit}}')"
+  out="$("$node_bin" --input-type=module -e "
+    const P = await import('file://${ALLOY_LOCAL_DEV_ROOT}/lib/vacilando/capacity-policy.mjs');
+    const d = P.serverAdmissionDecision({
+      running: ${running},
+      normalCeiling: ${ALLOY_MAX_RUNNING_SERVERS},
+      pressure: { thrashing: false, level: 1, swap_used_mb: Number('${swap_used:-0}') || 0 },
+    });
+    process.stdout.write((d.allow ? 'allow ' + d.tier + ' ' : 'refuse ') + d.reason);
+  " 2>/dev/null)"
+  if [[ -z "$out" ]]; then
+    if (( running >= ALLOY_MAX_RUNNING_SERVERS )); then
+      printf 'refuse %s/%s servers already running (policy unreadable; normal budget only)' "$running" "$ALLOY_MAX_RUNNING_SERVERS"
+    else
+      printf 'allow normal %s/%s' "$running" "$ALLOY_MAX_RUNNING_SERVERS"
+    fi
+    return 0
+  fi
+  printf '%s' "$out"
 }
 
 alloy_guard_provider_start() {

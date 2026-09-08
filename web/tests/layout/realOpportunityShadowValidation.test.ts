@@ -97,7 +97,7 @@ function buildRealisticVm(recordId: string): OpportunityDrawerViewModel {
         above_fold: { render_model: aboveFold, record },
         summaries: {
             tasks: { state: "loaded", open_count: 0, open_tasks: [] },
-            active_tour_bookings: [],
+            active_tour_bookings: [], operator_relevant_tour_booking: null,
             reminders: { state: "ready", next_follow_up_iso: null, scheduled_send_count: 0, scheduled_sends: [] },
             bos: null,
             attention: null,

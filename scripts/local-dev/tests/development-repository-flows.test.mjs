@@ -367,3 +367,49 @@ test("every choice control meets the touch target minimum", () => {
     assert.match(rule, /min-height:(4[4-9]|5[0-9]|[6-9][0-9])px/, sel);
   }
 });
+
+// ------------------------------------------- what is created is what was shown
+
+test("the wizard asks for the branch it previewed, prefix and all", () => {
+  // The Add lane review said "New branch agent/vui" while the request carried
+  // the bare suffix `vui`, so the branch created was not the one confirmed.
+  const start = clientSrc.indexOf("async function wizardCreate(");
+  const body = clientSrc.slice(start, clientSrc.indexOf("\n}\n", start));
+  assert.equal(body.includes("body.branch = d.branch_suffix"), false,
+    "the bare suffix must not be sent as the branch name");
+  assert.ok(body.includes("View.previewBranch("), "it sends the previewed branch");
+});
+
+test("a refused create is explained in the words of what was refused", () => {
+  // repositoryErrorText answered a refused branch with "That path contains
+  // characters Vacilando will not open" — about a path nobody had typed.
+  const text = V.laneCreateErrorText("path_refused", { fields: ["slot"] });
+  assert.match(text, /slot/);
+  assert.equal(/path contains characters/.test(text), false);
+  assert.match(V.laneCreateErrorText("invalid_branch_name"), /branch name/i);
+  const start = clientSrc.indexOf("async function wizardCreate(");
+  const body = clientSrc.slice(start, clientSrc.indexOf("\n}\n", start));
+  assert.ok(body.includes("View.laneCreateErrorText("));
+});
+
+test("a lane whose workspace failed is not reported as ready", () => {
+  const text = V.workspaceFailureText({ mode: "new_worktree", provisioned: false, error: "branch_exists", branch: "agent/vui" });
+  assert.match(text, /created/);
+  assert.match(text, /agent\/vui already exists/);
+  assert.match(text, /duplicate/, "and it says not to press Create again");
+  const start = clientSrc.indexOf("async function wizardCreate(");
+  const body = clientSrc.slice(start, clientSrc.indexOf("\n}\n", start));
+  assert.ok(body.includes("ws.provisioned === false"), "the client checks provisioning, not just ok");
+  assert.ok(body.includes("w.createdLaneId"), "and remembers the lane that does exist");
+});
+
+test("after a half-created lane the sheet offers Open lane, never Create again", () => {
+  const html = V.renderLaneWizard({
+    step: "review", repositories: REPOS, folders: FOLDERS, createdLaneId: "lane_abc",
+    error: "branch_exists", errorText: "The lane was created, but its workspace was not.",
+    draft: { repository_id: "r_alloy", name: "ui", workspace_mode: "new_worktree", provider: "claude" },
+  });
+  assert.equal(html.includes("data-gw-wiz-create"), false);
+  assert.ok(html.includes("Open lane"));
+  assert.ok(html.includes(V.laneDetailHash("lane_abc")));
+});

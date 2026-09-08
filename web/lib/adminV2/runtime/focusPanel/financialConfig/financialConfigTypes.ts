@@ -1,18 +1,24 @@
 /**
- * Financial Configuration V1 — tuition resolution read model.
+ * Assignment tuition — the read model an operator surface renders.
  *
- * V1 scope: read-only. Resolves per-child tuition rates from
- * commercial_tuition_rates via the API route. No payer data,
- * no responsibility assignment, no invoices, no payment history.
+ * Read-only: resolution belongs to Commercial Execution and the DECISION belongs to the registered
+ * `enrollment.pricing.accept` / `.override` actions. Nothing here writes, and nothing here creates
+ * a charge.
  *
- * Deferred (no schema): payer responsibility, billing contact write,
- * per-enrollment tuition assignment, invoice generation.
+ * `FinancialConfigEnrollment` is the ORIGINAL, narrower shape and is kept because callers already
+ * read it. It carries a rate only when the resolution is deterministic — an ambiguous assignment
+ * leaves it null rather than handing one of several equally-valid answers to a caller who cannot
+ * tell. `assignments` carries the full picture: state, alternatives, explanation, what was accepted,
+ * and whether the assignment has moved since it was.
+ *
+ * The note this file used to carry — "deferred (no schema): per-enrollment tuition assignment" — is
+ * why Thread 3 exists. The schema is `enrollment_pricing_terms`.
  *
  * @see web/app/api/admin/financial-config/opportunity/[id]/route.ts
- * @see docs/platform/operator/operational-configuration-card-pattern.md
+ * @see web/lib/enrollment/pricing/buildAssignmentTuitionView.ts
  */
 
-import type { TuitionBillingPeriod } from "@/lib/commercial/tuitionRates";
+import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 
 /** Per-child tuition rate resolution returned by the API route. */
 export type FinancialConfigEnrollment = {
@@ -22,13 +28,14 @@ export type FinancialConfigEnrollment = {
     scheduleKey: string | null;
     locationId: string | null;
     /**
-     * Resolved tuition rate, or null when no active rate matches this
-     * program + schedule combination in commercial_tuition_rates.
+     * The recommended tuition, or null when the resolution is ambiguous, matches nothing, or the
+     * assignment facts are incomplete. Never one of several tied candidates.
      */
     resolvedRate: {
         rateId: string;
         rateCents: number;
-        billingPeriod: TuitionBillingPeriod;
+        /** `billing_cadences` item key — Commercial's own billing-frequency vocabulary. */
+        billingPeriod: string;
         /** Pre-formatted: "$1,200/month" */
         rateLabel: string;
         /** True when a location-specific rate won over the org default. */
@@ -38,4 +45,6 @@ export type FinancialConfigEnrollment = {
 
 export type FinancialConfigApiResponse = {
     enrollments: FinancialConfigEnrollment[];
+    /** The full assignment tuition view — state, alternatives, explanation, accepted term. */
+    assignments: AssignmentTuitionView[];
 };

@@ -245,7 +245,7 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
     billingdetail: {
         question: "What does Billing details open?",
         decisions: [
-            "The SAME card at density expanded, exactly as the real BillingPreviewCard already expands.",
+            "The SAME card at density expanded, exactly as the real assignment Tuition card already expands.",
             "The ledger lives HERE, with Date / Type / Description / Amount / Status / Source and the filters the brief asked for.",
             "NO running balance column: ledger_transactions provides no authoritative running balance, and computing one in the card would invent an ordering the backend does not guarantee.",
             "Current period repeats the reconciliation with its groups made explicit — Charges, Discounts & credits, Funding, then Payments.",

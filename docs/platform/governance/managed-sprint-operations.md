@@ -9,7 +9,7 @@ supersedes: []
 
 **Status:** Canonical (July 2026). Default operating model for Alloy implementation sprints on Cursor and Claude.
 
-**Purpose:** Make the installed six-slot Alloy local-dev toolkit the normal way every new sprint starts, pauses overnight, resumes, and finishes — without Director/Company OS machinery.
+**Purpose:** Make the installed managed-slot Alloy local-dev toolkit the normal way every new sprint starts, pauses overnight, resumes, and finishes — without Director/Company OS machinery.
 
 **Toolkit source:** `scripts/local-dev/` (install: `npm run local-dev:install` or `bash scripts/local-dev/install.sh`)
 
@@ -20,10 +20,10 @@ supersedes: []
 ## 1. Non-negotiable rules
 
 1. **Every new sprint starts through the installed Alloy toolkit** — not by hand-creating branches in the canonical checkout.
-2. The worker **selects only an available managed slot** (1–6). Fail closed if occupied, conflicting, or unhealthy.
-3. **Permanent ports remain 3011–3016** (slot N → `3010 + N`). Never invent another port.
+2. The worker **selects only an available managed slot** (1–12). Fail closed if occupied, conflicting, or unhealthy.
+3. **Permanent ports remain 3011–3022** (slot N → `3010 + N`). Never invent another port.
 4. **Work occurs only in the assigned worktree** under `~/Code/alloy-worktrees/wtN-<name>/`.
-5. **Server starts only when required** (`--with-server` or explicit `alloy-dev-start`). Six worktrees ≠ six servers.
+5. **Server starts only when required** (`--with-server` or explicit `alloy-dev-start`). A placed worktree is not a running server: twelve slots do not imply twelve servers, and the server ceiling is lower than the slot count on purpose.
 6. **Worktree-local dependencies only** — `npm install` inside that worktree’s `web/`. No `node_modules` symlinks between worktrees.
 7. Respect resource limits: active providers, running servers, concurrent installs, concurrent heavy jobs (see config defaults in `scripts/local-dev/alloy-config.example`).
 8. Use **pause / resume / status / doctor / finish** for overnight and closeout — do not kill unrelated processes.
@@ -52,7 +52,7 @@ Lower-level primitives (`alloy-agent-create`, `alloy-worktree-create`, `alloy-de
 
 | Command | When |
 |---------|------|
-| `alloy-worker-status` | Compact table for all six slots |
+| `alloy-worker-status` | Compact table for all managed slots |
 | `alloy-worker-pause <slot\|--all>` | Overnight / stop owned provider+server+browser |
 | `alloy-worker-resume <slot\|--all>` | Morning — restore only resources that were active |
 | `alloy-worker-doctor <slot\|--all> [--recover]` | Diagnose drift; mutate only with `--recover` |
@@ -64,6 +64,76 @@ Pause state: `~/.local/state/alloy-dev/pause-state/`
 Finished archive: `~/.local/state/alloy-dev/finished/`
 
 ---
+
+## 3a. Capacity doctrine (Capacity V2, measured 2026-09-03)
+
+Every number here was **measured on the 48 GB / 12-core Mac mini**, not derived
+from a formula. They are recorded with their evidence so the next person to
+change one has to argue with the measurement rather than rediscover it.
+
+| Resource | Value | Why |
+| --- | --- | --- |
+| Managed slots | **12** | Registration is metadata and costs nothing at rest. Slots are placement, not runtime. |
+| Normal dev servers | **8** | Three levels below the measured knee, zero swap with wide margin, certified under a full heavy-use overlay. |
+| Burst dev servers | **10** | Ten is the highest level measured with **zero swap**. Offered only while the kernel reports normal pressure. |
+| Measured knee | **11** | Swap first appears at eleven and grows within the hold (0 → 240 → 729 MB). Twelve accelerates to ~2.3 GB. **Nothing admits at the knee.** |
+| Provider seats | **3** | CPU/API-bound, not memory-bound. Host memory evidence does not apply. |
+| Automated browsers | **2** | Two concurrent certifications were not slower than one (39.4 s and 47.7 s against 50.7 s solo). |
+| Validation / heavy / installs | **1 / 1 / 1** | CPU-bound and never independently measured. Not raised on server-memory evidence. |
+
+**A slot is not a server.** Twelve lanes can be placed while only eight run
+servers normally and only three drive providers. These are separate scarcities
+that do not constrain each other, and conflating them is what made "we are at
+capacity" sound like "your work is gone".
+
+**Cost follows age and use, not existence.** A freshly started dev server
+measures 390–440 MB; one that has compiled real routes for hours reaches
+several GB. An 8 GB Next server is **not automatically a leak** — canonical
+restart reclaims it cheaply. Never clear `.next` as routine hygiene: it turns a
+five-second restart into a full rebuild.
+
+**Burst is judged by the kernel, never by retained swap.** macOS keeps swap
+allocated long after pressure normalises, so "this machine has ever swapped" is
+not "this machine is constrained now". Burst requires kernel pressure level 1;
+an **unreadable** probe withholds burst rather than assuming calm.
+
+### Lane placement
+
+| State | Meaning |
+| --- | --- |
+| **PLACED** | Owns a managed slot. Port, QA route and server follow from that. |
+| **PARKED** | Durable and holds no slot. Keeps identity, branch, worktree, history, runs, uncommitted work and placement eligibility. |
+| **NO_WORKTREE** | The lane exists with no working tree. Not a flavour of parked — it needs an explicit disposition. |
+
+A PARKED lane is never given a fabricated slot, port or QA route. An invented
+port is worse than an absent one: absent is legible, invented sends someone to
+a URL that will never answer.
+
+### Arbitration when the fleet is full
+
+A safety ordering, not an efficiency one:
+
+1. Release something that provably should not be running.
+2. Only then spend burst headroom.
+3. Never past the burst ceiling — **queue** instead.
+
+Holder selection uses **positive evidence only**. An active run vetoes reclaim
+unconditionally, and an unrecognised run state counts as ACTIVE. Age, RSS, a
+missing audit entry and an UNKNOWN desired state are **never** evidence of
+idleness.
+
+### Slot bounds
+
+Any slot bound must derive from the topology owner (`managed-slots.mjs`,
+`isManagedSlot`). A literal ceiling shipped as `n <= 6` survived the six-slot
+host and caused `freeSlots()` to offer a slot Payments was using; a standing
+guard test now refuses literal slot bounds anywhere in the control plane.
+
+### Host hygiene
+
+A clean host means **everything consuming resources has an owner, purpose,
+lifecycle and recovery path** — not minimal RAM. Useful caches and parked
+worktrees are not dirt, and UNKNOWN state is never destroyed.
 
 ## 4. First-response contract (every managed sprint)
 

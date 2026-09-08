@@ -341,5 +341,30 @@ await test("REGRESSION GUARD — the policy never reads a memory page counter it
   assert.match(assignment, /memory_available_gb.*:\s*null/s, "a missing measurement yields null, not a substitute");
 });
 
+// ── a probe that cannot run must not look like a calm host ──────────────────
+//
+// memoryPressure called execFile("sysctl", …) by bare name. sysctl lives in
+// /usr/sbin, which is not on every PATH this code runs under, and execFile
+// returns "" when it cannot resolve the binary — which parses to level null,
+// reports "unknown", and yields thrashing:false. So on any caller without
+// /usr/sbin the module reported a calm machine no matter what the kernel said,
+// and auto-reclaim could never fire. MEASURED: bare sysctl does not resolve in
+// a lane shell here, while /usr/sbin/sysctl -n kern.memorystatus_vm_pressure_level
+// returns 1 immediately. Identical in shape to the lsof fix in read-core.
+await test("the pressure probe resolves sysctl by absolute path", async () => {
+  const src = readFileSync(new URL("../lib/vacilando/memory-manager.mjs", import.meta.url), "utf8");
+  assert.match(src, /\/usr\/sbin\/sysctl/, "an absolute path must be tried first");
+  assert.doesNotMatch(src, /run\("sysctl"/, "no bare-name sysctl call may remain");
+});
+
+await test("pressure says whether it could actually read the kernel", async () => {
+  // Without this flag a blind probe and a healthy host are the same object, and
+  // burst admission cannot tell which one it is holding.
+  const M = await import("../lib/vacilando/memory-manager.mjs");
+  const p = await M.memoryPressure({});
+  assert.equal(typeof p.readable, "boolean", "readable must always be present");
+  if (p.readable) assert.notEqual(p.level, null, "readable implies a level");
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

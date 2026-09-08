@@ -44,9 +44,31 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "attendance.move",
     "attendance.correct",
     "attendance.mark_absent",
+    "enrollment.pricing.accept",
+    "enrollment.pricing.override",
+    "billing.generate_tuition",
+    "billing.apply_discounts",
+    "billing.adjust_account",
+    "billing.reverse_adjustment",
+    "billing.configure_responsibility",
+    "billing.resolve_responsibility",
+    "billing.reallocate_responsibility",
+    "billing.configure_expected_funding",
+    "billing.attribute_payment",
+    "subsidy.configure_agency",
+    "subsidy.configure_program",
+    "subsidy.record_authorization",
+    "subsidy.build_claim",
+    "subsidy.submit_claim",
+    "subsidy.record_remittance",
+    "subsidy.settle_remittance",
+    "subsidy.reconcile_remittance",
+    "subsidy.resolve_variance",
     "charge.add",
     "charge.post",
     "charge.reverse",
+    "payment.record",
+    "payment.refund",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -189,6 +211,364 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         implementationStatus: "production",
         reason: "Closes a fact with an end date. Never a deletion — the record says when it stopped applying.",
     }),
+    // ── Enrollment pricing ─────────────────────────────────────────────────
+    // The operator's decision about tuition, over the resolution Commercial Execution produced.
+    // Neither of these creates a charge: an accepted term is a contract fact, and turning it into
+    // money is a later thread's job.
+    def({
+        capabilityKey: "enrollment.pricing.accept",
+        canonicalCommandKey: "enrollment.pricing.accept",
+        operatorLabel: "Accept tuition",
+        family: "enrollment",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "enrollment.pricing.accept",
+        implementationStatus: "production",
+        reason:
+            "Records the recommended tuition as an effective-dated pricing term on the assignment. "
+            + "The server re-reads the assignment and re-resolves before writing, so a resolution "
+            + "that has gone stale is refused rather than committed.",
+    }),
+    def({
+        capabilityKey: "enrollment.pricing.override",
+        canonicalCommandKey: "enrollment.pricing.override",
+        operatorLabel: "Override tuition",
+        family: "enrollment",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "enrollment.pricing.override",
+        implementationStatus: "production",
+        reason:
+            "Chooses a DIFFERENT authored tuition option than the one recommended, with a recorded "
+            + "reason, under `enrollment.pricing.override`. It cannot accept an amount: an override "
+            + "picks from the catalog, so every accepted price stays traceable to a rate someone authored.",
+    }),
+    // ── Billing generation ─────────────────────────────────────────────────
+    def({
+        capabilityKey: "billing.generate_tuition",
+        canonicalCommandKey: "billing.generate_tuition",
+        operatorLabel: "Generate tuition",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.generate_tuition",
+        implementationStatus: "production",
+        reason:
+            "Turns ACCEPTED pricing terms into draft tuition charges for one named service period, "
+            + "through the Operational Consumption path that already owns consequence lineage. The "
+            + "amount is the term's, never the caller's and never a re-resolved catalog price; a "
+            + "payload carrying one is refused. Creates drafts only — posting stays separate — and is "
+            + "safe to retry, because the occurrence converges on a database unique index.",
+    }),
+    // ── Reductions: what legitimately lowers what a family owes ────────────
+    def({
+        capabilityKey: "billing.apply_discounts",
+        canonicalCommandKey: "billing.apply_discounts",
+        operatorLabel: "Apply discounts",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "opportunity_customer_member"],
+        supportsPreview: false,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.apply_discounts",
+        implementationStatus: "production",
+        reason:
+            "Applies the organisation's AUTHORED discount policies to a period's gross tuition, "
+            + "writing each reduction as its own contra-revenue charge beside the gross rather than "
+            + "changing it. What a discount is worth comes from `commercial_policies`; who qualifies "
+            + "is proven server-side from enrolments and employments. A payload carrying an amount, a "
+            + "percentage or an eligibility claim is refused.",
+    }),
+    def({
+        capabilityKey: "billing.adjust_account",
+        canonicalCommandKey: "billing.adjust_account",
+        operatorLabel: "Adjust account",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "child"],
+        supportsPreview: false,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.adjust_account",
+        implementationStatus: "production",
+        reason:
+            "Records a manual credit, waiver or write-off with a reason, under `fin.adjust` — a "
+            + "different permission from billing, because deciding a family owes less is a different "
+            + "act from billing what was authored. Appends; never edits posted history.",
+    }),
+    def({
+        capabilityKey: "billing.reverse_adjustment",
+        canonicalCommandKey: "billing.reverse_adjustment",
+        operatorLabel: "Reverse adjustment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "child"],
+        supportsPreview: false,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.reverse_adjustment",
+        implementationStatus: "production",
+        reason:
+            "Undoes a manual reduction by appending its opposite and linking the two. The original "
+            + "stands, and a reduction is reversed once — the same bound a posted charge's correction "
+            + "already carries.",
+    }),
+    // ── Responsibility: who owes it, and where their share is funded from ──
+    def({
+        capabilityKey: "billing.configure_responsibility",
+        canonicalCommandKey: "billing.configure_responsibility",
+        operatorLabel: "Configure responsibility",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.configure_responsibility",
+        implementationStatus: "production",
+        reason:
+            "Records which NAMED parties contractually bear a family's obligations, from a date, "
+            + "under `fin.responsibility` — a separate grant, because moving a contractual position "
+            + "between two real people changes who owes rather than what is owed. Responsibility is "
+            + "never inferred from account ownership, a contact role or who paid.",
+    }),
+    def({
+        capabilityKey: "billing.resolve_responsibility",
+        canonicalCommandKey: "billing.resolve_responsibility",
+        operatorLabel: "Resolve responsibility",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.resolve_responsibility",
+        implementationStatus: "production",
+        reason:
+            "Divides a charge's allocatable net — gross less its Thread 10 reductions, derived "
+            + "server-side — between the parties the arrangement in force names. Ordinary billing "
+            + "work under `fin.write`: it decides nothing. Where no arrangement is in force the "
+            + "whole net is recorded as UNASSIGNED rather than given to the household.",
+    }),
+    def({
+        capabilityKey: "billing.reallocate_responsibility",
+        canonicalCommandKey: "billing.reallocate_responsibility",
+        operatorLabel: "Reallocate responsibility",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.reallocate_responsibility",
+        implementationStatus: "production",
+        reason:
+            "Moves a POSTED charge's responsibility onto the arrangement now in force, with a reason "
+            + "and full lineage. Deliberately explicit and permissioned: on posted money a different "
+            + "division means one real person now owes what another owed, and that is chosen, never "
+            + "converged into by a background run.",
+    }),
+    def({
+        capabilityKey: "billing.configure_expected_funding",
+        canonicalCommandKey: "billing.configure_expected_funding",
+        operatorLabel: "Configure expected funding",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.configure_expected_funding",
+        implementationStatus: "production",
+        reason:
+            "Records where a responsible party's share is EXPECTED to be funded from — an employer, "
+            + "a scholarship, a subsidy agency. Attached to responsibility, never a substitute for "
+            + "it: expected funding is not a payment, reduces nothing owed, and does not make the "
+            + "funder responsible. Subsidy eligibility and remittance stay Thread 9's.",
+    }),
+    def({
+        capabilityKey: "billing.attribute_payment",
+        canonicalCommandKey: "billing.attribute_payment",
+        operatorLabel: "Attribute payment to responsibility",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.attribute_payment",
+        implementationStatus: "production",
+        reason:
+            "Explains whose share a payment application satisfied, stated explicitly rather than "
+            + "guessed from who paid. Thread 8 remains the only authority that reduces outstanding; "
+            + "an attribution moves no balance and cannot exceed what its application applied.",
+    }),
+    // ── Subsidy: authorization, claim, remittance, variance ────────────────
+    def({
+        capabilityKey: "subsidy.configure_agency",
+        canonicalCommandKey: "subsidy.configure_agency",
+        operatorLabel: "Configure funding agency",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.configure_agency",
+        implementationStatus: "production",
+        reason:
+            "Records a funder with a stable identity — enough to be a payer on a Thread 8 receipt, to isolate by org, to carry provenance and to reconcile a remittance against. Deliberately narrow: not a party platform.",
+    }),
+    def({
+        capabilityKey: "subsidy.configure_program",
+        canonicalCommandKey: "subsidy.configure_program",
+        operatorLabel: "Configure subsidy programme",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.configure_program",
+        implementationStatus: "production",
+        reason:
+            "Records a funding programme an agency runs. Configuration steers; no jurisdiction, agency or statute is encoded in shared infrastructure.",
+    }),
+    def({
+        capabilityKey: "subsidy.record_authorization",
+        canonicalCommandKey: "subsidy.record_authorization",
+        operatorLabel: "Record subsidy authorization",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.record_authorization",
+        implementationStatus: "production",
+        reason:
+            "Records the financially operative decision — which child, which period, how much, and what the agency says the family still pays. Effective-dated and superseding; the copay is RECORDED, never applied, because what a family owes is Thread 6's.",
+    }),
+    def({
+        capabilityKey: "subsidy.build_claim",
+        canonicalCommandKey: "subsidy.build_claim",
+        operatorLabel: "Build subsidy claim",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.build_claim",
+        implementationStatus: "production",
+        reason:
+            "Assembles a period's claim only from posted obligations that actually carry expected funding, so a provider cannot claim for care nobody authorised. Idempotent by authorization and period.",
+    }),
+    def({
+        capabilityKey: "subsidy.submit_claim",
+        canonicalCommandKey: "subsidy.submit_claim",
+        operatorLabel: "Submit subsidy claim",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.submit_claim",
+        implementationStatus: "production",
+        reason:
+            "Sends the claim. Under the approved policy this is the event that may suppress family collection for the amount the claim attributed — bounded by expected funding and by what is still outstanding. It is not payment.",
+    }),
+    def({
+        capabilityKey: "subsidy.record_remittance",
+        canonicalCommandKey: "subsidy.record_remittance",
+        operatorLabel: "Record remittance advice",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.record_remittance",
+        implementationStatus: "production",
+        reason:
+            "Records what the agency SAID it is paying. Advice is evidence, not cash: the receipt stays null until Thread 8 has one.",
+    }),
+    def({
+        capabilityKey: "subsidy.settle_remittance",
+        canonicalCommandKey: "subsidy.settle_remittance",
+        operatorLabel: "Settle remittance with payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.settle_remittance",
+        implementationStatus: "production",
+        reason:
+            "Attaches the agency receipt that actually settled an advice. Refuses a payment whose payer is not the agency, so a family's own money can never look like a subsidy arriving.",
+    }),
+    def({
+        capabilityKey: "subsidy.reconcile_remittance",
+        canonicalCommandKey: "subsidy.reconcile_remittance",
+        operatorLabel: "Reconcile remittance",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.reconcile_remittance",
+        implementationStatus: "production",
+        reason:
+            "Compares claimed with received and writes a variance per line. Resolves nothing: a shortfall never becomes a family charge, a write-off or a resubmission by itself.",
+    }),
+    def({
+        capabilityKey: "subsidy.resolve_variance",
+        canonicalCommandKey: "subsidy.resolve_variance",
+        operatorLabel: "Resolve subsidy variance",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "subsidy.resolve_variance",
+        implementationStatus: "production",
+        reason:
+            "An operator names what happens to money the agency did not pay. No default. Write-off forgives it through Thread 10's adjustment rather than a subsidy-shaped copy; accepting family responsibility writes no money at all.",
+    }),
     // ── Financials ─────────────────────────────────────────────────────────
     // One operator intent over the existing charge-lifecycle service. The adapter resolves the
     // enrollment agreement the domain requires from the CHILD the operator names, and fails closed
@@ -245,6 +625,47 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             "The lawful way posted money changes. Writes a NEW corrective row referencing the original "
             + "through source_charge_id; the original stays exactly as posted. Immutability without a "
             + "correction path is a dead end, not a guarantee.",
+    }),
+    // Money RECEIVED, and given back. The counterpart to charge.post: posting says what is owed,
+    // this says what has been paid, and the balance is the difference. Both write to the substrate
+    // that already exists — `payments` + `payment_allocations.charge_id` — so the childcare card and
+    // the job drawer compute a balance the same way.
+    def({
+        capabilityKey: "payment.record",
+        canonicalCommandKey: "payment.record",
+        operatorLabel: "Record payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.record",
+        implementationStatus: "production",
+        reason:
+            "Records authoritative money received against a POSTED charge and applies it, reducing the "
+            + "balance exactly once. Idempotent — a retried request returns the payment already recorded "
+            + "and its existing application. This RECORDS money; it does not collect it, so a family who "
+            + "pays by cash or check is representable without a provider.",
+    }),
+    def({
+        capabilityKey: "payment.refund",
+        canonicalCommandKey: "payment.refund",
+        operatorLabel: "Refund payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.refund",
+        implementationStatus: "production",
+        reason:
+            "The lawful way received money changes. Writes a NEW outbound row referencing the receipt "
+            + "through refunds_payment_id and reverses the applications that were holding the balance "
+            + "down; the original receipt stays exactly as received and is never deleted.",
     }),
     def({
         capabilityKey: "attendance.check_in",

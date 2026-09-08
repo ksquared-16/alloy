@@ -216,7 +216,7 @@ describe("buildCurrentWorkSurfaceVM threads execution state onto every action", 
             signals: {
                 work: { primary: null, items: [], openCount: 1, overdueCount: 0, nextActionLabel: null },
                 attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-                tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+                tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
                 communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
                 billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
             },

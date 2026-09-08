@@ -366,5 +366,37 @@ grep -q 'alloy_refuse_occupied_port "$port" "${mode}-start for $name" loopback' 
   && ok "39. dev-start asks the loopback question, not the port-global one" \
   || bad "39. dev-start still asks the port-global question"
 
+# ── an unregistered worktree still has a canonical retirement path ──────────
+#
+# alloy-worktree-remove loaded metadata FIRST and died "unknown worktree
+# metadata", so a worktree whose registration was gone had no canonical way out
+# and the operator was pushed to raw `git worktree remove`. That is not
+# hypothetical: registration is host-local state no backup carries, and a
+# retirement that deletes metadata before calling this command produces the same
+# orphan. It happened during capacity certification and cost exactly that.
+#
+# The safety property was never the metadata file — it is that a worktree whose
+# identity cannot be confirmed is never removed. With no registration there is no
+# recorded branch, so --orphaned makes the CALLER name it and it must still match
+# the worktree HEAD. The check survives; only its source moves.
+REMOVE="${ROOT}/alloy-worktree-remove"
+grep -q -- '--orphaned' "$REMOVE" \
+  && ok "40. an unregistered worktree can still be retired canonically" \
+  || bad "40. no path exists for a worktree whose metadata is gone"
+grep -q 'IS registered — retire it normally' "$REMOVE" \
+  && ok "41. --orphaned refuses a worktree that IS registered" \
+  || bad "41. --orphaned can be used to skip the registry"
+grep -q 'branch disagree' "$REMOVE" \
+  && ok "42. the branch cross-check is preserved on both paths" \
+  || bad "42. branch identity check lost"
+grep -q 'not a git worktree' "$REMOVE" \
+  && ok "43. --orphaned still proves it is a real git worktree first" \
+  || bad "43. --orphaned would act on any path"
+# The confirmation must remain interactive on BOTH paths: the whole subsystem
+# exists because "override the safety check" must not be one flag away.
+grep -q 'alloy_confirm' "$REMOVE" \
+  && ok "44. removal still requires interactive confirmation" \
+  || bad "44. confirmation bypassed"
+
 printf '\n==== dev-server-ownership: %s passed, %s failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

@@ -97,9 +97,21 @@ export type ProcessCardCommandProjection = {
      * that keeps rule 6 honest in production rather than only in fixtures.
      */
     withheld: Array<{ key: string; label: string }>;
+    /**
+     * The refs configuration actually named, in configured order — the input side of this
+     * projection, reported so provenance is checkable rather than inferred from what rendered.
+     * Certification reads this against the rendered row; nothing renders from it.
+     */
+    configuredRefs: string[];
 };
 
-const EMPTY: ProcessCardCommandProjection = { configured: false, commands: [], drift: [], withheld: [] };
+const EMPTY: ProcessCardCommandProjection = {
+    configured: false,
+    commands: [],
+    drift: [],
+    withheld: [],
+    configuredRefs: [],
+};
 
 function commandFrom(
     action: CurrentWorkActionVM,
@@ -238,5 +250,5 @@ export function projectProcessCardCommands(context: OperationalContext): Process
         });
     }
 
-    return { configured: true, commands, drift, withheld };
+    return { configured: true, commands, drift, withheld, configuredRefs: configured.map((c) => c.ref) };
 }

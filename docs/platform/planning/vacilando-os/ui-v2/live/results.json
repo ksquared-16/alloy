@@ -1,0 +1,448 @@
+{
+  "captured_at": "2026-09-04T14:10:51.904Z",
+  "base": "http://127.0.0.1:3030",
+  "passed": 88,
+  "failed": 0,
+  "results": [
+    {
+      "name": "mobile Home: a global Needs You control exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Home: the control opens a sheet in place",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Home: opening it does not navigate",
+      "ok": true,
+      "detail": "#/home -> #/home"
+    },
+    {
+      "name": "mobile Home: no \"Lane unavailable\"",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Home: the sheet does not pollute history",
+      "ok": true,
+      "detail": "2 -> 2"
+    },
+    {
+      "name": "mobile Home: every Review link names a real lane",
+      "ok": true,
+      "detail": "#/lanes/lane_db3431e755a8"
+    },
+    {
+      "name": "mobile Home: closing returns to the same screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lanes: a global Needs You control exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lanes: the control opens a sheet in place",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lanes: opening it does not navigate",
+      "ok": true,
+      "detail": "#/lanes -> #/lanes"
+    },
+    {
+      "name": "mobile Lanes: no \"Lane unavailable\"",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lanes: the sheet does not pollute history",
+      "ok": true,
+      "detail": "3 -> 3"
+    },
+    {
+      "name": "mobile Lanes: every Review link names a real lane",
+      "ok": true,
+      "detail": "#/lanes/lane_db3431e755a8"
+    },
+    {
+      "name": "mobile Lanes: closing returns to the same screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lane: a global Needs You control exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lane: the control opens a sheet in place",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lane: opening it does not navigate",
+      "ok": true,
+      "detail": "#/lanes/lane_a5ce60877b5f -> #/lanes/lane_a5ce60877b5f"
+    },
+    {
+      "name": "mobile Lane: no \"Lane unavailable\"",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile Lane: the sheet does not pollute history",
+      "ok": true,
+      "detail": "4 -> 4"
+    },
+    {
+      "name": "mobile Lane: every Review link names a real lane",
+      "ok": true,
+      "detail": "#/lanes/lane_db3431e755a8"
+    },
+    {
+      "name": "mobile Lane: closing returns to the same screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home: a global Needs You control exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home: the control opens a sheet in place",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home: opening it does not navigate",
+      "ok": true,
+      "detail": "#/home -> #/home"
+    },
+    {
+      "name": "desktop Home: no \"Lane unavailable\"",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Home: the sheet does not pollute history",
+      "ok": true,
+      "detail": "2 -> 2"
+    },
+    {
+      "name": "desktop Home: every Review link names a real lane",
+      "ok": true,
+      "detail": "#/lanes/lane_db3431e755a8"
+    },
+    {
+      "name": "desktop Home: closing returns to the same screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lanes: a global Needs You control exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lanes: the control opens a sheet in place",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lanes: opening it does not navigate",
+      "ok": true,
+      "detail": "#/lanes -> #/lanes"
+    },
+    {
+      "name": "desktop Lanes: no \"Lane unavailable\"",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lanes: the sheet does not pollute history",
+      "ok": true,
+      "detail": "3 -> 3"
+    },
+    {
+      "name": "desktop Lanes: every Review link names a real lane",
+      "ok": true,
+      "detail": "#/lanes/lane_db3431e755a8"
+    },
+    {
+      "name": "desktop Lanes: closing returns to the same screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lane: a global Needs You control exists",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lane: the control opens a sheet in place",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lane: opening it does not navigate",
+      "ok": true,
+      "detail": "#/lanes/lane_a5ce60877b5f -> #/lanes/lane_a5ce60877b5f"
+    },
+    {
+      "name": "desktop Lane: no \"Lane unavailable\"",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop Lane: the sheet does not pollute history",
+      "ok": true,
+      "detail": "4 -> 4"
+    },
+    {
+      "name": "desktop Lane: every Review link names a real lane",
+      "ok": true,
+      "detail": "#/lanes/lane_db3431e755a8"
+    },
+    {
+      "name": "desktop Lane: closing returns to the same screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home renders no permanent Needs You card",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home renders no permanent approvals block",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home shows an operational subset, not the directory",
+      "ok": true,
+      "detail": "Home 2 of 18 on Lanes"
+    },
+    {
+      "name": "Home names that subset and offers the directory",
+      "ok": true,
+      "detail": "Active lanes"
+    },
+    {
+      "name": "Home keeps its command-centre blocks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "there is no thread-level Copy anywhere",
+      "ok": true,
+      "detail": "0 found"
+    },
+    {
+      "name": "user message owns a Copy control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "user message defaults to four lines",
+      "ok": true,
+      "detail": "4 lines"
+    },
+    {
+      "name": "user long message offers See more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "provider message owns a Copy control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "provider message defaults to four lines",
+      "ok": true,
+      "detail": "4.17 lines"
+    },
+    {
+      "name": "provider long message offers See more",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "expanding the user message expands only that message",
+      "ok": true,
+      "detail": "1 expanded"
+    },
+    {
+      "name": "Show less collapses the user message again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "expanding shows See less",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy confirms in place",
+      "ok": true,
+      "detail": "Copied"
+    },
+    {
+      "name": "Copy takes the whole message while collapsed",
+      "ok": true,
+      "detail": "2660 chars"
+    },
+    {
+      "name": "Copy excludes byline and status chrome",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no standalone Current Work card",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no second progress subsystem",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no ETA anywhere",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "the lane status line carries state (and progress when fresh)",
+      "ok": true,
+      "detail": "Ready · Claude"
+    },
+    {
+      "name": "no operator-facing surface says suspended — /home",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /activity",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /system",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no operator-facing surface says suspended — /lanes/lane_faacca6079ad",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "lane resources never show a CPU figure that was not measured",
+      "ok": true,
+      "detail": "(no resources block — no live seat for this lane)"
+    },
+    {
+      "name": "a lane opened from Home returns to Home",
+      "ok": true,
+      "detail": "back=\"#/home\" crumb=\"Home\""
+    },
+    {
+      "name": "a lane opened from Lanes returns to Lanes",
+      "ok": true,
+      "detail": "back=\"#/lanes\" crumb=\"Lanes\""
+    },
+    {
+      "name": "compose 390: typing enters compose mode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: the field is the dominant surface above the keyboard",
+      "ok": true,
+      "detail": "171px of 380 = 45%"
+    },
+    {
+      "name": "compose 390: the field owns its own line",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: Send and attach stay reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: the provider stays reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: orientation chrome stands down",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 390: some conversation remains",
+      "ok": true,
+      "detail": "77px"
+    },
+    {
+      "name": "compose 390: the composer ends at the visual viewport bottom",
+      "ok": true,
+      "detail": "composer 380 of 380"
+    },
+    {
+      "name": "compose 320: typing enters compose mode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: the field is the dominant surface above the keyboard",
+      "ok": true,
+      "detail": "128px of 300 = 43%"
+    },
+    {
+      "name": "compose 320: the field owns its own line",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: Send and attach stay reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: the provider stays reachable",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: orientation chrome stands down",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "compose 320: some conversation remains",
+      "ok": true,
+      "detail": "40px"
+    },
+    {
+      "name": "compose 320: the composer ends at the visual viewport bottom",
+      "ok": true,
+      "detail": "composer 300 of 300"
+    }
+  ]
+}

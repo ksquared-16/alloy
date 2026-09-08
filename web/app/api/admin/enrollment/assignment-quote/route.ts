@@ -1,23 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabaseAdmin";
+import { randomUUID } from "crypto";
+
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
-import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { buildAssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import { generateAssignmentQuoteSnapshot } from "@/lib/enrollment/generateAssignmentQuote";
-import type { TuitionRateCandidate } from "@/lib/adminV2/runtime/focusPanel/financialConfig/resolveEnrollmentTuitionRate";
-import {
-    ASSIGNMENT_QUOTE_SNAPSHOTS_METADATA_KEY,
-    activeAssignmentQuoteSnapshot,
-} from "@/lib/enrollment/assignmentQuoteSnapshot";
+import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
  * POST /api/admin/enrollment/assignment-quote
  *
- * Generate an immutable commercial assignment quote/estimate snapshot for a child's
- * enrollment process instance. Persists onto process_instances.metadata only —
- * never posts ledger charges, invoices, or payments.
+ * Resolve an assignment's tuition and record the resulting ESTIMATE for the assignment card.
  *
- * Body: { customer_member_id, opportunity_id, offering_id? }
+ * ── THE NAME IS HISTORICAL; THERE IS NO QUOTE DOMAIN ──
+ *
+ * This route does not create a quote entity and drives no quote lifecycle. A resolution for an
+ * assignment that is proposed or future-effective is still a resolution for that assignment. What
+ * an operator ACCEPTS is an effective-dated `enrollment_pricing_terms` row, written by the
+ * registered `enrollment.pricing.accept` / `.override` actions — not by this route, and not by any
+ * route.
+ *
+ * ── WHY IT WAS REWRITTEN ──
+ *
+ * It selected `program_key`, `schedule_key` and `billing_period` from `commercial_tuition_rates` —
+ * columns dropped by `20260702000002_commercial_tuition_rates_v2` — so every call answered 500 and
+ * the mounted "Generate quote" control had never worked against the current schema. It also read
+ * the assignment's program, schedule and site out of `process_instances.metadata`: a fourth copy of
+ * facts whose owners are the assignment, the placement and the schedule.
+ *
+ * Both are fixed the same way. Facts come from their owners, matching comes from Commercial
+ * Execution, and this route composes neither.
  */
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -33,14 +46,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const customerMemberId =
-        typeof body.customer_member_id === "string" ? body.customer_member_id.trim() : "";
-    const opportunityId =
-        typeof body.opportunity_id === "string" ? body.opportunity_id.trim() : "";
-    const offeringId =
-        typeof body.offering_id === "string" && body.offering_id.trim()
-            ? body.offering_id.trim()
-            : null;
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const customerMemberId = str(body.customer_member_id);
+    const opportunityId = str(body.opportunity_id);
+    /** An explicit choice among the applicable options, when the operator has made one. */
+    const selectedSourceId = str(body.selected_source_id) || str(body.offering_id);
 
     if (!customerMemberId) {
         return NextResponse.json({ error: "Missing customer_member_id" }, { status: 400 });
@@ -48,15 +58,44 @@ export async function POST(request: NextRequest) {
     if (!opportunityId) {
         return NextResponse.json({ error: "Missing opportunity_id" }, { status: 400 });
     }
-    // Operator must lock in an explicit plan — never silent auto-match on persist.
-    if (!offeringId) {
-        return NextResponse.json(
-            { error: "Select a tuition plan to lock in the quote." },
-            { status: 400 },
-        );
-    }
 
     const supabase = createAdminClient();
+
+    // The ASSIGNMENT, which is what is being priced.
+    const { data: ocm } = await supabase
+        .from("opportunity_customer_members")
+        .select("id")
+        .eq("org_id", ctx.orgId)
+        .eq("opportunity_id", opportunityId)
+        .eq("customer_member_id", customerMemberId)
+        .maybeSingle();
+    const ocmId = (ocm as { id?: string } | null)?.id ?? "";
+    if (!ocmId) {
+        return NextResponse.json({ error: "no_assignment_for_child" }, { status: 404 });
+    }
+
+    const view = await buildAssignmentTuitionView(supabase, {
+        orgId: ctx.orgId,
+        opportunityCustomerMemberId: ocmId,
+    });
+    if (!view) {
+        return NextResponse.json({ error: "no_assignment_for_child" }, { status: 404 });
+    }
+
+    // Ambiguity and no-match are ANSWERS, returned as themselves. Neither is resolved by picking.
+    const chosen =
+        (selectedSourceId ? view.applicable.find((o) => o.sourceId === selectedSourceId) : null)
+        ?? view.recommended;
+    if (!chosen) {
+        return NextResponse.json(
+            {
+                error: view.state === "ambiguous" ? "tuition_ambiguous" : "no_tuition_for_assignment",
+                state: view.state,
+                view,
+            },
+            { status: 409 },
+        );
+    }
 
     const { data: piRows, error: piErr } = await supabase
         .from("process_instances")
@@ -67,121 +106,52 @@ export async function POST(request: NextRequest) {
         .eq("context_id", opportunityId)
         .order("created_at", { ascending: false })
         .limit(1);
+    if (piErr) return NextResponse.json({ error: piErr.message }, { status: 500 });
 
-    if (piErr) {
-        return NextResponse.json({ error: piErr.message }, { status: 500 });
-    }
-
-    const pi = (piRows ?? [])[0] as
-        | { id: string; metadata: Record<string, unknown> | null }
-        | undefined;
+    const pi = (piRows ?? [])[0] as { id: string; metadata: Record<string, unknown> | null } | undefined;
     if (!pi) {
         return NextResponse.json({ error: "no_enrollment_process_instance" }, { status: 404 });
     }
 
-    const metadata = (pi.metadata ?? {}) as Record<string, unknown>;
-    const programCategoryId =
-        typeof metadata.program_category_id === "string" && metadata.program_category_id.trim()
-            ? metadata.program_category_id.trim()
-            : null;
-    const scheduleKey =
-        typeof metadata.schedule_type === "string" && metadata.schedule_type.trim()
-            ? metadata.schedule_type.trim()
-            : null;
-    const locationId =
-        typeof metadata.location_id === "string" && metadata.location_id.trim()
-            ? metadata.location_id.trim()
-            : null;
-
-    let programKey: string | null = null;
-    if (programCategoryId) {
-        const { data: cat } = await supabase
-            .from("location_program_categories")
-            .select("key")
-            .eq("org_id", ctx.orgId)
-            .eq("id", programCategoryId)
-            .maybeSingle();
-        const key = (cat as { key?: string | null } | null)?.key;
-        programKey = typeof key === "string" && key.trim() ? key.trim() : null;
-    }
-
-    let rateQuery = supabase
-        .from("commercial_tuition_rates")
-        .select("id, program_key, schedule_key, rate_cents, billing_period, location_id, is_active, not_offered")
-        .eq("org_id", ctx.orgId)
-        .eq("is_active", true)
-        .eq("not_offered", false);
-
-    if (locationId) {
-        rateQuery = rateQuery.or(`location_id.is.null,location_id.eq.${locationId}`);
-    } else {
-        rateQuery = rateQuery.is("location_id", null);
-    }
-
-    const { data: rateRows, error: rateError } = await rateQuery;
-    if (rateError) {
-        return NextResponse.json({ error: rateError.message }, { status: 500 });
-    }
-
-    const rates = (rateRows ?? []) as TuitionRateCandidate[];
-
-    const effectiveDateRaw =
-        typeof metadata.start_date === "string" && metadata.start_date.trim()
-            ? metadata.start_date.trim()
-            : new Date().toISOString();
-
-    const result = generateAssignmentQuoteSnapshot({
-        metadata,
-        rates,
-        programKey,
-        scheduleKey,
-        locationId,
-        offeringId,
-        effectiveDate: effectiveDateRaw,
-        actorUserId: ctx.userId,
-        snapshotId: crypto.randomUUID(),
+    const generated = generateAssignmentQuoteSnapshot({
+        metadata: pi.metadata,
+        resolved: {
+            rateId: chosen.sourceId,
+            rateCents: chosen.amountCents,
+            billingPeriod: chosen.cadenceKey,
+            rateLabel: chosen.amountLabel,
+            isLocationOverride: chosen.scope === "location",
+        },
+        programKey: view.facts.programKey,
+        scheduleKey: view.facts.attendanceType,
+        locationId: view.facts.locationId,
+        offeringId: chosen.sourceId,
+        offeringLabel: chosen.amountLabel,
+        offeringVersionKey: view.configVersion,
+        effectiveDate: view.facts.asOf,
+        actorUserId: ctx.userId ?? null,
+        snapshotId: randomUUID(),
+        // The resolution's own identity travels with the estimate, so what the operator saw can be
+        // compared with what the assignment says later.
         pricingInputsExtra: {
-            customer_member_id: customerMemberId,
-            opportunity_id: opportunityId,
-            program_category_id: programCategoryId,
+            resolution_key: view.resolutionKey,
+            config_version: view.configVersion,
+            days_per_week: view.facts.daysPerWeek,
+            fact_sources: view.factSources,
         },
     });
-
-    if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: 400 });
+    if (!generated.ok) {
+        return NextResponse.json({ error: generated.error }, { status: 409 });
     }
 
-    const { error: updateErr } = await supabase
+    const { error: updateError } = await supabase
         .from("process_instances")
-        .update({
-            metadata: result.metadata,
-            updated_at: new Date().toISOString(),
-        })
+        .update({ metadata: generated.metadata })
         .eq("id", pi.id)
         .eq("org_id", ctx.orgId);
-
-    if (updateErr) {
-        return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    const active = activeAssignmentQuoteSnapshot(result.metadata);
-
-    return NextResponse.json({
-        ok: true,
-        process_instance_id: pi.id,
-        snapshot: result.snapshot,
-        active_snapshot: active,
-        metadata_keys: {
-            tuition_plan_id: result.metadata.tuition_plan_id ?? null,
-            [ASSIGNMENT_QUOTE_SNAPSHOTS_METADATA_KEY]: Array.isArray(
-                result.metadata[ASSIGNMENT_QUOTE_SNAPSHOTS_METADATA_KEY],
-            )
-                ? (result.metadata[ASSIGNMENT_QUOTE_SNAPSHOTS_METADATA_KEY] as unknown[]).length
-                : 0,
-        },
-        // Explicit: this route never posts financial truth.
-        ledger_posted: false,
-        invoice_created: false,
-        payment_created: false,
-    });
+    return NextResponse.json({ ok: true, snapshot: generated.snapshot, view });
 }

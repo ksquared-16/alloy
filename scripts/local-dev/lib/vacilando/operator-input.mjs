@@ -126,6 +126,76 @@ export function reconcileNeedsInputWithoutInput({ root, nowMs = Date.now() } = {
 }
 
 /** Read-only assertion used by the API/UI: is this NEEDS_INPUT legitimate? */
+/**
+ * A queued run whose lane has been closed will never start.
+ *
+ * THE DEFECT: closing a lane frees the lane, but a run already QUEUED against
+ * it keeps its record. Four such runs sat QUEUED for over fifteen hours on
+ * lanes closed within two minutes of the runs being created. Nothing was going
+ * to admit them — the lane they were queued for no longer exists — so they were
+ * not "waiting", they were stranded, and they counted against every queue and
+ * capacity reading that looked at non-terminal runs.
+ *
+ * ABANDONED is the right state and it is the same one the sibling reconciler
+ * uses: terminal for scheduling, explicitly recoverable, and not a claim that
+ * the work failed. What is asserted here is only that the run cannot proceed,
+ * which is a fact about the lane rather than a judgement about the work.
+ *
+ * Deliberately narrow. It touches ONLY runs that are still queued AND whose
+ * lane is closed. A queued run on a live lane is genuinely waiting and is left
+ * alone, because "has been queued a long time" is not evidence of anything.
+ */
+export function reconcileQueuedRunsOnClosedLanes({
+  root,
+  nowMs = Date.now(),
+  listLanes = listDurableLanes,
+  listRuns = null,
+} = {}) {
+  const reconciled = [];
+  let lanes = [];
+  try { lanes = listLanes(root) || []; } catch { lanes = []; }
+
+  const closed = new Set(
+    lanes.filter((l) => String(l?.status || "").toUpperCase() === "CLOSED")
+      .map((l) => l.lane_id || l.id).filter(Boolean),
+  );
+  if (!closed.size) return { ok: true, reconciled };
+
+  let runs = [];
+  try {
+    runs = listRuns ? listRuns(root) || [] : queuedRunsForLanes(closed, root);
+  } catch { runs = []; }
+
+  for (const run of runs) {
+    if (!run || run.state !== "QUEUED") continue;
+    if (!closed.has(run.lane_id)) continue;
+    const out = transitionExecutionRun(run.run_id, "ABANDONED", {
+      reason: "queued_on_closed_lane",
+      origin: "governor",
+      nowMs,
+      root,
+      completion_report: {
+        summary: "The lane this run was queued against was closed, so nothing would ever admit it. "
+          + "Collected rather than left counting against queue and capacity readings.",
+        at: new Date(nowMs).toISOString(),
+      },
+    });
+    if (out?.ok) reconciled.push({ lane_id: run.lane_id, run_id: run.run_id, was_state: "QUEUED" });
+  }
+  return { ok: true, reconciled };
+}
+
+/** Queued runs belonging to the given lanes, read from the run store. */
+function queuedRunsForLanes(laneIds, root) {
+  const out = [];
+  for (const laneId of laneIds) {
+    let run = null;
+    try { run = activeRunForLane(laneId, root); } catch { run = null; }
+    if (run && run.state === "QUEUED") out.push(run);
+  }
+  return out;
+}
+
 export function needsInputIsActionable(run, { root } = {}) {
   if (!run || run.state !== "NEEDS_INPUT") return true;
   return Boolean(actionableOperatorInputForRun(run, { root }));
