@@ -78,6 +78,10 @@ async function callAction(mode: "preview" | "execute", periodKey: string) {
         body: JSON.stringify({
             action_key: GENERATE_TUITION_ACTION_KEY,
             entity_type: "opportunity_customer_member",
+            /*
+             * NO SUBJECT, SENT AS NO SUBJECT. The run's subject is the period; an assignment id
+             * here would narrow it to one child while this panel said organization-wide.
+             */
             entity_id: "",
             mode,
             confirmation: { confirmed: mode === "execute" },

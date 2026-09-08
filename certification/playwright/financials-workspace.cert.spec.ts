@@ -11,7 +11,7 @@
  * Financials shell, KPI card or navigation grammar would look like one workspace family for exactly
  * as long as nobody changed the real one.
  */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /*
  * The shell and its left rail live under `/adminV2/*`. `/adminV2` itself redirects, and
@@ -23,6 +23,22 @@ const PERIOD = process.env.CERT_WS_PERIOD || new Date().toISOString().slice(0, 7
 const CUSTOMER = process.env.CERT_WS_CUSTOMER || "";
 const MEMBER = process.env.CERT_WS_MEMBER || "";
 const GROSS_LABEL = "$1,210.00";
+
+/*
+ * TABS ARE ADDRESSED BY THEIR SHARED DATA ATTRIBUTE, SCOPED TO THE WORKSPACE.
+ *
+ * `getByRole("tab", { name: "Activity" })` matched two elements: the Focus Panel's own mode tab on
+ * the surface behind the modal, and this workspace's section tab. A proof that cannot name which
+ * control it clicked proves nothing about either — the same lesson `[data-financials-card]` taught
+ * this file, one layer up.
+ */
+function sectionTab(shell: Locator, key: string): Locator {
+    return shell.locator(`[data-workspace-section-tab="${key}"]`);
+}
+
+function modeTab(shell: Locator, key: string): Locator {
+    return shell.locator(`[data-alloy-mode="${key}"]`);
+}
 
 async function openFinancialsWorkspace(page: Page) {
     await page.goto(HOME);
@@ -39,13 +55,26 @@ async function openFinancialsWorkspace(page: Page) {
     return shell;
 }
 
-/** Generate a draft charge through Thread 7's own command, so the cohort is real work. */
+/**
+ * Generate a draft charge through Thread 7's own command, so the cohort is real work.
+ *
+ * THE SEED NAMES ITS SUBJECT, AND FAILS IF IT CANNOT.
+ *
+ * `entity_id` on this action is a SCOPE: it narrows generation to one assignment. It is also
+ * now legitimately omissible — the transport transmits "no subject" for an action that declares
+ * it needs none, and for this action that means the whole period. So an unset
+ * `CERT_WS_ASSIGNMENT` no longer fails the request; it would quietly widen this seed from one
+ * draft charge to an org-wide billing run, and the certification would pass while proving
+ * something it never intended to do. The proof states the id it is scoped to.
+ */
 async function seedDraftCharge(page: Page) {
+    const assignment = (process.env.CERT_WS_ASSIGNMENT ?? "").trim();
+    expect(assignment, "CERT_WS_ASSIGNMENT must name the assignment this seed charges").not.toBe("");
     const res = await page.request.post("/api/admin/actions/execute", {
         data: {
             action_key: "billing.generate_tuition",
             entity_type: "opportunity_customer_member",
-            entity_id: process.env.CERT_WS_ASSIGNMENT ?? "",
+            entity_id: assignment,
             mode: "execute",
             confirmation: { confirmed: true },
             payload: { period_key: PERIOD },
@@ -111,15 +140,15 @@ test.describe("financials workspace, in the mounted application", () => {
         expect(overviewText, "the Overview states the scope its figures obey").toMatch(/All sites|site/i);
 
         // ── THE WORK SECTIONS EACH MOUNT THEIR OWN SURFACE ─────────────────────────────────
-        for (const [tab, section, testId] of [
-            ["Accounts", "accounts", "financials-accounts-section"],
-            ["Payments", "payments", "financials-payments-section"],
-            ["Subsidy", "subsidy", "financials-subsidy-section"],
-            ["Activity", "activity", "financials-activity-section"],
+        for (const [section, testId] of [
+            ["accounts", "financials-accounts-section"],
+            ["payments", "financials-payments-section"],
+            ["subsidy", "financials-subsidy-section"],
+            ["activity", "financials-activity-section"],
         ] as const) {
-            await page.getByRole("tab", { name: tab }).click();
+            await sectionTab(shell, section).click();
             await page.waitForTimeout(6_000);
-            await expect(shell, `${tab} is a real section`).toHaveAttribute("data-financials-section", section);
+            await expect(shell, `${section} is a real section`).toHaveAttribute("data-financials-section", section);
             await expect(page.locator(`[data-testid="${testId}"]`)).toBeVisible({ timeout: 40_000 });
         }
 
@@ -129,7 +158,7 @@ test.describe("financials workspace, in the mounted application", () => {
         );
 
         // ── THE OPERATIONAL SECTION ────────────────────────────────────────────────────────
-        await page.getByRole("tab", { name: "Charges" }).click();
+        await sectionTab(shell, "charges").click();
         await page.waitForTimeout(6_000);
         await expect(shell).toHaveAttribute("data-financials-section", "charges");
         await expect(
@@ -175,8 +204,8 @@ test.describe("financials workspace, in the mounted application", () => {
         await page.reload();
         await page.waitForLoadState("domcontentloaded");
         await page.waitForTimeout(30_000);
-        await openFinancialsWorkspace(page);
-        await page.getByRole("tab", { name: "Charges" }).click();
+        const reopened = await openFinancialsWorkspace(page);
+        await sectionTab(reopened, "charges").click();
         await page.waitForTimeout(8_000);
         await expect(
             page.locator(`[data-financials-queue-row="${chargeId}"]`),
@@ -212,7 +241,7 @@ test.describe("financials workspace, in the mounted application", () => {
         test.setTimeout(600_000);
         const shell = await openFinancialsWorkspace(page);
 
-        await page.getByRole("tab", { name: "Studio" }).click();
+        await modeTab(shell, "studio").click();
         await page.waitForTimeout(6_000);
         await expect(shell).toHaveAttribute("data-financials-mode", "studio");
         await expect(shell).toHaveAttribute("data-financials-section", "setup");
@@ -230,7 +259,7 @@ test.describe("financials workspace, in the mounted application", () => {
         );
 
         // Returning to Work lands on Work's own section, not a Studio key.
-        await page.getByRole("tab", { name: "Work" }).click();
+        await modeTab(shell, "work").click();
         await page.waitForTimeout(4_000);
         await expect(shell).toHaveAttribute("data-financials-section", "overview");
     });
@@ -242,8 +271,8 @@ test.describe("financials workspace, in the mounted application", () => {
     test("bulk charging previews a period before it writes anything", async ({ page }) => {
         test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
         test.setTimeout(900_000);
-        await openFinancialsWorkspace(page);
-        await page.getByRole("tab", { name: "Charges" }).click();
+        const shell = await openFinancialsWorkspace(page);
+        await sectionTab(shell, "charges").click();
         await page.waitForTimeout(6_000);
 
         await page.locator('[data-financials-bulk-open="true"]').click();

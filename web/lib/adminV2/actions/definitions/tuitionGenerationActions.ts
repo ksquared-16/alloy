@@ -27,6 +27,7 @@ import { randomUUID } from "crypto";
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import { generateTuitionCharges } from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
+import { isSubjectlessEntityId } from "@/lib/adminV2/actions/subjectlessActionConstants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const BILLING_GENERATE_TUITION_ACTION_KEY = "billing.generate_tuition";
@@ -210,7 +211,14 @@ function scopeFrom(
         ? (payload!.opportunity_customer_member_ids as unknown[]).map((v) => t(v)).filter(Boolean)
         : [];
     if (listed.length > 0) return listed;
-    const single = t(payload?.opportunity_customer_member_id) || t(entityId);
+    /*
+     * "NO SUBJECT" IS NOT A SUBJECT. The transport transmits a sentinel for an action that
+     * declares it needs no record, and treating that sentinel as an assignment id would narrow
+     * the run to a record that does not exist — zero charges, indistinguishable from a period
+     * with nothing to bill.
+     */
+    const fromEntity = isSubjectlessEntityId(entityId) ? "" : t(entityId);
+    const single = t(payload?.opportunity_customer_member_id) || fromEntity;
     return single ? [single] : null;
 }
 

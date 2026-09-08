@@ -8,6 +8,8 @@ import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { CREATE_LEAD_ACTION_ENTITY_ID } from "@/lib/admin/actions/createLeadActionConstants";
+import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
+import { SUBJECTLESS_ACTION_ENTITY_ID } from "@/lib/adminV2/actions/subjectlessActionConstants";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
 import { logCommandExecutePathDiagnostic } from "@/lib/platform/commands/runtime/commandExecuteCompatDiagnostics";
 import { recordExecuteAdminActionFallback } from "@/lib/platform/commands/runtime/executeAdminActionFallbackTelemetry";
@@ -126,13 +128,32 @@ export async function POST(request: NextRequest) {
     const entityType = body.entity_type != null ? String(body.entity_type).trim() : "";
     let entityId = body.entity_id != null ? String(body.entity_id).trim() : "";
     const createLead = actionKey === "create_lead";
-    if (!actionKey || !entityType || (!entityId && !createLead)) {
+    /*
+     * SOME ACTIONS HAVE NO RECORD SUBJECT, AND THE REGISTRY ALREADY SAYS SO.
+     *
+     * `requiredContext.requiresEntityId: false` is a declaration by the action's owner —
+     * `billing.generate_tuition`'s subject is a service PERIOD, not a row. Requiring an
+     * `entity_id` from every caller contradicted that declaration and left only one way to
+     * invoke such an action: send a record that is not its subject. For this action that is
+     * not a harmless placeholder, because an entity id there NARROWS the run to one
+     * assignment — a caller satisfying the transport would have billed one child while
+     * believing it had billed the month.
+     *
+     * `create_lead` had already been given its own hard-coded exemption for the same reason.
+     * This generalises it to the declaration rather than adding a second special case.
+     */
+    const subjectless =
+        !entityId && !createLead && getRegisteredAction(actionKey)?.requiredContext.requiresEntityId === false;
+    if (!actionKey || !entityType || (!entityId && !createLead && !subjectless)) {
         return apiError("BAD_REQUEST", "action_key, entity_type, and entity_id are required", 400, undefined, {
             request,
         });
     }
     if (createLead && !entityId) {
         entityId = CREATE_LEAD_ACTION_ENTITY_ID;
+    }
+    if (subjectless) {
+        entityId = SUBJECTLESS_ACTION_ENTITY_ID;
     }
 
     const t0 = Date.now();
