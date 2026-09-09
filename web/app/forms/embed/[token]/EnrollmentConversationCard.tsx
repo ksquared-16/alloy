@@ -41,6 +41,7 @@ import {
     participantQuestion,
     participantQuestionSegments,
     participantUnreadableAnswerMessage,
+    type ParticipantTurnControl,
     type ParticipantValueControl,
     PARTICIPANT_CLARIFICATION_MESSAGE,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
@@ -1347,6 +1348,38 @@ export function EnrollmentConversationCard({
               ? typedCandidate
               : null;
 
+    /**
+     * DOES THIS TURN ACTUALLY TAKE PROSE?
+     *
+     * The composer was mounted unconditionally, so a structured question carried three competing
+     * ways to answer it at once. Kelly's first reaction to the birthday confirmation was exactly
+     * that: "Why do I have Yes, that's right, Change, AND Type your answer…?"
+     *
+     * The principle the old code was protecting — "everything the pills do is also sayable in the
+     * composer, so nothing is reachable only by pressing one" — was about reachability, and it
+     * survives without the composer: the pills are real buttons, so they are already tab-reachable
+     * and screen-reader operable. What does not survive is asking a parent to choose between three
+     * paradigms for one question.
+     *
+     * So the composer appears only where prose IS the answer: a text/email/tel value with no
+     * dedicated control of its own. Everything structured — confirmations, grouped confirmations,
+     * a pending clarification, options, booleans, and the yes/no half of an optional question —
+     * answers through its own control. Dates and numbers keep their picker and lose the "Or tell me
+     * in your own words…" box beside it, which was the same competing paradigm in quieter clothes.
+     *
+     * Generalised on the CONTROL, never on the field: nothing here knows what a birthday is.
+     */
+    const answerControl: ParticipantTurnControl | ParticipantValueControl =
+        correcting && control.kind === "choice_or_text" ? control.correction : control;
+    const composerIsTheAnswer =
+        !typed
+        && !(correcting && turn.editor)
+        && !group
+        && !(objective.pending_clarification && !correcting)
+        && !optionalUnanswered
+        && answerControl.kind === "value"
+        && !NEEDS_ITS_OWN_CONTROL.has(answerControl.inputType);
+
     return (
         <ConversationViewport
             followSignal={`${settled.length}:${objective.settled.length}:${participantQuestion(objective)}:${clarification ?? ""}:${changingGroup ? "individual" : "summary"}:${editingRef ?? ""}`}
@@ -1542,12 +1575,14 @@ export function EnrollmentConversationCard({
                         />
                     ) : null}
                     <SuggestedReplies replies={suggestions} busy={busy} controlKind={suggestionKind} />
-                    <Composer
-                        busy={busy}
-                        placeholder={typed ? "Or tell me in your own words…" : "Type your answer…"}
-                        focusSignal={participantQuestion(objective)}
-                        onSend={(words) => void submit({ text: words, settledAs: words })}
-                    />
+                    {composerIsTheAnswer ? (
+                        <Composer
+                            busy={busy}
+                            placeholder="Type your answer…"
+                            focusSignal={participantQuestion(objective)}
+                            onSend={(words) => void submit({ text: words, settledAs: words })}
+                        />
+                    ) : null}
                 </>
             }
         />

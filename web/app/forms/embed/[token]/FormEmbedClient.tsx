@@ -1043,6 +1043,17 @@ export function FormEmbedClient({
     const signatureFieldIds = compiled ? compiled.signatures.map((c) => c.field_id) : [];
 
     /**
+     * A REQUIRED ACKNOWLEDGEMENT IS PART OF "COMPLETE", so the primary action waits for it.
+     *
+     * `Sign and finish` was gated on the signature alone. The acknowledgement was required too, but
+     * only the server said so — the parent could press a live button and be answered with a
+     * validation error. That was survivable while the conversation pre-answered the field; now that
+     * the attestation is made where it belongs, beside the document, it is the parent who ticks it
+     * and the button has to reflect that.
+     */
+    const acknowledgementOutstanding = ackFieldIds.some((id) => payload.values?.[id] !== true);
+
+    /**
      * Where the parent is, in the five words a parent uses.
      *
      * Derived on every render from what the artifact still wants, so it cannot drift from the state
@@ -1227,6 +1238,28 @@ export function FormEmbedClient({
                                 for (const id of fieldIds) values[id] = value;
                                 return { ...prev, values };
                             });
+                            /*
+                             * AND INTO THE RESOLVED SNAPSHOT, WHICH IS WHAT THE REVIEW LIST READS.
+                             *
+                             * `compiled` prefers `resolvedArtifactValues ?? payload.values`, and the
+                             * resolved snapshot is fetched once per artifact and never refreshed. So
+                             * merging only into the payload left the stale copy winning: after
+                             * correcting a birthday to Jun 15 the document regenerated correctly to
+                             * 06/15 in all three positions, while "Make a change" still listed
+                             * Jun 14 and its editor opened on Jun 14 — the parent being offered the
+                             * value they had just replaced.
+                             *
+                             * Server truth was right throughout; a reload showed Jun 15. This was
+                             * client staleness, and it was survivable only because an extra
+                             * acknowledgement turn used to sit here and trigger another fetch.
+                             * Removing that redundant question is what exposed it.
+                             */
+                            setResolvedArtifactValues((prev) => {
+                                if (!prev) return prev;
+                                const next = { ...prev };
+                                for (const id of fieldIds) next[id] = value;
+                                return next;
+                            });
                         }}
                     />
                     {documentFlow && reviewStep === "handoff" ? (
@@ -1306,29 +1339,6 @@ export function FormEmbedClient({
                     ) : reviewStep === "sign" ? (
                         <IntakeCard>
                             <ParticipantArtifactHeader status={artifactStatus} />
-                            {/* Acknowledge, then sign AT the document’s own signature line. */}
-                            {ackFieldIds.length > 0 ? (
-                                <div className="pb-5 [&_header]:hidden" data-artifact-final-phase="acknowledgment">
-                                    <p className="pb-3 text-[15px] text-alloy-midnight">
-                                        Please confirm you&rsquo;ve reviewed the information above.
-                                    </p>
-                                    <FormEngineRenderer
-                                        schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
-                                        payload={payload}
-                                        onChange={(next) => {
-                                            setValidationErrors(null);
-                                            setMessage(null);
-                                            setPayload(next);
-                                            void persistDraft(next);
-                                        }}
-                                        mode="edit"
-                                        optionValuesByFieldId={optionValuesByFieldId}
-                                        optionChoicesByFieldId={optionChoicesByFieldId}
-                                        variant="embed"
-                                        validationErrors={validationErrors ?? undefined}
-                                    />
-                                </div>
-                            ) : null}
                             <p className="pb-4 text-[15px] text-alloy-midnight" data-artifact-final-phase="signature">
                                 {participantSignaturePrompt(artifactStatus.state !== "complete")}
                             </p>
@@ -1372,6 +1382,41 @@ export function FormEmbedClient({
                                     />
                                 </div>
                             )}
+                            {/*
+                              * THE DOCUMENT COMES FIRST, THEN THE ATTESTATION ABOUT IT.
+                              *
+                              * This block used to render ABOVE the document, so the sentence
+                              * "Please confirm you've reviewed the information above" sat with
+                              * nothing above it and the application it referred to appeared
+                              * underneath. Kelly met exactly that and called the sequence backward.
+                              *
+                              * The signing prompt still precedes the canvas, because it is the
+                              * instruction for the signature line INSIDE the canvas. What moves is
+                              * only the attestation, to directly above "Sign and finish" — where
+                              * what it refers to is genuinely above it.
+                              */}
+                            {ackFieldIds.length > 0 ? (
+                                <div className="pb-5 [&_header]:hidden" data-artifact-final-phase="acknowledgment">
+                                    <p className="pb-3 text-[15px] text-alloy-midnight">
+                                        Please confirm you&rsquo;ve reviewed the information above.
+                                    </p>
+                                    <FormEngineRenderer
+                                        schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
+                                        payload={payload}
+                                        onChange={(next) => {
+                                            setValidationErrors(null);
+                                            setMessage(null);
+                                            setPayload(next);
+                                            void persistDraft(next);
+                                        }}
+                                        mode="edit"
+                                        optionValuesByFieldId={optionValuesByFieldId}
+                                        optionChoicesByFieldId={optionChoicesByFieldId}
+                                        variant="embed"
+                                        validationErrors={validationErrors ?? undefined}
+                                    />
+                                </div>
+                            ) : null}
                             <IntakeFooter
                                 errorLines={errorLines}
                                 message={message}
@@ -1379,7 +1424,10 @@ export function FormEmbedClient({
                                 primaryLabel={submitting ? "Finishing…" : "Sign and finish"}
                                 onPrimary={() => void handleSubmit()}
                                 primaryDisabled={
-                                    submitting || !submissionId || (signaturePlacement != null && !capturedSignature)
+                                    submitting
+                                    || !submissionId
+                                    || (signaturePlacement != null && !capturedSignature)
+                                    || acknowledgementOutstanding
                                 }
                                 primaryBusy={submitting}
                             />

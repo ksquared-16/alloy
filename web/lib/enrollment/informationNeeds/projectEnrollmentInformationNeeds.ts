@@ -199,6 +199,23 @@ export function projectEnrollmentInformationNeeds(
                 sessionItemId: form.session_item_id,
             });
 
+            /*
+             * A STATEMENT IS ACCEPTED, NOT ANSWERED.
+             *
+             * Same shape of rule as the upload return above, and for the same reason. An
+             * acknowledgement says something about the document — "I acknowledge the information
+             * above is accurate" — so asking it in the conversation asks a parent to attest to
+             * information that does not exist yet. Kelly met it as a bare Yes / No immediately
+             * after confirming a birthday, phrased "What is I acknowledge the information above is
+             * accurate.?" by the generic prompt builder, with no meaning attached to No.
+             *
+             * It is not dropped: `compileParticipantArtifact` already classifies this exact field
+             * as an `acknowledgment`, and the sign step already renders it from the Form's own
+             * schema beside the document it refers to. This return removes the DUPLICATE, leaving
+             * the occurrence where the statement is.
+             */
+            if (identity.collection_mode === "acknowledgement") return;
+
             const occurrence: EnrollmentNeedOccurrence = {
                 requirement_id: form.requirement_id,
                 form_definition_id: form.form_definition_id,

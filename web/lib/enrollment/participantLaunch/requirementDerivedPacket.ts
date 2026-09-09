@@ -119,6 +119,15 @@ export function requirementDerivedPacketKey(revisionId: string, stageKey: string
 
 export const REQUIREMENT_DERIVED_PACKET_SOURCE = "business_process_requirements" as const;
 
+/**
+ * What a FAMILY sees where the packet is named.
+ *
+ * Generic on purpose: this is shared platform infrastructure, so it carries no child's name and no
+ * childcare vocabulary. The subject is already named by the conversation itself ("I already have
+ * most of Patha's information"), and the stage stays in metadata for the operator side.
+ */
+export const PARTICIPANT_FACING_PACKET_NAME = "Enrollment" as const;
+
 type PacketItemRow = { sequence_index: number; form_definition_id: string };
 
 function sameSteps(
@@ -166,7 +175,7 @@ export async function ensureRequirementDerivedPacketDefinition(
 
     const { data: existing, error: readErr } = await supabase
         .from("form_packet_definitions")
-        .select("id")
+        .select("id, name")
         .eq("org_id", orgId)
         .eq("key", key)
         .maybeSingle();
@@ -198,6 +207,31 @@ export async function ensureRequirementDerivedPacketDefinition(
             };
         }
 
+        /*
+         * A NAME THIS FUNCTION GENERATED, CORRECTED IN PLACE.
+         *
+         * The stage suffix below was our own output, and it reaches a family: the participant frame
+         * prints the packet name under the tenant's brand, which is how "Enrollment — enrolling"
+         * ended up at the top of a parent's screen. Fixing only the creation default would never
+         * reach an existing tenant, because this row is reused rather than recreated — the
+         * certification fixture resets households and journeys and leaves packet definitions
+         * standing, so the stale name survives every reset.
+         *
+         * Deliberately matched BYTE-FOR-BYTE against the exact string this function used to write.
+         * Anything else — a tenant that renamed the packet, a differently derived name — is left
+         * untouched, because the only name we may silently overwrite is one we authored ourselves.
+         */
+        const legacyDerivedName = `Enrollment — ${plan.stage_key}`;
+        if (String((existing as { name?: string }).name ?? "") === legacyDerivedName) {
+            const { error: renameErr } = await supabase
+                .from("form_packet_definitions")
+                .update({ name: PARTICIPANT_FACING_PACKET_NAME })
+                .eq("org_id", orgId)
+                .eq("id", packetDefinitionId);
+            // Cosmetic: a failure here must not stop a family entering their Enrollment.
+            if (renameErr) console.error("[requirementDerivedPacket] packet name normalise", renameErr.message);
+        }
+
         return { ok: true, packetDefinitionId, plan, outcome: "reused" };
     }
 
@@ -206,7 +240,20 @@ export async function ensureRequirementDerivedPacketDefinition(
         .insert({
             org_id: orgId,
             key,
-            name: input.label ?? `Enrollment — ${plan.stage_key}`,
+            /*
+             * THE PACKET'S NAME IS READ BY THE FAMILY, so it does not carry the stage key.
+             *
+             * `loadPacketProjection` returns this as `packet_name`, and the participant frame prints
+             * it under the tenant's brand — which is how "Enrollment — enrolling" came to sit at the
+             * top of a parent's screen. `enrolling` is the process's internal state: useful to an
+             * operator, meaningless to the family, and exactly the kind of vocabulary that should
+             * not reach them merely because it was in scope.
+             *
+             * The stage is not lost — it stays in `metadata.stage_key` below, where the operator
+             * side already reads it, and on the public link's own label. An authored `input.label`
+             * still wins, so a tenant that names its packet keeps that name.
+             */
+            name: input.label ?? PARTICIPANT_FACING_PACKET_NAME,
             description: null,
             is_active: true,
             metadata: {

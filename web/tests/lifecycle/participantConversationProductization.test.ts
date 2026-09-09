@@ -310,7 +310,7 @@ describe("the participant surface is a thread with an anchored composer", () => 
         expect(alloyCurrent).not.toContain("font-bold");
     });
 
-    it("has one persistent composer, with Enter to send and Shift+Enter for a newline", () => {
+    it("shows one composer where prose is the answer, with Enter to send and Shift+Enter for a newline", () => {
         /**
          * The composer is the answer surface, and now says so.
          *
@@ -320,7 +320,14 @@ describe("the participant surface is a thread with an anchored composer", () => 
          * date picker) is genuinely offered alongside it.
          */
         expect(CARD).toContain("Type your answer…");
-        expect(CARD).toContain("Or tell me in your own words…");
+        /*
+         * The composer is no longer PERSISTENT, and that is the correction rather than a
+         * regression: it is mounted only where prose is genuinely the answer. A structured turn —
+         * a confirmation, options, a boolean, a date picker — owns its own control, and a prose box
+         * beside it was a competing paradigm the parent had to arbitrate between.
+         */
+        expect(CARD).not.toContain("Or tell me in your own words…");
+        expect(CARD).toContain("{composerIsTheAnswer ? (");
         expect(COMPOSER).toMatch(/e\.key === "Enter" && !e\.shiftKey/);
         expect(COMPOSER).toContain("textarea");
         // Never the old form-input caption.
