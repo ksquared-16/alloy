@@ -67,7 +67,7 @@ describe("the transport honours the registry's declaration", () => {
  * ── THE CENSUS ────────────────────────────────────────────────────────────────────────────────
  *
  * Generalising the transport from "create_lead only" to "whatever the registry declares" widened
- * the door for EVERY action with `requiresEntityId: false` — TWENTY-FIVE of them, not the two
+ * the door for EVERY action with `requiresEntityId: false` — TWENTY-SIX of them, not the two
  * the change was written for. Most are billing/subsidy factories, so the count is not visible
  * by reading the definition files; it has to be enumerated from the registry. Each now reaches the Command Runtime carrying the sentinel, because the
  * runtime rejects an empty subject (`missing_entity`) and something has to satisfy it.
@@ -104,6 +104,7 @@ describe("the subjectless action census", () => {
             "charge.reverse",
             "child.add",
             "create_lead",
+            "payment.collect_card",
             "payment.record",
             "payment.refund",
             "staff.add",
