@@ -76,6 +76,32 @@ async function execute(page: Page, body: Record<string, unknown>) {
 const TEMPLATE = "fc500000-0000-4000-8000-0000000d0001";
 
 /**
+ * THE CERTIFICATION SUBJECT, PINNED — and it has to be this one.
+ *
+ * Card collection resolves what may be taken through Thread 9, which resolves responsibility through
+ * `resolveAllocatableNet` — and that refuses anything that is not enrolment-backed: "Only an
+ * enrolment-backed charge carries responsibility." A pre-enrolment New Leads family therefore has
+ * nothing collectible by card no matter how much it owes, so a subject chosen for being reachable is
+ * not enough; it must also carry an active enrolment agreement.
+ *
+ * This tenant has exactly one family that is both: Tatum Testfamily-0059, whose household has an
+ * active agreement AND opportunities the Work View pages. The charge-spine fixture household has an
+ * agreement too, but no opportunity and no mounted route at all, which is why it cannot be the
+ * mounted subject.
+ *
+ * Pinned rather than discovered, so every scenario in this file operates on the same money.
+ */
+/*
+ * The household has three opportunities; this is the one the Work View actually pages. Cold entry
+ * onto either of the others is REFUSED ("isn't in this Work View") — correct product behaviour, and
+ * an unusable starting point. Verified mounted against both New Leads and the enrolment pipeline:
+ * only this id mounts the card, and the card it mounts reads the household below.
+ */
+const CERT_OPPORTUNITY = "00000000-0000-4000-8000-40000000099b";
+const CERT_CUSTOMER = "00000000-0000-4000-8000-10000000003b";
+const CERT_MEMBER = "00000000-0000-4000-8000-30000000003b";
+
+/**
  * The subject this run operates on, and the account its money lives in.
  *
  * `customerId` is not read from a fixture or a guess — it is taken from the card's OWN request for
@@ -113,35 +139,23 @@ async function openCertificationSubject(page: Page, reads: string[]): Promise<Ce
         timeout: 90_000,
     });
 
-    // DELIBERATE, NOT POSITIONAL. The least id among the rows this view pages in is the same
-    // subject whatever order the queue decides to render, so the run is reproducible without
-    // depending on `updated_at` or on the display sort.
-    const ids = (await rows.evaluateAll((els) =>
-        els.map((el) => el.getAttribute("data-entity-id")).filter((v): v is string => !!v),
-    )).sort();
-    expect(ids.length, "no selectable subject in the Work View").toBeGreaterThan(0);
-    const subjectId = ids[0];
-
     /*
      * Everything read up to here belongs to whichever subject the Work View opened BY DEFAULT when
-     * it had no `subject_id` to honour. That is a legitimate product behaviour and a different
-     * account, so the subject assertion below is scoped to the reads that follow cold entry — the
-     * first run of this file failed here, correctly, by counting both.
+     * it had no `subject_id` to honour. That is a different account, so the assertion below is
+     * scoped to the reads that follow cold entry.
      */
     const mark = reads.length;
 
-    // Cold entry — the platform's own way of establishing attention on a named subject.
-    await page.goto(`${WORK_VIEW}?subject_id=${subjectId}`);
+    // Cold entry onto the PINNED subject — the platform's own way of establishing attention.
+    await page.goto(`${WORK_VIEW}?subject_id=${CERT_OPPORTUNITY}`);
     await page.waitForLoadState("domcontentloaded");
-    await expect(page).toHaveURL(new RegExp(`subject_id=${subjectId}`));
+    await expect(page).toHaveURL(new RegExp(`subject_id=${CERT_OPPORTUNITY}`));
 
-    // A subject this view cannot page in is REFUSED rather than substituted. That refusal is a
-    // correct product behaviour, and an unusable starting point for this certification.
     await expect
         .poll(async () => await page.locator('[data-financials-card="true"]').count(), { timeout: 90_000 })
         .toBeGreaterThan(0);
     const text = (await page.locator("body").innerText().catch(() => "")) || "";
-    expect(text, "the Work View refused the subject instead of presenting it").not.toMatch(
+    expect(text, "the Work View refused the certification subject instead of presenting it").not.toMatch(
         /isn.t in this Work View/i,
     );
 
@@ -150,28 +164,27 @@ async function openCertificationSubject(page: Page, reads: string[]): Promise<Ce
         "the operator's closed assistant-rail preference must be honoured, or every click below is covered",
     ).toBe(0);
 
-    // THE SUBJECT ASSERTION. The card must have asked about exactly one account, and that account
-    // is the one every scenario below will seed, collect and refund against.
+    /*
+     * THE SUBJECT ASSERTION. The card must be reading the certification household's own account —
+     * compared against the pinned id, not merely against itself, so opening the wrong family fails
+     * here rather than three assertions later against somebody else's money.
+     */
     await expect
         .poll(() => reads.length - mark, { timeout: 60_000 })
         .toBeGreaterThan(0);
     const afterEntry = reads.slice(mark);
-    const customerId = afterEntry[afterEntry.length - 1];
-    expect(customerId, "the mounted card never resolved an account to read").toBeTruthy();
     const distinct = Array.from(new Set(afterEntry));
     expect(
         distinct,
-        `the mounted card read more than one account — the panel is not settled on one subject: ${distinct.join(", ")}`,
-    ).toHaveLength(1);
+        `the mounted card read ${distinct.join(", ")} but this run's subject is ${CERT_CUSTOMER}`,
+    ).toEqual([CERT_CUSTOMER]);
 
     test.info().annotations.push({
         type: "certification-subject",
-        description: `subject_id=${subjectId} customer_id=${customerId}`,
+        description: `subject_id=${CERT_OPPORTUNITY} customer_id=${CERT_CUSTOMER} member=${CERT_MEMBER}`,
     });
-    // From here on, EVERY read must be this subject's. The window is closed so the tripwire below
-    // cannot be satisfied by the default subject's reads from before cold entry.
     reads.length = 0;
-    return { subjectId, customerId };
+    return { subjectId: CERT_OPPORTUNITY, customerId: CERT_CUSTOMER };
 }
 
 /**
@@ -201,15 +214,15 @@ function assertStillOnSubject(reads: string[], subject: CertSubject, where: stri
  */
 async function seedPostedCharge(page: Page, subject: CertSubject, templateId = TEMPLATE) {
     const added = await execute(page, {
-        action_key: "charge.add", entity_type: "opportunity", entity_id: subject.subjectId, mode: "execute",
+        action_key: "charge.add", entity_type: "child", entity_id: CERT_MEMBER, mode: "execute",
         confirmation: { confirmed: true },
-        payload: { customer_id: subject.customerId, template_id: templateId },
+        payload: { customer_member_id: CERT_MEMBER, customer_id: subject.customerId, template_id: templateId },
     });
     const id = added.json.data?.execution_result?.affected_id ?? added.json.data?.affected_id;
     expect(id, `seeding a charge for ${subject.customerId} failed: ${JSON.stringify(added.json).slice(0, 400)}`)
         .toBeTruthy();
     const posted = await execute(page, {
-        action_key: "charge.post", entity_type: "opportunity", entity_id: subject.subjectId, mode: "execute",
+        action_key: "charge.post", entity_type: "child", entity_id: CERT_MEMBER, mode: "execute",
         confirmation: { confirmed: true }, payload: { charge_id: id },
     });
     expect(posted.json.ok, `posting the seeded charge failed: ${JSON.stringify(posted.json).slice(0, 400)}`)
@@ -261,7 +274,7 @@ async function openPaymentPanel(page: Page): Promise<void> {
 async function subjectWithCollectibleCharge(page: Page, reads: string[]): Promise<CertSubject> {
     const subject = await openCertificationSubject(page, reads);
     await seedPostedCharge(page, subject);
-    await page.goto(`${WORK_VIEW}?subject_id=${subject.subjectId}`);
+    await page.goto(`${WORK_VIEW}?subject_id=${CERT_OPPORTUNITY}`);
     await page.waitForLoadState("domcontentloaded");
     await expect
         .poll(async () => await page.locator('[data-financials-card="true"]').count(), { timeout: 90_000 })
@@ -285,8 +298,9 @@ test.describe("Slice H — collecting money through the mounted Financials card"
         // The seeded money lands on the SAME account the card is reading — asserted through the
         // card's own projection rather than through the database.
         const before = await execute(page, {
-            action_key: "charge.add", entity_type: "opportunity", entity_id: subject.subjectId,
-            mode: "preview", payload: { customer_id: subject.customerId, template_id: TEMPLATE },
+            action_key: "charge.add", entity_type: "child", entity_id: CERT_MEMBER,
+            mode: "preview",
+            payload: { customer_member_id: CERT_MEMBER, customer_id: subject.customerId, template_id: TEMPLATE },
         });
         expect(before.json.ok, "the resolver must accept this subject's own grain").toBeTruthy();
 
@@ -420,8 +434,8 @@ test.describe("Slice H — collecting money through the mounted Financials card"
         // Driven through the operator's own session, exactly as the panel does it.
         const attempted = await execute(page, {
             action_key: "payment.collect_card",
-            entity_type: "opportunity",
-            entity_id: subject.subjectId,
+            entity_type: "child",
+            entity_id: CERT_MEMBER,
             mode: "execute",
             confirmation: { confirmed: true },
             payload: { charge_id: "00000000-0000-4000-8000-0000000000cc", amount_cents: 1000 },
@@ -473,78 +487,144 @@ test.describe("Slice H — collecting money through the mounted Financials card"
     });
 
     /*
-     * SCENARIO B — A REAL CARD, and the state that matters most.
+     * SCENARIO B — A REAL CARD, END TO END.
      *
-     * The panel must not say "paid" when Stripe has taken the money but Financials has not yet
-     * recognised it. That interval is real, Slice F made it representable, and this is where an
-     * operator would otherwise be told a lie in either direction.
+     * Real connected merchant, real Stripe test-mode Payment Element, real webhook. The claim that
+     * matters most is in the middle: between Stripe accepting the card and Financials recognising
+     * it, the panel must say "finalizing" and the canonical balance must not move. A browser is not
+     * a payment.
      */
-    test("B — a real card collection shows finalizing, never paid, until Financials recognises it", async ({ page }) => {
+    test("B — a real card is collected, shows finalizing, and only Financials recognition moves the money", async ({ page }) => {
         const reads = watchAccountReads(page);
         const subject = await subjectWithCollectibleCharge(page, reads);
-        await openPaymentPanel(page);
-        const chooser = page.locator('[data-financials-payment-method="true"]').first();
-        await chooser.selectOption("card");
 
-        const amount = page.locator('[data-financials-payment-amount="true"]').first();
-        await amount.fill("10.00");
-        await page.locator('[data-financials-payment-commit="true"]').first().click();
+        /** Canonical Thread 8/2/4 truth, read the way the card reads it — never collection-state. */
+        const canonical = async () => {
+            const res = await page.request.get(
+                `/api/admin/financials/card?customer_id=${subject.customerId}`,
+            );
+            const json = (await res.json()) as any;
+            const vm = json.vm ?? {};
+            return {
+                balance: vm.reconciliation?.balanceCents ?? null,
+                payments: (vm.payments ?? []) as Array<any>,
+                paymentsCents: vm.reconciliation?.paymentsCents ?? 0,
+            };
+        };
+
+        const before = await canonical();
+        expect(before.balance, "the subject must owe something to collect").toBeGreaterThan(0);
 
         /*
-         * Either the merchant is ready and Stripe's own fields mount, or the organisation cannot
-         * collect and the panel says so. Both are correct product states; what would be wrong is a
-         * raw error, a fallback, or a balance that moved.
+         * A UNIQUE AMOUNT PER RUN, because the collection attempt is idempotent on
+         * (charge, amount, rail). `charge.add` reuses the period's charge, so a fixed amount
+         * resolves to the SAME PaymentIntent every run — and once that intent has succeeded, Stripe
+         * Elements cannot mount against it. Varying the cents gives each run its own intent while
+         * collecting from the same obligation.
          */
-        const mounted = page.locator('[data-financials-card-field="true"]');
-        const blocked = page.locator('[data-financials-card-blocked="true"]');
-        await expect
-            .poll(async () => (await mounted.count()) + (await blocked.count()), { timeout: 60_000 })
-            .toBeGreaterThan(0);
+        const cents = 1_000 + (Date.now() % 90);
+        const amountText = (cents / 100).toFixed(2);
 
+        await openPaymentPanel(page);
+        await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
+        await page.locator('[data-financials-payment-amount="true"]').first().fill(amountText);
+        const commit = page.locator('[data-financials-payment-commit="true"]').first();
+        await commit.scrollIntoViewIfNeeded();
+        await commit.click();
+
+        /*
+         * The merchant IS ready for this run, so "blocked" is now a defect rather than one of two
+         * correct answers. Scenario A already certifies the blocked path on its own terms.
+         */
+        const blocked = page.locator('[data-financials-card-blocked="true"]');
+        const field = page.locator('[data-financials-card-field="true"]');
+        await expect
+            .poll(async () => (await field.count()) + (await blocked.count()), { timeout: 60_000 })
+            .toBeGreaterThan(0);
         if ((await blocked.count()) > 0) {
-            const text = await blocked.innerText();
-            expect(text.length, "a blocked collection explains itself").toBeGreaterThan(10);
-            expect(text, "and never names an account").not.toMatch(/acct_/);
-            test.info().annotations.push({ type: "scenario-b", description: `blocked: ${text}` });
-            assertStillOnSubject(reads, subject, "scenario B (blocked)");
-            return;
+            throw new Error(`card collection was refused with a ready merchant: ${await blocked.innerText()}`);
         }
 
-        // Stripe's own iframe. The card number never enters Alloy state — this is the whole reason
-        // the field is Stripe's rather than ours.
-        const frame = page.frameLocator('[data-financials-card-field="true"] iframe').first();
-        await expect
-            .poll(async () => await page.locator('[data-financials-card-mount="true"] iframe').count(), { timeout: 60_000 })
-            .toBeGreaterThan(0);
+        // Stripe's own iframe. The card number never enters Alloy state.
+        const mount = page.locator('[data-financials-card-mount="true"] iframe').first();
+        await expect(mount, "Stripe's Payment Element must mount").toBeVisible({ timeout: 60_000 });
+        const frame = page.frameLocator('[data-financials-card-mount="true"] iframe').first();
+        const number = frame.locator('input[name="number"]');
+        await expect(number, "the Payment Element must offer a card number field").toBeVisible({ timeout: 60_000 });
+        await number.fill("4242424242424242");
+        await frame.locator('input[name="expiry"]').fill("12" + String(new Date().getFullYear() + 2).slice(2));
+        await frame.locator('input[name="cvc"]').fill("123");
+        const zip = frame.locator('input[name="postalCode"]');
+        if (await zip.count()) await zip.fill("94103").catch(() => undefined);
 
-        await frame.locator('[name="number"]').fill("4242424242424242").catch(() => undefined);
-        await frame.locator('[name="expiry"]').fill("12" + String(new Date().getFullYear() + 2).slice(2)).catch(() => undefined);
-        await frame.locator('[name="cvc"]').fill("123").catch(() => undefined);
+        const submit = page.locator('[data-financials-card-submit="true"]').first();
+        await expect(submit, "the submit control must become enabled once Stripe is ready").toBeEnabled({
+            timeout: 60_000,
+        });
+        await submit.scrollIntoViewIfNeeded();
+        await submit.click();
 
-        await page.locator('[data-financials-card-submit="true"]').first().click();
-
-        // THE ASSERTION THIS SCENARIO EXISTS FOR. Whatever happens next, the panel must never claim
-        // the money is Financials-recognised on the strength of the browser alone.
-        await expect
-            .poll(
-                async () =>
-                    (await page.locator('[data-financials-card-finalizing="true"]').count())
-                    + (await page.locator('[data-financials-card-failed="true"]').count())
-                    + (await page.locator('[data-financials-card-recognized="true"]').count()),
-                { timeout: 90_000 },
-            )
-            .toBeGreaterThan(0);
-
+        /*
+         * PRE-RECOGNITION. Stripe has taken the card; Financials has not recognised it. The panel
+         * must name that interval truthfully and must never call it paid.
+         */
         const finalizing = page.locator('[data-financials-card-finalizing="true"]');
+        const failed = page.locator('[data-financials-card-failed="true"]');
+        const recognized = page.locator('[data-financials-card-recognized="true"]');
+        await expect
+            .poll(async () => (await finalizing.count()) + (await failed.count()) + (await recognized.count()), {
+                timeout: 90_000,
+            })
+            .toBeGreaterThan(0);
+        expect(await failed.count(), "a real test card must not be declined").toBe(0);
+
         if ((await finalizing.count()) > 0) {
             const text = await finalizing.innerText();
             expect(text, "the interval is named truthfully").toMatch(/finalizing/i);
             expect(text, "and is never called paid").not.toMatch(/\bpaid\b/i);
-            // Never offer another charge as the recovery for money already taken.
-            expect(text).not.toMatch(/charge again|try again/i);
+            expect(text, "and never offers another charge as the recovery").not.toMatch(/charge again/i);
+
+            /*
+             * THE INVARIANT: no cash exists that the provider did not confirm.
+             *
+             * Stated as "untouched, or moved by exactly this collection" rather than "untouched",
+             * because `stripe listen` forwards to localhost and recognition can legitimately land
+             * within the same second — a strict equality would be a race against the product
+             * working properly. What must never happen is the balance moving by some OTHER amount.
+             */
+            const during = await canonical();
+            expect(
+                [before.balance, before.balance! - cents],
+                `the canonical balance moved by something other than this collection: ${before.balance} → ${during.balance}`,
+            ).toContain(during.balance);
         }
 
+        /*
+         * RECOGNITION, through the real webhook. `stripe listen` forwards the provider's own event
+         * to this app; nothing here writes a payment.
+         */
+        await expect
+            .poll(async () => (await canonical()).payments.length, { timeout: 180_000 })
+            .toBeGreaterThan(before.payments.length);
+
+        const after = await canonical();
+        const fresh = after.payments.filter(
+            (p) => !before.payments.some((b) => b.paymentId === p.paymentId),
+        );
+        expect(fresh, "exactly one canonical payment must appear").toHaveLength(1);
+        const receipt = fresh[0];
+        expect(receipt.receivedCents ?? receipt.amountCents, "the canonical receipt is the amount asked for").toBe(cents);
+        expect(receipt.appliedCents, "the receipt is applied to the obligation").toBe(cents);
+        expect(receipt.unappliedCents ?? 0, "nothing is left unapplied").toBe(0);
+        expect(after.balance, "outstanding falls by exactly the amount collected, once").toBe(
+            before.balance! - cents,
+        );
+
         assertStillOnSubject(reads, subject, "scenario B");
+        test.info().annotations.push({
+            type: "scenario-b",
+            description: `collected ${cents}c — canonical receipt ${receipt.paymentId} — balance ${before.balance} → ${after.balance}`,
+        });
     });
 
     /*

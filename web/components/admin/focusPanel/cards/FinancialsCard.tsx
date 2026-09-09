@@ -537,11 +537,37 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * read model in `finally` so what the card shows afterwards is what committed rather than an
      * optimistic guess about it.
      */
+    /**
+     * WHAT A PAYMENT IS ATTRIBUTED TO.
+     *
+     * `/api/admin/actions/execute` refuses a call with no entity, and the payment path was handing
+     * it the panel's child — which a pre-enrolment household does not have. `vm.subjects` is empty
+     * for a New Leads family, so the attribution resolved to null, the route answered "action_key,
+     * entity_type, and entity_id are required", and the panel showed that sentence as a blocked
+     * card collection. Manual rails, card collection and refunds all failed the same way; only the
+     * chooser labels could be certified, which is why it survived this long.
+     *
+     * `chargeInvocation` already answers exactly this question for charges — the named child when
+     * there is one, the panel's own subject when there is not — so payments travel at the same
+     * grain rather than inventing a second answer. The charge_id or payment_id in the payload still
+     * decides where the money goes; this is attribution for the audit trail.
+     */
+    const paymentEntityFor = useCallback(
+        (subjectMemberId: string | null): { entityType: string; entityId: string } | null => {
+            if (subjectMemberId) return { entityType: "child", entityId: subjectMemberId };
+            if (chargeInvocation) {
+                return { entityType: chargeInvocation.entityType, entityId: chargeInvocation.entityId };
+            }
+            return null;
+        },
+        [chargeInvocation],
+    );
+
     const runPaymentAction = useCallback(
         async (
             actionKey: "payment.record" | "payment.refund" | "payment.collect_card",
             payload: Record<string, unknown>,
-            entityId: string | null,
+            entity: { entityType: string; entityId: string } | null,
         ) => {
             if (running) return;
             setRunning(true);
@@ -553,7 +579,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     credentials: "include",
                     body: JSON.stringify({
                         action_key: actionKey,
-                        entity_type: "child",
+                        entity_type: entity?.entityType ?? "child",
                         /*
                          * THE ROUTE IS STRICTER THAN THE ACTION.
                          *
@@ -568,7 +594,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                          * it has one, else the panel's. The charge_id in the payload remains what
                          * decides where the money goes; this is attribution for the audit trail.
                          */
-                        entity_id: entityId ?? "",
+                        entity_id: entity?.entityId ?? "",
                         mode: "execute",
                         confirmation: { confirmed: true },
                         payload,
@@ -577,7 +603,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 const json = (await res.json()) as {
                     ok?: boolean;
                     error?: string | { message?: string };
-                    data?: { execution_result?: { detail?: Record<string, unknown> } };
+                    data?: { execution_result?: Record<string, unknown> };
                 };
                 if (!json?.ok) {
                     const err = typeof json?.error === "string" ? json.error : json?.error?.message;
@@ -586,7 +612,23 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 }
                 // A card collection keeps the panel open: the operator still has to enter a card.
                 if (actionKey !== "payment.collect_card") setPayTarget(null);
-                return { ok: true as const, detail: json.data?.execution_result?.detail ?? {} };
+                /*
+                 * THE RESULT IS THE EXECUTION RESULT, not a `detail` inside it.
+                 *
+                 * `/api/admin/actions/execute` answers `data.execution_result: { client_secret,
+                 * connected_account, collection_attempt_id, … }`. Reading a `detail` wrapper that
+                 * the envelope does not have yielded `{}` for every field, so a card collection
+                 * handed Stripe Elements an empty client secret and the Payment Element refused to
+                 * mount: "clientSecret should be of the form ${id}_secret_${secret}. You specified:
+                 * .". The intent had been created on the connected account by then — the money side
+                 * was correct and only the browser's handle on it was lost.
+                 *
+                 * The nested shape is still honoured, so an action that does wrap its answer keeps
+                 * working.
+                 */
+                const executionResult = (json.data?.execution_result ?? {}) as Record<string, unknown>;
+                const detail = (executionResult.detail as Record<string, unknown> | undefined) ?? executionResult;
+                return { ok: true as const, detail };
             } catch {
                 setCommandError("The request could not be sent.");
                 return { ok: false as const, error: "The request could not be sent." };
@@ -785,7 +827,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                         payment_id: p.paymentId,
                                                         payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
                                                     },
-                                                    chargeTarget,
+                                                    paymentEntityFor(chargeTarget),
                                                 )
                                             }
                                         >
@@ -906,7 +948,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     // a float. The action refuses anything that
                                     // is not a positive integer of cents.
                                     const cents = Math.round(Number(payAmount) * 100);
-                                    const subject = payTarget.subjectMemberId ?? chargeTarget;
+                                    const subject = paymentEntityFor(payTarget.subjectMemberId ?? chargeTarget);
 
                                     if (payMethod !== "card") {
                                         void runPaymentAction(
