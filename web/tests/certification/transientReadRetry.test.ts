@@ -94,7 +94,9 @@ describe("bounded read", () => {
         // THE INVARIANT. Zero outputs is the input to the gate check — N/A when the handoff gate is
         // off, FAIL when it is on. If the retry treated zero rows as something to try again, a real
         // gate-ON failure could be retried into a pass. It must be delivered on attempt one.
-        const read = vi.fn().mockResolvedValue({ rows: 0, errors: [] as string[] });
+        // Typed rather than `vi.fn().mockResolvedValue(...)`, whose inference is `unknown` — which
+        // makes `v.errors` and `out.value.rows` below untypeable.
+        const read = vi.fn(async (): Promise<{ rows: number; errors: string[] }> => ({ rows: 0, errors: [] }));
 
         const out = await boundedRead(read, { sleep: noSleep, errorOf: (v) => (v.errors.length ? "err" : null) });
 

@@ -10,10 +10,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * empty department metadata before touching the database". It short-circuits, so that test passed
  * for the wrong reason in one direction and failed in the other.
  */
-const evaluateTransitionRequirementPreflight = vi.fn(async () => ({
-    missingRequirements: [],
-    blockingRequirements: [],
-}));
+const evaluateTransitionRequirementPreflight = vi.fn(
+    // The argument is typed, not inferred: an untyped `vi.fn(async () => …)` has zero parameters,
+    // so passing one is an error and `mock.calls[0][0]` indexes an empty tuple. Both only surface
+    // under `typecheck:tests`, which is the config that includes this directory.
+    async (_args: { readonly opportunityId: string }) => ({
+        missingRequirements: [] as unknown[],
+        blockingRequirements: [] as unknown[],
+    }),
+);
 vi.mock("@/lib/lifecycle/evaluateTransitionRequirementPreflight", () => ({
     evaluateTransitionRequirementPreflight: (args: unknown) =>
         evaluateTransitionRequirementPreflight(args as never),
