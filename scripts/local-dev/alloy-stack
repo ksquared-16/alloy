@@ -91,11 +91,47 @@ stack_is_running() {
 # ---------------------------------------------------------------- lease handling
 # A holder identifies a session. Default: the managed worktree name, which is
 # stable across the session's life and disappears when the worktree does.
+# A SESSION, NOT A DIRECTORY, IS WHAT HOLDS A LEASE.
+#
+# THE DEFECT THIS CLOSES, reproduced hermetically before it was written. The
+# lease key was the worktree BASENAME, and `lease_path` is one file per holder
+# name. Two sessions working in the same worktree therefore did not take two
+# leases — the second silently OVERWROTE the first:
+#
+#   A: use  -> lease held by 'wt5-vacilando' (1 active)
+#   B: use  -> lease held by 'wt5-vacilando' (1 active)   <- overwrote A
+#   A: release -> "last lease released - stopping the shared stack"
+#
+# and the stack was torn down under B, who was still using it. Nothing reported
+# a problem: both joins succeeded, and `live_lease_count` was truthfully
+# counting the one file that existed.
+#
+# That single fault also silently defeated three defences that were themselves
+# correct: `cmd_release` only stops at zero remaining leases, `require_exclusive`
+# refuses when another holder is present, and `cmd_reap` only reaps the
+# sanctioned stack at zero live leases. All three were reading a count that had
+# been collapsed by the key collision, so each behaved correctly on false input.
+session_token() {
+  # An explicit token always wins — a caller that knows who it is is never
+  # second-guessed.
+  local t="${ALLOY_STACK_SESSION:-}"
+  [[ -n "$t" ]] || t="${ALLOY_WORKTREE_SLOT:-}"
+  # A tmux session name is stable for the life of a sprint and differs between
+  # two shells in the same worktree, which is exactly the case that collided.
+  if [[ -z "$t" && -n "${TMUX:-}" ]] && have tmux; then
+    t="$(tmux display-message -p '#S' 2>/dev/null || true)"
+  fi
+  # Sanitised so a token can never escape its filename component.
+  printf '%s\n' "$t" | tr -cd '[:alnum:]._-' | cut -c1-40
+}
+
 default_holder() {
   local d="${ALLOY_WORKTREE_PATH:-$PWD}"
   local root
   root="$(cd "$d" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$d")"
-  basename "$root"
+  local base; base="$(basename "$root")"
+  local tok; tok="$(session_token)"
+  if [[ -n "$tok" ]]; then printf '%s-%s\n' "$base" "$tok"; else printf '%s\n' "$base"; fi
 }
 
 lease_path() { printf '%s/%s.lease\n' "$LEASE_DIR" "$1"; }
@@ -372,15 +408,23 @@ ensure_seeded() {
     return 0
   fi
 
-  # Surface the actual failure. Swallowing it is what turned a wrong-connection
-  # error into an unexplained "may be schema-only" for a whole session.
+  # A FAILED SEED IS A FAILURE, ON EVERY PATH.
+  #
+  # This printed the error and then `return 0`, on the DEFAULT path — and
+  # ALLOY_STACK_SEED_REQUIRED defaults to 0, so the default is the path almost
+  # everything takes. The caller saw success, took a lease, and certification
+  # proceeded against a stack that never reached a seeded baseline. The warning
+  # scrolled past; the exit status, which is the part machinery reads, said fine.
+  #
+  # `--required` still exists and still means "die immediately, before a lease is
+  # taken". The difference now is only WHEN the caller finds out, never WHETHER.
   warn "seed step failed (exit ${rc}):"
   printf '%s\n' "$out" | tail -6 | sed 's/^/      /' >&2
   if [[ $required -eq 1 ]]; then
     die "rebuild did not reach a seeded baseline — stack left up, no lease taken"
   fi
   info "run manually: ${certify} seed"
-  return 0
+  return "$rc"
 }
 
 # ---------------------------------------------------------------- commands
@@ -432,9 +476,27 @@ cmd_use() {
   # with no synthetic tenant — which is not what any session is asking for.
   # `alloy-certify seed` is idempotent (one SELECT when already seeded).
   if [[ "${ALLOY_STACK_SEED_REQUIRED:-0}" == "1" ]]; then
+    # CERTIFICATION cannot proceed on an unseeded baseline, and dies before a
+    # lease is taken. That is the path the masking defect actually endangered.
     ensure_seeded "$workdir" --required
   else
-    ensure_seeded "$workdir"
+    # A PLAIN JOIN IS NOT A CERTIFICATION, and must not be bricked by one.
+    #
+    # This died on any seed failure for one revision, and the real host showed
+    # why that is wrong: `alloy-certify seed` shells out to a host `psql` that
+    # does not exist on this machine (it lives only inside the db container), so
+    # the seed fails for every caller. Making that fatal to `use` meant NO
+    # session could take a lease at all — and a session that cannot take a lease
+    # runs unleased, which is the precise condition that let one lane stop the
+    # stack under another. The cure would have caused the disease.
+    #
+    # So the failure is propagated (ensure_seeded returns non-zero, and nothing
+    # can mistake it for success) and reported unmissably, while the join and its
+    # lease still happen. Certification remains gated above.
+    if ! ensure_seeded "$workdir"; then
+      warn "joining WITHOUT a verified seeded baseline — certification will refuse this stack"
+      info "fix the seed first if you intend to certify:  ${workdir}/alloy-certify seed"
+    fi
   fi
 
   local f; f="$(lease_path "$holder")"
@@ -442,6 +504,29 @@ cmd_use() {
   # the original process's start timestamp or command line, so "same pid, different process" is
   # detectable rather than being mistaken for a live holder.
   local anchor; anchor="$(resolve_holder_pid)"
+
+  # THE FALLBACK MUST NOT SILENTLY COLLIDE.
+  #
+  # `default_holder` now carries a session token, so two sessions in one worktree
+  # normally get two lease files. But the token is only as good as the
+  # environment: a session with no ALLOY_STACK_SESSION, no slot and no tmux falls
+  # back to the bare worktree basename, and two such sessions would collide again
+  # — the precise fault this change exists to remove, returning by the back door.
+  #
+  # So the write REFUSES rather than overwrites when the existing lease belongs to
+  # a different, still-live process. Refusing is safe: it costs one explicit
+  # `--holder`. Overwriting costs another session its stack, silently.
+  if [[ -f "$f" ]]; then
+    local prev_pid; prev_pid="$(lease_field "$f" PID)"
+    if [[ -n "$prev_pid" && "$prev_pid" != "$anchor" ]] && lease_holder_process_alive "$f"; then
+      bad "lease '${holder}' is already held by a different live session (pid ${prev_pid})"
+      info "two sessions in one worktree need distinct names. Either:"
+      info "  export ALLOY_STACK_SESSION=<something-unique>   # then re-run"
+      info "  alloy-stack use <unique-name>"
+      die "refusing to overwrite a live session's lease"
+    fi
+  fi
+
   cat >"$f" <<EOF
 HOLDER=${holder}
 WORKTREE=$(cd "${ALLOY_WORKTREE_PATH:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
@@ -453,6 +538,13 @@ PROVIDER=${ALLOY_PROVIDER:-unknown}
 SLOT=${ALLOY_WORKTREE_SLOT:-unknown}
 CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
+  # SUCCESSFUL USE => CALLER LEASE EXISTS. Read the lease back before claiming
+  # the join worked. A `use` that reports success while the registry has no record
+  # of the caller is what lets the next `release` decide the stack is unused.
+  if [[ ! -s "$f" ]] || [[ "$(lease_field "$f" HOLDER)" != "$holder" ]]; then
+    bad "lease for '${holder}' could not be written to ${LEASE_DIR}"
+    die "not reporting a successful join without a durable lease"
+  fi
   ok "lease held by '${holder}' ($(live_lease_count) active on this stack)"
   info "release it when the sprint ends:  alloy-stack release"
 }
