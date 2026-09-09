@@ -21,7 +21,7 @@ const migrationPath = resolve(
  */
 const captureHardeningPath = resolve(
     __dirname,
-    "../../../../supabase/migrations/20260909160000_attendance_capture_hardening.sql"
+    "../../../../supabase/migrations/20260909220000_attendance_capture_hardening.sql"
 );
 
 describe("childcare attendance facts P2 migration", () => {

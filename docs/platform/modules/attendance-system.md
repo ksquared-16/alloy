@@ -151,7 +151,7 @@ day — a different question; **occupancy must not be derived from it.**
 Corrections and reversals reconstruct history for free, because they change
 which facts are effective and the fold is re-run.
 
-Implemented by `supabase/migrations/20260909160000_attendance_capture_hardening.sql`.
+Implemented by `supabase/migrations/20260909220000_attendance_capture_hardening.sql`.
 
 ---
 
@@ -195,7 +195,7 @@ Rules:
   playground is the *same* child standing elsewhere and is never double-counted
   into their classroom's physical occupancy.
 
-Implemented by `supabase/migrations/20260909150000_location_topology_v1.sql`
+Implemented by `supabase/migrations/20260909210000_location_topology_v1.sql`
 (role column, `location_site_id()`, hierarchy guard, and the placement /
 attendance / staff-presence triggers converted from direct-parent to ancestry).
 
