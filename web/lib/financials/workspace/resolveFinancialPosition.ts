@@ -189,15 +189,23 @@ export async function resolveFinancialPositionCohort(
             charges.filter((c) => c.billable_source_type === "enrollment_agreement").map((c) => c.billable_source_id),
         ),
     ];
-    const { data: agreementRows } = agreementIds.length
-        ? await supabase
-              .from("child_enrollment_agreements")
-              .select("id, customer_id, site_location_id")
-              .eq("org_id", args.orgId)
-              .in("id", agreementIds)
-        : { data: [] };
+    /*
+     * PROVENANCE FAILS CLOSED TOO. This read decides which household a charge belongs to. Dropped,
+     * it does not produce a wrong number — it produces no account at all, which is indistinguishable
+     * on screen from a family that has no financial history.
+     */
+    const agreementRows = await readInBatches<{ id: string; customer_id: string | null; site_location_id: string | null }>(
+        "the agreements charges were billed from",
+        agreementIds,
+        (batch) =>
+            supabase
+                .from("child_enrollment_agreements")
+                .select("id, customer_id, site_location_id")
+                .eq("org_id", args.orgId)
+                .in("id", batch),
+    );
     const agreements = new Map(
-        (((agreementRows ?? []) as unknown) as Array<{ id: string; customer_id: string | null; site_location_id: string | null }>)
+        agreementRows
             .map((a) => [a.id, a]),
     );
 
@@ -267,12 +275,12 @@ export async function resolveFinancialPositionCohort(
 
     /* Names, so a list of accounts reads as families. Presentation only — never a key. */
     const customerIds = [...new Set(visible.map((v) => v.customerId).filter((v): v is string => !!v))];
-    const { data: customerRows } = customerIds.length
-        ? await supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", customerIds)
-        : { data: [] };
-    const customerNames = new Map(
-        (((customerRows ?? []) as unknown) as Array<{ id: string; name: string | null }>).map((c) => [c.id, c.name]),
+    const customerRows = await readInBatches<{ id: string; name: string | null }>(
+        "household names",
+        customerIds,
+        (batch) => supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", batch),
     );
+    const customerNames = new Map(customerRows.map((c) => [c.id, c.name]));
 
     const rows: FinancialPositionRow[] = visible.map((v) => {
         const reductions = facts.reductionsByCharge.get(v.charge.id) ?? [];
@@ -373,16 +381,25 @@ type AllocationFact = { id: string; assignedAmountCents: number; isUnassigned: b
  * exposed: one id per request. That is exactly the divergence the note above this function warned
  * about, arriving through scale rather than through edits.
  */
-const CHARGE_ID_BATCH = 80;
+const ID_BATCH = 80;
 
-async function readChargeScoped<T>(
+/*
+ * NOT ONLY THE CHARGE-SCOPED FACTS. The first repair batched the four facts keyed by charge and
+ * left the follow-on read keyed by PAYMENT alone, because it looked small — it reads only the
+ * payments the applications referred to. It is not small: 432 applications on this tenant refer to
+ * 392 distinct payments, the request URI overflows exactly as before, and the discarded error left
+ * every application with a null payment status. An application whose payment cannot be shown to
+ * have settled is not counted, so every account read as owing its full posted amount and NO
+ * account could ever be settled. Same rule, same file, one read further down.
+ */
+async function readInBatches<T>(
     label: string,
-    chargeIds: string[],
+    ids: string[],
     run: (batch: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
 ): Promise<T[]> {
     const out: T[] = [];
-    for (let i = 0; i < chargeIds.length; i += CHARGE_ID_BATCH) {
-        const batch = chargeIds.slice(i, i + CHARGE_ID_BATCH);
+    for (let i = 0; i < ids.length; i += ID_BATCH) {
+        const batch = ids.slice(i, i + ID_BATCH);
         const { data, error } = await run(batch);
         if (error) {
             throw new Error(`financial position: ${label} could not be read (${error.message.trim()})`);
@@ -399,7 +416,7 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         allocationRows,
         claimLineRows,
     ] = await Promise.all([
-        readChargeScoped<{ source_charge_id: string; amount_cents: number }>(
+        readInBatches<{ source_charge_id: string; amount_cents: number }>(
             "reductions",
             chargeIds,
             (batch) =>
@@ -409,7 +426,7 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
                     .eq("org_id", orgId)
                     .in("source_charge_id", batch),
         ),
-        readChargeScoped<{ charge_id: string; allocated_amount_cents: number; status: string | null; payment_id: string }>(
+        readInBatches<{ charge_id: string; allocated_amount_cents: number; status: string | null; payment_id: string }>(
             "payment applications",
             chargeIds,
             (batch) =>
@@ -419,7 +436,7 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
                     .eq("org_id", orgId)
                     .in("charge_id", batch),
         ),
-        readChargeScoped<{ id: string; charge_id: string; assigned_amount_cents: number; is_unassigned: boolean; share_id: string | null }>(
+        readInBatches<{ id: string; charge_id: string; assigned_amount_cents: number; is_unassigned: boolean; share_id: string | null }>(
             "responsibility allocations",
             chargeIds,
             (batch) =>
@@ -430,7 +447,7 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
                     .eq("state", "active")
                     .in("charge_id", batch),
         ),
-        readChargeScoped<{ id: string; charge_id: string; claim_id: string; claimed_amount_cents: number }>(
+        readInBatches<{ id: string; charge_id: string; claim_id: string; claimed_amount_cents: number }>(
             "subsidy claim lines",
             chargeIds,
             (batch) =>
@@ -456,17 +473,17 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         payment_id: string;
     }>);
     const paymentIds = [...new Set(rawApplications.map((a) => a.payment_id).filter(Boolean))];
-    const { data: paymentRows } = paymentIds.length
-        ? await supabase
-              .from("payments")
-              .select("id, status, payer_entity_type")
-              .eq("org_id", orgId)
-              .in("id", paymentIds)
-        : { data: [] };
-    const payments = new Map(
-        ((paymentRows ?? []) as Array<{ id: string; status: string; payer_entity_type: string | null }>)
-            .map((p) => [p.id, p]),
+    const paymentRows = await readInBatches<{ id: string; status: string; payer_entity_type: string | null }>(
+        "payments backing applied money",
+        paymentIds,
+        (batch) =>
+            supabase
+                .from("payments")
+                .select("id, status, payer_entity_type")
+                .eq("org_id", orgId)
+                .in("id", batch),
     );
+    const payments = new Map(paymentRows.map((p) => [p.id, p]));
     const applicationsByCharge = new Map<string, Array<{
         allocatedAmountCents: number;
         status: string | null;

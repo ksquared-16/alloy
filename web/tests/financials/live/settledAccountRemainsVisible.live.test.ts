@@ -96,10 +96,18 @@ describeLive("a settled account stays in the Accounts cohort — live", () => {
          * WITHOUT naming a household. If the batched reads regress, every application vanishes and
          * there is no such charge at all, which is itself the failure.
          */
-        const settledRow = cohort.rows.find((r) => r.position.outstandingCents === 0);
+        /*
+         * A SETTLED OBLIGATION, NOT A ZERO. `outstandingCents === 0` alone also describes a credit
+         * or a fully-reduced line, which never owed anything and which Thread 2 correctly refuses
+         * to allocate responsibility over. The claim here is about money that WAS owed and has
+         * since been paid, so the net obligation must be positive before the zero means anything.
+         */
+        const settledRow = cohort.rows.find(
+            (r) => r.position.outstandingCents === 0 && r.position.explanation.netCents > 0,
+        );
         expect(
             settledRow,
-            "no charge in the cohort is fully settled — applied payments are not being counted",
+            "no posted obligation in the cohort is fully settled — applied payments are not being counted",
         ).toBeTruthy();
 
         // AND THE TWO PATHS AGREE. Divergence here is the defect restated.
@@ -122,7 +130,12 @@ describeLive("a settled account stays in the Accounts cohort — live", () => {
         const cohort = await resolveFinancialPositionCohort(supabase, orgWide as never);
         const settledAccounts = new Set(
             cohort.rows
-                .filter((r) => r.position.outstandingCents === 0 && r.customerId)
+                .filter(
+                    (r) =>
+                        r.position.outstandingCents === 0
+                        && r.position.explanation.netCents > 0
+                        && r.customerId,
+                )
                 .map((r) => r.customerId as string),
         );
         expect(
@@ -145,14 +158,25 @@ describeLive("a settled account stays in the Accounts cohort — live", () => {
             resolve(__dirname, "../../../lib/financials/workspace/resolveFinancialPosition.ts"),
             "utf8",
         );
-        expect(source, "per-charge facts are read in bounded batches").toContain("CHARGE_ID_BATCH");
+        expect(source, "cohort reads are issued in bounded batches").toContain("ID_BATCH");
         expect(source, "a failed read throws rather than resolving to nothing").toMatch(
             /if \(error\)[\s\S]{0,120}throw new Error/,
         );
-        // No cohort-wide fact may be destructured without its error again.
+        /*
+         * THE RULE, NOT A LIST OF NAMES. The first version of this pin enumerated the four
+         * charge-scoped facts, so it went on passing while the read keyed by PAYMENT — the one that
+         * decides whether an application counts at all — kept dropping its error two hundred lines
+         * further down. Any `const { data: x } = await …` in this file is that same defect again,
+         * whatever the variable is called.
+         */
+        const droppedErrorReads = [...source.matchAll(/const \{ data: (\w+) \}/g)].map((m) => m[1]);
         expect(
-            /const \{ data: (reductionRows|applicationRows|allocationRows|claimLineRows) \}/.test(source),
-            "a cohort fact is being read with its error dropped",
-        ).toBe(false);
+            droppedErrorReads,
+            "a cohort read in this file discards its error and will fail open into wrong money",
+        ).toEqual([]);
+        // Every id-keyed read goes through the one fail-closed seam.
+        expect(source, "the payments behind applied money are read in batches too").toMatch(
+            /readInBatches<[^>]*>\(\s*\n?\s*"payments backing applied money"/,
+        );
     });
 });
