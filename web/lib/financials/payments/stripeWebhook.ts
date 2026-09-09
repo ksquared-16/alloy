@@ -137,6 +137,13 @@ function stateForEvent(eventType: string, objectStatus: string | undefined): str
     return mapStripeStatus(objectStatus);
 }
 
+/** The provider's own name for what the payer still has to do, or null when nothing is pending. */
+function nextAction(object: Record<string, unknown>): string | null {
+    const action = object.next_action as { type?: unknown } | null | undefined;
+    const type = action && typeof action === "object" ? action.type : null;
+    return typeof type === "string" && type ? type : null;
+}
+
 export async function handleStripeWebhook(
     supabase: SupabaseClient,
     rawBody: string,
@@ -429,6 +436,20 @@ export async function handleStripeWebhook(
         .update({
             processor_state: nextState,
             processor_state_at: new Date().toISOString(),
+            /*
+             * WHAT THE PAYER HAS LEFT TO DO, captured here and not only at creation.
+             *
+             * At creation there is no `next_action` — no payment method has been attached yet — so
+             * this column was always null in practice, and the lifecycle could not tell a card
+             * challenge from a bank microdeposit verification. Both are "requires_action", and an
+             * operator told a bank debit was awaiting a card challenge would send the family looking
+             * for a code that is never coming. The provider says which one it is on the event that
+             * moves the attempt into that state, so that is where it is recorded.
+             *
+             * Cleared when the attempt moves on: an action that is no longer required is not a fact
+             * about the collection any more.
+             */
+            provider_action_type: nextAction(object),
             last_provider_detail: { event_id: eventId, event_type: eventType, status: object.status ?? null },
             updated_at: new Date().toISOString(),
         })
