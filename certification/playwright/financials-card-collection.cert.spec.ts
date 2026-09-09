@@ -794,6 +794,20 @@ test.describe("Slice H — collecting money through the mounted Financials card"
         await refund.click();
 
         /*
+         * The control opens at the full remaining refundable amount, so a full refund is committing
+         * what it already offers. Same canonical action as a partial one — only the amount differs.
+         */
+        const refundForm = page.locator('[data-financials-refund-form="true"]');
+        await expect(refundForm, "the refund control must open a form").toBeVisible({ timeout: 30_000 });
+        await expect(refundForm.locator('[data-financials-refund-remaining]')).toHaveAttribute(
+            "data-financials-refund-remaining",
+            String(cents),
+        );
+        const refundCommit = page.locator('[data-financials-refund-commit="true"]').first();
+        await refundCommit.scrollIntoViewIfNeeded();
+        await refundCommit.click();
+
+        /*
          * RECOGNITION, not optimism. Thread 8 records the reversal as its own payment; the original
          * is never edited.
          */
@@ -819,13 +833,329 @@ test.describe("Slice H — collecting money through the mounted Financials card"
     });
 
     /*
+     * SCENARIO F — A PARTIAL REFUND, AND THEN ANOTHER.
+     *
+     * Slice G certified repeatable partial refunds on the server; this is the operator expressing
+     * them. Both refunds go through the SAME canonical `payment.refund` the full refund uses — one
+     * capability with an amount intent, never a second mutation — and the original receipt keeps
+     * saying what arrived while the reversals accumulate beside it.
+     */
+    test("F — a partial refund, a second one, and an over-refund the server refuses", async ({ page }) => {
+        const reads = watchAccountReads(page);
+        const subject = await subjectWithCollectibleCharge(page, reads);
+        const canonical = async () => {
+            const res = await page.request.get(`/api/admin/financials/card?customer_id=${subject.customerId}`);
+            const vm = ((await res.json()) as any).vm ?? {};
+            return {
+                balance: vm.reconciliation?.balanceCents ?? null,
+                payments: (vm.payments ?? []) as Array<any>,
+            };
+        };
+        const received = (r: any) => r.receivedCents ?? r.amountCents;
+
+        // ── A real card payment to refund in pieces ──────────────────────────────────────────────
+        const opening = await canonical();
+        const cents = 1_000 + (Date.now() % 90);
+        await openPaymentPanel(page);
+        await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
+        await page.locator('[data-financials-payment-amount="true"]').first().fill((cents / 100).toFixed(2));
+        const commit = page.locator('[data-financials-payment-commit="true"]').first();
+        await commit.scrollIntoViewIfNeeded();
+        await commit.click();
+
+        const frame = page.frameLocator('[data-financials-card-mount="true"] iframe').first();
+        await expect(page.locator('[data-financials-card-mount="true"] iframe').first()).toBeVisible({ timeout: 60_000 });
+        await expect(frame.locator('input[name="number"]')).toBeVisible({ timeout: 60_000 });
+        await frame.locator('input[name="number"]').fill("4242424242424242");
+        await frame.locator('input[name="expiry"]').fill("12" + String(new Date().getFullYear() + 2).slice(2));
+        await frame.locator('input[name="cvc"]').fill("123");
+        const zip = frame.locator('input[name="postalCode"]');
+        if (await zip.count()) await zip.fill("94103").catch(() => undefined);
+        const submit = page.locator('[data-financials-card-submit="true"]').first();
+        await expect(submit).toBeEnabled({ timeout: 60_000 });
+        await submit.scrollIntoViewIfNeeded();
+        await submit.click();
+
+        await expect
+            .poll(async () => (await canonical()).payments.length, { timeout: 180_000 })
+            .toBeGreaterThan(opening.payments.length);
+        const collected = await canonical();
+        const receipt = collected.payments.find(
+            (p) => !opening.payments.some((o) => o.paymentId === p.paymentId),
+        );
+        expect(receipt, "the receipt this test refunds must exist canonically").toBeTruthy();
+        expect(received(receipt)).toBe(cents);
+
+        /** Reopen the panel on the receipt and read what the surface says is refundable. */
+        const openRefund = async () => {
+            await page.goto(`${WORK_VIEW}?subject_id=${CERT_OPPORTUNITY}`);
+            await expect
+                .poll(async () => await page.locator('[data-financials-card="true"]').count(), { timeout: 90_000 })
+                .toBeGreaterThan(0);
+            await openPaymentPanel(page);
+            const button = page.locator(`[data-financials-refund-payment="${receipt.paymentId}"]`);
+            await expect(button, "the receipt must still offer a refund").toBeVisible({ timeout: 60_000 });
+            await button.scrollIntoViewIfNeeded();
+            await button.click();
+            const form = page.locator('[data-financials-refund-form="true"]');
+            await expect(form).toBeVisible({ timeout: 30_000 });
+            return form;
+        };
+
+        // ── FIRST PARTIAL: less than the whole ───────────────────────────────────────────────────
+        const firstPart = 400;
+        let form = await openRefund();
+        // ENTITY ATTRIBUTION: the form is bound to the payment the operator chose, not to a first row.
+        await expect(form).toHaveAttribute("data-financials-refund-for", receipt.paymentId);
+        await expect(form.locator("[data-financials-refund-remaining]")).toHaveAttribute(
+            "data-financials-refund-remaining",
+            String(cents),
+        );
+        await page.locator('[data-financials-refund-amount="true"]').fill((firstPart / 100).toFixed(2));
+        let refundCommit = page.locator('[data-financials-refund-commit="true"]').first();
+        await refundCommit.scrollIntoViewIfNeeded();
+        await refundCommit.click();
+
+        await expect
+            .poll(async () => (await canonical()).balance, { timeout: 180_000 })
+            .toBe(collected.balance! + firstPart);
+
+        let after = await canonical();
+        let original = after.payments.find((p) => p.paymentId === receipt.paymentId);
+        expect(original, "the original receipt must remain").toBeTruthy();
+        expect(received(original), "the original is not rewritten to net").toBe(cents);
+
+        // ── SECOND PARTIAL: a new intent, not a duplicate of the first ───────────────────────────
+        const secondPart = 300;
+        form = await openRefund();
+        await expect(
+            form.locator("[data-financials-refund-remaining]"),
+            "the remaining refundable amount must fall by the first refund",
+        ).toHaveAttribute("data-financials-refund-remaining", String(cents - firstPart));
+        await expect(
+            page.locator(`[data-financials-payment-id="${receipt.paymentId}"] [data-financials-payment-refunded]`),
+            "the receipt must state what has gone back",
+        ).toHaveAttribute("data-financials-payment-refunded", String(firstPart));
+
+        await page.locator('[data-financials-refund-amount="true"]').fill((secondPart / 100).toFixed(2));
+        refundCommit = page.locator('[data-financials-refund-commit="true"]').first();
+        await refundCommit.scrollIntoViewIfNeeded();
+        await refundCommit.click();
+
+        await expect
+            .poll(async () => (await canonical()).balance, { timeout: 180_000 })
+            .toBe(collected.balance! + firstPart + secondPart);
+
+        after = await canonical();
+        original = after.payments.find((p) => p.paymentId === receipt.paymentId);
+        expect(received(original), "the original still says what arrived").toBe(cents);
+        const reversals = after.payments.filter((p) => p.refundsPaymentId === receipt.paymentId);
+        expect(
+            reversals.length,
+            "the second partial refund was deduplicated instead of being its own reversal",
+        ).toBe(2);
+        expect(reversals.map((r) => received(r)).sort((a, b) => a - b)).toEqual([secondPart, firstPart].sort((a, b) => a - b));
+
+        // ── OVER-REFUND: the client warns, and the server refuses regardless ─────────────────────
+        const remaining = cents - firstPart - secondPart;
+        form = await openRefund();
+        await expect(form.locator("[data-financials-refund-remaining]")).toHaveAttribute(
+            "data-financials-refund-remaining",
+            String(remaining),
+        );
+        await page.locator('[data-financials-refund-amount="true"]').fill(((remaining + 500) / 100).toFixed(2));
+        await page.locator('[data-financials-refund-commit="true"]').first().click();
+        const clientRefusal = page.locator('[data-financials-refund-error="true"]');
+        await expect(clientRefusal, "the surface should say why before asking").toBeVisible({ timeout: 20_000 });
+        expect(await clientRefusal.innerText()).toMatch(/exceeds the remaining refundable/i);
+
+        // …and the client is only a courtesy: the server refuses the same request on its own.
+        const balanceBefore = (await canonical()).balance;
+        const bypass = await execute(page, {
+            action_key: "payment.refund", entity_type: "child", entity_id: CERT_MEMBER,
+            mode: "execute", confirmation: { confirmed: true },
+            payload: { payment_id: receipt.paymentId, amount_cents: remaining + 500, payment_label: "over" },
+        });
+        expect(bypass.json.ok, "the server must refuse an over-refund even when the client is bypassed").toBeFalsy();
+        const refusal = JSON.stringify(bypass.json);
+        expect(refusal, "no provider identifiers in operator copy").not.toMatch(/acct_|re_[A-Za-z0-9]/);
+        expect(refusal, "no raw database error").not.toMatch(/violates|constraint|stack/i);
+        expect((await canonical()).balance, "a refused over-refund moved money").toBe(balanceBefore);
+
+        // ── COLD RELOAD: the same canonical state reconstructs ───────────────────────────────────
+        await page.reload();
+        await page.waitForLoadState("domcontentloaded");
+        await expect
+            .poll(async () => await page.locator('[data-financials-card="true"]').count(), { timeout: 90_000 })
+            .toBeGreaterThan(0);
+        const reloaded = await canonical();
+        expect(reloaded.balance, "outstanding after a true reload").toBe(after.balance);
+        expect(
+            reloaded.payments.filter((p) => p.refundsPaymentId === receipt.paymentId).length,
+            "a reload must not duplicate the refunds",
+        ).toBe(2);
+        expect(received(reloaded.payments.find((p) => p.paymentId === receipt.paymentId)), "the receipt survives a reload").toBe(cents);
+
+        assertStillOnSubject(reads, subject, "scenario F");
+        test.info().annotations.push({
+            type: "scenario-f",
+            description: `receipt ${receipt.paymentId} ${cents}c → refunded ${firstPart}+${secondPart}c, retained ${cents - firstPart - secondPart}c`,
+        });
+    });
+
+    /*
+     * REFRESH CONVERGENCE — the balance arrives without the operator reloading.
+     *
+     * Recognition happens after the browser is done: the provider's webhook reaches Financials, and
+     * the card's own seam (poll `collection-state`, reload canonical truth, stop asking once
+     * recognised) brings the surface to it. Asserted in the DOM with NO `page.reload()` anywhere in
+     * this test — a reload would prove the database, not the convergence.
+     */
+    test("R — the mounted card converges on canonical truth without a manual reload", async ({ page }) => {
+        const reads = watchAccountReads(page);
+        const subject = await subjectWithCollectibleCharge(page, reads);
+
+        await openPaymentPanel(page);
+        await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
+        const cents = 1_000 + (Date.now() % 90);
+        await page.locator('[data-financials-payment-amount="true"]').first().fill((cents / 100).toFixed(2));
+        const commit = page.locator('[data-financials-payment-commit="true"]').first();
+        await commit.scrollIntoViewIfNeeded();
+        await commit.click();
+
+        const frame = page.frameLocator('[data-financials-card-mount="true"] iframe').first();
+        await expect(page.locator('[data-financials-card-mount="true"] iframe').first()).toBeVisible({ timeout: 60_000 });
+        await expect(frame.locator('input[name="number"]')).toBeVisible({ timeout: 60_000 });
+        await frame.locator('input[name="number"]').fill("4242424242424242");
+        await frame.locator('input[name="expiry"]').fill("12" + String(new Date().getFullYear() + 2).slice(2));
+        await frame.locator('input[name="cvc"]').fill("123");
+        const zip = frame.locator('input[name="postalCode"]');
+        if (await zip.count()) await zip.fill("94103").catch(() => undefined);
+        const submit = page.locator('[data-financials-card-submit="true"]').first();
+        await expect(submit).toBeEnabled({ timeout: 60_000 });
+        await submit.scrollIntoViewIfNeeded();
+        await submit.click();
+
+        // The interval, stated the way the operator reads it.
+        const finalizing = page.locator('[data-financials-card-finalizing="true"]');
+        if (await finalizing.count()) {
+            const text = await finalizing.innerText();
+            expect(text, "the finalizing copy must not read as failure").not.toMatch(/failed|could not/i);
+            expect(text, "and must not offer another charge as recovery").not.toMatch(/charge again/i);
+        }
+
+        // CONVERGENCE, in the DOM, with no reload: the card says recognised on its own.
+        await expect(
+            page.locator('[data-financials-card-recognized="true"]'),
+            "the card never converged on canonical recognition by itself",
+        ).toBeVisible({ timeout: 120_000 });
+
+        // …and the canonical receipt is on the surface, not merely in the database.
+        await expect
+            .poll(
+                async () =>
+                    await page
+                        .locator('[data-financials-payments="true"] [data-financials-payment-kind="receipt"]')
+                        .count(),
+                { timeout: 60_000 },
+            )
+            .toBeGreaterThan(0);
+
+        assertStillOnSubject(reads, subject, "refresh convergence");
+    });
+
+    /*
+     * NARROW VIEWPORT — the same operation, on a screen that cannot hide a layout problem.
+     *
+     * Especially load-bearing after a depth-layer change: a raised command surface that overflows a
+     * short viewport puts its commit control where nothing can reach it, which is exactly the class
+     * of failure this slice already hit once.
+     */
+    test("N — the collection and refund controls stay usable at a narrow viewport", async ({ page }) => {
+        /*
+         * Entered at desk width, then narrowed.
+         *
+         * The Work View's queue pages no rows at 390px — its own responsive behaviour, and a
+         * separate question from this one. What this scenario is about is the payment and refund
+         * surface, so the subject is opened the ordinary way and the viewport is narrowed around it,
+         * which is also what happens to an operator who resizes or rotates mid-task.
+         */
+        const reads = watchAccountReads(page);
+        const subject = await subjectWithCollectibleCharge(page, reads);
+        await page.setViewportSize({ width: 390, height: 780 });
+        await page.waitForTimeout(1_500);
+
+        await openPaymentPanel(page);
+        const chooser = page.locator('[data-financials-payment-method="true"]').first();
+        await expect(chooser, "the rail chooser must be reachable").toBeVisible({ timeout: 30_000 });
+        await chooser.selectOption("card");
+        const amount = page.locator('[data-financials-payment-amount="true"]').first();
+        await expect(amount, "the amount input must not be clipped away").toBeVisible();
+        // Unique per run: the attempt is idempotent on (charge, amount, rail), and Elements cannot
+        // mount against an intent that has already succeeded.
+        await amount.fill(((1_000 + (Date.now() % 90)) / 100).toFixed(2));
+
+        const commit = page.locator('[data-financials-payment-commit="true"]').first();
+        await commit.scrollIntoViewIfNeeded();
+        const reachable = async (locator: typeof commit, label: string) => {
+            await expect
+                .poll(async () => await locator.evaluate((el) => {
+                    const r = el.getBoundingClientRect();
+                    return r.top >= 0 && r.bottom <= window.innerHeight && r.left >= 0 && r.right <= window.innerWidth ? 1 : 0;
+                }), { timeout: 30_000 })
+                .toBe(1);
+            const hit = await locator.evaluate((el) => {
+                const r = el.getBoundingClientRect();
+                const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) as HTMLElement | null;
+                return { isScrim: !!top?.hasAttribute?.("data-fp-depth-scrim"), self: !!(top && (el === top || el.contains(top))) };
+            });
+            expect(hit.isScrim, `${label} is behind the depth scrim at a narrow viewport`).toBe(false);
+            expect(hit.self, `${label} does not hit-test to itself at a narrow viewport`).toBe(true);
+        };
+        await reachable(commit, "the collect control");
+        await commit.click();
+
+        // Stripe's own element has to be usable here too, not merely present.
+        await expect(page.locator('[data-financials-card-mount="true"] iframe').first(), "the Payment Element must mount narrow").toBeVisible({ timeout: 60_000 });
+        const frame = page.frameLocator('[data-financials-card-mount="true"] iframe').first();
+        await expect(frame.locator('input[name="number"]')).toBeVisible({ timeout: 60_000 });
+        await frame.locator('input[name="number"]').fill("4242424242424242");
+        const submit = page.locator('[data-financials-card-submit="true"]').first();
+        await submit.scrollIntoViewIfNeeded();
+        await reachable(submit, "the card submit control");
+
+        // Leave without charging: cancel is reachable too, which is the way out of this surface.
+        const cancel = page.locator('[data-financials-card-cancel="true"]').first();
+        await cancel.scrollIntoViewIfNeeded();
+        await reachable(cancel, "the cancel control");
+        await cancel.click();
+
+        // And the refund control, on an existing receipt, at the same width.
+        const refundButton = page.locator("[data-financials-refund-payment]").first();
+        if (await refundButton.count()) {
+            await refundButton.scrollIntoViewIfNeeded();
+            await reachable(refundButton, "the refund control");
+            await refundButton.click();
+            const refundAmount = page.locator('[data-financials-refund-amount="true"]');
+            await expect(refundAmount, "the refund amount input must be usable narrow").toBeVisible({ timeout: 30_000 });
+            await refundAmount.fill("1.00");
+            const refundCommit = page.locator('[data-financials-refund-commit="true"]').first();
+            await refundCommit.scrollIntoViewIfNeeded();
+            await reachable(refundCommit, "the refund commit control");
+            await page.locator('[data-financials-refund-cancel="true"]').first().click();
+        }
+
+        assertStillOnSubject(reads, subject, "narrow viewport");
+    });
+
+    /*
      * NO SECOND READ MODEL.
      *
      * `/api/admin/financials/collection-state` reports where a collection has GOT TO. The moment it
      * starts reporting what is owed, Financials has two answers to the same question and one of them
      * is wrong. Asserted against the live route, on this run's own subject.
      */
-    test("N — collection-state reports execution state and never financial authority", async ({ page }) => {
+    test("M — collection-state reports execution state and never financial authority", async ({ page }) => {
         const reads = watchAccountReads(page);
         await openCertificationSubject(page, reads);
 

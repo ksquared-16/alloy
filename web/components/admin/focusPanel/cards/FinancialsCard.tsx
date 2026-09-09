@@ -24,7 +24,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-    presentPayment,
+    presentPayments,
     unappliedTotalCents,
 } from "@/lib/adminV2/runtime/focusPanel/financials/paymentPresentation";
 import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
@@ -122,6 +122,23 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     } | null>(null);
     const [payAmount, setPayAmount] = useState<string>("");
     const [payMethod, setPayMethod] = useState<string>("cash");
+    /**
+     * THE REFUND THE OPERATOR IS COMPOSING.
+     *
+     * One canonical capability with an amount intent, not two actions: full and partial both commit
+     * `payment.refund`, and the amount is the only thing that differs. It opens at the full
+     * remaining refundable figure so the common case is one click, and the operator may reduce it.
+     */
+    const [refundTarget, setRefundTarget] = useState<{
+        paymentId: string;
+        label: string;
+        receivedCents: number;
+        refundedCents: number;
+        refundableCents: number;
+        currencyCode: string;
+    } | null>(null);
+    const [refundAmount, setRefundAmount] = useState<string>("");
+    const [refundError, setRefundError] = useState<string | null>(null);
     /*
      * CARD IS COLLECTED, NOT RECORDED — and that distinction is the whole of this state.
      *
@@ -781,8 +798,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         className="alloy-os-financials__payments"
                         data-financials-payments="true"
                     >
-                        {vm.payments.map((raw) => {
-                            const p = presentPayment(raw);
+                        {presentPayments(vm.payments).map((p) => {
+                            const composing = refundTarget?.paymentId === p.paymentId;
                             return (
                                 <li
                                     key={p.paymentId}
@@ -813,26 +830,154 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                             ) : null}
                                         </span>
                                     ) : null}
-                                    {p.offersRefund ? (
+                                    {/*
+                                        WHAT IS LEFT OF THIS RECEIPT, once some of it has gone back.
+                                        The original amount stays on the row above rather than being
+                                        replaced by a "Partially refunded" state that hides both
+                                        numbers; refunded and retained are stated beside it.
+                                    */}
+                                    {p.kind === "receipt" && p.isMoney && p.refundedCents > 0 ? (
+                                        <span
+                                            className="alloy-os-financials__note"
+                                            data-financials-payment-refunded={p.refundedCents}
+                                        >
+                                            {money(p.refundedCents, p.currencyCode)} refunded ·{" "}
+                                            <span data-financials-payment-retained={p.receivedCents - p.refundedCents}>
+                                                {money(p.receivedCents - p.refundedCents, p.currencyCode)} net retained
+                                            </span>
+                                        </span>
+                                    ) : null}
+                                    {p.offersRefund && !composing ? (
                                         <button
                                             type="button"
                                             className="alloy-os-financials__action"
                                             data-financials-command="payment.refund"
                                             data-financials-refund-payment={p.paymentId}
                                             disabled={running}
-                                            onClick={() =>
-                                                void runPaymentAction(
-                                                    "payment.refund",
-                                                    {
-                                                        payment_id: p.paymentId,
-                                                        payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
-                                                    },
-                                                    paymentEntityFor(chargeTarget),
-                                                )
-                                            }
+                                            onClick={() => {
+                                                setCommandError(null);
+                                                setRefundError(null);
+                                                setRefundTarget({
+                                                    paymentId: p.paymentId,
+                                                    label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                    receivedCents: p.receivedCents,
+                                                    refundedCents: p.refundedCents,
+                                                    refundableCents: p.refundableCents,
+                                                    currencyCode: p.currencyCode,
+                                                });
+                                                // Opens at the full remaining refundable amount.
+                                                setRefundAmount((p.refundableCents / 100).toFixed(2));
+                                            }}
                                         >
                                             Refund
                                         </button>
+                                    ) : null}
+                                    {composing ? (
+                                        <div
+                                            className="alloy-os-financials__preview"
+                                            data-financials-refund-form="true"
+                                            data-financials-refund-for={p.paymentId}
+                                        >
+                                            <p className="alloy-os-financials__preview-summary">
+                                                Refund {p.methodLabel} payment
+                                            </p>
+                                            {/* Every figure the decision needs, so nothing is worked
+                                                out in the operator's head. */}
+                                            <p className="alloy-os-financials__note">
+                                                <span data-financials-refund-original={p.receivedCents}>
+                                                    {money(p.receivedCents, p.currencyCode)} original
+                                                </span>
+                                                {" · "}
+                                                <span data-financials-refund-already={p.refundedCents}>
+                                                    {money(p.refundedCents, p.currencyCode)} already refunded
+                                                </span>
+                                                {" · "}
+                                                <span data-financials-refund-remaining={p.refundableCents}>
+                                                    {money(p.refundableCents, p.currencyCode)} refundable
+                                                </span>
+                                            </p>
+                                            <input
+                                                className="alloy-os-financials__input"
+                                                data-financials-refund-amount="true"
+                                                inputMode="decimal"
+                                                value={refundAmount}
+                                                onChange={(e) => {
+                                                    setRefundError(null);
+                                                    setRefundAmount(e.target.value);
+                                                }}
+                                                aria-label={`Refund amount in ${p.currencyCode}`}
+                                            />
+                                            {refundError ? (
+                                                <p
+                                                    className="alloy-os-financials__note"
+                                                    data-financials-refund-error="true"
+                                                >
+                                                    {refundError}
+                                                </p>
+                                            ) : null}
+                                            <span className="alloy-os-financials__preview-actions">
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-financials-refund-commit="true"
+                                                    disabled={running}
+                                                    onClick={() => {
+                                                        /*
+                                                         * Cents, as an integer, because money is not
+                                                         * a float — the same conversion the payment
+                                                         * amount already uses.
+                                                         *
+                                                         * These checks are for the operator's sake,
+                                                         * not the ledger's: the action re-derives
+                                                         * eligibility, the merchant, the currency and
+                                                         * the cumulative ceiling on the server, and
+                                                         * its refusal is what decides.
+                                                         */
+                                                        const cents = Math.round(Number(refundAmount) * 100);
+                                                        if (!Number.isFinite(cents) || cents <= 0) {
+                                                            setRefundError("Enter a refund amount greater than zero.");
+                                                            return;
+                                                        }
+                                                        if (cents > p.refundableCents) {
+                                                            setRefundError(
+                                                                `Refund amount exceeds the remaining refundable balance of ${money(p.refundableCents, p.currencyCode)}.`,
+                                                            );
+                                                            return;
+                                                        }
+                                                        setRefundError(null);
+                                                        void runPaymentAction(
+                                                            "payment.refund",
+                                                            {
+                                                                payment_id: p.paymentId,
+                                                                amount_cents: cents,
+                                                                payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                            },
+                                                            paymentEntityFor(chargeTarget),
+                                                        ).then((outcome) => {
+                                                            if (outcome?.ok) setRefundTarget(null);
+                                                        });
+                                                    }}
+                                                >
+                                                    Refund{" "}
+                                                    {money(
+                                                        Math.max(0, Math.round(Number(refundAmount) * 100) || 0),
+                                                        p.currencyCode,
+                                                    )}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-financials-refund-cancel="true"
+                                                    disabled={running}
+                                                    onClick={() => {
+                                                        setRefundTarget(null);
+                                                        setRefundError(null);
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </span>
+                                        </div>
                                     ) : null}
                                 </li>
                             );
