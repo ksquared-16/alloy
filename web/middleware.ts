@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 
 import { getCachedJwks } from "@/lib/auth/jwksCache";
 import { NextResponse, type NextRequest } from "next/server";
+import { externalRedirectUrl } from "@/lib/http/requestOrigin";
+import { authCookieNameFor } from "@/lib/supabase/browserTransport";
 import {
     getSupabaseAnonKeyForAuth,
     getSupabaseUrlForAuth,
@@ -59,8 +61,13 @@ export async function middleware(request: NextRequest) {
     /** Phase H1: legacy `/admin/*` bookmarks → canonical settings/workspace (legacy drawer retired). */
     const legacyTarget = legacyAdminRedirectTarget(pathname);
     if (legacyTarget) {
-        const url = request.nextUrl.clone();
-        url.pathname = legacyTarget;
+        /*
+         * `request.nextUrl.clone()` carries the origin the server is BOUND to, so
+         * this answered a Director on the tailnet with `https://localhost:PORT/workspace`.
+         * Certified live: `/admin/financials` returned exactly that. Same rule as
+         * the login redirect below — the caller's own origin, never ours.
+         */
+        const url = externalRedirectUrl(request, `${legacyTarget}${request.nextUrl.search}`);
         const res = NextResponse.redirect(url);
         res.headers.set("x-alloy-admin-mw", `legacy-redirect:${legacyTarget}`);
         return res;
@@ -69,8 +76,7 @@ export async function middleware(request: NextRequest) {
     /** Phase H1: `/adminV2`, `/admin/v2` → canonical `/admin`. */
     const transitionalTarget = normalizeTransitionalAdminPath(pathname);
     if (transitionalTarget && transitionalTarget !== pathname) {
-        const url = request.nextUrl.clone();
-        url.pathname = transitionalTarget;
+        const url = externalRedirectUrl(request, `${transitionalTarget}${request.nextUrl.search}`);
         const res = NextResponse.redirect(url);
         res.headers.set("x-alloy-admin-mw", `canonical-redirect:${transitionalTarget}`);
         return res;
@@ -90,7 +96,7 @@ export async function middleware(request: NextRequest) {
             console.error(
                 "[MIDDLEWARE] Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or SUPABASE_URL / SUPABASE_ANON_KEY)."
             );
-            const res = NextResponse.redirect(new URL("/login?error=config", request.url));
+            const res = NextResponse.redirect(externalRedirectUrl(request, "/login?error=config"));
             res.headers.set("x-alloy-admin-mw", "redirect:/login?error=config");
             return res;
         }
@@ -102,7 +108,24 @@ export async function middleware(request: NextRequest) {
         warnIfAuthSupabaseUrlMismatch();
     }
 
+    /*
+     * THE SAME AUTH COOKIE IDENTITY THE BROWSER WROTE.
+     *
+     * On a loopback runtime the browser reaches Supabase through the app's own
+     * origin, so `@supabase/ssr` would derive its cookie name from a DIFFERENT
+     * URL than the one configured here. `supabaseClient.ts` and
+     * `supabaseServer.ts` already pin the name for exactly that reason;
+     * middleware did not, so it looked for `sb-<ref>-auth-token`, found nothing,
+     * and answered every authenticated request with a redirect to /login.
+     *
+     * Null on hosted runtimes, so production keeps the library's own derivation.
+     * The rule itself lives in `browserTransport.ts` and is not restated here —
+     * three call sites, one owner, so they cannot drift apart again.
+     */
+    const authCookieName = authCookieNameFor(supabaseUrl);
+
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        ...(authCookieName ? { cookieOptions: { name: authCookieName } } : {}),
         cookies: {
             getAll() {
                 return request.cookies.getAll();
@@ -171,7 +194,13 @@ export async function middleware(request: NextRequest) {
     }
 
     if (!authedUserId) {
-        const res = NextResponse.redirect(new URL(operatorLoginRedirectPath(), request.url));
+        /*
+         * The origin the caller actually used, never the one this server is bound
+         * to: `request.url` answered a Director on the tailnet with a redirect to
+         * `https://localhost:PORT/login` — their own machine. See
+         * `lib/http/requestOrigin.ts`.
+         */
+        const res = NextResponse.redirect(externalRedirectUrl(request, operatorLoginRedirectPath()));
         res.headers.set("x-alloy-admin-mw", "redirect:/login");
         return res;
     }

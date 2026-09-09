@@ -48,6 +48,7 @@ import { listStaffPresenceForSiteDate } from "@/lib/staffPresence/staffPresenceS
 import { loadOperationalExpectationInputs } from "@/lib/childcareOperational/expectations/loadOperationalExpectationInputs";
 import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
 import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
+import { resolveCurrentWhereabouts } from "@/lib/roster/resolveCurrentWhereabouts";
 import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
 import { formatCompactScheduleHours } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import {
@@ -207,6 +208,24 @@ export async function buildCombinedRoster(
     const childDayByAgreement = new Map(
         summarizeAttendanceByDay(childAttendanceRows).map((d) => [d.enrollmentAgreementId, d])
     );
+    /*
+     * CURRENT WHEREABOUTS COMES FROM THE CERTIFIED FOLD, NOT FROM THE DAY SET.
+     *
+     * `roomsObserved` is an alphabetically sorted SET of every room seen today —
+     * there is no time in it. Reading its last element answered "which room name
+     * sorts last", which is right often enough to pass a demo and wrong on any
+     * afternoon that ends somewhere alphabetically early. Grouped per child so the
+     * fold sees one child's history, which is what it expects.
+     */
+    const eventsByAgreement = new Map<string, ChildAttendanceEventRow[]>();
+    for (const e of childAttendanceRows) {
+        const list = eventsByAgreement.get(e.enrollment_agreement_id) ?? [];
+        list.push(e);
+        eventsByAgreement.set(e.enrollment_agreement_id, list);
+    }
+    // End of the service day: "where did today leave this child", not "where were
+    // they at the instant this request happened to run".
+    const whereaboutsAsOf = `${date}T23:59:59.999Z`;
     // The effective fact a child correction would target — same fold, so the
     // surface never has to interpret raw history to offer "Correct".
     const childLatestFactByAgreement = new Map<string, string>();
@@ -346,23 +365,22 @@ export async function buildCombinedRoster(
             actual: (() => {
                 const day = childDayByAgreement.get(e.agreementId);
                 if (!day) return NO_RECORD;
-                if (day.absent && !day.present) {
-                    return {
-                        state: "absent" as const,
-                        arrivedAt: null,
-                        departedAt: null,
-                        actualRoomLocationId: null,
-                        latestFactId: childLatestFactByAgreement.get(e.agreementId) ?? null,
-                    };
-                }
-                if (!day.present) return NO_RECORD;
+
+                // State AND location both come from the chronological fold, so the
+                // Workspace and the Focus Panel cannot disagree about a child.
+                const here = resolveCurrentWhereabouts(
+                    eventsByAgreement.get(e.agreementId) ?? [],
+                    whereaboutsAsOf,
+                );
+                if (here.state === "not_arrived") return NO_RECORD;
+
                 return {
-                    state: (day.missingCheckout ? "present" : day.lastCheckOutAt ? "checked_out" : "present") as
-                        | "present"
-                        | "checked_out",
+                    state: here.state,
+                    // Times stay day-level: "when did she first arrive / last leave"
+                    // is a question about the whole day, not about this instant.
                     arrivedAt: day.firstCheckInAt,
                     departedAt: day.lastCheckOutAt,
-                    actualRoomLocationId: day.roomsObserved[day.roomsObserved.length - 1] ?? null,
+                    actualRoomLocationId: here.locationId,
                     latestFactId: childLatestFactByAgreement.get(e.agreementId) ?? null,
                 };
             })(),
