@@ -17,10 +17,10 @@
     "ceiling is a violation; under it is stale, because a ceiling left above a fallen floor hands",
     "out that many free exceptions. Both must be re-tightened whenever the floor moves."
   ],
-  "reviewed": "2026-08-27",
-  "reviewed_by": "Real Enrollment V1 staging landing (PR #555) — added the two participant Enrollment capability-token routes that broke the staging build; previously WS8 V1 preference boundary (Communications final hardening) — added the recipient unsubscribe capability-token route; previously PR #416 staging build fix (tour book + confirm-attendance moved to guardTourActionRoute advisory model); previously assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 reopen re-execution, 2026-08-06); previously the same assignment's 2026-08-04 re-verification; originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
+  "reviewed": "2026-09-09",
+  "reviewed_by": "Financials Thread 8B Stripe collection (PR #750) — added the Connect webhook boundary, the first provider-signature exception; previously Real Enrollment V1 staging landing (PR #555) — added the two participant Enrollment capability-token routes that broke the staging build; previously WS8 V1 preference boundary (Communications final hardening) — added the recipient unsubscribe capability-token route; previously PR #416 staging build fix (tour book + confirm-attendance moved to guardTourActionRoute advisory model); previously assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 reopen re-execution, 2026-08-06); previously the same assignment's 2026-08-04 re-verification; originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
   "ratchet": {
-    "max_subject_unresolved": 22,
+    "max_subject_unresolved": 23,
     "max_transitive_only_unresolved": 12,
     "history": [
       "2026-07-31: unresolved 26 (initial baseline), advisory 3.",
@@ -37,7 +37,8 @@
       "2026-08-19: unresolved raised 17 → 18 for `enrollment-document` (original-document artifact vertical). Read-only render of the participant's own filled document; the whole selection chain (session → pinned version → mapped source document → sha-pinned bytes) is server-derived from the token.",
       "2026-08-19: unresolved raised 18 → 19 for `enrollment-signature-asset` (artifact-positioned signing). Same gate; the request carries PNG bytes (magic-verified, 300KB cap) and NO target — the asset attaches to the D-95 anchor's own subject, resolved server-side.",
       "2026-08-19: unresolved raised 19 → 20 for the recipient Email unsubscribe route (`communications/unsubscribe`). Not a loosening. It is the same capability-token model as the `public/forms/[token]` and Participant Runtime entries, and it is the narrowest instance of that model on the list: the caller supplies NO target and NO value — Person, org and category are all signed claims, and the only reachable mutation is a single preference category to `opted_out` through the canonical write authority. Required because an unsubscribe link that demands a session is not an unsubscribe link; WS8 V1 needs recipient-initiated Email opt-out.",
-      "2026-08-27: unresolved raised 20 → 22 for the two new participant Enrollment routes (enrollment-artifact, enrollment-upload). Not a shrink, and deliberate: they are the tenth and eleventh members of the `public/forms/[token]` capability-token family, gated by the same `resolveParticipantEnrollmentFromToken` as the nine already listed. A public participant route has no auth principal to resolve by construction — the token IS the principal — so the ceiling moves with the family rather than the routes being left unlisted."
+      "2026-08-27: unresolved raised 20 → 22 for the two new participant Enrollment routes (enrollment-artifact, enrollment-upload). Not a shrink, and deliberate: they are the tenth and eleventh members of the `public/forms/[token]` capability-token family, gated by the same `resolveParticipantEnrollmentFromToken` as the nine already listed. A public participant route has no auth principal to resolve by construction — the token IS the principal — so the ceiling moves with the family rather than the routes being left unlisted.",
+      "2026-09-09: unresolved raised 22 → 23 for the Stripe Connect webhook (`api/stripe/webhook`). Not a loosening and not a member of the capability-token family: it is the first PROVIDER-SIGNATURE entry. The distinction matters — a capability token is presented by a person the link was issued to, while this caller is Stripe, which has no Alloy identity to present at all. The orthogonal model is a verified HMAC over the raw body checked before the body is read, plus tenancy resolved from the connected account through `payment_provider_merchants` rather than from anything the event asserts, failing closed on an unbound account. Required by Thread 8B: provider-confirmed success is what turns a collection attempt into canonical money, and it can only arrive on an unauthenticated route."
     ]
   },
   "exceptions": [
@@ -150,6 +151,11 @@
       "route": "app/api/public/forms/[token]/enrollment-upload/route.ts",
       "model": "capability-token + subject-binding",
       "reason": "Same gate at :75. The caller names a field id (:88) and NOTHING else, and it is bound: `uploadDestinationForField` at :105 reads the session's own D-94-pinned schema and refuses any id that is not an upload destination on THAT artifact. The doc_type comes from the schema (:135), never the caller, and the entity is the session's own child read from `process_instances.subject_id` at :111-117 — the request cannot name an entity. Bytes are magic-sniffed against a PDF/PNG/JPEG allow-list with a 10MB cap."
+    },
+    {
+      "route": "app/api/stripe/webhook/route.ts",
+      "model": "provider-signature",
+      "reason": "A provider callback has no Alloy principal to resolve by construction — Stripe cannot present a session — and the signature IS the authentication. `handleStripeWebhook` verifies it FIRST (`verifyStripeSignature` at stripeWebhook.ts:128, HMAC-SHA256 over the raw bytes compared with `timingSafeEqual` at :57), and nothing in the body is read as meaningful before that check passes; the route hands over the RAW body precisely so the bytes still verify. Tenancy is NOT taken from the payload: the connected account names the org through the merchant binding, and an account bound to no organization fails closed at :217 rather than guessing a tenant. The request carries no target — org, charge and attempt are all resolved server-side from the verified event. The signing secret stays server-side in STRIPE_WEBHOOK_SECRET."
     }
   ],
   "baseline": [],
