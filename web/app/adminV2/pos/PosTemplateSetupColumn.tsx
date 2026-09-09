@@ -62,7 +62,7 @@ import {
 } from "@/lib/pos/processingCase/formDraft/generateStepPresentation";
 import { detectionModeLabel } from "@/lib/pos/processingCase/formDraft/detectionModeLabel";
 import { formatDisplayDateTime } from "@/lib/presentation/presentationDateFormat";
-import { proposeGeneratedFormName } from "@/lib/pos/documentInstanceNaming";
+import { proposeGeneratedFormNameFromSources } from "@/lib/pos/documentInstanceNaming";
 import ProcessingNativeFormCreatingState from "./ProcessingNativeFormCreatingState";
 import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
 import { capabilitiesForFormat, detectProcessingSourceFormat, processingImportAcceptList } from "@/lib/pos/processingSourceCapabilities";
@@ -1612,7 +1612,15 @@ export default function PosTemplateSetupColumn({
                                 type="button"
                                 disabled={activeFieldCount === 0}
                                 onClick={() => {
-                                    setFormName((cur) => cur.trim() || proposeGeneratedFormName(docTitle));
+                                    setFormName(
+                                        (cur) =>
+                                            cur.trim() ||
+                                            proposeGeneratedFormNameFromSources({
+                                                draftTitle: draft?.title,
+                                                draftTitleFromText: draft?.title_from_text,
+                                                documentDisplayLabel: primary?.display.label,
+                                            }),
+                                    );
                                     setPhase("generate");
                                 }}
                                 className={WS_ACTION_PRIMARY}

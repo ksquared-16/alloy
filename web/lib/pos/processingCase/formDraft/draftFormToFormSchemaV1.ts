@@ -16,6 +16,7 @@ import {
     UNRESOLVED_AT_GENERATE_EVIDENCE,
 } from "./questionResolutionModel";
 import type { SectionDisposition } from "./sectionDisposition";
+import { sectionKeepsDetectedFields, staticTextWithoutFieldLabels } from "./sectionDisposition";
 
 /** Map one detected draft field to a valid FormSchemaV1 field, preserving canonical binding. */
 function mapDraftField(f: DraftFormField): FormField {
@@ -145,7 +146,17 @@ export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSche
         const disposition: SectionDisposition = s.disposition ?? "fields";
         const ids: string[] = [];
 
+        // 2. Keep detected fields for dispositions that still collect them.
+        const keepsDetectedFields = sectionKeepsDetectedFields(disposition);
+
         // 1. Preserve instructional / consent prose as a static text_block (never dropped).
+        //
+        // Second line of defence behind `buildManualFormDraft`, which no longer manufactures prose
+        // out of field labels. This one covers static text that arrives honestly and still echoes
+        // the questions: on the AcroForm tier `static_text` is the PAGE'S EXTRACTED TEXT, carried
+        // as evidence for discovery, and on a fillable form the page text simply IS the printed
+        // labels beside the widgets. Evidence is not participant copy. Real instructions, legal
+        // language, policy and consent survive untouched — none of them restate a field label.
         const carriesStatic =
             disposition === "static_reference" ||
             disposition === "acknowledgement" ||
@@ -153,15 +164,16 @@ export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSche
             disposition === "signature" ||
             disposition === "initials" ||
             disposition === "upload";
-        if (carriesStatic && s.static_text && s.static_text.trim()) {
+        const alsoAsked = keepsDetectedFields
+            ? s.field_ids.map((fid) => detectedById.get(fid)?.label ?? "").filter(Boolean)
+            : [];
+        const participantStatic = staticTextWithoutFieldLabels(s.static_text, alsoAsked);
+        if (carriesStatic && participantStatic) {
             const id = synthId("text");
-            outFields.push({ id, type: "text_block", label: s.title || "Information", required: false, content: s.static_text.trim() });
+            outFields.push({ id, type: "text_block", label: s.title || "Information", required: false, content: participantStatic });
             ids.push(id);
         }
 
-        // 2. Keep detected fields for dispositions that still collect them.
-        const keepsDetectedFields =
-            disposition === "fields" || disposition === "signature" || disposition === "upload" || disposition === "generated";
         const detectedInSection: FormField[] = [];
         if (keepsDetectedFields) {
             for (const fid of s.field_ids) {

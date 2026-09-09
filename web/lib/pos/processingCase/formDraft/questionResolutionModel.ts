@@ -210,6 +210,35 @@ export function supportsNameRepresentation(intent: QuestionIntent, type?: string
     return intent === "child_identity" || intent === "guardian_identity" || intent === "emergency_contact";
 }
 
+/** Attributes that belong TO a person but are not their name. */
+const NON_NAME_ATTRIBUTE_RE =
+    /\b(phone|telephone|mobile|cell|fax|email|e-mail|relationship|relation|address|street|city|state|zip|postal|date|dob|birth|age|gender|sex|employer|occupation|company|notes?|comments?|reason|allerg\w*|physician|insurance|policy|signature|initials?)\b/i;
+
+/**
+ * Does this label ask for a person's NAME, as opposed to some other attribute OF that person?
+ *
+ * `inferQuestionIntent` answers WHO a question is about. It was being read as though it also
+ * answered WHAT the question asks. For child and guardian the two happened to coincide, because
+ * those intents only match when the word "name" is adjacent — `/(parent|guardian)('?s)?\s*name/`.
+ * `emergency_contact` matches the subject alone, so "Emergency Contact Phone" and "Emergency
+ * Contact Relationship" both claimed to be names and were split into first/last pairs.
+ *
+ * The imported Enrollment application asks for ONE emergency contact — name, relationship, phone.
+ * It generated six questions: "Emergency contact first name" and "Emergency contact last name",
+ * three times over, indistinguishable. The relationship and the phone number were not mislabelled,
+ * they were GONE — overwritten by a name pair each. Splitting is now an attribute decision, which
+ * is what it always was.
+ */
+export function labelAsksForPersonName(label: string): boolean {
+    const text = (label ?? "").trim();
+    // Unknown label: preserve the intent-only default rather than silently declining to split.
+    if (!text) return true;
+    if (NON_NAME_ATTRIBUTE_RE.test(text)) return false;
+    if (/\bnames?\b/i.test(text)) return true;
+    // A bare subject line ("Emergency Contact", "Parent / Guardian") is paper's name line.
+    return true;
+}
+
 /**
  * A person's name defaults to SEPARATE first and last fields.
  *
@@ -226,6 +255,8 @@ export function supportsNameRepresentation(intent: QuestionIntent, type?: string
  */
 export function defaultNameRepresentation(intent: QuestionIntent, evidenceLabel = ""): NameRepresentation {
     if (!supportsNameRepresentation(intent)) return "full_name";
+    // The subject may be a person while the question is not their name.
+    if (!labelAsksForPersonName(evidenceLabel)) return "full_name";
     // An explicit single-field request in the source document is honoured.
     if (/\bfull\s*name\b|\bname\s+as\s+it\s+appears\b|\blegal\s+name\b/i.test(evidenceLabel)) {
         return "full_name";
@@ -298,7 +329,21 @@ export function deriveFieldSources(input: {
     }
 
     if (input.intent === "emergency_contact" || input.subject === "other_adult") {
-        return registrySource("guardian", "guardian_first_name", "guardian_first_name");
+        /*
+         * An emergency contact is a RELATIONSHIP, not a second guardian.
+         *
+         * This branch used to bind every emergency-contact question — name, relationship, phone
+         * alike — to `guardian.guardian_first_name`. That published one person's details as
+         * another person's business truth, and it did so for fields that are not even names.
+         *
+         * The canonical owner is the relationship model: POS-FP17 projects an ACCEPTED
+         * emergency-contact concept into a collection-bound group whose nested field sources come
+         * from the Relationship Definition. Asserting a guardian binding here would pre-empt that
+         * owner with a wrong answer. Holding the binding leaves the question form-only and visibly
+         * unresolved, which is what routes the operator to the relationship decision that does own
+         * it. Safe incompleteness over unsafe automation.
+         */
+        return undefined;
     }
 
     if (input.intent === "health" || input.subject === "enrollment") {
@@ -424,6 +469,9 @@ export function expandQuestionsForDraftSave(
         const splitName =
             subject !== "processing_only" &&
             (nameRep === "first_last" || nameRep === "first_middle_last") &&
+            // Only a NAME splits into name parts, whoever the question is about. Without this the
+            // subject disjunction below makes the intent test vacuous.
+            labelAsksForPersonName(question.evidenceLabel || label) &&
             (supportsNameRepresentation(intent, question.type) ||
                 subject === "child" ||
                 subject === "parent" ||
@@ -466,20 +514,24 @@ export function expandQuestionsForDraftSave(
         }
 
         if (splitName && (subject === "parent" || subject === "guardian" || subject === "other_adult")) {
+            // Same reason as `deriveFieldSources`: an emergency contact's name is not the guardian's
+            // name. The relationship projection owns the canonical destination, so the split parts
+            // stay form-only until the operator accepts that concept.
+            const isOtherAdult = subject === "other_adult";
             out.push({
-                label: subject === "other_adult" ? "Emergency contact first name" : "Guardian first name",
+                label: isOtherAdult ? "Emergency contact first name" : "Guardian first name",
                 type: "text",
                 section: question.section,
                 required: question.required,
-                field_source: registrySource("guardian", "guardian_first_name", "guardian_first_name"),
+                ...(isOtherAdult ? {} : { field_source: registrySource("guardian", "guardian_first_name", "guardian_first_name") }),
                 ...pdfProvenance,
             });
             out.push({
-                label: subject === "other_adult" ? "Emergency contact last name" : "Guardian last name",
+                label: isOtherAdult ? "Emergency contact last name" : "Guardian last name",
                 type: "text",
                 section: question.section,
                 required: question.required,
-                field_source: registrySource("guardian", "guardian_last_name", "guardian_last_name"),
+                ...(isOtherAdult ? {} : { field_source: registrySource("guardian", "guardian_last_name", "guardian_last_name") }),
             });
             continue;
         }
