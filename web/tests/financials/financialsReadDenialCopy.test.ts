@@ -76,7 +76,18 @@ describe("the financial read refusal", () => {
  * running a school could not read that school's money.
  */
 describe("the director roles can read financials", () => {
-    const migration = read("../supabase/migrations/20260909170000_financials_read_for_director_roles.sql");
+    /*
+     * Located by NAME, not by timestamp. The first version of this file collided with a payments
+     * migration on the same 20260909170000 slot when staging advanced — two migrations claiming one
+     * version is what Trust DB certification exists to catch — so it was renumbered past that slice.
+     * Finding it by suffix means the next renumbering does not silently read an empty string and
+     * pass every assertion below.
+     */
+    const migrationFile = fs
+        .readdirSync(path.join(root, "../supabase/migrations"))
+        .filter((f) => f.endsWith("_financials_read_for_director_roles.sql"));
+    expect(migrationFile, "exactly one director-read migration exists").toHaveLength(1);
+    const migration = read(`../supabase/migrations/${migrationFile[0]}`);
 
     it("grants fin.read to the director roles at the RBAC owner, not in Financials", () => {
         expect(migration).toContain("role_permission_grants");
