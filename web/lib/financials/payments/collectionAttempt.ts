@@ -393,18 +393,31 @@ export async function createCardCollection(
         throw new Error(`Stripe refused the collection request: ${err.message ?? stripeResponse.status}`);
     }
 
-    const intent = stripeResponse.body as { id?: string; client_secret?: string; status?: string };
+    const intent = stripeResponse.body as {
+        id?: string;
+        client_secret?: string;
+        status?: string;
+        next_action?: { type?: string } | null;
+    };
     const providerTransactionId = String(intent.id ?? "");
     const clientSecret = String(intent.client_secret ?? "");
 
     // Stripe's own first answer, recorded as processor state — never as a receipt status.
     const providerState = mapStripeStatus(intent.status);
+    /*
+     * WHY action is required, when it is. A bank debit answering `requires_action` with
+     * `verify_with_microdeposits` is waiting days on a verification, not offering a challenge the
+     * payer can finish now, and an operator told "action required" for that would go looking for a
+     * button nobody has. Presentation reads this; nothing financial depends on it.
+     */
+    const providerActionType = intent.next_action?.type ? String(intent.next_action.type) : null;
 
     await supabase
         .from("payment_collection_attempts")
         .update({
             provider_transaction_id: providerTransactionId,
             processor_state: providerState,
+            provider_action_type: providerActionType,
             processor_state_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             updated_by: input.actorUserId ?? null,

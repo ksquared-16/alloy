@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
+import { collectionLifecycle, lifecycleLabel } from "@/lib/financials/payments/collectionLifecycle";
 import { achReadinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 
 function readTrusted(key: string): string | null {
@@ -56,6 +57,19 @@ const supabase: SupabaseClient | null = env
     ? createClient(env.url, env.serviceKey, { auth: { persistSession: false } })
     : null;
 const describeLive = env && secret ? describe : describe.skip;
+
+async function stripePost(path: string, body: Record<string, string>, account?: string) {
+    const res = await fetch(`https://api.stripe.com/v1/${path}`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${secret}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+            ...(account ? { "Stripe-Account": account } : {}),
+        },
+        body: new URLSearchParams(body).toString(),
+    });
+    return { status: res.status, body: (await res.json()) as Record<string, any> };
+}
 
 async function stripeGet(path: string, account?: string) {
     const res = await fetch(`https://api.stripe.com/v1/${path}`, {
@@ -199,5 +213,84 @@ describeLive("Thread 8C — ACH collection", () => {
             (ach as { providerTransactionId: string }).providerTransactionId,
             "the rail is part of what makes an intent the same intent",
         ).not.toBe((card as { providerTransactionId: string }).providerTransactionId);
+    });
+
+    it("an unverified bank account is VERIFICATION REQUIRED, and is not money", async () => {
+        /*
+         * Real provider behaviour: raw bank details answer `requires_action` with
+         * `verify_with_microdeposits` — days of waiting, not a challenge anyone can finish now.
+         * Thread 8C does not build the microdeposit product; it must still tell the truth about the
+         * state, and must create nothing financial while it lasts.
+         *
+         * The account details go straight to Stripe and are never seen by Alloy — this is the
+         * tokenization boundary the product relies on, exercised here in one step instead of
+         * through Elements.
+         */
+        const client = supabase!;
+        const chargeId = await postCharge(client, 60_000);
+        const before = (await readChargeBalance(client, ORG, chargeId)).outstandingCents;
+
+        const created = await createCardCollection(client, {
+            orgId: ORG, chargeId, requestedAmountCents: 5_500, rail: "ach", actorUserId: ACTOR,
+        });
+        expect(created.ok, JSON.stringify(created)).toBe(true);
+        const result = created as { ok: true; providerTransactionId: string; attemptId: string };
+
+        const pm = await stripePost("payment_methods", {
+            type: "us_bank_account",
+            "us_bank_account[routing_number]": "110000000",
+            "us_bank_account[account_number]": "000123456789",
+            "us_bank_account[account_holder_type]": "individual",
+            "billing_details[name]": "Certification Payer",
+            "billing_details[email]": "cert@example.com",
+        }, connectedAccount);
+        expect(pm.status, "the provider tokenizes the account details").toBe(200);
+
+        const confirmed = await stripePost(`payment_intents/${result.providerTransactionId}/confirm`, {
+            payment_method: String(pm.body.id),
+            "mandate_data[customer_acceptance][type]": "online",
+            "mandate_data[customer_acceptance][online][ip_address]": "127.0.0.1",
+            "mandate_data[customer_acceptance][online][user_agent]": "alloy-certification",
+        }, connectedAccount);
+        expect(confirmed.status).toBe(200);
+        expect(confirmed.body.status, "real provider behaviour for an unverified account").toBe("requires_action");
+        expect(confirmed.body.next_action?.type).toBe("verify_with_microdeposits");
+
+        // A mandate exists — the payer authorised the debit, which is what makes it lawful to try.
+        expect(confirmed.body.payment_method, "the tokenized method is attached").toBeTruthy();
+
+        // ── AND NOTHING FINANCIAL HAPPENED. Asserted on persisted state, not on a label. ─────────
+        const { data: payments } = await client.from("payments").select("id")
+            .eq("org_id", ORG).eq("processor_transaction_id", result.providerTransactionId);
+        expect((payments ?? []).length, "verification pending creates no receipt").toBe(0);
+        const { data: allocs } = await client.from("payment_allocations").select("id").eq("charge_id", chargeId);
+        expect((allocs ?? []).length, "and no application").toBe(0);
+        expect(
+            (await readChargeBalance(client, ORG, chargeId)).outstandingCents,
+            "and moves no outstanding",
+        ).toBe(before);
+
+        // The operator is told the truth about which of the two `requires_action` meanings this is.
+        const state = collectionLifecycle({
+            rail: "ach",
+            processorState: "requires_action",
+            providerActionType: String(confirmed.body.next_action?.type),
+            canonicallyRecognized: false,
+        });
+        expect(state).toBe("verification_required");
+        expect(lifecycleLabel(state, "ach")).toBe("Verification required");
+    });
+
+    it("never persists raw bank credentials anywhere Alloy owns", async () => {
+        const client = supabase!;
+        // The routing/account numbers used above must exist nowhere in Alloy's own records.
+        const { data: attempts } = await client.from("payment_collection_attempts")
+            .select("id, last_provider_detail, provider_action_type, provider_transaction_id").eq("org_id", ORG);
+        const serialised = JSON.stringify(attempts ?? []);
+        expect(serialised, "no routing number").not.toMatch(/110000000/);
+        expect(serialised, "no account number").not.toMatch(/000123456789/);
+        const { data: events } = await client.from("payment_provider_events").select("payload").limit(50);
+        expect(JSON.stringify(events ?? []), "provider evidence carries no raw bank credentials")
+            .not.toMatch(/000123456789/);
     });
 });
