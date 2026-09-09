@@ -20,6 +20,20 @@ export type OipMetricKey =
     | "ops.workflow_failure_rate"
     | "ops.needs_attention_count"
     | "ops.readiness_gap_count"
+    // Financials — money, and only where a canonical owner already answers for it.
+    //
+    // Every one of these is a THREAD'S figure, scoped and summed by
+    // `resolvers/financialsMetrics.ts`. None is computed in the metric layer, none is
+    // derived from journal rows, and none is called Accounts Receivable or Revenue:
+    // the platform has no receivables accounting and no revenue-recognition model, so
+    // the names say what the numbers actually are.
+    | "financials.outstanding_amount"
+    | "financials.currently_collectible_amount"
+    | "financials.gross_charges_posted_amount"
+    | "financials.payments_received_amount"
+    | "financials.unapplied_payments_amount"
+    | "financials.unresolved_subsidy_variance_amount"
+    | "financials.charges_awaiting_post_count"
     // Trust — governed reasoning execution. Every source is a Trust Runtime
     // append-only record. Nothing here reads provider identity or recommendation
     // content from a Decision Package (ADR-2).
@@ -59,6 +73,7 @@ export type MetricPackKey =
     | "forms"
     | "operational_health"
     | "capacity"
+    | "financials"
     /**
      * Governed reasoning execution. A presentation grouping, not a Business
      * Process — Trust is platform infrastructure every capability consumes, so

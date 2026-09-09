@@ -1637,6 +1637,13 @@
         "status": "pending"
       }
     },
+    "app/api/admin/financials/activity/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
     "app/api/admin/financials/card/route.ts": {
       "GET": {
         "status": "none",
@@ -1666,6 +1673,27 @@
     "app/api/admin/financials/ledger/route.ts": {
       "GET": {
         "status": "pending"
+      }
+    },
+    "app/api/admin/financials/overview-metrics/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/payment-flow/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/position/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
       }
     },
     "app/api/admin/financials/schedule/[id]/route.ts": {

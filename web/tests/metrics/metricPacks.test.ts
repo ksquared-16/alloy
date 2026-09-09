@@ -12,7 +12,7 @@ describe("metric packs registry", () => {
         expect(validateMetricPackRegistry()).toEqual([]);
     });
 
-    it("lists five available packs with metrics", () => {
+    it("lists six available packs with metrics", () => {
         const available = listAvailableMetricPacks();
         expect(available.map((p) => p.key)).toEqual([
             "operational_health",
@@ -22,12 +22,16 @@ describe("metric packs registry", () => {
             // Governed reasoning execution. A presentation grouping, not a
             // Business Process — see PACK_TO_BUSINESS_PROCESS.
             "trust",
+            // Money. Was the empty `billing` placeholder promising "receivables"; it is now
+            // the Financials pack, and every key in it quotes a Financials thread.
+            "financials",
         ]);
     });
 
     it("includes coming-soon packs without metrics", () => {
         const soon = listMetricPacks().filter((p) => p.domainStatus === "coming_soon");
-        expect(soon.length).toBeGreaterThanOrEqual(4);
+        // capacity, attendance, staffing. `billing` left this list by becoming `financials`.
+        expect(soon.length).toBeGreaterThanOrEqual(3);
         expect(soon.every((p) => p.metricKeys.length === 0)).toBe(true);
     });
 

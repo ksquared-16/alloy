@@ -110,14 +110,46 @@ function readVersions() {
   });
 }
 
+/**
+ * Every process's working directory, or null when it could not be measured.
+ *
+ * A version is in use by a process that LIVES in it, not only by one that names
+ * it on its command line. The tmux server proved that the hard way: its argv is
+ * just `tmux`, its cwd was inside a toolkit version, nothing pinned it, that
+ * version was reclaimed, and the server was left holding a deleted directory —
+ * after which no lane could open a session in its own worktree.
+ *
+ * One lsof over cwd descriptors, measured at ~0.3s for ~470 processes.
+ */
+function readCwds() {
+  const text = bounded("lsof", ["-a", "-d", "cwd", "-Fpn"], { timeoutMs: 10000 });
+  if (!text) return null;
+  const byPid = new Map();
+  let pid = null;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("p")) { pid = Number(line.slice(1)); continue; }
+    if (line.startsWith("n") && pid != null) byPid.set(pid, line.slice(1));
+  }
+  return byPid;
+}
+
 function readProcesses() {
   const text = bounded("ps", ["-Ao", "pid=,ppid=,command="], { timeoutMs: 8000 });
   if (!text) return null;
+  const cwds = readCwds();
   const rows = [];
   for (const line of text.split("\n")) {
     const m = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
-    if (m) rows.push({ pid: Number(m[1]), ppid: Number(m[2]), command: m[3] });
+    if (m) {
+      const pid = Number(m[1]);
+      const row = { pid, ppid: Number(m[2]), command: m[3] };
+      if (cwds) row.cwd = cwds.get(pid) ?? null;
+      rows.push(row);
+    }
   }
+  // An unmeasurable cwd table is not an empty one. Say so, so the plan blocks
+  // rather than pruning a version some process is sitting in.
+  rows.cwdMeasured = Boolean(cwds);
   return rows;
 }
 
@@ -153,7 +185,20 @@ function gather() {
   // A process table we could not read is not an empty process table. Synthesise
   // one unresolved pin so the plan blocks rather than pruning blind.
   const pins = processes
-    ? resolveProcessPins({ processes })
+    ? (() => {
+      const resolved = resolveProcessPins({ processes });
+      if (processes.cwdMeasured === false) {
+        return {
+          ...resolved,
+          unresolved: [...resolved.unresolved, {
+            pid: null, command: null,
+            reason: "working directories could not be read, so a version a live process is sitting in cannot be ruled out",
+          }],
+          fully_resolved: false,
+        };
+      }
+      return resolved;
+    })()
     : { pins: {}, pinned_versions: [], unresolved: [{ pid: null, command: null, reason: "the process table could not be read; live pins are unknown" }], fully_resolved: false };
   const currentSha = currentVersion();
   const inventory = buildInventory({
