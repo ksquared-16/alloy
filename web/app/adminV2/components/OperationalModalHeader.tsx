@@ -11,6 +11,15 @@
  *   ┃ icon  Title                    [secondary] [primary] [Close]
  *         subtitle (muted)
  *   ^ Bend Pine left accent
+ *
+ * ── THE BAND IS ONE LINE, ALWAYS ──
+ *
+ * The action rail is `flex-nowrap whitespace-nowrap` and never shrinks; the title block is
+ * `min-w-0` and truncates. That asymmetry is the whole layout contract: when the header runs
+ * out of room the TITLE gives way, because a truncated title still reads while a control that
+ * has wrapped onto a second row has silently changed the shell's height and pushed the mode
+ * nav down. Close carries `shrink-0` of its own so it is the one control that can never be
+ * squeezed out of reach — a modal whose only exit has been compressed to nothing is a trap.
  */
 
 import type { ReactNode } from "react";
@@ -49,7 +58,7 @@ export default function OperationalModalHeader({
 }) {
     return (
         <header
-            className="flex w-full shrink-0 items-center justify-between gap-3 border-l-2 border-l-alloy-bend-pine bg-white px-4 pb-0 pt-1.5"
+            className="flex w-full shrink-0 flex-nowrap items-center justify-between gap-3 border-l-2 border-l-alloy-bend-pine bg-white px-4 pb-0 pt-1.5"
             data-operational-modal-header="true"
             data-workspace-header-compact="true"
         >
@@ -70,13 +79,16 @@ export default function OperationalModalHeader({
                     ) : null}
                 </div>
             </div>
-            <div className="ml-auto flex shrink-0 items-center gap-1.5" data-operational-modal-header-actions="true">
+            <div
+                className="ml-auto flex shrink-0 flex-nowrap items-center gap-1.5 whitespace-nowrap"
+                data-operational-modal-header-actions="true"
+            >
                 {secondaryActions}
                 {actions}
                 <button
                     type="button"
                     onClick={onClose}
-                    className={`inline-flex items-center gap-1 rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px] font-semibold ${WS_TEXT_MUTED} hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight`}
+                    className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px] font-semibold ${WS_TEXT_MUTED} hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight`}
                     aria-label={closeLabel}
                 >
                     <X className="h-3.5 w-3.5" aria-hidden strokeWidth={2} />

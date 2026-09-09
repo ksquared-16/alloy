@@ -46,6 +46,39 @@ CERT_INBOUND_TO_E164="${CERT_INBOUND_TO_E164:-+15550001111}"
 CERT_STRIPE_PLACEHOLDER_KEY="sk_$(printf 'test')_alloy_certification_placeholder"
 CERT_STRIPE_PLACEHOLDER_WEBHOOK="whsec_alloy_certification_placeholder"
 
+# ── REAL STRIPE TEST CREDENTIALS, WHEN THE NODE HAS THEM ────────────────────────────────────────
+#
+# The placeholders above exist because the backend refuses to boot without Stripe configuration
+# while certification never reached a payment path. Thread 8B reaches it, so a node that runs
+# Stripe collection certification needs the real TEST keys — and they must arrive from the trusted
+# host, not from a worktree file somebody might commit.
+#
+# Home: $ALLOY_RUNTIME_ROOT/vacilando/trusted-secrets/stripe-test.env, the same class and directory
+# as staging-certification-principal.env. durable-state classes trusted-secrets as EPHEMERAL and
+# excludes it from backup, so these never travel with a node restore.
+#
+# Absent, everything below keeps the placeholder behaviour exactly as it was: a node that does not
+# certify Stripe is not misconfigured for lacking them.
+STRIPE_TRUSTED_ENV="${ALLOY_RUNTIME_ROOT:-$HOME/.local/state/alloy-dev/gateway}/vacilando/trusted-secrets/stripe-test.env"
+
+# Values are read into variables and never echoed. `set -a` is scoped to a subshell-free block and
+# immediately disabled so nothing later in this script is exported by accident.
+load_stripe_trusted_env() {
+    [ -f "$STRIPE_TRUSTED_ENV" ] || return 0
+    set -a
+    # shellcheck disable=SC1090
+    . "$STRIPE_TRUSTED_ENV"
+    set +a
+}
+load_stripe_trusted_env
+
+# The secret key is server-only and is passed to the backend process, never written to any file the
+# browser or the repository can read. The publishable key is public by Stripe's own design and is
+# the only one that may reach the web build.
+CERT_STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY:-$CERT_STRIPE_PLACEHOLDER_KEY}"
+CERT_STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-$CERT_STRIPE_PLACEHOLDER_WEBHOOK}"
+CERT_STRIPE_PUBLISHABLE_KEY="${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-${STRIPE_PUBLISHABLE_KEY:-}}"
+
 OPERATOR_EMAIL="qa.operator@northwind.invalid"
 OPERATOR_PASSWORD="alloy-local-cert"        # synthetic, local-only, non-secret (seeded)
 ORG_SLUG="northwind-early-learning"
@@ -198,8 +231,8 @@ cmd_inbound_up() {
         TWILIO_AUTH_TOKEN="$CERT_TWILIO_AUTH_TOKEN" \
         COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL="$INBOUND_URL" \
         ALLOY_CERTIFICATION=1 \
-        STRIPE_SECRET_KEY="$CERT_STRIPE_PLACEHOLDER_KEY" \
-        STRIPE_WEBHOOK_SECRET="$CERT_STRIPE_PLACEHOLDER_WEBHOOK" \
+        STRIPE_SECRET_KEY="$CERT_STRIPE_SECRET_KEY" \
+        STRIPE_WEBHOOK_SECRET="$CERT_STRIPE_WEBHOOK_SECRET" \
         python3 -m uvicorn main:app --host 127.0.0.1 --port "$INBOUND_PORT" \
             >"$CERT_DIR/.run/inbound.log" 2>&1 &
         echo $! > "$INBOUND_PID_FILE"
@@ -245,6 +278,13 @@ NEXT_PUBLIC_ALLOY_OS_RUNTIME=1
 # objective result (queued/sent) but nothing leaves the machine. Auth emails are
 # caught locally by the stack's mail catcher (inbucket :54424).
 ALLOY_CERTIFICATION=1
+# Stripe. The publishable key is public by Stripe's design and is the only one the browser build
+# reads. The secret and the webhook signing secret are SERVER-only: Next exposes a variable to the
+# browser only when it is prefixed NEXT_PUBLIC_, so these two stay inside the server process. The
+# file is gitignored and regenerated, and never leaves the node.
+${CERT_STRIPE_PUBLISHABLE_KEY:+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${CERT_STRIPE_PUBLISHABLE_KEY}}
+${STRIPE_SECRET_KEY:+STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}}
+${STRIPE_WEBHOOK_SECRET:+STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}}
 # The ingress quarantine is RLS-locked to service_role, so the only way to prove
 # it retains an unattributable message WITHOUT exposing the parent's words is to
 # read the diagnostic projection. Enabled here so that withholding is certified

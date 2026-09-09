@@ -69,6 +69,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "charge.reverse",
     "payment.record",
     "payment.refund",
+    "payment.collect_card",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -630,6 +631,31 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     // this says what has been paid, and the balance is the difference. Both write to the substrate
     // that already exists — `payments` + `payment_allocations.charge_id` — so the childcare card and
     // the job drawer compute a balance the same way.
+    // Money COLLECTED rather than recorded. The distinction is the whole of Thread 8B: `payment.record`
+    // is an operator writing down money that already arrived, and this asks an external executor to
+    // go and get it. It creates no receipt — a canonical payment appears only when the provider
+    // confirms and Thread 8 recognises it, which is why the capability is a collection and not a
+    // payment.
+    def({
+        capabilityKey: "payment.collect_card",
+        canonicalCommandKey: "payment.collect_card",
+        operatorLabel: "Collect by card",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.collect_card",
+        implementationStatus: "production",
+        reason:
+            "Asks the organisation's OWN connected Stripe account to collect an amount that is already "
+            + "owed, on the direct-charge topology, so the provider remains merchant for its families. "
+            + "The server derives the amount from canonical collectible truth and refuses when the "
+            + "merchant is not ready rather than falling back to the platform account. No canonical "
+            + "receipt exists until provider-confirmed success reaches Thread 8.",
+    }),
     def({
         capabilityKey: "payment.record",
         canonicalCommandKey: "payment.record",

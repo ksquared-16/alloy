@@ -44,7 +44,7 @@ export async function PATCH(
 
     const { data: prevRow, error: prevErr } = await supabase
         .from("payments")
-        .select("status_key, status, paid_at, posted_at, failed_at, voided_at, payment_status_id, job_id, customer_id")
+        .select("status_key, status, paid_at, posted_at, failed_at, voided_at, payment_status_id, job_id, customer_id, billable_source_type")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -57,6 +57,33 @@ export async function PATCH(
     const dim = scopeDimensionsFromAccess(access);
     if (!(await assertPaymentDrawerReadable(supabase, ctx.orgId, dim, id))) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    /*
+     * CHILDCARE MONEY DOES NOT COME THROUGH HERE.
+     *
+     * This route is job billing's, and job billing legitimately edits `status_key` / `paid_at` /
+     * `notes` on live rows. A childcare receipt is append-only and its lifecycle belongs to
+     * `childcarePaymentService` — recorded once, corrected only by a refund that carries lineage.
+     *
+     * Without this, `paymentAppStatusFromStatusKey` maps a `canceled` key onto `status = 'voided'`,
+     * and a posted childcare receipt stops counting toward the balance while the row and its
+     * applications survive: the family's outstanding silently goes back up with no correction
+     * recorded anywhere. The database refuses that too — `enforce_childcare_payment_immutability` is
+     * the guarantee — but a 409 that names the canonical path is a better answer than a 500 carrying
+     * a trigger's exception text, and the rule should not depend on one handler remembering it.
+     */
+    const CHILDCARE_SOURCES = new Set(["enrollment_agreement", "customer"]);
+    const sourceType = (prevRow as { billable_source_type?: string | null }).billable_source_type ?? null;
+    if (sourceType && CHILDCARE_SOURCES.has(sourceType)) {
+        return NextResponse.json(
+            {
+                error:
+                    "This is a childcare payment. Its lifecycle is owned by the Financials payment actions; "
+                    + "record a refund or correction there rather than editing the receipt in place.",
+            },
+            { status: 409 },
+        );
     }
 
     const oldStatusKey = (prevRow as { status_key?: string | null }).status_key ?? null;

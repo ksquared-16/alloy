@@ -96,12 +96,28 @@ const PACKS: readonly MetricPackDefinition[] = [
         domainStatus: "coming_soon",
     },
     {
-        key: "billing",
-        label: "Billing",
-        description: "Collections, receivables, and billing cycle health.",
-        metricKeys: [],
+        /*
+         * This entry was `billing`, empty, and promising "receivables" — a placeholder that
+         * named a concept the platform did not own. It is now the Financials pack, and the
+         * description says only what the seven metrics actually answer.
+         */
+        key: "financials",
+        label: "Financials",
+        description:
+            "Money owed, collectible now, billed, received, unapplied, and subsidy variance \u2014 each "
+            + "quoted from the Financials thread that owns it. Not receivables accounting and not "
+            + "recognised revenue: neither model exists in the platform.",
+        metricKeys: [
+            "financials.outstanding_amount",
+            "financials.currently_collectible_amount",
+            "financials.gross_charges_posted_amount",
+            "financials.payments_received_amount",
+            "financials.unapplied_payments_amount",
+            "financials.unresolved_subsidy_variance_amount",
+            "financials.charges_awaiting_post_count",
+        ],
         defaultSurfaceOrder: 80,
-        domainStatus: "coming_soon",
+        domainStatus: "available",
     },
 ] as const;
 
