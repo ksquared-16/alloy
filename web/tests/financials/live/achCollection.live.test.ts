@@ -166,6 +166,16 @@ describeLive("Thread 8C — ACH collection", () => {
 
     it("refuses ACH on a merchant nobody has checked, and still collects by card", async () => {
         const client = supabase!;
+
+        /*
+         * State the precondition rather than inherit it. This read the merchant as whatever the
+         * previous test — or a previous certification run — had left there, and passed only because
+         * `null` happened to be the ambient value; it began failing the moment a mounted run left the
+         * merchant ACH-ready. A test about the never-asked merchant has to put the merchant there.
+         */
+        await client.from("payment_provider_merchants")
+            .update({ ach_readiness: null }).eq("org_id", ORG);
+
         const chargeId = await postCharge(client, 60_000);
 
         const refused = await createCardCollection(client, {
