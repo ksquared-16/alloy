@@ -42,6 +42,30 @@ import { expect, test, type Page } from "@playwright/test";
 
 const WORK_VIEW = "/workspace/work-unit/new-leads";
 
+/**
+ * The assistant rail, parked.
+ *
+ * BOS mounts an overlay above the workspace. It is a real product surface and the operator's own
+ * preference decides it, but left open it sits over the Financials card's footer, so `Details →`
+ * and the payment controls beneath it are covered and every click waits out its own timeout against
+ * an element nothing can reach. `workspace-financials-smoke` parks it the same way for the same
+ * reason — this is the operator's stored preference, not a test-only bypass.
+ */
+const BOS_PRESENTATION_STATE_KEY = "alloy:v1:admV2:shell:bosPresentationState";
+
+async function parkAssistantRail(page: Page) {
+    await page.addInitScript(
+        ([key, state]) => {
+            try {
+                sessionStorage.setItem(key, state);
+            } catch {
+                /* private-mode storage; the rail simply stays where it parks */
+            }
+        },
+        [BOS_PRESENTATION_STATE_KEY, "closed"],
+    );
+}
+
 /** The action envelope, from the operator's own authenticated session. */
 async function execute(page: Page, body: Record<string, unknown>) {
     const res = await page.request.post("/api/admin/actions/execute", { data: body });
@@ -80,6 +104,7 @@ function watchAccountReads(page: Page): string[] {
  * scenario here instead of at an assertion three steps later that would blame the wrong thing.
  */
 async function openCertificationSubject(page: Page, reads: string[]): Promise<CertSubject> {
+    await parkAssistantRail(page);
     await page.goto(WORK_VIEW);
     await page.waitForLoadState("domcontentloaded");
 
@@ -119,6 +144,11 @@ async function openCertificationSubject(page: Page, reads: string[]): Promise<Ce
     expect(text, "the Work View refused the subject instead of presenting it").not.toMatch(
         /isn.t in this Work View/i,
     );
+
+    expect(
+        await page.locator("[data-adminv2-bos-rail-overlay][data-bos-overlay-mode]").count(),
+        "the operator's closed assistant-rail preference must be honoured, or every click below is covered",
+    ).toBe(0);
 
     // THE SUBJECT ASSERTION. The card must have asked about exactly one account, and that account
     // is the one every scenario below will seed, collect and refund against.
@@ -201,21 +231,30 @@ async function openPaymentPanel(page: Page): Promise<void> {
         .locator('[data-financials-card="true"]')
         .first()
         .getByRole("button", { name: /Details/ });
-    if ((await details.count()) > 0) {
-        await details.first().click();
-        await page.waitForTimeout(2_000);
-    }
-    const trigger = page.locator('[data-financials-command="payment.record"]').first();
+    /*
+     * WAITED FOR, never merely probed. `[data-financials-card]` appears as soon as the card mounts,
+     * while its footer actions belong to the approved representation composed inside it — so a
+     * conditional probe silently did nothing on a card that was still rendering, and the control it
+     * opens was then waited for forever against a card that had never finished composing.
+     */
     await expect
-        .poll(async () => await trigger.count(), { timeout: 60_000 })
+        .poll(async () => await details.count(), { timeout: 60_000 })
         .toBeGreaterThan(0);
-    await trigger.click();
-    const menu = page.locator('[data-financials-payment-menu="true"]');
-    await expect(menu).toBeVisible({ timeout: 20_000 });
-    const item = menu.locator('[role="menuitem"], button').first();
-    await item.click();
+
+    /*
+     * `Take payment →` is the card's own footer intent, and it is taken from the card rather than
+     * from inside Details on purpose: the detail representation is a deeper layer whose armed scrim
+     * sits over the operation, so a commit button reached that way is visible, enabled and
+     * unclickable. This is the same depth Add charge opens at, which is where the operation belongs.
+     */
+    const payNow = page.getByRole("button", { name: /Take payment/ });
+    await expect(payNow, "the mounted card must offer the settle operation").toBeVisible({
+        timeout: 60_000,
+    });
+    await payNow.click();
+
     const chooser = page.locator('[data-financials-payment-method="true"]').first();
-    await expect(chooser, "the payment panel opens with a rail chooser").toBeVisible({ timeout: 30_000 });
+    await expect(chooser, "the payment panel opens with a rail chooser").toBeVisible({ timeout: 60_000 });
 }
 
 /** Open the subject, seed one posted charge on it, and come back with the panel ready. */

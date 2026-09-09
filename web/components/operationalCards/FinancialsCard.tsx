@@ -130,6 +130,9 @@ export default function FinancialsCard({
                         {/* "Add something that should be billed" is a Current Period intent, not a
                             payment one — and it stays quiet so it never competes with Pay now. */}
                         <div className="alloy-os-billing__zone-actions">
+                            {onPayNow ? (
+                                <FooterAction onClick={onPayNow}>Take payment →</FooterAction>
+                            ) : null}
                             <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
                             <FooterAction onClick={onDetails}>Details →</FooterAction>
                         </div>
@@ -254,6 +257,16 @@ function FinancialsCompactCard({
                 data-universal-card-key="financials"
                 footerAction={
                     <div className="alloy-os-billing__footer">
+                        {/*
+                            TAKING MONEY IS A FOOTER INTENT WHEN NOTHING IS OVERDUE.
+                            `Pay now` above answers past due and only past due, so an account that
+                            simply owes something current had no way into the settle operation at
+                            all — the rails existed, the panel existed, and no representation an
+                            operator could open offered a way in. Supplied by the host or absent.
+                        */}
+                        {onPayNow ? (
+                            <FooterAction onClick={onPayNow}>Take payment →</FooterAction>
+                        ) : null}
                         <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
                         <FooterAction onClick={onDetails}>Details →</FooterAction>
                     </div>

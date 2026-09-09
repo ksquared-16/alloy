@@ -89,7 +89,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * already uses. Neither of these is a new page or a second modal system, and the scrim click /
      * ESC path comes back through `useDismissSignal` rather than a close button this card owns.
      */
-    const [overlay, setOverlay] = useState<null | "detail" | "add_charge">(null);
+    const [overlay, setOverlay] = useState<null | "detail" | "add_charge" | "payment">(null);
     const expanded = overlay === "detail";
     const [subjectFilter, setSubjectFilter] = useState<string>("all");
     const [running, setRunning] = useState(false);
@@ -278,6 +278,29 @@ export default function FinancialsCard({ model, context, receded = false, coordi
         // Genuinely unresolvable: no child, and no household to fall back to.
         return null;
     }, [chargeTarget, customerId, context.subject?.id, context.subject?.type]);
+
+    /**
+     * Open the settle operation on the obligation most likely to be settled.
+     *
+     * The read model decides which that is — the first row it marks payable — and the operator may
+     * change both the charge and the amount once the panel is open. Undefined when nothing can take
+     * money, so the control stays inert rather than opening a panel with nothing to act on.
+     */
+    const openSettle = useMemo(() => {
+        if (!payableRows.length) return undefined;
+        return () => {
+            const row = payableRows[0];
+            setCommandError(null);
+            setPayTarget({
+                chargeId: row.chargeId,
+                label: row.description ?? row.categoryLabel,
+                outstandingCents: row.outstandingCents,
+                subjectMemberId: row.subjectMemberId,
+            });
+            setPayAmount((row.outstandingCents / 100).toFixed(2));
+            setOverlay("payment");
+        };
+    }, [payableRows]);
 
     /** Why Add charge cannot be offered, when it cannot. Stated, never silent. */
     const chargeUnavailableReason =
@@ -668,6 +691,387 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * same resolver the write uses, so what the operator confirms is what gets persisted. Only the
      * PRESENTATION moves — from a generic list-and-confirm into the approved command card.
      */
+    /*
+     * ── THE PAYMENT BAND, HOISTED SO THE MOUNTED PANEL CAN ACTUALLY REACH IT ──
+     *
+     * Everything Slice H built — the rail chooser, the amount, the card collection and the
+     * finalizing/failed/recognized states — lived inside the band region below, which renders only
+     * when this card falls through to its own anatomy. The mounted Focus Panel never falls through:
+     * a healthy account returns the approved card above, and `Details →` returns the approved detail
+     * above that. So the payment operation was built, typechecked, and unreachable in the product —
+     * `Record payment →` did not exist in any representation an operator could open.
+     *
+     * Hoisting it costs nothing (every value it closes over is resolved by this point) and lets the
+     * detail representation — the density where an operator is actually working the ledger — carry
+     * the operation, which is where FinancialsDetailCard's own `Payment` action already pointed.
+     */
+    const paymentBand = vm ? (
+            <section className="alloy-os-financials__band" data-financials-band="payment">
+                <p className="alloy-os-financials__band-label">Payment</p>
+                {/*
+                    ONLY CANONICAL PAYMENT STATE THAT ACTUALLY EXISTS.
+                    This region used to print the platform's own limitations at
+                    the operator — "payments are not recorded for enrollment
+                    accounts yet", "autopay is not configured in this platform",
+                    "responsibility splits are owned by Processing". Those are
+                    development findings; they belong in the ledger, not on a
+                    card someone uses to run a childcare centre. Where no
+                    canonical payment state exists, the region stays neutral and
+                    says nothing rather than explaining our architecture.
+                */}
+                {vm.paymentSetup ? (
+                    <p className="alloy-os-financials__note" data-financials-payment="state">
+                        {vm.paymentSetup}
+                    </p>
+                ) : null}
+
+                {/*
+                    WHAT ARRIVED, AND WHAT IT IS DOING.
+                    `vm.payments` was composed by the read model and never
+                    rendered, so a family could send $500, have $300 applied, and
+                    the card showed neither number. Received and applied are
+                    separate facts; the difference between them is money sitting
+                    on the account, and it is called UNAPPLIED — never account
+                    credit, which in this platform is a charge-side ledger row.
+                */}
+                {vm.payments.length ? (
+                    <ul
+                        className="alloy-os-financials__payments"
+                        data-financials-payments="true"
+                    >
+                        {vm.payments.map((raw) => {
+                            const p = presentPayment(raw);
+                            return (
+                                <li
+                                    key={p.paymentId}
+                                    className="alloy-os-financials__payment"
+                                    data-financials-payment-id={p.paymentId}
+                                    data-financials-payment-kind={p.kind}
+                                >
+                                    <span data-financials-payment-received="true">
+                                        {p.kind === "refund" ? "−" : ""}
+                                        {money(p.receivedCents, p.currencyCode)}
+                                    </span>
+                                    <span className="alloy-os-financials__note">
+                                        {p.statusLabel} · {p.methodLabel}
+                                    </span>
+                                    {p.kind === "receipt" && p.isMoney ? (
+                                        <span
+                                            className="alloy-os-financials__note"
+                                            data-financials-payment-applied={p.appliedCents}
+                                        >
+                                            {money(p.appliedCents, p.currencyCode)} applied
+                                            {p.unappliedCents > 0 ? (
+                                                <>
+                                                    {" · "}
+                                                    <span data-financials-payment-unapplied={p.unappliedCents}>
+                                                        {money(p.unappliedCents, p.currencyCode)} unapplied
+                                                    </span>
+                                                </>
+                                            ) : null}
+                                        </span>
+                                    ) : null}
+                                    {p.offersRefund ? (
+                                        <button
+                                            type="button"
+                                            className="alloy-os-financials__action"
+                                            data-financials-command="payment.refund"
+                                            data-financials-refund-payment={p.paymentId}
+                                            disabled={running}
+                                            onClick={() =>
+                                                void runPaymentAction(
+                                                    "payment.refund",
+                                                    {
+                                                        payment_id: p.paymentId,
+                                                        payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                    },
+                                                    chargeTarget,
+                                                )
+                                            }
+                                        >
+                                            Refund
+                                        </button>
+                                    ) : null}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                ) : null}
+
+                {/* Cash on the account, stated as cash. Never subtracted from
+                    what is owed here — applying money is its own act with its
+                    own record, and the balance above stays the read model's. */}
+                {unappliedTotalCents(vm.payments) > 0 ? (
+                    <p
+                        className="alloy-os-financials__note"
+                        data-financials-unapplied-total={unappliedTotalCents(vm.payments)}
+                    >
+                        {money(unappliedTotalCents(vm.payments), currency)} received and not yet
+                        applied
+                    </p>
+                ) : null}
+
+                {/* RECORD PAYMENT — the charges that can actually take money.
+                    `offersPayment` is the read model's answer, the same way
+                    `offersReverse` is; this renders it and does not restate it. */}
+                {payableRows.length ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-command="payment.record"
+                                disabled={running}
+                            >
+                                Record payment →
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" sideOffset={4} data-financials-payment-menu="true">
+                            {payableRows.map((r) => (
+                                <DropdownMenuItem
+                                    key={r.chargeId}
+                                    data-financials-payment-charge={r.chargeId}
+                                    onSelect={() => {
+                                        setCommandError(null);
+                                        setPayTarget({
+                                            chargeId: r.chargeId,
+                                            label: r.description ?? r.categoryLabel,
+                                            outstandingCents: r.outstandingCents,
+                                            subjectMemberId: r.subjectMemberId,
+                                        });
+                                        // The row's own outstanding amount, from
+                                        // the read model. The operator may lower
+                                        // it for a partial payment.
+                                        setPayAmount((r.outstandingCents / 100).toFixed(2));
+                                    }}
+                                >
+                                    {r.description ?? r.categoryLabel}
+                                    <span className="alloy-os-financials__menu-amount">
+                                        {money(r.outstandingCents, r.currencyCode)}
+                                    </span>
+                                </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : null}
+
+                {payTarget ? (
+                    <div
+                        className="alloy-os-financials__preview"
+                        data-financials-payment-form="true"
+                    >
+                        <p className="alloy-os-financials__preview-summary">
+                            {payTarget.label}
+                        </p>
+                        <p className="alloy-os-financials__note">
+                            {money(payTarget.outstandingCents, currency)} outstanding
+                        </p>
+                        <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={payAmount}
+                            aria-label="Payment amount"
+                            data-financials-payment-amount="true"
+                            onChange={(e) => setPayAmount(e.target.value)}
+                        />
+                        <select
+                            value={payMethod}
+                            aria-label="Payment method"
+                            data-financials-payment-method="true"
+                            onChange={(e) => setPayMethod(e.target.value)}
+                        >
+                            <option value="card">Card</option>
+                            <option value="cash">Cash</option>
+                            <option value="check">Check</option>
+                            <option value="money_order">Money order</option>
+                            {/*
+                                Bank transfer is a real rail with no executor
+                                yet. Offering it as though it worked recorded
+                                money nobody had collected, which is the same
+                                defect Card had; it stays visible and disabled so
+                                the model reads truthfully.
+                            */}
+                            <option value="ach" disabled>Bank transfer — not yet available</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <span className="alloy-os-financials__preview-actions">
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-payment-commit="true"
+                                disabled={running}
+                                onClick={() => {
+                                    // Cents, as an integer, because money is not
+                                    // a float. The action refuses anything that
+                                    // is not a positive integer of cents.
+                                    const cents = Math.round(Number(payAmount) * 100);
+                                    const subject = payTarget.subjectMemberId ?? chargeTarget;
+
+                                    if (payMethod !== "card") {
+                                        void runPaymentAction(
+                                            "payment.record",
+                                            {
+                                                charge_id: payTarget.chargeId,
+                                                amount_cents: cents,
+                                                payment_method: payMethod,
+                                                charge_label: payTarget.label,
+                                            },
+                                            subject,
+                                        );
+                                        return;
+                                    }
+
+                                    /*
+                                     * CARD ASKS FOR THE MONEY. The server decides
+                                     * whether this organisation can collect at
+                                     * all — a merchant that has not finished
+                                     * onboarding is a blocked state with an
+                                     * explanation, never a generic failure and
+                                     * never a fallback to Alloy's own account.
+                                     */
+                                    setCardMessage(null);
+                                    void (async () => {
+                                        const outcome = await runPaymentAction(
+                                            "payment.collect_card",
+                                            {
+                                                charge_id: payTarget.chargeId,
+                                                amount_cents: cents,
+                                                charge_label: payTarget.label,
+                                            },
+                                            subject,
+                                        );
+                                        if (!outcome?.ok) {
+                                            setCardStage("blocked");
+                                            setCardMessage(outcome?.error ?? "Card collection is unavailable.");
+                                            return;
+                                        }
+                                        const d = outcome.detail;
+                                        setCardCollection({
+                                            clientSecret: String(d.client_secret ?? ""),
+                                            connectedAccount: String(d.connected_account ?? ""),
+                                            attemptId: String(d.collection_attempt_id ?? ""),
+                                            amountCents: Number(d.amount_cents ?? cents),
+                                        });
+                                        setCardStage("entry");
+                                    })();
+                                }}
+                            >
+                                {payMethod === "card" ? "Collect by card" : "Record payment"}
+                            </button>
+                            <button
+                                type="button"
+                                className="alloy-os-financials__action"
+                                data-financials-payment-cancel="true"
+                                disabled={running}
+                                onClick={() => setPayTarget(null)}
+                            >
+                                Cancel
+                            </button>
+                        </span>
+
+                        {/*
+                            THE INTERVAL BETWEEN ASKING AND BEING PAID.
+                            Cash has no such interval, which is why the panel
+                            never needed these states before. Every one of them
+                            is deliberately NOT "paid": the balance below does
+                            not move until Financials recognises the money.
+                        */}
+                        {cardStage === "blocked" ? (
+                            <p
+                                className="alloy-os-financials__note"
+                                data-financials-card-blocked="true"
+                            >
+                                {cardMessage ?? "Card collection is unavailable."}
+                            </p>
+                        ) : null}
+
+                        {cardStage === "entry" && cardCollection ? (
+                            <CardCollectionField
+                                clientSecret={cardCollection.clientSecret}
+                                connectedAccount={cardCollection.connectedAccount}
+                                amountLabel={money(cardCollection.amountCents, currency)}
+                                disabled={running}
+                                onCancel={() => {
+                                    setCardStage("idle");
+                                    setCardCollection(null);
+                                }}
+                                onResult={(r) => {
+                                    if (r.status === "failed") {
+                                        setCardStage("failed");
+                                        setCardMessage(r.message ?? "That card could not be charged.");
+                                        return;
+                                    }
+                                    /*
+                                     * The card went through at the processor.
+                                     * That is NOT a payment yet — Financials
+                                     * recognises it when provider confirmation
+                                     * reaches the canonical posting path — so the
+                                     * operator is told it is finalizing, and is
+                                     * never offered "charge again" as recovery.
+                                     */
+                                    setCardStage("finalizing");
+                                    setCardMessage(null);
+                                    void (async () => {
+                                        for (let i = 0; i < 12; i += 1) {
+                                            await new Promise((res) => setTimeout(res, 1000));
+                                            await load();
+                                            const check = await fetch(
+                                                `/api/admin/financials/collection-state?attempt_id=${cardCollection.attemptId}`,
+                                                { credentials: "include" },
+                                            );
+                                            if (!check.ok) continue;
+                                            const body = (await check.json()) as { recognized?: boolean };
+                                            if (body.recognized) {
+                                                setCardStage("recognized");
+                                                setCardCollection(null);
+                                                setPayTarget(null);
+                                                await load();
+                                                return;
+                                            }
+                                        }
+                                    })();
+                                }}
+                            />
+                        ) : null}
+
+                        {cardStage === "finalizing" ? (
+                            <p
+                                className="alloy-os-financials__note"
+                                data-financials-card-finalizing="true"
+                            >
+                                Payment received — finalizing. The balance updates when Financials records it.
+                            </p>
+                        ) : null}
+
+                        {cardStage === "failed" ? (
+                            <p
+                                className="alloy-os-financials__note"
+                                data-financials-card-failed="true"
+                            >
+                                {cardMessage ?? "That card could not be charged."} Nothing was collected and the balance is unchanged.
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {cardStage === "recognized" ? (
+                    <p
+                        className="alloy-os-financials__note"
+                        data-financials-card-recognized="true"
+                    >
+                        Payment received.
+                    </p>
+                ) : null}
+
+                {!vm.paymentSetup && !vm.payments.length && !payableRows.length ? (
+                    <p className="alloy-os-financials__note" data-financials-payment="none">
+                        No payments recorded
+                    </p>
+                ) : null}
+            </section>
+    ) : null;
+
     if (overlay === "add_charge" && vm && reconciliation) {
         const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
         const selected =
@@ -740,6 +1144,36 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * by billing period with prior periods closed, and carries no running balance: `ledger_transactions`
      * guarantees no ordering, and computing one would present one defensible answer as the answer.
      */
+    /*
+     * ── SETTLE, AS ITS OWN REPRESENTATION ──
+     *
+     * The band cannot be a sibling of the approved detail card: that card's header and title sit
+     * over anything beside it and intercept the pointer, so every control underneath rendered
+     * visible, enabled and unclickable — proven in the browser, above and below it alike. Add charge
+     * already answers this with its own overlay, and settling is the same kind of act, so it gets
+     * the same treatment rather than a CSS argument with a card that is not ours to restyle.
+     */
+    if (overlay === "payment" && vm && reconciliation) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="payment">
+                {paymentBand}
+                <div className="alloy-os-financials__actions" data-financials-actions="true">
+                    <button
+                        type="button"
+                        className="alloy-os-financials__action"
+                        data-financials-payment-close="true"
+                        onClick={() => {
+                            setPayTarget(null);
+                            setOverlay("detail");
+                        }}
+                    >
+                        ← Back to details
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (overlay === "detail" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
@@ -761,9 +1195,15 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         openPeriodKey: vm.period.key,
                     })}
                     activeSubject={subjectFilter === "all" ? "All" : subjectFilter}
-                    /* `Payment` enters the settle operation; the platform exposes no payment
-                       command from this lane yet, so it is passed undefined and the control is
-                       inert rather than lying about what it will do. */
+                    /*
+                     * `Payment` enters the settle operation. Slice H is that lane, so the control is
+                     * live: it selects the obligation the operator is most likely to settle — the
+                     * first charge the read model marks payable — and opens the same form the band's
+                     * own `Record payment →` menu opens. Still inert when nothing can take money,
+                     * because an enabled control that cannot act is the lie this comment used to
+                     * describe.
+                     */
+                    onPayment={openSettle}
                     onAddCharge={() => setOverlay("add_charge")}
                 />
             </div>
@@ -806,6 +1246,14 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     span={model.density === "compact" ? 1 : "row"}
                     onDetails={() => setOverlay("detail")}
                     onAddCharge={() => setOverlay("add_charge")}
+                    /*
+                     * `Pay now` was always this card's primary action and the Focus Panel never wired
+                     * it, so it rendered inert while Slice H's settle operation had no way in at all.
+                     * It opens at the SAME depth as Add charge deliberately: reached from inside the
+                     * detail representation, the panel's armed depth scrim sits over the operation
+                     * and the commit button cannot be clicked — visible, enabled, and unreachable.
+                     */
+                    onPayNow={openSettle}
                 />
             </div>
         );
@@ -973,370 +1421,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     )}
                                 </section>
 
-                                <section className="alloy-os-financials__band" data-financials-band="payment">
-                                    <p className="alloy-os-financials__band-label">Payment</p>
-                                    {/*
-                                        ONLY CANONICAL PAYMENT STATE THAT ACTUALLY EXISTS.
-                                        This region used to print the platform's own limitations at
-                                        the operator — "payments are not recorded for enrollment
-                                        accounts yet", "autopay is not configured in this platform",
-                                        "responsibility splits are owned by Processing". Those are
-                                        development findings; they belong in the ledger, not on a
-                                        card someone uses to run a childcare centre. Where no
-                                        canonical payment state exists, the region stays neutral and
-                                        says nothing rather than explaining our architecture.
-                                    */}
-                                    {vm.paymentSetup ? (
-                                        <p className="alloy-os-financials__note" data-financials-payment="state">
-                                            {vm.paymentSetup}
-                                        </p>
-                                    ) : null}
-
-                                    {/*
-                                        WHAT ARRIVED, AND WHAT IT IS DOING.
-                                        `vm.payments` was composed by the read model and never
-                                        rendered, so a family could send $500, have $300 applied, and
-                                        the card showed neither number. Received and applied are
-                                        separate facts; the difference between them is money sitting
-                                        on the account, and it is called UNAPPLIED — never account
-                                        credit, which in this platform is a charge-side ledger row.
-                                    */}
-                                    {vm.payments.length ? (
-                                        <ul
-                                            className="alloy-os-financials__payments"
-                                            data-financials-payments="true"
-                                        >
-                                            {vm.payments.map((raw) => {
-                                                const p = presentPayment(raw);
-                                                return (
-                                                    <li
-                                                        key={p.paymentId}
-                                                        className="alloy-os-financials__payment"
-                                                        data-financials-payment-id={p.paymentId}
-                                                        data-financials-payment-kind={p.kind}
-                                                    >
-                                                        <span data-financials-payment-received="true">
-                                                            {p.kind === "refund" ? "−" : ""}
-                                                            {money(p.receivedCents, p.currencyCode)}
-                                                        </span>
-                                                        <span className="alloy-os-financials__note">
-                                                            {p.statusLabel} · {p.methodLabel}
-                                                        </span>
-                                                        {p.kind === "receipt" && p.isMoney ? (
-                                                            <span
-                                                                className="alloy-os-financials__note"
-                                                                data-financials-payment-applied={p.appliedCents}
-                                                            >
-                                                                {money(p.appliedCents, p.currencyCode)} applied
-                                                                {p.unappliedCents > 0 ? (
-                                                                    <>
-                                                                        {" · "}
-                                                                        <span data-financials-payment-unapplied={p.unappliedCents}>
-                                                                            {money(p.unappliedCents, p.currencyCode)} unapplied
-                                                                        </span>
-                                                                    </>
-                                                                ) : null}
-                                                            </span>
-                                                        ) : null}
-                                                        {p.offersRefund ? (
-                                                            <button
-                                                                type="button"
-                                                                className="alloy-os-financials__action"
-                                                                data-financials-command="payment.refund"
-                                                                data-financials-refund-payment={p.paymentId}
-                                                                disabled={running}
-                                                                onClick={() =>
-                                                                    void runPaymentAction(
-                                                                        "payment.refund",
-                                                                        {
-                                                                            payment_id: p.paymentId,
-                                                                            payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
-                                                                        },
-                                                                        chargeTarget,
-                                                                    )
-                                                                }
-                                                            >
-                                                                Refund
-                                                            </button>
-                                                        ) : null}
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
-                                    ) : null}
-
-                                    {/* Cash on the account, stated as cash. Never subtracted from
-                                        what is owed here — applying money is its own act with its
-                                        own record, and the balance above stays the read model's. */}
-                                    {unappliedTotalCents(vm.payments) > 0 ? (
-                                        <p
-                                            className="alloy-os-financials__note"
-                                            data-financials-unapplied-total={unappliedTotalCents(vm.payments)}
-                                        >
-                                            {money(unappliedTotalCents(vm.payments), currency)} received and not yet
-                                            applied
-                                        </p>
-                                    ) : null}
-
-                                    {/* RECORD PAYMENT — the charges that can actually take money.
-                                        `offersPayment` is the read model's answer, the same way
-                                        `offersReverse` is; this renders it and does not restate it. */}
-                                    {payableRows.length ? (
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    className="alloy-os-financials__action"
-                                                    data-financials-command="payment.record"
-                                                    disabled={running}
-                                                >
-                                                    Record payment →
-                                                </button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="start" sideOffset={4} data-financials-payment-menu="true">
-                                                {payableRows.map((r) => (
-                                                    <DropdownMenuItem
-                                                        key={r.chargeId}
-                                                        data-financials-payment-charge={r.chargeId}
-                                                        onSelect={() => {
-                                                            setCommandError(null);
-                                                            setPayTarget({
-                                                                chargeId: r.chargeId,
-                                                                label: r.description ?? r.categoryLabel,
-                                                                outstandingCents: r.outstandingCents,
-                                                                subjectMemberId: r.subjectMemberId,
-                                                            });
-                                                            // The row's own outstanding amount, from
-                                                            // the read model. The operator may lower
-                                                            // it for a partial payment.
-                                                            setPayAmount((r.outstandingCents / 100).toFixed(2));
-                                                        }}
-                                                    >
-                                                        {r.description ?? r.categoryLabel}
-                                                        <span className="alloy-os-financials__menu-amount">
-                                                            {money(r.outstandingCents, r.currencyCode)}
-                                                        </span>
-                                                    </DropdownMenuItem>
-                                                ))}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    ) : null}
-
-                                    {payTarget ? (
-                                        <div
-                                            className="alloy-os-financials__preview"
-                                            data-financials-payment-form="true"
-                                        >
-                                            <p className="alloy-os-financials__preview-summary">
-                                                {payTarget.label}
-                                            </p>
-                                            <p className="alloy-os-financials__note">
-                                                {money(payTarget.outstandingCents, currency)} outstanding
-                                            </p>
-                                            <input
-                                                type="number"
-                                                min="0.01"
-                                                step="0.01"
-                                                value={payAmount}
-                                                aria-label="Payment amount"
-                                                data-financials-payment-amount="true"
-                                                onChange={(e) => setPayAmount(e.target.value)}
-                                            />
-                                            <select
-                                                value={payMethod}
-                                                aria-label="Payment method"
-                                                data-financials-payment-method="true"
-                                                onChange={(e) => setPayMethod(e.target.value)}
-                                            >
-                                                <option value="card">Card</option>
-                                                <option value="cash">Cash</option>
-                                                <option value="check">Check</option>
-                                                <option value="money_order">Money order</option>
-                                                {/*
-                                                    Bank transfer is a real rail with no executor
-                                                    yet. Offering it as though it worked recorded
-                                                    money nobody had collected, which is the same
-                                                    defect Card had; it stays visible and disabled so
-                                                    the model reads truthfully.
-                                                */}
-                                                <option value="ach" disabled>Bank transfer — not yet available</option>
-                                                <option value="other">Other</option>
-                                            </select>
-                                            <span className="alloy-os-financials__preview-actions">
-                                                <button
-                                                    type="button"
-                                                    className="alloy-os-financials__action"
-                                                    data-financials-payment-commit="true"
-                                                    disabled={running}
-                                                    onClick={() => {
-                                                        // Cents, as an integer, because money is not
-                                                        // a float. The action refuses anything that
-                                                        // is not a positive integer of cents.
-                                                        const cents = Math.round(Number(payAmount) * 100);
-                                                        const subject = payTarget.subjectMemberId ?? chargeTarget;
-
-                                                        if (payMethod !== "card") {
-                                                            void runPaymentAction(
-                                                                "payment.record",
-                                                                {
-                                                                    charge_id: payTarget.chargeId,
-                                                                    amount_cents: cents,
-                                                                    payment_method: payMethod,
-                                                                    charge_label: payTarget.label,
-                                                                },
-                                                                subject,
-                                                            );
-                                                            return;
-                                                        }
-
-                                                        /*
-                                                         * CARD ASKS FOR THE MONEY. The server decides
-                                                         * whether this organisation can collect at
-                                                         * all — a merchant that has not finished
-                                                         * onboarding is a blocked state with an
-                                                         * explanation, never a generic failure and
-                                                         * never a fallback to Alloy's own account.
-                                                         */
-                                                        setCardMessage(null);
-                                                        void (async () => {
-                                                            const outcome = await runPaymentAction(
-                                                                "payment.collect_card",
-                                                                {
-                                                                    charge_id: payTarget.chargeId,
-                                                                    amount_cents: cents,
-                                                                    charge_label: payTarget.label,
-                                                                },
-                                                                subject,
-                                                            );
-                                                            if (!outcome?.ok) {
-                                                                setCardStage("blocked");
-                                                                setCardMessage(outcome?.error ?? "Card collection is unavailable.");
-                                                                return;
-                                                            }
-                                                            const d = outcome.detail;
-                                                            setCardCollection({
-                                                                clientSecret: String(d.client_secret ?? ""),
-                                                                connectedAccount: String(d.connected_account ?? ""),
-                                                                attemptId: String(d.collection_attempt_id ?? ""),
-                                                                amountCents: Number(d.amount_cents ?? cents),
-                                                            });
-                                                            setCardStage("entry");
-                                                        })();
-                                                    }}
-                                                >
-                                                    {payMethod === "card" ? "Collect by card" : "Record payment"}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="alloy-os-financials__action"
-                                                    data-financials-payment-cancel="true"
-                                                    disabled={running}
-                                                    onClick={() => setPayTarget(null)}
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </span>
-
-                                            {/*
-                                                THE INTERVAL BETWEEN ASKING AND BEING PAID.
-                                                Cash has no such interval, which is why the panel
-                                                never needed these states before. Every one of them
-                                                is deliberately NOT "paid": the balance below does
-                                                not move until Financials recognises the money.
-                                            */}
-                                            {cardStage === "blocked" ? (
-                                                <p
-                                                    className="alloy-os-financials__note"
-                                                    data-financials-card-blocked="true"
-                                                >
-                                                    {cardMessage ?? "Card collection is unavailable."}
-                                                </p>
-                                            ) : null}
-
-                                            {cardStage === "entry" && cardCollection ? (
-                                                <CardCollectionField
-                                                    clientSecret={cardCollection.clientSecret}
-                                                    connectedAccount={cardCollection.connectedAccount}
-                                                    amountLabel={money(cardCollection.amountCents, currency)}
-                                                    disabled={running}
-                                                    onCancel={() => {
-                                                        setCardStage("idle");
-                                                        setCardCollection(null);
-                                                    }}
-                                                    onResult={(r) => {
-                                                        if (r.status === "failed") {
-                                                            setCardStage("failed");
-                                                            setCardMessage(r.message ?? "That card could not be charged.");
-                                                            return;
-                                                        }
-                                                        /*
-                                                         * The card went through at the processor.
-                                                         * That is NOT a payment yet — Financials
-                                                         * recognises it when provider confirmation
-                                                         * reaches the canonical posting path — so the
-                                                         * operator is told it is finalizing, and is
-                                                         * never offered "charge again" as recovery.
-                                                         */
-                                                        setCardStage("finalizing");
-                                                        setCardMessage(null);
-                                                        void (async () => {
-                                                            for (let i = 0; i < 12; i += 1) {
-                                                                await new Promise((res) => setTimeout(res, 1000));
-                                                                await load();
-                                                                const check = await fetch(
-                                                                    `/api/admin/financials/collection-state?attempt_id=${cardCollection.attemptId}`,
-                                                                    { credentials: "include" },
-                                                                );
-                                                                if (!check.ok) continue;
-                                                                const body = (await check.json()) as { recognized?: boolean };
-                                                                if (body.recognized) {
-                                                                    setCardStage("recognized");
-                                                                    setCardCollection(null);
-                                                                    setPayTarget(null);
-                                                                    await load();
-                                                                    return;
-                                                                }
-                                                            }
-                                                        })();
-                                                    }}
-                                                />
-                                            ) : null}
-
-                                            {cardStage === "finalizing" ? (
-                                                <p
-                                                    className="alloy-os-financials__note"
-                                                    data-financials-card-finalizing="true"
-                                                >
-                                                    Payment received — finalizing. The balance updates when Financials records it.
-                                                </p>
-                                            ) : null}
-
-                                            {cardStage === "failed" ? (
-                                                <p
-                                                    className="alloy-os-financials__note"
-                                                    data-financials-card-failed="true"
-                                                >
-                                                    {cardMessage ?? "That card could not be charged."} Nothing was collected and the balance is unchanged.
-                                                </p>
-                                            ) : null}
-                                        </div>
-                                    ) : null}
-
-                                    {cardStage === "recognized" ? (
-                                        <p
-                                            className="alloy-os-financials__note"
-                                            data-financials-card-recognized="true"
-                                        >
-                                            Payment received.
-                                        </p>
-                                    ) : null}
-
-                                    {!vm.paymentSetup && !vm.payments.length && !payableRows.length ? (
-                                        <p className="alloy-os-financials__note" data-financials-payment="none">
-                                            No payments recorded
-                                        </p>
-                                    ) : null}
-                                </section>
+                                {paymentBand}
                             </div>
                             )}
                         </div>
