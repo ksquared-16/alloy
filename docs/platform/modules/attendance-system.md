@@ -50,6 +50,70 @@ Fact kinds in scope:
 5. **Authored by Actions, not queues or projections.** Attendance is created/corrected through the canonical action/workflow path (see [`./actions-and-workflows.md`](./actions-and-workflows.md)). Queue rows and Projection read models are previews/derivations only; they never write attendance.
 6. **Room transfer ≠ placement supersede.** An intraday room transfer is an attendance fact about where the child *was*; a placement change is a committed-intent change about where the child *belongs*. Keep them distinct models.
 7. **A room resolves to its site by ancestry, not by parentage.** See Location topology below. Nothing may read `parent_location_id` as "the site".
+8. **Provenance is derived, never accepted.** A request body may not establish `actor_type` or `source_type`. See Capture substrate below.
+9. **Current whereabouts are folded, never stored.** There is no `current_room` column and there must not be one.
+
+---
+
+## Capture substrate (V1, 2026-09-09)
+
+Every attendance producer — operator today; kiosk, parent, integration and door
+access later — converges on one server-authoritative ingestion path. Channels
+differ in what trusted context they supply; they do not get their own attendance
+truth.
+
+### Durable idempotency
+
+`child_attendance_events` carries a nullable `idempotency_key` with a PARTIAL
+unique index on `(org_id, idempotency_key)`, plus a `payload_fingerprint`. This
+is the same contract `consumption_events`, `operational_expectations` and
+`payments` already use.
+
+- Same key, same fingerprint → the FIRST fact is returned; no second row, and
+  **no second workflow event** (a replay must not bill or notify twice).
+- Same key, different fingerprint → `attendance_idempotency_conflict`.
+- No key → never deduped against anything.
+- Corrections and reversals carry their own keys and remain distinct facts.
+
+`public.record_child_attendance_event(org, fact)` is the only ingestion entry
+point. It inserts with `ON CONFLICT DO NOTHING` and re-reads on conflict, so
+concurrent duplicates converge instead of one succeeding and one erroring. Do
+not add a check-then-insert path around it.
+
+For an integration the key is the **external event id** — the same replayed
+event must arrive with the same key, which is what makes retry safe.
+
+### Authoritative provenance
+
+`web/lib/childcareOperational/attendance/attendanceProvenance.ts` derives
+`actor_type` / `source_type` / `source_key` from the authenticated principal and
+the trusted channel. `CLIENT_ASSERTABLE_CHANNELS` is empty and must stay empty.
+
+`source_type` admits `kiosk`, `integration_api`, `door_access` and `mobile_app`
+so those producers need no schema change. **Representable is not implemented** —
+a channel becomes real only when it has a trusted-context resolver here. A
+non-human channel must supply a `producerKey` identifying the device or
+integration; an anonymous `system` write is refused.
+
+### One capture path
+
+Both operator surfaces author through the registered action bus
+(`attendance.check_in` and siblings) via `/api/admin/actions/execute`. The
+Attendance Workspace previously posted directly to the attendance API, skipping
+eligibility, confirmation and correlated audit. Surfaces may present a command
+differently; they may not own different mutation semantics.
+
+### Point-in-time whereabouts
+
+`attendanceWhereabouts.ts` folds the ledger into "where was child C at T" and
+"who occupied L at T". A child holds exactly ONE position, replaced by each
+event, so a child who moved Toddler 1 → Playground → Toddler 2 is never counted
+three times. `summarizeAttendanceByDay` still returns the set of rooms seen that
+day — a different question; **occupancy must not be derived from it.**
+Corrections and reversals reconstruct history for free, because they change
+which facts are effective and the fold is re-run.
+
+Implemented by `supabase/migrations/20260909160000_attendance_capture_hardening.sql`.
 
 ---
 

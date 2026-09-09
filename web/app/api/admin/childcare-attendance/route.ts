@@ -10,6 +10,11 @@ import {
 import type { AttendanceActorContext } from "@/lib/childcareOperational/attendance/attendanceTypes";
 import { resolveAttendanceServiceDate } from "@/lib/childcareOperational/attendance/attendanceServiceDate";
 import { operationalEnrollmentErrorResponse } from "@/lib/childcareOperational/operationalEnrollmentApi";
+import {
+    operatorChannelForSurface,
+    resolveAttendanceProvenance,
+} from "@/lib/childcareOperational/attendance/attendanceProvenance";
+import { randomUUID } from "crypto";
 
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
@@ -45,15 +50,48 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid JSON", code: "invalid_input" }, { status: 400 });
     }
 
+    // Correlation identifies THIS invocation for audit trace. It is never an
+    // identity or an authorization input, so accepting a caller-supplied value is
+    // safe — and useful, because an integration can tie its own retry log to ours.
+    const correlationId =
+        body.correlation_id != null && String(body.correlation_id).trim()
+            ? String(body.correlation_id).trim()
+            : randomUUID();
+
+    /*
+     * PROVENANCE IS DERIVED, NEVER ACCEPTED.
+     *
+     * This route used to read `actor_type` and `source_type` off the body, so a
+     * caller could file a fact stamped `parent` or `system` while authenticated
+     * as an operator. The fact was real and its provenance was fiction. Both now
+     * come from the authenticated principal and this route's own trusted channel;
+     * body values for them are ignored, not rejected, so existing callers keep
+     * working while losing the ability to lie.
+     */
+    let provenance;
+    try {
+        provenance = resolveAttendanceProvenance({
+            channel: operatorChannelForSurface(
+                body.operational_context != null ? String(body.operational_context) : null
+            ),
+            actorUserId: ctx.userId,
+            actorLabel: body.actor_label != null ? String(body.actor_label) : null,
+            correlationId,
+        });
+    } catch (e) {
+        return NextResponse.json(
+            { error: e instanceof Error ? e.message : "provenance could not be established", code: "forbidden" },
+            { status: 403 }
+        );
+    }
+
     const actor: AttendanceActorContext = {
-        actorType: String(body.actor_type ?? "staff") as AttendanceActorContext["actorType"],
-        actorUserId: ctx.userId,
-        actorPersonId: body.actor_person_id != null ? String(body.actor_person_id) : null,
-        actorLabel: body.actor_label != null ? String(body.actor_label) : null,
-        sourceType: (body.source_type != null
-            ? String(body.source_type)
-            : "operator_action") as AttendanceActorContext["sourceType"],
-        sourceKey: body.source_key != null ? String(body.source_key) : undefined,
+        actorType: provenance.actorType,
+        actorUserId: provenance.actorUserId,
+        actorPersonId: provenance.actorPersonId,
+        actorLabel: provenance.actorLabel,
+        sourceType: provenance.sourceType,
+        sourceKey: provenance.sourceKey,
     };
 
     const eventAt = body.event_at != null ? String(body.event_at) : new Date().toISOString();
@@ -80,6 +118,11 @@ export async function POST(request: NextRequest) {
         reasonKey: body.reason_key != null ? String(body.reason_key) : null,
         note: body.note != null ? String(body.note) : null,
         actor,
+        idempotencyKey:
+            body.idempotency_key != null && String(body.idempotency_key).trim()
+                ? String(body.idempotency_key).trim()
+                : null,
+        correlationId,
     };
 
     const entryType = body.entry_type != null ? String(body.entry_type) : "original";

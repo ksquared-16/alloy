@@ -12,8 +12,21 @@ const migrationPath = resolve(
     "../../../../supabase/migrations/20260629120000_childcare_attendance_facts_p2.sql"
 );
 
+/**
+ * Capture hardening (Thread 2) re-issued the source_type CHECK to admit the
+ * channels future producers need, so the vocabulary is no longer expressible
+ * from the P2 file alone. The effective contract is P2 plus every later
+ * migration that touches it — scanning only the first would assert a schema
+ * that has not been the live one since.
+ */
+const captureHardeningPath = resolve(
+    __dirname,
+    "../../../../supabase/migrations/20260909160000_attendance_capture_hardening.sql"
+);
+
 describe("childcare attendance facts P2 migration", () => {
     const sql = readFileSync(migrationPath, "utf8");
+    const effectiveSql = sql + "\n" + readFileSync(captureHardeningPath, "utf8");
 
     it("creates the single append-only attendance fact table", () => {
         expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.child_attendance_events");
@@ -45,7 +58,20 @@ describe("childcare attendance facts P2 migration", () => {
     it("encodes the event-kind / actor / source vocabularies from TS", () => {
         for (const k of ATTENDANCE_EVENT_KINDS) expect(sql).toContain(`'${k}'::text`);
         for (const a of ATTENDANCE_ACTOR_TYPES) expect(sql).toContain(`'${a}'::text`);
-        for (const s of ATTENDANCE_SOURCE_TYPES) expect(sql).toContain(`'${s}'::text`);
+        // Source channels span both migrations — see effectiveSql above.
+        for (const s of ATTENDANCE_SOURCE_TYPES) expect(effectiveSql).toContain(`'${s}'::text`);
+    });
+
+    it("keeps durable idempotency in the database, not in a caller", () => {
+        const hardening = readFileSync(captureHardeningPath, "utf8");
+        // Partial unique index: dedupe only where a key is present, so facts
+        // authored without one are never collapsed into each other.
+        expect(hardening).toContain("uq_child_attendance_events_org_idempotency");
+        expect(hardening).toContain("WHERE idempotency_key IS NOT NULL");
+        // Race-free: insert first and re-read on conflict, never check-then-insert.
+        expect(hardening).toContain("ON CONFLICT (org_id, idempotency_key)");
+        expect(hardening).toContain("DO NOTHING");
+        expect(hardening).toContain("attendance_idempotency_conflict");
     });
 
     it("models room transfer as a fact distinct from placement supersede", () => {

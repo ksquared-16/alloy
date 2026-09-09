@@ -355,19 +355,41 @@ export default function AttendanceWorkspace({
         );
     }
 
+    /*
+     * CHILD ATTENDANCE GOES THROUGH THE REGISTERED COMMAND, LIKE STAFF PRESENCE.
+     *
+     * This used to POST straight to /api/admin/childcare-attendance, which meant
+     * the two surfaces in this product had two different mutation architectures:
+     * Focus Panel went through the action bus and got eligibility, confirmation
+     * and correlated audit; this screen skipped all three and told the server what
+     * actor_type to record. Same table, different rules — and the weaker path was
+     * the one an operator uses all day.
+     *
+     * The action keys already existed and were already registered. Nothing new was
+     * needed here except to stop going around them.
+     */
     function childAttendance(child: RosterChild, room: Cell, kind: "check_in" | "check_out" | "absence") {
+        const actionKey =
+            kind === "check_in" ? "attendance.check_in"
+            : kind === "check_out" ? "attendance.check_out"
+            : "attendance.mark_absent";
+
         return runAction(
             `child:${child.customerMemberId}`,
             {
-                enrollment_agreement_id: child.enrollmentAgreementId,
-                customer_member_id: child.customerMemberId,
-                event_kind: kind,
-                room_location_id: kind === "check_out" ? null : room.roomLocationId,
-                service_date: room.date,
-                actor_type: "staff",
-                source_type: "operator_action",
+                action_key: actionKey,
+                entity_type: "child",
+                entity_id: child.customerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                context: { surface: "workspace" },
+                payload: {
+                    customer_member_id: child.customerMemberId,
+                    room_location_id: kind === "check_out" ? null : room.roomLocationId,
+                    service_date: room.date,
+                },
             },
-            "/api/admin/childcare-attendance"
+            "/api/admin/actions/execute"
         );
     }
 

@@ -26,6 +26,37 @@ import type {
     RecordAttendanceEventInput,
 } from "@/lib/childcareOperational/attendance/attendanceTypes";
 import { emitAttendanceEvent } from "@/lib/childcareOperational/attendance/attendanceEvents";
+import { createHash } from "crypto";
+
+/**
+ * Fingerprint of the meaningful content of a fact.
+ *
+ * Deliberately EXCLUDES correlation_id and the idempotency key itself: two
+ * retries of one real event carry different correlations but assert the same
+ * thing, and treating that as a conflict would break the retry it exists to
+ * support. It includes everything that changes what the fact MEANS, so a
+ * producer reusing a key for different content is caught rather than silently
+ * handed back someone else's fact.
+ */
+function fingerprintFact(row: Record<string, unknown>): string {
+    const material = [
+        "enrollment_agreement_id",
+        "customer_member_id",
+        "site_location_id",
+        "event_kind",
+        "entry_type",
+        "corrects_event_id",
+        "event_at",
+        "service_date",
+        "room_location_id",
+        "from_room_location_id",
+        "to_room_location_id",
+        "reason_key",
+    ]
+        .map((k) => `${k}=${row[k] == null ? "" : String(row[k])}`)
+        .join("|");
+    return createHash("sha256").update(material).digest("hex");
+}
 
 function assertValidTimestamp(value: string, field: string): void {
     if (!value || Number.isNaN(new Date(value).getTime())) {
@@ -125,15 +156,38 @@ async function insertAttendanceEvent(
         actorUserId?: string | null;
     }
 ): Promise<ChildAttendanceEventRow> {
-    const { data, error } = await supabase
-        .from("child_attendance_events")
-        .insert(row)
-        .select("*")
-        .single();
-    if (error || !data) {
-        throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "insert failed");
+    // All ingestion goes through the RPC so that idempotency is decided in ONE
+    // place, inside the database, atomically. A direct table insert here would
+    // reintroduce the check-then-insert race the RPC exists to remove.
+    const { data, error } = await supabase.rpc("record_child_attendance_event", {
+        p_org_id: emit.orgId,
+        p_fact: row,
+    });
+
+    if (error) {
+        // Surface the two idempotency outcomes as domain errors so callers can
+        // distinguish "you already sent this" from "the database is unhappy".
+        if (error.message?.includes("attendance_idempotency_conflict")) {
+            throw new OperationalEnrollmentServiceError(
+                "invalid_state",
+                "An attendance fact already exists for this idempotency key with different content"
+            );
+        }
+        throw new OperationalEnrollmentServiceError("db_error", error.message);
     }
-    const event = data as ChildAttendanceEventRow;
+
+    const result = data as { ok?: boolean; idempotent?: boolean; event?: ChildAttendanceEventRow } | null;
+    if (!result?.event) {
+        throw new OperationalEnrollmentServiceError("db_error", "attendance ingestion returned no fact");
+    }
+    const event = result.event;
+
+    // A replay is not a new fact, so it must not emit a second downstream event.
+    // Emitting again would let one real-world arrival bill or notify twice.
+    if (result.idempotent) {
+        return event;
+    }
+
     await emitAttendanceEvent({
         orgId: emit.orgId,
         attendanceEventId: event.id,
@@ -186,6 +240,8 @@ function buildRow(args: {
         note: trimOrNull(input.note),
         metadata: input.metadata ?? {},
         created_by: trimOrNull(input.actor.actorUserId),
+        idempotency_key: trimOrNull(input.idempotencyKey),
+        correlation_id: trimOrNull(input.correlationId),
     };
 }
 
@@ -222,6 +278,7 @@ export async function recordAttendanceEvent(
         correctsEventId: null,
     });
 
+    row.payload_fingerprint = fingerprintFact(row);
     return insertAttendanceEvent(supabase, row, {
         orgId: input.orgId,
         enrollmentAgreementId: input.enrollmentAgreementId,
@@ -294,6 +351,7 @@ export async function correctAttendanceEvent(
         correctsEventId: target.id,
     });
 
+    row.payload_fingerprint = fingerprintFact(row);
     return insertAttendanceEvent(supabase, row, {
         orgId: input.orgId,
         enrollmentAgreementId: target.enrollment_agreement_id,
