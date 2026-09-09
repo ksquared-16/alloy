@@ -3,6 +3,13 @@
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
+
+import WorkspaceArtifactZoomControls from "@/components/workspace/WorkspaceArtifactZoomControls";
+import {
+    ARTIFACT_ZOOM_STEP,
+    clampArtifactScale,
+    type ArtifactScaleMode,
+} from "@/lib/workspace/artifactViewportScale";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { ParticipantUploads } from "./ParticipantUploads";
 import { ParticipantArtifactHeader } from "./ParticipantArtifactHeader";
@@ -55,9 +62,6 @@ import {
     IntakeCompletion,
     IntakeNotice,
 } from "./ParentIntakeShell";
-
-/** How much bigger than the available width "View larger" renders the page. */
-const DOCUMENT_ZOOM = 2.2;
 
 type ResolvePacketMeta = {
     packet_session_id: string;
@@ -334,7 +338,27 @@ export function FormEmbedClient({
      * the document. Fitting the page puts the document and the decision in one view; enlarging is
      * then an intentional act rather than the default that hides the decision.
      */
-    const [documentEnlarged, setDocumentEnlarged] = useState(false);
+    /**
+     * DOCUMENT READING MODE — a view, never a step.
+     *
+     * "View larger" used to magnify inside the same small preview box, which Kelly correctly called
+     * a worse reading experience: a cropped window onto a huge page. Reading is a different task
+     * from deciding, so it gets the browser viewport and the platform's own fit-page / fit-width /
+     * zoom controls. Opening or closing it touches no participant state, so Enrollment progress
+     * cannot move while the parent is simply looking at their paperwork.
+     */
+    const [readingOpen, setReadingOpen] = useState(false);
+    const [readingMode, setReadingMode] = useState<ArtifactScaleMode>("fit-page");
+    const [readingManualScale, setReadingManualScale] = useState(1);
+    const readingBodyRef = useRef<HTMLDivElement | null>(null);
+    const [readingViewportH, setReadingViewportH] = useState(0);
+    useEffect(() => {
+        if (!readingOpen) return;
+        const measure = () => setReadingViewportH(readingBodyRef.current?.clientHeight ?? 0);
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, [readingOpen]);
     const [fitHeightPx, setFitHeightPx] = useState<number | null>(null);
     useEffect(() => {
         const measure = () => {
@@ -1237,6 +1261,64 @@ export function FormEmbedClient({
             )}
         >
             {/*
+              * DOCUMENT READING MODE.
+              *
+              * Deliberately a sibling of the whole review rather than something nested inside the
+              * preview card: the complaint was that enlarging stayed trapped in the same small box,
+              * so the reading surface takes the browser viewport. The toolbar is the platform's own
+              * `WorkspaceArtifactZoomControls`, and the scale maths is `artifactViewportScale` —
+              * the operator viewport's rules, not a second participant-only viewer.
+              *
+              * It holds no participant state. Closing restores the review exactly as it was,
+              * because nothing about opening it changed anything.
+              */}
+            {readingOpen && artifactRenderable ? (
+                <div
+                    className="fixed inset-0 z-50 flex flex-col bg-white"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={schema?.title ?? "Document"}
+                    data-participant-document-reader="open"
+                >
+                    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-midnight/[0.08] px-4 py-3">
+                        <h2 className="truncate text-[15px] font-semibold text-alloy-midnight">
+                            {schema?.title ?? "Your paperwork"}
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={() => setReadingOpen(false)}
+                            className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-4 text-[14px] font-medium text-alloy-midnight"
+                            data-participant-document-reader-close="true"
+                        >
+                            Close
+                        </button>
+                    </header>
+                    <WorkspaceArtifactZoomControls
+                        zoom={Math.round(readingManualScale * 100)}
+                        fitActive={readingMode === "fit-page"}
+                        onFitPage={() => setReadingMode("fit-page")}
+                        onFitWidth={() => setReadingMode("fit-width")}
+                        onZoomIn={() => {
+                            setReadingManualScale((z) => clampArtifactScale(z + ARTIFACT_ZOOM_STEP));
+                            setReadingMode("manual");
+                        }}
+                        onZoomOut={() => {
+                            setReadingManualScale((z) => clampArtifactScale(z - ARTIFACT_ZOOM_STEP));
+                            setReadingMode("manual");
+                        }}
+                    />
+                    <div ref={readingBodyRef} className="min-h-0 flex-1 overflow-auto bg-alloy-stone/20 p-3">
+                        {readingViewportH > 0 ? (
+                            <ParticipantDocumentCanvas
+                                url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
+                                onUnavailable={() => setDocumentUnavailable(true)}
+                                view={{ mode: readingMode, manualScale: readingManualScale, viewportH: readingViewportH }}
+                            />
+                        ) : null}
+                    </div>
+                </div>
+            ) : null}
+            {/*
               * V1.2 — the conversational Enrollment turn, ABOVE the packet flow.
               *
               * Rendered only when this token resolves an Enrollment journey; `enrollmentObjective`
@@ -1482,41 +1564,26 @@ export function FormEmbedClient({
                            paperwork; the machinery stays out of sight. */
                         <IntakeCard>
                             <ParticipantArtifactHeader status={artifactStatus} />
-                            {/*
-                              * THE REGION KEEPS ITS SIZE; ONLY THE DOCUMENT INSIDE IT GROWS.
-                              *
-                              * Enlarging used to let the page expand the card, which pushed the
-                              * decision controls back below the fold — the very thing fitting had
-                              * just fixed. Holding the region's height means "View larger" is a
-                              * magnifier rather than a layout change: the parent scrolls WITHIN the
-                              * document while Make a change and Everything looks good stay put.
-                              */}
                             <div
-                                className={clsx(
-                                    "relative rounded-xl border border-alloy-midnight/[0.08] bg-alloy-stone/20 p-3",
-                                    documentEnlarged ? "overflow-auto" : "flex justify-center overflow-hidden",
-                                )}
+                                className="relative flex justify-center overflow-hidden rounded-xl border border-alloy-midnight/[0.08] bg-alloy-stone/20 p-3"
                                 style={fitHeightPx ? { height: fitHeightPx + 24 } : undefined}
-                                data-participant-document-region={documentEnlarged ? "enlarged" : "fit"}
+                                data-participant-document-region="fit"
                             >
                                 <ParticipantDocumentCanvas
                                     url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
                                     onUnavailable={() => setDocumentUnavailable(true)}
-                                    fitHeightPx={documentEnlarged ? undefined : (fitHeightPx ?? undefined)}
-                                    zoom={documentEnlarged ? DOCUMENT_ZOOM : undefined}
+                                    fitHeightPx={fitHeightPx ?? undefined}
                                 />
                             </div>
                             <div className="mt-3 flex items-center justify-between gap-3">
-                                <span className="text-[13px] text-alloy-midnight/55">
-                                    {documentEnlarged ? "Enlarged — scroll to read" : "Whole page shown"}
-                                </span>
+                                <span className="text-[13px] text-alloy-midnight/55">Whole page shown</span>
                                 <button
                                     type="button"
-                                    onClick={() => setDocumentEnlarged((v) => !v)}
+                                    onClick={() => { setReadingMode("fit-page"); setReadingOpen(true); }}
                                     className="rounded-xl border border-alloy-midnight/15 px-3.5 py-2 text-[14px] font-medium text-alloy-midnight"
-                                    data-participant-document-zoom={documentEnlarged ? "shrink" : "enlarge"}
+                                    data-participant-document-zoom="enlarge"
                                 >
-                                    {documentEnlarged ? "Fit page" : "View larger"}
+                                    View larger
                                 </button>
                             </div>
                             {message ? (

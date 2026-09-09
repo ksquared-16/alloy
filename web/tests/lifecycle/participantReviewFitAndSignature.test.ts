@@ -62,39 +62,68 @@ describe("review presents the decision, not just the document", () => {
         expect(CANVAS).toMatch(/Math\.max\(MIN_FIT_SCALE, Math\.min\(widthScale, fitHeightPx \/ base\.height\)\)/);
         expect(HOST).toContain('data-participant-document-zoom');
         expect(HOST).toContain("View larger");
-        expect(HOST).toContain("Fit page");
+        // "Fit page" / "Fit width" are the shared toolbar's words now, not this surface's — which is
+        // the point: the reading controls are the platform's, not a participant-only copy.
+        const CONTROLS = readFileSync(
+            join(process.cwd(), "components", "workspace", "WorkspaceArtifactZoomControls.tsx"),
+            "utf8",
+        );
+        expect(CONTROLS).toContain("Fit page");
+        expect(CONTROLS).toContain("Fit width");
     });
 
-    it("makes View larger actually magnify, inside a region that holds its size", () => {
+    it("opens a dedicated reading surface instead of zooming inside the preview", () => {
         /*
-         * "View larger" originally only removed the height cap, so the page grew to container width
-         * and stopped. On a phone the container IS about the fitted width — 362px tall became 365px
-         * — and Kelly reported, correctly, that pressing it did nothing.
+         * The first attempt magnified the page INSIDE the same small preview card, which Kelly
+         * rightly called a worse reading experience: a cropped window onto a huge document. Reading
+         * and deciding are different tasks, so reading gets the browser viewport.
          *
-         * Zoom is now a multiple of the width that would just fill the container, so it magnifies at
-         * any width: measured 2.2x at 375 and 4.24x against the fitted page at 1280.
-         *
-         * The region keeps its height, so enlarging is a magnifier rather than a layout change and
-         * the decision controls do not move. That matters: letting the page expand the card would
-         * push them back below the fold, undoing the fix they were introduced for.
+         * Measured at 1280: the reader body is the full 1280x798, fit-page renders the whole page
+         * at 604x782, fit-width fills to 1224 and scrolls vertically, and Close returns to the same
+         * review with the same 389x504 preview.
          */
-        expect(CANVAS).toContain("zoom");
-        expect(CANVAS).toMatch(/const scale = zoom && zoom > 0 \? widthScale \* zoom : fitted;/);
-        expect(HOST).toContain("DOCUMENT_ZOOM");
-        expect(HOST).toContain("zoom={documentEnlarged ? DOCUMENT_ZOOM : undefined}");
-        // The region is height-pinned and scrolls when the page is bigger than it.
-        expect(HOST).toMatch(/style=\{fitHeightPx \? \{ height: fitHeightPx \+ 24 \}/);
-        expect(HOST).toContain('documentEnlarged ? "overflow-auto"');
+        expect(HOST).toContain('data-participant-document-reader="open"');
+        expect(HOST).toContain("fixed inset-0");
+        expect(HOST).toContain('data-participant-document-reader-close="true"');
+        // The preview itself is a preview again — no zoom state inside the card.
+        expect(HOST).not.toContain("DOCUMENT_ZOOM");
     });
 
-    it("sizes the page wrapper so an enlarged document can be scrolled to", () => {
+    it("reuses the platform's artifact viewer rules rather than inventing a second one", () => {
+        // `artifactViewportScale` and `WorkspaceArtifactZoomControls` already own fit-page,
+        // fit-width and manual zoom for the operator viewport. A participant-only viewer would be a
+        // second answer to a solved question.
+        expect(HOST).toContain("WorkspaceArtifactZoomControls");
+        expect(HOST).toContain("ARTIFACT_ZOOM_STEP");
+        expect(HOST).toContain("clampArtifactScale");
+        expect(CANVAS).toContain("resolveArtifactScale");
+    });
+
+    it("reading is a view, not a step — it cannot move Enrollment", () => {
         /*
-         * The wrapper is `overflow-hidden` — it rounds the canvas corners — and, left to flow, took
-         * the REGION's width. So a page rendered 616px wide sat in a 299px wrapper that clipped it,
-         * and the region's scrollWidth stayed at 299: the right half of the document was not merely
-         * off-screen, it was unreachable. Measured after: scrollWidth 628 against clientWidth 299.
+         * Opening and closing the reader touches presentation state only. Proven in a counted
+         * session: every step moved forward or stayed, never back, with 0 reloads and 0 unloads.
+         */
+        const openSetter = HOST.match(/setReadingOpen\(true\)/g) ?? [];
+        expect(openSetter.length).toBeGreaterThan(0);
+        // Nothing in the reader submits, persists or advances the participant.
+        const reader = HOST.slice(HOST.indexOf('data-participant-document-reader="open"'), HOST.indexOf("V1.2 — the conversational Enrollment turn"));
+        expect(reader).not.toContain("persistDraft");
+        expect(reader).not.toContain("setReviewStep");
+        expect(reader).not.toContain("handleSubmit");
+    });
+
+    it("sizes the page wrapper and centres it with auto margins so a zoomed page is reachable", () => {
+        /*
+         * Two clipping faults, both found by measuring rather than looking. The wrapper is
+         * `overflow-hidden` and, left to flow, took the REGION's width — so a 616px page sat in a
+         * 299px wrapper and scrollWidth stayed 299. And centring the column with `items-center`
+         * overflowed a zoomed page BOTH ways, leaving its left edge unreachable: 765px of canvas
+         * reported 570px of scrollable width. Auto margins collapse to zero when there is no room.
          */
         expect(CANVAS).toMatch(/wrapper\.style\.width = `\$\{viewport\.width\}px`;/);
+        expect(CANVAS).toContain('wrapper.style.marginLeft = "auto"');
+        expect(CANVAS).not.toContain("flex w-full flex-col items-center gap-4");
     });
 
     it("keeps the decision reachable on a phone", () => {

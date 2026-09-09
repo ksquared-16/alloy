@@ -22,6 +22,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import {
+    resolveArtifactScale,
+    type ArtifactScaleMode,
+} from "@/lib/workspace/artifactViewportScale";
+
 /** Beyond 2x the extra pixels cost more than they show. */
 const MAX_DEVICE_PIXEL_RATIO = 2;
 
@@ -84,7 +89,7 @@ export function ParticipantDocumentCanvas({
     signature,
     onUnavailable,
     fitHeightPx,
-    zoom,
+    view,
 }: {
     url: string;
     signature?: DocumentSignatureOverlay | null;
@@ -100,14 +105,14 @@ export function ParticipantDocumentCanvas({
      */
     fitHeightPx?: number;
     /**
-     * Magnification, as a multiple of the width that would just fill the container.
+     * Reading mode, resolved by the PLATFORM's artifact scale rules.
      *
-     * "View larger" originally only removed the height cap, which meant the page grew to container
-     * width and stopped. On a phone the container IS roughly the fitted width, so the document went
-     * from 362px tall to 365px — Kelly pressed it and correctly reported that nothing happened.
-     * Enlarging has to mean bigger than the space available, with the region scrolled to read it.
+     * `lib/workspace/artifactViewportScale` already owns fit-page / fit-width / manual for the
+     * operator's document viewport, so the parent's reading surface uses the same maths rather than
+     * a second, participant-only idea of what "larger" means. `viewportH` is passed in because the
+     * canvas container is content-sized: it knows how wide it may be, never how tall.
      */
-    zoom?: number;
+    view?: { readonly mode: ArtifactScaleMode; readonly manualScale: number; readonly viewportH: number };
 }) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [status, setStatus] = useState<"loading" | "ready">("loading");
@@ -168,9 +173,23 @@ export function ParticipantDocumentCanvas({
                         fitHeightPx && fitHeightPx > 0
                             ? Math.max(MIN_FIT_SCALE, Math.min(widthScale, fitHeightPx / base.height))
                             : widthScale;
-                    // Zoom is relative to filling the container, so it is genuine magnification at
-                    // any width rather than "grow until you touch the edges, then stop".
-                    const scale = zoom && zoom > 0 ? widthScale * zoom : fitted;
+                    /*
+                     * READING MODE DEFERS TO THE PLATFORM'S SCALE RULES.
+                     *
+                     * The review preview keeps its own fit — it answers "is this correct?" inside a
+                     * bounded region. Reading answers "I want to read this", and that is a solved
+                     * problem the operator viewport already owns.
+                     */
+                    const scale = view
+                        ? resolveArtifactScale({
+                              mode: view.mode,
+                              viewportW: width,
+                              viewportH: view.viewportH,
+                              contentW: base.width,
+                              firstPageH: base.height,
+                              manualScale: view.manualScale,
+                          })
+                        : fitted;
                     const viewport = page.getViewport({ scale });
 
                     // Same render contract as the operator canvas: the CANVAS is handed to pdf.js,
@@ -203,6 +222,17 @@ export function ParticipantDocumentCanvas({
                      */
                     wrapper.style.width = `${viewport.width}px`;
                     wrapper.style.flexShrink = "0";
+                    /*
+                     * AUTO MARGINS, NOT `items-center`.
+                     *
+                     * Centring the column clipped a zoomed page's LEFT edge: a flex item wider than
+                     * its container overflows both ways and only the right is scrollable, so at 375
+                     * a 765px page reported 570px of scrollable width and its left margin could not
+                     * be reached. Auto margins collapse to zero when there is no room, so the page
+                     * centres while it fits and overflows one way — scrollably — once it does not.
+                     */
+                    wrapper.style.marginLeft = "auto";
+                    wrapper.style.marginRight = "auto";
                     wrapper.appendChild(canvas);
 
                     const sig = signatureRef.current;
@@ -258,7 +288,7 @@ export function ParticipantDocumentCanvas({
          * The mark is painted over an already-rendered page, so it updates in place below. The
          * document may still regenerate afterwards; the acknowledgment no longer waits for it.
          */
-    }, [url, page, signature?.focus, !!signature, fitHeightPx, zoom]);
+    }, [url, page, signature?.focus, !!signature, fitHeightPx, view?.mode, view?.manualScale, view?.viewportH]);
 
     /**
      * The captured mark, projected immediately.
@@ -298,13 +328,17 @@ export function ParticipantDocumentCanvas({
     const atLast = pageCount > 0 && page >= pageCount;
 
     return (
-        <div data-participant-document="true" data-participant-document-pages={pageCount || undefined}>
+        <div className="w-full" data-participant-document="true" data-participant-document-pages={pageCount || undefined}>
             {status === "loading" ? (
                 <p className="py-6 text-center text-[14px] text-alloy-midnight/50">
                     Preparing your paperwork…
                 </p>
             ) : null}
-            <div ref={containerRef} className="flex flex-col gap-4" />
+            {/* `w-full` because the measured width IS the render width: as a bare flex item inside a
+                centering region this collapsed to its content and the page rendered at the 280px
+                floor — a correctly proportioned, uselessly small document. Centring is the column's
+                job, not the width's. */}
+            <div ref={containerRef} className="flex w-full flex-col gap-4" />
             {pageCount > 1 ? (
                 /* Reachable on a phone: full-height targets, and never off the safe area. */
                 <nav
