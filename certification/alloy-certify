@@ -305,6 +305,48 @@ EOF
 # So the question is asked the only way that cannot be wrong: try to bind it, on
 # the interface the server will actually use. A refusal names the likely owner
 # instead of leaving an operator to hunt a process that does not exist.
+# WHO HOLDS THIS PORT — asked without assuming the host put `lsof` on PATH.
+#
+# THE FAILURE. `cmd_app_stop` finds the Next CHILD that outlives the launcher
+# entirely through `lsof`; the pid file only records the launcher. On this Mac
+# mini `lsof` lives at /usr/sbin/lsof and the profile PATH is
+# `~/bin:~/.local/bin:/usr/local/bin:/opt/homebrew/bin:…:/usr/bin:/bin` — no
+# /usr/sbin. So every `lsof -ti` produced NOTHING, and "no visible holder" was
+# read as "no holder", exactly as the port pre-flight above once read it.
+#
+# Measured, not imagined: a certification server for a stale commit survived
+# `app_stop`, kept :3011, and `cmd_serve` then took the "App already serving"
+# branch and certified against it — the precise outcome the staleness check
+# directly below was written to prevent. The teardown reported "app stopped".
+#
+# So the tool is resolved by location as well as by PATH, and when it cannot be
+# found at all the question is answered from `ps` using the command line this
+# script itself starts (`next dev … -p PORT`). A caller that gets an empty
+# answer must therefore treat it as "unknown", never as "free" — the bind probe
+# in `cert_assert_port_bindable` is the only authority on emptiness.
+CERT_LSOF="$(command -v lsof 2>/dev/null || true)"
+if [ -z "$CERT_LSOF" ]; then
+    for _cand in /usr/sbin/lsof /usr/bin/lsof /bin/lsof; do
+        [ -x "$_cand" ] && CERT_LSOF="$_cand" && break
+    done
+fi
+
+cert_port_listener_pids() {
+    local port="$1"
+    if [ -n "$CERT_LSOF" ]; then
+        "$CERT_LSOF" -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null
+        return 0
+    fi
+    # No lsof anywhere: match the process this script starts. Narrow on purpose —
+    # it must never return a pid this certification did not launch.
+    # The regex is assembled in BEGIN so the port cannot be read as a
+    # concatenation against the match result — awk binds `~` tighter than
+    # concatenation, and the anchor then decorates the ANSWER instead of the
+    # pattern, which matches far too much.
+    ps -eo pid,command 2>/dev/null \
+        | awk -v p="$port" 'BEGIN { re = "next dev.*-p[ =]?" p "($|[^0-9])" } $0 ~ re { print $1 }'
+}
+
 cert_assert_port_bindable() {
     local port="$1"
     command -v node >/dev/null 2>&1 || return 0   # cannot probe; let the server speak
@@ -332,11 +374,22 @@ cmd_serve() {
     # variables, and reusing it silently certifies the wrong build — an env-gated
     # route stayed 404 across three runs because of exactly this.
     if curl -s -o /dev/null "$APP_URL" 2>/dev/null; then
-        local pid; pid="$(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null | head -1)"
-        if [ -n "$pid" ] && [ -n "$(find "$ENV_FILE" -newermt "$(ps -o lstart= -p "$pid" 2>/dev/null)" 2>/dev/null)" ]; then
-            info "app on ${APP_PORT} predates ${ENV_FILE##*/} — restarting so it reads the current configuration"
-            cmd_app_stop >/dev/null 2>&1
-            for p in $(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null); do kill -9 "$p" 2>/dev/null || true; done
+        local pid; pid="$(cert_port_listener_pids "$APP_PORT" | head -1)"
+        # AN UNIDENTIFIED HOLDER IS STALE UNTIL PROVEN OTHERWISE.
+        #
+        # Something is answering on this port. If its age cannot be established,
+        # reuse is a guess, and the losing side of that guess is certifying the
+        # wrong build silently — which is the whole reason this check exists.
+        # Restarting costs a compile; reusing costs the run's credibility.
+        if [ -z "$pid" ] \
+            || [ -n "$(find "$ENV_FILE" -newermt "$(ps -o lstart= -p "$pid" 2>/dev/null)" 2>/dev/null)" ]; then
+            if [ -z "$pid" ]; then
+                info "app on ${APP_PORT} has no identifiable owner — restarting rather than certifying an unknown build"
+            else
+                info "app on ${APP_PORT} predates ${ENV_FILE##*/} — restarting so it reads the current configuration"
+            fi
+            cmd_app_stop >/dev/null 2>&1 || true
+            for p in $(cert_port_listener_pids "$APP_PORT"); do kill -9 "$p" 2>/dev/null || true; done
             sleep 2
         else
             green "App already serving at $APP_URL"; return 0
@@ -433,7 +486,7 @@ cmd_journey() {
             printf '\n── %s  [inherits tenant]\n' "$name"
             needs_reset=0
         fi
-        cmd_app_stop >/dev/null 2>&1
+        cmd_app_stop >/dev/null 2>&1 || true
         if [ "$needs_reset" -eq 0 ]; then
             if ! ( cmd_serve ) > "$CERT_DIR/.run/journey/${name}.serve.log" 2>&1; then
                 printf '\033[31m✗ %s — app did not come up\033[0m\n' "$name" >&2
@@ -547,7 +600,9 @@ cmd_status() {
 # bypass the lease model exists to prevent. Releasing is the sanctioned way to say "I am
 # done" — alloy-stack stops the stack itself, but only when the last holder leaves.
 cmd_down() {
-    cmd_app_stop
+    # A port that will not release is reported by cmd_app_stop and must not abort
+    # the rest of teardown — the lease still has to be released.
+    cmd_app_stop || true
     local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
     if [ -x "$stack" ]; then
         "$stack" release "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" || true
@@ -567,16 +622,31 @@ cmd_app_stop() {
     fi
     # The pid file records the launcher; Next spawns a child that outlives it and keeps
     # the port bound, which is what left a dev server running after a "clean" teardown.
-    local held; held="$(lsof -ti "tcp:${APP_PORT}" 2>/dev/null || true)"
+    local held; held="$(cert_port_listener_pids "$APP_PORT" || true)"
     for pid in $held; do kill "$pid" 2>/dev/null && stopped=1; done
+    # RELEASE IS PROVEN BY BINDING, NOT BY A PID LIST BEING EMPTY.
+    #
+    # The old loop broke as soon as `lsof` printed nothing, which on a host
+    # without it was immediately and always — so teardown announced a release it
+    # had never confirmed. The bind probe answers the question that actually
+    # matters to the next `serve`: can this port be taken?
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-        lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1 || break
+        cert_assert_port_bindable "$APP_PORT" >/dev/null 2>&1 && break
         sleep 1
     done
-    if lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1; then
-        for pid in $(lsof -ti "tcp:${APP_PORT}" 2>/dev/null); do kill -9 "$pid" 2>/dev/null || true; done
+    if ! cert_assert_port_bindable "$APP_PORT" >/dev/null 2>&1; then
+        for pid in $(cert_port_listener_pids "$APP_PORT"); do kill -9 "$pid" 2>/dev/null || true; done
+        sleep 1
     fi
-    [ "$stopped" -eq 1 ] && info "app stopped (port ${APP_PORT} released)" || info "no app was running on ${APP_PORT}"
+    if cert_assert_port_bindable "$APP_PORT" >/dev/null 2>&1; then
+        [ "$stopped" -eq 1 ] && info "app stopped (port ${APP_PORT} released)" || info "no app was running on ${APP_PORT}"
+    else
+        # Say so. A teardown that cannot free the port must not report success —
+        # the next run would certify against whatever still holds it.
+        echo "app on ${APP_PORT} could not be released; a later certification would reuse it" >&2
+        echo "  find it with: ps ax | grep 'next dev .*-p ${APP_PORT}'" >&2
+        return 1
+    fi
 }
 
 # A test may source this file to exercise one helper without running a
