@@ -7,7 +7,7 @@
  *
  *   1. validateBrowserAuthRequest refuses any base that is not loopback —
  *      "only a loopback base may be driven".
- *   2. the base URL is derived as `http://127.0.0.1:${SLOT_PORTS[slot]}`.
+ *   2. the base URL is derived as `http://127.0.0.1:${portForSlot(slot)}`.
  *   3. the mint writes cookies for the literal domains "localhost" and
  *      "127.0.0.1", hard-coded.
  *

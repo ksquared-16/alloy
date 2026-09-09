@@ -29,6 +29,7 @@
  */
 import { execFile, spawnSync } from "node:child_process";
 import { laneAppUrl, readServeStatus } from "./lane-app-url.mjs";
+import { isManagedSlot, managedSlots, portForSlot } from "./managed-slots.mjs";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -59,8 +60,35 @@ export const BROWSER_AUTH_REFUSALS = Object.freeze({
   AGENT_CANNOT_SIGN_IN: "interactive_sign_in_requires_operator",
 });
 
-/** Permanent slot → port. A slot never borrows another slot's port. */
-export const SLOT_PORTS = Object.freeze({ 1: 3011, 2: 3012, 3: 3013, 4: 3014, 5: 3015, 6: 3016 });
+/**
+ * SLOT → PORT IS NOT THIS MODULE'S FACT TO DECLARE.
+ *
+ * THE DEFECT, and it is the reason a lane could have no browser session at all.
+ * This module used to own `SLOT_PORTS = {1:3011 … 6:3016}` — a frozen six. The
+ * host had already moved on: `ALLOY_MAX_AGENTS=12` in the config the shell
+ * reads, twelve managed slots, ports 3011–3022, and lanes actually bound to
+ * slots 7, 8, 9, 11 and 12. `managed-slots.mjs` was written to be the single
+ * owner of exactly this and its own header lists the ten files that had
+ * re-encoded the six. THIS FILE WAS NOT ON THAT LIST, so it kept its copy.
+ *
+ * MEASURED CONSEQUENCE. `laneSlot()` used `SLOT_PORTS[n]` as its test of
+ * whether a slot is real, so a lane on slot 7 resolved to NO slot, and
+ * `attachLaneBrowserAuth` returned it untouched with no `browser_auth` at all.
+ * The Gateway then rendered nothing: Payments, Troubleshooting, UI-Vac,
+ * Attendance and Work Items had no Browser session card, no state, and no way
+ * to sign in — while `lane-app-url.mjs`, deriving its ports arithmetically,
+ * happily published an app URL for the same lanes. Two port tables, one bounded
+ * at six and one not, disagreeing about which lanes exist.
+ *
+ * So ports are asked for here, never declared. The permanence the old comment
+ * claimed is real and is preserved by the derivation itself — port = FIRST +
+ * slot - 1 — not by a literal that has to be edited when the fleet grows.
+ */
+export function slotPortMap(env = process.env) {
+  const out = {};
+  for (const slot of managedSlots(env)) out[slot] = portForSlot(slot, env);
+  return Object.freeze(out);
+}
 
 export const DEFAULT_CAPTURE_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -309,10 +337,10 @@ export function validateBrowserAuthRequest({
     };
   }
   const n = Number(slot);
-  if (!Number.isInteger(n) || !SLOT_PORTS[n]) {
+  if (!Number.isInteger(n) || !isManagedSlot(n)) {
     return { ok: false, error: BROWSER_AUTH_REFUSALS.SLOT_MISMATCH, detail: `slot ${slot} is not a managed slot` };
   }
-  const expectedPort = SLOT_PORTS[n];
+  const expectedPort = portForSlot(n);
   if (port != null && Number(port) !== expectedPort) {
     return {
       ok: false,
@@ -714,6 +742,7 @@ export function attachLaneBrowserAuth(lanes, {
       ? verdict.state
       : status.state;
     const app = directorFacing(lane, slot);
+    const slotPort = portForSlot(slot);
     return {
       ...lane,
       browser_auth: {
@@ -724,8 +753,8 @@ export function attachLaneBrowserAuth(lanes, {
         blocks_execution: blocksExecution(effective),
         verified: status.verified === true,
         slot,
-        port: SLOT_PORTS[slot] || null,
-        base_url: SLOT_PORTS[slot] ? `http://127.0.0.1:${SLOT_PORTS[slot]}` : null,
+        port: slotPort,
+        base_url: slotPort ? `http://127.0.0.1:${slotPort}` : null,
         // WHERE A HUMAN OPENS THIS, from whatever device they are actually on.
         // Null with a stated reason rather than a guess: "there is no route" and
         // "the app is down" are different problems, and an operator who cannot
@@ -748,10 +777,12 @@ export function attachLaneBrowserAuth(lanes, {
 /** A lane's slot, from its binding or from its worktree name. */
 export function laneSlot(lane) {
   const explicit = Number(lane?.binding?.slot);
-  if (Number.isInteger(explicit) && SLOT_PORTS[explicit]) return explicit;
-  const m = String(lane?.binding?.worktree_path || lane?.worktree?.name || "").match(/(?:^|\/)wt(\d)-/);
+  if (isManagedSlot(explicit)) return explicit;
+  // `\d+`, not `\d`: a single digit stopped reading at `wt1` for a `wt11-`
+  // worktree, which is a slot-10-and-beyond lane silently answering as slot 1.
+  const m = String(lane?.binding?.worktree_path || lane?.worktree?.name || "").match(/(?:^|\/)wt(\d+)-/);
   const n = m ? Number(m[1]) : null;
-  return n && SLOT_PORTS[n] ? n : null;
+  return isManagedSlot(n) ? n : null;
 }
 
 /* ── Deployed targets ─────────────────────────────────────────────────────
