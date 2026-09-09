@@ -33,12 +33,30 @@ describe("name bindings resolve to REGISTERED system fields", () => {
     });
 
     it("2. every name suggestion points at a REGISTERED field", () => {
-        const labels = ["Child's Name", "Name of Student", "Child First Name", "Student Last Name", "Parent/Guardian Name", "Emergency Contact Name"];
+        const labels = ["Child's Name", "Name of Student", "Child First Name", "Student Last Name", "Parent/Guardian Name"];
         for (const label of labels) {
             const src = suggestFieldBinding(label, "text")?.field_source;
             expect(src, `${label} produced no binding`).toBeTruthy();
             expect(registered.has(`${src!.entity_type}.${src!.field_key}`), `${label} → ${src!.entity_type}.${src!.field_key} is not a registered system field`).toBe(true);
         }
+    });
+
+    it("2b. a non-subject relationship's name is not a scalar name binding at all", () => {
+        /*
+         * "Emergency Contact Name" used to appear in the list above, and satisfied it, by binding to
+         * `guardian.guardian_first_name` — a registered field belonging to a different person. The
+         * assertion was true and the behaviour was wrong: it published one person's name as another
+         * person's business truth.
+         *
+         * An emergency contact is a relationship. Its canonical owner is the relationship model,
+         * which projects an accepted concept into a collection-bound group (POS-FP17). Suggesting a
+         * scalar binding here would pre-empt that owner, so none is suggested and the question stays
+         * visibly unresolved for the operator to resolve through the relationship decision.
+         */
+        expect(suggestFieldBinding("Emergency Contact Name", "text")).toBeNull();
+        expect(suggestFieldBinding("Emergency Contact Phone", "text")).toBeNull();
+        // The form's own subject is unaffected — a guardian still binds.
+        expect(suggestFieldBinding("Parent/Guardian Name", "text")?.field_source?.field_key).toBe("guardian_first_name");
     });
 
     it("3. a name suggestion anchors on the FIRST-name field and says the name is split", () => {
