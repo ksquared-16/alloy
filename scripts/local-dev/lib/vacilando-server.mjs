@@ -2808,6 +2808,33 @@ export function createVacilandoServer() {
             .then(({ tickGovernedActions }) => tickGovernedActions())
             .catch(() => {});
         } catch { /* Director freshness recover must not block warm */ }
+        /*
+         * THE TAILNET MAPPING FOR A LANE'S PORT NEEDS AN OWNER.
+         *
+         * `lane-app-url` has always been able to SAY "port not published to the
+         * tailnet"; nothing has ever been able to fix it, because no code in
+         * this repository ran `tailscale serve`. Mappings existed only where an
+         * operator had typed one, so slots 2, 3, 7-10 and 12 were unreachable
+         * to a remote Director while their lanes were told to go and sign in.
+         *
+         * Additive and tailnet-only — see tailnet-serve.mjs. It runs on the
+         * same boot-and-timer footing as the other reconcilers because a
+         * mapping can also be lost to a Tailscale restart, not only to a lane
+         * being created.
+         */
+        try {
+          import("./vacilando/tailnet-serve.mjs")
+            .then(({ reconcileTailnetServe }) => reconcileTailnetServe())
+            .then((r) => {
+              if (r?.published?.length) {
+                console.log(`[tailnet] published ${r.published.length} lane port(s): ${r.published.map((x) => x.port).join(", ")}`);
+              }
+              if (r?.failed?.length) {
+                console.log(`[tailnet] could not publish ${r.failed.map((x) => x.port).join(", ")}`);
+              }
+            })
+            .catch(() => {});
+        } catch { /* a lane is still usable on this host without a tailnet */ }
         try {
           reconcileGrantContinuations().then((ex) => {
             const n = (ex.delivered || 0) + (ex.repaired || 0);
@@ -2875,6 +2902,21 @@ export function createVacilandoServer() {
     maybeReconcileGovernor({ reason: "periodic", depth: "cheap" }).catch(() => {});
   }, 10000);
   recoverCheapTimer.unref?.();
+  // Lane ports are re-published on a slow cadence: a Tailscale restart drops
+  // every mapping, and the symptom is a lane the Director cannot open with no
+  // event to explain why. A healthy host does nothing here but read a status.
+  const tailnetServeTimer = setInterval(() => {
+    import("./vacilando/tailnet-serve.mjs")
+      .then(({ reconcileTailnetServe }) => reconcileTailnetServe())
+      .then((r) => {
+        if (r?.published?.length) {
+          console.log(`[tailnet] re-published ${r.published.length} lane port(s): ${r.published.map((x) => x.port).join(", ")}`);
+        }
+      })
+      .catch(() => {});
+  }, 15 * 60_000);
+  tailnetServeTimer.unref?.();
+
   const recoverTargetedTimer = setInterval(() => {
     reconcileGovernor({ reason: "periodic", depth: "targeted" }).catch(() => {});
   }, 30000);

@@ -2513,9 +2513,13 @@ test("controls that gate progress are reachable, and reference state is folded",
   }
   const sectionDef = insp.slice(insp.indexOf("const section = ("));
   assert.match(sectionDef, /open = false/, "inspector sections are closed by default");
-  // Browser session is the exception: when it renders at all, something is
-  // wrong with the QA identity and the operator needs to see it.
-  assert.match(insp, /section\("browser", "Browser session", browser, \{ open: Boolean\(browser\) \}\)/);
+  // Browser session is the exception, and the condition is now the right one.
+  // It used to open on `Boolean(browser)` — true whenever the card rendered at
+  // all, which was fine only while the card rendered exclusively for a BROKEN
+  // session. The card is a status for every lane now, so a lane whose session
+  // is healthy must not have a fold pushed open to say so; a session that
+  // blocks execution still must.
+  assert.match(insp, /section\("browser", "Browser session", browser, \{ open: Boolean\(lane\?\.browser_auth\?\.blocks_execution\) \}\)/);
 
   // The decision bar still precedes the composer, and the reference material
   // does not sit between them.
@@ -2580,6 +2584,55 @@ test("a recognised modal offers the operator a way out", () => {
   assert.match(gwSrc, /lanes\/prompt-block\/dismiss/);
 });
 
+test("a healthy browser session is shown, not hidden until it breaks", () => {
+  /*
+   * `renderBrowserAuthRecovery` returned "" unless the session was BLOCKING, so
+   * the card was a failure notice rather than a status. A working lane could
+   * not show whose account it was signed in as or when that was captured, and
+   * — since the card is the only surface for the sign-in ceremony — a Director
+   * could re-authenticate a lane only after it had already broken.
+   */
+  const healthy = renderBrowserAuthRecovery({
+    lane_id: "trust-runtime",
+    browser_auth: {
+      state: "authentication_valid",
+      blocks_execution: false,
+      slot: 4,
+      headline: "Browser session present for slot 4 — not yet verified",
+      base_url: "http://127.0.0.1:3014",
+      director_url: "https://mini.tail2aa1af.ts.net:3014",
+      expected_identity: "qa@example.com",
+      storage_captured_at: new Date().toISOString(),
+    },
+  });
+  assert.ok(healthy.length > 0, "a healthy lane still shows its session");
+  assert.match(healthy, /Sign in again/, "the ceremony stays available before the session breaks");
+  assert.doesNotMatch(healthy, /btn primary/, "a healthy lane must not shout for attention");
+  assert.match(healthy, /qa@example\.com/, "the Director can see which account this lane holds");
+
+  const blocked = renderBrowserAuthRecovery({
+    lane_id: "financials",
+    browser_auth: {
+      state: "authentication_missing",
+      blocks_execution: true,
+      slot: 2,
+      headline: "Browser session expired — Re-authentication required",
+      base_url: "http://127.0.0.1:3012",
+      director_url: null,
+      director_url_reason: "no_serve_mapping_for_port",
+    },
+  });
+  assert.match(blocked, /btn primary/, "a blocking session is still the primary action");
+  assert.match(blocked, /port not published to the tailnet/,
+    "the unroutable case still states the reason rather than guessing a URL");
+
+  // A lane with no slot has no port, so there is no session to have.
+  assert.equal(renderBrowserAuthRecovery({ lane_id: "x" }), "");
+});
+
+
 await Promise.all(started);
+
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

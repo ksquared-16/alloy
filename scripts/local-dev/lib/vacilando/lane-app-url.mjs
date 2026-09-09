@@ -46,8 +46,22 @@ const require = createRequire(import.meta.url);
  * localhost link appeared in the first place.
  */
 
-/** Ports are the shell's rule: ALLOY_FIRST_AGENT_PORT + slot - 1. */
-export const DEFAULT_FIRST_AGENT_PORT = 3011;
+/*
+ * PORTS ARE ASKED FOR, NOT RE-DERIVED HERE.
+ *
+ * This module used to carry its own `portForSlot` and its own default first
+ * port. The arithmetic was right — FIRST + slot - 1, the shell's rule — and it
+ * was still a second owner of a fact `managed-slots.mjs` exists to own, which
+ * is how `browser-auth.mjs` got away with a THIRD copy frozen at six slots
+ * while this one derived twelve. The two disagreed in production: lanes on
+ * slots 7-12 received an app URL from here and no browser session from there.
+ *
+ * The imported derivation additionally bounds by the configured ceiling, which
+ * this copy never did: a slot above the managed range now resolves to no port
+ * instead of to a port outside the agent range entirely.
+ */
+export { DEFAULT_FIRST_AGENT_PORT, portForSlot } from "./managed-slots.mjs";
+import { portForSlot } from "./managed-slots.mjs";
 
 export const APP_URL_SCHEMA = "vacilando.lane_app_url.v1";
 
@@ -75,13 +89,6 @@ export function directorFacingHost({ serveStatus = null, env = process.env } = {
   // Serve prints "https://<host>[:port] (tailnet only)" lines.
   const m = text.match(/https:\/\/([a-z0-9][a-z0-9.-]*\.ts\.net)/i);
   return m ? m[1] : null;
-}
-
-export function portForSlot(slot, env = process.env) {
-  const n = Number(slot);
-  if (!Number.isInteger(n) || n < 1) return null;
-  const first = Number(env.ALLOY_FIRST_AGENT_PORT) || DEFAULT_FIRST_AGENT_PORT;
-  return first + n - 1;
 }
 
 /** Which lane ports Serve is currently publishing. */
@@ -119,7 +126,11 @@ export function isRemoteExecutionHost({ env = process.env } = {}) {
  */
 export function laneAppUrl(lane, { serveStatus = null, env = process.env } = {}) {
   const slot = lane?.binding?.slot ?? lane?.slot ?? null;
-  const port = portForSlot(slot, env);
+  // Coerced here because a lane's slot arrives from JSON and has been a string
+  // in the wild; the canonical resolver takes an integer and says no to
+  // anything else, which is the right contract for it and the wrong answer for
+  // a lane that simply came off the API.
+  const port = portForSlot(Number(slot), env);
   const remote = isRemoteExecutionHost({ env });
 
   if (port == null) {
