@@ -14,6 +14,7 @@
  */
 
 import type { FormField, FormFieldSource } from "@/lib/forms/schema";
+import { detectRelationshipDefinitionForTitle } from "@/lib/fields/relationship/relationshipDefinitions";
 
 export type BindingScope = "household" | "child" | "recipient";
 
@@ -86,7 +87,7 @@ const RULES: Rule[] = [
     { test: /\b(parent|guardian|mother|father|caregiver)\b.*\bfirst\s*name\b/i, suggest: guardianName("first") },
     { test: /\b(parent|guardian|mother|father|caregiver)\b.*\blast\s*name\b/i, suggest: guardianName("last") },
     // Parent / guardian full name
-    { test: /\b(parent|guardian|mother|father|caregiver|emergency\s*contact)('?s)?\s*name\b/i, suggest: { ...guardianName("first"), note: "Captured as separate first and last name fields." } },
+    { test: /\b(parent|guardian|mother|father|caregiver)('?s)?\s*name\b/i, suggest: { ...guardianName("first"), note: "Captured as separate first and last name fields." } },
     // Contact
     { test: /\bemail\b/i, suggest: person("email") },
     { test: /\b(phone|telephone|mobile|cell)\b/i, suggest: person("phone") },
@@ -100,6 +101,34 @@ const RULES: Rule[] = [
 ];
 
 /**
+ * The form's default person subject. Every `person(...)` and `guardianName(...)` rule below assumes
+ * the person being described IS this one, which is true of an enrolment form's own respondent.
+ */
+const SUBJECT_RELATIONSHIP_KEY = "parents_guardians";
+
+/**
+ * Does this label describe a person the form is NOT about?
+ *
+ * "Emergency Contact Name" used to ride the parent/guardian name rule and bind to
+ * `guardian.guardian_first_name`; "Emergency Contact Phone" fell through to the generic phone rule
+ * and bound to `person.phone`. Both published one person's details as another person's business
+ * truth — an emergency contact is a RELATIONSHIP, not a second guardian.
+ *
+ * The canonical owner of every relationship other than the subject is the relationship model:
+ * POS-FP17 projects an accepted concept into a collection-bound group whose nested field sources
+ * come from the Relationship Definition. Suggesting a scalar binding here pre-empts that owner with
+ * a wrong answer, so nothing is suggested and the question stays visibly unresolved — which is what
+ * routes the operator to the decision that does own it.
+ *
+ * Driven by the definition registry rather than a list of roles, so adding a definition row is what
+ * makes a relationship recognised here, exactly as it is what makes one projectable.
+ */
+function namesANonSubjectRelationship(label: string): boolean {
+    const def = detectRelationshipDefinitionForTitle(label);
+    return Boolean(def) && def!.definition_key !== SUBJECT_RELATIONSHIP_KEY;
+}
+
+/**
  * Suggest a canonical binding for a detected field. Signature-typed fields are always
  * recipient-scoped. Returns `null` when nothing confident matches (operator binds manually).
  */
@@ -109,6 +138,7 @@ export function suggestFieldBinding(label: string, type: string): BindingSuggest
 
     const text = (label ?? "").trim();
     if (!text) return null;
+    if (namesANonSubjectRelationship(text)) return null;
     for (const rule of RULES) {
         if (rule.types && !(rule.types as readonly string[]).includes(type)) continue;
         if (rule.test.test(text)) return rule.suggest;
