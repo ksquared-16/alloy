@@ -10,10 +10,14 @@
 
 import { describe, expect, it } from "vitest";
 import {
+    ATTENDANCE_EXPECTATION_PURPOSE,
+    SERVICE_DAY_PREDICATES,
     applyObservedPresence,
     interpretServiceDay,
     raisesMissingArrivalAttention,
     expectationStandingIsConsumable,
+    serviceDayAsOf,
+    serviceDayValidWindow,
     type ChildServiceDayExpectation,
 } from "@/lib/childcareOperational/attendance/serviceDayExpectations";
 import type { EffectiveExpectationForSubject } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
@@ -22,6 +26,19 @@ const SITE = "site-1";
 const GROUP = "toddler-1";
 const EMMA = "emma";
 const FINN = "finn";
+
+/**
+ * The Condition as the frozen grammar actually stores it: a fixed predicate shape
+ * plus author-supplied params. Fixtures that invented `{ reason_key }` at the top
+ * level agreed with the reader and disagreed with the database.
+ */
+function condition(predicateShape: string, reasonKey?: string): Record<string, unknown> {
+    return {
+        typeKey: ATTENDANCE_EXPECTATION_PURPOSE,
+        predicateShape,
+        params: reasonKey ? { reason_key: reasonKey } : {},
+    };
+}
 
 /**
  * A child known-away is `intended`, not `prohibited`: nobody forbids a child from
@@ -39,7 +56,7 @@ function awayIntent(
         expectationId: `exp-child-${subjectId}`,
         lineageRootId: `root-${subjectId}`,
         modality: "intended",
-        condition: reasonKey ? { reason_key: reasonKey } : {},
+        condition: condition(SERVICE_DAY_PREDICATES.childAway, reasonKey),
         effectiveFrom: "2026-09-18",
         effectiveTo: "2026-09-18",
         standing,
@@ -57,7 +74,7 @@ function prohibition(
         expectationId: `exp-${subjectKind}-${subjectId}`,
         lineageRootId: `root-${subjectId}`,
         modality: "prohibited",
-        condition: reasonKey ? { reason_key: reasonKey } : {},
+        condition: condition(SERVICE_DAY_PREDICATES.grainClosed, reasonKey),
         effectiveFrom: "2026-09-18",
         effectiveTo: "2026-09-18",
         standing: "proposed",
@@ -289,5 +306,69 @@ describe("modality is not interchangeable", () => {
         const siteIntent = { ...awayIntent(SITE, "maybe_closed"), subjectKind: "site", subjectId: SITE };
         const rows = interpretServiceDay({ ...base, effective: [siteIntent] });
         expect(rows.every((r) => r.interpretation === "normal")).toBe(true);
+    });
+});
+
+describe("only the vocabulary Attendance owns is interpreted", () => {
+    it("ignores a closure-shaped expectation authored under another purpose", () => {
+        // A prohibition on this site could mean anything — a maintenance embargo,
+        // a licensing hold. Reading it as "the nursery is shut" would suppress the
+        // missing-arrival signal for every child here on someone else's say-so.
+        const foreign = {
+            ...prohibition("site", SITE, "who_knows"),
+            condition: { typeKey: "facilities.embargo", predicateShape: "operating_grain_closed", params: {} },
+        };
+        const rows = interpretServiceDay({ ...base, effective: [foreign] });
+        expect(rows.every((r) => r.interpretation === "normal")).toBe(true);
+    });
+
+    it("ignores an expectation carrying no vocabulary at all", () => {
+        const shapeless = { ...prohibition("site", SITE), condition: {} };
+        expect(
+            interpretServiceDay({ ...base, effective: [shapeless] }).every((r) => r.interpretation === "normal"),
+        ).toBe(true);
+    });
+});
+
+describe("a withdrawn plan stops meaning the child is away", () => {
+    it("reads the revised intent — she is expected in after all", () => {
+        // The revision keeps the modality and changes the predicate. Matching on
+        // modality alone would read this as another absence, and a cancelled
+        // holiday would keep the child marked away forever.
+        const withdrawn = {
+            ...awayIntent(EMMA),
+            condition: condition(SERVICE_DAY_PREDICATES.childExpectedPresent, "plans_changed"),
+        };
+        const [emma] = interpretServiceDay({ ...base, scheduledChildIds: [EMMA], effective: [withdrawn] });
+        expect(emma.interpretation).toBe("normal");
+        expect(applyObservedPresence(emma, "no_record")).toBe("not_arrived");
+    });
+
+    it("reads a reopened site as operating", () => {
+        const reopened = {
+            ...prohibition("site", SITE),
+            modality: "intended",
+            condition: condition(SERVICE_DAY_PREDICATES.grainOpen, "reopened"),
+        };
+        expect(
+            interpretServiceDay({ ...base, effective: [reopened] }).every((r) => r.interpretation === "normal"),
+        ).toBe(true);
+    });
+});
+
+describe("the service day window is one shared definition", () => {
+    it("bounds a day half-open so authoring and querying cannot drift", () => {
+        expect(serviceDayValidWindow("2026-09-18")).toEqual({
+            validFrom: "2026-09-18T00:00:00.000Z",
+            validTo: "2026-09-19T00:00:00.000Z",
+        });
+    });
+
+    it("asks about the day at the instant the day opens", () => {
+        expect(serviceDayAsOf("2026-09-18")).toEqual({ validTime: "2026-09-18T00:00:00.000Z" });
+    });
+
+    it("refuses a date it cannot parse rather than inventing a window", () => {
+        expect(() => serviceDayValidWindow("not-a-date")).toThrow();
     });
 });

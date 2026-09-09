@@ -61,10 +61,20 @@ function actToRpcPayload(act: AuthoringActRecord): Record<string, unknown> {
     };
 }
 
-export function createSupabaseAuthoringGateway(admin: Admin = createAdminClient()): AuthoringGateway {
+/**
+ * `purpose` is the scoped-activation seam. Omitted, the gateway governs the
+ * GENERIC intake and the `oe.ledger.author` env flag decides — unchanged, still
+ * OFF by default. Supplied and activated, it opens exactly one reviewed
+ * vocabulary without enabling authoring for every other consumer at once. A
+ * tenant's opt-out still wins either way.
+ */
+export function createSupabaseAuthoringGateway(
+    admin: Admin = createAdminClient(),
+    purpose?: string | null,
+): AuthoringGateway {
     return {
         async isAuthoringEnabled(orgId: string): Promise<boolean> {
-            return isOeLedgerAuthorEnabledForOrg(admin, orgId);
+            return isOeLedgerAuthorEnabledForOrg(admin, orgId, purpose);
         },
 
         async loadPredecessor(predecessorId: string): Promise<PredecessorRow | null> {

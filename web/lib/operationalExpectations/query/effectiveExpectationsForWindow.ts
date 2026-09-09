@@ -36,6 +36,7 @@ import type {
     AsOfCoordinate,
     ExpectationLedgerRow,
 } from "@/lib/operationalExpectations/resolver/effectiveExpectationTypes";
+import { primaryExpectationSubjectId } from "@/lib/operationalExpectations/query/expectationSubjectRef";
 
 /**
  * A queried row: the resolver's columns plus the two facets it deliberately does
@@ -43,7 +44,13 @@ import type {
  * WHAT that row says, and `subject_ref` / `condition` carry it.
  */
 export interface ExpectationQueryRow extends ExpectationLedgerRow {
-    subject_ref: Record<string, unknown> | null;
+    /**
+     * The stored Subject facet. Deliberately `unknown`: the intake writes the
+     * tuple's subject ARRAY here, and typing it as an object invited exactly the
+     * `subject_ref.id` misreading that made this seam match nothing. Read it only
+     * through `expectationSubjectRef`.
+     */
+    subject_ref: unknown;
     condition: Record<string, unknown> | null;
 }
 
@@ -97,13 +104,6 @@ export type ExpectationQueryGateway = {
     loadRowsForSubjects(query: EffectiveExpectationsQuery): Promise<ExpectationQueryRow[]>;
 };
 
-function subjectIdOf(row: ExpectationQueryRow): string {
-    const ref = row.subject_ref;
-    if (ref == null) return "";
-    const id = ref.id ?? ref.ref ?? ref.subject_id;
-    return typeof id === "string" ? id : String(id ?? "");
-}
-
 export async function effectiveExpectationsForWindow(
     query: EffectiveExpectationsQuery,
     gateway: ExpectationQueryGateway,
@@ -135,7 +135,7 @@ export async function effectiveExpectationsForWindow(
             const offending = byId.get(resolution.expectationId);
             unresolved.push({
                 subjectKind: offending?.subject_kind ?? "",
-                subjectId: offending ? subjectIdOf(offending) : "",
+                subjectId: offending ? primaryExpectationSubjectId(offending.subject_ref) : "",
                 lineageRootId,
                 reason: `unsupported_transition:${resolution.transitionType}`,
             });
@@ -146,7 +146,7 @@ export async function effectiveExpectationsForWindow(
         const row = byId.get(e.effectiveExpectationId);
         effective.push({
             subjectKind: e.subjectKind,
-            subjectId: row ? subjectIdOf(row) : "",
+            subjectId: row ? primaryExpectationSubjectId(row.subject_ref) : "",
             expectationId: e.effectiveExpectationId,
             lineageRootId: e.lineageRootId,
             modality: e.modality,

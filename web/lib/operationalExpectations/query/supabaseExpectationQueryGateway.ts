@@ -6,14 +6,17 @@
  * eventually forget. The resolver filters by org again, so a leak would need two
  * independent failures.
  *
- * Subject matching is done on `subject_ref->>id` because that is where the
- * durable business id lives in the authored tuple. Rows are over-fetched on the
- * temporal axis — anything whose valid window could touch the coordinate — and
+ * Subject matching happens in code, through `expectationSubjectRef`, because the
+ * intake stores the tuple's subject ARRAY in `subject_ref` — there is no single
+ * scalar path to filter on, and inventing one (`subject_ref->>id`) matches every
+ * real row against nothing. Rows are over-fetched on the subject and temporal
+ * axes — anything whose valid window could touch the coordinate — and
  * the resolver decides effectivity. Over-fetching costs a few rows; deciding
  * effectivity here would be a second implementation of the ratified fold.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { expectationSubjectRefMatches } from "@/lib/operationalExpectations/query/expectationSubjectRef";
 import type {
     EffectiveExpectationsQuery,
     ExpectationQueryGateway,
@@ -53,11 +56,9 @@ export function createSupabaseExpectationQueryGateway(
             }
 
             const wanted = new Set(ids);
-            return ((data ?? []) as unknown as ExpectationQueryRow[]).filter((row) => {
-                const ref = row.subject_ref;
-                const id = ref == null ? "" : String((ref as Record<string, unknown>).id ?? "");
-                return wanted.has(id);
-            });
+            return ((data ?? []) as unknown as ExpectationQueryRow[]).filter((row) =>
+                expectationSubjectRefMatches(row.subject_ref, wanted),
+            );
         },
     };
 }

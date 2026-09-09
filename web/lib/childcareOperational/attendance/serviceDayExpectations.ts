@@ -33,8 +33,61 @@ import type {
     UnresolvedExpectationLineage,
 } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
 
-/** The purpose Attendance authors under. Ratified in the expectations owner. */
+/** The purpose Attendance authors under. Activated in the expectations owner. */
 export const ATTENDANCE_EXPECTATION_PURPOSE = "attendance.service_day_exception" as const;
+
+/**
+ * The predicate shapes Attendance authors under that purpose. The Condition's
+ * shape is fixed by the Expectation Type; the author supplies parameters.
+ */
+export const SERVICE_DAY_PREDICATES = {
+    /** A child is expected away for the day. Parameter: `reason_key`. */
+    childAway: "child_away",
+    /** A withdrawn or corrected plan: the child IS expected in after all. */
+    childExpectedPresent: "child_expected_present",
+    /** An operating grain is not operating. Parameter: `reason_key`. */
+    grainClosed: "operating_grain_closed",
+    /** A withdrawn closure: the grain is operating after all. */
+    grainOpen: "operating_grain_open",
+} as const;
+
+/**
+ * The purposes whose vocabulary this projection is willing to interpret.
+ *
+ * Deliberately a closed set, and deliberately just ours. A `prohibited`
+ * expectation on a site authored by some other domain, for some other reason,
+ * would otherwise read as "the nursery is closed" and suppress the missing-arrival
+ * signal for every child there — meaning imported from a vocabulary Attendance
+ * does not own. When another domain has a real closure to express, adding its
+ * purpose here is one deliberate, reviewable line.
+ */
+export const INTERPRETED_EXPECTATION_PURPOSES: ReadonlySet<string> = new Set([
+    ATTENDANCE_EXPECTATION_PURPOSE,
+]);
+
+/**
+ * The valid-time window of one service day.
+ *
+ * Authoring and querying MUST agree on this, or an expectation authored for
+ * Friday is effective at no coordinate the roster ever asks about — a bug that
+ * looks exactly like "the feature does nothing". One function, both callers.
+ *
+ * The day is bounded in UTC, matching how the roster already addresses a service
+ * date. Sites in other zones are a known convergence debt, recorded rather than
+ * half-fixed here: a partial timezone correction on one side of this pair would
+ * reintroduce precisely the drift the shared helper exists to prevent.
+ */
+export function serviceDayValidWindow(serviceDate: string): { validFrom: string; validTo: string } {
+    const start = new Date(`${serviceDate}T00:00:00Z`);
+    if (Number.isNaN(start.getTime())) throw new Error(`invalid service date: ${serviceDate}`);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return { validFrom: start.toISOString(), validTo: end.toISOString() };
+}
+
+/** The valid-time coordinate the roster asks about for a service day. */
+export function serviceDayAsOf(serviceDate: string): { validTime: string } {
+    return { validTime: serviceDayValidWindow(serviceDate).validFrom };
+}
 
 /** Subject kinds Attendance authors and reads. */
 export const ATTENDANCE_SUBJECT_KINDS = {
@@ -127,9 +180,33 @@ export function expectationStandingIsConsumable(standing: string): boolean {
     return standing === "proposed" || standing === "binding" || standing === "model";
 }
 
+/**
+ * The operator-facing reason, read from where the frozen grammar actually puts
+ * it: the author supplies PARAMETERS to a fixed predicate shape, so the reason
+ * lives at `condition.params.reason_key`. The top-level spellings are accepted
+ * too — a row hand-authored before the grammar settled should still explain
+ * itself rather than silently lose its reason.
+ */
 function reasonOf(condition: Record<string, unknown>): string | null {
-    const r = condition?.reason_key ?? condition?.reasonKey;
+    const params = condition?.params;
+    const fromParams =
+        params != null && typeof params === "object" && !Array.isArray(params)
+            ? (params as Record<string, unknown>).reason_key ?? (params as Record<string, unknown>).reasonKey
+            : undefined;
+    const r = fromParams ?? condition?.reason_key ?? condition?.reasonKey;
     return typeof r === "string" && r.trim() ? r.trim() : null;
+}
+
+/** Is this expectation written in the vocabulary Attendance owns? */
+function isInterpretablePurpose(condition: Record<string, unknown>): boolean {
+    const typeKey = condition?.typeKey ?? condition?.type_key;
+    return typeof typeKey === "string" && INTERPRETED_EXPECTATION_PURPOSES.has(typeKey);
+}
+
+/** The predicate shape an expectation instantiates, or "" when it names none. */
+function predicateOf(condition: Record<string, unknown>): string {
+    const p = condition?.predicateShape ?? condition?.predicate_shape;
+    return typeof p === "string" ? p : "";
 }
 
 /**
@@ -148,10 +225,23 @@ export function interpretServiceDay(input: {
     effective: readonly EffectiveExpectationForSubject[];
     unresolved?: readonly UnresolvedExpectationLineage[];
 }): ChildServiceDayExpectation[] {
-    const consumable = input.effective.filter((e) => expectationStandingIsConsumable(e.standing));
+    const consumable = input.effective.filter(
+        (e) => expectationStandingIsConsumable(e.standing) && isInterpretablePurpose(e.condition),
+    );
 
-    const closures = consumable.filter((e) => e.modality === CLOSURE_MODALITY);
-    const awayIntents = consumable.filter((e) => e.modality === CHILD_AWAY_MODALITY);
+    /*
+     * Both the modality AND the predicate must match. The modality alone would
+     * read a withdrawal — an `intended` expectation saying the child IS coming —
+     * as another absence, so cancelling a holiday would leave the child marked
+     * away forever. Matching the predicate is what makes a lineage able to say
+     * the opposite of what it first said.
+     */
+    const closures = consumable.filter(
+        (e) => e.modality === CLOSURE_MODALITY && predicateOf(e.condition) === SERVICE_DAY_PREDICATES.grainClosed,
+    );
+    const awayIntents = consumable.filter(
+        (e) => e.modality === CHILD_AWAY_MODALITY && predicateOf(e.condition) === SERVICE_DAY_PREDICATES.childAway,
+    );
 
     const siteClosure = closures.find(
         (e) => e.subjectKind === ATTENDANCE_SUBJECT_KINDS.site && e.subjectId === input.siteLocationId,

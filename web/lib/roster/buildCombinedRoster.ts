@@ -54,6 +54,7 @@ import {
     applyObservedPresence,
     interpretServiceDay,
     raisesMissingArrivalAttention,
+    serviceDayAsOf,
     type ServiceDayState,
 } from "@/lib/childcareOperational/attendance/serviceDayExpectations";
 import { effectiveExpectationsForWindow } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
@@ -314,7 +315,7 @@ export async function buildCombinedRoster(
         })),
     ];
     const serviceDayExpectations = await effectiveExpectationsForWindow(
-        { orgId, subjects: expectationSubjects, asOf: { validTime: `${date}T00:00:00Z` } },
+        { orgId, subjects: expectationSubjects, asOf: serviceDayAsOf(date) },
         createSupabaseExpectationQueryGateway(supabase),
     );
 
