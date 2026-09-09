@@ -1414,14 +1414,24 @@ export function buildCurrentWork(lane, { nowMs = Date.now() } = {}) {
 
 export const OPERATOR_STATE = Object.freeze({
   WORKING: "working",
+  // The gap between the agent's last token and a durable terminal run. Neither
+  // Working (nothing is being produced) nor Ready (the run has not finished
+  // recording), and an operator told Ready here sends the next instruction into
+  // a lane that is still writing its own result.
+  FINALIZING: "finalizing",
   NEEDS_YOU: "needs_you",
+  // Something worth knowing that is not a question: today, a provider busy in a
+  // lane no Execution Run owns.
+  ATTENTION: "attention",
   READY: "ready",
   FAILED: "failed",
 });
 
 export const OPERATOR_STATE_LABEL = Object.freeze({
   working: "Working",
+  finalizing: "Finalizing",
   needs_you: "Needs you",
+  attention: "Attention",
   ready: "Ready",
   failed: "Failed",
 });
@@ -1429,7 +1439,9 @@ export const OPERATOR_STATE_LABEL = Object.freeze({
 /** Presentation tone per operator state. One mapping, used everywhere. */
 export const OPERATOR_STATE_TONE = Object.freeze({
   working: "run",
+  finalizing: "run",
   needs_you: "needs",
+  attention: "needs",
   ready: "",
   failed: "failed",
 });
@@ -1485,6 +1497,16 @@ export function operatorState(work, lane = null) {
   if (awaiting || key === "needs_input" || group === "needs_input") return OPERATOR_STATE.NEEDS_YOU;
 
   if (key === "failed") return OPERATOR_STATE.FAILED;
+
+  // READY MUST MEAN THE RUN IS OVER, NOT THAT THE PANE WENT QUIET.
+  //
+  // These two are checked before the generic live/active rules below, because
+  // both would otherwise be answered by them and both answers would be wrong:
+  // `finalizing` is group "active" and would read Working though nothing is
+  // being produced, and `provider_active` is not live and would read Ready
+  // though a provider is demonstrably busy in that worktree.
+  if (key === "finalizing") return OPERATOR_STATE.FINALIZING;
+  if (key === "provider_active") return OPERATOR_STATE.ATTENTION;
 
   // Working covers every shape of "the machine is getting on with it":
   // executing, validating, recovering, queued for capacity, waiting on a
