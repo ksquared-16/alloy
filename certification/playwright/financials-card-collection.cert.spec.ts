@@ -628,6 +628,103 @@ test.describe("Slice H — collecting money through the mounted Financials card"
     });
 
     /*
+     * SCENARIO C — A PARTIAL COLLECTION, AND THE CEILING.
+     *
+     * Scenario B already collects less than the obligation and proves the residual exactly. What is
+     * left to certify is the other half of the same rule: asking for MORE than is collectible is
+     * refused rather than quietly clamped. A clamp would take a different amount than the operator
+     * authorised and tell nobody.
+     */
+    test("C — an over-request is refused with the ceiling named, never clamped", async ({ page }) => {
+        const reads = watchAccountReads(page);
+        const subject = await subjectWithCollectibleCharge(page, reads);
+
+        const cardVm = await page.request.get(`/api/admin/financials/card?customer_id=${subject.customerId}`);
+        const vm = ((await cardVm.json()) as any).vm ?? {};
+        const payable = (vm.rows ?? []).find((r: any) => r.offersPayment);
+        expect(payable, "the subject must have a payable obligation").toBeTruthy();
+
+        const outstanding = payable.outstandingCents as number;
+
+        const over = await execute(page, {
+            action_key: "payment.collect_card", entity_type: "child", entity_id: CERT_MEMBER,
+            mode: "execute", confirmation: { confirmed: true },
+            payload: { charge_id: payable.chargeId, amount_cents: outstanding + 5_000, charge_label: "over" },
+        });
+
+        expect(over.json.ok, "an over-request must be refused").toBeFalsy();
+        const message = JSON.stringify(over.json);
+        expect(message, "the refusal names what CAN be collected rather than failing blankly").toMatch(
+            /most that can be collected/i,
+        );
+        expect(message, "and never names an account").not.toMatch(/acct_/);
+
+        /*
+         * NOT CLAMPED. A clamp would have SUCCEEDED at a smaller amount — `ok: true` carrying a
+         * different figure than the operator authorised. A refusal cannot be mistaken for one, and
+         * proving it this way needs no new endpoint to count attempts through.
+         */
+        expect(over.json.data?.execution_result, "a refusal must not carry an execution result").toBeFalsy();
+
+        assertStillOnSubject(reads, subject, "scenario C");
+    });
+
+    /*
+     * SCENARIO D — A DECLINED CARD.
+     *
+     * Stripe's own decline, not a synthesised one. The operator must be able to tell a refusal from
+     * a delay, and must never be told money arrived.
+     */
+    test("D2 — a declined card is distinguishable from processing and creates no canonical money", async ({ page }) => {
+        const reads = watchAccountReads(page);
+        const subject = await subjectWithCollectibleCharge(page, reads);
+        const canonicalBalance = async () => {
+            const res = await page.request.get(`/api/admin/financials/card?customer_id=${subject.customerId}`);
+            return ((await res.json()) as any).vm?.reconciliation?.balanceCents ?? null;
+        };
+        const before = await canonicalBalance();
+
+        await openPaymentPanel(page);
+        await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
+        const cents = 1_000 + (Date.now() % 90);
+        await page.locator('[data-financials-payment-amount="true"]').first().fill((cents / 100).toFixed(2));
+        const commit = page.locator('[data-financials-payment-commit="true"]').first();
+        await commit.scrollIntoViewIfNeeded();
+        await commit.click();
+
+        const mount = page.locator('[data-financials-card-mount="true"] iframe').first();
+        await expect(mount, "Stripe's Payment Element must mount").toBeVisible({ timeout: 60_000 });
+        const frame = page.frameLocator('[data-financials-card-mount="true"] iframe').first();
+        const number = frame.locator('input[name="number"]');
+        await expect(number).toBeVisible({ timeout: 60_000 });
+        // Stripe's own generic-decline test card.
+        await number.fill("4000000000000002");
+        await frame.locator('input[name="expiry"]').fill("12" + String(new Date().getFullYear() + 2).slice(2));
+        await frame.locator('input[name="cvc"]').fill("123");
+        const zip = frame.locator('input[name="postalCode"]');
+        if (await zip.count()) await zip.fill("94103").catch(() => undefined);
+
+        const submit = page.locator('[data-financials-card-submit="true"]').first();
+        await expect(submit).toBeEnabled({ timeout: 60_000 });
+        await submit.scrollIntoViewIfNeeded();
+        await submit.click();
+
+        // The refusal is stated, and it is Stripe's own operator-safe sentence.
+        const failedNote = page.locator('[data-financials-card-error="true"], [data-financials-card-failed="true"]');
+        await expect(failedNote.first(), "a declined card must say so").toBeVisible({ timeout: 90_000 });
+        const text = await failedNote.first().innerText();
+        expect(text.length, "the decline explains itself").toBeGreaterThan(8);
+        expect(text, "the operator is never told the payment arrived").not.toMatch(/payment received|\bpaid\b/i);
+        expect(text, "and a decline is not dressed up as processing").not.toMatch(/finalizing|processing/i);
+        expect(text, "no provider identifiers as primary copy").not.toMatch(/acct_|pi_|re_|card_declined/);
+
+        // AND NO MONEY. The provider refused, so Financials has nothing to recognise.
+        expect(await canonicalBalance(), "a declined card moved the canonical balance").toBe(before);
+
+        assertStillOnSubject(reads, subject, "scenario D");
+    });
+
+    /*
      * NO SECOND READ MODEL.
      *
      * `/api/admin/financials/collection-state` reports where a collection has GOT TO. The moment it
