@@ -80,6 +80,16 @@ export type EnrollmentConversationCardProps = {
      */
     readonly onPhaseChange?: (phase: ParticipantObjectiveWire["phase"]) => void;
     /**
+     * The advanced objective, handed up as it advances.
+     *
+     * The host seeds this card with `initialObjective` and then holds that first copy forever, while
+     * the card owns the live one. Two owners, one of them frozen at page load — so anything the host
+     * reads from its copy (the artifact header's progress among them) describes a journey the parent
+     * has already moved past, and any remount of this card re-seeds it from that stale copy and
+     * visibly walks the parent backwards.
+     */
+    readonly onObjectiveAdvanced?: (objective: ParticipantObjectiveWire) => void;
+    /**
      * Whether the host actually has an artifact to render beneath this card.
      *
      * The handoff copy points at the paperwork. Saying "review it" when there is nothing to review
@@ -723,6 +733,7 @@ export function EnrollmentConversationCard({
     initialObjective,
     onArtifactHandoff,
     onPhaseChange,
+    onObjectiveAdvanced,
     artifactRenderable = true,
     onValueSettled,
 }: EnrollmentConversationCardProps) {
@@ -774,12 +785,13 @@ export function EnrollmentConversationCard({
             if (json.ok && json.data) {
                 setObjective(json.data);
                 onPhaseChange?.(json.data.phase);
+                onObjectiveAdvanced?.(json.data);
                 if (json.data.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
             }
         } catch {
             // Left as it was; the parent can attach again or reload.
         }
-    }, [token, onPhaseChange, onArtifactHandoff]);
+    }, [token, onPhaseChange, onArtifactHandoff, onObjectiveAdvanced]);
 
     /** Send one document to the token-scoped route. The server derives everything about it. */
     const uploadEvidence = useCallback(
@@ -970,6 +982,7 @@ export function EnrollmentConversationCard({
                     }
                 }
                 onPhaseChange?.(json.data.objective.phase);
+                onObjectiveAdvanced?.(json.data.objective);
                 if (json.data.objective.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
             } catch {
                 // Roll the optimistic entry back rather than leave a resolved-looking exchange for
@@ -983,7 +996,7 @@ export function EnrollmentConversationCard({
                 setAwaitingTurn(false);
             }
         },
-        [token, onArtifactHandoff, onPhaseChange, onValueSettled, objective],
+        [token, onArtifactHandoff, onPhaseChange, onObjectiveAdvanced, onValueSettled, objective],
     );
 
     const turn = objective.next_turn;
@@ -1386,11 +1399,26 @@ export function EnrollmentConversationCard({
             progress={progress ? <ConversationProgress label={progress.label} percent={progress.percent} /> : null}
             thread={
                 <>
-                    {/* Alloy's opening line, spoken once and then left in the transcript above. */}
-                    {intro && settled.length === 0 ? (
+                    {/*
+                      * Alloy's opening line, spoken once and then LEFT in the transcript above.
+                      *
+                      * It used to be dropped the moment the first fact settled — `settled.length === 0`
+                      * — which contradicted the sentence directly above it and, more to the point, was
+                      * half of why saving a correction felt abrupt. Measured on the live surface: the
+                      * intro vanished ~300ms after Save while the answer was still committing, the
+                      * transcript stood alone and the content shrank, and only ~700ms later did the
+                      * settled-details card arrive. Two separate reflows for one action, the first of
+                      * them a removal — so the surface appeared to come apart before it advanced.
+                      *
+                      * Keeping it costs one line of transcript and removes the first reflow entirely:
+                      * what the parent already read stays where they read it, and the save adds to the
+                      * surface rather than rebuilding it. It recedes to `history` once anything is
+                      * settled, which is the same depth every other past turn uses.
+                      */}
+                    {intro ? (
                         // The opening line and the first question are both Alloy — one eyebrow.
-                        <ThreadTurn who="alloy" depth="recent" showSpeaker={false}>
-                            <ThreadSaid who="alloy" depth="recent">{intro}</ThreadSaid>
+                        <ThreadTurn who="alloy" depth={settled.length === 0 ? "recent" : "history"} showSpeaker={false}>
+                            <ThreadSaid who="alloy" depth={settled.length === 0 ? "recent" : "history"}>{intro}</ThreadSaid>
                         </ThreadTurn>
                     ) : null}
 

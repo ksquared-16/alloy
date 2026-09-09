@@ -1229,6 +1229,25 @@ export function FormEmbedClient({
                         token={token}
                         initialObjective={enrollmentObjective}
                         onPhaseChange={setEnrollmentPhase}
+                        /*
+                         * ONE OWNER OF THE OBJECTIVE, kept current.
+                         *
+                         * This host fetched the objective once and handed it down as a seed; the
+                         * card advanced its own copy from there. So the host's copy froze at page
+                         * load while the parent moved on — and the host still reads it for the
+                         * artifact header's progress, and re-seeds the card from it on any remount.
+                         *
+                         * Kelly saw the consequence during Round 2: the surface jumped back to the
+                         * first question after a save. Reproduced here — a source edit remounts the
+                         * card via Fast Refresh, it re-seeds from the frozen copy, and the parent is
+                         * walked back to a question they had already answered. No page reload was
+                         * involved; the load counter never moved.
+                         *
+                         * That trigger is development-only, and there is no production path back
+                         * into the conversation once it hands off. The stale copy is not
+                         * development-only, so it is fixed rather than explained away.
+                         */
+                        onObjectiveAdvanced={setEnrollmentObjective}
                         artifactRenderable={artifactRenderable}
                         onValueSettled={(fieldIds, value) => {
                             // Merge into the rendered artifact immediately. The session already
