@@ -12,6 +12,7 @@
  * separately from creation — so this is HERMETIC CONVERGENCE evidence over a real provider model,
  * and it is not claimed as real Stripe proof.
  */
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
@@ -21,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { readChargeBalance, recordAndApplyChildcarePayment } from "@/lib/financials/childcarePaymentService";
 import { recognizeProviderDispute } from "@/lib/financials/payments/providerDispute";
+import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     try {
@@ -35,7 +37,19 @@ function certEnv(): { url: string; serviceKey: string } | null {
     }
 }
 
+function readTrusted(key: string): string | null {
+    if (process.env[key]) return process.env[key] as string;
+    try {
+        const f = resolve(homedir(), ".local/state/alloy-dev/gateway/vacilando/trusted-secrets/stripe-test.env");
+        const line = readFileSync(f, "utf8").split("\n").find((l) => l.startsWith(`${key}=`));
+        return line?.slice(key.length + 1).trim() || null;
+    } catch {
+        return null;
+    }
+}
+
 const env = certEnv();
+const whsec = readTrusted("STRIPE_WEBHOOK_SECRET");
 const ORG = "00000000-0000-4000-8000-000000000001";
 const AGREEMENT = "fc500000-0000-4000-8000-0000000a0001";
 const CHILD = "fc500000-0000-4000-8000-0000000c0002";
@@ -46,6 +60,37 @@ const supabase: SupabaseClient | null = env
     ? createClient(env.url, env.serviceKey, { auth: { persistSession: false } })
     : null;
 const describeLive = env ? describe : describe.skip;
+const describeWebhook = env && whsec ? describe : describe.skip;
+
+function signed(body: string): string {
+    const t = Math.floor(Date.now() / 1000);
+    return `t=${t},v1=${createHmac("sha256", whsec!).update(`${t}.${body}`).digest("hex")}`;
+}
+
+/** A dispute event in the shape the governed test merchant actually produced. */
+function disputeEvent(
+    type: string,
+    disputeId: string,
+    opts: { amount?: number; pi?: string | null; account?: string; id?: string; status?: string } = {},
+): string {
+    return JSON.stringify({
+        id: opts.id ?? `evt_8c_${Math.random().toString(36).slice(2)}`,
+        type,
+        created: Math.floor(Date.now() / 1000),
+        account: opts.account ?? "acct_certification_8c",
+        data: {
+            object: {
+                id: disputeId,
+                object: "dispute",
+                amount: opts.amount ?? 1_000,
+                currency: "usd",
+                reason: "debit_not_authorized",
+                status: opts.status ?? "lost",
+                payment_intent: opts.pi ?? null,
+            },
+        },
+    });
+}
 
 const charges: string[] = [];
 const disputes: string[] = [];
@@ -228,5 +273,103 @@ describeLive("Thread 8C — provider-initiated reversal", () => {
         const converged = await recognizeProviderDispute(client, ev);
         expect(converged.recognized, JSON.stringify(converged)).toBe(true);
         expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(afterPayment + 2_000);
+    });
+});
+
+/**
+ * HERMETIC CONVERGENCE EVIDENCE — not real Stripe proof.
+ *
+ * The dispute SHAPE is the one the governed merchant produced, but duplicate, concurrent and
+ * deliberately out-of-order deliveries cannot be ordered from a bank. Signatures are genuine, so
+ * the verification boundary is exercised for real; the ORDERING is manufactured, and this suite is
+ * labelled as such rather than counted as provider proof.
+ */
+describeWebhook("Thread 8C — dispute convergence through the real webhook", () => {
+    /*
+     * The org's OWN bound merchant, read rather than invented: one active merchant per
+     * org+processor is a unique index, so a second one cannot exist — and tenancy resolving through
+     * the real binding is the property under test anyway.
+     */
+    let account = "";
+    let createdMerchant = false;
+
+    beforeAll(async () => {
+        const { data } = await supabase!
+            .from("payment_provider_merchants")
+            .select("provider_account_ref")
+            .eq("org_id", ORG).eq("processor", "stripe").eq("is_active", true)
+            .maybeSingle();
+        account = (data as { provider_account_ref: string } | null)?.provider_account_ref ?? "";
+        if (!account) {
+            // Self-sufficient: sibling suites delete the org's merchant in their own teardown, and a
+            // suite that depends on another one having run is not a proof.
+            account = `acct_8c_dispute_${Date.now()}`;
+            await supabase!.from("payment_provider_merchants").insert({
+                org_id: ORG, processor: "stripe", provider_account_ref: account,
+                readiness: "ready", readiness_checked_at: new Date().toISOString(),
+                is_active: true, created_by: ACTOR, updated_by: ACTOR,
+            });
+            createdMerchant = true;
+        }
+    });
+
+    afterAll(async () => {
+        if (createdMerchant) {
+            await supabase!.from("payment_provider_merchants").delete().eq("provider_account_ref", account);
+        }
+    });
+
+    it("refuses an unsigned or forged dispute event before reading it", async () => {
+        const body = disputeEvent("charge.dispute.funds_withdrawn", `du_8c_forged_${Date.now()}`, { account });
+        const unsigned = await handleStripeWebhook(supabase!, body, null, whsec!);
+        expect(unsigned.outcome).toBe("rejected");
+        const forged = await handleStripeWebhook(supabase!, body, "t=1,v1=deadbeef", whsec!);
+        expect(forged.outcome).toBe("rejected");
+    });
+
+    it("keeps a raised dispute as evidence and moves no money", async () => {
+        const du = `du_8c_raised_${Date.now()}`;
+        disputes.push(du);
+        const body = disputeEvent("charge.dispute.created", du, { account, status: "needs_response" });
+        const res = await handleStripeWebhook(supabase!, body, signed(body), whsec!);
+        expect(res.outcome, res.detail).toBe("observed");
+        const { data } = await supabase!.from("payment_provider_disputes").select("id, canonical_reversal_payment_id").eq("provider_dispute_id", du).single();
+        expect((data as Record<string, unknown>).canonical_reversal_payment_id, "raising takes no money").toBeNull();
+    });
+
+    it("three events for one dispute produce exactly one canonical reversal", async () => {
+        const client = supabase!;
+        const chargeId = await postCharge(client, 40_000);
+        const original = await receipt(client, chargeId, 3_000);
+        const afterPayment = (await readChargeBalance(client, ORG, chargeId)).outstandingCents;
+
+        const du = `du_8c_conv_${Date.now()}`;
+        disputes.push(du);
+        // created → evidence only
+        const created = disputeEvent("charge.dispute.created", du, { account, amount: 3_000, status: "needs_response" });
+        expect((await handleStripeWebhook(client, created, signed(created), whsec!)).outcome).toBe("observed");
+        await client.from("payment_provider_disputes").update({ original_payment_id: original }).eq("provider_dispute_id", du);
+
+        // funds_withdrawn → the money actually leaves, exactly once
+        const withdrawn = disputeEvent("charge.dispute.funds_withdrawn", du, { account, amount: 3_000 });
+        expect((await handleStripeWebhook(client, withdrawn, signed(withdrawn), whsec!)).outcome).toBe("applied");
+
+        // a DIFFERENT event id for the same dispute, plus closed — evidence, never a second reversal
+        const again = disputeEvent("charge.dispute.funds_withdrawn", du, { account, amount: 3_000 });
+        expect((await handleStripeWebhook(client, again, signed(again), whsec!)).outcome).toBe("duplicate");
+        const closed = disputeEvent("charge.dispute.closed", du, { account, amount: 3_000 });
+        expect((await handleStripeWebhook(client, closed, signed(closed), whsec!)).outcome).toBe("duplicate");
+
+        const { data: reversals } = await client.from("payments").select("id, reversal_origin").eq("refunds_payment_id", original);
+        expect((reversals ?? []).length, "one dispute, one reversal").toBe(1);
+        expect((reversals as Array<Record<string, unknown>>)[0].reversal_origin).toBe("provider");
+        expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(afterPayment + 3_000);
+    });
+
+    it("fails closed for a connected account bound to no organization", async () => {
+        const du = `du_8c_unknown_${Date.now()}`;
+        const body = disputeEvent("charge.dispute.funds_withdrawn", du, { account: "acct_never_seen_8c" });
+        const res = await handleStripeWebhook(supabase!, body, signed(body), whsec!);
+        expect(res.outcome).toBe("unattributed");
     });
 });
