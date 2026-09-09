@@ -315,6 +315,21 @@ test.describe("financials workspace, in the mounted application", () => {
         const res = await page.request.get("/api/admin/financials/work-queue");
         const text = await res.text();
         expect(res.status(), text).toBe(403);
-        expect(text, "the refusal names the permission").toMatch(/fin\.read/i);
+
+        /*
+         * THE REFUSAL IS SERVER-SIDE, AND IT DOES NOT TEACH THE OPERATOR OUR RBAC VOCABULARY.
+         *
+         * The body used to be asserted for `fin.read`, which is how the permission key ended up
+         * being the sentence a director read. The key is still the truth of the check, so it stays
+         * checkable — in `required_permission`, a diagnostic field the workspace never renders —
+         * while `error` is the copy a person is actually shown. Asserting BOTH is what keeps the
+         * two from collapsing back into one string.
+         */
+        const body = JSON.parse(text) as { error?: string; required_permission?: string };
+        expect(body.required_permission, "the key stays available to diagnostics").toBe("fin.read");
+        expect(body.error ?? "", "operator copy must not contain a grant key").not.toMatch(/fin\.read/i);
+        expect(body.error ?? "", "operator copy explains access, in business language").toMatch(
+            /don't have access/i,
+        );
     });
 });

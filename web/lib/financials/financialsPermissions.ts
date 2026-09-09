@@ -23,6 +23,22 @@ import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants
 
 export const FINANCIALS_READ_PERMISSION_KEY = "fin.read" as const;
 
+/*
+ * WHAT A DENIED OPERATOR IS ACTUALLY TOLD.
+ *
+ * The refusal used to read "Viewing financial work requires fin.read." — the permission key, in
+ * the primary surface, to a person who cannot act on it. A grant key is a fact about our RBAC
+ * table, not an answer to "why can't I see this": it tells the operator nothing they can do, and
+ * quietly teaches the vocabulary of an internal system to everyone who is refused.
+ *
+ * The key is still the truth of the check and still worth having when something is wrong, so it
+ * stays on the verdict as `requiredPermission` for diagnostics, logging and tests. It is simply
+ * no longer the sentence a director reads.
+ */
+export const FINANCIALS_READ_DENIED_MESSAGE =
+    "You don't have access to view financial information for this organization. "
+    + "Contact an administrator to request access.";
+
 /**
  * Enforces `fin.read` for a financial read surface. Returns a verdict rather than throwing, so the
  * caller decides the response shape — and a caller that ignores the verdict fails the table's own
@@ -35,8 +51,12 @@ export async function assertFinancialsReadAllowed(params: {
     supabase: SupabaseClient;
     orgId: string;
     userId: string | null | undefined;
-}): Promise<{ ok: true } | { ok: false; message: string }> {
+}): Promise<{ ok: true } | { ok: false; message: string; requiredPermission: string }> {
     const grants = await resolveActorPermissionGrants(params.supabase, params.orgId, params.userId ?? null);
     if ((grants.permissionKeys ?? []).includes(FINANCIALS_READ_PERMISSION_KEY)) return { ok: true };
-    return { ok: false, message: `Viewing financial work requires ${FINANCIALS_READ_PERMISSION_KEY}.` };
+    return {
+        ok: false,
+        message: FINANCIALS_READ_DENIED_MESSAGE,
+        requiredPermission: FINANCIALS_READ_PERMISSION_KEY,
+    };
 }
