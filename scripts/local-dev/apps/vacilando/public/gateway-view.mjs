@@ -1231,6 +1231,41 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
     return { key: "complete", label: "Complete", group: "completed", tone: "complete", mark: "✓", hint: "Complete", headline: "Complete", live: false, stale: false };
   }
   if (!run && prev?.state === "COMPLETE") {
+    // ── A COMPLETED RUN IS NOT AUTOMATICALLY A FINISHED ONE ──────────────────
+    //
+    // Measured across 104 terminal runs on this host: `completion_report
+    // .report_id` is present for exactly the 82 that also carry a durable
+    // `agent_report.message`, and absent for exactly the 22 that do not — 82
+    // both, 22 neither, zero mixed. So report_id is an exact predicate for "an
+    // account of this turn survives", and nothing downstream was asking it.
+    //
+    // Eight of those 22 are state COMPLETE: the run says it succeeded and there
+    // is no summary anywhere. They are closed by the system rather than by the
+    // agent — Send superseding the previous turn, the stale reaper, an
+    // unanswerable input gate — so the agent never filed. Rendering that as
+    // plain Ready is how a completed turn silently loses its account.
+    //
+    // It is NOT repaired by inventing prose. The run is reported as what it is.
+    if (!prev?.completion_report?.report_id) {
+      return {
+        key: "completion_unreported", label: "Completed · no summary", group: "attention", tone: "needs", mark: "!",
+        hint: "The run closed without a filed summary",
+        headline: "Completed · no summary filed",
+        live: false, stale: false,
+        source: "terminal_without_account",
+      };
+    }
+    // Completed WITH an account the operator has not opened. Attention, but not
+    // an obligation: nobody is being asked anything.
+    if (laneUnseenCount(lane) > 0) {
+      return {
+        key: "completed_unread", label: "New", group: "completed", tone: "complete", mark: "●",
+        hint: `${who} finished · unread`,
+        headline: "New · completed output unread",
+        live: false, stale: false,
+        source: "completion_unseen",
+      };
+    }
     return { key: liveAgent ? "ready" : "idle", label: liveAgent ? "Ready" : "Idle", group: "idle", tone: "", mark: liveAgent ? "●" : "○", hint: liveAgent ? `${who} ready` : "Idle", headline: liveAgent ? "Ready" : "Idle", live: false, stale: false };
   }
   if (lane?.runtime === "offline" && !run && !liveAgent) {

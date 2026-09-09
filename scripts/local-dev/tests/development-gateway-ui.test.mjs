@@ -2157,7 +2157,11 @@ await test("canonical work state maps live execution to Working and stale heartb
   const idle = canonicalLaneWorkState({
     lane_id: "lane_idleidleidle",
     durable: true,
-    previous_run: { state: "COMPLETE" },
+    // report_id is what says an account of that turn survives. The fixture is
+    // about idleness, so it describes a normally-accounted completion; a
+    // previous_run WITHOUT one is now its own state and is covered in
+    // development-operator-state-truth.
+    previous_run: { state: "COMPLETE", completion_report: { report_id: "rep_fixture" } },
   }, { nowMs: now });
   assert.equal(idle.label, "Idle");
   const thinking = canonicalLaneWorkState({
