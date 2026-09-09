@@ -39,8 +39,9 @@ export interface ManualFieldInput {
 export interface SectionDispositionInput {
     title: string;
     disposition: SectionDisposition;
-    /** Preserved instructional/consent/signature prose. When absent for a non-"fields" disposition, it
-     * is derived from the section's field labels so meaningful text is never silently dropped. */
+    /** Preserved instructional/consent/signature prose. When absent for a disposition that DROPS its
+     * detected fields, it is derived from those field labels so meaningful text is never silently
+     * dropped — see `sectionKeepsDetectedFields`. */
     static_text?: string;
 }
 
