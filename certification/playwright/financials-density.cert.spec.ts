@@ -560,6 +560,41 @@ test.describe("financials 4B — the workspace has a financial day in it", () =>
         const count = await tiles.count();
         expect(count, "Studio keeps its six chapters").toBeGreaterThanOrEqual(6);
 
+        /*
+         * NAMED, NOT COUNTED. Six tiles is satisfied by six of anything; the claim is that these
+         * six chapters of the financial day are each reachable. A chapter that quietly disappears
+         * takes its configuration with it and leaves a Studio that still counts to six.
+         */
+        const CHAPTERS = ["tuition", "catalog", "policies", "accounting", "simulator", "funding"] as const;
+        const present = await tiles.evaluateAll((els) =>
+            els.map((el) => el.getAttribute("data-financials-studio-tile")),
+        );
+        for (const chapter of CHAPTERS) {
+            expect(present, `Studio is missing its ${chapter} chapter`).toContain(chapter);
+        }
+
+        /*
+         * AND EACH SAYS WHAT KIND OF DESTINATION IT IS. Funding is the one that matters: it is
+         * owned by Processing, not by Financials config, and a card that deep-links there without
+         * saying so teaches an operator that Financials owns who-pays. Every tile carries a
+         * posture label, so "owned elsewhere" is disclosed rather than implied by the href.
+         */
+        for (const chapter of CHAPTERS) {
+            const tile = page.locator(`[data-financials-studio-tile="${chapter}"]`);
+            const text = (await tile.innerText()).trim();
+            expect(text.length, `the ${chapter} card renders nothing`).toBeGreaterThan(0);
+            expect(
+                text,
+                `the ${chapter} card does not declare what kind of destination it is`,
+            ).toMatch(/Configuration|Utility|Owned elsewhere/);
+        }
+
+        // Funding is the case the disclosure exists for: Processing owns who-pays, not Financials.
+        expect(
+            (await page.locator('[data-financials-studio-tile="funding"]').innerText()),
+            "the funding card must say it is owned elsewhere rather than imply Financials configures it",
+        ).toContain("Owned elsewhere");
+
         for (let i = 0; i < count; i += 1) {
             const tile = tiles.nth(i);
             const id = await tile.getAttribute("data-financials-studio-tile");
