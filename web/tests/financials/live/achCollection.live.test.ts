@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
 import { collectionLifecycle, lifecycleLabel } from "@/lib/financials/payments/collectionLifecycle";
+import { postProviderConfirmedCollection } from "@/lib/financials/payments/canonicalPosting";
 import { achReadinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 
 function readTrusted(key: string): string | null {
@@ -220,6 +221,49 @@ describeLive("Thread 8C — ACH collection", () => {
         const a = attempt as Record<string, unknown>;
         expect(a.rail, "the attempt records the rail it asked on").toBe("ach");
         expect(a.canonical_payment_id, "nothing is recognised yet").toBeNull();
+    });
+
+    it("recognises a settled bank debit as a BANK receipt, not a card one", async () => {
+        const client = supabase!;
+
+        /*
+         * The defect this pins, found by mounted certification: a real ACH collection settled, was
+         * recognised correctly, and landed in `payments` with `payment_method = 'card'` — because
+         * the posting seam hardcoded the rail back when card was the only one. Everything upstream
+         * was right; the attempt said `ach` and the intent said `us_bank_account`. Only the receipt
+         * lied, and the receipt is the row an operator reconciles against a bank statement.
+         */
+        const chargeId = await postCharge(client, 60_000);
+        const created = await createCardCollection(client, {
+            orgId: ORG, chargeId, requestedAmountCents: 5_100, rail: "ach", actorUserId: ACTOR,
+        });
+        expect(created.ok, JSON.stringify(created)).toBe(true);
+        const attemptId = (created as { attemptId: string }).attemptId;
+
+        // Stand the attempt where a settled debit stands. The rail, amount and intent are the real
+        // ones this test just created; only the provider's eventual verdict is supplied here, which
+        // is why this is DB-application evidence and not a claim about Stripe.
+        await client.from("payment_collection_attempts")
+            .update({ processor_state: "succeeded" }).eq("id", attemptId);
+        const { data: row } = await client.from("payment_collection_attempts")
+            .select("id, org_id, charge_id, currency, requested_amount_cents, payer_person_id, "
+                + "provider_transaction_id, processor_state, canonical_payment_id, rail")
+            .eq("id", attemptId).single();
+
+        const posted = await postProviderConfirmedCollection(
+            client,
+            row as unknown as Parameters<typeof postProviderConfirmedCollection>[1],
+            { amountCents: 5_100, currency: "USD" },
+        );
+        expect(posted.posted, JSON.stringify(posted)).toBe(true);
+
+        const { data: receipt } = await client.from("payments")
+            .select("payment_method, processor, amount_cents")
+            .eq("id", (posted as { paymentId: string }).paymentId).single();
+        const r = receipt as Record<string, unknown>;
+        expect(r.payment_method, "money that came down the bank rail is a bank receipt").toBe("ach");
+        expect(r.processor, "and the processor is still who executed it").toBe("stripe");
+        expect(r.amount_cents).toBe(5_100);
     });
 
     it("asks for the same bank collection twice and gets one intent", async () => {

@@ -258,6 +258,27 @@ export type FinancialsCardVM = {
      */
     achAvailable: boolean;
     /**
+     * Collections the provider has not finished, as the DATABASE holds them.
+     *
+     * An in-flight card collection lasts seconds and lived happily in component state. A bank debit
+     * lasts days: the operator closes the tab, comes back tomorrow, and must still be told the money
+     * is on its way. Lifecycle that exists only in React disappears on reload and takes the truth
+     * with it, so the open attempts travel on the view model and the surface reads them.
+     *
+     * Recognised collections are absent on purpose — once Thread 8 has the receipt, the payment
+     * history is the truth and an attempt is just how it got there.
+     */
+    openCollections: Array<{
+        attemptId: string;
+        rail: string;
+        processorState: string;
+        providerActionType: string | null;
+        chargeId: string | null;
+        amountCents: number;
+        currencyCode: string;
+        updatedAt: string | null;
+    }>;
+    /**
      * WHO is responsible for this account, from the canonical `payer` contact role.
      *
      * `share` is deliberately nullable and is null today for every payer. Alloy has a payer ROLE
@@ -364,6 +385,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         unavailable: [],
         paymentSetup: null,
         achAvailable: false,
+        openCollections: [],
         unavailableReason: null,
     };
 }
@@ -1078,6 +1100,33 @@ export async function buildFinancialsCardVM(
         .eq("is_active", true)
         .maybeSingle();
     vm.achAvailable = (merchantRow as { ach_readiness: string | null } | null)?.ach_readiness === "ready";
+
+    /*
+     * The collections still in flight for the charges this card is about. Scoped to those charges so
+     * a household's card never reports another household's attempt, and limited to states the
+     * provider has not finished — a recognised attempt has become a payment and is read there.
+     */
+    const chargeIds = vm.rows.map((r) => r.chargeId).filter(Boolean);
+    if (chargeIds.length) {
+        const { data: attemptRows } = await supabase
+            .from("payment_collection_attempts")
+            .select("id, rail, processor_state, provider_action_type, charge_id, requested_amount_cents, currency, updated_at, canonical_payment_id")
+            .eq("org_id", args.orgId)
+            .in("charge_id", chargeIds)
+            .is("canonical_payment_id", null)
+            .in("processor_state", ["initiated", "requires_payment_method", "requires_action", "processing", "succeeded"])
+            .order("updated_at", { ascending: false });
+        vm.openCollections = ((attemptRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            attemptId: t(r.id),
+            rail: t(r.rail) || "card",
+            processorState: t(r.processor_state),
+            providerActionType: t(r.provider_action_type) || null,
+            chargeId: t(r.charge_id) || null,
+            amountCents: Number(r.requested_amount_cents) || 0,
+            currencyCode: t(r.currency) || "USD",
+            updatedAt: t(r.updated_at) || null,
+        }));
+    }
 
     return vm;
 }

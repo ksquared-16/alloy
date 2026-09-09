@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import {
+    collectionLifecycle,
+    lifecycleLabel,
+    type CollectionRail,
+} from "@/lib/financials/payments/collectionLifecycle";
 import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
@@ -782,6 +787,43 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     <p className="alloy-os-financials__note" data-financials-payment="state">
                         {vm.paymentSetup}
                     </p>
+                ) : null}
+
+                {/*
+                    WHAT IS STILL ON ITS WAY, read from the DATABASE.
+
+                    A card collection lasts seconds and could live happily in component state. A bank
+                    debit lasts days — the operator closes the tab and comes back tomorrow — so an
+                    in-flight collection is read from the view model and survives a reload. The words
+                    come from the shared lifecycle module, so nothing here can invent a state that
+                    means money.
+                */}
+                {vm.openCollections.length ? (
+                    <ul className="alloy-os-financials__payments" data-financials-collections="true">
+                        {vm.openCollections.map((c) => {
+                            const rail = (c.rail === "ach" ? "ach" : "card") as CollectionRail;
+                            const state = collectionLifecycle({
+                                rail,
+                                processorState: c.processorState,
+                                providerActionType: c.providerActionType,
+                                canonicallyRecognized: false,
+                            });
+                            return (
+                                <li
+                                    key={c.attemptId}
+                                    className="alloy-os-financials__payment"
+                                    data-financials-collection={c.attemptId}
+                                    data-financials-collection-rail={c.rail}
+                                    data-financials-collection-state={state}
+                                >
+                                    <span>{money(c.amountCents, c.currencyCode)}</span>
+                                    <span className="alloy-os-financials__note">
+                                        {lifecycleLabel(state, rail)}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
                 ) : null}
 
                 {/*

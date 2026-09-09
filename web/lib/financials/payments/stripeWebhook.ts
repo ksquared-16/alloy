@@ -357,7 +357,7 @@ export async function handleStripeWebhook(
         .from("payment_collection_attempts")
         .select(
             "id, org_id, processor_state, provider_account_ref, charge_id, currency, "
-            + "requested_amount_cents, payer_person_id, provider_transaction_id, canonical_payment_id",
+            + "requested_amount_cents, payer_person_id, provider_transaction_id, canonical_payment_id, rail",
         )
         .eq("org_id", orgId)
         .eq("processor", "stripe")

@@ -41,7 +41,24 @@ export type AttemptForPosting = {
     provider_transaction_id: string | null;
     processor_state: string;
     canonical_payment_id: string | null;
+    /**
+     * Which rail the money actually came down. Nullable because every attempt written before
+     * Thread 8C predates the column, and all of those were card — the only rail that existed.
+     */
+    rail: string | null;
 };
+
+/**
+ * The rail, in Thread 8's payment-method vocabulary.
+ *
+ * The two vocabularies happen to agree today (`card` → `card`, `ach` → `ach`), and the mapping is
+ * written out anyway: they are owned by different threads and are free to diverge, and an implicit
+ * pass-through would turn that divergence into a wrong receipt rather than a type error. An
+ * unrecognised or absent rail falls back to `card`, which is what every pre-8C attempt is.
+ */
+function railPaymentMethod(rail: string | null): "card" | "ach" {
+    return rail === "ach" ? "ach" : "card";
+}
 
 /** The Thread 8 idempotency key for one collection. Derived, stable, and never a delivery id. */
 export function postingIdempotencyKey(attemptId: string): string {
@@ -99,7 +116,12 @@ export async function postProviderConfirmedCollection(
             amountCents: attempt.requested_amount_cents,
             // The rail is how value was tendered; the processor is who executed it. Both are recorded,
             // and neither is the other.
-            paymentMethod: "card",
+            //
+            // This read `"card"` until Thread 8C, which was true while card was the only rail and
+            // silently wrong the moment a bank debit settled: certification found a receipt for a
+            // real ACH collection filed as a card payment. The receipt is what an operator reconciles
+            // against a bank statement, so the rail has to survive recognition, not just authorisation.
+            paymentMethod: railPaymentMethod(attempt.rail),
             processor: "stripe",
             processorTransactionId: attempt.provider_transaction_id,
             /*
