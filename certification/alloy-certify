@@ -227,6 +227,44 @@ cmd_seed() {
     cert_psql_f "$db" "$CERT_DIR/inbound-sms-binding.sql" \
         || die "inbound SMS binding provisioning failed"
     green "Inbound SMS destination provisioned (${CERT_INBOUND_TO_E164})"
+
+    cmd_domain_fixtures "$db"
+}
+
+# ------------------------------------------------------------- domain fixtures
+#
+# A COMMITTED FIXTURE THAT IS NEVER APPLIED IS AN EMPTY TENANT.
+#
+# THE DEFECT. `certification/attendance/01-attendance-fixture.sql` exists precisely
+# because its contents were once seeded by hand and vanished whenever the stack was
+# reset — its own header says so. The file was committed; nothing ever ran it. So
+# `up` reported a healthy seeded tenant, the Attendance surface correctly rendered a
+# day with no expected children, and every Attendance browser spec failed on
+# toBeVisible against elements that had no data to exist for.
+#
+# It failed the same way the lsof defect failed: a missing input read as an empty
+# ANSWER rather than as a missing INPUT. The A/B is unambiguous — same commit, same
+# specs, same session: without these fixtures 4 of 7 fail after 13.7 MINUTES of
+# element timeouts; with them 7 of 7 pass in 22 SECONDS.
+#
+# Order is load-bearing. The attendance fixture names the search fixture as its
+# prerequisite (the Smith household, Emma, and the M/W/F schedule pattern it
+# reuses), so search runs first. Both are upsert-shaped and safe to re-run.
+#
+# A fixture that fails is fatal: proceeding would certify against a tenant that
+# cannot express the scenarios, which is the failure this function exists to remove.
+cmd_domain_fixtures() {
+    local db="$1"
+    local fixture
+    for fixture in \
+        "$CERT_DIR/search-platform/01-search-certification-fixtures.sql" \
+        "$CERT_DIR/attendance/01-attendance-fixture.sql"
+    do
+        [ -f "$fixture" ] || continue
+        cert_psql_f "$db" "$fixture" \
+            || die "domain fixture failed: $(basename "$fixture")"
+    done
+    green "Domain fixtures applied (search platform, attendance)"
 }
 
 # ----------------------------------------------------------- inbound webhook
