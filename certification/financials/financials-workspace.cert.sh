@@ -173,6 +173,20 @@ SQL
        "$PW" test -c playwright.config.ts playwright/financials-workspace.cert.spec.ts --workers=1 --reporter=line )
   check $? "navigation, shell, money overview, sections, Studio, bulk preview, queue, Thread 2 detail, posting, reload"
 
+  #
+  # ── THE DENSITY PROOF ────────────────────────────────────────────────────────────────────────
+  #
+  # The suite above proves STRUCTURE and passes against an empty Financials. This one proves the
+  # workspace has a financial day in it, and is written to FAIL against the empty tenant the old
+  # screenshots showed. Both are kept: structure catches architectural regressions, density catches
+  # the product quietly becoming six white canvases again.
+  echo
+  echo "── the product, with money in it"
+  ( cd "$ROOT/certification" \
+    && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" \
+       "$PW" test -c playwright.config.ts playwright/financials-density.cert.spec.ts --workers=1 --reporter=line )
+  check $? "populated Overview, Accounts, Charges, Payments, Subsidy, Activity, Studio, site narrowing, cold reload"
+
   echo "── the shared chrome, in every workspace that wears it"
   ( cd "$ROOT/certification" \
     && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" \
@@ -187,8 +201,8 @@ SQL
   ( cd "$ROOT/certification" \
     && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" CERT_EXPECT_UNAUTHORIZED=1 \
        CERT_WS_CUSTOMER="$CUSTOMER" CERT_WS_MEMBER="$MEMBER" \
-       "$PW" test -c playwright.config.ts playwright/financials-workspace.cert.spec.ts \
-       -g "without the grant" --workers=1 --reporter=line )
+       "$PW" test -c playwright.config.ts playwright/financials-workspace.cert.spec.ts playwright/financials-density.cert.spec.ts \
+       -g "without the grant|in business language" --workers=1 --reporter=line )
   unauthorized=$?
   pg -q -c "update public.role_permission_grants set allowed = true where permission_key = 'fin.read'"
   check $unauthorized "handing over financial work is refused server-side without fin.read"

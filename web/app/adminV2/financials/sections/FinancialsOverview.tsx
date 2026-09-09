@@ -155,9 +155,30 @@ export default function FinancialsOverview({
                             >
                                 <div className="min-w-0">
                                     <p className="truncate text-sm text-alloy-midnight">
-                                        <span className="font-semibold tabular-nums">{metric?.formatted_value ?? "—"}</span>
-                                        {" · "}
-                                        {metric?.label ?? "—"}
+                                        {/*
+                                          * PENDING IS NOT THE SAME ANSWER AS NONE.
+                                          *
+                                          * These rows rendered "— · —" while the metric pack was in
+                                          * flight, which reads as "there is nothing here" at exactly
+                                          * the moment the truth is "we do not know yet". The KPI
+                                          * tiles above already reserve their geometry and stay quiet;
+                                          * this does the same instead of asserting an empty figure.
+                                          */}
+                                        {metrics.loading && !metric ? (
+                                            <span
+                                                aria-hidden
+                                                data-settlement-reserved="exception"
+                                                className="inline-block h-[14px] w-24 rounded bg-alloy-midnight/[0.06] align-middle"
+                                            />
+                                        ) : (
+                                            <>
+                                                <span className="font-semibold tabular-nums">
+                                                    {metric?.formatted_value ?? "—"}
+                                                </span>
+                                                {" · "}
+                                                {metric?.label ?? "—"}
+                                            </>
+                                        )}
                                     </p>
                                     <p className="mt-0.5 text-xs text-alloy-midnight/55">{why}</p>
                                 </div>
