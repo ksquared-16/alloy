@@ -320,3 +320,61 @@ export function deleteRemoteBranch(inputs = {}, { gh = defaultGh } = {}) {
     dependents_at_deletion: before.dependent_pull_requests || [],
   };
 }
+
+/**
+ * MAY THIS MERGE BECOME EFFECTIVE ON THE DEPLOYED PRIMARY?
+ *
+ * Merging into staging is where application code becomes everyone else's
+ * problem, and it is the narrowest boundary this system actually owns: Vercel
+ * deploys from the branch, so gating the merge gates effectiveness. Nothing
+ * else in the repository applies migrations — no workflow runs `supabase db
+ * push`, `prebuild` is verifications, `build` is `next build`, and the governed
+ * `database.apply_migration` action has never been requested once. Without this
+ * gate, application code can be promoted while the schema it requires has not
+ * been applied, and nothing notices.
+ *
+ * The required set is read from the PULL REQUEST'S tree, not the local
+ * checkout: the question is what the merged revision will require, and a lane's
+ * working copy is not that. The proof of hosted state comes from the governed
+ * census records, because the census IS the proof and copying it would create a
+ * second truth to drift.
+ *
+ * Unmeasured is not pass. A gate that cannot read either side returns UNKNOWN,
+ * and an unmeasured gate makes the merge escalate rather than auto-approve —
+ * which is the fail-closed behaviour the merge policy already relies on.
+ */
+export function measureHostedMigrationParity(n, { gh = defaultGh, censusRequests = [], nowMs = Date.now(), gate, provenFrom } = {}) {
+  const out = { hosted_migration_parity: null };
+  try {
+    const res = gh(["api", `repos/${n.repository}/contents/supabase/migrations?ref=${n.expectedHeadSha}`,
+      "--jq", "[.[].name]"]);
+    if (res.status !== 0) {
+      out.hosted_migration_parity_detail = "could not read the promoted revision's migration set";
+      return out;
+    }
+    const names = parseJson(res.stdout);
+    if (!Array.isArray(names)) {
+      out.hosted_migration_parity_detail = "unparseable migration listing for the promoted revision";
+      return out;
+    }
+    const required = gate.requiredVersionsFromFilenames(names);
+    const proven = provenFrom(censusRequests);
+    const verdict = gate.migrationMergeGate({
+      requiredHead: required.length ? required[required.length - 1] : null,
+      requiredCount: required.length,
+      provenHead: proven?.head || null,
+      provenAtMs: proven?.atMs || null,
+      nowMs,
+    });
+    // null (not false) when unmeasured: the policy treats an unmeasured gate as
+    // "escalate", which is the answer an unreadable measurement deserves.
+    out.hosted_migration_parity = verdict.measured ? verdict.promote : null;
+    out.hosted_migration_parity_detail = verdict.reason;
+    out.hosted_migration_required_head = verdict.required_head || null;
+    out.hosted_migration_proven_head = verdict.proven_head || null;
+    out.hosted_migration_proof_request = proven?.request_id || null;
+  } catch (err) {
+    out.hosted_migration_parity_detail = String(err?.message || err).slice(0, 200);
+  }
+  return out;
+}

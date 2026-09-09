@@ -516,6 +516,14 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
       "managed_repository", "full_exact_sha", "base_is_staging",
       "required_checks_successful", "pull_request_mergeable", "head_sha_still_matches",
       "no_unresolved_governance_findings", "certification_suite_passed",
+      // THE SCHEMA THIS REVISION REQUIRES MUST BE PROVEN PRESENT WHERE IT WILL
+      // RUN. Nothing else applies migrations to the deployed primary — no
+      // workflow runs `supabase db push`, and `database.apply_migration` has
+      // never been requested — so without this gate a merge can promote code
+      // whose schema is not there. Unmeasured leaves it null, and an unmeasured
+      // gate escalates instead of auto-approving, exactly as the note above
+      // describes for the rest of this set.
+      "hosted_migration_parity",
       "no_governance_exception", "no_operator_hold",
     ]),
   }),
