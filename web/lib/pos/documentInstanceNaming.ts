@@ -46,6 +46,34 @@ export function proposeImportDisplayName(input: {
 }
 
 /** Generated native form name — separate from source document display name. */
+/**
+ * Which title should a generated Form be NAMED after?
+ *
+ * `draft.title` is a DOCUMENT title, and when the document's own text yields no heading it falls
+ * back to the classification bucket's label — so an imported enrollment application called
+ * "Northwind Enrollment Application v2" generated a Form named "Enrollment Packet", because that
+ * is what `CLASSIFICATION_LABELS.enrollment_document` says every enrollment document is. Every
+ * enrollment document in the org would have generated a Form with that same name, and the name
+ * belongs to the Packet, which is a different thing that this Form is at most one piece of.
+ *
+ * The naming hierarchy: the document's own heading identifies it best; failing that the display
+ * name the administrator sees and can set; and only then the classification bucket, which is a
+ * useful answer to "what kind of paperwork is this" and a poor answer to "what is this form
+ * called". The administrator renames it afterwards either way — this is the default, not a lock.
+ */
+export function proposeGeneratedFormNameFromSources(input: {
+    draftTitle?: string | null;
+    draftTitleFromText?: boolean;
+    documentDisplayLabel?: string | null;
+}): string {
+    const draftTitle = (input.draftTitle ?? "").trim();
+    const displayLabel = (input.documentDisplayLabel ?? "").trim();
+    // A heading the document itself carries is the most specific name available.
+    if (input.draftTitleFromText && draftTitle) return proposeGeneratedFormName(draftTitle);
+    if (displayLabel) return proposeGeneratedFormName(displayLabel);
+    return proposeGeneratedFormName(draftTitle);
+}
+
 export function proposeGeneratedFormName(sourceDocumentDisplayName: string): string {
     const trimmed = normalizeDisplayNameCandidate(sourceDocumentDisplayName);
     if (!trimmed) return "";

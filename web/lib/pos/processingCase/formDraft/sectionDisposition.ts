@@ -131,6 +131,56 @@ export function recommendSectionDisposition(input: SectionClassificationInput): 
     };
 }
 
+/**
+ * Does this disposition still ASK the section's detected fields as questions?
+ *
+ * The single source of truth for a rule two modules were each keeping their own copy of, and
+ * disagreeing about. `draftFormToFormSchemaV1` decides whether to emit the detected fields;
+ * `buildManualFormDraft` decides whether the section's labels need preserving as prose because
+ * they are about to be dropped. Those are the same question, and when the two answers diverged
+ * the overlap — signature / upload / generated — both kept every field AND re-published its label
+ * as static text, so the participant read the whole form as prose and then answered it again.
+ */
+export function sectionKeepsDetectedFields(disposition: SectionDisposition | undefined): boolean {
+    const d = disposition ?? "fields";
+    return d === "fields" || d === "signature" || d === "upload" || d === "generated";
+}
+
+/**
+ * Strip from preserved static content any line that merely restates a question the participant is
+ * being asked in the same breath, and return null if nothing meaningful survives.
+ *
+ * Static content is legitimate and must survive: instructions, legal language, section
+ * explanations, policy copy, consent language. None of those restate a field label. A synthetic
+ * aggregate of detected labels is the one thing that does — and on a fillable PDF it arrives
+ * honestly, because the page's extracted text IS the printed labels beside the widgets, carried
+ * along as evidence for discovery. Evidence is not participant copy.
+ */
+export function staticTextWithoutFieldLabels(
+    text: string | null | undefined,
+    fieldLabels: readonly string[],
+): string | null {
+    const raw = (text ?? "").trim();
+    if (!raw) return null;
+    const asked = new Set(fieldLabels.map(normalizeLabel).filter(Boolean));
+    if (asked.size === 0) return raw;
+    const kept = raw
+        .split(/\n+/)
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !asked.has(normalizeLabel(l)));
+    return kept.length > 0 ? kept.join("\n") : null;
+}
+
+/** Compare a prose line to a field label on words alone — punctuation and case are presentation. */
+function normalizeLabel(value: string): string {
+    return value
+        .toLowerCase()
+        // A possessive is presentation too: "Child's First Name:" is the same ask as "Child First Name".
+        .replace(/[\u2019']s\b/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+}
+
 /** Count lines that read as prose/instruction (not field prompts). */
 function proseLineCount(text: string): number {
     return text

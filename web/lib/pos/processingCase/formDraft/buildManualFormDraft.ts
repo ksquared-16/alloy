@@ -12,6 +12,7 @@
 
 import type { DraftFormField, DraftFormFieldType, DraftFormSection, StoredFormDraftPreview } from "./types";
 import type { SectionDisposition } from "./sectionDisposition";
+import { sectionKeepsDetectedFields } from "./sectionDisposition";
 
 export const MANUAL_FORM_DRAFT_VERSION = "manual-1";
 
@@ -97,10 +98,16 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
         const disp = dispByTitle.get(title);
         const disposition = disp?.disposition;
         let staticText = disp?.static_text?.trim() || undefined;
-        // No silent data loss: for a non-"fields" disposition without explicit prose, preserve the
-        // section's detected labels as static text (they are the instructional/consent lines that would
-        // otherwise become junk form fields).
-        if (disposition && disposition !== "fields" && !staticText) {
+        // No silent data loss: for a disposition that DROPS its detected fields, preserve the
+        // section's labels as static text (they are the instructional/consent lines that would
+        // otherwise become junk form fields, and dropping the fields would drop them entirely).
+        //
+        // The guard used to be `disposition !== "fields"`, which also caught signature, upload and
+        // generated — three dispositions that KEEP every field. So the labels were preserved as
+        // prose AND asked as questions: the generated Enrollment form opened with a text block
+        // reciting all 23 labels, then asked for all 23. Nothing was being rescued; it was being
+        // duplicated. `sectionKeepsDetectedFields` is now the one place that rule lives.
+        if (disposition && !sectionKeepsDetectedFields(disposition) && !staticText) {
             const preserved = sectionFields
                 .map((f) => f.label.trim())
                 .filter(Boolean)
