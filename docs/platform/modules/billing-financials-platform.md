@@ -1110,6 +1110,21 @@ the first in front of a family.
 There is also no platform fallback. An organisation without a usable connected account cannot
 collect; it is told why, and Alloy never charges the card into its own account instead.
 
+### Promoted
+
+Landed on staging as PR #750 (merge `57a30511e`), with PR #752 (merge `d48a264f7`) registering the
+two governance declarations the merge revealed were missing: the webhook's provider-signature
+exception and the route-capability entries for it and `collection-state`.
+
+Certified independently AFTER promotion, against the promoted application and a real Stripe test
+platform — not against the implementation lane: mounted product matrix 13/13, Thread 8B live suites
+52/52 across ten suites, posted-childcare lifecycle 13/13, Financials and governance units 561/561,
+typecheck and `typecheck:tests` rc=0, prebuild governance chain rc=0, migration preflight 392/392.
+The provider evidence is a PaymentIntent retrievable on the connected account and invisible on the
+platform account, real partial and full refunds on that same account, and exactly one Thread 5
+journal consequence per canonical receipt. Cash, check and money order remained `processor = NULL`
+with no provider transaction throughout.
+
 ### ACH is a follow-up over this model, not a new payment system
 
 `ach` is present as a rail and deliberately not executable: it is offered, visibly unavailable, and
