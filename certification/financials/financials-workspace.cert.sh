@@ -27,8 +27,32 @@ ORG='00000000-0000-4000-8000-000000000001'
 APP="${CERT_APP_URL:-http://localhost:3012}"
 PW="$ROOT/web/node_modules/.bin/playwright"
 
+# ── THE DATABASE CLIENT LIVES IN THE DATABASE ────────────────────────────────────────────────
+#
+# This harness shelled out to a host `psql` for every one of its nine SQL steps, and this host
+# has none — not on PATH, not in Homebrew. The Runtime lane hit the identical defect in
+# `alloy-certify` and fixed it there; the same seam is used here rather than a different one,
+# because two certification paths disagreeing about how to reach the same database is how one of
+# them silently stops being run.
+#
+# Requiring an operator to install a Postgres client before Alloy can certify itself is not a
+# fix: the sanctioned stack already ships a psql inside `supabase_db_<project>`, and that client
+# is by definition the right version for that database. Host client when there is one, the
+# stack's own client otherwise — with the connection rebuilt for the container's own loopback
+# (5432, not the host's published port) while keeping the credentials and database the stack
+# itself reported.
+cert_db_container() { printf 'supabase_db_%s\n' "$(sed -n 's/^[[:space:]]*project_id[[:space:]]*=[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$ROOT/certification/supabase/config.toml" 2>/dev/null | head -1)"; }
+cert_db_url_incontainer() { printf '%s\n' "$1" | sed -E 's#^(postgresql://[^@]+@)[^/]+(/.*)$#\1127.0.0.1:5432\2#'; }
+
+# `pg <psql-args…>` — the connection is this harness's `$DB`, wherever the client happens to be.
+# stdin is forwarded, so the heredoc call sites keep working unchanged.
+pg() {
+  if command -v psql >/dev/null 2>&1; then psql "$DB" "$@"; return $?; fi
+  docker exec -i "$(cert_db_container)" psql "$(cert_db_url_incontainer "$DB")" "$@"
+}
+
 teardown() {
-  psql "$DB" -q -v ON_ERROR_STOP=1 <<SQL
+  pg -q -v ON_ERROR_STOP=1 <<SQL
 set session_replication_role = replica;
 delete from public.payment_responsibility_attributions where org_id = '$ORG';
 delete from public.payment_allocations where org_id = '$ORG';
@@ -50,16 +74,16 @@ teardown
 [ $? -eq 0 ] || { echo "✗ teardown failed"; exit 1; }
 
 echo "── the substrate this workspace lists"
-psql "$DB" -tAc "select count(*) from public.financial_charge_templates where org_id='$ORG' and template_key='tuition' and is_active" \
+pg -tAc "select count(*) from public.financial_charge_templates where org_id='$ORG' and template_key='tuition' and is_active" \
   | grep -q '^1$' || { echo "✗ no active 'tuition' charge template"; exit 1; }
-psql "$DB" -tAc "select count(*) from public.locations where org_id='$ORG' and location_type='site'" \
+pg -tAc "select count(*) from public.locations where org_id='$ORG' and location_type='site'" \
   | grep -qvE '^(0|1)$' || { echo "✗ two sites are needed to prove location scope"; exit 1; }
 
 echo "── the accounting calendar the history cases depend on"
 # Thread 5's attribution trigger REFUSES a journal entry whose effective date falls outside every
 # period on the active calendar. A run whose service period sits outside it would post charges and
 # silently record no history, so the productization cases would assert nothing at all.
-psql "$DB" -tAc "select count(*) from public.financial_accounting_periods p
+pg -tAc "select count(*) from public.financial_accounting_periods p
                    join public.financial_accounting_calendars c on c.id = p.calendar_id
                   where c.org_id = '$ORG' and c.is_active" \
   | grep -qv '^0$' || { echo "✗ the active calendar has no periods; history cannot be attributed"; exit 1; }
@@ -94,16 +118,16 @@ if [ "${CERT_BROWSER:-0}" = "1" ]; then
   PERIOD="${CERT_WS_PERIOD:-$(date -u +%Y-%m)}"
   QUEUE_FIRST="${CERT_WS_SUBJECT:-00000000-0000-4000-8000-40000000099b}"
   AGREEMENT='6f000000-0000-4000-8000-00000000c001'
-  read -r OCM MEMBER CUSTOMER <<<"$(psql "$DB" -tA -F' ' -c "
+  read -r OCM MEMBER CUSTOMER <<<"$(pg -tA -F' ' -c "
     select o.id, o.customer_member_id, m.customer_id
       from public.opportunity_customer_members o
       join public.customer_members m on m.id = o.customer_member_id
      where o.org_id = '$ORG' and o.opportunity_id = '$QUEUE_FIRST' limit 1;")"
-  SITE="$(psql "$DB" -tAc "select id from public.locations where org_id='$ORG' and location_type='site' order by id limit 1")"
+  SITE="$(pg -tAc "select id from public.locations where org_id='$ORG' and location_type='site' order by id limit 1")"
   [ -n "${OCM:-}" ] && [ -n "${SITE:-}" ]
   check $? "an assignment and a site: ${CUSTOMER:-none}"
 
-  psql "$DB" -q -v ON_ERROR_STOP=1 <<SQL
+  pg -q -v ON_ERROR_STOP=1 <<SQL
 delete from public.enrollment_pricing_terms where org_id = '$ORG';
 insert into public.child_enrollment_agreements
     (id, org_id, customer_member_id, customer_id, site_location_id, opportunity_customer_member_id, status, start_date)
@@ -143,18 +167,18 @@ SQL
   # declares none — it is gated by the admin/ops route gate — which is reported as a finding rather
   # than patched from a workspace that has no business changing another thread's action contract.
   echo "── the same read, with fin.read revoked"
-  psql "$DB" -q -c "update public.role_permission_grants set allowed = false where permission_key = 'fin.read'"
+  pg -q -c "update public.role_permission_grants set allowed = false where permission_key = 'fin.read'"
   ( cd "$ROOT/certification" \
     && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" CERT_EXPECT_UNAUTHORIZED=1 \
        CERT_WS_CUSTOMER="$CUSTOMER" CERT_WS_MEMBER="$MEMBER" \
        "$PW" test -c playwright.config.ts playwright/financials-workspace.cert.spec.ts \
        -g "without the grant" --workers=1 --reporter=line )
   unauthorized=$?
-  psql "$DB" -q -c "update public.role_permission_grants set allowed = true where permission_key = 'fin.read'"
+  pg -q -c "update public.role_permission_grants set allowed = true where permission_key = 'fin.read'"
   check $unauthorized "handing over financial work is refused server-side without fin.read"
 
   teardown
-  psql "$DB" -q -c "delete from public.enrollment_pricing_terms where org_id='$ORG'; delete from public.child_enrollment_agreements where id = '$AGREEMENT';"
+  pg -q -c "delete from public.enrollment_pricing_terms where org_id='$ORG'; delete from public.child_enrollment_agreements where id = '$AGREEMENT';"
   check $? "the tenant is left as the browser proof found it"
 fi
 
