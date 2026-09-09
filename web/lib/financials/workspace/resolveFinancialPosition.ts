@@ -349,34 +349,97 @@ type AllocationFact = { id: string; assignedAmountCents: number; isUnassigned: b
  * widened to `.in(charges)`. Keeping them recognisably identical is deliberate: a divergence
  * here would be a divergence in what the workspace believes about money.
  */
+/**
+ * ── A COHORT READ THAT FAILED SILENTLY BECAME MONEY A FAMILY DID NOT OWE ────────────────────────
+ *
+ * THE DEFECT. Every fact below was fetched with one `.in("charge_id", chargeIds)` covering the
+ * whole cohort, and the result was destructured as `const { data } = …` with the error dropped.
+ * Past a few hundred charges the request URI exceeds the server's limit, PostgREST answers
+ * `URI too long`, and `data` comes back null. Null applications do not read as "we could not
+ * find out" — they read as "nothing was ever paid", so every account's outstanding was overstated
+ * by exactly the payments applied to it. A household that had settled in full was shown owing the
+ * whole charge. That is worse than an empty list: it is a confident wrong number, and Thread 2's
+ * account detail sitting beside it answered zero for the same charge.
+ *
+ * THE REPAIR, in two halves, because either alone still lies:
+ *
+ *   1. CHUNK. The id list is spent in batches small enough that the URI cannot overflow, and the
+ *      batches are concatenated. Scale stops changing the answer.
+ *   2. THROW. A read that fails is an ERROR, never an empty result. Financial truth may be
+ *      unavailable, but it may not be silently replaced by a cheaper falsehood — the same
+ *      fail-closed rule `resolveActorPermissionGrants` already applies to grants.
+ *
+ * `resolveFamilyCollectible` issues these same queries with `.eq(charge)` and was therefore never
+ * exposed: one id per request. That is exactly the divergence the note above this function warned
+ * about, arriving through scale rather than through edits.
+ */
+const CHARGE_ID_BATCH = 80;
+
+async function readChargeScoped<T>(
+    label: string,
+    chargeIds: string[],
+    run: (batch: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+    const out: T[] = [];
+    for (let i = 0; i < chargeIds.length; i += CHARGE_ID_BATCH) {
+        const batch = chargeIds.slice(i, i + CHARGE_ID_BATCH);
+        const { data, error } = await run(batch);
+        if (error) {
+            throw new Error(`financial position: ${label} could not be read (${error.message.trim()})`);
+        }
+        for (const row of data ?? []) out.push(row);
+    }
+    return out;
+}
+
 async function readPositionFacts(supabase: SupabaseClient, orgId: string, chargeIds: string[]) {
     const [
-        { data: reductionRows },
-        { data: applicationRows },
-        { data: allocationRows },
-        { data: claimLineRows },
+        reductionRows,
+        applicationRows,
+        allocationRows,
+        claimLineRows,
     ] = await Promise.all([
-        supabase
-            .from("financial_reduction_applications")
-            .select("source_charge_id, amount_cents")
-            .eq("org_id", orgId)
-            .in("source_charge_id", chargeIds),
-        supabase
-            .from("payment_allocations")
-            .select("charge_id, allocated_amount_cents, status, payment_id")
-            .eq("org_id", orgId)
-            .in("charge_id", chargeIds),
-        supabase
-            .from("financial_responsibility_allocations")
-            .select("id, charge_id, assigned_amount_cents, is_unassigned, share_id")
-            .eq("org_id", orgId)
-            .eq("state", "active")
-            .in("charge_id", chargeIds),
-        supabase
-            .from("financial_subsidy_claim_lines")
-            .select("id, charge_id, claim_id, claimed_amount_cents")
-            .eq("org_id", orgId)
-            .in("charge_id", chargeIds),
+        readChargeScoped<{ source_charge_id: string; amount_cents: number }>(
+            "reductions",
+            chargeIds,
+            (batch) =>
+                supabase
+                    .from("financial_reduction_applications")
+                    .select("source_charge_id, amount_cents")
+                    .eq("org_id", orgId)
+                    .in("source_charge_id", batch),
+        ),
+        readChargeScoped<{ charge_id: string; allocated_amount_cents: number; status: string | null; payment_id: string }>(
+            "payment applications",
+            chargeIds,
+            (batch) =>
+                supabase
+                    .from("payment_allocations")
+                    .select("charge_id, allocated_amount_cents, status, payment_id")
+                    .eq("org_id", orgId)
+                    .in("charge_id", batch),
+        ),
+        readChargeScoped<{ id: string; charge_id: string; assigned_amount_cents: number; is_unassigned: boolean; share_id: string | null }>(
+            "responsibility allocations",
+            chargeIds,
+            (batch) =>
+                supabase
+                    .from("financial_responsibility_allocations")
+                    .select("id, charge_id, assigned_amount_cents, is_unassigned, share_id")
+                    .eq("org_id", orgId)
+                    .eq("state", "active")
+                    .in("charge_id", batch),
+        ),
+        readChargeScoped<{ id: string; charge_id: string; claim_id: string; claimed_amount_cents: number }>(
+            "subsidy claim lines",
+            chargeIds,
+            (batch) =>
+                supabase
+                    .from("financial_subsidy_claim_lines")
+                    .select("id, charge_id, claim_id, claimed_amount_cents")
+                    .eq("org_id", orgId)
+                    .in("charge_id", batch),
+        ),
     ]);
 
     const reductionsByCharge = new Map<string, number[]>();
