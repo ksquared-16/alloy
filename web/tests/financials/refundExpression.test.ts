@@ -27,16 +27,18 @@ const receipt = (over: Partial<FinancialsPaymentRow> = {}): FinancialsPaymentRow
     appliedCents: 1_000,
     reference: null,
     notes: null,
+    reversalOrigin: null,
     ...over,
 });
 
 const reversal = (cents: number, over: Partial<FinancialsPaymentRow> = {}): FinancialsPaymentRow =>
     receipt({
-        paymentId: `refund-${cents}-${over.status ?? "posted"}`,
+        paymentId: `refund-${cents}-${over.status ?? "posted"}-${over.reversalOrigin ?? "operator"}`,
         direction: "outbound",
         refundsPaymentId: "pay-1",
         amountCents: cents,
         appliedCents: 0,
+        reversalOrigin: "operator",
         ...over,
     });
 
@@ -165,5 +167,45 @@ describe("the refunded parameter can never be filled in by accident", () => {
         // Comments are allowed to name the mistake — code is not allowed to make it.
         const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
         expect(code).not.toMatch(/\.map\(presentPayment\)/);
+    });
+});
+
+
+describe("a return is not a refund, and the surface must not say it is", () => {
+    /*
+     * The two wear the same shape — an outbound payment naming the receipt it reverses — and mean
+     * opposite things about who acted. An operator shown "Refunded" for a returned ACH would
+     * believe somebody here decided it and would go looking for the person who did.
+     */
+    it("an operator refund reads as a refund", () => {
+        const rows = presentPayments([receipt(), reversal(400, { reversalOrigin: "operator" })]);
+        const out = rows.find((r) => r.paymentId !== "pay-1")!;
+        expect(out.kind).toBe("refund");
+        expect(out.statusLabel).toBe("Refunded");
+        expect(out.reversalOrigin).toBe("operator");
+    });
+
+    it("a provider return reads as a return, and never as a refund", () => {
+        const rows = presentPayments([receipt(), reversal(400, { reversalOrigin: "provider" })]);
+        const out = rows.find((r) => r.paymentId !== "pay-1")!;
+        expect(out.kind).toBe("return");
+        expect(out.statusLabel).toBe("Returned");
+        expect(out.statusLabel.toLowerCase()).not.toMatch(/refund/);
+        expect(out.reversalOrigin).toBe("provider");
+    });
+
+    it("both still reduce what remains refundable, because the money really did go back", () => {
+        const [rec] = presentPayments([
+            receipt({ amountCents: 1_000 }),
+            reversal(400, { reversalOrigin: "provider" }),
+        ]);
+        expect(rec.refundedCents, "a return is money that left, whoever sent it").toBe(400);
+        expect(rec.refundableCents).toBe(600);
+    });
+
+    it("a receipt never carries a reversal origin", () => {
+        const [rec] = presentPayments([receipt()]);
+        expect(rec.kind).toBe("receipt");
+        expect(rec.reversalOrigin).toBeNull();
     });
 });

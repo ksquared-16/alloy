@@ -69,6 +69,12 @@ export type FinancialsPaymentRow = {
     direction: "inbound" | "outbound";
     /** The receipt this refund reverses, when it is one. */
     refundsPaymentId: string | null;
+    /**
+     * WHO caused this reversal — `operator` for a refund somebody asked for, `provider` for money a
+     * bank or network took back. Null on a receipt. Without it the surface cannot tell a family's
+     * refund from their bank reversing a debit, and the two mean opposite things about who acted.
+     */
+    reversalOrigin: "operator" | "provider" | null;
     amountCents: number;
     currencyCode: string;
     /** pending | posted | failed | voided. Only `posted` is money. */
@@ -244,6 +250,14 @@ export type FinancialsCardVM = {
      */
     paymentSetup: string | null;
     /**
+     * Whether this organization's merchant can actually take a bank debit.
+     *
+     * Resolved from the merchant's provider capability on the SERVER. The browser is told the
+     * answer and never computes it: a surface that decided its own rail availability would offer a
+     * collection the provider then refuses, after the operator had been told it was under way.
+     */
+    achAvailable: boolean;
+    /**
      * WHO is responsible for this account, from the canonical `payer` contact role.
      *
      * `share` is deliberately nullable and is null today for every payer. Alloy has a payer ROLE
@@ -349,6 +363,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         chargeTemplates: [],
         unavailable: [],
         paymentSetup: null,
+        achAvailable: false,
         unavailableReason: null,
     };
 }
@@ -551,7 +566,7 @@ async function readAccountPayments(
         supabase
             .from("payments")
             .select(
-                "id, direction, refunds_payment_id, amount_cents, currency, status, payment_method, "
+                "id, direction, refunds_payment_id, reversal_origin, amount_cents, currency, status, payment_method, "
                 + "processor, received_at, posted_at, reference_number, notes",
             )
             .eq("org_id", orgId)
@@ -625,6 +640,7 @@ async function readAccountPayments(
             paymentId: id,
             direction: t(raw.direction) === "outbound" ? "outbound" : "inbound",
             refundsPaymentId: t(raw.refunds_payment_id) || null,
+            reversalOrigin: (t(raw.reversal_origin) || null) as "operator" | "provider" | null,
             amountCents: Number(raw.amount_cents) || 0,
             currencyCode: t(raw.currency) || "USD",
             status: t(raw.status).toLowerCase(),
@@ -1044,6 +1060,24 @@ export async function buildFinancialsCardVM(
             occursOnStrategy: t(row.occurs_on_strategy),
             billableOnStrategy: t(row.billable_on_strategy),
         }));
+
+    /*
+     * ── WHETHER A BANK DEBIT IS EVEN POSSIBLE HERE ───────────────────────────────────────────────
+     *
+     * Read from the merchant's own recorded capability, on the server, so the browser is told the
+     * answer rather than deciding it. A surface that worked this out for itself would offer a
+     * collection the provider then refuses — after the operator had been told it was under way.
+     * Absent or non-ready is `false`, which is the honest reading of "nobody has asked the provider
+     * about this merchant".
+     */
+    const { data: merchantRow } = await supabase
+        .from("payment_provider_merchants")
+        .select("ach_readiness")
+        .eq("org_id", args.orgId)
+        .eq("processor", "stripe")
+        .eq("is_active", true)
+        .maybeSingle();
+    vm.achAvailable = (merchantRow as { ach_readiness: string | null } | null)?.ach_readiness === "ready";
 
     return vm;
 }

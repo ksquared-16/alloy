@@ -579,6 +579,12 @@ const collectCardPayment: RegisteredAction = {
                 requestedAmountCents: requested,
                 actorUserId: ctx.userId ?? null,
                 payerPersonId: t(payload.payer_person_id) || null,
+                /*
+                 * The rail the operator chose. Intent only — the server still resolves the merchant,
+                 * its capability for THIS rail, and the collectible amount, and refuses an ACH
+                 * request on a merchant the provider has not enabled for it.
+                 */
+                rail: t(payload.rail) === "ach" ? "ach" : "card",
             });
 
             if (!created.ok) {
