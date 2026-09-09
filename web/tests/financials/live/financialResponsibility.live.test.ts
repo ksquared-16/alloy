@@ -187,7 +187,16 @@ describeLive("responsibility and funding, live", () => {
                 });
             }
             const agreementId = `${R}00000000a00${index + 1}`;
-            await supabase.from("child_enrollment_agreements").delete().eq("id", agreementId);
+            /*
+             * Retire whatever agreement this child already holds at this site, not only one carrying
+             * the id this suite uses. One operational agreement per child per site is a real
+             * constraint, so an agreement another suite left behind silently defeated the insert
+             * below and the suite then worked against a subject that did not exist.
+             */
+            await supabase.from("enrollment_pricing_terms").delete()
+                .eq("org_id", ORG).eq("customer_member_id", member.id);
+            await supabase.from("child_enrollment_agreements").delete()
+                .eq("org_id", ORG).eq("customer_member_id", member.id).eq("site_location_id", siteLocationId);
             await supabase.from("child_enrollment_agreements").insert({
                 id: agreementId, org_id: ORG, customer_member_id: member.id, customer_id: customerId,
                 site_location_id: siteLocationId, opportunity_customer_member_id: ocmId,
