@@ -37,7 +37,24 @@ function haystack(form: { name?: string | null; key?: string; metadata?: Record<
 
 export function formOrigin(form: { metadata?: Record<string, unknown> }): "generated" | "manual" {
     const meta = form.metadata ?? {};
-    if (meta.generated_from_processing === true || meta.processing_case_id || meta.origin === "document") {
+    /*
+     * `source: "document_form_draft"` is what `createFormFromCaseDraft` ACTUALLY writes, and it was
+     * the one shape this predicate did not test. Nothing in the product ever wrote the other three:
+     * `origin: "document"` existed only in this module's own unit test. So every form generated from
+     * an imported document was filed as a manual form, "Generated from documents" sat empty with a
+     * "generate one from a document in Work" empty state directly after the operator had done
+     * exactly that, and Studio Health counted 0 Generated forever.
+     *
+     * `processingDevCleanup.isProcessingOwnedForm` already tested both shapes; only this reader
+     * missed the real one. The speculative keys are kept so no other writer silently breaks.
+     */
+    if (
+        meta.source === "document_form_draft" ||
+        typeof meta.source_case_id === "string" ||
+        meta.generated_from_processing === true ||
+        meta.processing_case_id ||
+        meta.origin === "document"
+    ) {
         return "generated";
     }
     return "manual";
