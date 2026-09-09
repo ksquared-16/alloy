@@ -41,6 +41,9 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+import { runHex, runPeriodKey } from "./certificationPeriod";
+
+/** This run's own billing month and fixture ids — see `certificationPeriod`. */
 const ORG = "00000000-0000-4000-8000-000000000001";
 const OTHER_ORG = "00000000-0000-4000-8000-0000000000ff";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
@@ -455,38 +458,61 @@ describeLive("tuition generation — the certification matrix, live", () => {
          * deleted — which is the guarantee Thread 5 relies on, working. The fixture adapts to it.
          */
         /*
-         * One active calendar per org is a real constraint, and another suite's fixture calendar may
-         * already hold that slot. Stand this one up by standing the others down — the calendars are
-         * fixture state and may be deactivated; the periods and journal entries hanging off them are
-         * not touched, and a deactivated calendar keeps everything that ever reported through it.
+         * ONE ACTIVE CALENDAR PER ORG IS A REAL CONSTRAINT, so this authors its period into whichever
+         * calendar the org already has rather than insisting on its own.
+         *
+         * Deactivating the incumbent was tried and was worse than the collision it fixed: Thread 5
+         * records a journal entry only where an ACTIVE calendar's period contains the date, so
+         * standing the org's calendar down silently stopped every later suite's money from reporting
+         * anywhere. What this test needs is a 4/4/5 period that does not align with the billing
+         * month; which calendar holds it was never the point.
          */
-        await supabase.from("financial_accounting_calendars")
-            .update({ is_active: false }).eq("org_id", ORG).neq("id", CALENDAR);
-        const { error: calError } = await supabase.from("financial_accounting_calendars").upsert({
-            id: CALENDAR,
-            org_id: ORG,
-            calendar_key: "matrix_445",
-            name: "4/4/5 matrix calendar",
-            period_style: "four_four_five",
-            is_active: true,
-        });
-        expect(calError, calError?.message).toBeNull();
+        const { data: activeCalendar } = await supabase
+            .from("financial_accounting_calendars").select("id")
+            .eq("org_id", ORG).eq("is_active", true).limit(1).maybeSingle();
+        let calendarId = (activeCalendar as { id: string } | null)?.id ?? "";
+        if (!calendarId) {
+            const { error: calError } = await supabase.from("financial_accounting_calendars").upsert({
+                id: CALENDAR,
+                org_id: ORG,
+                calendar_key: "matrix_445",
+                name: "4/4/5 matrix calendar",
+                period_style: "four_four_five",
+                is_active: true,
+            });
+            expect(calError, calError?.message).toBeNull();
+            calendarId = CALENDAR;
+        }
         // A 4/4/5 period that deliberately does NOT align with the calendar month: it opens before
         // the billing month starts, so the attribution cannot have come from the month key.
+        /*
+         * The billing month is this run's own, and the 4/4/5 window is built around it — opening six
+         * days BEFORE the month starts and closing inside it, which is the whole point: the billable
+         * date falls in a period whose key cannot have been read off the month.
+         *
+         * A fixed month could only be billed once. The second run found the charge already posted
+         * and generated nothing, which read as a Thread 7 regression and was a spent fixture.
+         */
+        const bill = runPeriodKey(11);
+        const [billYear, billMonth] = bill.split("-").map(Number);
+        const monthStart = new Date(Date.UTC(billYear!, billMonth! - 1, 1));
+        const opens = new Date(monthStart); opens.setUTCDate(opens.getUTCDate() - 6);
+        const closes = new Date(monthStart); closes.setUTCDate(closes.getUTCDate() + 21);
+        const accountingKey = `FY-MATRIX-${bill}`;
         const { error: perError } = await supabase.from("financial_accounting_periods").upsert({
-            id: `${P}00000000d001`,
+            id: `${P}${runHex()}d001`,
             org_id: ORG,
-            calendar_id: CALENDAR,
-            period_key: "FY2028-P02",
-            label: "Period 2",
-            starts_on: "2028-01-26",
-            ends_on: "2028-02-22",
+            calendar_id: calendarId,
+            period_key: accountingKey,
+            label: "Matrix period",
+            starts_on: opens.toISOString().slice(0, 10),
+            ends_on: closes.toISOString().slice(0, 10),
             status: "open",
         });
         expect(perError, perError?.message).toBeNull();
 
         await acceptTerm(TERM, 121_000);
-        const result = await run("2028-02");
+        const result = await run(bill);
         expect(result.counts.generated, JSON.stringify(result.outcomes)).toBe(1);
         const chargeId = result.outcomes[0]!.kind === "generated" ? result.outcomes[0]!.chargeId! : "";
 
@@ -499,9 +525,9 @@ describeLive("tuition generation — the certification matrix, live", () => {
             .eq("source_id", chargeId);
         expect(entries ?? [], "posting writes one journal entry").toHaveLength(1);
         const entry = (entries ?? [])[0] as Record<string, unknown>;
-        expect(entry.billing_period_key, "the customer's billing month").toBe("2028-02");
-        expect(entry.accounting_period_key, "the 4/4/5 period the billable date falls in").toBe("FY2028-P02");
-        expect(entry.accounting_calendar_id).toBe(CALENDAR);
+        expect(entry.billing_period_key, "the customer's billing month").toBe(bill);
+        expect(entry.accounting_period_key, "the 4/4/5 period the billable date falls in").toBe(accountingKey);
+        expect(entry.accounting_calendar_id, "the calendar that period lives in").toBe(calendarId);
         expect(entry.amount_cents).toBe(121_000);
     }, 180_000);
 });

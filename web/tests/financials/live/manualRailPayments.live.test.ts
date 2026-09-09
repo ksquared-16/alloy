@@ -30,6 +30,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import {
     readChargeBalance,
     recordAndApplyChildcarePayment,
+    refundChildcarePayment,
 } from "@/lib/financials/childcarePaymentService";
 
 function certEnv(): { url: string; serviceKey: string } | null {
@@ -113,6 +114,45 @@ describeLive("manual rails — cash, check and money order are canonical payment
      * is that each of the three tenders a childcare office actually receives is a first-class
      * canonical payment with no provider identity at all.
      */
+    it("gives an operator no way to file their own refund as a bank return", async () => {
+        const client = supabase!;
+        const chargeId = await postCharge(client, 60_000);
+        const paid = await recordAndApplyChildcarePayment(client, {
+            orgId: ORG, chargeId, amountCents: 60_000, paymentMethod: "cash",
+            idempotencyKey: `${RUN}-origin-guard`, actorUserId: ACTOR,
+        });
+
+        /*
+         * `reversal_origin = provider` means A BANK TOOK THE MONEY BACK. It is the difference between
+         * "somebody here decided this" and "the payer's bank reversed it" — and an operator able to
+         * set it by hand could make a refund they authorised look like something nobody chose, which
+         * is precisely the question a family disputing a charge would be asking.
+         *
+         * The protection is structural rather than a validation rule: the refund path takes no
+         * origin from its caller and the service writes `operator`. This asks for it every way a
+         * request could, and then reads what was actually written.
+         */
+        const refunded = await refundChildcarePayment(client, {
+            orgId: ORG,
+            paymentId: paid.payment.id,
+            amountCents: 10_000,
+            reason: "certification — origin guard",
+            idempotencyKey: `${RUN}-origin-guard-refund`,
+            actorUserId: ACTOR,
+            // Everything a request could carry, none of which the operator path reads.
+            ...({ reversal_origin: "provider", origin: "provider" } as Record<string, unknown>),
+        } as never);
+
+        const { data: row } = await client.from("payments")
+            .select("reversal_origin, refunds_payment_id, direction, status")
+            .eq("id", refunded.refund.id).single();
+        const r = row as Record<string, unknown>;
+        expect(r.direction).toBe("outbound");
+        expect(r.refunds_payment_id, "the refund names what it reverses").toBe(paid.payment.id);
+        expect(r.reversal_origin, "an operator refund is an OPERATOR refund, whatever was asked for")
+            .toBe("operator");
+    });
+
     for (const [label, rail, item] of [
         ["cash", "cash", 36],
         ["check", "check", 37],
