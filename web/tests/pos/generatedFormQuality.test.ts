@@ -11,6 +11,8 @@ import {
     labelAsksForPersonName,
 } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import { proposeGeneratedFormNameFromSources } from "@/lib/pos/documentInstanceNaming";
+import { buildManualFormDraft } from "@/lib/pos/processingCase/formDraft/buildManualFormDraft";
+import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
 
 /**
  * WHAT A GENERATED FORM LOOKED LIKE, AND WHY IT WAS NOT SHIPPABLE.
@@ -179,5 +181,64 @@ describe("a generated Form is named after the document, not its classification b
                 documentDisplayLabel: "Northwind Enrollment Application v2 — Received 09/09/2026",
             }),
         ).toBe("Northwind Enrollment Application v2");
+    });
+});
+
+describe("the save path, end to end: prose survives, a label dump does not", () => {
+    const fields = [
+        { label: "Guardian Full Name", type: "text", required: true, section: "Authorization" },
+        { label: "Guardian Signature", type: "signature", required: true, section: "Authorization" },
+    ];
+
+    it("keeps real consent prose above the signature it belongs to", () => {
+        const draft = buildManualFormDraft({
+            title: "Health Authorization",
+            sourceDocumentId: null,
+            fields: fields as never,
+            sectionDispositions: [
+                {
+                    title: "Authorization",
+                    disposition: "signature",
+                    static_text:
+                        "I authorize the Center to secure emergency medical treatment for my child, " +
+                        "including transport to a medical facility.",
+                },
+            ],
+        });
+        const schema = draftFormToFormSchemaV1(draft);
+        const block = schema.fields.find((f) => f.type === "text_block");
+        expect(block).toBeTruthy();
+        expect(String((block as { content?: string }).content)).toContain("emergency medical treatment");
+        // And the questions are still asked.
+        expect(schema.fields.some((f) => f.type === "signature")).toBe(true);
+        expect(schema.fields.some((f) => f.label === "Guardian Full Name")).toBe(true);
+    });
+
+    it("manufactures no prose for a signature section that has none", () => {
+        /*
+         * The regression, exactly: a "signature" section with no authored prose used to have its own
+         * field labels joined into static_text, and `draftFormToFormSchemaV1` emits static text for
+         * that disposition — so the form opened by reciting the questions it was about to ask.
+         */
+        const draft = buildManualFormDraft({
+            title: "Health Authorization",
+            sourceDocumentId: null,
+            fields: fields as never,
+            sectionDispositions: [{ title: "Authorization", disposition: "signature" }],
+        });
+        expect(draft.sections[0].static_text ?? null).toBeNull();
+        expect(draftFormToFormSchemaV1(draft).fields.some((f) => f.type === "text_block")).toBe(false);
+    });
+
+    it("still rescues the labels of a section whose prompts are dropped", () => {
+        // An acknowledgement section drops its detected fields — those "fields" were prose misread as
+        // prompts, so joining their labels is a genuine rescue, not duplication. That must survive.
+        const draft = buildManualFormDraft({
+            title: "Policies",
+            sourceDocumentId: null,
+            fields: [{ label: "I have read and agree to the attendance policy", type: "text", section: "Policies" }] as never,
+            sectionDispositions: [{ title: "Policies", disposition: "acknowledgement" }],
+        });
+        expect(draft.sections[0].static_text).toContain("attendance policy");
     });
 });
