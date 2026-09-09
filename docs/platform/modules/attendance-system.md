@@ -49,6 +49,53 @@ Fact kinds in scope:
 4. **Event-emitting.** Every recorded or corrected attendance fact emits an event on `workflow_events` (`emitEvent` → `workflow_events` → `workflowRun`), with a versioned payload. Downstream consequences (billing, compliance, forecasting) react to events; they do not poll mutable state.
 5. **Authored by Actions, not queues or projections.** Attendance is created/corrected through the canonical action/workflow path (see [`./actions-and-workflows.md`](./actions-and-workflows.md)). Queue rows and Projection read models are previews/derivations only; they never write attendance.
 6. **Room transfer ≠ placement supersede.** An intraday room transfer is an attendance fact about where the child *was*; a placement change is a committed-intent change about where the child *belongs*. Keep them distinct models.
+7. **A room resolves to its site by ancestry, not by parentage.** See Location topology below. Nothing may read `parent_location_id` as "the site".
+
+---
+
+## Location topology (V1, 2026-09-09)
+
+An operational classroom is **a role a Location plays**, not a separate entity.
+Attendance, placements, capacity, ratio, staffing and config all key off
+`room_location_id`; a parallel "operational group" entity would have added a
+second nullable reference to every one of those tables. What was missing was a
+**role** and one **level**.
+
+```text
+Site
+└── Room 1        unit · unit_role = physical_space      licensed / capacity-bearing
+    ├── Toddler 1 unit · unit_role = operational_group   ratio + staffing + placement
+    └── Toddler 2 unit · unit_role = operational_group
+└── Playground    unit · unit_role = shared_space        attendance may name it
+```
+
+| Question | Owner |
+|---|---|
+| Physical / licensed capacity | the `physical_space` unit |
+| Program / classroom capacity, ratio grouping, staff assignment | the `operational_group` unit |
+| Committed placement (where a child *belongs*) | `child_placements.room_location_id` → an `operational_group` **only** |
+| Where a child *is* right now | `child_attendance_events` → **any** unit at the site, shared spaces included |
+
+Rules:
+
+- Nesting is exactly one level, and only inside a `physical_space`. A group may
+  not contain a group; a space may not contain a space.
+- A legacy unit with no stored role reads as `operational_group` — that is what
+  every room meant before roles existed. No back-fill was needed.
+- **Site resolution is an ancestor walk, never `parent_location_id`.**
+  `public.location_site_id()` (SQL) and `resolveSiteIdsByLocation` /
+  `resolveRoomsForLocation` (TS) are the only authorities. Both are bounded to 8
+  hops and cycle-guarded, and both return NULL/undefined rather than a guess —
+  the failure this prevents is silent misattribution of a nested group to its
+  containing space, which returns a real location id and never throws.
+- Combining two groups is a **transfer**, never a placement rewrite. Occupancy at
+  a physical space is the sum of the groups it contains; a child on the
+  playground is the *same* child standing elsewhere and is never double-counted
+  into their classroom's physical occupancy.
+
+Implemented by `supabase/migrations/20260909150000_location_topology_v1.sql`
+(role column, `location_site_id()`, hierarchy guard, and the placement /
+attendance / staff-presence triggers converted from direct-parent to ancestry).
 
 ---
 
