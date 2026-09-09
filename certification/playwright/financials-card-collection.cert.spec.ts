@@ -521,8 +521,12 @@ test.describe("Slice H — collecting money through the mounted Financials card"
          * resolves to the SAME PaymentIntent every run — and once that intent has succeeded, Stripe
          * Elements cannot mount against it. Varying the cents gives each run its own intent while
          * collecting from the same obligation.
+         *
+         * The window is wide (about $10–$50) on purpose: a narrow one wraps around within a session
+         * and lands on an amount whose intent has already succeeded, which presents as the Payment
+         * Element simply never mounting.
          */
-        const cents = 1_000 + (Date.now() % 90);
+        const cents = 1_000 + (Date.now() % 4_000);
         const amountText = (cents / 100).toFixed(2);
 
         await openPaymentPanel(page);
@@ -686,7 +690,7 @@ test.describe("Slice H — collecting money through the mounted Financials card"
 
         await openPaymentPanel(page);
         await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
-        const cents = 1_000 + (Date.now() % 90);
+        const cents = 1_000 + (Date.now() % 4_000);
         await page.locator('[data-financials-payment-amount="true"]').first().fill((cents / 100).toFixed(2));
         const commit = page.locator('[data-financials-payment-commit="true"]').first();
         await commit.scrollIntoViewIfNeeded();
@@ -745,7 +749,7 @@ test.describe("Slice H — collecting money through the mounted Financials card"
 
         // ── Collect a real card payment to refund ────────────────────────────────────────────────
         const opening = await canonical();
-        const cents = 1_000 + (Date.now() % 90);
+        const cents = 1_000 + (Date.now() % 4_000);
         await openPaymentPanel(page);
         await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
         await page.locator('[data-financials-payment-amount="true"]').first().fill((cents / 100).toFixed(2));
@@ -855,7 +859,7 @@ test.describe("Slice H — collecting money through the mounted Financials card"
 
         // ── A real card payment to refund in pieces ──────────────────────────────────────────────
         const opening = await canonical();
-        const cents = 1_000 + (Date.now() % 90);
+        const cents = 1_000 + (Date.now() % 4_000);
         await openPaymentPanel(page);
         await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
         await page.locator('[data-financials-payment-amount="true"]').first().fill((cents / 100).toFixed(2));
@@ -1017,7 +1021,7 @@ test.describe("Slice H — collecting money through the mounted Financials card"
 
         await openPaymentPanel(page);
         await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
-        const cents = 1_000 + (Date.now() % 90);
+        const cents = 1_000 + (Date.now() % 4_000);
         await page.locator('[data-financials-payment-amount="true"]').first().fill((cents / 100).toFixed(2));
         const commit = page.locator('[data-financials-payment-commit="true"]').first();
         await commit.scrollIntoViewIfNeeded();
@@ -1093,7 +1097,7 @@ test.describe("Slice H — collecting money through the mounted Financials card"
         await expect(amount, "the amount input must not be clipped away").toBeVisible();
         // Unique per run: the attempt is idempotent on (charge, amount, rail), and Elements cannot
         // mount against an intent that has already succeeded.
-        await amount.fill(((1_000 + (Date.now() % 90)) / 100).toFixed(2));
+        await amount.fill(((1_000 + (Date.now() % 4_000)) / 100).toFixed(2));
 
         const commit = page.locator('[data-financials-payment-commit="true"]').first();
         await commit.scrollIntoViewIfNeeded();
