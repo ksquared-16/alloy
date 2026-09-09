@@ -114,6 +114,22 @@ check $? "one calculation, one location contract, one shell family, no Expand"
 
 if [ "${CERT_BROWSER:-0}" = "1" ]; then
   echo
+  #
+  # ── THE WORKSPACE NEEDS A TENANT TO BE A WORKSPACE ABOUT ────────────────────────────────────
+  #
+  # `teardown` above is right for the invariant proofs — a cohort assertion against leftovers
+  # proves nothing — but it leaves the org with no money at all, and the browser proof that ran
+  # next was therefore certifying an empty product. That is why the Financials screenshots look
+  # like empty shells: the sections render lists correctly, and there was nothing to list.
+  #
+  # So the representative tenant is installed HERE, after the invariant proofs have had their
+  # clean slate and before anything mounted is asserted. One seam, and it fails loudly.
+  # shellcheck source=certification/financials/demo-tenant.sh
+  . "$ROOT/certification/financials/demo-tenant.sh"
+  seed_demo_tenant || { echo "✗ representative tenant could not be built"; exit 1; }
+  check $? "a representative tenant: four households, two campuses, money the resolver can see"
+
+  echo
   echo "── preparing a draft charge the workspace can list and post"
   PERIOD="${CERT_WS_PERIOD:-$(date -u +%Y-%m)}"
   QUEUE_FIRST="${CERT_WS_SUBJECT:-00000000-0000-4000-8000-40000000099b}"
@@ -157,6 +173,20 @@ SQL
        "$PW" test -c playwright.config.ts playwright/financials-workspace.cert.spec.ts --workers=1 --reporter=line )
   check $? "navigation, shell, money overview, sections, Studio, bulk preview, queue, Thread 2 detail, posting, reload"
 
+  #
+  # ── THE DENSITY PROOF ────────────────────────────────────────────────────────────────────────
+  #
+  # The suite above proves STRUCTURE and passes against an empty Financials. This one proves the
+  # workspace has a financial day in it, and is written to FAIL against the empty tenant the old
+  # screenshots showed. Both are kept: structure catches architectural regressions, density catches
+  # the product quietly becoming six white canvases again.
+  echo
+  echo "── the product, with money in it"
+  ( cd "$ROOT/certification" \
+    && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" \
+       "$PW" test -c playwright.config.ts playwright/financials-density.cert.spec.ts --workers=1 --reporter=line )
+  check $? "populated Overview, Accounts, Charges, Payments, Subsidy, Activity, Studio, site narrowing, cold reload"
+
   echo "── the shared chrome, in every workspace that wears it"
   ( cd "$ROOT/certification" \
     && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" \
@@ -171,15 +201,26 @@ SQL
   ( cd "$ROOT/certification" \
     && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" CERT_EXPECT_UNAUTHORIZED=1 \
        CERT_WS_CUSTOMER="$CUSTOMER" CERT_WS_MEMBER="$MEMBER" \
-       "$PW" test -c playwright.config.ts playwright/financials-workspace.cert.spec.ts \
-       -g "without the grant" --workers=1 --reporter=line )
+       "$PW" test -c playwright.config.ts playwright/financials-workspace.cert.spec.ts playwright/financials-density.cert.spec.ts \
+       -g "without the grant|in business language" --workers=1 --reporter=line )
   unauthorized=$?
   pg -q -c "update public.role_permission_grants set allowed = true where permission_key = 'fin.read'"
   check $unauthorized "handing over financial work is refused server-side without fin.read"
 
+  #
+  # ── LEFT DEMO-READY, NOT LEFT EMPTY ─────────────────────────────────────────────────────────
+  #
+  # This used to end by deleting every enrolment- and customer-sourced charge in the org, so the
+  # tenant a human opened AFTER a certification run had nothing in it. The proof cleaned up after
+  # itself and took the product with it.
+  #
+  # The proof's OWN subject still goes — it is scaffolding — but the representative tenant is
+  # rebuilt, so the next person to open Financials sees the product rather than its skeleton.
   teardown
   pg -q -c "delete from public.enrollment_pricing_terms where org_id='$ORG'; delete from public.child_enrollment_agreements where id = '$AGREEMENT';"
-  check $? "the tenant is left as the browser proof found it"
+  check $? "the browser proof's own scaffolding is removed"
+  seed_demo_tenant >/dev/null 2>&1
+  check $? "the tenant is left demo-ready, not empty"
 fi
 
 echo; echo "RESULT: ${pass:-0} passed, ${fail:-0} failed"

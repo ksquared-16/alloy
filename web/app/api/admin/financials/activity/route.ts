@@ -26,7 +26,12 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const allowed = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
     if (!allowed.ok) {
-        return NextResponse.json({ error: allowed.message }, { status: 403 });
+        return NextResponse.json(
+            // `error` is what the operator reads; `required_permission` is for diagnostics,
+            // logging and tests — the grant key is not operator vocabulary.
+            { error: allowed.message, required_permission: allowed.requiredPermission },
+            { status: 403 },
+        );
     }
 
     const params = new URL(request.url).searchParams;

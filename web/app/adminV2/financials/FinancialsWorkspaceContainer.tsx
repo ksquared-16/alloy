@@ -79,7 +79,12 @@ export default function FinancialsWorkspaceContainer({ onClose }: { onClose?: ()
     const metrics = useFinancialsOverviewMetrics(siteId, section === "overview");
     const position = useFinancialsPosition(siteId, section === "accounts" || section === "subsidy");
     const flow = useFinancialsPaymentFlow(siteId, section === "payments");
-    const activity = useFinancialsActivity(siteId, section === "activity");
+    /*
+     * Overview reads the activity feed too, because a landing page that cannot say what MOVED is
+     * only half a landing page. It is the same feed the Activity section renders — one read model,
+     * shown at two densities — not a second history.
+     */
+    const activity = useFinancialsActivity(siteId, section === "activity" || section === "overview");
 
     const scopeLabel = useMemo(() => {
         if (!siteId) return "All sites";
