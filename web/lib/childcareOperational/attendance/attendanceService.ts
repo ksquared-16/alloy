@@ -364,6 +364,13 @@ export async function correctAttendanceEvent(
 export type ListAttendanceEventsFilters = {
     enrollmentAgreementId?: string;
     siteLocationId?: string;
+    /**
+     * Sites the caller is allowed to see, already intersected with any requested
+     * filter. An EMPTY array means "no sites permitted" and returns nothing —
+     * distinct from `undefined`, which means org-wide. Collapsing the two would
+     * turn a scoped caller into an unscoped one.
+     */
+    siteLocationIds?: readonly string[];
     customerMemberId?: string;
     serviceDateStart?: string;
     serviceDateEnd?: string;
@@ -377,6 +384,10 @@ export async function listAttendanceEvents(
     let q = supabase.from("child_attendance_events").select("*").eq("org_id", orgId);
     if (filters.enrollmentAgreementId) q = q.eq("enrollment_agreement_id", filters.enrollmentAgreementId);
     if (filters.siteLocationId) q = q.eq("site_location_id", filters.siteLocationId);
+    if (filters.siteLocationIds) {
+        if (filters.siteLocationIds.length === 0) return [];
+        q = q.in("site_location_id", [...filters.siteLocationIds]);
+    }
     if (filters.customerMemberId) q = q.eq("customer_member_id", filters.customerMemberId);
     if (filters.serviceDateStart) q = q.gte("service_date", filters.serviceDateStart);
     if (filters.serviceDateEnd) q = q.lte("service_date", filters.serviceDateEnd);

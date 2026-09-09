@@ -103,6 +103,44 @@ Attendance Workspace previously posted directly to the attendance API, skipping
 eligibility, confirmation and correlated audit. Surfaces may present a command
 differently; they may not own different mutation semantics.
 
+### Authorization (Slice 2A)
+
+Capture is gated on two INDEPENDENT questions, both server-side. A permission
+says **what** you may do; site scope says **where**. Neither substitutes for the
+other.
+
+| Concern | Owner |
+|---|---|
+| Capability | `attendance.record` / `attendance.read` in the canonical RBAC catalog, resolved by `resolveActorPermissionGrants` |
+| Reach | `locationAllowedUnderSiteScope` over the caller's `user_site_access`, ancestor-resolved so nested groups work |
+| Both, composed | `attendancePermissions.ts` — `assertAttendanceCaptureAllowed` / `assertAttendanceReadAllowed` |
+
+Rules:
+
+- **Authorization precedes every write.** The handler holds a service-role client
+  that bypasses RLS, so nothing downstream re-asks. The gate runs first, on every
+  path out of the handler.
+- **Scope covers the subject AND every location the fact names.** Checking only
+  the child would let a caller move them into another site's room; checking only
+  rooms would let an absence, which names no room, escape entirely.
+- **A correction is authorized identically to an original**, against the site of
+  the fact it corrects — read from that fact, never from the request body.
+  Otherwise "correct" becomes the way to write anything.
+- **A site filter may only narrow.** `narrowSitesToScope` intersects the request
+  with the gate's rights, so asking for a site you do not hold returns nothing.
+- **A failed grants read denies.** `null` from the resolver is not `[]` — an
+  unidentified caller is not an unprivileged one.
+- **Non-human producers do not inherit human sessions.** Kiosk, integration and
+  door channels must answer `assertNonHumanCaptureAllowed` with a registered
+  authority; until Threads 5/6 build that registration they are denied, which is
+  the correct default.
+
+`requireAdminOrOps` is deliberately NOT repaired here. It is shared by many
+unrelated routes and checks no role; fixing it globally would change
+authorization everywhere in one uncertified commit. Attendance uses
+`loadAdminRouteGate` plus the primitive above instead. **New attendance surfaces
+must do the same** — do not reintroduce `requireAdminOrOps` as a gate.
+
 ### Point-in-time whereabouts
 
 `attendanceWhereabouts.ts` folds the ledger into "where was child C at T" and
