@@ -61,8 +61,13 @@ export async function middleware(request: NextRequest) {
     /** Phase H1: legacy `/admin/*` bookmarks → canonical settings/workspace (legacy drawer retired). */
     const legacyTarget = legacyAdminRedirectTarget(pathname);
     if (legacyTarget) {
-        const url = request.nextUrl.clone();
-        url.pathname = legacyTarget;
+        /*
+         * `request.nextUrl.clone()` carries the origin the server is BOUND to, so
+         * this answered a Director on the tailnet with `https://localhost:PORT/workspace`.
+         * Certified live: `/admin/financials` returned exactly that. Same rule as
+         * the login redirect below — the caller's own origin, never ours.
+         */
+        const url = externalRedirectUrl(request, `${legacyTarget}${request.nextUrl.search}`);
         const res = NextResponse.redirect(url);
         res.headers.set("x-alloy-admin-mw", `legacy-redirect:${legacyTarget}`);
         return res;
@@ -71,8 +76,7 @@ export async function middleware(request: NextRequest) {
     /** Phase H1: `/adminV2`, `/admin/v2` → canonical `/admin`. */
     const transitionalTarget = normalizeTransitionalAdminPath(pathname);
     if (transitionalTarget && transitionalTarget !== pathname) {
-        const url = request.nextUrl.clone();
-        url.pathname = transitionalTarget;
+        const url = externalRedirectUrl(request, `${transitionalTarget}${request.nextUrl.search}`);
         const res = NextResponse.redirect(url);
         res.headers.set("x-alloy-admin-mw", `canonical-redirect:${transitionalTarget}`);
         return res;
