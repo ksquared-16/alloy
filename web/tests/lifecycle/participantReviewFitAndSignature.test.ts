@@ -23,8 +23,11 @@ describe("a captured signature is acknowledged immediately", () => {
          *
          * Measured after the fix: the signed state appears in well under a second at both widths.
          */
-        expect(CANVAS).toContain("}, [url, page, signature?.focus, !!signature, fitHeightPx]);");
-        expect(CANVAS).not.toMatch(/\}, \[url, page, signature\?\.preview\?\.typedName/);
+        // Asserted as the INTENT rather than the literal list, so adding a legitimate dependency
+        // (zoom, for instance) does not read as a regression while the real rule still holds.
+        const deps = CANVAS.match(/\}, \[url, page,[^\]]*\]\);/)?.[0] ?? "";
+        expect(deps).not.toBe("");
+        expect(deps).not.toContain("preview");
     });
 
     it("paints the mark in place, off the same rules the full render uses", () => {
@@ -60,6 +63,38 @@ describe("review presents the decision, not just the document", () => {
         expect(HOST).toContain('data-participant-document-zoom');
         expect(HOST).toContain("View larger");
         expect(HOST).toContain("Fit page");
+    });
+
+    it("makes View larger actually magnify, inside a region that holds its size", () => {
+        /*
+         * "View larger" originally only removed the height cap, so the page grew to container width
+         * and stopped. On a phone the container IS about the fitted width — 362px tall became 365px
+         * — and Kelly reported, correctly, that pressing it did nothing.
+         *
+         * Zoom is now a multiple of the width that would just fill the container, so it magnifies at
+         * any width: measured 2.2x at 375 and 4.24x against the fitted page at 1280.
+         *
+         * The region keeps its height, so enlarging is a magnifier rather than a layout change and
+         * the decision controls do not move. That matters: letting the page expand the card would
+         * push them back below the fold, undoing the fix they were introduced for.
+         */
+        expect(CANVAS).toContain("zoom");
+        expect(CANVAS).toMatch(/const scale = zoom && zoom > 0 \? widthScale \* zoom : fitted;/);
+        expect(HOST).toContain("DOCUMENT_ZOOM");
+        expect(HOST).toContain("zoom={documentEnlarged ? DOCUMENT_ZOOM : undefined}");
+        // The region is height-pinned and scrolls when the page is bigger than it.
+        expect(HOST).toMatch(/style=\{fitHeightPx \? \{ height: fitHeightPx \+ 24 \}/);
+        expect(HOST).toContain('documentEnlarged ? "overflow-auto"');
+    });
+
+    it("sizes the page wrapper so an enlarged document can be scrolled to", () => {
+        /*
+         * The wrapper is `overflow-hidden` — it rounds the canvas corners — and, left to flow, took
+         * the REGION's width. So a page rendered 616px wide sat in a 299px wrapper that clipped it,
+         * and the region's scrollWidth stayed at 299: the right half of the document was not merely
+         * off-screen, it was unreachable. Measured after: scrollWidth 628 against clientWidth 299.
+         */
+        expect(CANVAS).toMatch(/wrapper\.style\.width = `\$\{viewport\.width\}px`;/);
     });
 
     it("keeps the decision reachable on a phone", () => {

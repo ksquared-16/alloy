@@ -56,6 +56,9 @@ import {
     IntakeNotice,
 } from "./ParentIntakeShell";
 
+/** How much bigger than the available width "View larger" renders the page. */
+const DOCUMENT_ZOOM = 2.2;
+
 type ResolvePacketMeta = {
     packet_session_id: string;
     packet_definition_id: string;
@@ -1479,19 +1482,33 @@ export function FormEmbedClient({
                            paperwork; the machinery stays out of sight. */
                         <IntakeCard>
                             <ParticipantArtifactHeader status={artifactStatus} />
+                            {/*
+                              * THE REGION KEEPS ITS SIZE; ONLY THE DOCUMENT INSIDE IT GROWS.
+                              *
+                              * Enlarging used to let the page expand the card, which pushed the
+                              * decision controls back below the fold — the very thing fitting had
+                              * just fixed. Holding the region's height means "View larger" is a
+                              * magnifier rather than a layout change: the parent scrolls WITHIN the
+                              * document while Make a change and Everything looks good stay put.
+                              */}
                             <div
-                                className="relative flex justify-center overflow-hidden rounded-xl border border-alloy-midnight/[0.08] bg-alloy-stone/20 p-3"
+                                className={clsx(
+                                    "relative rounded-xl border border-alloy-midnight/[0.08] bg-alloy-stone/20 p-3",
+                                    documentEnlarged ? "overflow-auto" : "flex justify-center overflow-hidden",
+                                )}
+                                style={fitHeightPx ? { height: fitHeightPx + 24 } : undefined}
                                 data-participant-document-region={documentEnlarged ? "enlarged" : "fit"}
                             >
                                 <ParticipantDocumentCanvas
                                     url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
                                     onUnavailable={() => setDocumentUnavailable(true)}
                                     fitHeightPx={documentEnlarged ? undefined : (fitHeightPx ?? undefined)}
+                                    zoom={documentEnlarged ? DOCUMENT_ZOOM : undefined}
                                 />
                             </div>
                             <div className="mt-3 flex items-center justify-between gap-3">
                                 <span className="text-[13px] text-alloy-midnight/55">
-                                    {documentEnlarged ? "Full size" : "Whole page shown"}
+                                    {documentEnlarged ? "Enlarged — scroll to read" : "Whole page shown"}
                                 </span>
                                 <button
                                     type="button"

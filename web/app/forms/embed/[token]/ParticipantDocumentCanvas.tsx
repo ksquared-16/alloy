@@ -84,6 +84,7 @@ export function ParticipantDocumentCanvas({
     signature,
     onUnavailable,
     fitHeightPx,
+    zoom,
 }: {
     url: string;
     signature?: DocumentSignatureOverlay | null;
@@ -98,6 +99,15 @@ export function ParticipantDocumentCanvas({
      * it sat below the fold and a parent had to guess they existed.
      */
     fitHeightPx?: number;
+    /**
+     * Magnification, as a multiple of the width that would just fill the container.
+     *
+     * "View larger" originally only removed the height cap, which meant the page grew to container
+     * width and stopped. On a phone the container IS roughly the fitted width, so the document went
+     * from 362px tall to 365px — Kelly pressed it and correctly reported that nothing happened.
+     * Enlarging has to mean bigger than the space available, with the region scrolled to read it.
+     */
+    zoom?: number;
 }) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [status, setStatus] = useState<"loading" | "ready">("loading");
@@ -154,10 +164,13 @@ export function ParticipantDocumentCanvas({
                      * host's own controls stay visible outside it either way.
                      */
                     const widthScale = width / base.width;
-                    const scale =
+                    const fitted =
                         fitHeightPx && fitHeightPx > 0
                             ? Math.max(MIN_FIT_SCALE, Math.min(widthScale, fitHeightPx / base.height))
                             : widthScale;
+                    // Zoom is relative to filling the container, so it is genuine magnification at
+                    // any width rather than "grow until you touch the edges, then stop".
+                    const scale = zoom && zoom > 0 ? widthScale * zoom : fitted;
                     const viewport = page.getViewport({ scale });
 
                     // Same render contract as the operator canvas: the CANVAS is handed to pdf.js,
@@ -179,6 +192,17 @@ export function ParticipantDocumentCanvas({
                     const wrapper = document.createElement("div");
                     wrapper.className =
                         "relative overflow-hidden rounded-lg border border-alloy-midnight/10 shadow-sm";
+                    /*
+                     * SIZED TO THE PAGE, so an enlarged document can actually be scrolled to.
+                     *
+                     * The wrapper is `overflow-hidden` (it rounds the canvas corners) and, left to
+                     * flow, it took the REGION's width. So at 375 a page rendered 616px wide sat
+                     * inside a 299px wrapper that clipped it, and the region's scrollWidth stayed at
+                     * 299 — the right half of the document was not merely off-screen, it was
+                     * unreachable by scrolling. Stating the width makes the region scroll instead.
+                     */
+                    wrapper.style.width = `${viewport.width}px`;
+                    wrapper.style.flexShrink = "0";
                     wrapper.appendChild(canvas);
 
                     const sig = signatureRef.current;
@@ -234,7 +258,7 @@ export function ParticipantDocumentCanvas({
          * The mark is painted over an already-rendered page, so it updates in place below. The
          * document may still regenerate afterwards; the acknowledgment no longer waits for it.
          */
-    }, [url, page, signature?.focus, !!signature, fitHeightPx]);
+    }, [url, page, signature?.focus, !!signature, fitHeightPx, zoom]);
 
     /**
      * The captured mark, projected immediately.
