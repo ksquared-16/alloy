@@ -64,8 +64,68 @@ export type ChildServiceDayExpectation = {
     expectationId: string | null;
 };
 
-/** A prohibition is the modality that means "not operating / not attending". */
-const PROHIBITED = "prohibited";
+/*
+ * ── WHY ABSENCE IS `intended` AND CLOSURE IS `prohibited` ──
+ *
+ * The first draft authored both as `prohibited`. That is wrong for a child, and
+ * Scenario F is what proves it: Emma is marked away and then attends anyway. Under
+ * `prohibited` — a deontic "must not" — her arrival is a VIOLATION of a standing
+ * expectation, and the ledger would be recording that a child broke a rule by
+ * coming to nursery. Nobody prohibited Emma from attending; somebody said she was
+ * not expected.
+ *
+ * `intended` is the modality for what SHOULD or WILL be without obligation. A
+ * plan that reality overtakes is just a plan that changed, which is exactly the
+ * semantics Scenario F needs.
+ *
+ * A closure is genuinely deontic. The site MUST NOT operate on a holiday — that
+ * is an obligation on the organisation, not an expectation about it — so closure
+ * keeps `prohibited`.
+ *
+ * This also resolves the standing question cleanly for the common case: an
+ * `intended` expectation imposes no obligation, so consuming it at `proposed`
+ * standing asserts nothing about binding force. See STANDING CONTRACT below.
+ */
+/** A child is EXPECTED away — intent, never an obligation on the child. */
+const CHILD_AWAY_MODALITY = "intended";
+/** An operating grain is prohibited from operating — genuinely deontic. */
+const CLOSURE_MODALITY = "prohibited";
+
+/**
+ * ── THE STANDING CONTRACT ──
+ *
+ * Attendance consumes an activated service-day expectation REGARDLESS of its
+ * standing, and that is a decision rather than an oversight.
+ *
+ * Standing is binding FORCE (Law 6) — whether an expectation obliges anyone. It
+ * is not a confidence score and not a workflow status. The service-day projection
+ * asks a different question: "is this child expected today?" An operator saying
+ * Emma is sick has changed what the centre expects whether or not anyone is
+ * thereby obliged, so gating the roster on standing would leave a known-away
+ * child showing as an unexplained missing arrival — the exact defect Thread 4
+ * exists to remove.
+ *
+ * Two consequences are deliberate:
+ *
+ *   - Absence is `intended`, which imposes no obligation at ANY standing, so the
+ *     question barely arises for the high-frequency case.
+ *   - Closure is `prohibited` and deontic. Per the expectations architecture an
+ *     authorized human holding the authority is "self-ratifying within authority"
+ *     and should land `binding`; today the intake clamps every act to `proposed`
+ *     because Wave C · C2 was never wired to `resolveAuthorityToStanding`. That is
+ *     an Operational Expectations gap, NOT something Attendance should route
+ *     around by inventing a standing.
+ *
+ * `expectationStandingIsConsumable` is the single place that decision lives, and
+ * its tests fail if someone narrows it silently — so a future standing change
+ * cannot quietly stop closures working.
+ */
+export function expectationStandingIsConsumable(standing: string): boolean {
+    // Every standing the ledger can express is consumable for INTERPRETATION.
+    // Deliberately total: a new standing must be considered here explicitly
+    // rather than defaulting to "ignored", which would silently drop truth.
+    return standing === "proposed" || standing === "binding" || standing === "model";
+}
 
 function reasonOf(condition: Record<string, unknown>): string | null {
     const r = condition?.reason_key ?? condition?.reasonKey;
@@ -88,19 +148,22 @@ export function interpretServiceDay(input: {
     effective: readonly EffectiveExpectationForSubject[];
     unresolved?: readonly UnresolvedExpectationLineage[];
 }): ChildServiceDayExpectation[] {
-    const prohibitions = input.effective.filter((e) => e.modality === PROHIBITED);
+    const consumable = input.effective.filter((e) => expectationStandingIsConsumable(e.standing));
 
-    const siteClosure = prohibitions.find(
+    const closures = consumable.filter((e) => e.modality === CLOSURE_MODALITY);
+    const awayIntents = consumable.filter((e) => e.modality === CHILD_AWAY_MODALITY);
+
+    const siteClosure = closures.find(
         (e) => e.subjectKind === ATTENDANCE_SUBJECT_KINDS.site && e.subjectId === input.siteLocationId,
     );
 
     const groupClosureById = new Map<string, EffectiveExpectationForSubject>();
-    for (const e of prohibitions) {
+    for (const e of closures) {
         if (e.subjectKind === ATTENDANCE_SUBJECT_KINDS.operationalGroup) groupClosureById.set(e.subjectId, e);
     }
 
     const childAwayById = new Map<string, EffectiveExpectationForSubject>();
-    for (const e of prohibitions) {
+    for (const e of awayIntents) {
         if (e.subjectKind === ATTENDANCE_SUBJECT_KINDS.child) childAwayById.set(e.subjectId, e);
     }
 

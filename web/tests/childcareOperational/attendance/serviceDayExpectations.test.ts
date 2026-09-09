@@ -13,6 +13,7 @@ import {
     applyObservedPresence,
     interpretServiceDay,
     raisesMissingArrivalAttention,
+    expectationStandingIsConsumable,
     type ChildServiceDayExpectation,
 } from "@/lib/childcareOperational/attendance/serviceDayExpectations";
 import type { EffectiveExpectationForSubject } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
@@ -21,6 +22,29 @@ const SITE = "site-1";
 const GROUP = "toddler-1";
 const EMMA = "emma";
 const FINN = "finn";
+
+/**
+ * A child known-away is `intended`, not `prohibited`: nobody forbids a child from
+ * attending, and Scenario F has her attend. A closure IS deontic and stays
+ * `prohibited`.
+ */
+function awayIntent(
+    subjectId: string,
+    reasonKey?: string,
+    standing = "proposed",
+): EffectiveExpectationForSubject {
+    return {
+        subjectKind: "child",
+        subjectId,
+        expectationId: `exp-child-${subjectId}`,
+        lineageRootId: `root-${subjectId}`,
+        modality: "intended",
+        condition: reasonKey ? { reason_key: reasonKey } : {},
+        effectiveFrom: "2026-09-18",
+        effectiveTo: "2026-09-18",
+        standing,
+    };
+}
 
 function prohibition(
     subjectKind: string,
@@ -64,7 +88,7 @@ describe("no expectations — the ordinary day is untouched", () => {
         const rows = interpretServiceDay({
             ...base,
             scheduledChildIds: [FINN],
-            effective: [prohibition("child", EMMA, "vacation")],
+            effective: [awayIntent(EMMA, "vacation")],
         });
         expect(rows.map((r) => r.childId)).toEqual([FINN]);
     });
@@ -73,7 +97,7 @@ describe("no expectations — the ordinary day is untouched", () => {
 describe("planned absence and same-day sick — known away", () => {
     it("reads a child prohibition as known away, carrying the reason", () => {
         const rows = byChild(
-            interpretServiceDay({ ...base, effective: [prohibition("child", EMMA, "vacation")] }),
+            interpretServiceDay({ ...base, effective: [awayIntent(EMMA, "vacation")] }),
         );
         expect(rows.get(EMMA)).toMatchObject({ interpretation: "known_away", reasonKey: "vacation" });
         expect(rows.get(FINN)?.interpretation).toBe("normal");
@@ -81,13 +105,13 @@ describe("planned absence and same-day sick — known away", () => {
 
     it("carries a sick reason the same way — one mechanism, different meaning", () => {
         const rows = byChild(
-            interpretServiceDay({ ...base, effective: [prohibition("child", EMMA, "illness")] }),
+            interpretServiceDay({ ...base, effective: [awayIntent(EMMA, "illness")] }),
         );
         expect(rows.get(EMMA)?.reasonKey).toBe("illness");
     });
 
     it("stops a known-away child raising unexplained missing-arrival attention", () => {
-        const [emma] = interpretServiceDay({ ...base, scheduledChildIds: [EMMA], effective: [prohibition("child", EMMA, "illness")] });
+        const [emma] = interpretServiceDay({ ...base, scheduledChildIds: [EMMA], effective: [awayIntent(EMMA, "illness")] });
         expect(raisesMissingArrivalAttention(applyObservedPresence(emma, "no_record"))).toBe(false);
     });
 
@@ -128,7 +152,7 @@ describe("closure — authored once, applied to whoever was scheduled", () => {
         const rows = byChild(
             interpretServiceDay({
                 ...base,
-                effective: [prohibition("site", SITE, "weather_closure"), prohibition("child", EMMA, "vacation")],
+                effective: [prohibition("site", SITE, "weather_closure"), awayIntent(EMMA, "vacation")],
             }),
         );
         expect(rows.get(EMMA)?.interpretation).toBe("closed");
@@ -173,7 +197,7 @@ describe("an unresolved lineage is not a clear day", () => {
 
 describe("OBSERVED FACTS WIN — the case the architecture turns on", () => {
     const onVacation = () =>
-        interpretServiceDay({ ...base, scheduledChildIds: [EMMA], effective: [prohibition("child", EMMA, "vacation")] })[0];
+        interpretServiceDay({ ...base, scheduledChildIds: [EMMA], effective: [awayIntent(EMMA, "vacation")] })[0];
 
     it("a child who attends despite a vacation plan is present, and visibly unplanned", () => {
         expect(applyObservedPresence(onVacation(), "present")).toBe("attended_despite_plan");
@@ -207,5 +231,63 @@ describe("OBSERVED FACTS WIN — the case the architecture turns on", () => {
         expect(raisesMissingArrivalAttention("known_away")).toBe(false);
         expect(raisesMissingArrivalAttention("here_now")).toBe(false);
         expect(raisesMissingArrivalAttention("closed")).toBe(false);
+    });
+});
+
+describe("the standing contract is explicit, not accidental", () => {
+    it("consumes every standing the ledger can express", () => {
+        // Standing is binding FORCE, not confidence. The roster asks "is this
+        // child expected today", which is a different question — so an operator's
+        // sick call counts whether or not anyone is thereby obliged.
+        for (const standing of ["proposed", "binding", "model"]) {
+            expect(expectationStandingIsConsumable(standing)).toBe(true);
+        }
+    });
+
+    it("interprets a known-away child at proposed standing", () => {
+        // The intake clamps every act to `proposed` (Wave C · C2 unwired). If this
+        // stopped working, every sick call would silently become an unexplained
+        // missing arrival — the defect Thread 4 exists to remove.
+        const [emma] = interpretServiceDay({
+            ...base,
+            scheduledChildIds: [EMMA],
+            effective: [awayIntent(EMMA, "illness", "proposed")],
+        });
+        expect(emma.interpretation).toBe("known_away");
+    });
+
+    it("would refuse a standing the ledger cannot express", () => {
+        // Deliberately total: a new standing must be considered here explicitly
+        // rather than defaulting into the consumable set.
+        expect(expectationStandingIsConsumable("invented")).toBe(false);
+    });
+
+    it("ignores an expectation whose standing is not consumable", () => {
+        const [emma] = interpretServiceDay({
+            ...base,
+            scheduledChildIds: [EMMA],
+            effective: [awayIntent(EMMA, "vacation", "invented")],
+        });
+        expect(emma.interpretation).toBe("normal");
+    });
+});
+
+describe("modality is not interchangeable", () => {
+    it("does not read a child PROHIBITION as known away", () => {
+        // A prohibition on a child is not a plan; if one ever appears it means
+        // something else, and quietly treating it as vacation would be inventing
+        // meaning the author did not express.
+        const [emma] = interpretServiceDay({
+            ...base,
+            scheduledChildIds: [EMMA],
+            effective: [prohibition("child", EMMA, "vacation")],
+        });
+        expect(emma.interpretation).toBe("normal");
+    });
+
+    it("does not read a site INTENT as a closure", () => {
+        const siteIntent = { ...awayIntent(SITE, "maybe_closed"), subjectKind: "site", subjectId: SITE };
+        const rows = interpretServiceDay({ ...base, effective: [siteIntent] });
+        expect(rows.every((r) => r.interpretation === "normal")).toBe(true);
     });
 });
