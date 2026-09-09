@@ -116,4 +116,37 @@ describe("middleware redirect address", () => {
         expect(res.status).toBe(307);
         expect(res.headers.get("location")).toBe("http://localhost:3011/login");
     });
+
+    /*
+     * These two ran BEFORE the auth check, on `request.nextUrl.clone()`, and were
+     * missed by the first pass because a transitional redirect happens to emit a
+     * relative Location. The legacy branch does not: certified live, an
+     * authenticated `/admin/financials` over the tailnet answered
+     * `https://localhost:3012/workspace`, which broke authenticated route
+     * transitions even once the session was visible.
+     */
+    it("keeps the caller's origin on a legacy /admin redirect", async () => {
+        authedSub = "user-1";
+        const res = await middleware(request("/admin/financials", { headers: tailnetHeaders }));
+
+        expect(res.status).toBe(307);
+        expect(res.headers.get("x-alloy-admin-mw")).toBe("legacy-redirect:/workspace");
+        expect(res.headers.get("location")).toBe(`https://${TAILNET}/workspace`);
+    });
+
+    it("keeps the caller's origin on a transitional /adminV2 redirect, query intact", async () => {
+        authedSub = "user-1";
+        const res = await middleware(
+            request("/adminV2/settings/organization?tab=processes", { headers: tailnetHeaders }),
+        );
+
+        expect(res.status).toBe(307);
+        expect(res.headers.get("location")).toBe(`https://${TAILNET}/organization?tab=processes`);
+    });
+
+    it("leaves those redirects on localhost for a direct caller", async () => {
+        const res = await middleware(request("/admin/financials"));
+
+        expect(res.headers.get("location")).toBe("http://localhost:3011/workspace");
+    });
 });
