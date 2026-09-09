@@ -126,4 +126,6 @@ export const PACK_TO_BUSINESS_PROCESS: Record<MetricPackKey, OperationalCalculat
     operational_health: "operational_health",
     capacity: "capacity",
     trust: "operational_health",
+    /* Identity: the Financials pack IS the financial business process an organization runs. */
+    financials: "financial",
 };

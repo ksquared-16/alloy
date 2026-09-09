@@ -1,37 +1,89 @@
 /**
  * FINANCIALS — the workspace product structure.
  *
- * Two sections, and only two, because only two are true today.
+ * ── WORK AND STUDIO ──
  *
- *   Overview   what financial work needs attention right now
- *   Charges    the draft charges waiting to be posted, and the operator's path to acting on them
+ * Work is running the financial day. Studio is what the day is made of — and Financials has a
+ * real one, because the configuration already exists at `/organization/financials`: the
+ * commercial catalogue, tuition rates, policies, accounting mappings, the simulator and the
+ * funding boundary.
  *
- * ── WHY THERE IS NO STUDIO ──
+ * Thread 4 declined a Studio for exactly the right reason at the time — a mode rail with one
+ * position in it is furniture, and a Studio that DUPLICATED that configuration would be worse
+ * than none. This one duplicates nothing: it is a launch and summary surface over the canonical
+ * owners, and every tile navigates to the page that actually persists the setting. No
+ * configuration is authored here and nothing is written here.
  *
- * Operations has Work | Studio because it both RUNS the operating day and CONFIGURES what the day is
- * made of. Financials configuration already exists and already has a home: `/organization/financials`
- * owns the commercial catalogue, policies, accounting calendars and the simulator. Adding a Studio
- * here would either move that product or duplicate it, and a mode rail with one position in it is
- * furniture — which is exactly the reasoning Operations records for the rail it removed.
+ * ── WHY THESE WORK SECTIONS, AND NOT MORE ──
  *
- * ── WHY THERE ARE NOT MORE WORK SECTIONS ──
+ * Each one has a canonical owner, a proven cross-household read seam, and its own location
+ * semantics. A section that cannot be filled truthfully is a navigation promise the product
+ * cannot keep, so the test for adding one is a read seam, not an ambition.
  *
- * Collectible balances, unapplied payments, responsibility exceptions, subsidy claims and subsidy
- * variances are all real operator work and all have canonical owners. None of them has a
- * cross-household read seam yet, and a section that cannot be filled truthfully is a navigation
- * promise the product cannot keep. They are follow-on expansions of this same shell, not V1.
+ *   Overview    the landing: money-related figures from the registered Financials metric pack
+ *   Accounts    households carrying posted money, from the position cohort
+ *   Charges     draft charges waiting to be posted, and the path to acting on them
+ *   Payments    money in, and money in that is not settling anything
+ *   Subsidy     expected funding, submitted-claim suppression, and unresolved variance
+ *   Activity    what happened lately — explanatory history, never a balance
+ *
+ * ── AND WHAT IS STILL ABSENT ──
+ *
+ * There is no P&L section and no Revenue figure anywhere in this workspace. Recognised revenue
+ * needs a revenue-recognition policy, deferral and a chart of accounts posting policy for every
+ * childcare consequence. The platform's double-entry `gl_*` tables belong to the job vertical
+ * and are dormant. P&L requires accounting-domain ownership beyond current Financials V1, and a
+ * tab that implied otherwise would create the accounting semantics by pretending to report them.
  */
 
-export type FinancialsMode = "work";
-export type FinancialsSection = "overview" | "charges";
+export type FinancialsMode = "work" | "studio";
 
-export const FINANCIALS_MODES = [{ key: "work" as const, label: "Work" }] as const;
+export type FinancialsWorkSection =
+    | "overview"
+    | "accounts"
+    | "charges"
+    | "payments"
+    | "subsidy"
+    | "activity";
 
-export const FINANCIALS_SECTIONS: { key: FinancialsSection; label: string }[] = [
+/** Studio has one surface: the launch board over the canonical configuration owners. */
+export type FinancialsStudioSection = "setup";
+
+export type FinancialsSection = FinancialsWorkSection | FinancialsStudioSection;
+
+export const FINANCIALS_MODES = [
+    { key: "work" as const, label: "Work" },
+    { key: "studio" as const, label: "Studio" },
+] as const;
+
+export const FINANCIALS_WORK_SECTIONS: { key: FinancialsWorkSection; label: string }[] = [
     { key: "overview", label: "Overview" },
+    { key: "accounts", label: "Accounts" },
     { key: "charges", label: "Charges" },
+    { key: "payments", label: "Payments" },
+    { key: "subsidy", label: "Subsidy" },
+    { key: "activity", label: "Activity" },
 ];
 
+export const FINANCIALS_STUDIO_SECTIONS: { key: FinancialsStudioSection; label: string }[] = [
+    { key: "setup", label: "Setup" },
+];
+
+const WORK_KEYS = new Set(FINANCIALS_WORK_SECTIONS.map((s) => s.key));
+
+export function financialsSectionsForMode(mode: FinancialsMode): { key: FinancialsSection; label: string }[] {
+    return mode === "studio" ? FINANCIALS_STUDIO_SECTIONS : FINANCIALS_WORK_SECTIONS;
+}
+
+/** The section a mode lands on when it is entered. */
+export function defaultFinancialsSection(mode: FinancialsMode): FinancialsSection {
+    return mode === "studio" ? "setup" : "overview";
+}
+
+export function isFinancialsWorkSection(value: unknown): value is FinancialsWorkSection {
+    return typeof value === "string" && WORK_KEYS.has(value as FinancialsWorkSection);
+}
+
 export function isFinancialsSection(value: unknown): value is FinancialsSection {
-    return value === "overview" || value === "charges";
+    return isFinancialsWorkSection(value) || value === "setup";
 }

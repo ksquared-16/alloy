@@ -8,6 +8,7 @@
 
 import { runRegisteredAction } from "@/lib/adminV2/actions/actionExecutor";
 import { getRegisteredAction } from "@/lib/adminV2/actions/actionRegistry";
+import { isSubjectlessEntityId } from "@/lib/adminV2/actions/subjectlessActionConstants";
 import type {
     ActionExecutionMode,
     ActionInvocation,
@@ -60,10 +61,29 @@ function mapActionInvocation(input: {
             : input.invocation.origin === "automation"
               ? "workflow"
               : "manual";
+    /*
+     * THE SUBJECTLESS SENTINEL STOPS HERE.
+     *
+     * The Command Runtime requires a non-empty execution subject — `executeCommandInvocation`
+     * fails an empty `entityId` as `missing_entity` — so an action that declares
+     * `requiredContext.requiresEntityId: false` reaches it carrying a sentinel rather than
+     * nothing. That sentinel is a TRANSPORT artefact. It satisfies the runtime's subject
+     * contract; it is not an id, and no action handler should ever see it as one.
+     *
+     * Handlers already express "no subject" as the empty string: they read
+     * `t(invocation.entityId) || <fallback>`, and a truthy sentinel would defeat that fallback
+     * and put a non-existent id on results, refresh targets and opened records. Worse, a
+     * child-grain handler that reads the subject as a filter would narrow to a record that
+     * cannot exist. Normalising once, here, is what makes the generalised transport correct for
+     * EVERY subjectless action instead of requiring each to learn a sentinel it did not ask for.
+     */
+    const subjectEntityId = isSubjectlessEntityId(input.executionSubject.entityId)
+        ? ""
+        : input.executionSubject.entityId;
     return {
         actionKey: input.actionKey,
         entityType: input.executionSubject.entityType,
-        entityId: input.executionSubject.entityId,
+        entityId: subjectEntityId,
         context: {
             surface: input.invocation.surface ?? null,
             department_id: input.departmentId ?? null,

@@ -34,38 +34,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveAllocatableNet, AllocatableNetError } from "@/lib/financials/responsibility/resolveAllocatableNet";
+import {
+    computeCollectiblePosition,
+    SUPPRESSING_CLAIM_STATES,
+    type CollectiblePosition,
+} from "@/lib/financials/subsidy/collectiblePosition";
 
-/** Claim states in which a claim has been sent and may therefore suppress collection. */
-export const SUPPRESSING_CLAIM_STATES = ["submitted", "accepted"] as const;
-
-export type CollectiblePosition = {
-    chargeId: string;
-    currencyCode: string;
-    /** Thread 8's answer: the posted charge less active applications of posted payments. */
-    outstandingCents: number;
-    /** Thread 6: what named parties were made responsible for, plus anything still unassigned. */
-    assignedResponsibilityCents: number;
-    unassignedResponsibilityCents: number;
-    /** Thread 6 expected funding attributable to this obligation. Never money. */
-    expectedSubsidyCents: number;
-    /** The bounded, governed suppression — submitted claims only. */
-    submittedClaimSuppressionCents: number;
-    /** Agency money that actually arrived and was applied to this charge. */
-    actualSubsidyReceivedCents: number;
-    /** Signed. Negative is short-paid or denied; positive is an overpayment. */
-    unresolvedVarianceCents: number;
-    /** outstanding − suppression, never below zero. */
-    currentlyCollectibleCents: number;
-    /** Every figure above, with the row that produced it, so an operator can be told why. */
-    explanation: {
-        grossCents: number;
-        reductionsCents: number;
-        netCents: number;
-        suppressionBoundBy: "claimed" | "expected" | "outstanding" | "none";
-        submittedClaimIds: string[];
-        openVarianceStates: string[];
-    };
-};
+/*
+ * The arithmetic lives in `collectiblePosition.ts` and is shared with the cross-household
+ * projection the Financials workspace reads. This function is now exactly the READING: it
+ * fetches one charge's facts and hands them over. Re-exported here so every existing caller
+ * keeps its import.
+ */
+export { SUPPRESSING_CLAIM_STATES };
+export type { CollectiblePosition };
 
 export class CollectibleError extends Error {
     constructor(public readonly code: string, message: string) {
@@ -118,21 +100,6 @@ export async function resolveFamilyCollectible(
             .map((p) => [p.id, p]),
     );
 
-    let appliedCents = 0;
-    let actualSubsidyReceivedCents = 0;
-    for (const application of activeApplications) {
-        const payment = payments.get(application.payment_id);
-        if (!payment || payment.status !== "posted") continue;
-        const amount = Number(application.allocated_amount_cents) || 0;
-        appliedCents += amount;
-        // AGENCY MONEY IS TOLD APART BY WHO PAID IT — the payer identity Thread 6 taught the payment
-        // path to record. Never by guessing from the amount.
-        if ((payment.payer_entity_type ?? "") === "agency") actualSubsidyReceivedCents += amount;
-    }
-
-    const postedGross = net.status === "posted" ? net.grossCents + net.reductionsCents : 0;
-    const outstandingCents = Math.max(0, postedGross - appliedCents);
-
     // ── RESPONSIBILITY (Thread 6) ───────────────────────────────────────────────────────────
     const { data: allocationRows, error: allocationError } = await supabase
         .from("financial_responsibility_allocations")
@@ -142,12 +109,6 @@ export async function resolveFamilyCollectible(
         .eq("state", "active");
     if (allocationError) throw new CollectibleError("db_error", allocationError.message);
     const allocations = (allocationRows ?? []) as Array<{ id: string; assigned_amount_cents: number; is_unassigned: boolean; share_id: string | null }>;
-    const assignedResponsibilityCents = allocations
-        .filter((a) => !a.is_unassigned)
-        .reduce((acc, a) => acc + Number(a.assigned_amount_cents), 0);
-    const unassignedResponsibilityCents = allocations
-        .filter((a) => a.is_unassigned)
-        .reduce((acc, a) => acc + Number(a.assigned_amount_cents), 0);
 
     // ── EXPECTED SUBSIDY (Thread 6's seam, with Thread 9's provenance) ──────────────────────
     /* The same two anchors a claim reads: this period's allocation, or the share behind it. */
@@ -167,12 +128,7 @@ export async function resolveFamilyCollectible(
                   .eq("org_id", args.orgId).eq("state", "active").is("allocation_id", null).in("share_id", shareIds)
             : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
     ]);
-    const fundingRows = [...(fundingByAllocation ?? []), ...(fundingByShare ?? [])];
-    const expectedSubsidyCents = ((fundingRows ?? []) as Array<Record<string, unknown>>).reduce((acc, f) => {
-        if (f.basis === "fixed_amount") return acc + Number(f.expected_amount_cents ?? 0);
-        // A percentage of the NET, the same convention every other percentage in Financials uses.
-        return acc + Math.floor((net.netCents * Number(f.percent_basis_points ?? 0)) / 10_000);
-    }, 0);
+    const fundingRows = ([...(fundingByAllocation ?? []), ...(fundingByShare ?? [])]) as Array<Record<string, unknown>>;
 
     // ── WHAT WAS ACTUALLY CLAIMED, ON CLAIMS THAT WERE ACTUALLY SENT ────────────────────────
     const { data: claimLineRows, error: claimLineError } = await supabase
@@ -193,36 +149,6 @@ export async function resolveFamilyCollectible(
         : { data: [] };
     const claimStateById = new Map(((claimRows ?? []) as Array<{ id: string; state: string }>).map((c) => [c.id, c.state]));
 
-    const submittedLines = claimLines.filter((l) =>
-        (SUPPRESSING_CLAIM_STATES as readonly string[]).includes(claimStateById.get(l.claim_id) ?? ""),
-    );
-    const claimedCents = submittedLines.reduce((acc, l) => acc + Number(l.claimed_amount_cents), 0);
-    const submittedClaimIds = [...new Set(submittedLines.map((l) => l.claim_id))];
-
-    /*
-     * SUPPRESSION IS ABOUT MONEY STILL EXPECTED TO ARRIVE, not money that already did.
-     *
-     * Once the agency has paid, its payment reduced outstanding through Thread 8 and the claim has
-     * done its job — continuing to suppress would hide the family's own copay behind a claim that is
-     * already settled, and the family would be asked for nothing at all. So what has been received
-     * is taken off the claim before it bounds anything.
-     */
-    const stillExpectedFromAgencyCents = Math.max(0, claimedCents - actualSubsidyReceivedCents);
-
-    /*
-     * THE SMALLEST OF THE THREE. Each bound removes a specific lie — claiming more than was expected,
-     * expecting more than was claimed, or suppressing money the family no longer owes — and the one
-     * that bound the answer is reported so an operator can be told which.
-     */
-    const bounds: Array<{ kind: CollectiblePosition["explanation"]["suppressionBoundBy"]; value: number }> = [
-        { kind: "claimed", value: stillExpectedFromAgencyCents },
-        { kind: "expected", value: Math.max(0, expectedSubsidyCents - actualSubsidyReceivedCents) },
-        { kind: "outstanding", value: outstandingCents },
-    ];
-    const winner = bounds.reduce((lowest, candidate) => (candidate.value < lowest.value ? candidate : lowest));
-    const submittedClaimSuppressionCents = submittedLines.length === 0 ? 0 : Math.max(0, winner.value);
-
-    // ── UNRESOLVED VARIANCE — reported beside the figure, never folded into it ──────────────
     const lineIds = claimLines.map((l) => l.id);
     const { data: varianceRows } = lineIds.length
         ? await supabase
@@ -231,28 +157,43 @@ export async function resolveFamilyCollectible(
               .eq("org_id", args.orgId)
               .in("claim_line_id", lineIds)
         : { data: [] };
-    const openVariances = ((varianceRows ?? []) as Array<{ variance_cents: number; state: string; resolution_kind: string | null }>)
-        .filter((v) => v.resolution_kind == null);
-    const unresolvedVarianceCents = openVariances.reduce((acc, v) => acc + Number(v.variance_cents), 0);
+    const variances = ((varianceRows ?? []) as Array<{ variance_cents: number; state: string; resolution_kind: string | null }>);
 
-    return {
+    // ── EVERY FACT IS NOW IN HAND. THE ARITHMETIC IS SOMEBODY ELSE'S ───────────────────────
+    return computeCollectiblePosition({
         chargeId: args.chargeId,
         currencyCode: net.currencyCode,
-        outstandingCents,
-        assignedResponsibilityCents,
-        unassignedResponsibilityCents,
-        expectedSubsidyCents,
-        submittedClaimSuppressionCents,
-        actualSubsidyReceivedCents,
-        unresolvedVarianceCents,
-        currentlyCollectibleCents: Math.max(0, outstandingCents - submittedClaimSuppressionCents),
-        explanation: {
-            grossCents: net.grossCents,
-            reductionsCents: net.reductionsCents,
-            netCents: net.netCents,
-            suppressionBoundBy: submittedLines.length === 0 ? "none" : winner.kind,
-            submittedClaimIds,
-            openVarianceStates: [...new Set(openVariances.map((v) => v.state))],
-        },
-    };
+        chargeStatus: net.status,
+        grossCents: net.grossCents,
+        reductionsCents: net.reductionsCents,
+        netCents: net.netCents,
+        applications: activeApplications.map((a) => {
+            const payment = payments.get(a.payment_id);
+            return {
+                allocatedAmountCents: Number(a.allocated_amount_cents) || 0,
+                status: a.status ?? "active",
+                paymentStatus: payment?.status ?? null,
+                payerEntityType: payment?.payer_entity_type ?? null,
+            };
+        }),
+        allocations: allocations.map((a) => ({
+            assignedAmountCents: Number(a.assigned_amount_cents),
+            isUnassigned: a.is_unassigned,
+        })),
+        expectedFunding: fundingRows.map((f) => ({
+            basis: (f.basis as string | null) ?? null,
+            expectedAmountCents: f.expected_amount_cents == null ? null : Number(f.expected_amount_cents),
+            percentBasisPoints: f.percent_basis_points == null ? null : Number(f.percent_basis_points),
+        })),
+        claimLines: claimLines.map((l) => ({
+            claimId: l.claim_id,
+            claimedAmountCents: Number(l.claimed_amount_cents),
+            claimState: claimStateById.get(l.claim_id) ?? null,
+        })),
+        variances: variances.map((v) => ({
+            varianceCents: Number(v.variance_cents),
+            state: v.state,
+            resolutionKind: v.resolution_kind,
+        })),
+    });
 }

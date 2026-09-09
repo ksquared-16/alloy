@@ -27,6 +27,7 @@ import { randomUUID } from "crypto";
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import { generateTuitionCharges } from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
+import { isSubjectlessEntityId } from "@/lib/adminV2/actions/subjectlessActionConstants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const BILLING_GENERATE_TUITION_ACTION_KEY = "billing.generate_tuition";
@@ -122,6 +123,27 @@ const generateTuition: RegisteredAction = {
                         ? `${o.assignmentId} · ${(o.amountCents / 100).toFixed(2)} ${o.currencyCode}`
                         : `${o.assignmentId} · ${o.kind === "refused" ? o.reason : o.kind === "not_due" ? o.reason : "error"}`,
                 ),
+            /*
+             * STRUCTURED, BECAUSE A SURFACE HAS TO SHOW THE EXCEPTIONS, NOT JUST COUNT THEM.
+             *
+             * `summary` and `changes` are prose and a caller can only render them. A bulk run
+             * needs the tally and the rows that will NOT be billed, so an operator confirms
+             * knowing what is being left behind rather than discovering it afterwards. The
+             * exceptions are carried whole; the generated rows stay in `changes`, since a
+             * hundred successful lines are a log and the failures are the decision.
+             */
+            after: {
+                period_key: periodKey,
+                counts: result.counts,
+                total_amount_cents: result.outcomes.reduce(
+                    (sum, o) => sum + (o.kind === "generated" ? o.amountCents : 0),
+                    0,
+                ),
+                refused_outcomes: result.outcomes.filter((o) => o.kind === "refused"),
+                not_due_outcomes: result.outcomes.filter((o) => o.kind === "not_due"),
+                error_outcomes: result.outcomes.filter((o) => o.kind === "error"),
+                already_posted_outcomes: result.outcomes.filter((o) => o.kind === "already_posted"),
+            },
         };
     },
 
@@ -189,7 +211,14 @@ function scopeFrom(
         ? (payload!.opportunity_customer_member_ids as unknown[]).map((v) => t(v)).filter(Boolean)
         : [];
     if (listed.length > 0) return listed;
-    const single = t(payload?.opportunity_customer_member_id) || t(entityId);
+    /*
+     * "NO SUBJECT" IS NOT A SUBJECT. The transport transmits a sentinel for an action that
+     * declares it needs no record, and treating that sentinel as an assignment id would narrow
+     * the run to a record that does not exist — zero charges, indistinguishable from a period
+     * with nothing to bill.
+     */
+    const fromEntity = isSubjectlessEntityId(entityId) ? "" : t(entityId);
+    const single = t(payload?.opportunity_customer_member_id) || fromEntity;
     return single ? [single] : null;
 }
 
