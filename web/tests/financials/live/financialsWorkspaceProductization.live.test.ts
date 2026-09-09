@@ -49,9 +49,9 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
-import { runPeriodKey } from "./certificationPeriod";
+import { runHex } from "./certificationPeriod";
 
-/** This run's own unbilled periods — see `certificationPeriod` for why fixed ones cannot work. */
+/** This run's own fixture subjects — see `certificationPeriod` for why fixed ones cannot work. */
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
@@ -66,7 +66,7 @@ const GROSS = 100_000;
  * and silently records no history, which would make this file's history cases assert nothing.
  * The period is chosen to sit inside the certification calendar for exactly that reason.
  */
-const PERIOD = runPeriodKey();
+const PERIOD = "2026-09";
 
 describeLive("financials workspace productization — live", () => {
     const supabase = (env
@@ -125,30 +125,46 @@ describeLive("financials workspace productization — live", () => {
         const firstOcm = (firstOcmRows ?? [])[0] as Record<string, string>;
 
         await clearMoney();
-        await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG);
+        /*
+         * This suite's OWN pricing terms. It used to delete every pricing term in the tenant, which
+         * is why running it left the tuition-generation suites with nothing to generate from — a
+         * collision that looked, from the other suite's failure, like a Thread 7 regression.
+         */
+        await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG)
+            .like("id", `${W}${runHex()}%`);
 
         for (const [index, member] of members.slice(0, 2).entries()) {
             const { data: ocmRows } = await supabase
                 .from("opportunity_customer_members").select("id").eq("org_id", ORG).eq("customer_member_id", member.id).limit(1);
             let ocmId = ((ocmRows ?? [])[0] as { id: string } | undefined)?.id;
             if (!ocmId) {
-                ocmId = `${W}00000000e00${index + 1}`;
+                ocmId = `${W}${runHex()}e00${index + 1}`;
                 await supabase.from("opportunity_customer_members").insert({
                     id: ocmId, org_id: ORG, opportunity_id: firstOcm.opportunity_id, customer_member_id: member.id,
                     schedule_type: firstOcm.schedule_type ?? "full_time", location_id: firstOcm.location_id,
                     program_category_id: firstOcm.program_category_id, metadata: { seed: "cert_workspace_4a" },
                 });
             }
-            const agreementId = `${W}00000000a00${index + 1}`;
+            const agreementId = `${W}${runHex()}a00${index + 1}`;
             const siteId = index === 0 ? siteA : siteB;
-            await supabase.from("child_enrollment_agreements").delete().eq("id", agreementId);
+            /*
+             * Clear whatever agreement this member already has at this site, not just one with the
+             * id this run happens to choose. A child may hold only one operational agreement per
+             * site — a real constraint — so a run that authors a fresh subject has to retire the
+             * previous run's first. The agreement is test-owned mutable fixture state; the money
+             * posted against it is not, and is left exactly where it is.
+             */
+            await supabase.from("enrollment_pricing_terms").delete()
+                .eq("org_id", ORG).eq("customer_member_id", member.id);
+            await supabase.from("child_enrollment_agreements").delete()
+                .eq("org_id", ORG).eq("customer_member_id", member.id).eq("site_location_id", siteId);
             const { error: agreementError } = await supabase.from("child_enrollment_agreements").insert({
                 id: agreementId, org_id: ORG, customer_member_id: member.id, customer_id: customerId,
                 site_location_id: siteId, opportunity_customer_member_id: ocmId, status: "active", start_date: "2026-01-01",
             });
             expect(agreementError, agreementError?.message).toBeNull();
             const { error: termError } = await supabase.from("enrollment_pricing_terms").insert({
-                id: `${W}00000000b00${index + 1}`, org_id: ORG, opportunity_customer_member_id: ocmId,
+                id: `${W}${runHex()}b00${index + 1}`, org_id: ORG, opportunity_customer_member_id: ocmId,
                 customer_member_id: member.id, enrollment_agreement_id: agreementId, term_kind: "tuition",
                 source_entity: "commercial_tuition_rates", source_id: rateId, recommended_source_id: rateId,
                 cadence_key: "monthly", payer_type: "private_pay", amount_cents: GROSS, currency_code: "USD",
@@ -175,7 +191,13 @@ describeLive("financials workspace productization — live", () => {
     afterAll(async () => {
         if (process.env.CERT_KEEP === "1") return;
         await clearMoney();
-        await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG);
+        /*
+         * This suite's OWN pricing terms. It used to delete every pricing term in the tenant, which
+         * is why running it left the tuition-generation suites with nothing to generate from — a
+         * collision that looked, from the other suite's failure, like a Thread 7 regression.
+         */
+        await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG)
+            .like("id", `${W}${runHex()}%`);
         for (const kid of kids) await supabase.from("child_enrollment_agreements").delete().eq("id", kid.agreementId);
         await supabase.from("opportunity_customer_members").delete().eq("org_id", ORG).contains("metadata", { seed: "cert_workspace_4a" });
     });
@@ -229,7 +251,9 @@ describeLive("financials workspace productization — live", () => {
             amountCents: 40_000,
             paymentMethod: "check",
             status: "posted",
-            idempotencyKey: `cert-4a-unapplied-${PERIOD}`,
+            // Run-scoped: a fixed key is idempotent by design, so a re-run got back the previous
+            // run's payment — recorded against an agreement this run has already retired.
+            idempotencyKey: `cert-4a-unapplied-${runHex()}`,
             actorUserId: ACTOR,
         } as never);
 

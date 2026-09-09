@@ -45,6 +45,9 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+import { runPeriodKey } from "./certificationPeriod";
+
+/** This run's own unbilled periods — see `certificationPeriod` for why fixed ones cannot work. */
 const ORG = "00000000-0000-4000-8000-000000000001";
 const OTHER_ORG = "00000000-0000-4000-8000-0000000000ff";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
@@ -141,7 +144,13 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
             orgId: ORG, billableSourceType: "enrollment_agreement", billableSourceId: kids[0]!.agreementId,
             customerId, amountCents, paymentMethod: "ach", status: "posted",
             payerEntityType: "agency", payerEntityId: agencyId,
-            idempotencyKey: key, actorUserId: ACTOR,
+            /*
+             * The key belongs to this RUN, not to the file. A fixed key is idempotent by design, so
+             * a second run got back the previous run's payment — already fully applied — and the
+             * next apply failed with "only 0 cents remain unapplied". Thread 8 was right both times;
+             * the certification was asking it to spend the same money twice.
+             */
+            idempotencyKey: `${runPeriodKey()}:${key}`, actorUserId: ACTOR,
         } as never);
         const applied = await applyPaymentToCharge(supabase, {
             orgId: ORG, paymentId: payment.payment.id, chargeId, amountCents, actorUserId: ACTOR,
@@ -268,7 +277,7 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("records expected subsidy without payment, without reducing outstanding, and without suppressing collection", async () => {
         await clearSubsidy();
-        const { chargeId } = await fundedObligation("2032-02");
+        const { chargeId } = await fundedObligation(runPeriodKey(0));
         const position = await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId });
 
         expect(position.expectedSubsidyCents).toBe(EXPECTED);
@@ -279,15 +288,21 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
         expect(position.currentlyCollectibleCents, "the family is still asked for the whole obligation").toBe(GROSS);
         expect(position.explanation.suppressionBoundBy).toBe("none");
 
-        const { data: payments } = await supabase.from("payments").select("id").eq("org_id", ORG).eq("billable_source_id", kids[0]!.agreementId);
-        expect((payments ?? []).length).toBe(0);
+        /*
+         * Scoped to THIS obligation. Counting every payment ever made against the agreement made the
+         * claim depend on how many times the certification had run before, which is not what "no
+         * cash was invented by recording an expected subsidy" means.
+         */
+        const { data: applied } = await supabase.from("payment_allocations").select("id")
+            .eq("org_id", ORG).eq("target_entity_type", "charge").eq("target_entity_id", chargeId);
+        expect((applied ?? []).length, "no cash was invented for this obligation").toBe(0);
     }, 300_000);
 
     it("does not suppress collection for a DRAFT claim", async () => {
         const { data: authRow } = await supabase
             .from("financial_subsidy_authorizations").select("id").eq("org_id", ORG).eq("state", "active").limit(1).maybeSingle();
         const claim = await buildSubsidyClaim(supabase, {
-            orgId: ORG, authorizationId: (authRow as { id: string }).id, periodKey: "2032-02", actorUserId: ACTOR,
+            orgId: ORG, authorizationId: (authRow as { id: string }).id, periodKey: runPeriodKey(0), actorUserId: ACTOR,
         });
         expect(claim.lines).toBe(1);
         const { data: chargeRow } = await supabase
@@ -301,8 +316,8 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("suppresses family collection for the submitted amount, and only that", async () => {
         await clearSubsidy();
-        const { chargeId, authorizationId } = await fundedObligation("2032-03");
-        await claimAndSubmit(authorizationId, "2032-03");
+        const { chargeId, authorizationId } = await fundedObligation(runPeriodKey(1));
+        await claimAndSubmit(authorizationId, runPeriodKey(1));
 
         const position = await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId });
         expect(position.outstandingCents, "outstanding STILL has not moved").toBe(GROSS);
@@ -316,11 +331,11 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
         const { data: authRow } = await supabase
             .from("financial_subsidy_authorizations").select("id").eq("org_id", ORG).eq("state", "active").limit(1).maybeSingle();
         const authorizationId = (authRow as { id: string }).id;
-        const rebuilt = await buildSubsidyClaim(supabase, { orgId: ORG, authorizationId, periodKey: "2032-03", actorUserId: ACTOR });
+        const rebuilt = await buildSubsidyClaim(supabase, { orgId: ORG, authorizationId, periodKey: runPeriodKey(1), actorUserId: ACTOR });
         expect(rebuilt.idempotent, "the agency is not asked twice").toBe(true);
         const resubmitted = await submitSubsidyClaim(supabase, { orgId: ORG, claimId: rebuilt.claimId, actorUserId: ACTOR });
         expect(resubmitted.alreadySubmitted).toBe(true);
-        const { data: claims } = await supabase.from("financial_subsidy_claims").select("id").eq("org_id", ORG).eq("period_key", "2032-03");
+        const { data: claims } = await supabase.from("financial_subsidy_claims").select("id").eq("org_id", ORG).eq("period_key", runPeriodKey(1));
         expect((claims ?? []).length).toBe(1);
     }, 240_000);
 
@@ -328,8 +343,8 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("settles an exact remittance as real money and matches it", async () => {
         await clearSubsidy();
-        const { chargeId, authorizationId } = await fundedObligation("2032-04");
-        const { lines } = await claimAndSubmit(authorizationId, "2032-04");
+        const { chargeId, authorizationId } = await fundedObligation(runPeriodKey(2));
+        const { lines } = await claimAndSubmit(authorizationId, runPeriodKey(2));
 
         const advice = await recordRemittanceAdvice(supabase, {
             orgId: ORG, agencyId, externalRemittanceId: "RA-EXACT", totalAmountCents: EXPECTED,
@@ -376,8 +391,8 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("holds a $900-expected / $825-actual shortfall open and never bills the family for it", async () => {
         await clearSubsidy();
-        const { chargeId, authorizationId } = await fundedObligation("2032-05");
-        const { lines } = await claimAndSubmit(authorizationId, "2032-05");
+        const { chargeId, authorizationId } = await fundedObligation(runPeriodKey(3));
+        const { lines } = await claimAndSubmit(authorizationId, runPeriodKey(3));
         const collectibleBefore = (await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId })).currentlyCollectibleCents;
         expect(collectibleBefore).toBe(GROSS - EXPECTED); // $100 of a $1,000 obligation
 
@@ -412,8 +427,16 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
         // agency underpaid, and not a cent more.
         expect(position.currentlyCollectibleCents).toBe(GROSS - EXPECTED);
         expect(position.currentlyCollectibleCents, "the shortfall did not move onto the family").toBe(collectibleBefore);
+        /*
+         * Scoped to the family under test. This counted every adjustment and credit in the tenant,
+         * so Thread 10's own fixtures made it fail — while saying nothing about whether THIS
+         * shortfall was pushed onto THIS family, which is the claim.
+         */
         const { data: adjustments } = await supabase
-            .from("charges").select("id").eq("org_id", ORG).in("charge_category", ["adjustment", "credit"]);
+            .from("charges").select("id").eq("org_id", ORG)
+            .eq("billable_source_id", kids[0]!.agreementId)
+            .eq("service_date", `${runPeriodKey(3)}-01`)
+            .in("charge_category", ["adjustment", "credit"]);
         expect((adjustments ?? []).length, "and no adjustment was written on the family's behalf").toBe(0);
     }, 480_000);
 
@@ -436,8 +459,15 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
             orgId: ORG, varianceId, resolution: "resubmit", actorUserId: ACTOR,
         });
         expect(again.alreadyResolved, "one difference, one decision").toBe(true);
+        /*
+         * This run's service month, not every adjustment the tenant has ever carried. The claim is
+         * that resolving a shortfall writes ONE adjustment — a count over the whole org measured how
+         * many times the certification had run, not whether the resolution is idempotent.
+         */
         const { data: adjustments } = await supabase
-            .from("charges").select("id").eq("org_id", ORG).eq("charge_category", "adjustment");
+            .from("charges").select("id").eq("org_id", ORG)
+            .eq("service_date", `${runPeriodKey(3)}-01`)
+            .eq("charge_category", "adjustment");
         expect((adjustments ?? []).length, "and it was written exactly once").toBe(1);
     }, 300_000);
 
@@ -445,8 +475,8 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("records a denial without inventing a payment", async () => {
         await clearSubsidy();
-        const { chargeId, authorizationId } = await fundedObligation("2032-06");
-        const { lines } = await claimAndSubmit(authorizationId, "2032-06");
+        const { chargeId, authorizationId } = await fundedObligation(runPeriodKey(4));
+        const { lines } = await claimAndSubmit(authorizationId, runPeriodKey(4));
         const advice = await recordRemittanceAdvice(supabase, {
             orgId: ORG, agencyId, totalAmountCents: 0,
             lines: [{ claimLineId: lines[0]!.id, amountCents: 0, state: "denied", denialReason: "authorization lapsed" }],
@@ -466,8 +496,8 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("records an overpayment as a variance rather than as extra credit", async () => {
         await clearSubsidy();
-        const { chargeId, authorizationId } = await fundedObligation("2032-07");
-        const { lines } = await claimAndSubmit(authorizationId, "2032-07");
+        const { chargeId, authorizationId } = await fundedObligation(runPeriodKey(5));
+        const { lines } = await claimAndSubmit(authorizationId, runPeriodKey(5));
         const OVER = EXPECTED + 5_000;
         const advice = await recordRemittanceAdvice(supabase, {
             orgId: ORG, agencyId, totalAmountCents: OVER,
@@ -488,10 +518,10 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("lets one remittance answer claims for two children", async () => {
         await clearSubsidy();
-        const first = await fundedObligation("2032-08", EXPECTED, 0);
-        const second = await fundedObligation("2032-08", EXPECTED, 1);
-        const a = await claimAndSubmit(first.authorizationId, "2032-08");
-        const b = await claimAndSubmit(second.authorizationId, "2032-08");
+        const first = await fundedObligation(runPeriodKey(6), EXPECTED, 0);
+        const second = await fundedObligation(runPeriodKey(6), EXPECTED, 1);
+        const a = await claimAndSubmit(first.authorizationId, runPeriodKey(6));
+        const b = await claimAndSubmit(second.authorizationId, runPeriodKey(6));
         expect(a.claim.claimId).not.toBe(b.claim.claimId);
 
         const advice = await recordRemittanceAdvice(supabase, {
@@ -513,8 +543,8 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("recoups a payment through Thread 8, exactly once", async () => {
         await clearSubsidy();
-        const { chargeId, authorizationId } = await fundedObligation("2032-09");
-        const { lines } = await claimAndSubmit(authorizationId, "2032-09");
+        const { chargeId, authorizationId } = await fundedObligation(runPeriodKey(7));
+        const { lines } = await claimAndSubmit(authorizationId, runPeriodKey(7));
         const advice = await recordRemittanceAdvice(supabase, {
             orgId: ORG, agencyId, totalAmountCents: EXPECTED,
             lines: [{ claimLineId: lines[0]!.id, amountCents: EXPECTED }],
@@ -544,15 +574,15 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("converges under concurrent claim building and reconciliation", async () => {
         await clearSubsidy();
-        const { authorizationId } = await fundedObligation("2032-10");
+        const { authorizationId } = await fundedObligation(runPeriodKey(8));
         const built = await Promise.all([
-            buildSubsidyClaim(supabase, { orgId: ORG, authorizationId, periodKey: "2032-10", actorUserId: ACTOR }),
-            buildSubsidyClaim(supabase, { orgId: ORG, authorizationId, periodKey: "2032-10", actorUserId: ACTOR }),
-            buildSubsidyClaim(supabase, { orgId: ORG, authorizationId, periodKey: "2032-10", actorUserId: ACTOR }),
+            buildSubsidyClaim(supabase, { orgId: ORG, authorizationId, periodKey: runPeriodKey(8), actorUserId: ACTOR }),
+            buildSubsidyClaim(supabase, { orgId: ORG, authorizationId, periodKey: runPeriodKey(8), actorUserId: ACTOR }),
+            buildSubsidyClaim(supabase, { orgId: ORG, authorizationId, periodKey: runPeriodKey(8), actorUserId: ACTOR }),
         ]);
         expect(new Set(built.map((b) => b.claimId)).size, "one claim, however many callers").toBe(1);
         const { data: claims } = await supabase
-            .from("financial_subsidy_claims").select("id").eq("org_id", ORG).eq("period_key", "2032-10");
+            .from("financial_subsidy_claims").select("id").eq("org_id", ORG).eq("period_key", runPeriodKey(8));
         expect((claims ?? []).length).toBe(1);
 
         const claimId = built[0]!.claimId;
@@ -579,8 +609,8 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
 
     it("gives agency money the same accounting attribution any posted money gets", async () => {
         await clearSubsidy();
-        const { chargeId, authorizationId } = await fundedObligation("2032-11");
-        const { lines } = await claimAndSubmit(authorizationId, "2032-11");
+        const { chargeId, authorizationId } = await fundedObligation(runPeriodKey(9));
+        const { lines } = await claimAndSubmit(authorizationId, runPeriodKey(9));
         const advice = await recordRemittanceAdvice(supabase, {
             orgId: ORG, agencyId, totalAmountCents: EXPECTED,
             lines: [{ claimLineId: lines[0]!.id, amountCents: EXPECTED }],
@@ -621,15 +651,31 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
          * upserting over it is refused, correctly. The harness has cleared the journal by now, so the
          * fixture period can go and come back rather than being moved under reported money.
          */
-        await supabase.from("financial_accounting_periods").delete().eq("org_id", ORG).eq("id", `${S}00000000f002`);
-        const { error: periodError } = await supabase.from("financial_accounting_periods").upsert({
-            id: `${S}00000000f002`, org_id: ORG, calendar_id: calendarId, period_key: "FY-CERT-SUBSIDY",
-            label: "Subsidy certification period",
-            starts_on: opens.toISOString().slice(0, 10),
-            ends_on: closes.toISOString().slice(0, 10),
-            status: "open",
-        });
-        expect(periodError, periodError?.message).toBeNull();
+        /*
+         * USE THE PERIOD THAT ALREADY COVERS TODAY, and only author one when none does.
+         *
+         * This used to delete and re-upsert its own fixture period unconditionally. A period's
+         * boundaries freeze once anything has reported into it — and by now thousands of journal
+         * entries have — so the re-author was refused, correctly, and the suite failed on a guard
+         * that was doing its job. What this test actually needs is that SOME open period contains
+         * the day the money arrived; which period that is was never the point.
+         */
+        const todayYmd = today.toISOString().slice(0, 10);
+        const { data: covering } = await supabase
+            .from("financial_accounting_periods").select("id")
+            .eq("org_id", ORG).eq("status", "open")
+            .lte("starts_on", todayYmd).gte("ends_on", todayYmd)
+            .limit(1).maybeSingle();
+        if (!covering) {
+            const { error: periodError } = await supabase.from("financial_accounting_periods").upsert({
+                id: `${S}00000000f002`, org_id: ORG, calendar_id: calendarId, period_key: "FY-CERT-SUBSIDY",
+                label: "Subsidy certification period",
+                starts_on: opens.toISOString().slice(0, 10),
+                ends_on: closes.toISOString().slice(0, 10),
+                status: "open",
+            });
+            expect(periodError, periodError?.message).toBeNull();
+        }
 
         const { paymentId } = await agencyPayment(EXPECTED, chargeId, "pay:cert-journal");
         await settleRemittanceWithPayment(supabase, { orgId: ORG, remittanceId: advice.remittanceId, paymentId, actorUserId: ACTOR });

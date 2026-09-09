@@ -34,6 +34,7 @@
  * declares snapshot semantics.
  */
 
+import { selectIn } from "@/lib/financials/workspace/inBatches";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -351,32 +352,32 @@ type AllocationFact = { id: string; assignedAmountCents: number; isUnassigned: b
  */
 async function readPositionFacts(supabase: SupabaseClient, orgId: string, chargeIds: string[]) {
     const [
-        { data: reductionRows },
-        { data: applicationRows },
-        { data: allocationRows },
-        { data: claimLineRows },
+        reductionRows,
+        applicationRows,
+        allocationRows,
+        claimLineRows,
     ] = await Promise.all([
-        supabase
+        selectIn(chargeIds, (batch) => supabase
             .from("financial_reduction_applications")
             .select("source_charge_id, amount_cents")
             .eq("org_id", orgId)
-            .in("source_charge_id", chargeIds),
-        supabase
+            .in("source_charge_id", batch) as never, "reductions applied to these charges"),
+        selectIn(chargeIds, (batch) => supabase
             .from("payment_allocations")
             .select("charge_id, allocated_amount_cents, status, payment_id")
             .eq("org_id", orgId)
-            .in("charge_id", chargeIds),
-        supabase
+            .in("charge_id", batch) as never, "money applied to these charges"),
+        selectIn(chargeIds, (batch) => supabase
             .from("financial_responsibility_allocations")
             .select("id, charge_id, assigned_amount_cents, is_unassigned, share_id")
             .eq("org_id", orgId)
             .eq("state", "active")
-            .in("charge_id", chargeIds),
-        supabase
+            .in("charge_id", batch) as never, "who is responsible for these charges"),
+        selectIn(chargeIds, (batch) => supabase
             .from("financial_subsidy_claim_lines")
             .select("id, charge_id, claim_id, claimed_amount_cents")
             .eq("org_id", orgId)
-            .in("charge_id", chargeIds),
+            .in("charge_id", batch) as never, "subsidy claim lines for these charges"),
     ]);
 
     const reductionsByCharge = new Map<string, number[]>();

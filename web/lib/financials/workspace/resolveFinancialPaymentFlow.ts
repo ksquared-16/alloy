@@ -36,6 +36,8 @@ import {
     type FinancialWorkLocationScope,
 } from "@/lib/financials/workspace/financialWorkLocation";
 
+import { selectIn } from "@/lib/financials/workspace/inBatches";
+
 export const FINANCIAL_PAYMENT_SCAN_CAP = 2000;
 
 export type FinancialPaymentRow = {
@@ -146,7 +148,7 @@ export async function resolveFinancialPaymentFlow(
               .from("child_enrollment_agreements")
               .select("id, customer_id, site_location_id")
               .eq("org_id", args.orgId)
-              .in("id", agreementIds)
+              .in("id", agreementIds.slice(0, 200))
         : { data: [] };
     const agreements = new Map(
         (((agreementRows ?? []) as unknown) as Array<{ id: string; customer_id: string | null; site_location_id: string | null }>)
@@ -184,7 +186,7 @@ export async function resolveFinancialPaymentFlow(
     /* Names, so a list of receipts reads as families. Presentation only — never a key. */
     const customerIds = [...new Set(visible.map((v) => v.customerId).filter((v): v is string => !!v))];
     const { data: customerRows } = customerIds.length
-        ? await supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", customerIds)
+        ? await supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", customerIds.slice(0, 200))
         : { data: [] };
     const customerNames = new Map(
         (((customerRows ?? []) as unknown) as Array<{ id: string; name: string | null }>).map((c) => [c.id, c.name]),
@@ -192,13 +194,17 @@ export async function resolveFinancialPaymentFlow(
 
     /* APPLIED IS THE CARD'S DEFINITION: active allocations of this payment, summed. */
     const paymentIds = visible.map((v) => v.payment.id);
-    const { data: allocationRows } = await supabase
-        .from("payment_allocations")
-        .select("payment_id, allocated_amount_cents, status")
-        .eq("org_id", args.orgId)
-        .in("payment_id", paymentIds);
+    const allocationRows = await selectIn<{ payment_id: string; allocated_amount_cents: number; status: string | null }>(
+        paymentIds,
+        (batch) => supabase
+            .from("payment_allocations")
+            .select("payment_id, allocated_amount_cents, status")
+            .eq("org_id", args.orgId)
+            .in("payment_id", batch) as never,
+        "what each payment has been applied to",
+    );
     const appliedByPaymentId = new Map<string, number>();
-    for (const a of ((allocationRows ?? []) as Array<{ payment_id: string; allocated_amount_cents: number; status: string | null }>)) {
+    for (const a of allocationRows) {
         if ((a.status ?? "active") !== "active") continue;
         appliedByPaymentId.set(a.payment_id, (appliedByPaymentId.get(a.payment_id) ?? 0) + (Number(a.allocated_amount_cents) || 0));
     }
