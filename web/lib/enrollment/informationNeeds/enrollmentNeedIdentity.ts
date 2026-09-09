@@ -178,7 +178,11 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
 
     const artifact_specific =
         scope === "recipient" || input.insideCollectionBoundGroup || parts.basis === "unbound";
-    const collection_mode = participantCollectionMode(field);
+    /*
+     * `bound` comes from the SAME derivation the artifact compiler uses (`canonicalKeyFor` →
+     * basis), so the conversation and the document cannot disagree about what a field is.
+     */
+    const collection_mode = participantCollectionMode(field, { bound: parts.basis !== "unbound" });
 
     /*
      * A question with no canonical identity is still a question.

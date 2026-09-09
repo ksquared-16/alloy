@@ -150,6 +150,76 @@ export async function resolveCurrentEnrollmentSession(
     return { session, items: (items ?? []) as PacketSessionItemRow[], error: null };
 }
 
+/**
+ * Statuses whose packet work counts as EVIDENCE.
+ *
+ * `in_progress` because a parent may satisfy a requirement partway through a packet, and
+ * `completed` because finishing the packet is the normal way a requirement gets satisfied.
+ *
+ * `cancelled` is deliberately absent. An abandoned attempt is history too, but it is not evidence of
+ * anything being done, and widening a satisfaction read to "not current" rather than to named
+ * statuses is how abandoned work starts satisfying requirements.
+ */
+export const ENROLLMENT_EVIDENCE_SESSION_STATUSES = ["in_progress", "completed"] as const;
+
+/**
+ * The packet work that constitutes durable EVIDENCE for one Enrollment execution.
+ *
+ * ## Why this exists separately from `resolveCurrentEnrollmentSession`
+ *
+ * Those two functions answer different questions and only one of them is about editing:
+ *
+ *   current  — "which packet may this participant work in NOW?"      in_progress only
+ *   evidence — "what has this participant already DONE here?"        in_progress + completed
+ *
+ * One predicate served both, and the consequence was severe: completing a packet moved it to
+ * `completed`, the current-session query stopped returning it, requirement projection saw no
+ * realized items, and every form requirement fell to UNREALIZED. Finishing the paperwork was
+ * precisely what made the paperwork invisible. For a single-form packet that made satisfaction
+ * unobservable outright, because submitting the only form is what completes the session.
+ *
+ * `resolveCurrentEnrollmentSession` is unchanged and still correct: terminal sessions are history
+ * and must never be handed back as editable work. This function is the other half.
+ *
+ * ## Scoping, which is the risk this introduces
+ *
+ * Widening from "current" to "history" invites stale evidence, so the scope is the narrowest thing
+ * that can be correct: ONE `process_instance_id` in ONE org. An Enrollment episode IS a Process
+ * Instance, so a previous year's completed packet belongs to a previous journey and cannot be seen
+ * from this one. Sibling and cross-tenant isolation follow from the same key rather than from an
+ * extra filter someone could forget.
+ *
+ * Satisfaction itself is still Forms' to decide: this returns realization/navigation context, and
+ * the caller resolves `form_submissions.status` through the item binding exactly as before. A
+ * completed session does not mean a satisfied requirement.
+ */
+export async function resolveEnrollmentEvidenceSessionItems(
+    supabase: SupabaseClient,
+    input: { orgId: string; processInstanceId: string },
+): Promise<{ items: PacketSessionItemRow[]; sessionIds: string[]; error: Error | null }> {
+    const { data: sessions, error: sessionError } = await supabase
+        .from("form_packet_sessions")
+        .select("id, status")
+        .eq("org_id", input.orgId)
+        .eq("process_instance_id", input.processInstanceId)
+        .in("status", [...ENROLLMENT_EVIDENCE_SESSION_STATUSES]);
+
+    if (sessionError) return { items: [], sessionIds: [], error: new Error(sessionError.message) };
+
+    const sessionIds = ((sessions ?? []) as Array<{ id: string }>).map((r) => String(r.id));
+    if (sessionIds.length === 0) return { items: [], sessionIds: [], error: null };
+
+    const { data: items, error: itemError } = await supabase
+        .from("form_packet_session_items")
+        .select(ITEM_COLUMNS)
+        .in("packet_session_id", sessionIds)
+        .order("sequence_index", { ascending: true });
+
+    if (itemError) return { items: [], sessionIds, error: new Error(itemError.message) };
+
+    return { items: (items ?? []) as PacketSessionItemRow[], sessionIds, error: null };
+}
+
 /** Loads and validates that the target really is a child's Enrollment journey in this org. */
 async function loadEnrollmentProcessInstance(
     supabase: SupabaseClient,

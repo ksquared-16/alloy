@@ -28,7 +28,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { canonicalStageRequirements } from "@/lib/lifecycle/effectiveStageRequirements";
 import { resolveEffectiveStageKey } from "@/lib/lifecycle/processEntryStage";
 import { entryIntentFromProcessInstanceMetadata } from "@/lib/lifecycle/processEntryPointsV1";
-import { resolveCurrentEnrollmentSession } from "@/lib/pos/packet/enrollmentObjectiveSession";
+import {
+    resolveCurrentEnrollmentSession,
+    resolveEnrollmentEvidenceSessionItems,
+} from "@/lib/pos/packet/enrollmentObjectiveSession";
 import type { PacketSessionRow } from "@/lib/forms/packets/formPacketService";
 import { cachedConfigRead } from "@/lib/runtime/provisioning/configReadCache";
 import { resolveProcessInstanceConfiguration } from "@/lib/process/resolveProcessInstanceConfiguration";
@@ -253,7 +256,32 @@ export async function resolveEnrollmentParticipantProgress(
         return { ok: false, refusal: { code: "read_failed", detail: sessionError.message } };
     }
 
-    const realized = await loadRealizedFormItems(supabase, input.orgId, items as SessionItemRow[]);
+    /*
+     * REQUIREMENT EVIDENCE COMES FROM THE EVIDENCE READ, not the work-session read.
+     *
+     * `session`/`items` above answer "which packet may the participant work in now", and that
+     * question is correctly in-progress-only — a completed packet must never be handed back as
+     * editable. Requirement satisfaction asks something different: "what has already been done for
+     * this Enrollment execution?"
+     *
+     * Using the work read for both meant a completed packet vanished from realization, `realized`
+     * came back empty, and every form requirement projected UNREALIZED. Finishing the paperwork was
+     * what made the paperwork invisible; with a single-form packet, submitting the only form is what
+     * completes the session, so satisfaction could never be observed at all.
+     *
+     * Scope is unchanged in spirit and narrower in fact: one Process Instance in one org, which is
+     * exactly one Enrollment episode. Forms still owns satisfaction — this only ensures the evidence
+     * it owns can still be found.
+     */
+    const evidence = await resolveEnrollmentEvidenceSessionItems(supabase, {
+        orgId: input.orgId,
+        processInstanceId: instance.id,
+    });
+    if (evidence.error) {
+        return { ok: false, refusal: { code: "read_failed", detail: evidence.error.message } };
+    }
+
+    const realized = await loadRealizedFormItems(supabase, input.orgId, evidence.items as SessionItemRow[]);
     const projected = projectRequirementsProgress(requirements, realized);
 
     input.captureLoaded?.({

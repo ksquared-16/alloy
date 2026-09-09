@@ -35,16 +35,56 @@ export const PARTICIPANT_COLLECTION_MODES = [
 export type ParticipantCollectionMode = (typeof PARTICIPANT_COLLECTION_MODES)[number];
 
 /**
+ * AN UNBOUND, REQUIRED BOOLEAN IS A STATEMENT TO ACCEPT — NOT A QUESTION TO ANSWER.
+ *
+ * This is not a new rule. `compileParticipantArtifact` has classified exactly this shape as an
+ * `acknowledgment` all along, which is how the sign step already knows to render it beside the
+ * document. The rule is lifted here so both layers read ONE definition, because they disagreed:
+ * the artifact compiler called the field an acknowledgment while the need projection called it a
+ * question, and the parent was asked it twice.
+ *
+ * The three clauses each carry weight, and together they are what keeps a real question a question:
+ *
+ *   unbound     a bound boolean is canonical truth about the child or household
+ *               ("does this child have allergies") and is genuinely asked;
+ *   boolean     only a yes/no shape can be an acceptance;
+ *   required    an OPTIONAL unbound boolean is a bespoke school question, which the compiler
+ *               already routes to `unresolved_artifact_specific` rather than to acknowledgment.
+ *
+ * Measured on the certification tenant: `f_ack` — "I acknowledge the information above is accurate."
+ * — is unbound, boolean and required, and sits immediately before the signature field it attests to.
+ */
+export function fieldIsAcknowledgement(field: FormField, opts: { readonly bound: boolean }): boolean {
+    return !opts.bound && field.type === "boolean" && field.required === true;
+}
+
+/**
  * How this destination gets its value from the person completing the document.
  *
  * Deliberately derived from the FIELD, never from the need's identity — that is the whole point of
  * separating the dimensions. A signature is artifact-specific because of who signs it, not because
  * it lacks a binding; a school's bespoke question lacks a binding but is still asked out loud.
+ *
+ * `bound` is the one thing the field cannot answer about itself, so it is passed in. Omitting it
+ * preserves the previous behaviour exactly, which keeps every existing caller honest rather than
+ * silently reclassifying fields it never considered.
  */
-export function participantCollectionMode(field: FormField): ParticipantCollectionMode {
+export function participantCollectionMode(
+    field: FormField,
+    opts: { readonly bound?: boolean } = {},
+): ParticipantCollectionMode {
     if (!formFieldAsksParticipant(field)) return "system";
     if (field.type === "signature") return "signature";
     if (field.type === "file_ref") return "upload";
+    /*
+     * The mode existed in this list from the start, documented as "belongs beside the statement it
+     * accepts", and no code path ever returned it. That gap is the whole of Kelly's finding: an
+     * attestation about "the information above" was asked in the conversation, BEFORE any document
+     * existed for there to be anything above.
+     */
+    if (opts.bound !== undefined && fieldIsAcknowledgement(field, { bound: opts.bound })) {
+        return "acknowledgement";
+    }
     return "conversational";
 }
 

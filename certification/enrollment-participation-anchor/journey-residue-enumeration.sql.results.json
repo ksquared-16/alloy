@@ -1,0 +1,212 @@
+{
+  "trusted_host_action_id": "tha_1b8c1aabf1f539",
+  "query_hash": "c7a960b2d4b8af41aa0d202abc82589456ae66c36083c713d54b476a7992250a",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-03T20:17:08.557Z",
+    "question_ids": [
+      "participation_anchored_journeys"
+    ],
+    "questions": {
+      "participation_anchored_journeys": {
+        "question_id": "participation_anchored_journeys",
+        "row_count": null,
+        "rows": [
+          {
+            "journey_id": "06f39397-d932-4255-91a6-de68a19fdaf3",
+            "subject_child_id": "4ba48a05-8bbf-457a-857d-1d7772b800b7",
+            "participation_id": "838d1254-8de8-4ef4-8fd8-e2159f79ae26",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 16:44:42.120738+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": true,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "1083c667-2459-48f1-baee-ef5e86e4e042",
+            "subject_child_id": "e4823f80-64a1-4778-bf7d-50180df1a856",
+            "participation_id": "04c81a25-c4ac-4fa1-ae00-3ae4777c9d50",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 18:56:53.539051+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "27ddbe72-5fa2-477a-86ef-a9ffb5a8f4b6",
+            "subject_child_id": "bb6c41de-9e7d-4815-b9cd-c4bc15dde71b",
+            "participation_id": "df19aedf-3603-4564-866a-5f664a0bf94c",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 19:04:23.770904+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "2c98f351-96a2-49dd-8ac6-0e856e8c3f1e",
+            "subject_child_id": "fe2364e1-e5e4-4a44-ae6b-b84792eb00ac",
+            "participation_id": "d94cd650-638d-4e2a-9f5b-baa49c5dcae6",
+            "stage_key": null,
+            "state": null,
+            "intent": "create_lead",
+            "created_at": "2026-09-02 17:49:41.562848+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 0
+          },
+          {
+            "journey_id": "45775b36-e933-47a4-b028-63b96d761a73",
+            "subject_child_id": "75a5083e-e908-4649-a143-3c7106b04b18",
+            "participation_id": "b5587bab-cdf0-475a-bc11-971ea63e04a0",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 18:43:07.371892+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "4c6a14c6-31aa-49fb-a6cb-23c5dd89537c",
+            "subject_child_id": "7ea401fe-4f1b-45c8-8609-123eecc9890c",
+            "participation_id": "2d5caa18-c8b4-4ce2-81e6-f0358339b695",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 18:57:03.658915+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "7b0fd025-1055-43c8-9e81-4d566e7bbc0c",
+            "subject_child_id": "82e3b9fb-cf84-4288-8f63-0fad8b80e5b3",
+            "participation_id": "5f6ecc4f-f4a6-4239-bea4-db1cf3dcee27",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 19:04:33.847715+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "80cdccdb-22ab-4046-9d87-a713a450c085",
+            "subject_child_id": "270eedcf-bcc5-43b0-b99a-15dfae44c73f",
+            "participation_id": "46736750-e6cc-4186-9c4f-60fbbe2a5e48",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 18:41:19.05549+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "8a3b6127-1108-4fa0-8e47-bab8bd50af0b",
+            "subject_child_id": "0056f9b5-8aff-4edd-b6d0-a30a7b509258",
+            "participation_id": "54f3240b-4d5f-4cc1-af54-69c14918563d",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 17:47:34.771993+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "9d70cfbd-d72d-4f12-b83d-34cd4f3b4c38",
+            "subject_child_id": "d0ff5189-fee9-4805-a8b9-9ba5a570e5cd",
+            "participation_id": "9e9c7489-d272-4aa3-88ff-f33a9a1497b9",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 18:41:28.761593+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "a63c2745-4c0e-434f-b48c-1f2d5cc8aba4",
+            "subject_child_id": "b6940d16-38b0-4bed-a7d1-5741ca68c8b0",
+            "participation_id": "d3dd66ed-1c47-4a15-a684-87d9fc43cd01",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 16:44:51.946895+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": true,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "ab786e52-187c-46c8-a32f-567c1f35b79f",
+            "subject_child_id": "e0463498-ffdf-4851-927e-31e30b41843f",
+            "participation_id": "0d3dec6d-bb4a-4226-a85c-fc4f09d18bae",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 17:49:33.527363+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "bdd4a7cd-3123-485a-9779-0468eb70bbcb",
+            "subject_child_id": "72de6f67-c7e2-4c10-8b4b-2a02a6ab8549",
+            "participation_id": "c6ca0967-3802-4cb0-9c65-b3de60163ef9",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-02 17:39:48.631447+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "c586aeee-04f0-4184-ab94-fceb42c8b624",
+            "subject_child_id": "89fe4fc4-b8e0-4f6c-832f-bafe0ffa91b4",
+            "participation_id": "a0e1b912-acae-4ffb-b6e4-478a47807fd5",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-03 19:34:17.06382+00",
+            "in_fixture_namespace": true,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "d69af4c9-72d6-41ac-b3b2-7fb4ea828c8f",
+            "subject_child_id": "d80a5c72-ce7e-4056-8a4e-0350ee2087ef",
+            "participation_id": "1afd5e50-52d9-49fe-ba75-b24175483747",
+            "stage_key": null,
+            "state": null,
+            "intent": "enrollment_start",
+            "created_at": "2026-09-03 19:34:28.554755+00",
+            "in_fixture_namespace": true,
+            "created_before_baseline": false,
+            "sessions_bound": 1
+          },
+          {
+            "journey_id": "ff7bbd77-b11c-4c0c-9af7-2f8078ff19cd",
+            "subject_child_id": "72f7c5be-1481-4b60-8add-08c967512e1a",
+            "participation_id": "aae802e4-f9b2-40b3-8e3e-b201e590eade",
+            "stage_key": "enrollment",
+            "state": null,
+            "intent": "family_enrollment_decision",
+            "created_at": "2026-09-02 18:43:18.09884+00",
+            "in_fixture_namespace": false,
+            "created_before_baseline": false,
+            "sessions_bound": 0
+          }
+        ]
+      }
+    },
+    "row_count": 16
+  }
+}

@@ -104,12 +104,16 @@ export function SemanticFactEditor({
                             {captionFor(control)}
                         </label>
                         {/* The SAME semantic control the Form authored — a date stays a date. */}
+                        {/* 16px, not 15px: iOS zooms the page on focus below 16, and this is the
+                            other surface a parent corrects a fact from. Matched to the participant
+                            turn control's `text-[16px] min-h-[44px]` so both editors behave the
+                            same way on a phone. */}
                         <input
                             id={`edit-${control.field_id}`}
                             type={control.input_type === "date" ? "date" : "text"}
                             value={draft}
                             onChange={(e) => setDraft(e.target.value)}
-                            className="rounded-xl border border-alloy-midnight/15 px-3 py-2.5 text-[15px]"
+                            className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-3 py-2.5 text-[16px]"
                         />
                         <div className="flex gap-2">
                             <button

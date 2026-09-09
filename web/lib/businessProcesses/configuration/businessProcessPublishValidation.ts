@@ -33,8 +33,16 @@ import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validatePr
 import { validateStageOperatingPlanOperatingContract } from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
 import {
     isProcessEntryIntent,
+    PROCESS_ENTRY_INTENT_SUBJECT_GRAIN,
     PROCESS_ENTRY_INTENTS,
+    type ProcessEntryIntentV1,
 } from "@/lib/lifecycle/processEntryPointsV1";
+import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
+import { ENROLLED_CHILD_STATUS_KEY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+import type {
+    LifecycleBuilderProcessRecord,
+    LifecycleBuilderStageRecord,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
 
 export const PUBLISH_UNREADABLE_PAYLOAD = "configuration_unreadable" as const;
 export const PUBLISH_DANGLING_REFERENCE = "dangling_stage_reference" as const;
@@ -61,6 +69,32 @@ export const PUBLISH_ENTRY_STAGE_UNRESOLVABLE = "process_entry_stage_unresolvabl
  * the moment a real journey starts.
  */
 export const PUBLISH_ENTRY_INTENT_UNKNOWN = "process_entry_intent_unknown" as const;
+/**
+ * An entry intent starts its journeys in a stage whose grain cannot hold that journey's subject.
+ *
+ * THE PLATFORM-GENERAL RULE: a configured process must not route a subject into a stage whose
+ * membership grain cannot own that subject.
+ *
+ * This is the check whose absence cost this program a sprint. Start Enrollment begins ONE CHILD's
+ * enrollment, and the tenant pointed it at a stage its own operating plan declared family-grain.
+ * Everything downstream then behaved consistently with a family stage: the child's completion
+ * outcome lived on a different stage, no rule matched, and Complete Enrollment reported success
+ * while changing nothing. Every individual piece was internally valid. Only the join was wrong,
+ * and nothing was looking at the join.
+ */
+export const PUBLISH_ENTRY_STAGE_GRAIN_MISMATCH = "process_entry_stage_grain_mismatch" as const;
+/**
+ * A child's Enrollment can be completed somewhere no child entering Enrollment can ever get to.
+ *
+ * Reachability, not naming: the completion effect is identified by the durable disposition it
+ * writes, and the walk follows configured movement out of the stage the tenant itself declares as
+ * the child Enrollment entry. No stage key is assumed to exist or to be called anything.
+ *
+ * Blocking, because the failure it describes is invisible at runtime. An unreachable completion
+ * rule does not error — it simply never matches, and an outcome that never matches is reported to
+ * the operator as a success that changed nothing.
+ */
+export const PUBLISH_CHILD_COMPLETION_UNREACHABLE = "child_completion_unreachable" as const;
 
 export type PublishValidationResult = {
     /** Publication is refused while this is non-empty. */
@@ -68,6 +102,83 @@ export type PublishValidationResult = {
     /** Reported, never blocking — a mid-build process is allowed to be imperfect. */
     warnings: ConfigurationWarning[];
 };
+
+
+// ─── Entry grain and child-completion reachability ───────────────────────────────────────────
+
+type StageGrainInput = { key: string; grain: string | null };
+
+/** A stage's grain, from its own two configured declarations. Never guessed. */
+function stageGrainOf(
+    stage: LifecycleBuilderStageRecord | undefined,
+    metadataGrain: string | null,
+): ReturnType<typeof resolveStageGrain> {
+    return resolveStageGrain({
+        stageKey: stage?.key ?? "",
+        operatingPlanJourneySegment: stage?.stage_operating_plan_v1?.journey_segment,
+        configuredMetadataGrain: metadataGrain,
+    });
+}
+
+/**
+ * Every stage a subject can move to from `from`, following ONLY configured movement.
+ *
+ * Both movement expressions are followed, because a rule may name either: a `transition_ref`
+ * resolved against the stage's own declared exits, or a bare `stage_key`. A rule naming a stage the
+ * process does not have contributes no edge — that dangling reference is already reported by its
+ * own validator, and inventing an edge for it here would hide this check behind that one.
+ */
+function reachableStages(
+    process: LifecycleBuilderProcessRecord,
+    from: string,
+): Set<string> {
+    const byKey = new Map(process.stages.map((s) => [s.key, s]));
+    const seen = new Set<string>([from]);
+    const queue = [from];
+    while (queue.length) {
+        const stage = byKey.get(queue.shift()!);
+        if (!stage) continue;
+        const plan = stage.stage_operating_plan_v1;
+        const exits = plan?.outgoing_transitions ?? [];
+        const destinations: string[] = exits
+            .filter((t) => t.available !== false)
+            .map((t) => t.target_stage_key);
+        for (const rule of plan?.outcome_rules ?? []) {
+            for (const target of rule.targets ?? []) {
+                if ((target as { kind?: string }).kind !== "move_to_stage") continue;
+                const direct = (target as { stage_key?: string }).stage_key;
+                if (direct) destinations.push(direct);
+                const ref = (target as { transition_ref?: string }).transition_ref;
+                const resolved = ref ? exits.find((t) => t.transition_ref === ref) : undefined;
+                if (resolved) destinations.push(resolved.target_stage_key);
+            }
+        }
+        for (const destination of destinations) {
+            const key = (destination ?? "").trim();
+            if (!key || seen.has(key) || !byKey.has(key)) continue;
+            seen.add(key);
+            queue.push(key);
+        }
+    }
+    return seen;
+}
+
+/** Stages whose plan carries an outcome that writes the child's ENROLLED durable status. */
+function stagesCompletingChildEnrollment(process: LifecycleBuilderProcessRecord): string[] {
+    const completing: string[] = [];
+    for (const stage of process.stages) {
+        const rules = stage.stage_operating_plan_v1?.outcome_rules ?? [];
+        const completes = rules.some((rule) =>
+            (rule.targets ?? []).some(
+                (target) =>
+                    (target as { kind?: string }).kind === "update_child_enrollment_status"
+                    && (target as { disposition_key?: string }).disposition_key === ENROLLED_CHILD_STATUS_KEY,
+            ),
+        );
+        if (completes) completing.push(stage.key);
+    }
+    return completing;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value != null && typeof value === "object" && !Array.isArray(value);
@@ -237,6 +348,86 @@ export function validateParsedBusinessProcessForPublish(
                     active_stages: activeStages.map((s) => s.key),
                 },
             });
+        }
+
+        /**
+         * ENTRY GRAIN — a subject may not be started in a stage that cannot own it.
+         *
+         * Reads the same two configured declarations `resolveStageGrain` ranks, and refuses on the
+         * same uncertainties: a stage that declares no grain, and a stage whose plan and metadata
+         * disagree, both block rather than resolve. A stage nobody has described is not proof of
+         * safety.
+         */
+        const stageGrainMetadata = new Map<string, string | null>(
+            process.stages.map((s) => {
+                const raw = (s as { grain?: unknown }).grain;
+                return [s.key, typeof raw === "string" ? raw : null] as const;
+            }),
+        );
+        for (const [intent, declaredEntry] of Object.entries(process.entry_points_v1?.by_intent ?? {})) {
+            if (!declaredEntry) continue;
+            const stage = activeStages.find((s) => s.key === declaredEntry);
+            // Missing/inactive is already reported above as PUBLISH_ENTRY_STAGE_UNRESOLVABLE.
+            if (!stage) continue;
+            const subjectGrain = PROCESS_ENTRY_INTENT_SUBJECT_GRAIN[intent as ProcessEntryIntentV1];
+            if (!subjectGrain) continue;
+            const grain = stageGrainOf(stage, stageGrainMetadata.get(stage.key) ?? null);
+            if (grain.ok && grain.grain === subjectGrain) continue;
+            errors.push({
+                code: PUBLISH_ENTRY_STAGE_GRAIN_MISMATCH,
+                stage_key: declaredEntry,
+                path: `processes[${process.key}].entry_points_v1.by_intent.${intent}`,
+                message: grain.ok
+                    ? `Process “${process.name}” starts “${intent}” journeys in stage `
+                      + `“${stage.label ?? declaredEntry}”, which belongs to the ${grain.grain} `
+                      + `track. That initiation begins ${subjectGrain === "child" ? "one child’s" : "a family’s"} `
+                      + `journey, and a ${grain.grain}-grain stage cannot hold it.`
+                    : `Process “${process.name}” starts “${intent}” journeys in stage `
+                      + `“${stage.label ?? declaredEntry}”, whose track cannot be determined, so it `
+                      + `cannot be shown to hold ${subjectGrain === "child" ? "a child" : "a family"}. `
+                      + grain.message,
+                detail: {
+                    entry_intent: intent,
+                    declared_entry_stage_key: declaredEntry,
+                    entry_subject_grain: subjectGrain,
+                    ...(grain.ok
+                        ? { entry_stage_grain: grain.grain, grain_source: grain.source }
+                        : { entry_stage_grain_reason: grain.reason }),
+                },
+            });
+        }
+
+        /**
+         * CHILD COMPLETION REACHABILITY — the completion outcome must be somewhere a child can get.
+         *
+         * Checked only when the tenant declares a child Enrollment entry AND configures a
+         * completion effect somewhere: a process that does neither is not enrolling children, and
+         * inventing a requirement for it would block every process that is not this one.
+         */
+        const childEntry = process.entry_points_v1?.by_intent?.enrollment_start?.trim();
+        const completingStages = stagesCompletingChildEnrollment(process);
+        if (childEntry && completingStages.length) {
+            const reachable = reachableStages(process, childEntry);
+            const stranded = completingStages.filter((key) => !reachable.has(key));
+            if (stranded.length === completingStages.length) {
+                errors.push({
+                    code: PUBLISH_CHILD_COMPLETION_UNREACHABLE,
+                    stage_key: stranded[0],
+                    path: `processes[${process.key}].entry_points_v1.by_intent.enrollment_start`,
+                    message:
+                        `Process “${process.name}” can mark a child enrolled only from `
+                        + stranded.map((k) => `“${k}”`).join(", ")
+                        + `, and no configured movement leads there from “${childEntry}”, where a `
+                        + `child’s Enrollment begins. Every child would reach the end of their `
+                        + `paperwork with no way to be enrolled, and completing it would report `
+                        + `success without changing anything.`,
+                    detail: {
+                        child_entry_stage_key: childEntry,
+                        completion_stage_keys: completingStages,
+                        reachable_from_entry: [...reachable],
+                    },
+                });
+            }
         }
 
         // Identity uniqueness is enforced nowhere on the read path except command_set_v1

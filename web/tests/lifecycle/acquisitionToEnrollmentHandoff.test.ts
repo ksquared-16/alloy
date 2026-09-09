@@ -20,9 +20,20 @@ const read = (rel: string) =>
     import("node:fs/promises").then((fs) => fs.readFile(new URL(rel, import.meta.url), "utf8"));
 
 describe("the two grains are named separately and cannot be typed interchangeably", () => {
-    it("`enrolling` is configured FAMILY-grain and `enrollment` CHILD-grain", () => {
-        expect(defaultStageOperatingPlanForEnrollmentStage("enrolling")?.journey_segment).toBe("family");
-        expect(defaultStageOperatingPlanForEnrollmentStage("enrollment")?.journey_segment).toBe("child");
+    it("`enrolling` is CHILD-grain, and no second `enrollment` stage exists beside it", () => {
+        /*
+         * This assertion used to read the other way round, and pinned the drift rather than the
+         * model: `enrolling` declared family, with a separate child-grain `enrollment` carrying the
+         * completion outcome. Nothing routed to `enrollment` — it is not in the Enrollment
+         * template's stage list and never was — so `Complete Enrollment` matched no rule and
+         * reported success having changed nothing.
+         *
+         * One stage per position per track. `enrolling` IS the child's Enrollment-in-progress
+         * stage, which is what the durable-state vocabulary and the stage metadata both said all
+         * along.
+         */
+        expect(defaultStageOperatingPlanForEnrollmentStage("enrolling")?.journey_segment).toBe("child");
+        expect(defaultStageOperatingPlanForEnrollmentStage("enrollment")).toBeNull();
     });
 
     it("`lead` is family-grain, which is why a child journey may never sit there", () => {
@@ -59,9 +70,15 @@ describe("the family decision carries a declared child-grain effect", () => {
     const decision = defaultStageOperatingPlanForEnrollmentStage("decision")!;
     const rule = decision.outcome_rules.find((r) => r.when_outcome_key === "family_enrolling")!;
 
-    it("moves the FAMILY to enrolling", () => {
+    it("does NOT move the family onto the child's Enrollment stage", () => {
+        /*
+         * The family Opportunity and the child's enrollment used to share `enrolling`, which is
+         * what made a child-grain stage look family-grain. Closing the family case is its own
+         * governed decision; one child starting paperwork is not the family's case ending.
+         */
         const move = rule.targets.find((t) => t.kind === "move_to_stage");
-        expect(move?.transition_ref).toBe("decision_to_enrolling");
+        expect(move).toBeUndefined();
+        expect(rule.targets.map((t) => t.kind)).toContain("no_movement");
     });
 
     it("and separately begins the CHILD's Enrollment", () => {
@@ -79,9 +96,9 @@ describe("the family decision carries a declared child-grain effect", () => {
         expect(enter?.stage_key ?? null).toBeNull();
     });
 
-    it("states the two effects separately rather than collapsing them into one stage", () => {
+    it("states the family effect and the child effect separately, at their own grains", () => {
         const kinds = rule.targets.map((t) => t.kind);
-        expect(kinds).toContain("move_to_stage");
+        expect(kinds).toContain("no_movement");
         expect(kinds).toContain("enter_child_enrollment");
     });
 });

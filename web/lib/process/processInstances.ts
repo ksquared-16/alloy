@@ -542,7 +542,7 @@ export async function moveEnrollmentInstanceStageByScope(
     supabase: SupabaseClient,
     args: {
         orgId: string;
-        opportunityId: string;
+        opportunityId?: string | null;
         customerMemberId: string;
         stageKey: string;
         processInstanceId?: string | null;
@@ -570,7 +570,7 @@ export async function setEnrollmentInstanceStateByScope(
     supabase: SupabaseClient,
     args: {
         orgId: string;
-        opportunityId: string;
+        opportunityId?: string | null;
         customerMemberId: string;
         state: EnrollmentProcessState;
         closeReasonKey?: string | null;
@@ -598,7 +598,7 @@ export async function setEnrollmentInstanceStateByScope(
 /** Resolve a child's enrollment process-instance id by scope (opportunity + child). */
 export async function getEnrollmentInstanceIdByScope(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; customerMemberId: string; processInstanceId?: string | null },
+    args: { orgId: string; opportunityId?: string | null; customerMemberId: string; processInstanceId?: string | null },
 ): Promise<string | null> {
     const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
     return resolved.ambiguous ? null : resolved.id;
@@ -607,7 +607,7 @@ export async function getEnrollmentInstanceIdByScope(
 /** Read a child's current enrollment instance state by scope (for transition events). */
 export async function readEnrollmentInstanceState(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; customerMemberId: string; processInstanceId?: string | null },
+    args: { orgId: string; opportunityId?: string | null; customerMemberId: string; processInstanceId?: string | null },
 ): Promise<string | null> {
     const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
     if (resolved.ambiguous || !resolved.id) return null;
@@ -626,7 +626,7 @@ export async function readEnrollmentInstanceState(
  */
 export async function readEnrollmentInstanceStageKey(
     supabase: SupabaseClient,
-    args: { orgId: string; opportunityId: string; customerMemberId: string; processInstanceId?: string | null },
+    args: { orgId: string; opportunityId?: string | null; customerMemberId: string; processInstanceId?: string | null },
 ): Promise<string | null> {
     const resolved = await resolveEnrollmentInstanceIdForScope(supabase, args);
     if (resolved.ambiguous || !resolved.id) return null;

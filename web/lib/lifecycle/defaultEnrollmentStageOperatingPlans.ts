@@ -311,13 +311,6 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
         purpose: "Support the family enrollment decision.",
         outgoing_transitions: [
             {
-                transition_ref: "decision_to_enrolling",
-                source_stage_key: "decision",
-                target_stage_key: "enrolling",
-                label: "Continue to Enrolling",
-                available: true,
-            },
-            {
                 transition_ref: "decision_to_waitlist",
                 source_stage_key: "decision",
                 target_stage_key: "waitlist",
@@ -378,8 +371,19 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "family_enrolling_move",
                 when_outcome_key: "family_enrolling",
                 targets: [
-                    // FAMILY effect: the case moves to the family-grain `enrolling` stage.
-                    { kind: "move_to_stage", transition_ref: "decision_to_enrolling" },
+                    /*
+                     * NO FAMILY MOVEMENT. `enrolling` is the CHILD's Enrollment stage, and this
+                     * outcome used to move the family Opportunity onto it — the family case and
+                     * the child's enrollment occupying one stage is what made `enrolling` look
+                     * family-grain and put child completion out of reach.
+                     *
+                     * The canonical family track is lead -> tour -> decision -> closed, and it
+                     * declares no "converted" transition out of decision: closing the family case
+                     * is its own governed decision (`executeGovernedFamilyClose`), not a
+                     * side-effect of one child starting paperwork. A family with three children
+                     * enrolling one of them has not finished its own case.
+                     */
+                    { kind: "no_movement" },
                     /*
                      * CHILD effect, at the child grain: the child's Enrollment execution begins.
                      * One outcome, two grains, stated separately — collapsing them is what put a
@@ -422,16 +426,45 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
         outcome_rules: [{ rule_key: "noop", when_outcome_key: "acknowledged", targets: [{ kind: "no_movement" }] }],
         attention_rules: [],
     },
+    /**
+     * CHILD Enrollment-in-progress. One stage, child grain, and the only place a child's
+     * Enrollment can be completed.
+     *
+     * This stage used to be declared `journey_segment: "family"` while a SECOND stage named
+     * `enrollment` carried the child-grain completion plan. Nothing routed to `enrollment`, so
+     * the completion outcome sat on a stage no child could reach, and `Complete Enrollment`
+     * matched no rule and reported success having changed nothing.
+     *
+     * The canonical durable-state vocabulary has said all along that `enrolling` is child grain
+     * over `opportunity_customer_members` — `resolveStageGrain` simply ranks a stage's own plan
+     * above that vocabulary, so the plan's wrong declaration won and the disagreement was never
+     * surfaced. The plan is now the one that agrees.
+     */
     enrolling: {
         version: 1,
-        journey_segment: "family",
-        purpose: "Complete enrollment paperwork after the family decides to enroll.",
-        outgoing_transitions: [],
+        journey_segment: "child",
+        purpose: "Complete enrollment paperwork and confirm start for this child.",
+        outgoing_transitions: [
+            {
+                transition_ref: "enrolling_to_enrolled",
+                source_stage_key: "enrolling",
+                target_stage_key: "enrolled",
+                label: "Complete Enrollment",
+                available: true,
+            },
+            {
+                transition_ref: "enrolling_to_closed_withdrawn",
+                source_stage_key: "enrolling",
+                target_stage_key: "closed_withdrawn",
+                label: "Close as Withdrawn",
+                available: true,
+            },
+        ],
         work_templates: [
             {
                 template_key: "send_enrollment_packet",
                 label: "Send Enrollment Packet",
-                description: "Send the enrollment packet / forms after the family enters Enrolling.",
+                description: "Send the enrollment packet / forms for this child.",
                 required: true,
                 primary: true,
                 due_policy: { kind: "offset_days", days: 1 },
@@ -440,24 +473,60 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 execution_mode: "direct_action",
                 primary_action: { action_ref: "send_form", override_label: "Send Enrollment Packet" },
             },
+            {
+                template_key: "confirm_start_date",
+                label: "Confirm start date",
+                required: true,
+                due_policy: { kind: "offset_days", days: 3 },
+                owner_strategy: "record_owner",
+            },
         ],
         outcomes: [
-            { outcome_key: "packet_sent", label: "Packet sent", successful: true, completes_work: true },
+            { outcome_key: "enrollment_complete", label: "Enrollment complete", successful: true, completes_work: true },
+            { outcome_key: "packet_sent", label: "Packet sent", successful: true },
             { outcome_key: "packet_pending", label: "Packet still pending" },
+            { outcome_key: "family_withdrew", label: "Family withdrew" },
         ],
         outcome_rules: [
             {
-                rule_key: "packet_sent_complete",
+                rule_key: "complete_to_enrolled",
+                when_outcome_key: "enrollment_complete",
+                targets: [
+                    // Paperwork-completion fact → process-instance Enrollment Date (not opportunity).
+                    { kind: "stamp_enrollment_date" },
+                    { kind: "update_child_enrollment_status", disposition_key: "enrolled" },
+                    { kind: "move_to_stage", transition_ref: "enrolling_to_enrolled" },
+                    { kind: "mark_stage_work_complete" },
+                ],
+            },
+            {
+                rule_key: "packet_sent_noted",
                 when_outcome_key: "packet_sent",
-                targets: [{ kind: "mark_stage_work_complete" }],
+                targets: [{ kind: "no_movement" }],
             },
             {
                 rule_key: "packet_attention",
                 when_outcome_key: "packet_pending",
                 targets: attention("Enrollment packet incomplete"),
             },
+            {
+                rule_key: "withdrew",
+                when_outcome_key: "family_withdrew",
+                targets: [
+                    { kind: "update_child_enrollment_status", disposition_key: "not_enrolling", close_reason_key: "family_withdrew" },
+                    { kind: "move_to_stage", transition_ref: "enrolling_to_closed_withdrawn" },
+                    { kind: "mark_stage_work_complete" },
+                ],
+            },
         ],
-        attention_rules: [],
+        attention_rules: [
+            {
+                rule_key: "required_docs_overdue",
+                kind: "required_work_overdue",
+                threshold: 1,
+                targets: attention("Required enrollment work overdue"),
+            },
+        ],
     },
     closed_withdrawn: {
         version: 1,
@@ -515,66 +584,6 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
             },
         ],
         attention_rules: [],
-    },
-    enrollment: {
-        version: 1,
-        journey_segment: "child",
-        purpose: "Complete enrollment paperwork and confirm start.",
-        work_templates: [
-            {
-                template_key: "send_enrollment_packet",
-                label: "Send enrollment packet",
-                required: true,
-                due_policy: { kind: "offset_days", days: 1 },
-                owner_strategy: "record_owner",
-            },
-            {
-                template_key: "confirm_start_date",
-                label: "Confirm start date",
-                required: true,
-                due_policy: { kind: "offset_days", days: 3 },
-                owner_strategy: "record_owner",
-            },
-        ],
-        outcomes: [
-            { outcome_key: "enrollment_complete", label: "Enrollment complete", successful: true },
-            { outcome_key: "packet_pending", label: "Packet still pending" },
-            { outcome_key: "family_withdrew", label: "Family withdrew" },
-        ],
-        outcome_rules: [
-            {
-                rule_key: "complete_to_enrolled",
-                when_outcome_key: "enrollment_complete",
-                targets: [
-                    // Paperwork-completion fact → process-instance Enrollment Date (not opportunity).
-                    { kind: "stamp_enrollment_date" },
-                    { kind: "update_child_enrollment_status", disposition_key: "enrolled" },
-                    { kind: "move_to_stage", stage_key: "enrolled" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-            {
-                rule_key: "packet_attention",
-                when_outcome_key: "packet_pending",
-                targets: attention("Enrollment packet incomplete"),
-            },
-            {
-                rule_key: "withdrew",
-                when_outcome_key: "family_withdrew",
-                targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "not_enrolling", close_reason_key: "family_withdrew" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-        ],
-        attention_rules: [
-            {
-                rule_key: "required_docs_overdue",
-                kind: "required_work_overdue",
-                threshold: 1,
-                targets: attention("Required enrollment work overdue"),
-            },
-        ],
     },
     enrolled: {
         version: 1,

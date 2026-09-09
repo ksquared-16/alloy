@@ -40,6 +40,7 @@ import {
     sourceFieldNamesByFieldId,
     type SourceFieldMapping,
 } from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
+import { fieldIsAcknowledgement } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 
@@ -163,9 +164,15 @@ function classify(
         return sharedKey != null && hasValue(value) ? "resolved_shared_value" : "display_content";
     }
 
+    /*
+     * ONE definition of an acknowledgment, shared with the need projection.
+     *
+     * This rule used to live only here, so the conversation could — and did — classify the same
+     * field as an ordinary question and ask it before the document existed.
+     */
     const bound = sharedKey != null;
     if (!bound && field.type === "boolean") {
-        return field.required === true ? "acknowledgment" : "unresolved_artifact_specific";
+        return fieldIsAcknowledgement(field, { bound }) ? "acknowledgment" : "unresolved_artifact_specific";
     }
     if (bound && hasValue(value)) return "resolved_shared_value";
     return "unresolved_artifact_specific";

@@ -83,6 +83,12 @@ async function stampCarryForward(params: {
     supabase: SupabaseClient;
     orgId: string;
     workId: string;
+    /*
+     * Required here, and narrowed by the caller. The entry point returns `missing_scope` before
+     * reaching this helper when the subject carries no Opportunity, so by this point one exists —
+     * and the call site already passes the narrowed local. Only the type still said otherwise,
+     * which put a possibly-null id into a fingerprint that throws on an empty entity id.
+     */
     opportunityId: string;
     fromStageKey: string;
     toStageKey: string;
@@ -186,7 +192,7 @@ export async function reconcileBusinessProcessWorkAcrossStageMove(params: {
     supabase: SupabaseClient;
     orgId: string;
     userId: string;
-    opportunityId: string;
+    opportunityId?: string | null;
     departmentId: string;
     sourceStageKey: string;
     destinationStageKey: string;
@@ -196,7 +202,13 @@ export async function reconcileBusinessProcessWorkAcrossStageMove(params: {
     now?: Date;
 }): Promise<ReconcileBusinessProcessWorkAcrossStageMoveResult> {
     const orgId = params.orgId.trim();
-    const opportunityId = params.opportunityId.trim();
+    /*
+     * Optional: context-free Enrollment carries no Opportunity, and this used to call `.trim()`
+     * on it unconditionally — which threw `Cannot read properties of null (reading 'trim')` and
+     * degraded a stage move that had already succeeded. The guard below already treats a missing
+     * id as "nothing to reconcile"; it simply was never reached.
+     */
+    const opportunityId = (params.opportunityId ?? "").trim();
     const sourceStageKey = params.sourceStageKey.trim();
     const destinationStageKey = params.destinationStageKey.trim();
     const initiatingWorkId = trimOrNull(params.initiatingWorkId);

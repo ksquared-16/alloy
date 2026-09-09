@@ -1,0 +1,1554 @@
+{
+  "trusted_host_action_id": "tha_2d0a4897300b91",
+  "query_hash": "fa558c4356ce92165057b2a18b3715daca3562536399ea9ccb38ec4e5cfccf2e",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-05T13:20:53.250Z",
+    "question_ids": [
+      "columns",
+      "schedule_like_tables",
+      "tables_present"
+    ],
+    "questions": {
+      "columns": {
+        "question_id": "columns",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "child_enrollment_agreements",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "opportunity_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "opportunity_customer_member_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "customer_member_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "customer_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "person_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "site_location_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "status",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "start_date",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "end_date",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "activation_policy_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "source_key",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "updated_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              }
+            ]
+          },
+          {
+            "table": "child_placements",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "enrollment_agreement_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "customer_member_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "site_location_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "program_category_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "room_location_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "start_date",
+                "type": "date",
+                "nullable": "NO"
+              },
+              {
+                "name": "end_date",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "status",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "reason_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "source_key",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "supersedes_placement_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "updated_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              }
+            ]
+          },
+          {
+            "table": "customer_members",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "customer_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "display_name",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "relationship",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "first_name",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "last_name",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "dob",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "is_active",
+                "type": "boolean",
+                "nullable": "NO"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "external_source",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "external_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "status_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "person_id",
+                "type": "uuid",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "customer_persons",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "customer_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "person_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "role_type",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "is_primary",
+                "type": "boolean",
+                "nullable": "NO"
+              },
+              {
+                "name": "status",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "start_date",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "end_date",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "customers",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "vertical_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "name",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "customer_type",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "stripe_customer_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "external_source",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "external_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "primary_contact_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "default_payment_method_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "payment_method_last4",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "payment_method_brand",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "setup_intent_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "status_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "customer_number",
+                "type": "bigint",
+                "nullable": "NO"
+              }
+            ]
+          },
+          {
+            "table": "enrollment_requirement_exceptions",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "enrollment_participation_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "stage_key",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "requirement_id",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "disposition",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "reason",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "state",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "approved_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "approved_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "revoked_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "revoked_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "revoke_reason",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "supersedes_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "form_packet_session_items",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "packet_session_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "packet_item_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "sequence_index",
+                "type": "integer",
+                "nullable": "NO"
+              },
+              {
+                "name": "status",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "form_submission_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "submitted_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "skip_reason",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "resolved_form_definition_version_id",
+                "type": "uuid",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "form_packet_sessions",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "packet_definition_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "started_via_public_link_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "status",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "launch_context",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "crm_snapshot",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "shared_values",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "current_sequence_index",
+                "type": "integer",
+                "nullable": "NO"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "completed_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "operator_review_status",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "operator_review_warnings",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "operator_reviewed_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "operator_reviewed_by_user_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "operator_review_notes",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "packet_instance_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "process_instance_id",
+                "type": "uuid",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "form_submissions",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "form_definition_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "form_definition_version_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "status",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "payload",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "person_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "customer_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "customer_member_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "opportunity_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "created_via_public_link_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "created_by_user_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "submitted_by_user_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "submitted_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "opportunities",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "vertical_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "customer_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "primary_contact_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "location_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "name",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "pipeline_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "pipeline_stage_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "source",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "lost_reason",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "assigned_to",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "job_date",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "job_time_window",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "appointment_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "customer_notes",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "monetary_value_cents",
+                "type": "integer",
+                "nullable": "YES"
+              },
+              {
+                "name": "estimated_price_cents",
+                "type": "integer",
+                "nullable": "YES"
+              },
+              {
+                "name": "recurring_price_cents",
+                "type": "integer",
+                "nullable": "YES"
+              },
+              {
+                "name": "price_breakdown",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "external_source",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "external_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "title",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "discount_code_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "discount_code",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "quote_subtotal",
+                "type": "numeric",
+                "nullable": "YES"
+              },
+              {
+                "name": "discount_amount",
+                "type": "numeric",
+                "nullable": "YES"
+              },
+              {
+                "name": "quote_total",
+                "type": "numeric",
+                "nullable": "YES"
+              },
+              {
+                "name": "discount_validated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "status_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "primary_person_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "discount_program_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "opportunity_number",
+                "type": "bigint",
+                "nullable": "NO"
+              },
+              {
+                "name": "quote_is_overridden",
+                "type": "boolean",
+                "nullable": "NO"
+              },
+              {
+                "name": "quote_override_total",
+                "type": "numeric",
+                "nullable": "YES"
+              },
+              {
+                "name": "quote_override_reason",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "work_unit_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "stage_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "close_reason_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "stage_entered_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "opportunity_customer_members",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "opportunity_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "customer_member_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "schedule_type",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "fit_status",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "notes",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "outcome_status_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "start_date",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "location_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "program_room_cohort_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "program_category_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "stage_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "close_reason_key",
+                "type": "text",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "org_settings",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "payout_type",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "payout_value",
+                "type": "numeric",
+                "nullable": "NO"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "persons",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "first_name",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "last_name",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "full_name",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "preferred_name",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "email",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "phone",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "date_of_birth",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "status_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "external_source",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "external_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "archived_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "archived_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "person_number",
+                "type": "bigint",
+                "nullable": "NO"
+              },
+              {
+                "name": "is_employee",
+                "type": "boolean",
+                "nullable": "YES"
+              },
+              {
+                "name": "employee_id",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "employee_source",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "phone_canonical",
+                "type": "text",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "process_instances",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "process_key",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "subject_type",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "subject_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "context_type",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "context_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "stage_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "state",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "close_reason_key",
+                "type": "text",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "stage_entered_at",
+                "type": "timestamp with time zone",
+                "nullable": "YES"
+              },
+              {
+                "name": "business_process_revision_id",
+                "type": "uuid",
+                "nullable": "YES"
+              }
+            ]
+          },
+          {
+            "table": "schedule_assignments",
+            "columns": [
+              {
+                "name": "id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "org_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "enrollment_agreement_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "schedule_pattern_id",
+                "type": "uuid",
+                "nullable": "NO"
+              },
+              {
+                "name": "customer_member_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "start_date",
+                "type": "date",
+                "nullable": "NO"
+              },
+              {
+                "name": "end_date",
+                "type": "date",
+                "nullable": "YES"
+              },
+              {
+                "name": "status",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "assignment_kind",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "source_key",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "supersedes_assignment_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "metadata",
+                "type": "jsonb",
+                "nullable": "NO"
+              },
+              {
+                "name": "created_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "updated_by",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "created_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "updated_at",
+                "type": "timestamp with time zone",
+                "nullable": "NO"
+              },
+              {
+                "name": "subject_type",
+                "type": "text",
+                "nullable": "NO"
+              },
+              {
+                "name": "subject_person_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "site_location_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "room_location_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "program_category_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "operational_assignment_type_id",
+                "type": "uuid",
+                "nullable": "YES"
+              },
+              {
+                "name": "is_primary",
+                "type": "boolean",
+                "nullable": "NO"
+              },
+              {
+                "name": "commitment_kind",
+                "type": "text",
+                "nullable": "NO"
+              }
+            ]
+          }
+        ]
+      },
+      "schedule_like_tables": {
+        "question_id": "schedule_like_tables",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "assignment_statuses"
+          },
+          {
+            "table": "assignments"
+          },
+          {
+            "table": "business_process_layout_assignments"
+          },
+          {
+            "table": "childcare_schedule_rules"
+          },
+          {
+            "table": "communication_scheduled_sends"
+          },
+          {
+            "table": "conversation_assignment_events"
+          },
+          {
+            "table": "operational_assignment_types"
+          },
+          {
+            "table": "operational_authority_assignments"
+          },
+          {
+            "table": "schedule_assignments"
+          },
+          {
+            "table": "schedule_patterns"
+          },
+          {
+            "table": "schedule_statuses"
+          },
+          {
+            "table": "schedule_tags"
+          },
+          {
+            "table": "schedules"
+          }
+        ]
+      },
+      "tables_present": {
+        "question_id": "tables_present",
+        "row_count": null,
+        "rows": [
+          {
+            "looked_for": 15,
+            "found": 15,
+            "names": [
+              "child_enrollment_agreements",
+              "child_placements",
+              "customer_members",
+              "customer_persons",
+              "customers",
+              "enrollment_requirement_exceptions",
+              "form_packet_session_items",
+              "form_packet_sessions",
+              "form_submissions",
+              "opportunities",
+              "opportunity_customer_members",
+              "org_settings",
+              "persons",
+              "process_instances",
+              "schedule_assignments"
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 29
+  }
+}

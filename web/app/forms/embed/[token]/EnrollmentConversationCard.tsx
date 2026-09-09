@@ -41,6 +41,7 @@ import {
     participantQuestion,
     participantQuestionSegments,
     participantUnreadableAnswerMessage,
+    type ParticipantTurnControl,
     type ParticipantValueControl,
     PARTICIPANT_CLARIFICATION_MESSAGE,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
@@ -78,6 +79,16 @@ export type EnrollmentConversationCardProps = {
      * artifact review MID-conversation — without this the Form would stay hidden until a reload.
      */
     readonly onPhaseChange?: (phase: ParticipantObjectiveWire["phase"]) => void;
+    /**
+     * The advanced objective, handed up as it advances.
+     *
+     * The host seeds this card with `initialObjective` and then holds that first copy forever, while
+     * the card owns the live one. Two owners, one of them frozen at page load — so anything the host
+     * reads from its copy (the artifact header's progress among them) describes a journey the parent
+     * has already moved past, and any remount of this card re-seeds it from that stale copy and
+     * visibly walks the parent backwards.
+     */
+    readonly onObjectiveAdvanced?: (objective: ParticipantObjectiveWire) => void;
     /**
      * Whether the host actually has an artifact to render beneath this card.
      *
@@ -291,8 +302,20 @@ function StructuredFactEditor({
 }: {
     editor: SemanticEditor;
     label: string;
-    /** The value being corrected, as the parent reads it — the editor opens on it, not on blank. */
-    initial?: string;
+    /**
+     * The value being corrected, as the parent reads it — the editor opens on it, not on blank.
+     *
+     * REQUIRED, and it was optional. Three of the four call sites passed it and the fourth simply
+     * did not, which TypeScript accepted in silence: `initial` defaulted to undefined, `shown`
+     * became "", and for a date field `isoDraft("")` produced "". A parent clicking Edit on a
+     * confirmed Birthday met an EMPTY date input and had to retype from memory the value they were
+     * only trying to correct.
+     *
+     * Nothing about that failure was visible in the editor — it renders whatever it is handed — so
+     * the type is what has to prevent it. Making this required turns "a call site forgot the value"
+     * from a silent runtime blank into a compile error.
+     */
+    initial: string;
     busy: boolean;
     onSave: (value: unknown) => void;
     onCancel: () => void;
@@ -310,7 +333,20 @@ function StructuredFactEditor({
         return shown;
     });
 
-    const field = "w-full min-w-0 rounded-lg border border-alloy-midnight/20 bg-white px-2.5 py-1.5 text-[14px] text-alloy-midnight";
+    /*
+     * 16px AND 44px ARE THE HOUSE RULE ON THIS SURFACE, and the correction editor was under both.
+     *
+     * The participant turn control below sets `text-[16px] min-h-[44px]` deliberately: iOS zooms
+     * the page whenever a focused input is under 16px, and 44px is the tap target. This editor —
+     * the one a parent reaches by tapping Edit to correct a fact — was `text-[14px]` with `py-1.5`,
+     * so at 375px a parent correcting their child's birthday got a ~32px control that zoomed the
+     * whole page on focus and then left them scrolled somewhere they did not ask to be.
+     *
+     * Measured at 375x812 on the live participant runtime: date input font-size 14px against 16px
+     * on every other input in the same journey. Same class of miss as the `initial` prop this
+     * editor already carries a comment about — the editor is fine, the wiring around it was not.
+     */
+    const field = "w-full min-w-0 min-h-[44px] rounded-lg border border-alloy-midnight/20 bg-white px-2.5 py-1.5 text-[16px] text-alloy-midnight";
     const caption = "mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40";
 
     let body: ReactNode;
@@ -415,7 +451,9 @@ function NewPartyForm({
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
-    const field = "w-full rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[15px] text-alloy-midnight";
+    // Same rule, same reason: 15px still zooms on iOS. The party editor is a parent-facing input
+    // like any other on this surface.
+    const field = "w-full min-h-[44px] rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[16px] text-alloy-midnight";
     const caption = "mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40";
     return (
         <div className="flex flex-col gap-3" data-participant-party-form={roleLabel}>
@@ -635,6 +673,7 @@ function SettledGroup({
                                 <StructuredFactEditor
                                     editor={fact.editor}
                                     label={fact.label}
+                                    initial={fact.value}
                                     busy={busy}
                                     onSave={(value) => onSave(fact.ref, value)}
                                     onCancel={onCancel}
@@ -694,6 +733,7 @@ export function EnrollmentConversationCard({
     initialObjective,
     onArtifactHandoff,
     onPhaseChange,
+    onObjectiveAdvanced,
     artifactRenderable = true,
     onValueSettled,
 }: EnrollmentConversationCardProps) {
@@ -745,12 +785,13 @@ export function EnrollmentConversationCard({
             if (json.ok && json.data) {
                 setObjective(json.data);
                 onPhaseChange?.(json.data.phase);
+                onObjectiveAdvanced?.(json.data);
                 if (json.data.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
             }
         } catch {
             // Left as it was; the parent can attach again or reload.
         }
-    }, [token, onPhaseChange, onArtifactHandoff]);
+    }, [token, onPhaseChange, onArtifactHandoff, onObjectiveAdvanced]);
 
     /** Send one document to the token-scoped route. The server derives everything about it. */
     const uploadEvidence = useCallback(
@@ -941,6 +982,7 @@ export function EnrollmentConversationCard({
                     }
                 }
                 onPhaseChange?.(json.data.objective.phase);
+                onObjectiveAdvanced?.(json.data.objective);
                 if (json.data.objective.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
             } catch {
                 // Roll the optimistic entry back rather than leave a resolved-looking exchange for
@@ -954,7 +996,7 @@ export function EnrollmentConversationCard({
                 setAwaitingTurn(false);
             }
         },
-        [token, onArtifactHandoff, onPhaseChange, onValueSettled, objective],
+        [token, onArtifactHandoff, onPhaseChange, onObjectiveAdvanced, onValueSettled, objective],
     );
 
     const turn = objective.next_turn;
@@ -1319,17 +1361,64 @@ export function EnrollmentConversationCard({
               ? typedCandidate
               : null;
 
+    /**
+     * DOES THIS TURN ACTUALLY TAKE PROSE?
+     *
+     * The composer was mounted unconditionally, so a structured question carried three competing
+     * ways to answer it at once. Kelly's first reaction to the birthday confirmation was exactly
+     * that: "Why do I have Yes, that's right, Change, AND Type your answer…?"
+     *
+     * The principle the old code was protecting — "everything the pills do is also sayable in the
+     * composer, so nothing is reachable only by pressing one" — was about reachability, and it
+     * survives without the composer: the pills are real buttons, so they are already tab-reachable
+     * and screen-reader operable. What does not survive is asking a parent to choose between three
+     * paradigms for one question.
+     *
+     * So the composer appears only where prose IS the answer: a text/email/tel value with no
+     * dedicated control of its own. Everything structured — confirmations, grouped confirmations,
+     * a pending clarification, options, booleans, and the yes/no half of an optional question —
+     * answers through its own control. Dates and numbers keep their picker and lose the "Or tell me
+     * in your own words…" box beside it, which was the same competing paradigm in quieter clothes.
+     *
+     * Generalised on the CONTROL, never on the field: nothing here knows what a birthday is.
+     */
+    const answerControl: ParticipantTurnControl | ParticipantValueControl =
+        correcting && control.kind === "choice_or_text" ? control.correction : control;
+    const composerIsTheAnswer =
+        !typed
+        && !(correcting && turn.editor)
+        && !group
+        && !(objective.pending_clarification && !correcting)
+        && !optionalUnanswered
+        && answerControl.kind === "value"
+        && !NEEDS_ITS_OWN_CONTROL.has(answerControl.inputType);
+
     return (
         <ConversationViewport
             followSignal={`${settled.length}:${objective.settled.length}:${participantQuestion(objective)}:${clarification ?? ""}:${changingGroup ? "individual" : "summary"}:${editingRef ?? ""}`}
             progress={progress ? <ConversationProgress label={progress.label} percent={progress.percent} /> : null}
             thread={
                 <>
-                    {/* Alloy's opening line, spoken once and then left in the transcript above. */}
-                    {intro && settled.length === 0 ? (
+                    {/*
+                      * Alloy's opening line, spoken once and then LEFT in the transcript above.
+                      *
+                      * It used to be dropped the moment the first fact settled — `settled.length === 0`
+                      * — which contradicted the sentence directly above it and, more to the point, was
+                      * half of why saving a correction felt abrupt. Measured on the live surface: the
+                      * intro vanished ~300ms after Save while the answer was still committing, the
+                      * transcript stood alone and the content shrank, and only ~700ms later did the
+                      * settled-details card arrive. Two separate reflows for one action, the first of
+                      * them a removal — so the surface appeared to come apart before it advanced.
+                      *
+                      * Keeping it costs one line of transcript and removes the first reflow entirely:
+                      * what the parent already read stays where they read it, and the save adds to the
+                      * surface rather than rebuilding it. It recedes to `history` once anything is
+                      * settled, which is the same depth every other past turn uses.
+                      */}
+                    {intro ? (
                         // The opening line and the first question are both Alloy — one eyebrow.
-                        <ThreadTurn who="alloy" depth="recent" showSpeaker={false}>
-                            <ThreadSaid who="alloy" depth="recent">{intro}</ThreadSaid>
+                        <ThreadTurn who="alloy" depth={settled.length === 0 ? "recent" : "history"} showSpeaker={false}>
+                            <ThreadSaid who="alloy" depth={settled.length === 0 ? "recent" : "history"}>{intro}</ThreadSaid>
                         </ThreadTurn>
                     ) : null}
 
@@ -1514,12 +1603,14 @@ export function EnrollmentConversationCard({
                         />
                     ) : null}
                     <SuggestedReplies replies={suggestions} busy={busy} controlKind={suggestionKind} />
-                    <Composer
-                        busy={busy}
-                        placeholder={typed ? "Or tell me in your own words…" : "Type your answer…"}
-                        focusSignal={participantQuestion(objective)}
-                        onSend={(words) => void submit({ text: words, settledAs: words })}
-                    />
+                    {composerIsTheAnswer ? (
+                        <Composer
+                            busy={busy}
+                            placeholder="Type your answer…"
+                            focusSignal={participantQuestion(objective)}
+                            onSend={(words) => void submit({ text: words, settledAs: words })}
+                        />
+                    ) : null}
                 </>
             }
         />

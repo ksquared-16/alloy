@@ -49,7 +49,8 @@ export async function stampEnrollmentDateOnProcessInstances(
     supabase: SupabaseClient,
     args: {
         orgId: string;
-        opportunityId: string;
+        /** The acquisition Opportunity, when there is one. Context-free Enrollment has none. */
+        opportunityId?: string | null;
         /** When set, only this child's enrollment instance is considered. */
         customerMemberId?: string | null;
         /** Most specific: stamp exactly this process instance (must match org + opportunity). */
@@ -88,24 +89,42 @@ export async function stampEnrollmentDateOnProcessInstances(
      * accepted. The Opportunity id itself stays in the list: journeys written before the convergence
      * are still stamped by the same call, with no backfill dependency.
      */
-    const { data: participationRows, error: participationError } = await supabase
-        .from("opportunity_customer_members")
-        .select("id")
-        .eq("org_id", args.orgId)
-        .eq("opportunity_id", args.opportunityId);
-    if (participationError) return { stamped: [], error: participationError.message };
-    const contextIds = [
-        args.opportunityId,
-        ...((participationRows ?? []) as { id: string }[]).map((r) => String(r.id)),
-    ];
+    /*
+     * THE OPPORTUNITY IS OPTIONAL HERE, because context-free Enrollment has none.
+     *
+     * This read the household's participations by Opportunity id and put that id at the head of
+     * the context list. With no Opportunity the filter was handed a blank — later a literal
+     * `null` — and Postgres refused the whole statement with `invalid input syntax for type
+     * uuid`. The stamp then failed a target whose three siblings had already applied, so a
+     * completed enrollment reported failure after durably succeeding.
+     *
+     * A context-free journey is anchored to its PARTICIPATION, and the caller already names the
+     * journey or the child. So when there is no Opportunity the context filter is simply not
+     * applied: the process-instance id or subject id below is the anchor, and it is the more
+     * specific one in either case.
+     */
+    const opportunityId = (args.opportunityId ?? "").trim() || null;
+    const contextIds: string[] = [];
+    if (opportunityId) {
+        const { data: participationRows, error: participationError } = await supabase
+            .from("opportunity_customer_members")
+            .select("id")
+            .eq("org_id", args.orgId)
+            .eq("opportunity_id", opportunityId);
+        if (participationError) return { stamped: [], error: participationError.message };
+        contextIds.push(
+            opportunityId,
+            ...((participationRows ?? []) as { id: string }[]).map((r) => String(r.id)),
+        );
+    }
 
     let query = supabase
         .from(PROCESS_INSTANCES_TABLE)
         .select("id, subject_id, metadata")
         .eq("org_id", args.orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
-        .eq("subject_type", ENROLLMENT_SUBJECT_TYPE)
-        .in("context_id", contextIds);
+        .eq("subject_type", ENROLLMENT_SUBJECT_TYPE);
+    if (contextIds.length) query = query.in("context_id", contextIds);
 
     const processInstanceId = args.processInstanceId?.trim();
     const customerMemberId = args.customerMemberId?.trim();
