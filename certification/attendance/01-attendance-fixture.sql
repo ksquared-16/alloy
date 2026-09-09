@@ -293,4 +293,65 @@ BEGIN
         v_placements, v_emp;
 END $$;
 
+-- =============================================================================
+-- TODAY'S FACTS ARE RESET SO EVERY CERTIFICATION RUN STARTS AT THE SAME HOUR
+-- =============================================================================
+-- Attendance facts are append-only and scoped to a service day, so a browser
+-- certification run leaves the tenant mid-morning: children checked in, moved,
+-- corrected, checked out. The next run then opens on a day already in progress
+-- and cannot perform "morning arrival" at all — there is nobody left to arrive.
+-- Scenarios that search for a subject instead of asserting one silently weaken
+-- until they prove nothing.
+--
+-- So the fixture returns the day to its start. It deletes ONLY today's facts and
+-- ONLY for the children this file places, which requires suspending the
+-- append-only trigger — legitimate here and nowhere else: this file refuses to
+-- run outside the disposable local certification tenant, and a ledger that may
+-- not be rewound is exactly what makes a repeatable browser certification
+-- impossible. Production is untouched by construction; no migration performs this.
+--
+-- The trigger is restored in the same transaction, so a failure mid-way leaves
+-- the ledger's protection intact rather than disabled.
+BEGIN;
+
+ALTER TABLE public.child_attendance_events DISABLE TRIGGER trg_prevent_child_attendance_events_mutation;
+
+DELETE FROM public.child_attendance_events e
+WHERE e.service_date = CURRENT_DATE
+  AND e.enrollment_agreement_id IN (
+      SELECT p.enrollment_agreement_id
+      FROM public.child_placements p
+      JOIN public.locations l ON l.id = p.room_location_id
+      WHERE l.label = 'Toddler Room A'
+  );
+
+ALTER TABLE public.child_attendance_events ENABLE TRIGGER trg_prevent_child_attendance_events_mutation;
+
+DO $$
+DECLARE
+    v_left int;
+    v_enabled text;
+BEGIN
+    SELECT count(*) INTO v_left
+    FROM public.child_attendance_events e
+    WHERE e.service_date = CURRENT_DATE
+      AND e.enrollment_agreement_id IN (
+          SELECT p.enrollment_agreement_id
+          FROM public.child_placements p
+          JOIN public.locations l ON l.id = p.room_location_id
+          WHERE l.label = 'Toddler Room A'
+      );
+
+    SELECT tgenabled INTO v_enabled
+    FROM pg_trigger WHERE tgname = 'trg_prevent_child_attendance_events_mutation';
+
+    -- Leaving the ledger unprotected would be a far worse outcome than an
+    -- un-reset day, so this is fatal rather than a notice.
+    IF v_enabled IS DISTINCT FROM 'O' THEN
+        RAISE EXCEPTION 'append-only protection was not restored (tgenabled=%)', v_enabled;
+    END IF;
+
+    RAISE NOTICE 'Attendance day reset: % facts remain for today (expected 0); append-only protection restored', v_left;
+END $$;
+
 COMMIT;
