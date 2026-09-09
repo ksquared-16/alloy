@@ -22,6 +22,7 @@ import {
     warmOperationsDayResult,
 } from "@/lib/scheduling/operationsWorkspaceWarmCache";
 import { createLatestWinsGate } from "@/lib/runtime/latestWins";
+import { buildAttendanceOverviewModel } from "@/lib/roster/attendanceOverviewModel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, UserRound, Users } from "lucide-react";
 
@@ -355,19 +356,102 @@ export default function AttendanceWorkspace({
         );
     }
 
+    /*
+     * CHILD ATTENDANCE GOES THROUGH THE REGISTERED COMMAND, LIKE STAFF PRESENCE.
+     *
+     * This used to POST straight to /api/admin/childcare-attendance, which meant
+     * the two surfaces in this product had two different mutation architectures:
+     * Focus Panel went through the action bus and got eligibility, confirmation
+     * and correlated audit; this screen skipped all three and told the server what
+     * actor_type to record. Same table, different rules — and the weaker path was
+     * the one an operator uses all day.
+     *
+     * The action keys already existed and were already registered. Nothing new was
+     * needed here except to stop going around them.
+     */
     function childAttendance(child: RosterChild, room: Cell, kind: "check_in" | "check_out" | "absence") {
+        const actionKey =
+            kind === "check_in" ? "attendance.check_in"
+            : kind === "check_out" ? "attendance.check_out"
+            : "attendance.mark_absent";
+
         return runAction(
             `child:${child.customerMemberId}`,
             {
-                enrollment_agreement_id: child.enrollmentAgreementId,
-                customer_member_id: child.customerMemberId,
-                event_kind: kind,
-                room_location_id: kind === "check_out" ? null : room.roomLocationId,
-                service_date: room.date,
-                actor_type: "staff",
-                source_type: "operator_action",
+                action_key: actionKey,
+                entity_type: "child",
+                entity_id: child.customerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                context: { surface: "workspace" },
+                payload: {
+                    customer_member_id: child.customerMemberId,
+                    room_location_id: kind === "check_out" ? null : room.roomLocationId,
+                    service_date: room.date,
+                },
             },
-            "/api/admin/childcare-attendance"
+            "/api/admin/actions/execute"
+        );
+    }
+
+    /*
+     * MOVE — the ordinary afternoon operation, and until now impossible here.
+     *
+     * `attendance.move` has been registered since Thread 0 and reachable from
+     * nowhere an operator actually works. It records ONE room_transfer fact; the
+     * domain resolves the source room from the fold, so this deliberately sends
+     * only the destination. Moving a child never touches their committed
+     * placement — they still belong to their classroom, they are just not in it.
+     */
+    function childMove(child: RosterChild, toRoomLocationId: string) {
+        return runAction(
+            `child:${child.customerMemberId}`,
+            {
+                action_key: "attendance.move",
+                entity_type: "child",
+                entity_id: child.customerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                context: { surface: "workspace" },
+                payload: {
+                    customer_member_id: child.customerMemberId,
+                    to_room_location_id: toRoomLocationId,
+                },
+            },
+            "/api/admin/actions/execute",
+        );
+    }
+
+    /*
+     * CORRECT — reverses the last fact recorded for this child.
+     *
+     * Staff presence has had this control all along; children have not, so a
+     * mis-tap on a child could only be fixed somewhere else. It authors a
+     * REVERSAL against the effective fact the roster already resolved, so the
+     * history keeps saying what happened and that it was undone. Nothing is
+     * edited and nothing is deleted.
+     */
+    function childCorrect(child: RosterChild, room: Cell) {
+        if (!child.actual.latestFactId) return;
+        return runAction(
+            `child:${child.customerMemberId}`,
+            {
+                action_key: "attendance.correct",
+                entity_type: "child",
+                entity_id: child.customerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                context: { surface: "workspace" },
+                payload: {
+                    customer_member_id: child.customerMemberId,
+                    corrects_event_id: child.actual.latestFactId,
+                    entry_type: "reversal",
+                    event_kind: child.actual.state === "checked_out" ? "check_out" : "check_in",
+                    room_location_id: child.actual.actualRoomLocationId ?? room.roomLocationId,
+                    service_date: room.date,
+                },
+            },
+            "/api/admin/actions/execute",
         );
     }
 
@@ -540,6 +624,15 @@ export default function AttendanceWorkspace({
                         <ul className="divide-y divide-alloy-stone/12">
                             {openRoom.children.map((c) => {
                                 const busy = busySubject === `child:${c.customerMemberId}`;
+                                // Where the child IS right now, from the authoritative fold.
+                                const whereNow = c.actual.actualRoomLocationId ?? openRoom.roomLocationId;
+                                // Only say "currently in X" when X is not the room being viewed —
+                                // otherwise every row repeats where you already are.
+                                const awayIn =
+                                    c.actual.state === "present" && whereNow !== openRoom.roomLocationId
+                                        ? ((model?.cells ?? []).find((cell) => cell.roomLocationId === whereNow)
+                                              ?.roomName ?? "another room")
+                                        : null;
                                 return (
                                     <li
                                         key={c.customerMemberId}
@@ -569,7 +662,14 @@ export default function AttendanceWorkspace({
                                                 </button>
                                             )}
                                             <p className="truncate text-[11.5px] text-alloy-midnight/55">
-                                                {c.timeLabel ? `Expected ${c.timeLabel}` : "Expected today"}
+                                                {/* Where she BELONGS and where she IS are different
+                                                    truths. When they diverge, say so plainly rather
+                                                    than moving her row and implying a re-placement. */}
+                                                {awayIn
+                                                    ? `Currently in ${awayIn} · placed here`
+                                                    : c.timeLabel
+                                                      ? `Expected ${c.timeLabel}`
+                                                      : "Expected today"}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -600,14 +700,56 @@ export default function AttendanceWorkspace({
                                                     </button>
                                                 </>
                                             ) : c.actual.state === "present" ? (
+                                                <>
+                                                    {/* Move is a select, not a dialog: picking the
+                                                        destination IS the whole decision, and a
+                                                        confirmation step on a reversible fact would
+                                                        cost more than the mistake it prevents. */}
+                                                    <select
+                                                        className={`${ACTION} border border-alloy-stone/25 bg-white pr-1 font-medium text-alloy-midnight/75`}
+                                                        disabled={busy}
+                                                        value=""
+                                                        onChange={(e) => {
+                                                            const to = e.target.value;
+                                                            e.target.value = "";
+                                                            if (to) void childMove(c, to);
+                                                        }}
+                                                        aria-label={`Move ${c.displayName} to another room`}
+                                                        data-attendance-child-move={c.customerMemberId}
+                                                    >
+                                                        <option value="">Move to…</option>
+                                                        {(model?.cells ?? [])
+                                                            .filter((cell) => cell.roomLocationId !== whereNow)
+                                                            .map((cell) => (
+                                                                <option key={cell.roomLocationId} value={cell.roomLocationId}>
+                                                                    {cell.roomName}
+                                                                </option>
+                                                            ))}
+                                                    </select>
+                                                    <button
+                                                        type="button"
+                                                        className={ACTION_SECONDARY}
+                                                        disabled={busy}
+                                                        onClick={() => childAttendance(c, openRoom, "check_out")}
+                                                        data-attendance-child-checkout={c.customerMemberId}
+                                                    >
+                                                        Check out
+                                                    </button>
+                                                </>
+                                            ) : null}
+                                            {/* Correct is available wherever a fact exists to correct —
+                                                including after checkout, which is when a wrong-child
+                                                tap is usually noticed. */}
+                                            {c.actual.latestFactId ? (
                                                 <button
                                                     type="button"
-                                                    className={ACTION_SECONDARY}
+                                                    className={`${ACTION} font-medium text-alloy-midnight/55 hover:bg-alloy-stone/10 hover:text-alloy-midnight`}
                                                     disabled={busy}
-                                                    onClick={() => childAttendance(c, openRoom, "check_out")}
-                                                    data-attendance-child-checkout={c.customerMemberId}
+                                                    onClick={() => childCorrect(c, openRoom)}
+                                                    data-attendance-child-correct={c.customerMemberId}
+                                                    title="Undo the last attendance record for this child"
                                                 >
-                                                    Check out
+                                                    Correct
                                                 </button>
                                             ) : null}
                                         </div>
@@ -625,18 +767,38 @@ export default function AttendanceWorkspace({
     }
 
     // ── Overview + rooms ──────────────────────────────────────────────────────
-    const exceptions = (model?.cells ?? []).flatMap((c) => [
-        ...c.children.filter((s) => s.actual.state === "no_record").map((s) => ({
-            key: `c:${s.customerMemberId}`,
-            label: `${s.displayName} has not arrived`,
-            room: c.roomName,
+
+    /*
+     * Two honest answers to "how many children are in this room" — roster
+     * presence (did my class come in) and physical occupancy (how many am I
+     * looking at). The overview needs both, so the derivation is a pure module
+     * that can be tested without mounting a workspace.
+     */
+    const overview = buildAttendanceOverviewModel(model?.cells ?? []);
+    const { hereNowByRoom, awayFromPlacement } = overview;
+
+    const exceptions = [
+        ...(model?.cells ?? []).flatMap((c) => [
+            ...c.children.filter((s) => s.actual.state === "no_record").map((s) => ({
+                key: `c:${s.customerMemberId}`,
+                label: `${s.displayName} has not arrived`,
+                room: c.roomName,
+            })),
+            ...c.staff.filter((s) => s.actual.state === "no_record").map((s) => ({
+                key: `s:${s.personId}`,
+                label: `${s.displayName} has not arrived`,
+                room: c.roomName,
+            })),
+        ]),
+        // Not a problem to fix — a fact to know. A director who cannot see that
+        // four of her toddlers are on the playground is missing the thing she
+        // would most want to be told when she walks in.
+        ...awayFromPlacement.map((a) => ({
+            key: a.key,
+            label: `${a.displayName} is in ${a.nowIn}`,
+            room: a.placedIn,
         })),
-        ...c.staff.filter((s) => s.actual.state === "no_record").map((s) => ({
-            key: `s:${s.personId}`,
-            label: `${s.displayName} has not arrived`,
-            room: c.roomName,
-        })),
-    ]);
+    ];
 
     return (
         <div className={`${WS_SURFACE_CONTENT_PAD} min-h-0 flex-1 overflow-y-auto`} data-attendance-overview="true">
@@ -666,11 +828,18 @@ export default function AttendanceWorkspace({
 
                 {model ? (
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-4" data-attendance-metrics="true">
+                        {/*
+                            The four questions an operator asks about children, in
+                            the order the day answers them. Staffing is not dropped —
+                            it moved to the room cards, where being short is
+                            actionable; a site-wide "rooms short" number tells a
+                            director something is wrong without telling her where.
+                        */}
                         {[
-                            { label: "Children present", value: `${model.totals.actualChildrenPresent}/${model.totals.expectedChildren}` },
-                            { label: "Staff present", value: `${model.totals.actualStaffPresent}/${model.totals.scheduledStaff}` },
-                            { label: "Rooms short", value: String(model.totals.roomsActuallyShort) },
-                            { label: "Not arrived", value: String(exceptions.length) },
+                            { label: "Expected", value: String(overview.counts.expected) },
+                            { label: "Here now", value: String(overview.counts.present) },
+                            { label: "Not arrived", value: String(overview.counts.notArrived) },
+                            { label: "Checked out", value: String(overview.counts.checkedOut) },
                         ].map((m) => (
                             <div key={m.label} className={`${WS_PANEL_SURFACE} px-3 py-2.5`}>
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
@@ -702,9 +871,15 @@ export default function AttendanceWorkspace({
                             </div>
                             <dl className="mt-2.5 grid grid-cols-2 gap-2">
                                 <div>
-                                    <dt className="text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/40">Children</dt>
+                                    <dt className="text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/40">In this room</dt>
                                     <dd className="text-[15px] font-semibold text-alloy-midnight">
-                                        {cell.actualChildrenPresent} / {cell.expectedChildCount} present
+                                        {hereNowByRoom.get(cell.roomLocationId) ?? 0}
+                                    </dd>
+                                    {/* The roster figure stays visible, because
+                                        "how many of my class came in" is a real and
+                                        different question from "how many are here". */}
+                                    <dd className="text-[10.5px] text-alloy-midnight/45">
+                                        {cell.actualChildrenPresent}/{cell.expectedChildCount} of this class in
                                     </dd>
                                 </div>
                                 <div>

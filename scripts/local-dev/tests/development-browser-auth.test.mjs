@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const {
-  BROWSER_AUTH_STATES, BROWSER_AUTH_REFUSALS, SLOT_PORTS,
+  BROWSER_AUTH_STATES, BROWSER_AUTH_REFUSALS, slotPortMap,
   isLoopbackBase, readSlotAuthStatus, validateBrowserAuthRequest,
   classifyVerification, publicAuthOutcome, browserAuthHeadline,
   blocksExecution, redactAuthText, beginBrowserAuthCapture,
@@ -32,6 +32,7 @@ const {
   attachLaneBrowserAuth, recordSlotVerification, readSlotVerification, laneSlot,
   legacySlotAuthStoragePath, qaIdentityForSlot, resetQaIdentityCacheForTests,
 } = await import("../lib/vacilando/browser-auth.mjs");
+const { managedSlotCount } = await import("../lib/vacilando/managed-slots.mjs");
 
 let pass = 0;
 let fail = 0;
@@ -160,7 +161,13 @@ await test("an unregistered lane or foreign worktree is refused", () => {
 });
 
 await test("the wrong slot and the wrong port are refused", () => {
-  for (const bad of [0, 9, 99, "x", null, 5.5]) {
+  // ONE ABOVE THE CONFIGURED CEILING, NOT A LITERAL NINE. This list used to read
+  // [0, 9, 99, ...] on the assumption that six slots is a constant. It is
+  // configuration — the execution host runs twelve — so the literal turned a
+  // legitimate slot into a test failure and, worse, asserted the very ceiling
+  // that stopped slot 7 lanes from ever getting a browser session.
+  const aboveCeiling = managedSlotCount() + 1;
+  for (const bad of [0, aboveCeiling, 999, "x", null, 5.5]) {
     assert.equal(validateBrowserAuthRequest({ lane: laneFor(WT), slot: bad, expectedIdentity: IDENTITY }).error,
       BROWSER_AUTH_REFUSALS.SLOT_MISMATCH, `slot ${bad} was accepted`);
   }
@@ -171,7 +178,7 @@ await test("the wrong slot and the wrong port are refused", () => {
   }).error, BROWSER_AUTH_REFUSALS.PORT_MISMATCH);
 
   // POSITIVE CONTROLS: each managed slot validates against its own port.
-  for (const [slot, port] of Object.entries(SLOT_PORTS)) {
+  for (const [slot, port] of Object.entries(slotPortMap())) {
     const v = validateBrowserAuthRequest({ lane: laneFor(WT), slot: Number(slot), port, expectedIdentity: IDENTITY });
     assert.equal(v.ok, true, `slot ${slot}`);
     assert.equal(v.base_url, `http://127.0.0.1:${port}`);
@@ -426,7 +433,7 @@ await test("the card carries an address the Director can open, not the driver's 
   assert.equal(a.director_url, "https://vacilandos-mac-mini.tail2aa1af.ts.net:3015");
   assert.equal(a.director_url_reason, null);
   // The driver's base is untouched, and still loopback.
-  assert.equal(a.base_url, `http://127.0.0.1:${SLOT_PORTS[5]}`);
+  assert.equal(a.base_url, `http://127.0.0.1:${slotPortMap()[5]}`);
   assert.equal(isLoopbackBase(a.base_url), true);
   // The human's address can never be loopback, or the defect is back.
   assert.doesNotMatch(a.director_url, /127\.0\.0\.1|localhost/);
@@ -474,6 +481,48 @@ await test("no route is stated as a reason, never filled in with a guess", () =>
   assert.equal(carried.director_url, null);
   assert.equal(carried.director_url_reason, "no_director_facing_origin");
 });
+
+await test("THE PAYMENTS DEFECT: a lane above slot six still has a browser session", () => {
+  /*
+   * A frozen `SLOT_PORTS` of six was this module's own copy of a fact
+   * `managed-slots` owns. `laneSlot()` used it as the test of whether a slot is
+   * real, so on a twelve-slot host every lane from slot 7 up resolved to NO
+   * slot and `attachLaneBrowserAuth` returned it untouched. The Gateway then
+   * rendered nothing at all — Payments (slot 7) had no Browser session card, no
+   * state, and no way to sign in, while the same lane was being handed an app
+   * URL by `lane-app-url`, which derived its ports arithmetically.
+   */
+  const prior = process.env.ALLOY_MAX_AGENTS;
+  process.env.ALLOY_MAX_AGENTS = "12";
+  try {
+    assert.equal(laneSlot({ binding: { slot: 7 } }), 7, "slot 7 is a real slot on a twelve-slot host");
+    const lane = attachLaneBrowserAuth([{ lane_id: "payments", binding: { slot: 7 } }], {
+      root: makeRoot(), qaIdentityFor: () => IDENTITY, serveStatus: "",
+    })[0];
+    assert.ok(lane.browser_auth, "a lane with a managed slot always carries a browser session");
+    assert.equal(lane.browser_auth.slot, 7);
+    assert.equal(lane.browser_auth.port, 3017, "port stays FIRST + slot - 1, derived not declared");
+    assert.equal(lane.browser_auth.base_url, "http://127.0.0.1:3017");
+    // And the ceiling still means something: one above it is not a slot.
+    assert.equal(laneSlot({ binding: { slot: 13 } }), null);
+  } finally {
+    if (prior == null) delete process.env.ALLOY_MAX_AGENTS; else process.env.ALLOY_MAX_AGENTS = prior;
+  }
+});
+
+await test("a two-digit worktree slot is read as itself, not as its first digit", () => {
+  // `wt(\d)-` stopped after one digit, so `wt11-attendance` answered SLOT 1 —
+  // a lane silently adopting another lane's port, session and identity.
+  const prior = process.env.ALLOY_MAX_AGENTS;
+  process.env.ALLOY_MAX_AGENTS = "12";
+  try {
+    assert.equal(laneSlot({ binding: { worktree_path: "/x/wt11-attendance" } }), 11);
+    assert.equal(laneSlot({ binding: { worktree_path: "/x/wt1-work-unit" } }), 1);
+  } finally {
+    if (prior == null) delete process.env.ALLOY_MAX_AGENTS; else process.env.ALLOY_MAX_AGENTS = prior;
+  }
+});
+
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);

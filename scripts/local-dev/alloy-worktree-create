@@ -2,6 +2,37 @@
 # Create an isolated Alloy agent worktree from origin/staging.
 set -euo pipefail
 
+# THE DIRECTOR IS NOT SITTING AT THE MACHINE THAT RUNS THE APP.
+#
+# THE DEFECT THIS CLOSES. Provisioning baked NEXT_PUBLIC_APP_URL=http://localhost:PORT
+# into every lane. Execution lives on the Mac mini and the Director drives from a
+# MacBook over Tailscale, so that URL names the MACBOOK when clicked there and
+# simply fails to connect — which reads as "the lane is down". Measured: all
+# eleven lanes carried a localhost URL, and only four ports had a Serve route at
+# all, so seven lanes had no Director-reachable address of any kind.
+#
+# Two things are needed together and neither works alone: a Serve route for the
+# port, and a URL that names it. Establishing the route here is what makes the
+# canonical owner, lane-app-url.mjs, able to derive a real address instead of
+# reporting no_serve_mapping_for_port.
+#
+# Falls back to localhost ONLY when Tailscale cannot be asked, and says so, so a
+# host with no tailnet still provisions rather than failing closed on a URL.
+alloy_lane_app_url() {
+  local port="$1" host=""
+  if command -v tailscale >/dev/null 2>&1; then
+    tailscale serve --bg --https="$port" "http://127.0.0.1:${port}" >/dev/null 2>&1 || true
+    host="$(tailscale status --json 2>/dev/null \
+      | /usr/bin/python3 -c 'import json,sys;d=json.load(sys.stdin);print((d.get("Self") or {}).get("DNSName","").rstrip("."))' 2>/dev/null)"
+  fi
+  if [ -n "$host" ]; then
+    printf 'https://%s:%s' "$host" "$port"
+  else
+    alloy_warn "no tailnet host available; lane app URL falls back to localhost and is not Director-reachable" 2>/dev/null || true
+    printf 'http://localhost:%s' "$port"
+  fi
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
@@ -69,6 +100,9 @@ main() {
     alloy_die "git already tracks worktree path: $path"
   fi
 
+  local app_url
+  app_url="$(alloy_lane_app_url "$port")"
+
   alloy_info "Creating worktree $name from $base..."
   alloy_git "$ALLOY_REPO" worktree add -b "$branch" "$path" "$base"
 
@@ -79,7 +113,7 @@ main() {
     "ALLOY_WORKTREE_BRANCH=\"$branch\"" \
     "ALLOY_AGENT=\"$agent\"" \
     "PORT=\"$port\"" \
-    "NEXT_PUBLIC_APP_URL=\"http://localhost:${port}\"" \
+    "NEXT_PUBLIC_APP_URL=\"${app_url}\"" \
     "ALLOY_CREATED_AT=\"$(alloy_iso_now)\""
 
   # Non-secret agent env for local Next; also covered by repo .gitignore (.env.*).
@@ -87,7 +121,7 @@ main() {
 ALLOY_WORKTREE_NAME="${name}"
 ALLOY_AGENT="${agent}"
 PORT="${port}"
-NEXT_PUBLIC_APP_URL="http://localhost:${port}"
+NEXT_PUBLIC_APP_URL="${app_url}"
 EOF
   # Ensure Git ignores it in both worktree-local and common excludes.
   local git_dir common_dir

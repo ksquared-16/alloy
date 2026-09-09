@@ -67,7 +67,7 @@ import {
  * How the money arrived. The vocabulary is the one already on the table
  * (`payments_payment_method_chk`); nothing is added.
  */
-export const CHILDCARE_PAYMENT_METHODS = ["cash", "check", "ach", "card", "manual", "other"] as const;
+export const CHILDCARE_PAYMENT_METHODS = ["cash", "check", "money_order", "ach", "card", "manual", "other"] as const;
 export type ChildcarePaymentMethod = (typeof CHILDCARE_PAYMENT_METHODS)[number];
 
 export function isChildcarePaymentMethod(value: unknown): value is ChildcarePaymentMethod {

@@ -703,6 +703,43 @@ export function createOperationalEnrollmentMockSupabase(
             );
             return { data: employed, error: null };
         }
+        /*
+         * Mirrors `record_child_attendance_event` closely enough that the service's
+         * idempotency behaviour is genuinely exercised in unit tests: same key +
+         * same fingerprint returns the FIRST fact and reports `idempotent: true`;
+         * same key + different fingerprint is a conflict. Facts with no key are
+         * never deduped against each other.
+         */
+        if (fnName === "record_child_attendance_event") {
+            const orgId = String(params?.p_org_id ?? "");
+            const fact = (params?.p_fact ?? {}) as Record<string, unknown>;
+            const key = fact.idempotency_key != null ? String(fact.idempotency_key).trim() : "";
+            const fingerprint = fact.payload_fingerprint != null ? String(fact.payload_fingerprint) : null;
+
+            if (key) {
+                const existing = store.child_attendance_events.find(
+                    (e) => String(e.org_id) === orgId && String(e.idempotency_key ?? "") === key,
+                );
+                if (existing) {
+                    if (fingerprint != null && String(existing.payload_fingerprint ?? "") !== fingerprint) {
+                        return { data: null, error: { message: "attendance_idempotency_conflict" } };
+                    }
+                    return { data: { ok: true, idempotent: true, event: existing }, error: null };
+                }
+            }
+
+            const row = {
+                id: `att-${store.child_attendance_events.length + 1}`,
+                created_at: new Date().toISOString(),
+                entry_type: "original",
+                metadata: {},
+                ...fact,
+                org_id: orgId,
+            } as Row;
+            store.child_attendance_events.push(row);
+            return { data: { ok: true, idempotent: false, event: row }, error: null };
+        }
+
         return { data: null, error: { message: `unknown rpc: ${fnName}` } };
     });
 

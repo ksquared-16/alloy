@@ -43,12 +43,27 @@ export type PaymentPresentation = {
     /**
      * Whether the card offers `payment.refund` on this row.
      *
-     * Posted inbound money that is not itself a refund. The service holds the real bounds — it
-     * refuses refunding more than was received and refuses refunding a refund — so this anticipates
-     * the obvious cases and lets the domain answer the rest. It never pre-empts a refusal the
-     * service would not make.
+     * Posted inbound money that is not itself a refund, with something still refundable. The service
+     * holds the real bounds — it refuses refunding more than was received and refuses refunding a
+     * refund — so this anticipates the obvious cases and lets the domain answer the rest. It never
+     * pre-empts a refusal the service would not make.
      */
     offersRefund: boolean;
+    /**
+     * What has already gone back out against this receipt, and what is still refundable.
+     *
+     * ── WHY THIS IS THREAD 8 AND NOT STRIPE ──
+     *
+     * A refund is an outbound payment naming the receipt it reverses, so both numbers are a sum over
+     * canonical payments and nothing else. Asking the provider for its refund list would answer a
+     * DIFFERENT question — what Stripe has executed — which is evidence for execution, not the
+     * financial truth, and would be wrong for a manual rail that Stripe has never heard of.
+     *
+     * Zero and "all of it" on a row presented alone: a single payment cannot see its own refunds, so
+     * `presentPayments` is what fills these in for a real account.
+     */
+    refundedCents: number;
+    refundableCents: number;
 };
 
 /** `pending | posted | failed | voided` → the operator's word for it. */
@@ -74,11 +89,16 @@ function humanize(value: string): string {
     return s ? s[0].toUpperCase() + s.slice(1) : "";
 }
 
-export function presentPayment(payment: FinancialsPaymentRow): PaymentPresentation {
+export function presentPayment(
+    payment: FinancialsPaymentRow,
+    refundedCents = 0,
+): PaymentPresentation {
     const received = Math.abs(Number(payment.amountCents) || 0);
     const applied = Math.abs(Number(payment.appliedCents) || 0);
     const isRefund = payment.direction === "outbound";
     const isPosted = payment.status === "posted";
+    const refunded = Math.max(0, Math.min(received, Math.abs(Number(refundedCents) || 0)));
+    const refundable = isRefund ? 0 : Math.max(0, received - refunded);
     return {
         paymentId: payment.paymentId,
         kind: isRefund ? "refund" : "receipt",
@@ -95,8 +115,31 @@ export function presentPayment(payment: FinancialsPaymentRow): PaymentPresentati
         currencyCode: payment.currencyCode,
         methodLabel: METHOD_LABELS[payment.method] ?? humanize(payment.method),
         refundsPaymentId: payment.refundsPaymentId,
-        offersRefund: isPosted && !isRefund && !payment.refundsPaymentId,
+        offersRefund: isPosted && !isRefund && !payment.refundsPaymentId && refundable > 0,
+        refundedCents: isRefund ? 0 : refunded,
+        refundableCents: refundable,
     };
+}
+
+/**
+ * The whole account's payments, each receipt knowing what has been refunded against it.
+ *
+ * A refund names its receipt (`refundsPaymentId`), so the remaining refundable amount is a sum over
+ * POSTED outbound rows — pending or failed reversals have taken nothing back. Presenting a receipt
+ * on its own cannot know this, which is why the list is the unit rather than the row.
+ */
+export function presentPayments(
+    payments: readonly FinancialsPaymentRow[],
+): PaymentPresentation[] {
+    const refundedByReceipt = new Map<string, number>();
+    for (const row of payments) {
+        if (row.direction !== "outbound" || row.status !== "posted") continue;
+        const target = row.refundsPaymentId;
+        if (!target) continue;
+        const cents = Math.abs(Number(row.amountCents) || 0);
+        refundedByReceipt.set(target, (refundedByReceipt.get(target) ?? 0) + cents);
+    }
+    return payments.map((row) => presentPayment(row, refundedByReceipt.get(row.paymentId) ?? 0));
 }
 
 /**
@@ -108,8 +151,16 @@ export function presentPayment(payment: FinancialsPaymentRow): PaymentPresentati
  * balance stays `responsibility − payments applied`, decided by the read model.
  */
 export function unappliedTotalCents(payments: readonly FinancialsPaymentRow[]): number {
-    return payments
-        .map(presentPayment)
+    /*
+     * ⚠ `presentPayments`, never `.map(presentPayment)`.
+     *
+     * `presentPayment` grew a second parameter for what has been refunded, and `Array.map` passes
+     * (element, INDEX, array) — so the point-free form silently handed the array index in as a
+     * refunded amount: the second payment read as 1 cent refunded, the third as 2, and every
+     * refundable figure below them was wrong. Caught by the live card suite, which reads these
+     * numbers against real rows.
+     */
+    return presentPayments(payments)
         .filter((p) => p.isMoney && p.kind === "receipt")
         .reduce((sum, p) => sum + p.unappliedCents, 0);
 }

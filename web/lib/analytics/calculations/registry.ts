@@ -427,6 +427,129 @@ const CALCULATIONS: Record<OipMetricKey, OperationalCalculation> = {
         status: "active",
         exploratoryOnly: true,
     }),
+
+    /*
+     * ── FINANCIALS ────────────────────────────────────────────────────────────────────────
+     *
+     * `logicOwner` names the THREAD, not this file, because that is the accountable owner: the
+     * metric resolvers read a scoped cohort and take a figure out of it, and every figure comes
+     * from `computeCollectiblePosition` — the same arithmetic a family's account card renders.
+     *
+     * ALL SEVEN ARE `exploratoryOnly`, AND NOT BECAUSE THEY DEAD-END.
+     *
+     * The drill vocabulary has exactly one kind: a queue drill that resolves a logical
+     * `workUnitKey` to a real work unit id. Financials is a modal workspace, not a work-unit
+     * queue, so there is no key to resolve — and inventing one would make DrillResolver return
+     * a fabricated target instead of an honest `unavailable`. The destination exists (the
+     * Financials workspace section that owns each figure); the contract type cannot yet
+     * express it. Declaring that plainly is the alternative to faking it.
+     *
+     * `accessScope: "site"` on the position and flow metrics is load-bearing: their projections
+     * intersect the requested site with the operator's own rights under Thread 4's contract, so
+     * a site filter narrows and can never widen.
+     */
+    "financials.outstanding_amount": defineCalculation("financials.outstanding_amount", {
+        questionAnswered: "How much do posted childcare charges still owe, in this scope?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 8 (payments/applications) via resolveFinancialPositionCohort",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Pure arithmetic pinned in collectiblePosition.test.ts; projection agreement with "
+            + "resolveFamilyCollectible proven live. NOT Accounts Receivable — no receivables model exists.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.currently_collectible_amount": defineCalculation("financials.currently_collectible_amount", {
+        questionAnswered: "How much may we actually collect from families right now?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: ["financials.outstanding_amount"],
+        logicOwner: "Financials Thread 9 (subsidy suppression, Director decision B)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "Three suppression bounds and the settled-claim release pinned hermetically.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.gross_charges_posted_amount": defineCalculation("financials.gross_charges_posted_amount", {
+        questionAnswered: "How much did we bill in this window?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 1 (charge spine)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy:
+            "Windowed on posted_at, not service_date. A billed amount, NOT recognised revenue — "
+            + "the platform has no revenue-recognition model.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.payments_received_amount": defineCalculation("financials.payments_received_amount", {
+        questionAnswered: "How much money arrived in this window?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 8 (payments)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "Posted inbound only; refunds reported beside it and never netted in.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.unapplied_payments_amount": defineCalculation("financials.unapplied_payments_amount", {
+        questionAnswered: "How much money is sitting on accounts without settling anything?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 8 (payment applications)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "amount − active allocations, the account card's own definition. Never windowed.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.unresolved_subsidy_variance_amount": defineCalculation("financials.unresolved_subsidy_variance_amount", {
+        questionAnswered: "How far apart are what we claimed and what agencies paid, undecided?",
+        grains: ["org", "site"],
+        aggregation: "sum",
+        dependencies: [],
+        logicOwner: "Financials Thread 9 (claims, remittances, variances)",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "Signed; open variances only. Reported beside collectible, never folded into it.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
+    "financials.charges_awaiting_post_count": defineCalculation("financials.charges_awaiting_post_count", {
+        questionAnswered: "How many draft charges is an operator able to post right now?",
+        grains: ["org", "site"],
+        aggregation: "count",
+        dependencies: [],
+        logicOwner: "Financials Thread 4 (work queue projection); `charge.post` owns eligibility",
+        refreshStrategy: "live",
+        consumers: ["analytics", "workspace_header"],
+        accessScope: "site",
+        version: 1,
+        testingStrategy: "Counted from the SAME projection the queue lists, so tile and list cannot disagree.",
+        status: "active",
+        exploratoryOnly: true,
+    }),
 };
 
 const CALCULATION_KEYS = new Set<string>(Object.keys(CALCULATIONS));

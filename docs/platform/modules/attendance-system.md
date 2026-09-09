@@ -49,6 +49,155 @@ Fact kinds in scope:
 4. **Event-emitting.** Every recorded or corrected attendance fact emits an event on `workflow_events` (`emitEvent` → `workflow_events` → `workflowRun`), with a versioned payload. Downstream consequences (billing, compliance, forecasting) react to events; they do not poll mutable state.
 5. **Authored by Actions, not queues or projections.** Attendance is created/corrected through the canonical action/workflow path (see [`./actions-and-workflows.md`](./actions-and-workflows.md)). Queue rows and Projection read models are previews/derivations only; they never write attendance.
 6. **Room transfer ≠ placement supersede.** An intraday room transfer is an attendance fact about where the child *was*; a placement change is a committed-intent change about where the child *belongs*. Keep them distinct models.
+7. **A room resolves to its site by ancestry, not by parentage.** See Location topology below. Nothing may read `parent_location_id` as "the site".
+8. **Provenance is derived, never accepted.** A request body may not establish `actor_type` or `source_type`. See Capture substrate below.
+9. **Current whereabouts are folded, never stored.** There is no `current_room` column and there must not be one.
+
+---
+
+## Capture substrate (V1, 2026-09-09)
+
+Every attendance producer — operator today; kiosk, parent, integration and door
+access later — converges on one server-authoritative ingestion path. Channels
+differ in what trusted context they supply; they do not get their own attendance
+truth.
+
+### Durable idempotency
+
+`child_attendance_events` carries a nullable `idempotency_key` with a PARTIAL
+unique index on `(org_id, idempotency_key)`, plus a `payload_fingerprint`. This
+is the same contract `consumption_events`, `operational_expectations` and
+`payments` already use.
+
+- Same key, same fingerprint → the FIRST fact is returned; no second row, and
+  **no second workflow event** (a replay must not bill or notify twice).
+- Same key, different fingerprint → `attendance_idempotency_conflict`.
+- No key → never deduped against anything.
+- Corrections and reversals carry their own keys and remain distinct facts.
+
+`public.record_child_attendance_event(org, fact)` is the only ingestion entry
+point. It inserts with `ON CONFLICT DO NOTHING` and re-reads on conflict, so
+concurrent duplicates converge instead of one succeeding and one erroring. Do
+not add a check-then-insert path around it.
+
+For an integration the key is the **external event id** — the same replayed
+event must arrive with the same key, which is what makes retry safe.
+
+### Authoritative provenance
+
+`web/lib/childcareOperational/attendance/attendanceProvenance.ts` derives
+`actor_type` / `source_type` / `source_key` from the authenticated principal and
+the trusted channel. `CLIENT_ASSERTABLE_CHANNELS` is empty and must stay empty.
+
+`source_type` admits `kiosk`, `integration_api`, `door_access` and `mobile_app`
+so those producers need no schema change. **Representable is not implemented** —
+a channel becomes real only when it has a trusted-context resolver here. A
+non-human channel must supply a `producerKey` identifying the device or
+integration; an anonymous `system` write is refused.
+
+### One capture path
+
+Both operator surfaces author through the registered action bus
+(`attendance.check_in` and siblings) via `/api/admin/actions/execute`. The
+Attendance Workspace previously posted directly to the attendance API, skipping
+eligibility, confirmation and correlated audit. Surfaces may present a command
+differently; they may not own different mutation semantics.
+
+### Authorization (Slice 2A)
+
+Capture is gated on two INDEPENDENT questions, both server-side. A permission
+says **what** you may do; site scope says **where**. Neither substitutes for the
+other.
+
+| Concern | Owner |
+|---|---|
+| Capability | `attendance.record` / `attendance.read` in the canonical RBAC catalog, resolved by `resolveActorPermissionGrants` |
+| Reach | `locationAllowedUnderSiteScope` over the caller's `user_site_access`, ancestor-resolved so nested groups work |
+| Both, composed | `attendancePermissions.ts` — `assertAttendanceCaptureAllowed` / `assertAttendanceReadAllowed` |
+
+Rules:
+
+- **Authorization precedes every write.** The handler holds a service-role client
+  that bypasses RLS, so nothing downstream re-asks. The gate runs first, on every
+  path out of the handler.
+- **Scope covers the subject AND every location the fact names.** Checking only
+  the child would let a caller move them into another site's room; checking only
+  rooms would let an absence, which names no room, escape entirely.
+- **A correction is authorized identically to an original**, against the site of
+  the fact it corrects — read from that fact, never from the request body.
+  Otherwise "correct" becomes the way to write anything.
+- **A site filter may only narrow.** `narrowSitesToScope` intersects the request
+  with the gate's rights, so asking for a site you do not hold returns nothing.
+- **A failed grants read denies.** `null` from the resolver is not `[]` — an
+  unidentified caller is not an unprivileged one.
+- **Non-human producers do not inherit human sessions.** Kiosk, integration and
+  door channels must answer `assertNonHumanCaptureAllowed` with a registered
+  authority; until Threads 5/6 build that registration they are denied, which is
+  the correct default.
+
+`requireAdminOrOps` is deliberately NOT repaired here. It is shared by many
+unrelated routes and checks no role; fixing it globally would change
+authorization everywhere in one uncertified commit. Attendance uses
+`loadAdminRouteGate` plus the primitive above instead. **New attendance surfaces
+must do the same** — do not reintroduce `requireAdminOrOps` as a gate.
+
+### Point-in-time whereabouts
+
+`attendanceWhereabouts.ts` folds the ledger into "where was child C at T" and
+"who occupied L at T". A child holds exactly ONE position, replaced by each
+event, so a child who moved Toddler 1 → Playground → Toddler 2 is never counted
+three times. `summarizeAttendanceByDay` still returns the set of rooms seen that
+day — a different question; **occupancy must not be derived from it.**
+Corrections and reversals reconstruct history for free, because they change
+which facts are effective and the fold is re-run.
+
+Implemented by `supabase/migrations/20260909220000_attendance_capture_hardening.sql`.
+
+---
+
+## Location topology (V1, 2026-09-09)
+
+An operational classroom is **a role a Location plays**, not a separate entity.
+Attendance, placements, capacity, ratio, staffing and config all key off
+`room_location_id`; a parallel "operational group" entity would have added a
+second nullable reference to every one of those tables. What was missing was a
+**role** and one **level**.
+
+```text
+Site
+└── Room 1        unit · unit_role = physical_space      licensed / capacity-bearing
+    ├── Toddler 1 unit · unit_role = operational_group   ratio + staffing + placement
+    └── Toddler 2 unit · unit_role = operational_group
+└── Playground    unit · unit_role = shared_space        attendance may name it
+```
+
+| Question | Owner |
+|---|---|
+| Physical / licensed capacity | the `physical_space` unit |
+| Program / classroom capacity, ratio grouping, staff assignment | the `operational_group` unit |
+| Committed placement (where a child *belongs*) | `child_placements.room_location_id` → an `operational_group` **only** |
+| Where a child *is* right now | `child_attendance_events` → **any** unit at the site, shared spaces included |
+
+Rules:
+
+- Nesting is exactly one level, and only inside a `physical_space`. A group may
+  not contain a group; a space may not contain a space.
+- A legacy unit with no stored role reads as `operational_group` — that is what
+  every room meant before roles existed. No back-fill was needed.
+- **Site resolution is an ancestor walk, never `parent_location_id`.**
+  `public.location_site_id()` (SQL) and `resolveSiteIdsByLocation` /
+  `resolveRoomsForLocation` (TS) are the only authorities. Both are bounded to 8
+  hops and cycle-guarded, and both return NULL/undefined rather than a guess —
+  the failure this prevents is silent misattribution of a nested group to its
+  containing space, which returns a real location id and never throws.
+- Combining two groups is a **transfer**, never a placement rewrite. Occupancy at
+  a physical space is the sum of the groups it contains; a child on the
+  playground is the *same* child standing elsewhere and is never double-counted
+  into their classroom's physical occupancy.
+
+Implemented by `supabase/migrations/20260909210000_location_topology_v1.sql`
+(role column, `location_site_id()`, hierarchy guard, and the placement /
+attendance / staff-presence triggers converted from direct-parent to ancestry).
 
 ---
 

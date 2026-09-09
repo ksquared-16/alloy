@@ -2638,7 +2638,22 @@ export function browserAuthAddressNote(reason) {
  */
 export function renderBrowserAuthRecovery(lane) {
   const a = lane?.browser_auth;
-  if (!a || !a.blocks_execution) return "";
+  /*
+   * EVERY LANE WITH A SESSION SHOWS ITS SESSION.
+   *
+   * This used to return nothing unless the session was BLOCKING, which made the
+   * card a failure notice rather than a status. Two consequences, both reported
+   * from the Director's chair: a healthy lane offered no way to see whose
+   * account it was signed in as or when that was captured, and — because the
+   * card was the only surface for the sign-in ceremony — there was no way to
+   * re-authenticate a lane BEFORE it broke, only after. A status that is only
+   * rendered when it is bad is not a status.
+   *
+   * A lane with no slot still renders nothing: it has no port, so there is no
+   * session to have. That is absence of a subject, not a hidden state.
+   */
+  if (!a) return "";
+  const blocking = Boolean(a.blocks_execution);
   const address = a.director_url
     ? `<a href="${esc(a.director_url)}" target="_blank" rel="noreferrer noopener">${esc(a.director_url)}</a>`
     : `<span class="gw-kv-none" title="${esc(a.director_url_reason || "")}">${esc(browserAuthAddressNote(a.director_url_reason))}</span>`;
@@ -2655,7 +2670,7 @@ export function renderBrowserAuthRecovery(lane) {
       </dl>
       <p class="gw-gv-text">A browser opens on this machine. What you type goes to the app and nowhere else — not to the agent, not into the run, not into any log.</p>
       <div class="gw-work-stale-actions">
-        <button type="button" class="btn primary" data-gw-browser-auth-signin data-lane-id="${esc(lane.lane_id || "")}" data-slot="${esc(String(a.slot ?? ""))}">Sign in</button>
+        <button type="button" class="btn${blocking ? " primary" : ""}" data-gw-browser-auth-signin data-lane-id="${esc(lane.lane_id || "")}" data-slot="${esc(String(a.slot ?? ""))}">${blocking ? "Sign in" : "Sign in again"}</button>
         <button type="button" class="btn" data-gw-browser-auth-recheck data-lane-id="${esc(lane.lane_id || "")}">Re-check</button>
       </div>
     </div>
@@ -5301,7 +5316,12 @@ export function renderLaneInspector(lane, {
       ${section("resources", "Resources", resources_block)}
       ${section("environment", "Environment", environment)}
       ${section("git", "Git", git)}
-      ${section("browser", "Browser session", browser, { open: Boolean(browser) })}
+      ${/*
+        OPEN WHEN IT NEEDS THE DIRECTOR, PRESENT EITHER WAY. The card now
+        renders for a healthy lane too, so opening it unconditionally would
+        expand a fold on every lane to say "this is fine".
+      */ ""}
+      ${section("browser", "Browser session", browser, { open: Boolean(lane?.browser_auth?.blocks_execution) })}
       ${section("diagnostics", "Diagnostics", diagnostics)}
       ${section("notifications", "Notifications", renderNotificationControls(notify || {}))}
     </div>

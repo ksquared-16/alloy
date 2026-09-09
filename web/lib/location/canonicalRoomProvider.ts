@@ -36,15 +36,28 @@ function roomAgeGroupCompat(metadata: Record<string, unknown>): string | null {
 
 /**
  * Project a `unit` Location into a CanonicalRoom. Returns null for non-unit
- * locations or units with no parent site (orphan) — an orphan is never a valid
- * room and must not be silently attached to a phantom site.
+ * locations or units with no parent (orphan) — an orphan is never a valid room
+ * and must not be silently attached to a phantom site.
+ *
+ * `siteLocationId` MUST be supplied for a nested room, because a unit's parent
+ * is only the site when the room hangs directly off it. Omitting it for a nested
+ * group would attribute the group to its containing physical space, which reads
+ * as a plausible site id and would never raise — so the resolved site is passed
+ * in by the caller that did the ancestor walk, not guessed here.
  */
-export function toCanonicalRoom(location: CanonicalLocation): CanonicalRoom | null {
+export function toCanonicalRoom(
+    location: CanonicalLocation,
+    siteLocationId?: string
+): CanonicalRoom | null {
     if (location.type !== "unit" || !location.parentLocationId) return null;
+    const site = siteLocationId ?? location.parentLocationId;
     return {
         id: location.id,
         orgId: location.orgId,
-        siteLocationId: location.parentLocationId,
+        siteLocationId: site,
+        containingSpaceLocationId:
+            location.parentLocationId === site ? null : location.parentLocationId,
+        unitRole: location.unitRole ?? "operational_group",
         name: location.name,
         locationNumber: location.locationNumber,
         statusKey: location.statusKey,
@@ -52,6 +65,19 @@ export function toCanonicalRoom(location: CanonicalLocation): CanonicalRoom | nu
         ageGroupCompat: roomAgeGroupCompat(location.metadata),
         metadata: location.metadata,
     };
+}
+
+/** Rooms a child may be PLACED into — operational groups only. */
+export function placeableRooms(rooms: readonly CanonicalRoom[]): CanonicalRoom[] {
+    return rooms.filter((r) => r.unitRole === "operational_group");
+}
+
+/** The operational groups a physical space contains. */
+export function groupsInSpace(
+    rooms: readonly CanonicalRoom[],
+    spaceLocationId: string
+): CanonicalRoom[] {
+    return rooms.filter((r) => r.containingSpaceLocationId === spaceLocationId);
 }
 
 /**
@@ -69,10 +95,18 @@ export async function resolveRoomsForLocation(
         includeInactive: options.includeInactive,
     });
     if (!hierarchy) return [];
-    return hierarchy.rooms.map(toCanonicalRoom).filter((r): r is CanonicalRoom => r != null);
+    return hierarchy.rooms
+        .map((room) => toCanonicalRoom(room, hierarchy.siteByRoomId.get(room.id) ?? siteLocationId))
+        .filter((r): r is CanonicalRoom => r != null);
 }
 
-/** A single Room by id, or null when not found / not a `unit` / orphan. */
+/**
+ * A single Room by id, or null when not found / not a `unit` / orphan.
+ *
+ * A nested group needs its site resolved through the containing space, so this
+ * follows the parent one hop when the parent is itself a unit. A chain that
+ * never reaches a site yields null rather than a room attached to a non-site.
+ */
 export async function resolveRoomById(
     supabase: SupabaseClient,
     orgId: string,
@@ -80,8 +114,17 @@ export async function resolveRoomById(
 ): Promise<CanonicalRoom | null> {
     if (!roomId) return null;
     const location = await resolveLocationById(supabase, orgId, roomId);
-    if (!location) return null;
-    return toCanonicalRoom(location);
+    if (!location || location.type !== "unit" || !location.parentLocationId) return null;
+
+    const parent = await resolveLocationById(supabase, orgId, location.parentLocationId);
+    if (!parent) return null;
+    if (parent.type === "site") return toCanonicalRoom(location, parent.id);
+
+    if (parent.type === "unit" && parent.parentLocationId) {
+        const grandparent = await resolveLocationById(supabase, orgId, parent.parentLocationId);
+        if (grandparent?.type === "site") return toCanonicalRoom(location, grandparent.id);
+    }
+    return null;
 }
 
 /**

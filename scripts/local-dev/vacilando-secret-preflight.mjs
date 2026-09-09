@@ -96,6 +96,43 @@ function checkCommand({ id, cmd, args, required = true, remedy, detailOk, detail
   record({ id, required, ok, detail: ok ? detailOk : detailFail, remedy });
 }
 
+/**
+ * Reports which KEYS a dotenv-style secret file defines — never their values.
+ *
+ * The JSON reporter above cannot be reused: a trusted-host credential file is a `.env`, because
+ * that is the shape the processes consuming it (`next`, `uvicorn`) already read.
+ */
+function checkEnvKeys({ id, path, requiredKeys, required = true, remedy }) {
+  if (!fileHasContent(path)) {
+    record({ id, required, ok: false, detail: `missing: ${path}`, remedy });
+    return;
+  }
+  let defined;
+  try {
+    defined = new Set(
+      readFileSync(path, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#"))
+        .map((line) => line.split("=")[0].trim())
+        .filter(Boolean),
+    );
+  } catch {
+    record({ id, required, ok: false, detail: "present but unreadable", remedy });
+    return;
+  }
+  const missing = requiredKeys.filter((k) => !defined.has(k));
+  record({
+    id,
+    required,
+    ok: missing.length === 0,
+    detail: missing.length === 0
+      ? `defines ${requiredKeys.join(", ")}`
+      : `present but missing: ${missing.join(", ")}`,
+    remedy,
+  });
+}
+
 function checkBinary({ id, cmd, required = true, remedy }) {
   let ok = false;
   try {
@@ -150,6 +187,26 @@ checkFile({
   remedy: "place only if this node runs staging certification",
 });
 
+// 4b. Stripe TEST-mode collection credentials (Financials Thread 8B).
+//
+//     Same class and same home as the certification principal above: a trusted-host credential,
+//     EPHEMERAL in durable-state, never backed up, never inside a worktree, never committed. The
+//     secret key is server-only; the publishable key is public by Stripe's own design and is
+//     duplicated under its NEXT_PUBLIC_ name because that is the only name the web build reads.
+//
+//     STRIPE_WEBHOOK_SECRET is deliberately NOT required here. It is issued by the webhook listener
+//     when one is first attached, so demanding it before that exists would fail a node that is
+//     correctly configured. It joins this file once Slice E creates it.
+//
+//     Optional: a node that does not run Stripe certification is not misconfigured for lacking it.
+checkEnvKeys({
+  id: "stripe.test_keys",
+  path: join(VAC, "trusted-secrets", "stripe-test.env"),
+  requiredKeys: ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"],
+  required: false,
+  remedy: "place only if this node runs Stripe collection certification; see docs/platform/governance/stripe-test-credentials.md",
+});
+
 // 5. Provider authentication. Interactive logins — expected operator work, and
 //    deliberately NOT automatable.
 checkBinary({
@@ -164,6 +221,12 @@ checkCommand({
   detailOk: "gh reports an authenticated account",
   detailFail: "gh is not authenticated (or not installed)",
   remedy: "run `gh auth login` on the node — interactive, operator-owned",
+});
+checkBinary({
+  id: "provider.stripe_cli",
+  cmd: "stripe",
+  required: false,
+  remedy: "brew install stripe/stripe-cli/stripe, then `stripe login` interactively — operator-owned, like gh",
 });
 checkCommand({
   id: "auth.tailscale",

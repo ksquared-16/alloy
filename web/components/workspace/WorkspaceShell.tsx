@@ -5,8 +5,6 @@ import type { ReactNode } from "react";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import WorkspaceModeNav from "@/components/workspace/WorkspaceModeNav";
 import type { WorkspaceMode } from "@/components/workspace/WorkspaceModeTabs";
-import WorkspaceExpandControl from "@/components/workspace/WorkspaceExpandControl";
-import { useWorkspaceExpand } from "@/components/workspace/WorkspaceExpandContext";
 import { WS_CONTROL_BAND_DIVIDER, WS_FIELD_CANVAS, WS_SHELL_INSET } from "@/components/workspace/workspaceTokens";
 
 /**
@@ -97,19 +95,10 @@ export default function WorkspaceShell<M extends string, S extends string>({
     showModeRail?: boolean;
     children: ReactNode;
 }) {
-    const { expanded } = useWorkspaceExpand();
-    const secondaryWithExpand = (
-        <>
-            {header.secondaryActions}
-            <WorkspaceExpandControl />
-        </>
-    );
-
     return (
         <div
             className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
             data-workspace-shell="true"
-            data-workspace-expanded={expanded ? "true" : "false"}
             data-testid={dataTestId}
             {...shellDataAttrs}
         >
@@ -120,7 +109,7 @@ export default function WorkspaceShell<M extends string, S extends string>({
                     subtitle={header.subtitle}
                     titleId={header.titleId}
                     actions={header.actions}
-                    secondaryActions={secondaryWithExpand}
+                    secondaryActions={header.secondaryActions}
                     onClose={header.onClose}
                     closeLabel={header.closeLabel}
                 />

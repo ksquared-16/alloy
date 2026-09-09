@@ -19,17 +19,19 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+    DEFAULT_UNIT_ROLE,
     isChildcareLocationType,
     type CanonicalLocation,
     type CanonicalLocationAddress,
     type CanonicalLocationResolutionMode,
     type CanonicalLocationType,
+    type CanonicalUnitRole,
     type SiteScopeFilter,
 } from "@/lib/location/canonicalLocationModel";
 
 /** Columns selected to build a CanonicalLocation. */
 export const CANONICAL_LOCATION_SELECT =
-    "id, org_id, label, location_number, location_type, parent_location_id, status_key, is_active, is_primary, address1, address2, city, state, postal_code, country, lat, lng, metadata";
+    "id, org_id, label, location_number, location_type, parent_location_id, unit_role, status_key, is_active, is_primary, address1, address2, city, state, postal_code, country, lat, lng, metadata";
 
 /** Raw `locations` row as returned by PostgREST (all fields optional/defensive). */
 type RawLocationRow = Record<string, unknown>;
@@ -57,6 +59,19 @@ function asMetadata(value: unknown): Record<string, unknown> {
 function normalizeLocationType(value: unknown): CanonicalLocationType {
     if (value === "site" || value === "unit" || value === "address") return value;
     return "address";
+}
+
+/**
+ * Effective unit role. A stored NULL on a unit is not missing data — it is a
+ * legacy classroom, which is exactly what `operational_group` means, so it
+ * resolves rather than reading as unknown.
+ */
+function normalizeUnitRole(rawType: unknown, rawRole: unknown): CanonicalUnitRole | null {
+    if (normalizeLocationType(rawType) !== "unit") return null;
+    if (rawRole === "physical_space" || rawRole === "operational_group" || rawRole === "shared_space") {
+        return rawRole;
+    }
+    return DEFAULT_UNIT_ROLE;
 }
 
 function normalizeAddress(raw: RawLocationRow): CanonicalLocationAddress | null {
@@ -87,6 +102,7 @@ export function normalizeLocationRow(raw: RawLocationRow): CanonicalLocation {
         locationNumber: num(raw.location_number),
         type: normalizeLocationType(raw.location_type),
         parentLocationId: str(raw.parent_location_id),
+        unitRole: normalizeUnitRole(raw.location_type, raw.unit_role),
         statusKey: str(raw.status_key),
         isActive: raw.is_active !== false,
         isPrimary: raw.is_primary === true,
@@ -250,13 +266,54 @@ export async function resolveLocationById(
 
 export type LocationHierarchy = {
     site: CanonicalLocation;
-    /** `unit` locations whose parent is the site, active first then by label. */
+    /**
+     * Every `unit` that RESOLVES to this site, at any supported depth — a room
+     * parented straight to the site, and a group nested inside a physical space.
+     * Active first then by label.
+     */
     rooms: CanonicalLocation[];
+    /** Site id each room resolved through, keyed by room id. */
+    siteByRoomId: ReadonlyMap<string, string>;
 };
 
 /**
- * A site and its room (`unit`) children in one round trip. Returns null when the
- * site id is not a `site` Location in the org.
+ * Resolve the site ancestor of every unit in one pass over the org's locations.
+ *
+ * This exists because "the room's parent is the site" stopped being true the
+ * moment a physical space could contain groups. A consumer that keeps reading
+ * `parent_location_id` as the site does not fail loudly — it silently attributes
+ * Toddler 1 to Room 1 instead of the campus — so the walk lives here, once,
+ * rather than in each caller. Mirrors `public.location_site_id()` in SQL:
+ * bounded depth, revisit-guarded, and NULL rather than a guess.
+ */
+export function resolveSiteIdsByLocation(
+    locations: readonly CanonicalLocation[]
+): Map<string, string> {
+    const byId = new Map(locations.map((l) => [l.id, l]));
+    const resolved = new Map<string, string>();
+
+    for (const start of locations) {
+        let current: CanonicalLocation | undefined = start;
+        const seen = new Set<string>();
+        let hops = 0;
+        while (current && hops < 8) {
+            if (seen.has(current.id)) break; // cycle — leave unresolved
+            seen.add(current.id);
+            if (current.type === "site") {
+                resolved.set(start.id, current.id);
+                break;
+            }
+            if (!current.parentLocationId) break;
+            current = byId.get(current.parentLocationId);
+            hops += 1;
+        }
+    }
+    return resolved;
+}
+
+/**
+ * A site and every room that resolves to it, in one round trip. Returns null
+ * when the site id is not a `site` Location in the org.
  */
 export async function resolveLocationHierarchy(
     supabase: SupabaseClient,
@@ -268,10 +325,17 @@ export async function resolveLocationHierarchy(
     const rows = await fetchOrgLocationRows(supabase, orgId, ["site", "unit"]);
     const site = rows.find((l) => l.id === siteId && l.type === "site");
     if (!site) return null;
+
+    const siteByLocationId = resolveSiteIdsByLocation(rows);
     const rooms = rows.filter((l) => {
-        if (l.type !== "unit" || l.parentLocationId !== siteId) return false;
+        if (l.type !== "unit") return false;
+        if (siteByLocationId.get(l.id) !== siteId) return false;
         if (!options.includeInactive && !l.isActive) return false;
         return true;
     });
-    return { site, rooms: sortLocations(rooms) };
+
+    const siteByRoomId = new Map<string, string>();
+    for (const room of rooms) siteByRoomId.set(room.id, siteId);
+
+    return { site, rooms: sortLocations(rooms), siteByRoomId };
 }

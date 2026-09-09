@@ -1046,6 +1046,99 @@ that recomputes any of them will disagree with the card in front of a family.
 
 ---
 
+## Thread 8B — collecting money through a provider (built, September 2026)
+
+Until this thread, every payment in the platform was money that had already arrived: an operator
+wrote down what a family had handed over. Thread 8B added the other half — **asking** for money —
+without moving where financial truth lives.
+
+### The shape
+
+```text
+Financial obligation
+→ canonical collectible truth        (Thread 9 · resolveFamilyCollectible)
+→ payment rail                       (card · ach · cash · check · money_order)
+→ optional external executor         (a connected merchant, when the rail has one)
+→ provider attempt / evidence        (payment_collection_attempts, payment_provider_events)
+→ provider-confirmed success         (a signed webhook, never the browser)
+→ canonical Thread 8 receipt/application
+→ Thread 5 journal consequence
+```
+
+A manual rail simply has no executor, so it takes the short path and nothing about it changes:
+
+```text
+Manual rail
+→ canonical Thread 8 receipt directly
+```
+
+### Rail is not processor
+
+The rail is how money moves; the processor is who moved it. They are separate columns because they
+are separate facts, and the valid combinations are not symmetrical:
+
+| Rail | Processor |
+|------|-----------|
+| `card` | `stripe` |
+| `ach` | `stripe` (no executor yet — see below) |
+| `cash` | none |
+| `check` | none |
+| `money_order` | none |
+
+Cash, check and money order require **no connected merchant, no collection attempt, no provider
+transaction and no Stripe call at all**. A provider integration that quietly became the only way to
+take money would have made the platform unusable for a centre that takes cheques.
+
+### What the provider does NOT own
+
+Stripe is an executor and a source of evidence. It is not an authority.
+
+- **Thread 8** owns the canonical receipt, its application, its refund lineage and the consequence
+  for what is outstanding.
+- **Thread 5** owns the journal consequence of both a payment and a refund.
+- **Thread 6** owns responsibility. Who actually paid is recorded; it does not rewrite who owed.
+- **Thread 9** owns collectible-now, including subsidy suppression. The collection path consumes
+  `resolveFamilyCollectible` and never re-derives what may be taken.
+
+Pre-recognition provider state lives outside canonical financial truth on purpose. Between Stripe
+accepting a card and Financials recognising it, the operator is told the collection is *finalizing*
+— never that it is paid, and never that it failed. `/api/admin/financials/collection-state` reports
+that interval and **only** that interval: it carries no outstanding, applied, unapplied,
+collectible-now or balance, because a second answer to any of those would eventually disagree with
+the first in front of a family.
+
+There is also no platform fallback. An organisation without a usable connected account cannot
+collect; it is told why, and Alloy never charges the card into its own account instead.
+
+### Promoted
+
+Landed on staging as PR #750 (merge `57a30511e`), with PR #752 (merge `d48a264f7`) registering the
+two governance declarations the merge revealed were missing: the webhook's provider-signature
+exception and the route-capability entries for it and `collection-state`.
+
+Certified independently AFTER promotion, against the promoted application and a real Stripe test
+platform — not against the implementation lane: mounted product matrix 13/13, Thread 8B live suites
+52/52 across ten suites, posted-childcare lifecycle 13/13, Financials and governance units 561/561,
+typecheck and `typecheck:tests` rc=0, prebuild governance chain rc=0, migration preflight 392/392.
+The provider evidence is a PaymentIntent retrievable on the connected account and invisible on the
+platform account, real partial and full refunds on that same account, and exactly one Thread 5
+journal consequence per canonical receipt. Cash, check and money order remained `processor = NULL`
+with no provider transaction throughout.
+
+### ACH is a follow-up over this model, not a new payment system
+
+`ach` is present as a rail and deliberately not executable: it is offered, visibly unavailable, and
+cannot record canonical money, because an executor for it does not exist yet. When it is built it
+reuses the merchant binding, the attempt model, the event evidence, connected-account tenancy,
+webhook verification, canonical posting and the journal consequence unchanged. Only the genuinely
+rail-specific parts are new — bank PaymentMethod collection, mandate/verification, asynchronous
+settlement, and returns.
+
+Provider-initiated reversals (card disputes, ACH returns) are **not** operator refunds and are not
+modelled here. They are a separate thread.
+
+---
+
 ## Cross-references
 
 | Concern | Doctrine |
@@ -1072,3 +1165,4 @@ that recomputes any of them will disagree with the card in front of a family.
 - The responsibility contract changes — the explicit-party rule, the unassigned representation, the net source, the cent/remainder rule, effective dating, posted reallocation, the funding seam, the payment-attribution bound, or the privacy non-decision.
 - The subsidy contract changes — the collection-suppression policy or its bounds, the shortfall non-default, agency identity, the advice/cash separation, the authorization supersession rule, or the Processing ingestion seam.
 - The workspace contract changes — the location provenance rules, the org-scoped visibility choice, the site-filter intersection, the account-wide detail labelling, or the single-read counts.
+- The provider collection contract changes — the rail/processor separation, which rails require an executor, the collectible authority the collection path consumes, the pre-recognition boundary, what `collection-state` is allowed to report, the connected-account tenancy rule, or the no-platform-fallback guarantee.

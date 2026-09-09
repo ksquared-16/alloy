@@ -168,12 +168,36 @@ export function resolveProcessPins({ processes = [], now = Date.now() } = {}) {
     pins.get(key).push({ pid: Number(proc.pid), command: proc.command, resolution: how });
   };
 
-  const toolkitProcs = processes.filter((p) => /toolkit\//.test(String(p.command || "")));
+  /*
+   * A PROCESS USES A VERSION BY LIVING IN IT, NOT ONLY BY NAMING IT.
+   *
+   * THE DEFECT THIS CLOSES, and it cost a working host. Pinning read the
+   * COMMAND LINE only. The tmux server's argv is just `tmux` — it never names a
+   * toolkit path — but its working directory was inside toolkit/4ee65145b96b.
+   * Nothing pinned that version, retention reclaimed it, and the server was
+   * left holding a deleted cwd. Every pane created afterwards inherited it, so
+   * no lane could start a session at its own worktree: proven by control, a
+   * fresh tmux server places the pane correctly and the default one cannot,
+   * and neither `new-session -c` nor `respawn-pane -c` can work around it.
+   *
+   * A directory a live process is sitting in is in use by any honest reading of
+   * "in use", and the retention model's own rule is that reclamation requires
+   * positive proof of safety. A cwd is exactly such proof going unread.
+   *
+   * `cwd` is optional on the process record. Absent, this behaves as before —
+   * the collector is responsible for saying it could not measure, rather than
+   * this silently treating unmeasured as unused.
+   */
+  const usesToolkit = (p) => /toolkit\//.test(String(p.command || "")) || /toolkit\//.test(String(p.cwd || ""));
+  const toolkitProcs = processes.filter(usesToolkit);
 
   for (const proc of toolkitProcs) {
     const cmd = String(proc.command || "");
     const direct = versionFromCommand(cmd);
     if (direct) { addPin(direct, proc, "resolved"); continue; }
+    // The working directory is a use of the version even when argv is silent.
+    const fromCwd = versionFromCommand(String(proc.cwd || ""));
+    if (fromCwd) { addPin(fromCwd, proc, "resolved_from_cwd"); continue; }
     if (!CURRENT_RE.test(cmd)) continue;
 
     // Through `current`. Look for a descendant that names a version.

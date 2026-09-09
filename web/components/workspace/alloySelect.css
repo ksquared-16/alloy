@@ -150,3 +150,25 @@
 .alloy-select--compact .alloy-select__chevron {
   font-size: 9px;
 }
+
+/*
+ * HEADER PLACEMENT — the workspace header action rail.
+ *
+ * The base rule is `width: 100%; min-width: 0`, which is correct in a form column and wrong
+ * in the header: the rail is a shrink-to-fit flex item, so `100%` resolves against a parent
+ * that has no width of its own and the trigger collapses. `.alloy-select__value` then
+ * ellipsised the site name down to nothing, and the site filter of every operational
+ * workspace read as an empty chevron.
+ *
+ * The floor is a content width, not a fixed one: enough for the ordinary labels ("All sites",
+ * a location name) to sit on one line, with a ceiling so a pathological label cannot eat the
+ * rail the actions and Close live in. Anything past the ceiling still ellipsises.
+ *
+ * Scoped to the header rail by data attribute so every workspace inherits the repair — the
+ * fix belongs to the shared chrome, not to each module's shell.
+ */
+[data-operational-modal-header-actions="true"] .alloy-select {
+  width: auto;
+  min-width: 11rem;
+  max-width: 18rem;
+}

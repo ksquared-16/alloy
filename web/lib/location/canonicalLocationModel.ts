@@ -18,6 +18,47 @@
 /** The three `locations.location_type` values (DB CHECK-enforced). */
 export type CanonicalLocationType = "site" | "unit" | "address";
 
+/**
+ * The semantic role of a `unit` (DB CHECK-enforced, `locations.unit_role`).
+ *
+ * A classroom is not a different KIND of thing from a room — it is a unit with a
+ * role. That is why this is a discriminator rather than a second entity:
+ *
+ *  - `physical_space`    Room 1. The licensed, capacity-bearing space. It may
+ *                        CONTAIN operational groups and is never a placement
+ *                        target itself.
+ *  - `operational_group` Toddler 1. The classroom/cohort — the ratio and
+ *                        staffing unit, and the only legal placement target.
+ *  - `shared_space`      Playground, gym. Attendance may name it; placement
+ *                        may not, because occupying it never changes which
+ *                        group a child belongs to.
+ *
+ * A legacy unit with no stored role reads as `operational_group` — that is what
+ * every room in the system meant before the roles existed.
+ */
+export type CanonicalUnitRole = "physical_space" | "operational_group" | "shared_space";
+
+export const DEFAULT_UNIT_ROLE: CanonicalUnitRole = "operational_group";
+
+/** Effective role for a unit; null for a site/address row. */
+export function effectiveUnitRole(
+    type: CanonicalLocationType,
+    storedRole: CanonicalUnitRole | null
+): CanonicalUnitRole | null {
+    if (type !== "unit") return null;
+    return storedRole ?? DEFAULT_UNIT_ROLE;
+}
+
+/** A unit a child may be PLACED into. Placement is committed group membership. */
+export function isPlaceableUnitRole(role: CanonicalUnitRole | null): boolean {
+    return role === "operational_group";
+}
+
+/** A unit attendance may name. Any unit at the site qualifies — including a shared space. */
+export function isAttendanceLocatableRole(role: CanonicalUnitRole | null): boolean {
+    return role != null;
+}
+
 /** Normalized postal address (childcare campus or field-service address). */
 export type CanonicalLocationAddress = {
     address1: string | null;
@@ -45,6 +86,11 @@ export type CanonicalLocation = {
     locationNumber: number | null;
     type: CanonicalLocationType;
     parentLocationId: string | null;
+    /**
+     * Effective `locations.unit_role` for a unit (legacy NULL reads as
+     * `operational_group`); null on a site/address row.
+     */
+    unitRole: CanonicalUnitRole | null;
     /** `locations.status_key` — operating status (text, nullable). */
     statusKey: string | null;
     isActive: boolean;
@@ -65,8 +111,20 @@ export type CanonicalLocation = {
 export type CanonicalRoom = {
     id: string;
     orgId: string;
-    /** Parent site `locations.id`. */
+    /**
+     * The site this room resolves to, by ANCESTRY — not necessarily
+     * `parent_location_id`. A group nested inside a physical space has that
+     * space as its parent and the site as its grandparent.
+     */
     siteLocationId: string;
+    /**
+     * The physical space that contains this room, when it is nested. Null when
+     * the room hangs directly off the site (every legacy room, and any
+     * standalone classroom or shared space).
+     */
+    containingSpaceLocationId: string | null;
+    /** Effective semantic role — what kind of unit this room is. */
+    unitRole: CanonicalUnitRole;
     name: string | null;
     locationNumber: number | null;
     statusKey: string | null;

@@ -347,6 +347,132 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         sources: ["trust_decision_observations"],
         orgScopeOnly: true,
     },
+
+    /*
+     * ── FINANCIALS ────────────────────────────────────────────────────────────────────────
+     *
+     * Seven, because there are seven distinct questions with a canonical owner — not because
+     * a landing page has room for a grid. Each one names the thread it quotes in its
+     * description, so a figure that later disagrees with a family's card can be traced to a
+     * reading rather than argued about.
+     *
+     * TWO WORDS DO NOT APPEAR HERE, DELIBERATELY.
+     *
+     * "Accounts Receivable" — there is no receivables accounting behind these numbers, only
+     * Thread 8's outstanding predicate. Calling a scoped sum of it A/R would promise ageing
+     * buckets, allowances and a subledger that do not exist.
+     *
+     * "Revenue" — posted charges are billed amounts. Recognised revenue needs a
+     * revenue-recognition policy, deferral and a chart of accounts, and the childcare spine
+     * has none of the three (the platform's `gl_*` tables belong to the job vertical and are
+     * dormant). So the metric is `gross_charges_posted_amount` and says what it is.
+     *
+     * All seven carry `snapshotSemantics` because the underlying projections scan a capped
+     * cohort and report when the cap was hit. A capped total that presents itself as org
+     * truth is the specific way a money figure lies.
+     */
+    "financials.outstanding_amount": {
+        key: "financials.outstanding_amount",
+        label: "Outstanding",
+        description:
+            "What posted childcare charges still owe, in scope. Thread 8's predicate — posted charge "
+            + "less active applications of posted payments — summed over the scoped cohort by "
+            + "resolveFinancialPositionCohort. NOT Accounts Receivable: no receivables accounting, "
+            + "ageing or allowance exists behind it. Never derived from journal rows.",
+        pack: "financials",
+        computationKind: "entity_snapshot",
+        format: "currency",
+        defaultWindow: "rolling_30d",
+        sources: ["charges", "payment_allocations", "payments", "financial_reduction_applications"],
+        snapshotSemantics: true,
+    },
+    "financials.currently_collectible_amount": {
+        key: "financials.currently_collectible_amount",
+        label: "Collectible now",
+        description:
+            "Outstanding less governed submitted-claim suppression (Thread 9, Director decision B): "
+            + "what may actually be collected from families right now. A submitted subsidy claim "
+            + "suppresses collection for what it attributed, so families are not chased for money an "
+            + "agency has been asked for. Subsidy is not a discount and is not netted into a balance.",
+        pack: "financials",
+        computationKind: "entity_snapshot",
+        format: "currency",
+        defaultWindow: "rolling_30d",
+        sources: ["charges", "payment_allocations", "payments", "financial_subsidy_claims", "financial_subsidy_claim_lines"],
+        snapshotSemantics: true,
+    },
+    "financials.gross_charges_posted_amount": {
+        key: "financials.gross_charges_posted_amount",
+        label: "Gross charges posted",
+        description:
+            "Thread 1's gross on childcare charges POSTED inside the window — what was billed, by the "
+            + "moment it became owed rather than by when care happened. This is a billed amount, not "
+            + "recognised revenue: the platform has no revenue-recognition model. Reductions are "
+            + "reported separately and are not netted in.",
+        pack: "financials",
+        computationKind: "event_window",
+        format: "currency",
+        defaultWindow: "rolling_30d",
+        sources: ["charges", "financial_reduction_applications"],
+        snapshotSemantics: true,
+    },
+    "financials.payments_received_amount": {
+        key: "financials.payments_received_amount",
+        label: "Payments received",
+        description:
+            "Posted, inbound childcare payments that ARRIVED inside the window (Thread 8). Pending "
+            + "payments have not arrived; refunds are outbound and are reported beside this, never as "
+            + "a negative receipt.",
+        pack: "financials",
+        computationKind: "event_window",
+        format: "currency",
+        defaultWindow: "rolling_30d",
+        sources: ["payments", "payment_allocations"],
+        snapshotSemantics: true,
+    },
+    "financials.unapplied_payments_amount": {
+        key: "financials.unapplied_payments_amount",
+        label: "Unapplied payments",
+        description:
+            "Money that arrived and is not settling anything: posted inbound payment amount less its "
+            + "ACTIVE allocations, the same definition the account card renders. Deliberately not "
+            + "windowed — a receipt unapplied since last month is the one that most needs finding.",
+        pack: "financials",
+        computationKind: "entity_snapshot",
+        format: "currency",
+        defaultWindow: "rolling_30d",
+        sources: ["payments", "payment_allocations"],
+        snapshotSemantics: true,
+    },
+    "financials.unresolved_subsidy_variance_amount": {
+        key: "financials.unresolved_subsidy_variance_amount",
+        label: "Unresolved subsidy variance",
+        description:
+            "Signed difference between what was claimed and what an agency paid, on variances nobody "
+            + "has decided about yet (Thread 9). Negative is short-paid or denied. Reported BESIDE "
+            + "collectible and never folded into it: a shortfall is a decision somebody owes, not a "
+            + "bill a family silently inherits.",
+        pack: "financials",
+        computationKind: "entity_snapshot",
+        format: "currency",
+        defaultWindow: "rolling_30d",
+        sources: ["financial_subsidy_variances", "financial_subsidy_claim_lines"],
+        snapshotSemantics: true,
+    },
+    "financials.charges_awaiting_post_count": {
+        key: "financials.charges_awaiting_post_count",
+        label: "Charges awaiting posting",
+        description:
+            "Draft childcare charges an operator could post, in scope — the same cohort the Financials "
+            + "work queue lists, counted from the same projection so the tile and the list cannot "
+            + "disagree. `charge.post` owns the eligibility; this restates no rule of its own.",
+        pack: "financials",
+        computationKind: "entity_snapshot",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["charges", "child_enrollment_agreements"],
+        snapshotSemantics: true,
+    },
 };
 
 const KEYS = new Set<string>(Object.keys(DEFINITIONS));

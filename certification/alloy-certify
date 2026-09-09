@@ -46,6 +46,39 @@ CERT_INBOUND_TO_E164="${CERT_INBOUND_TO_E164:-+15550001111}"
 CERT_STRIPE_PLACEHOLDER_KEY="sk_$(printf 'test')_alloy_certification_placeholder"
 CERT_STRIPE_PLACEHOLDER_WEBHOOK="whsec_alloy_certification_placeholder"
 
+# ── REAL STRIPE TEST CREDENTIALS, WHEN THE NODE HAS THEM ────────────────────────────────────────
+#
+# The placeholders above exist because the backend refuses to boot without Stripe configuration
+# while certification never reached a payment path. Thread 8B reaches it, so a node that runs
+# Stripe collection certification needs the real TEST keys — and they must arrive from the trusted
+# host, not from a worktree file somebody might commit.
+#
+# Home: $ALLOY_RUNTIME_ROOT/vacilando/trusted-secrets/stripe-test.env, the same class and directory
+# as staging-certification-principal.env. durable-state classes trusted-secrets as EPHEMERAL and
+# excludes it from backup, so these never travel with a node restore.
+#
+# Absent, everything below keeps the placeholder behaviour exactly as it was: a node that does not
+# certify Stripe is not misconfigured for lacking them.
+STRIPE_TRUSTED_ENV="${ALLOY_RUNTIME_ROOT:-$HOME/.local/state/alloy-dev/gateway}/vacilando/trusted-secrets/stripe-test.env"
+
+# Values are read into variables and never echoed. `set -a` is scoped to a subshell-free block and
+# immediately disabled so nothing later in this script is exported by accident.
+load_stripe_trusted_env() {
+    [ -f "$STRIPE_TRUSTED_ENV" ] || return 0
+    set -a
+    # shellcheck disable=SC1090
+    . "$STRIPE_TRUSTED_ENV"
+    set +a
+}
+load_stripe_trusted_env
+
+# The secret key is server-only and is passed to the backend process, never written to any file the
+# browser or the repository can read. The publishable key is public by Stripe's own design and is
+# the only one that may reach the web build.
+CERT_STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY:-$CERT_STRIPE_PLACEHOLDER_KEY}"
+CERT_STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-$CERT_STRIPE_PLACEHOLDER_WEBHOOK}"
+CERT_STRIPE_PUBLISHABLE_KEY="${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-${STRIPE_PUBLISHABLE_KEY:-}}"
+
 OPERATOR_EMAIL="qa.operator@northwind.invalid"
 OPERATOR_PASSWORD="alloy-local-cert"        # synthetic, local-only, non-secret (seeded)
 ORG_SLUG="northwind-early-learning"
@@ -81,26 +114,75 @@ cmd_up() {
     cmd_seed
 }
 
+# ---------------------------------------------------------------- db client
+#
+# THE DATABASE CLIENT LIVES IN THE DATABASE.
+#
+# THE DEFECT. Every seed step shelled out to a host `psql`. This Mac mini has
+# none — not on PATH, not in Homebrew, no Postgres.app — so the representative
+# seed failed on every run. It failed QUIETLY, because `alloy-stack`'s
+# `ensure_seeded` printed the error and returned 0, so a certification would
+# take its lease and proceed against a database that had never been seeded. Two
+# defects in series: one that broke the seed, one that hid it.
+#
+# Requiring an operator to install a Postgres client before Alloy can certify
+# itself is not a fix; the sanctioned stack already ships a psql inside
+# `supabase_db_<project>`, and that client is by definition the right version for
+# that database.
+#
+# So: use the host client when there is one, and otherwise run the same command
+# inside the sanctioned container. `-f` becomes stdin, because a host path does
+# not exist inside the container. The connection is rebuilt for the container's
+# own loopback (5432, not the host's published port) while keeping the
+# credentials and database name the stack itself reported, so nothing is
+# hardcoded that the stack could change.
+cert_db_container() { printf 'supabase_db_%s\n' "$(sed -n 's/^[[:space:]]*project_id[[:space:]]*=[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$CERT_DIR/supabase/config.toml" 2>/dev/null | head -1)"; }
+
+# The same URL as seen from inside the container: userinfo and database kept,
+# host and port replaced by the container's own postgres.
+cert_db_url_incontainer() {
+    printf '%s\n' "$1" | sed -E 's#^(postgresql://[^@]+@)[^/]+(/.*)$#\1127.0.0.1:5432\2#'
+}
+
+cert_have_host_psql() { command -v psql >/dev/null 2>&1; }
+
+# cert_psql_q <db-url> <sql>   -> single-value query, stdout is the result
+cert_psql_q() {
+    local db="$1" sql="$2"
+    if cert_have_host_psql; then psql "$db" -tAc "$sql" 2>/dev/null; return $?; fi
+    docker exec -i "$(cert_db_container)" psql "$(cert_db_url_incontainer "$db")" -tAc "$sql" 2>/dev/null
+}
+
+# cert_psql_f <db-url> <sql-file>  -> run a file, failing loudly
+cert_psql_f() {
+    local db="$1" file="$2"
+    [ -f "$file" ] || { echo "SQL file not found: $file" >&2; return 1; }
+    if cert_have_host_psql; then psql "$db" -v ON_ERROR_STOP=1 -q -f "$file" >/dev/null; return $?; fi
+    # `-f -` because the host path does not exist inside the container.
+    docker exec -i "$(cert_db_container)" \
+        psql "$(cert_db_url_incontainer "$db")" -v ON_ERROR_STOP=1 -q -f - <"$file" >/dev/null
+}
+
 cmd_seed() {
     local db; db="$(cert_db_url)" && [ -n "$db" ] \
         || die "could not resolve the cert stack DB_URL after 10 attempts — is the shared stack up? (alloy-stack status)"
     # Already seeded? (idempotent — the representative seed is upsert-based anyway.)
-    if psql "$db" -tAc "select 1 from orgs where slug='${ORG_SLUG}' limit 1" 2>/dev/null | grep -q 1; then
+    if cert_psql_q "$db" "select 1 from orgs where slug='${ORG_SLUG}' limit 1" | grep -q 1; then
         green "Seeded data available (org ${ORG_SLUG})"
     else
-        info "Seeding representative synthetic tenant via psql…"
-        psql "$db" -v ON_ERROR_STOP=1 -q -f "$REPO_ROOT/supabase/seed/local_representative_seed.sql" >/dev/null \
+        info "Seeding representative synthetic tenant$(cert_have_host_psql || printf ' (via the stack'"'"'s own client)')…"
+        cert_psql_f "$db" "$REPO_ROOT/supabase/seed/local_representative_seed.sql" \
             || die "representative seed failed"
         green "Seeded data available (org ${ORG_SLUG})"
     fi
-    psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/operator-credential.sql" >/dev/null \
+    cert_psql_f "$db" "$CERT_DIR/operator-credential.sql" \
         || die "operator credential attach failed"
     green "Authenticated operator account ready (${OPERATOR_EMAIL})"
 
     # Canonical environment storage. Idempotent, and deliberately NOT part of any
     # certification fixture: a fixture that creates environment state cannot tear itself
     # down without breaking the next run.
-    psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/environment-buckets.sql" >/dev/null \
+    cert_psql_f "$db" "$CERT_DIR/environment-buckets.sql" \
         || die "storage bucket provisioning failed"
     green "Storage buckets provisioned (org_documents)"
 
@@ -108,7 +190,7 @@ cmd_seed() {
     # and refuses to guess when nothing answers. The canonical seed declares no
     # provider binding, so without this every certification inbound quarantines as
     # org-less — proving the quarantine works and nothing else.
-    psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/inbound-sms-binding.sql" >/dev/null \
+    cert_psql_f "$db" "$CERT_DIR/inbound-sms-binding.sql" \
         || die "inbound SMS binding provisioning failed"
     green "Inbound SMS destination provisioned (${CERT_INBOUND_TO_E164})"
 }
@@ -149,8 +231,8 @@ cmd_inbound_up() {
         TWILIO_AUTH_TOKEN="$CERT_TWILIO_AUTH_TOKEN" \
         COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL="$INBOUND_URL" \
         ALLOY_CERTIFICATION=1 \
-        STRIPE_SECRET_KEY="$CERT_STRIPE_PLACEHOLDER_KEY" \
-        STRIPE_WEBHOOK_SECRET="$CERT_STRIPE_PLACEHOLDER_WEBHOOK" \
+        STRIPE_SECRET_KEY="$CERT_STRIPE_SECRET_KEY" \
+        STRIPE_WEBHOOK_SECRET="$CERT_STRIPE_WEBHOOK_SECRET" \
         python3 -m uvicorn main:app --host 127.0.0.1 --port "$INBOUND_PORT" \
             >"$CERT_DIR/.run/inbound.log" 2>&1 &
         echo $! > "$INBOUND_PID_FILE"
@@ -196,6 +278,13 @@ NEXT_PUBLIC_ALLOY_OS_RUNTIME=1
 # objective result (queued/sent) but nothing leaves the machine. Auth emails are
 # caught locally by the stack's mail catcher (inbucket :54424).
 ALLOY_CERTIFICATION=1
+# Stripe. The publishable key is public by Stripe's design and is the only one the browser build
+# reads. The secret and the webhook signing secret are SERVER-only: Next exposes a variable to the
+# browser only when it is prefixed NEXT_PUBLIC_, so these two stay inside the server process. The
+# file is gitignored and regenerated, and never leaves the node.
+${CERT_STRIPE_PUBLISHABLE_KEY:+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${CERT_STRIPE_PUBLISHABLE_KEY}}
+${STRIPE_SECRET_KEY:+STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}}
+${STRIPE_WEBHOOK_SECRET:+STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}}
 # The ingress quarantine is RLS-locked to service_role, so the only way to prove
 # it retains an unattributable message WITHOUT exposing the parent's words is to
 # read the diagnostic projection. Enabled here so that withholding is certified
@@ -205,6 +294,79 @@ EOF
     green "Configuration written ($ENV_FILE) — url/anon/tenant known, no discovery"
 }
 
+# CERTIFICATION MUST NOT CHOOSE A PORT IT CANNOT BIND.
+#
+# The old pre-flight asked `lsof -ti tcp:PORT`, which answers "who is LISTENING".
+# A Tailscale Serve mapping is not a listener in that sense, so lsof reported
+# nothing, certification concluded the port was free, and `next dev` then died
+# EADDRINUSE against an owner nothing had named. "No visible holder" was read as
+# "no holder".
+#
+# So the question is asked the only way that cannot be wrong: try to bind it, on
+# the interface the server will actually use. A refusal names the likely owner
+# instead of leaving an operator to hunt a process that does not exist.
+# WHO HOLDS THIS PORT — asked without assuming the host put `lsof` on PATH.
+#
+# THE FAILURE. `cmd_app_stop` finds the Next CHILD that outlives the launcher
+# entirely through `lsof`; the pid file only records the launcher. On this Mac
+# mini `lsof` lives at /usr/sbin/lsof and the profile PATH is
+# `~/bin:~/.local/bin:/usr/local/bin:/opt/homebrew/bin:…:/usr/bin:/bin` — no
+# /usr/sbin. So every `lsof -ti` produced NOTHING, and "no visible holder" was
+# read as "no holder", exactly as the port pre-flight above once read it.
+#
+# Measured, not imagined: a certification server for a stale commit survived
+# `app_stop`, kept :3011, and `cmd_serve` then took the "App already serving"
+# branch and certified against it — the precise outcome the staleness check
+# directly below was written to prevent. The teardown reported "app stopped".
+#
+# So the tool is resolved by location as well as by PATH, and when it cannot be
+# found at all the question is answered from `ps` using the command line this
+# script itself starts (`next dev … -p PORT`). A caller that gets an empty
+# answer must therefore treat it as "unknown", never as "free" — the bind probe
+# in `cert_assert_port_bindable` is the only authority on emptiness.
+CERT_LSOF="$(command -v lsof 2>/dev/null || true)"
+if [ -z "$CERT_LSOF" ]; then
+    for _cand in /usr/sbin/lsof /usr/bin/lsof /bin/lsof; do
+        [ -x "$_cand" ] && CERT_LSOF="$_cand" && break
+    done
+fi
+
+cert_port_listener_pids() {
+    local port="$1"
+    if [ -n "$CERT_LSOF" ]; then
+        "$CERT_LSOF" -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null
+        return 0
+    fi
+    # No lsof anywhere: match the process this script starts. Narrow on purpose —
+    # it must never return a pid this certification did not launch.
+    # The regex is assembled in BEGIN so the port cannot be read as a
+    # concatenation against the match result — awk binds `~` tighter than
+    # concatenation, and the anchor then decorates the ANSWER instead of the
+    # pattern, which matches far too much.
+    ps -eo pid,command 2>/dev/null \
+        | awk -v p="$port" 'BEGIN { re = "next dev.*-p[ =]?" p "($|[^0-9])" } $0 ~ re { print $1 }'
+}
+
+cert_assert_port_bindable() {
+    local port="$1"
+    command -v node >/dev/null 2>&1 || return 0   # cannot probe; let the server speak
+    if node -e '
+        const net = require("net");
+        const s = net.createServer();
+        s.on("error", (e) => { console.error(e.code); process.exit(1); });
+        s.listen(Number(process.argv[1]), "127.0.0.1", () => s.close(() => process.exit(0)));
+      ' "$port" 2>/dev/null; then
+        return 0
+    fi
+    echo "port ${port} is not bindable on 127.0.0.1" >&2
+    if command -v tailscale >/dev/null 2>&1 && tailscale serve status 2>/dev/null | grep -q ":${port} "; then
+        echo "  Tailscale Serve publishes ${port}; a wildcard bind there fails but loopback should not — check for a real listener too" >&2
+    fi
+    echo "  another certification serve may already own it: ps ax | grep 'next dev -p ${port}'" >&2
+    echo "  choose a different port with CERT_APP_PORT=<port>" >&2
+    return 1
+}
+
 cmd_serve() {
     [ -f "$ENV_FILE" ] || cmd_env
     # "Already serving" is only reuse if that process was started from the CURRENT
@@ -212,19 +374,43 @@ cmd_serve() {
     # variables, and reusing it silently certifies the wrong build — an env-gated
     # route stayed 404 across three runs because of exactly this.
     if curl -s -o /dev/null "$APP_URL" 2>/dev/null; then
-        local pid; pid="$(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null | head -1)"
-        if [ -n "$pid" ] && [ -n "$(find "$ENV_FILE" -newermt "$(ps -o lstart= -p "$pid" 2>/dev/null)" 2>/dev/null)" ]; then
-            info "app on ${APP_PORT} predates ${ENV_FILE##*/} — restarting so it reads the current configuration"
-            cmd_app_stop >/dev/null 2>&1
-            for p in $(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null); do kill -9 "$p" 2>/dev/null || true; done
+        local pid; pid="$(cert_port_listener_pids "$APP_PORT" | head -1)"
+        # AN UNIDENTIFIED HOLDER IS STALE UNTIL PROVEN OTHERWISE.
+        #
+        # Something is answering on this port. If its age cannot be established,
+        # reuse is a guess, and the losing side of that guess is certifying the
+        # wrong build silently — which is the whole reason this check exists.
+        # Restarting costs a compile; reusing costs the run's credibility.
+        if [ -z "$pid" ] \
+            || [ -n "$(find "$ENV_FILE" -newermt "$(ps -o lstart= -p "$pid" 2>/dev/null)" 2>/dev/null)" ]; then
+            if [ -z "$pid" ]; then
+                info "app on ${APP_PORT} has no identifiable owner — restarting rather than certifying an unknown build"
+            else
+                info "app on ${APP_PORT} predates ${ENV_FILE##*/} — restarting so it reads the current configuration"
+            fi
+            cmd_app_stop >/dev/null 2>&1 || true
+            for p in $(cert_port_listener_pids "$APP_PORT"); do kill -9 "$p" 2>/dev/null || true; done
             sleep 2
         else
             green "App already serving at $APP_URL"; return 0
         fi
     fi
     mkdir -p "$(dirname "$SERVER_PID_FILE")"
+    cert_assert_port_bindable "$APP_PORT" || return 1
     info "Starting app at $APP_URL against the cert tenant…"
-    ( cd "$WEB_DIR" && env $(grep -v '^#' "$ENV_FILE" | xargs) npx next dev -p "$APP_PORT" \
+    # BIND LOOPBACK, EXPLICITLY.
+    #
+    # `next dev` binds the wildcard by default, and the wildcard is the one thing
+    # this port cannot do. The managed slot ports (3011-3022) are published by
+    # Tailscale Serve, which holds each one on the tailnet interface; a wildcard
+    # bind to a mapped port fails EADDRINUSE while 127.0.0.1 stays free. Measured
+    # on this host: 3011 and 3013 (mapped, no app) refuse 0.0.0.0 and accept
+    # 127.0.0.1; 3023 and 3025 (unmapped) accept both.
+    #
+    # Certification drives $APP_URL — localhost — and a mounted browser runs on
+    # this machine, so no tailnet exposure is needed and binding it was never
+    # intentional. This also matches what the lane dev servers already do.
+    ( cd "$WEB_DIR" && env $(grep -v '^#' "$ENV_FILE" | xargs) npx next dev -H 127.0.0.1 -p "$APP_PORT" \
         >"$CERT_DIR/.run/server.log" 2>&1 & echo $! > "$SERVER_PID_FILE" )
     for _ in $(seq 1 60); do curl -s -o /dev/null "$APP_URL" && { green "Current Work app ready ($APP_URL)"; return 0; }; sleep 2; done
     die "app did not become ready — see $CERT_DIR/.run/server.log"
@@ -232,8 +418,26 @@ cmd_serve() {
 
 cmd_verify() {
     cmd_serve
-    cmd_inbound_up
-    green "Communications mocked (no real email/SMS; local-delivery only)"
+    # THE INBOUND WEBHOOK IS A DEPENDENCY OF SOME SPECS, NOT OF CERTIFICATION.
+    #
+    # `cmd_inbound_up` ends in `die` when the FastAPI app will not start, and
+    # `die` exits. So on a host whose python has no uvicorn — this Mac mini's
+    # `/Library/Developer/CommandLineTools/usr/bin/python3` has none — the whole
+    # certification aborted before a single browser spec ran, including the
+    # authenticated-session specs that never touch SMS. One optional component
+    # took the entire suite down with it.
+    #
+    # Run it in a subshell so its exit cannot end this one, and say plainly what
+    # is now unavailable. Nothing is weakened: the inbound-SMS specs still need a
+    # live webhook and still fail without one, which is the honest result. What
+    # changes is that they fail alone instead of taking every other spec with
+    # them. `alloy-certify inbound-up`, invoked directly, stays strict.
+    if ( cmd_inbound_up ); then
+        green "Communications mocked (no real email/SMS; local-delivery only)"
+    else
+        echo "inbound webhook unavailable — see ${CERT_DIR}/.run/inbound.log" >&2
+        echo "  certification continues; inbound-SMS specs will fail on their own terms" >&2
+    fi
     info "Authenticating operator + running certification specs…"
     ( cd "$CERT_DIR" && NODE_PATH="$WEB_DIR/node_modules" CERT_APP_URL="$APP_URL" \
         CERT_OPERATOR_EMAIL="$OPERATOR_EMAIL" CERT_OPERATOR_PASSWORD="$OPERATOR_PASSWORD" \
@@ -300,7 +504,7 @@ cmd_journey() {
             printf '\n── %s  [inherits tenant]\n' "$name"
             needs_reset=0
         fi
-        cmd_app_stop >/dev/null 2>&1
+        cmd_app_stop >/dev/null 2>&1 || true
         if [ "$needs_reset" -eq 0 ]; then
             if ! ( cmd_serve ) > "$CERT_DIR/.run/journey/${name}.serve.log" 2>&1; then
                 printf '\033[31m✗ %s — app did not come up\033[0m\n' "$name" >&2
@@ -414,7 +618,9 @@ cmd_status() {
 # bypass the lease model exists to prevent. Releasing is the sanctioned way to say "I am
 # done" — alloy-stack stops the stack itself, but only when the last holder leaves.
 cmd_down() {
-    cmd_app_stop
+    # A port that will not release is reported by cmd_app_stop and must not abort
+    # the rest of teardown — the lease still has to be released.
+    cmd_app_stop || true
     local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
     if [ -x "$stack" ]; then
         "$stack" release "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" || true
@@ -434,17 +640,36 @@ cmd_app_stop() {
     fi
     # The pid file records the launcher; Next spawns a child that outlives it and keeps
     # the port bound, which is what left a dev server running after a "clean" teardown.
-    local held; held="$(lsof -ti "tcp:${APP_PORT}" 2>/dev/null || true)"
+    local held; held="$(cert_port_listener_pids "$APP_PORT" || true)"
     for pid in $held; do kill "$pid" 2>/dev/null && stopped=1; done
+    # RELEASE IS PROVEN BY BINDING, NOT BY A PID LIST BEING EMPTY.
+    #
+    # The old loop broke as soon as `lsof` printed nothing, which on a host
+    # without it was immediately and always — so teardown announced a release it
+    # had never confirmed. The bind probe answers the question that actually
+    # matters to the next `serve`: can this port be taken?
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-        lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1 || break
+        cert_assert_port_bindable "$APP_PORT" >/dev/null 2>&1 && break
         sleep 1
     done
-    if lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1; then
-        for pid in $(lsof -ti "tcp:${APP_PORT}" 2>/dev/null); do kill -9 "$pid" 2>/dev/null || true; done
+    if ! cert_assert_port_bindable "$APP_PORT" >/dev/null 2>&1; then
+        for pid in $(cert_port_listener_pids "$APP_PORT"); do kill -9 "$pid" 2>/dev/null || true; done
+        sleep 1
     fi
-    [ "$stopped" -eq 1 ] && info "app stopped (port ${APP_PORT} released)" || info "no app was running on ${APP_PORT}"
+    if cert_assert_port_bindable "$APP_PORT" >/dev/null 2>&1; then
+        [ "$stopped" -eq 1 ] && info "app stopped (port ${APP_PORT} released)" || info "no app was running on ${APP_PORT}"
+    else
+        # Say so. A teardown that cannot free the port must not report success —
+        # the next run would certify against whatever still holds it.
+        echo "app on ${APP_PORT} could not be released; a later certification would reuse it" >&2
+        echo "  find it with: ps ax | grep 'next dev .*-p ${APP_PORT}'" >&2
+        return 1
+    fi
 }
+
+# A test may source this file to exercise one helper without running a
+# certification. Same seam, same name shape, as alloy-stack's.
+if [ -n "${ALLOY_CERT_TEST_SOURCE:-}" ]; then return 0 2>/dev/null || exit 0; fi
 
 case "${1:-all}" in
     up) cmd_up ;;

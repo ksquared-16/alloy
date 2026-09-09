@@ -1,3 +1,4 @@
+import { localSupabaseRewrite } from "./lib/supabase/browserTransport";
 import { execSync } from "node:child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -260,7 +261,19 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
+    /*
+     * THE LOCAL SUPABASE, REACHED THROUGH THE APP'S OWN ORIGIN.
+     *
+     * A loopback NEXT_PUBLIC_SUPABASE_URL is resolved by whichever machine runs
+     * the BROWSER, so a Director on the tailnet was sending sign-in to their own
+     * laptop. This forwards it from the Next server, which really is on the host.
+     * Returns nothing at all unless the configured URL is loopback, so hosted
+     * runtimes are untouched. See lib/supabase/browserTransport.ts.
+     */
+    const localSupabase = localSupabaseRewrite(process.env.NEXT_PUBLIC_SUPABASE_URL);
+
     return [
+      ...(localSupabase ? [localSupabase] : []),
       /** Drawer VM routes live under /api/admin/view-models (not /api/admin/v2) — Turbopack dev mis-resolves nested v2 API segments. */
       {
         source: "/api/admin/v2/view-models/:path*",
