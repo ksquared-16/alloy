@@ -454,6 +454,14 @@ describeLive("tuition generation — the certification matrix, live", () => {
          * RESTRICT foreign key, so once a run has posted through this calendar the period cannot be
          * deleted — which is the guarantee Thread 5 relies on, working. The fixture adapts to it.
          */
+        /*
+         * One active calendar per org is a real constraint, and another suite's fixture calendar may
+         * already hold that slot. Stand this one up by standing the others down — the calendars are
+         * fixture state and may be deactivated; the periods and journal entries hanging off them are
+         * not touched, and a deactivated calendar keeps everything that ever reported through it.
+         */
+        await supabase.from("financial_accounting_calendars")
+            .update({ is_active: false }).eq("org_id", ORG).neq("id", CALENDAR);
         const { error: calError } = await supabase.from("financial_accounting_calendars").upsert({
             id: CALENDAR,
             org_id: ORG,

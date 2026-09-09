@@ -32,6 +32,7 @@
  * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
  */
 
+import { selectIn } from "@/lib/financials/workspace/inBatches";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -446,15 +447,23 @@ async function readResponsibility(
     };
     if (chargeIds.length === 0) return empty;
 
-    const { data: allocationRows, error } = await supabase
-        .from("financial_responsibility_allocations")
-        .select("id, charge_id, responsible_party_id, is_unassigned, assigned_amount_cents, share_id")
-        .eq("org_id", orgId)
-        .eq("state", "active")
-        .in("charge_id", [...chargeIds]);
-    // A responsibility read that fails is an absence of responsibility on the card, never a reason
-    // to fail the account — the same rule the payer read has always followed.
-    if (error) return empty;
+    let allocationRows: Array<Record<string, unknown>>;
+    try {
+        allocationRows = await selectIn(
+            [...chargeIds],
+            (batch) => supabase
+                .from("financial_responsibility_allocations")
+                .select("id, charge_id, responsible_party_id, is_unassigned, assigned_amount_cents, share_id")
+                .eq("org_id", orgId)
+                .eq("state", "active")
+                .in("charge_id", batch) as never,
+            "who is responsible for these charges",
+        );
+    } catch {
+        // A responsibility read that fails is an absence of responsibility on the card, never a
+        // reason to fail the account — the same rule the payer read has always followed.
+        return empty;
+    }
     const allocations = (allocationRows ?? []) as Array<{
         id: string;
         charge_id: string;
@@ -577,14 +586,22 @@ async function readAccountPayments(
     const sourceIds = billableSourceIds.length ? [...billableSourceIds] : [NO_SOURCE_SENTINEL];
 
     const [allocResult, accountPaymentResult] = await Promise.all([
-        chargeIds.length
-            ? supabase
-                  .from("payment_allocations")
-                  .select("id, payment_id, charge_id, allocated_amount_cents, status")
-                  .eq("org_id", orgId)
-                  .eq("status", "active")
-                  .in("charge_id", [...chargeIds])
-            : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
+        /*
+         * Batched, because this list of charge ids goes into the URL. On an account with a few
+         * hundred charges the request came back `414 URI Too Long`, the error was discarded with the
+         * rest of the response, and the card read the empty result as "none of this has been paid" —
+         * showing a family the whole balance again after they had settled it.
+         */
+        selectIn(
+            [...chargeIds],
+            (batch) => supabase
+                .from("payment_allocations")
+                .select("id, payment_id, charge_id, allocated_amount_cents, status")
+                .eq("org_id", orgId)
+                .eq("status", "active")
+                .in("charge_id", batch) as never,
+            "money applied to these charges",
+        ).then((data) => ({ data: data as Array<Record<string, unknown>>, error: null })),
         supabase
             .from("payments")
             .select(
@@ -613,9 +630,8 @@ async function readAccountPayments(
     if (accountPaymentResult.error) {
         throw new Error(accountPaymentResult.error.message);
     }
-    if (allocResult.error) {
-        throw new Error(allocResult.error.message);
-    }
+    // The allocation read raises on failure inside `selectIn` rather than returning an empty answer,
+    // which is the same rule this block already stated for the account read.
 
     const allocRows = (allocResult.data ?? []) as unknown as Array<Record<string, unknown>>;
     const paymentRows = (accountPaymentResult.data ?? []) as unknown as Array<Record<string, unknown>>;
@@ -1112,7 +1128,7 @@ export async function buildFinancialsCardVM(
             .from("payment_collection_attempts")
             .select("id, rail, processor_state, provider_action_type, charge_id, requested_amount_cents, currency, updated_at, canonical_payment_id")
             .eq("org_id", args.orgId)
-            .in("charge_id", chargeIds)
+            .in("charge_id", chargeIds.slice(0, 200))
             .is("canonical_payment_id", null)
             .in("processor_state", ["initiated", "requires_payment_method", "requires_action", "processing", "succeeded"])
             .order("updated_at", { ascending: false });
