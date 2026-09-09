@@ -725,6 +725,100 @@ test.describe("Slice H — collecting money through the mounted Financials card"
     });
 
     /*
+     * SCENARIO E — A FULL REFUND OF A REAL CARD PAYMENT.
+     *
+     * Money goes back the way it came: a real refund on the provider's connected account, recognised
+     * canonically. The original receipt must survive — giving money back is a new fact, never an
+     * edit of the one that recorded its arrival.
+     */
+    test("E — a real card payment is refunded on the provider, and the original receipt survives", async ({ page }) => {
+        const reads = watchAccountReads(page);
+        const subject = await subjectWithCollectibleCharge(page, reads);
+        const canonical = async () => {
+            const res = await page.request.get(`/api/admin/financials/card?customer_id=${subject.customerId}`);
+            const vm = ((await res.json()) as any).vm ?? {};
+            return {
+                balance: vm.reconciliation?.balanceCents ?? null,
+                payments: (vm.payments ?? []) as Array<any>,
+            };
+        };
+
+        // ── Collect a real card payment to refund ────────────────────────────────────────────────
+        const opening = await canonical();
+        const cents = 1_000 + (Date.now() % 90);
+        await openPaymentPanel(page);
+        await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
+        await page.locator('[data-financials-payment-amount="true"]').first().fill((cents / 100).toFixed(2));
+        const commit = page.locator('[data-financials-payment-commit="true"]').first();
+        await commit.scrollIntoViewIfNeeded();
+        await commit.click();
+
+        const frame = page.frameLocator('[data-financials-card-mount="true"] iframe').first();
+        await expect(page.locator('[data-financials-card-mount="true"] iframe').first()).toBeVisible({ timeout: 60_000 });
+        await expect(frame.locator('input[name="number"]')).toBeVisible({ timeout: 60_000 });
+        await frame.locator('input[name="number"]').fill("4242424242424242");
+        await frame.locator('input[name="expiry"]').fill("12" + String(new Date().getFullYear() + 2).slice(2));
+        await frame.locator('input[name="cvc"]').fill("123");
+        const zip = frame.locator('input[name="postalCode"]');
+        if (await zip.count()) await zip.fill("94103").catch(() => undefined);
+        const submit = page.locator('[data-financials-card-submit="true"]').first();
+        await expect(submit).toBeEnabled({ timeout: 60_000 });
+        await submit.scrollIntoViewIfNeeded();
+        await submit.click();
+
+        // Canonical recognition, through the provider's own webhook.
+        await expect
+            .poll(async () => (await canonical()).payments.length, { timeout: 180_000 })
+            .toBeGreaterThan(opening.payments.length);
+        const collected = await canonical();
+        const receipt = collected.payments.find(
+            (p) => !opening.payments.some((o) => o.paymentId === p.paymentId),
+        );
+        expect(receipt, "the collection this refund is about must exist canonically").toBeTruthy();
+        const received = (r: any) => r.receivedCents ?? r.amountCents;
+        expect(received(receipt), "the canonical receipt is the amount collected").toBe(cents);
+        expect(collected.balance, "the collection reduced outstanding").toBe(opening.balance! - cents);
+
+        // ── The refund, from the mounted control on that receipt ─────────────────────────────────
+        await page.goto(`${WORK_VIEW}?subject_id=${CERT_OPPORTUNITY}`);
+        await expect
+            .poll(async () => await page.locator('[data-financials-card="true"]').count(), { timeout: 90_000 })
+            .toBeGreaterThan(0);
+        await openPaymentPanel(page);
+
+        const refund = page.locator(`[data-financials-refund-payment="${receipt.paymentId}"]`);
+        await expect(refund, "the eligible receipt must offer a refund from the mounted panel").toBeVisible({
+            timeout: 60_000,
+        });
+        await refund.scrollIntoViewIfNeeded();
+        await refund.click();
+
+        /*
+         * RECOGNITION, not optimism. Thread 8 records the reversal as its own payment; the original
+         * is never edited.
+         */
+        await expect
+            .poll(async () => (await canonical()).balance, { timeout: 180_000 })
+            .toBe(collected.balance! + cents);
+
+        const after = await canonical();
+        const original = after.payments.find((p) => p.paymentId === receipt.paymentId);
+        expect(original, "the original receipt must remain visible after a refund").toBeTruthy();
+        expect(received(original), "the original receipt is not edited to hide the refund").toBe(cents);
+
+        const lineage = after.payments.filter(
+            (p) => !collected.payments.some((c) => c.paymentId === p.paymentId),
+        );
+        expect(lineage.length, "the refund must appear as its own canonical fact").toBeGreaterThan(0);
+
+        assertStillOnSubject(reads, subject, "scenario E");
+        test.info().annotations.push({
+            type: "scenario-e",
+            description: `refunded ${cents}c of receipt ${receipt.paymentId}; balance ${collected.balance} → ${after.balance}`,
+        });
+    });
+
+    /*
      * NO SECOND READ MODEL.
      *
      * `/api/admin/financials/collection-state` reports where a collection has GOT TO. The moment it
