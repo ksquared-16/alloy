@@ -322,6 +322,29 @@ export function FormEmbedClient({
      */
     const [reviewStep, setReviewStep] = useState<"handoff" | "review" | "edit" | "sign">("handoff");
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+    /**
+     * The review presents the document FITTED, with a way to open it larger.
+     *
+     * The task at review is "decide whether this is correct", not "read this at maximum size". A
+     * letter page rendered at container width is taller than a laptop viewport, so Make a change and
+     * Everything looks good sat below the fold and a parent had to discover them by scrolling past
+     * the document. Fitting the page puts the document and the decision in one view; enlarging is
+     * then an intentional act rather than the default that hides the decision.
+     */
+    const [documentEnlarged, setDocumentEnlarged] = useState(false);
+    const [fitHeightPx, setFitHeightPx] = useState<number | null>(null);
+    useEffect(() => {
+        const measure = () => {
+            // The room a fitted page may take: enough to read, never so much that the decision
+            // controls beneath it leave the viewport. Below a phone's height, fitting is abandoned
+            // in favour of a readable preview the parent scrolls (see the mobile branch).
+            const h = window.innerHeight;
+            setFitHeightPx(h < 700 ? Math.round(h * 0.42) : Math.round(h * 0.56));
+        };
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, []);
     /** What the parent captured, for previewing the mark ON the document before submitting. */
     const [capturedSignature, setCapturedSignature] = useState<{
         typedName?: string;
@@ -1456,10 +1479,29 @@ export function FormEmbedClient({
                            paperwork; the machinery stays out of sight. */
                         <IntakeCard>
                             <ParticipantArtifactHeader status={artifactStatus} />
-                            <ParticipantDocumentCanvas
-                                url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
-                                onUnavailable={() => setDocumentUnavailable(true)}
-                            />
+                            <div
+                                className="relative flex justify-center overflow-hidden rounded-xl border border-alloy-midnight/[0.08] bg-alloy-stone/20 p-3"
+                                data-participant-document-region={documentEnlarged ? "enlarged" : "fit"}
+                            >
+                                <ParticipantDocumentCanvas
+                                    url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
+                                    onUnavailable={() => setDocumentUnavailable(true)}
+                                    fitHeightPx={documentEnlarged ? undefined : (fitHeightPx ?? undefined)}
+                                />
+                            </div>
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                                <span className="text-[13px] text-alloy-midnight/55">
+                                    {documentEnlarged ? "Full size" : "Whole page shown"}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setDocumentEnlarged((v) => !v)}
+                                    className="rounded-xl border border-alloy-midnight/15 px-3.5 py-2 text-[14px] font-medium text-alloy-midnight"
+                                    data-participant-document-zoom={documentEnlarged ? "shrink" : "enlarge"}
+                                >
+                                    {documentEnlarged ? "Fit page" : "View larger"}
+                                </button>
+                            </div>
                             {message ? (
                                 <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[13px] text-amber-950">
                                     {message}
@@ -1475,7 +1517,24 @@ export function FormEmbedClient({
                                     />
                                 </div>
                             ) : null}
-                            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-alloy-midnight/[0.07] pt-5">
+                            {/*
+                              * THE DECISION STAYS ON SCREEN ON A PHONE.
+                              *
+                              * Fitting the page put both controls in view on a laptop, but at 375
+                              * the primary action still landed at 779px in an 812px viewport — the
+                              * one button the parent is meant to press, cut off by the fold. Fitting
+                              * the document harder would have meant shrinking it past legibility to
+                              * win 40 pixels, which trades the wrong thing.
+                              *
+                              * So the decision row sticks to the bottom while the review is on
+                              * screen, and returns to normal flow from `sm` up where it already
+                              * fits. `Make a change` travels with it, so correcting stays exactly
+                              * as reachable as accepting.
+                              */}
+                            <div
+                                className="sticky bottom-0 z-10 -mx-5 mt-6 flex flex-wrap items-center gap-3 border-t border-alloy-midnight/[0.07] bg-white/95 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:backdrop-blur-none"
+                                data-review-decision-row="true"
+                            >
                                 <span className="text-[14px] text-alloy-midnight/55">Something not right?</span>
                                 <button
                                     type="button"

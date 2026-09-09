@@ -25,6 +25,9 @@ import { useEffect, useRef, useState } from "react";
 /** Beyond 2x the extra pixels cost more than they show. */
 const MAX_DEVICE_PIXEL_RATIO = 2;
 
+/** The smallest a fitted page may be scaled before it stops being readable at all. */
+const MIN_FIT_SCALE = 0.34;
+
 export type DocumentSignatureOverlay = {
     /** 0-indexed page, PDF points, origin bottom-left — the version's authored placement. */
     readonly page: number;
@@ -40,15 +43,61 @@ export type DocumentSignatureOverlay = {
     readonly focus?: boolean;
 };
 
+
+/**
+ * Paint the signature target for whatever the parent has (or has not) captured.
+ *
+ * Extracted so the same rules serve both a full rasterize and an in-place update. The mark is
+ * PRESENTATION over an already-rendered page; nothing about it needs the PDF re-fetched.
+ */
+function paintSignatureTarget(
+    target: HTMLElement,
+    preview: DocumentSignatureOverlay["preview"],
+    heightPx: number,
+): void {
+    target.replaceChildren();
+    if (preview?.drawnPngDataUrl) {
+        target.className = "rounded-md";
+        const img = document.createElement("img");
+        img.src = preview.drawnPngDataUrl;
+        img.alt = "Your signature";
+        img.style.width = "100%";
+        img.style.height = "100%";
+        img.style.objectFit = "contain";
+        target.appendChild(img);
+        target.setAttribute("data-artifact-signature-state", "signed");
+    } else if (preview?.typedName) {
+        target.className = "rounded-md text-left font-medium italic text-alloy-midnight";
+        target.style.fontSize = `${Math.max(12, Math.min(heightPx * 0.6, 20))}px`;
+        target.textContent = preview.typedName;
+        target.setAttribute("data-artifact-signature-state", "signed");
+    } else {
+        target.className =
+            "animate-pulse rounded-md border-2 border-dashed border-alloy-bend-pine/70 bg-alloy-bend-pine/10 text-[13px] font-medium text-alloy-bend-pine";
+        target.textContent = "Tap to sign";
+        target.setAttribute("data-artifact-signature-state", "unsigned");
+    }
+}
+
 export function ParticipantDocumentCanvas({
     url,
     signature,
     onUnavailable,
+    fitHeightPx,
 }: {
     url: string;
     signature?: DocumentSignatureOverlay | null;
     /** The document could not render — the host falls back to the semantic review, never a blank. */
     onUnavailable: () => void;
+    /**
+     * Scale the whole page to fit within this many pixels of height.
+     *
+     * Absent, the page renders at container width — which is right when the document IS the task
+     * (reading it, signing it) and wrong when the task is "decide whether this is correct": a
+     * letter page at full width is taller than a laptop viewport, so the decision controls beneath
+     * it sat below the fold and a parent had to guess they existed.
+     */
+    fitHeightPx?: number;
 }) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [status, setStatus] = useState<"loading" | "ready">("loading");
@@ -96,7 +145,19 @@ export function ParticipantDocumentCanvas({
                     const page = await doc.getPage(pageNumber);
                     if (cancelled) return;
                     const base = page.getViewport({ scale: 1 });
-                    const scale = width / base.width;
+                    /*
+                     * FIT THE PAGE WHEN A HEIGHT BUDGET IS GIVEN, and never below legibility.
+                     *
+                     * `MIN_FIT_SCALE` is the floor: shrinking a page past it to satisfy "one
+                     * viewport" produces something nobody can read, which is not a review surface.
+                     * Below the floor the page keeps a readable size and the region scrolls, and the
+                     * host's own controls stay visible outside it either way.
+                     */
+                    const widthScale = width / base.width;
+                    const scale =
+                        fitHeightPx && fitHeightPx > 0
+                            ? Math.max(MIN_FIT_SCALE, Math.min(widthScale, fitHeightPx / base.height))
+                            : widthScale;
                     const viewport = page.getViewport({ scale });
 
                     // Same render contract as the operator canvas: the CANVAS is handed to pdf.js,
@@ -138,26 +199,7 @@ export function ParticipantDocumentCanvas({
                         target.style.height = `${Math.max(h, 30)}px`;
                         target.addEventListener("click", () => signatureRef.current?.onActivate());
 
-                        const preview = sig.preview;
-                        if (preview?.drawnPngDataUrl) {
-                            target.className = "rounded-md";
-                            const img = document.createElement("img");
-                            img.src = preview.drawnPngDataUrl;
-                            img.alt = "Your signature";
-                            img.style.width = "100%";
-                            img.style.height = "100%";
-                            img.style.objectFit = "contain";
-                            target.appendChild(img);
-                        } else if (preview?.typedName) {
-                            target.className =
-                                "rounded-md text-left font-medium italic text-alloy-midnight";
-                            target.style.fontSize = `${Math.max(12, Math.min(h * 0.6, 20))}px`;
-                            target.textContent = preview.typedName;
-                        } else {
-                            target.className =
-                                "animate-pulse rounded-md border-2 border-dashed border-alloy-bend-pine/70 bg-alloy-bend-pine/10 text-[13px] font-medium text-alloy-bend-pine";
-                            target.textContent = "Tap to sign";
-                        }
+                        paintSignatureTarget(target, sig.preview, h);
                         wrapper.appendChild(target);
                         if (sig.focus) {
                             // After paint, bring the signature area to the parent's eye.
@@ -180,7 +222,31 @@ export function ParticipantDocumentCanvas({
         // preview are the identity of a render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
         // `page` is a dependency: turning the page re-renders that page and only that page.
-    }, [url, page, signature?.preview?.typedName, signature?.preview?.drawnPngDataUrl, signature?.focus, !!signature]);
+        /*
+         * THE CAPTURED MARK IS NOT A DEPENDENCY OF THE RASTERIZE.
+         *
+         * It used to be. So the moment a parent finished signing, this effect re-imported pdf.js,
+         * re-fetched the document and re-rasterized the page — several seconds — purely to relabel
+         * one overlay. For that whole time the OLD overlay stayed on screen: a dashed, pulsing
+         * "Tap to sign" inviting them to sign something they had just signed. Kelly's words were
+         * "did my signature actually work?".
+         *
+         * The mark is painted over an already-rendered page, so it updates in place below. The
+         * document may still regenerate afterwards; the acknowledgment no longer waits for it.
+         */
+    }, [url, page, signature?.focus, !!signature, fitHeightPx]);
+
+    /**
+     * The captured mark, projected immediately.
+     *
+     * Runs off `capturedSignature` — which the host sets only after the authoritative commit — so
+     * this shows the signed state as soon as it is true, and never before.
+     */
+    useEffect(() => {
+        const target = containerRef.current?.querySelector<HTMLElement>("[data-artifact-signature-target]");
+        if (!target) return;
+        paintSignatureTarget(target, signature?.preview, target.getBoundingClientRect().height);
+    }, [signature?.preview?.typedName, signature?.preview?.drawnPngDataUrl]);
 
     /*
      * A signature navigates to its own page.
