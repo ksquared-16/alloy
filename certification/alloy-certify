@@ -418,8 +418,26 @@ cmd_serve() {
 
 cmd_verify() {
     cmd_serve
-    cmd_inbound_up
-    green "Communications mocked (no real email/SMS; local-delivery only)"
+    # THE INBOUND WEBHOOK IS A DEPENDENCY OF SOME SPECS, NOT OF CERTIFICATION.
+    #
+    # `cmd_inbound_up` ends in `die` when the FastAPI app will not start, and
+    # `die` exits. So on a host whose python has no uvicorn — this Mac mini's
+    # `/Library/Developer/CommandLineTools/usr/bin/python3` has none — the whole
+    # certification aborted before a single browser spec ran, including the
+    # authenticated-session specs that never touch SMS. One optional component
+    # took the entire suite down with it.
+    #
+    # Run it in a subshell so its exit cannot end this one, and say plainly what
+    # is now unavailable. Nothing is weakened: the inbound-SMS specs still need a
+    # live webhook and still fail without one, which is the honest result. What
+    # changes is that they fail alone instead of taking every other spec with
+    # them. `alloy-certify inbound-up`, invoked directly, stays strict.
+    if ( cmd_inbound_up ); then
+        green "Communications mocked (no real email/SMS; local-delivery only)"
+    else
+        echo "inbound webhook unavailable — see ${CERT_DIR}/.run/inbound.log" >&2
+        echo "  certification continues; inbound-SMS specs will fail on their own terms" >&2
+    fi
     info "Authenticating operator + running certification specs…"
     ( cd "$CERT_DIR" && NODE_PATH="$WEB_DIR/node_modules" CERT_APP_URL="$APP_URL" \
         CERT_OPERATOR_EMAIL="$OPERATOR_EMAIL" CERT_OPERATOR_PASSWORD="$OPERATOR_PASSWORD" \
