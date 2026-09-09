@@ -24,6 +24,7 @@ import {
     PAYMENT_RECORD_ACTION_KEY,
     financialPaymentActions,
 } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
+import type { ActionResult } from "@/lib/adminV2/actions/actionTypes";
 import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
@@ -128,6 +129,19 @@ async function clearAll(client: SupabaseClient) {
     if (error) throw new Error(`merchant teardown failed: ${error.message}`);
 }
 
+/**
+ * The success half of an `ActionResult`, or a failure that says why.
+ *
+ * `expect(r.ok).toBe(true)` asserts at runtime but narrows nothing at compile time, so reading
+ * `r.result` straight afterwards does not type-check against the union — `result` lives only on the
+ * ok variant. Throwing here narrows properly AND puts the refusal in the failure message, which is
+ * the thing worth reading when a live action declines.
+ */
+function detailOf(result: ActionResult, what: string): Record<string, unknown> {
+    if (!result.ok) throw new Error(`${what} was refused: ${JSON.stringify(result)}`);
+    return (result.result as unknown as { detail: Record<string, unknown> }).detail;
+}
+
 describeLive("Slice H — the Financials payment actions, live", () => {
     beforeAll(async () => {
         const client = supabase!;
@@ -187,8 +201,7 @@ describeLive("Slice H — the Financials payment actions, live", () => {
         const executed = await action(PAYMENT_COLLECT_CARD_ACTION_KEY).execute({
             supabase: client, ctx, invocation, payload: { charge_id: chargeId },
         } as never);
-        expect(executed.ok, JSON.stringify(executed)).toBe(true);
-        const detail = (executed.result as { detail: Record<string, unknown> }).detail;
+        const detail = detailOf(executed, "card collection");
         expect(detail.recognized, "a request is not a receipt").toBe(false);
         expect(String(detail.client_secret).length, "the browser gets a tokenized handle").toBeGreaterThan(0);
         expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents, "no balance movement yet").toBe(50_000);
@@ -217,8 +230,7 @@ describeLive("Slice H — the Financials payment actions, live", () => {
         const refunded = await action(PAYMENT_REFUND_ACTION_KEY).execute({
             supabase: client, ctx, invocation, payload: { payment_id: payment.id },
         } as never);
-        expect(refunded.ok, JSON.stringify(refunded)).toBe(true);
-        const detail = (refunded.result as { detail: Record<string, unknown> }).detail;
+        const detail = detailOf(refunded, "refund");
 
         /*
          * THE GAP THIS SLICE CLOSED. Before the routing fix this action reversed canonically and
@@ -246,8 +258,7 @@ describeLive("Slice H — the Financials payment actions, live", () => {
         const refunded = await action(PAYMENT_REFUND_ACTION_KEY).execute({
             supabase: client, ctx, invocation, payload: { payment_id: payment.id, amount_cents: 25_000 },
         } as never);
-        expect(refunded.ok, JSON.stringify(refunded)).toBe(true);
-        const detail = (refunded.result as { detail: Record<string, unknown> }).detail;
+        const detail = detailOf(refunded, "refund");
         expect(String(detail.provider_refund_id)).toMatch(/^re_/);
         expect(detail.amount_cents).toBe(25_000);
 
@@ -264,8 +275,7 @@ describeLive("Slice H — the Financials payment actions, live", () => {
                 supabase: client, ctx, invocation,
                 payload: { charge_id: chargeId, amount_cents: 7_000, payment_method: rail },
             } as never);
-            expect(executed.ok, `${rail}: ${JSON.stringify(executed)}`).toBe(true);
-            const paymentId = String((executed.result as { detail: Record<string, unknown> }).detail.payment_id);
+            const paymentId = String(detailOf(executed, `${rail} payment`).payment_id);
 
             const { data: row } = await client.from("payments").select("processor, processor_transaction_id, payment_method").eq("id", paymentId).single();
             const r = row as { processor: string | null; processor_transaction_id: string | null; payment_method: string };
@@ -280,8 +290,7 @@ describeLive("Slice H — the Financials payment actions, live", () => {
             const refunded = await action(PAYMENT_REFUND_ACTION_KEY).execute({
                 supabase: client, ctx, invocation, payload: { payment_id: paymentId },
             } as never);
-            expect(refunded.ok, `${rail} refund: ${JSON.stringify(refunded)}`).toBe(true);
-            const detail = (refunded.result as { detail: Record<string, unknown> }).detail;
+            const detail = detailOf(refunded, `${rail} refund`);
             expect(detail.provider_refund_id, `${rail} refund involves no processor`).toBeUndefined();
             expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(7_000);
         }
