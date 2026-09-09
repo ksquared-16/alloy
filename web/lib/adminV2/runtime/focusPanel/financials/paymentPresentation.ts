@@ -151,8 +151,16 @@ export function presentPayments(
  * balance stays `responsibility − payments applied`, decided by the read model.
  */
 export function unappliedTotalCents(payments: readonly FinancialsPaymentRow[]): number {
-    return payments
-        .map(presentPayment)
+    /*
+     * ⚠ `presentPayments`, never `.map(presentPayment)`.
+     *
+     * `presentPayment` grew a second parameter for what has been refunded, and `Array.map` passes
+     * (element, INDEX, array) — so the point-free form silently handed the array index in as a
+     * refunded amount: the second payment read as 1 cent refunded, the third as 2, and every
+     * refundable figure below them was wrong. Caught by the live card suite, which reads these
+     * numbers against real rows.
+     */
+    return presentPayments(payments)
         .filter((p) => p.isMoney && p.kind === "receipt")
         .reduce((sum, p) => sum + p.unappliedCents, 0);
 }
