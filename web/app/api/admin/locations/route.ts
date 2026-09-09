@@ -206,15 +206,45 @@ export async function POST(request: NextRequest) {
     if (location_type === "unit" && !parent_location_id) {
         return NextResponse.json({ error: "parent_location_id is required for room units" }, { status: 400 });
     }
+    // A unit may hang off a site, or off a physical space that itself hangs off a
+    // site (Room 1 containing Toddler 1 / Toddler 2). Anything deeper, or nested
+    // under a group or a shared space, is refused here and again by the DB.
+    const unit_role =
+        typeof body.unit_role === "string" && body.unit_role.trim() ? body.unit_role.trim() : null;
+    if (unit_role && !["physical_space", "operational_group", "shared_space"].includes(unit_role)) {
+        return NextResponse.json({ error: "Invalid unit_role" }, { status: 400 });
+    }
+    if (unit_role && location_type !== "unit") {
+        return NextResponse.json({ error: "unit_role applies only to a unit" }, { status: 400 });
+    }
     if (parent_location_id) {
         const { data: parent } = await supabase
             .from("locations")
-            .select("id, location_type")
+            .select("id, location_type, parent_location_id, unit_role")
             .eq("id", parent_location_id)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
-        if (!parent || String(parent.location_type ?? "").trim() !== "site") {
-            return NextResponse.json({ error: "Parent location must be a site in this organization" }, { status: 400 });
+        const parentType = String(parent?.location_type ?? "").trim();
+        if (!parent || (parentType !== "site" && parentType !== "unit")) {
+            return NextResponse.json(
+                { error: "Parent location must be a site or a physical space in this organization" },
+                { status: 400 }
+            );
+        }
+        if (parentType === "unit") {
+            const parentRole = String(parent.unit_role ?? "operational_group").trim();
+            if (parentRole !== "physical_space") {
+                return NextResponse.json(
+                    { error: "A room may only be nested inside a physical space" },
+                    { status: 400 }
+                );
+            }
+            if ((unit_role ?? "operational_group") === "physical_space") {
+                return NextResponse.json(
+                    { error: "A physical space may not be nested inside another physical space" },
+                    { status: 400 }
+                );
+            }
         }
     }
 
@@ -280,6 +310,7 @@ export async function POST(request: NextRequest) {
         location_type,
         location_type_id: location_type_id ?? null,
         parent_location_id,
+        unit_role,
         is_primary,
         is_active,
         address1,
