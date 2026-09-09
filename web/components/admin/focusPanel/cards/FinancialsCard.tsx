@@ -1156,20 +1156,49 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     if (overlay === "payment" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="payment">
-                {paymentBand}
-                <div className="alloy-os-financials__actions" data-financials-actions="true">
-                    <button
-                        type="button"
-                        className="alloy-os-financials__action"
-                        data-financials-payment-close="true"
-                        onClick={() => {
-                            setPayTarget(null);
-                            setOverlay("detail");
-                        }}
-                    >
-                        ← Back to details
-                    </button>
-                </div>
+                {/*
+                 * HOSTED BY THE PLATFORM CARD, because that is what the depth layer grants
+                 * interaction to.
+                 *
+                 * An elevated cell makes every direct child inert —
+                 * `.alloy-os-focus-panel-grid[data-fp-depth="active"] .…__cell[data-fp-elevated="true"] > *
+                 * { pointer-events: none }` — and hands `z-index: 60; pointer-events: auto` to
+                 * `.alloy-os-ucard` alone. Rendered as a bare div, this surface painted above the
+                 * scrim and could not be clicked: measured mounted, every ancestor of the commit
+                 * control up to `.alloy-os-financials` carried `pointer-events: none`, no element in
+                 * the chain created a stacking context, and `elementFromPoint` over the control
+                 * returned the scrim. Not a z-index defect — a host defect.
+                 *
+                 * Add charge learned this first ("It was rendering as a bare div inside the elevated
+                 * cell"), and the fix is the same one: the platform card, with the command modal
+                 * class. No new layer numbers, and the scrim keeps protecting the background.
+                 */}
+                <UniversalCard
+                    title="Take payment"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="payment"
+                    footerAction={
+                        <button
+                            type="button"
+                            className="alloy-os-financials__action"
+                            data-financials-payment-close="true"
+                            onClick={() => {
+                                setPayTarget(null);
+                                setOverlay("detail");
+                            }}
+                        >
+                            ← Back to details
+                        </button>
+                    }
+                >
+                    {paymentBand}
+                </UniversalCard>
             </div>
         );
     }

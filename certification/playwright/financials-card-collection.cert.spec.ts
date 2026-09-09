@@ -301,6 +301,112 @@ test.describe("Slice H — collecting money through the mounted Financials card"
     });
 
     /*
+     * THE DEPTH LAYER — the collection surface must be usable, not merely painted.
+     *
+     * Slice H's controls rendered above the scrim and could not be clicked. The cause was not
+     * z-index: an elevated cell makes every direct child inert and hands interaction to
+     * `.alloy-os-ucard` alone, so a surface hosted as a bare div is inert by contract. Measured
+     * before the repair: every ancestor of the commit control carried `pointer-events: none`, no
+     * node in the chain created a stacking context, and `elementFromPoint` over the control
+     * returned the scrim.
+     *
+     * This asserts the INVARIANT rather than the fix, so it keeps holding if the depth layer is
+     * reimplemented: the operator's own click lands on the control, the scrim still guards the
+     * background, and nothing here is force-clicked — a force-click passing would only prove the
+     * product is broken.
+     */
+    test("D — the collection surface is interactive in the mounted depth layer, and the scrim still guards the background", async ({ page }) => {
+        const reads = watchAccountReads(page);
+        const subject = await subjectWithCollectibleCharge(page, reads);
+        await openPaymentPanel(page);
+        await page.locator('[data-financials-payment-method="true"]').first().selectOption("card");
+
+        const commit = page.locator('[data-financials-payment-commit="true"]').first();
+        await expect(commit, "the collection surface must be visible").toBeVisible({ timeout: 30_000 });
+
+        /*
+         * Settle before measuring. The raised card animates in from its origin, so a rect read on
+         * the first frame is transient — measured once at y=-251, above the viewport entirely. This
+         * is the browser's own scroll, not a test convenience: hit-testing a control the operator
+         * has not scrolled to would prove nothing either way.
+         */
+        await commit.scrollIntoViewIfNeeded();
+        await expect
+            .poll(async () => await commit.evaluate((el) => {
+                const r = el.getBoundingClientRect();
+                return r.top >= 0 && r.bottom <= window.innerHeight ? 1 : 0;
+            }), { timeout: 30_000 })
+            .toBe(1);
+
+        // 1 · THE CONTROL'S OWN CENTRE HIT-TESTS TO THE CONTROL, not to the scrim.
+        const hit = await page.evaluate(() => {
+            const el = document.querySelector('[data-financials-payment-commit="true"]') as HTMLElement;
+            const surface = el.closest('[data-financials-overlay="payment"]');
+            const r = el.getBoundingClientRect();
+            const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) as HTMLElement | null;
+            return {
+                isScrim: !!top?.hasAttribute?.("data-fp-depth-scrim"),
+                insideSurface: !!(top && surface?.contains(top)),
+                pointerEvents: getComputedStyle(el).pointerEvents,
+                topDesc: top ? `${top.tagName.toLowerCase()}.${String(top.className).split(" ")[0]}` : "nothing",
+                rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+            };
+        });
+        expect(hit.isScrim, "the depth scrim is intercepting the commit control").toBe(false);
+        expect(
+            hit.insideSurface,
+            `the commit control's centre hit ${hit.topDesc} instead of its own active surface (rect ${JSON.stringify(hit.rect)})`,
+        ).toBe(true);
+        expect(hit.pointerEvents, "the commit control is inert").not.toBe("none");
+
+        // 2 · THE SCRIM STILL DOES ITS JOB. A point inside a receded cell and outside the raised
+        //     card must belong to the scrim — protecting the background is the reason it exists.
+        const background = await page.evaluate(() => {
+            const raised = document.querySelector('[data-fp-elevated="true"] .alloy-os-ucard') as HTMLElement | null;
+            const rr = raised?.getBoundingClientRect();
+            for (const cell of Array.from(document.querySelectorAll("[data-focus-panel-grid-cell]"))) {
+                if (cell.getAttribute("data-fp-elevated") === "true") continue;
+                const b = cell.getBoundingClientRect();
+                if (b.width < 8 || b.height < 8) continue;
+                // Sample a few points; take the first that is genuinely outside the raised card.
+                for (const [px, py] of [[0.08, 0.5], [0.92, 0.5], [0.5, 0.9]] as const) {
+                    const x = b.x + b.width * px, y = b.y + b.height * py;
+                    if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue;
+                    if (rr && x >= rr.x && x <= rr.right && y >= rr.y && y <= rr.bottom) continue;
+                    const top = document.elementFromPoint(x, y) as HTMLElement | null;
+                    if (!top) continue;
+                    return {
+                        cell: cell.getAttribute("data-focus-panel-grid-cell"),
+                        isScrim: !!top.hasAttribute?.("data-fp-depth-scrim"),
+                        inRaisedCard: !!(raised && raised.contains(top)),
+                    };
+                }
+            }
+            return null;
+        });
+        expect(background, "no receded cell was available to probe").not.toBeNull();
+        expect(
+            background!.isScrim,
+            `the scrim no longer guards the background (cell ${background!.cell} hit-tested past it)`,
+        ).toBe(true);
+
+        // 3 · KEYBOARD REACHES IT, so "works with a mouse" is not mistaken for "works".
+        const keyboard = await page.evaluate(() => {
+            const el = document.querySelector('[data-financials-payment-commit="true"]') as HTMLButtonElement;
+            el.focus();
+            return { focused: document.activeElement === el, disabled: el.disabled, tabIndex: el.tabIndex };
+        });
+        expect(keyboard.focused, "the commit control cannot take keyboard focus").toBe(true);
+        expect(keyboard.disabled).toBe(false);
+
+        // 4 · AND AN ORDINARY CLICK LANDS. No `force` — Playwright's own actionability check is
+        //     the assertion, and it is the same check a real pointer would fail.
+        await commit.click({ timeout: 30_000 });
+
+        assertStillOnSubject(reads, subject, "depth-layer scenario");
+    });
+
+    /*
      * SCENARIO A — MERCHANT BLOCKED.
      *
      * The organisation has no usable connected account, so card collection cannot happen. The bar is
