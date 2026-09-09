@@ -226,6 +226,63 @@ describeLive("Slice F — provider-confirmed success becomes canonical money, on
         expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(0);
     });
 
+    it("recovers an attempt the provider succeeded but Financials never recognised", async () => {
+        /*
+         * DEFECT 5, LOCKED.
+         *
+         * The trap: an attempt already marked `succeeded` by the provider while no canonical receipt
+         * exists — recognition threw, or the process died between the two. If the handler treats
+         * "already succeeded" as "already done" it short-circuits before canonical posting, and the
+         * money is stuck outside Thread 8 with no way back in that does not charge the family twice.
+         *
+         * The recovery has to be the ordinary path: the same event, replayed, posts the receipt.
+         * Constructed by advancing the attempt WITHOUT letting recognition run, which is the state
+         * a failed posting leaves behind.
+         */
+        const client = supabase!;
+        const chargeId = await postCharge(client, 52_000);
+        const created = await collect(client, chargeId, 52_000, CHILD);
+
+        await client
+            .from("payment_collection_attempts")
+            .update({ processor_state: "succeeded", processor_state_at: new Date().toISOString() })
+            .eq("id", created.attemptId);
+
+        // The trap, as the database holds it: provider done, Financials unaware.
+        const { data: trapped } = await client.from("payment_collection_attempts")
+            .select("processor_state, canonical_payment_id").eq("id", created.attemptId).single();
+        expect((trapped as { processor_state: string }).processor_state).toBe("succeeded");
+        expect(
+            (trapped as { canonical_payment_id: string | null }).canonical_payment_id,
+            "the attempt must be unrecognised for this to be the case under test",
+        ).toBeNull();
+        expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(52_000);
+
+        // The same provider truth, replayed. It must RECOGNISE rather than decline as done.
+        const recovered = await post(successEvent(created.providerTransactionId, 52_000, { id: "evt_f_recover_1" }));
+        expect(recovered.outcome, recovered.detail).toBe("applied");
+        expect(recovered.detail).toMatch(/posted canonical payment/);
+
+        // Exactly one receipt, and the money is finally inside Thread 8.
+        const { data: receipts } = await client.from("payments").select("id")
+            .eq("org_id", ORG).eq("processor_transaction_id", created.providerTransactionId);
+        expect((receipts ?? []).length, "recovery posts exactly one receipt").toBe(1);
+        expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(0);
+
+        // …and the family was never asked for the money a second time: one attempt, one provider
+        // transaction, no new collection created by the recovery.
+        const { data: attempts } = await client.from("payment_collection_attempts").select("id")
+            .eq("org_id", ORG).eq("provider_transaction_id", created.providerTransactionId);
+        expect((attempts ?? []).length, "recovery must not create a second collection").toBe(1);
+
+        // Replaying again is now an ordinary duplicate.
+        const again = await post(successEvent(created.providerTransactionId, 52_000, { id: "evt_f_recover_2" }));
+        expect(again.outcome).toBe("duplicate");
+        const { data: after } = await client.from("payments").select("id")
+            .eq("org_id", ORG).eq("processor_transaction_id", created.providerTransactionId);
+        expect((after ?? []).length, "still exactly one receipt").toBe(1);
+    });
+
     it("creates one receipt, one application and one balance move under concurrent success processing", async () => {
         const client = supabase!;
         const chargeId = await postCharge(client, 33_000);
