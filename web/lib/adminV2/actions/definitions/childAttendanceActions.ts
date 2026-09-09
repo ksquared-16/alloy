@@ -22,6 +22,7 @@
 import { randomUUID } from "crypto";
 
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import {
     resolveAttendanceSubject,
     resolveCurrentRoom,
@@ -32,6 +33,14 @@ import {
 } from "@/lib/childcareOperational/attendance/attendanceService";
 import type { AttendanceEventKind } from "@/lib/childcareOperational/attendance/attendanceVocabulary";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import {
+    operatorChannelForSurface,
+    resolveAttendanceProvenance,
+} from "@/lib/childcareOperational/attendance/attendanceProvenance";
+import {
+    assertAttendanceCaptureAllowed,
+    assertAttendanceLocationsInScope,
+} from "@/lib/childcareOperational/attendance/attendancePermissions";
 
 export const ATTENDANCE_CHECK_IN_ACTION_KEY = "attendance.check_in";
 export const ATTENDANCE_CHECK_OUT_ACTION_KEY = "attendance.check_out";
@@ -64,6 +73,76 @@ function mapError(err: unknown, correlationId: string): ActionResult {
     };
 }
 
+
+/**
+ * The SAME authorization the Attendance API boundary applies.
+ *
+ * Two entry points that write one table must not disagree about who may write —
+ * whichever is laxer becomes the way in. This calls the identical primitive, so
+ * the registered action and the route cannot drift apart.
+ *
+ * `ctx.accessScope` is the runtime's server-resolved scope; when it is absent the
+ * caller is treated as UNSCOPED-UNKNOWN and denied, never as org-wide.
+ */
+async function authorizeAttendanceCapture(
+    supabase: Parameters<typeof assertAttendanceCaptureAllowed>[0]["supabase"],
+    ctx: { orgId: string; userId?: string | null; accessScope?: AdminAccessScopeDimensions | null },
+    siteLocationId: string | null,
+    roomLocationIds: readonly (string | null | undefined)[],
+    correlationId: string,
+): Promise<ActionResult | null> {
+    if (!ctx.accessScope) {
+        return {
+            ok: false,
+            correlationId,
+            status: 403,
+            error: "Attendance scope could not be resolved for this caller.",
+        };
+    }
+    const verdict = await assertAttendanceCaptureAllowed({
+        supabase,
+        orgId: ctx.orgId,
+        userId: ctx.userId ?? null,
+        dim: ctx.accessScope,
+        siteLocationId,
+        roomLocationIds,
+    });
+    if (!verdict.ok) {
+        return { ok: false, correlationId, status: verdict.status, error: verdict.message };
+    }
+    return null;
+}
+
+/**
+ * Server-derived provenance for an attendance fact authored through the action
+ * bus.
+ *
+ * The runtime already guarantees the actor is the authenticated principal — this
+ * adds the CHANNEL, taken from the operational context the runtime resolved
+ * rather than from anything the surface sent. Focus Panel and Workspace
+ * therefore produce facts that differ in recorded channel and in nothing else,
+ * which is exactly the distinction we want: same authority, honest attribution.
+ */
+function attendanceActorFor(
+    ctx: { orgId: string; userId?: string | null },
+    invocation: { context?: { surface?: string | null } } | undefined,
+    correlationId: string,
+) {
+    const provenance = resolveAttendanceProvenance({
+        channel: operatorChannelForSurface(invocation?.context?.surface ?? null),
+        actorUserId: ctx.userId ?? null,
+        correlationId,
+    });
+    return {
+        actorType: provenance.actorType,
+        actorUserId: provenance.actorUserId,
+        actorPersonId: provenance.actorPersonId,
+        actorLabel: provenance.actorLabel,
+        sourceType: provenance.sourceType,
+        sourceKey: provenance.sourceKey,
+    };
+}
+
 /** Shared shape: every attendance intent acts on a child and needs an effective time. */
 const BASE: Pick<
     RegisteredAction,
@@ -86,6 +165,7 @@ async function subjectEligibility(
     supabase: Parameters<typeof resolveAttendanceSubject>[0],
     orgId: string,
     childId: string,
+    dim?: AdminAccessScopeDimensions | null,
 ): Promise<{ eligible: boolean; blockers: { code: string; message: string; field?: string }[] }> {
     if (!childId) {
         return {
@@ -97,6 +177,25 @@ async function subjectEligibility(
     if (!resolved.ok) {
         return { eligible: false, blockers: [{ code: resolved.code, message: resolved.message }] };
     }
+
+    /*
+     * Eligibility is a READ that reveals whether a child is attendable, so it
+     * answers the same scope question the write does. Without this, preview would
+     * confirm the existence and enrolment state of children at sites the caller
+     * cannot see — and would offer controls that execute is going to refuse.
+     */
+    if (dim) {
+        const inScope = await assertAttendanceLocationsInScope({
+            supabase,
+            orgId,
+            dim,
+            siteLocationId: resolved.subject.siteLocationId,
+        });
+        if (!inScope.ok) {
+            return { eligible: false, blockers: [{ code: inScope.code, message: inScope.message }] };
+        }
+    }
+
     return { eligible: true, blockers: [] };
 }
 
@@ -139,6 +238,7 @@ function recordAction(args: {
                 supabase,
                 ctx.orgId,
                 childIdFrom(payload, invocation?.entityId),
+                ctx.accessScope,
             );
             return { eligible, blockers, availableTransitions: [], requiredInputs: [] };
         },
@@ -180,6 +280,17 @@ function recordAction(args: {
                     };
                 }
 
+                const roomForEvent =
+                    t(payload.room_location_id) || resolved.subject.placementRoomLocationId || null;
+                const denied = await authorizeAttendanceCapture(
+                    supabase,
+                    ctx,
+                    resolved.subject.siteLocationId,
+                    [roomForEvent, fromRoom, t(payload.to_room_location_id) || null],
+                    correlationId,
+                );
+                if (denied) return denied;
+
                 const row = await recordAttendanceEvent(supabase, {
                     orgId: ctx.orgId,
                     enrollmentAgreementId: resolved.subject.enrollmentAgreementId,
@@ -196,7 +307,20 @@ function recordAction(args: {
                     toRoomLocationId: t(payload.to_room_location_id) || null,
                     reasonKey: t(payload.reason_key) || null,
                     note: t(payload.note) || null,
-                    actor: { actorType: "staff", actorUserId: ctx.userId ?? null },
+                    /*
+                     * PROVENANCE IS SERVER-DERIVED HERE TOO.
+                     *
+                     * The action bus already refuses a client-supplied actor, but
+                     * hardcoding "staff" here would still have made the channel a
+                     * lie the moment a second surface used the same action. The
+                     * operational context the runtime resolved decides the channel;
+                     * the authenticated principal decides the identity.
+                     */
+                    actor: attendanceActorFor(ctx, invocation, correlationId),
+                    // One operator intent = one fact. A double-submitted button or a
+                    // retried request converges instead of recording a second arrival.
+                    idempotencyKey: t(payload.idempotency_key) || null,
+                    correlationId,
                 } as Parameters<typeof recordAttendanceEvent>[1]);
 
                 return {
@@ -328,6 +452,19 @@ export const attendanceCorrectAction: RegisteredAction = {
             if (!resolved.ok) {
                 return { ok: false, correlationId, status: 409, error: resolved.message };
             }
+            const denied = await authorizeAttendanceCapture(
+                supabase,
+                ctx,
+                resolved.subject.siteLocationId,
+                [
+                    t(payload.room_location_id) || null,
+                    t(payload.from_room_location_id) || null,
+                    t(payload.to_room_location_id) || null,
+                ],
+                correlationId,
+            );
+            if (denied) return denied;
+
             const row = await correctAttendanceEvent(supabase, {
                 orgId: ctx.orgId,
                 correctsEventId: t(payload.corrects_event_id),
@@ -340,7 +477,9 @@ export const attendanceCorrectAction: RegisteredAction = {
                 toRoomLocationId: t(payload.to_room_location_id) || null,
                 reasonKey: t(payload.reason_key) || null,
                 note: t(payload.note) || null,
-                actor: { actorType: "staff", actorUserId: ctx.userId ?? null },
+                actor: attendanceActorFor(ctx, invocation, correlationId),
+                idempotencyKey: t(payload.idempotency_key) || null,
+                correlationId,
             } as Parameters<typeof correctAttendanceEvent>[1]);
 
             return {

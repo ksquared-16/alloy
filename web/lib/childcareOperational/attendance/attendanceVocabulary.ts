@@ -25,12 +25,25 @@ export const ATTENDANCE_ACTOR_TYPES = [
 ] as const;
 export type AttendanceActorType = (typeof ATTENDANCE_ACTOR_TYPES)[number];
 
+/**
+ * The channel a fact was captured through.
+ *
+ * The last four are Thread 2 additions for producers that do not exist yet, so
+ * that Kiosk (Thread 5) and the parent/API/door integrations (Thread 6) can
+ * record the truth about their origin without a schema change. Being
+ * REPRESENTABLE is not being implemented — a channel only becomes real when it
+ * has a trusted-context resolver in `attendanceProvenance.ts`.
+ */
 export const ATTENDANCE_SOURCE_TYPES = [
     "operator_action",
     "staff_workspace",
     "parent_portal",
     "processing_import",
     "system",
+    "kiosk",
+    "integration_api",
+    "door_access",
+    "mobile_app",
 ] as const;
 export type AttendanceSourceType = (typeof ATTENDANCE_SOURCE_TYPES)[number];
 
