@@ -381,7 +381,11 @@ type AllocationFact = { id: string; assignedAmountCents: number; isUnassigned: b
  * exposed: one id per request. That is exactly the divergence the note above this function warned
  * about, arriving through scale rather than through edits.
  */
-const ID_BATCH = 80;
+/**
+ * How many identifiers one request may carry. Well under the server's URI limit with room for the
+ * longest column list in this file, so the bound holds as selects grow rather than only today.
+ */
+export const ID_BATCH = 80;
 
 /*
  * NOT ONLY THE CHARGE-SCOPED FACTS. The first repair batched the four facts keyed by charge and
@@ -392,14 +396,20 @@ const ID_BATCH = 80;
  * have settled is not counted, so every account read as owing its full posted amount and NO
  * account could ever be settled. Same rule, same file, one read further down.
  */
-async function readInBatches<T>(
+export async function readInBatches<T>(
     label: string,
     ids: string[],
     run: (batch: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
 ): Promise<T[]> {
+    /*
+     * De-duplicated once, here, so a repeated identifier cannot straddle two batches and return the
+     * same row twice — which in this file would be counted twice as money. Callers that already
+     * pass a Set lose nothing; callers that do not are made safe rather than trusted.
+     */
+    const unique = [...new Set(ids)];
     const out: T[] = [];
-    for (let i = 0; i < ids.length; i += ID_BATCH) {
-        const batch = ids.slice(i, i + ID_BATCH);
+    for (let i = 0; i < unique.length; i += ID_BATCH) {
+        const batch = unique.slice(i, i + ID_BATCH);
         const { data, error } = await run(batch);
         if (error) {
             throw new Error(`financial position: ${label} could not be read (${error.message.trim()})`);
