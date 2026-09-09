@@ -45,6 +45,11 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+import { runPeriodKey } from "./certificationPeriod";
+
+/** This run's own unbilled period — see `certificationPeriod` for why a fixed one cannot work. */
+const RUN_PERIOD = runPeriodKey();
+
 const ORG = "00000000-0000-4000-8000-000000000001";
 const OTHER_ORG = "00000000-0000-4000-8000-0000000000ff";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
@@ -360,7 +365,7 @@ describeLive("responsibility and funding, live", () => {
             { responsiblePartyId: alexId, method: "percentage", percentBasisPoints: 7000, priority: 1 },
             { responsiblePartyId: samId, method: "percentage", percentBasisPoints: 3000, priority: 2 },
         ]);
-        const [charge] = await grossFor("2030-10");
+        const [charge] = await grossFor(RUN_PERIOD);
         await resolveChargeResponsibility(supabase, { orgId: ORG, chargeId: charge!.id, actorUserId: ACTOR });
         await postChildcareCharge(supabase, { orgId: ORG, chargeId: charge!.id, actorUserId: ACTOR } as never);
 

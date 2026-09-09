@@ -49,6 +49,10 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+import { runPeriodKey } from "./certificationPeriod";
+
+/** This run's own unbilled periods — see `certificationPeriod` for why fixed ones cannot work. */
+
 const ORG = "00000000-0000-4000-8000-000000000001";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
 const W = "6f100000-0000-4000-8000-";
@@ -62,7 +66,7 @@ const GROSS = 100_000;
  * and silently records no history, which would make this file's history cases assert nothing.
  * The period is chosen to sit inside the certification calendar for exactly that reason.
  */
-const PERIOD = "2026-09";
+const PERIOD = runPeriodKey();
 
 describeLive("financials workspace productization — live", () => {
     const supabase = (env

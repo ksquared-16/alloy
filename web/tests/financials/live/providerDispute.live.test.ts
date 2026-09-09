@@ -244,6 +244,20 @@ describeLive("Thread 8C — provider-initiated reversal", () => {
         // EXACT RESTORATION.
         expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(afterPayment + 10_000);
 
+        /*
+         * AND THE LEDGER EXPLAINS IT. Thread 5 owns the accounting consequence, and a return has to
+         * produce one: money left the account and a family's debt came back, which is exactly the
+         * kind of movement an accountant later has to be able to trace without asking anybody. A
+         * reversal that moved the balance but journalled nothing would reconcile to a hole.
+         */
+        const { data: journal } = await client.from("financial_journal_entries")
+            .select("id, amount_cents, source_type, source_id")
+            .eq("org_id", ORG).eq("source_id", reversalId);
+        const entries = journal ?? [];
+        expect(entries.length, "a return journals exactly once").toBe(1);
+        expect(Math.abs(Number((entries[0] as { amount_cents: number }).amount_cents)),
+            "for the amount the bank actually took back").toBe(10_000);
+
         // THREE EVENTS, ONE REVERSAL. `closed` arriving later changes evidence, not money.
         const again = await recognizeProviderDispute(client, { ...ev, providerState: "lost" });
         expect(again.recognized).toBe(true);

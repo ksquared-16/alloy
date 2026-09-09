@@ -35,6 +35,11 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+import { runPeriodKey } from "./certificationPeriod";
+
+/** This run's own unbilled periods — see `certificationPeriod` for why fixed ones cannot work. */
+const RUN_PERIOD = runPeriodKey();
+
 const ORG = "00000000-0000-4000-8000-000000000001";
 const OTHER_ORG = "00000000-0000-4000-8000-0000000000ff";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
@@ -139,10 +144,10 @@ describeLive("financials workspace queue — live", () => {
 
     it("lists draft charges at the site their own enrolment names", async () => {
         await clearMoney();
-        await generate("2033-01");
+        await generate(RUN_PERIOD);
         const queue = await resolveFinancialWorkQueue(supabase, orgScope);
 
-        const rows = queue.rows.filter((r) => r.periodKey === "2033-01");
+        const rows = queue.rows.filter((r) => r.periodKey === RUN_PERIOD);
         expect(rows).toHaveLength(2);
         expect(queue.counts.actionable).toBe(queue.rows.length);
         for (const kid of kids) {
