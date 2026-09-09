@@ -95,6 +95,40 @@ function disputeEvent(
 const charges: string[] = [];
 const disputes: string[] = [];
 
+/**
+ * TEARDOWN, AND THE LIMIT OF IT.
+ *
+ * These suites post charges on the shared certification agreement, and leaving them behind broke a
+ * sibling: 75 accumulated here and `paymentApplication` began failing on arithmetic that had
+ * nothing to do with it. So teardown removes everything the platform permits — applications, the
+ * payments they reference, and any charge still in draft.
+ *
+ * It CANNOT remove a posted childcare charge, and does not pretend to. That is a deliberate
+ * guarantee — `enforce_childcare_charge_immutability` refuses the DELETE and says to record a
+ * reversal instead — and `voided` is not in the charge vocabulary either. Money that was posted
+ * stays posted, which is correct for a ledger and inconvenient for a shared test tenant.
+ *
+ * The reclaim path for that is the fixture itself
+ * (`certification/fixtures/financials-charge-spine.sql`), run between suites rather than from
+ * inside one. This is the shared-tenant certification debt, narrowed to its real cause rather than
+ * papered over with a teardown that would silently fail.
+ */
+async function removeOwnCharges(client: SupabaseClient, ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    for (const chargeId of ids) {
+        const { data: allocs } = await client.from("payment_allocations")
+            .select("payment_id").eq("charge_id", chargeId);
+        const paymentIds = [...new Set(((allocs ?? []) as Array<{ payment_id: string }>).map((a) => a.payment_id))];
+        await client.from("payment_allocations").delete().eq("charge_id", chargeId);
+        for (const pid of paymentIds) {
+            await client.from("payments").delete().eq("refunds_payment_id", pid);
+            await client.from("payments").delete().eq("id", pid);
+        }
+    }
+    // Drafts go; posted ones are immutable by design and are left to the fixture reclaim.
+    await client.from("charges").delete().in("id", ids).eq("status", "draft");
+}
+
 async function postCharge(client: SupabaseClient, amountCents: number): Promise<string> {
     const { data, error } = await client
         .from("charges")
@@ -147,11 +181,7 @@ describeLive("Thread 8C — provider-initiated reversal", () => {
     afterAll(async () => {
         if (!supabase) return;
         await supabase.from("payment_provider_disputes").delete().in("provider_dispute_id", disputes);
-        for (const c of charges) {
-            const { data } = await supabase.from("payments").select("id").eq("org_id", ORG);
-            void data;
-            await supabase.from("payment_allocations").delete().eq("charge_id", c);
-        }
+        await removeOwnCharges(supabase, charges);
     });
 
     it("a dispute that has only been RAISED takes no money back", async () => {
@@ -371,5 +401,110 @@ describeWebhook("Thread 8C — dispute convergence through the real webhook", ()
         const body = disputeEvent("charge.dispute.funds_withdrawn", du, { account: "acct_never_seen_8c" });
         const res = await handleStripeWebhook(supabase!, body, signed(body), whsec!);
         expect(res.outcome).toBe("unattributed");
+    });
+
+    it("concurrent withdrawals of one dispute produce exactly one reversal", async () => {
+        const client = supabase!;
+        const chargeId = await postCharge(client, 40_000);
+        const original = await receipt(client, chargeId, 2_500);
+        const afterPayment = (await readChargeBalance(client, ORG, chargeId)).outstandingCents;
+
+        const du = `du_8c_race_${Date.now()}`;
+        disputes.push(du);
+        const created = disputeEvent("charge.dispute.created", du, { account, amount: 2_500, status: "needs_response" });
+        await handleStripeWebhook(client, created, signed(created), whsec!);
+        await client.from("payment_provider_disputes").update({ original_payment_id: original }).eq("provider_dispute_id", du);
+
+        // Two deliveries of the same withdrawal, in flight together. The database decides.
+        const a = disputeEvent("charge.dispute.funds_withdrawn", du, { account, amount: 2_500 });
+        const b = disputeEvent("charge.dispute.funds_withdrawn", du, { account, amount: 2_500 });
+        const [ra, rb] = await Promise.all([
+            handleStripeWebhook(client, a, signed(a), whsec!),
+            handleStripeWebhook(client, b, signed(b), whsec!),
+        ]);
+        expect([ra.outcome, rb.outcome].filter((o) => o === "applied").length + [ra.outcome, rb.outcome].filter((o) => o === "duplicate").length)
+            .toBeGreaterThan(0);
+
+        const { data: reversals } = await client.from("payments").select("id").eq("refunds_payment_id", original);
+        expect((reversals ?? []).length, "a race must not reverse a family's balance twice").toBe(1);
+        expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(afterPayment + 2_500);
+    });
+
+    it("a withdrawal whose receipt never becomes valid forges no reversal, however often it is retried", async () => {
+        const client = supabase!;
+        const du = `du_8c_never_${Date.now()}`;
+        disputes.push(du);
+        for (let i = 0; i < 3; i += 1) {
+            // Each delivery is its own event, signed as itself — a signature is over the bytes sent.
+            const body = disputeEvent("charge.dispute.funds_withdrawn", du, {
+                account, amount: 900, pi: "pi_8c_never_recognised",
+            });
+            const res = await handleStripeWebhook(client, body, signed(body), whsec!);
+            expect(res.outcome, `retrying cannot invent a receipt to reverse: ${res.detail}`).toBe("observed");
+        }
+
+        // Evidence is durable; money is not invented.
+        const { data: row } = await client.from("payment_provider_disputes")
+            .select("canonical_reversal_payment_id, funds_withdrawn_at").eq("provider_dispute_id", du).single();
+        const r = row as Record<string, unknown>;
+        expect(r.funds_withdrawn_at, "the withdrawal is remembered").toBeTruthy();
+        expect(r.canonical_reversal_payment_id, "and no reversal was manufactured").toBeNull();
+        const { data: forged } = await client.from("payments").select("id")
+            .eq("org_id", ORG).eq("idempotency_key", `stripe-dispute:${du}`);
+        expect((forged ?? []).length).toBe(0);
+    });
+
+    it("a reversal that fails to recognise is a retry state, and the retry reverses exactly once", async () => {
+        const client = supabase!;
+        const chargeId = await postCharge(client, 40_000);
+        const original = await receipt(client, chargeId, 1_800);
+        const afterPayment = (await readChargeBalance(client, ORG, chargeId)).outstandingCents;
+
+        const du = `du_8c_retry_${Date.now()}`;
+        disputes.push(du);
+
+        /*
+         * Induce a recognition failure the way a real one happens: the withdrawal is known and the
+         * receipt exists, but Thread 8 will not reverse it yet. A PENDING payment is exactly that —
+         * money that has not been received cannot be given back, and the service says so.
+         *
+         * A first attempt pointed the evidence at an id that did not exist; the foreign key refused
+         * the write, which is the schema being stronger than the test assumed rather than a bug.
+         */
+        const { data: pendingRow } = await client.from("payments").insert({
+            org_id: ORG, amount_cents: 1_800, currency: "USD", direction: "inbound",
+            status: "pending", payment_method: "ach", received_at: new Date().toISOString(),
+            created_by: ACTOR, updated_by: ACTOR,
+        }).select("id").single();
+        const pendingId = (pendingRow as { id: string }).id;
+
+        const created = disputeEvent("charge.dispute.created", du, { account, amount: 1_800, status: "needs_response" });
+        await handleStripeWebhook(client, created, signed(created), whsec!);
+        const { error: pointErr } = await client.from("payment_provider_disputes")
+            .update({ original_payment_id: pendingId }).eq("provider_dispute_id", du);
+        expect(pointErr, "the evidence must actually point at the unreversible receipt").toBeNull();
+
+        const failed = disputeEvent("charge.dispute.funds_withdrawn", du, { account, amount: 1_800 });
+        const first = await handleStripeWebhook(client, failed, signed(failed), whsec!);
+        expect(first.outcome, `a failed reversal is not silently applied: ${first.detail}`).toBe("observed");
+        const { data: errored } = await client.from("payment_provider_disputes")
+            .select("recognition_error, canonical_reversal_payment_id").eq("provider_dispute_id", du).single();
+        expect(
+            (errored as Record<string, unknown>).recognition_error,
+            `the failure is recorded (webhook said: ${first.detail})`,
+        ).toBeTruthy();
+        expect((errored as Record<string, unknown>).canonical_reversal_payment_id).toBeNull();
+        expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents, "and nothing moved").toBe(afterPayment);
+
+        // Repair the world, retry the same evidence: it converges once.
+        await client.from("payment_provider_disputes")
+            .update({ original_payment_id: original }).eq("provider_dispute_id", du);
+        const retried = disputeEvent("charge.dispute.funds_withdrawn", du, { account, amount: 1_800 });
+        const second = await handleStripeWebhook(client, retried, signed(retried), whsec!);
+        expect(second.outcome, second.detail).toBe("applied");
+
+        const { data: reversals } = await client.from("payments").select("id").eq("refunds_payment_id", original);
+        expect((reversals ?? []).length, "the retry reverses once, not twice").toBe(1);
+        expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(afterPayment + 1_800);
     });
 });

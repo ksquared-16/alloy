@@ -81,6 +81,42 @@ async function stripeGet(path: string, account?: string) {
     return { status: res.status, body: (await res.json()) as Record<string, any> };
 }
 
+/**
+ * TEARDOWN, AND THE LIMIT OF IT.
+ *
+ * These suites post charges on the shared certification agreement, and leaving them behind broke a
+ * sibling: 75 accumulated here and `paymentApplication` began failing on arithmetic that had
+ * nothing to do with it. So teardown removes everything the platform permits — applications, the
+ * payments they reference, and any charge still in draft.
+ *
+ * It CANNOT remove a posted childcare charge, and does not pretend to. That is a deliberate
+ * guarantee — `enforce_childcare_charge_immutability` refuses the DELETE and says to record a
+ * reversal instead — and `voided` is not in the charge vocabulary either. Money that was posted
+ * stays posted, which is correct for a ledger and inconvenient for a shared test tenant.
+ *
+ * The reclaim path for that is the fixture itself
+ * (`certification/fixtures/financials-charge-spine.sql`), run between suites rather than from
+ * inside one. This is the shared-tenant certification debt, narrowed to its real cause rather than
+ * papered over with a teardown that would silently fail.
+ */
+async function removeOwnCharges(client: SupabaseClient, ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    for (const chargeId of ids) {
+        const { data: allocs } = await client.from("payment_allocations")
+            .select("payment_id").eq("charge_id", chargeId);
+        const paymentIds = [...new Set(((allocs ?? []) as Array<{ payment_id: string }>).map((a) => a.payment_id))];
+        await client.from("payment_allocations").delete().eq("charge_id", chargeId);
+        for (const pid of paymentIds) {
+            await client.from("payments").delete().eq("refunds_payment_id", pid);
+            await client.from("payments").delete().eq("id", pid);
+        }
+    }
+    // Drafts go; posted ones are immutable by design and are left to the fixture reclaim.
+    await client.from("charges").delete().in("id", ids).eq("status", "draft");
+}
+
+const createdCharges: string[] = [];
+
 async function postCharge(client: SupabaseClient, amountCents: number): Promise<string> {
     const { data, error } = await client
         .from("charges")
@@ -96,6 +132,7 @@ async function postCharge(client: SupabaseClient, amountCents: number): Promise<
     await client.from("charges")
         .update({ status: "posted", posted_at: new Date().toISOString(), posted_by: ACTOR, updated_by: ACTOR })
         .eq("id", id).eq("status", "draft");
+    createdCharges.push(id);
     return id;
 }
 
@@ -123,6 +160,7 @@ describeLive("Thread 8C — ACH collection", () => {
         const client = supabase!;
         await client.from("payment_collection_attempts").delete().eq("org_id", ORG);
         await client.from("payment_provider_merchants").delete().eq("org_id", ORG);
+        await removeOwnCharges(client, createdCharges);
     });
 
     it("refuses ACH on a merchant nobody has checked, and still collects by card", async () => {
