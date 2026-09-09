@@ -47,6 +47,7 @@ import {
     recordChildcarePayment,
     readPaymentUnappliedCents,
 } from "@/lib/financials/childcarePaymentService";
+import { resolveFinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     const fromProcess = {
@@ -221,6 +222,56 @@ describeSeed("demo tenant money — seeded through the canonical services", () =
             actorUserId: ACTOR,
         });
         expect(draft.status).toBe("draft");
+    }, 180_000);
+
+    /*
+     * ── THE POINT OF ALL OF IT ─────────────────────────────────────────────────────────────────
+     *
+     * The seed exists so the workspace has something true to say. This asserts that through the
+     * SAME resolver the Overview renders — not by counting rows, which would only prove the seed
+     * inserted them. An all-zero cohort is the failure this whole pass is about, and a product
+     * certification that accepted one would be certifying an empty shell.
+     */
+    it("produces a cohort the Overview can render real money from", async () => {
+        const cohort = await resolveFinancialPositionCohort(supabase, {
+            orgId: ORG,
+            siteScope: "all",
+            allowedSiteLocationIds: [],
+            activeSiteLocationId: null,
+        } as never);
+
+        expect(cohort.totals.grossChargesCents, "money has been billed").toBeGreaterThan(0);
+        expect(cohort.totals.outstandingCents, "and some of it is still owed").toBeGreaterThan(0);
+        expect(
+            cohort.counts.chargesWithOutstanding,
+            "more than one account is carrying it",
+        ).toBeGreaterThan(1);
+    }, 180_000);
+
+    /*
+     * SITE SCOPE NARROWS, AND THE ANSWER DIFFERS. Two campuses carry two households each, so a
+     * site-scoped cohort must be SMALLER than the org-wide one. In a single-site tenant this
+     * assertion is unwritable, which is exactly why 4A could not make it.
+     */
+    it("narrows when a single campus is selected", async () => {
+        const riverside = "00000000-0000-4000-8000-000000000010";
+        const orgWide = await resolveFinancialPositionCohort(supabase, {
+            orgId: ORG,
+            siteScope: "all",
+            allowedSiteLocationIds: [],
+            activeSiteLocationId: null,
+        } as never);
+        const oneSite = await resolveFinancialPositionCohort(supabase, {
+            orgId: ORG,
+            siteScope: "all",
+            allowedSiteLocationIds: [],
+            activeSiteLocationId: riverside,
+        } as never);
+
+        expect(oneSite.totals.grossChargesCents, "a site is a subset, never a superset").toBeLessThan(
+            orgWide.totals.grossChargesCents,
+        );
+        expect(oneSite.totals.grossChargesCents, "and it is not empty").toBeGreaterThan(0);
     }, 180_000);
 
     /** The seed is worthless if it half-succeeded, so it says out loud what it produced. */
