@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-09
+supersedes: []
+---
+
 # Stripe test credentials on a Vacilando node
 
 **Status:** Governance (September 2026). Names the one place Stripe TEST-mode credentials live on an
