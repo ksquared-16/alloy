@@ -1420,9 +1420,12 @@ export const OPERATOR_STATE = Object.freeze({
   // a lane that is still writing its own result.
   FINALIZING: "finalizing",
   NEEDS_YOU: "needs_you",
-  // Something worth knowing that is not a question: today, a provider busy in a
-  // lane no Execution Run owns.
+  // Something worth knowing that is not a question: a provider busy in a lane no
+  // Execution Run owns, or a run that closed without filing any account of it.
   ATTENTION: "attention",
+  // Finished, with output the operator has not opened. Visible, but nobody is
+  // being asked anything — which is exactly what separates it from NEEDS_YOU.
+  COMPLETED_UNREAD: "completed_unread",
   READY: "ready",
   FAILED: "failed",
 });
@@ -1432,6 +1435,7 @@ export const OPERATOR_STATE_LABEL = Object.freeze({
   finalizing: "Finalizing",
   needs_you: "Needs you",
   attention: "Attention",
+  completed_unread: "New",
   ready: "Ready",
   failed: "Failed",
 });
@@ -1442,6 +1446,7 @@ export const OPERATOR_STATE_TONE = Object.freeze({
   finalizing: "run",
   needs_you: "needs",
   attention: "needs",
+  completed_unread: "complete",
   ready: "",
   failed: "failed",
 });
@@ -1507,6 +1512,13 @@ export function operatorState(work, lane = null) {
   // though a provider is demonstrably busy in that worktree.
   if (key === "finalizing") return OPERATOR_STATE.FINALIZING;
   if (key === "provider_active") return OPERATOR_STATE.ATTENTION;
+
+  // A completed run that filed no account is not Ready — Ready would say the
+  // turn is finished AND accounted for, and only the first half is true.
+  if (key === "completion_unreported") return OPERATOR_STATE.ATTENTION;
+  // Unread completion is attention without obligation, so it is answered here
+  // rather than folding into NEEDS_YOU above.
+  if (key === "completed_unread") return OPERATOR_STATE.COMPLETED_UNREAD;
 
   // Working covers every shape of "the machine is getting on with it":
   // executing, validating, recovering, queued for capacity, waiting on a

@@ -122,3 +122,62 @@ test("every operator state has a label and a tone", () => {
     assert.ok(s in M.OPERATOR_STATE_TONE, `${s} has no tone`);
   }
 });
+
+// ── 4 · A completed run must account for itself ─────────────────────────────
+//
+// Measured on this host across 104 terminal runs: `completion_report.report_id`
+// is present for exactly the 82 that also carry a durable agent_report.message
+// and absent for exactly the 22 that do not — 82 both, 22 neither, zero mixed.
+// Eight of the 22 are state COMPLETE: the run claims success and no account of
+// it exists anywhere, because the system closed it (Send superseding the turn,
+// the stale reaper, an unanswerable input gate) before the agent could file.
+const doneLane = (opts = {}) => ({
+  ...identity,
+  previous_run: {
+    state: "COMPLETE",
+    ...(opts.accounted === false ? {} : { completion_report: { report_id: "rep_1" } }),
+  },
+  ...(opts.unseen ? { unseen_notifications: opts.unseen } : {}),
+});
+
+test("a completed run with no filed account is Attention, never Ready", () => {
+  const st = V.canonicalLaneWorkState(doneLane({ accounted: false }));
+  assert.equal(st.key, "completion_unreported");
+  assert.notEqual(st.label, "Ready");
+  assert.notEqual(st.label, "Idle");
+  assert.equal(st.source, "terminal_without_account");
+  assert.equal(stateOf(doneLane({ accounted: false })), M.OPERATOR_STATE.ATTENTION);
+});
+
+test("an unreported completion is not repaired by inventing a summary", () => {
+  // The state reports the absence. It must not claim an account exists.
+  const st = V.canonicalLaneWorkState(doneLane({ accounted: false }));
+  assert.match(st.headline, /no summary/i);
+});
+
+test("a completed run with unopened output is New, not Ready", () => {
+  const st = V.canonicalLaneWorkState(doneLane({ unseen: 2 }));
+  assert.equal(st.key, "completed_unread");
+  assert.notEqual(st.label, "Ready");
+  assert.equal(stateOf(doneLane({ unseen: 2 })), M.OPERATOR_STATE.COMPLETED_UNREAD);
+  assert.equal(M.OPERATOR_STATE_LABEL[M.OPERATOR_STATE.COMPLETED_UNREAD], "New");
+});
+
+test("unread completion is attention WITHOUT an answer obligation", () => {
+  // The whole point of keeping it separate from NEEDS_YOU: it is visible, and
+  // nobody is being asked anything.
+  assert.notEqual(stateOf(doneLane({ unseen: 2 })), M.OPERATOR_STATE.NEEDS_YOU);
+});
+
+test("opening the output returns the lane to Ready", () => {
+  // Unread derives from the durable unseen count, so clearing it is what
+  // clears the state — no separate client flag to drift.
+  const st = V.canonicalLaneWorkState(doneLane({ unseen: 0 }));
+  assert.ok(["ready", "idle"].includes(st.key), `expected ready/idle, got ${st.key}`);
+  assert.notEqual(st.key, "completed_unread");
+});
+
+test("a real question still outranks unread output", () => {
+  const lane = { ...doneLane({ unseen: 3 }), execution_run: { state: "NEEDS_INPUT" } };
+  assert.equal(stateOf(lane), M.OPERATOR_STATE.NEEDS_YOU);
+});
