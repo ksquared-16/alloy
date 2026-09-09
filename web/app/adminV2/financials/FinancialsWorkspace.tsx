@@ -48,7 +48,14 @@ export default function FinancialsWorkspace({
 }) {
     switch (section) {
         case "overview":
-            return <FinancialsOverview metrics={metrics} scopeLabel={scopeLabel} onOpenSection={onOpenSection} />;
+            return (
+                <FinancialsOverview
+                    metrics={metrics}
+                    activity={activity}
+                    scopeLabel={scopeLabel}
+                    onOpenSection={onOpenSection}
+                />
+            );
         case "accounts":
             return <FinancialsAccounts position={position} scopeLabel={scopeLabel} />;
         case "charges":

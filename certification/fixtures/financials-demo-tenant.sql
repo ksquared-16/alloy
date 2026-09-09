@@ -56,6 +56,10 @@
 \set agency  'fd000000-0000-4000-8000-0000000f0001'
 \set program 'fd000000-0000-4000-8000-0000000f0002'
 
+-- A responsible adult for Chen. Thread 6 divides money between real PEOPLE, and expected agency
+-- funding attaches to a responsibility share — so subsidy work cannot exist without one.
+\set parent_c 'fd000000-0000-4000-8000-0000000b0001'
+
 -- ── TEARDOWN ────────────────────────────────────────────────────────────────────────────────────
 set session_replication_role = replica;
 
@@ -122,8 +126,10 @@ delete from child_enrollment_agreements
   where id in (:'agr_a'::uuid, :'agr_b'::uuid, :'agr_c'::uuid, :'agr_d'::uuid);
 delete from customer_members
   where id in (:'kid_a'::uuid, :'kid_b'::uuid, :'kid_c'::uuid, :'kid_d'::uuid);
+delete from customer_persons where org_id = :'org'::uuid and person_id = :'parent_c'::uuid;
 delete from customers
   where id in (:'hh_a'::uuid, :'hh_b'::uuid, :'hh_c'::uuid, :'hh_d'::uuid);
+delete from persons where id = :'parent_c'::uuid;
 
 set session_replication_role = origin;
 
@@ -150,6 +156,18 @@ insert into customer_members
   (:'kid_b'::uuid, :'org'::uuid, :'hh_b'::uuid, 'Ben Brennan',   'Ben',   'Brennan', true),
   (:'kid_c'::uuid, :'org'::uuid, :'hh_c'::uuid, 'Cai Chen',      'Cai',   'Chen',    true),
   (:'kid_d'::uuid, :'org'::uuid, :'hh_d'::uuid, 'Obi Okafor',    'Obi',   'Okafor',  true);
+
+-- ── THE ADULT WHO OWES ───────────────────────────────────────────────────────────────────────────
+--
+-- Thread 6 divides an obligation between named people, and Thread 9's expected funding attaches to
+-- one of those shares. Without a responsible adult on the account there is no share, so there is
+-- nothing for agency money to be expected AGAINST — which is why an authorization alone left the
+-- Subsidy surface correctly empty.
+insert into persons (id, org_id, first_name, last_name, full_name, person_number, status_key) values
+  (:'parent_c'::uuid, :'org'::uuid, 'Mei', 'Chen', 'Mei Chen', 900014, 'active');
+
+insert into customer_persons (org_id, customer_id, person_id, role_type, is_primary) values
+  (:'org'::uuid, :'hh_c'::uuid, :'parent_c'::uuid, 'parent', true);
 
 -- ── AGREEMENTS, SPLIT ACROSS BOTH CAMPUSES ──────────────────────────────────────────────────────
 --

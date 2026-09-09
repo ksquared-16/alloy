@@ -42,6 +42,8 @@ import type {
     FinancialsReadState,
     FinancialsOverviewMetrics,
 } from "@/app/adminV2/financials/useFinancialsReads";
+import type { FinancialActivityFeed } from "@/lib/financials/workspace/resolveFinancialActivity";
+import { moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsWorkSection } from "@/app/adminV2/financials/financialsSections";
 
 /** The headline four: what money is doing right now, and what moved in the window. */
@@ -85,17 +87,23 @@ function anyTruncated(metrics: FinancialsOverviewMetric[] | undefined): boolean 
     return (metrics ?? []).some((m) => m.meta?.truncated === true);
 }
 
+/** How many recent events the landing page shows before it stops being a landing page. */
+const RECENT_LIMIT = 5;
+
 export default function FinancialsOverview({
     metrics,
+    activity,
     scopeLabel,
     onOpenSection,
 }: {
     metrics: FinancialsReadState<FinancialsOverviewMetrics>;
+    activity: FinancialsReadState<FinancialActivityFeed>;
     scopeLabel: string;
     onOpenSection: (section: FinancialsWorkSection) => void;
 }) {
     const resolved = useMemo(() => byKey(metrics.data?.metrics), [metrics.data]);
     const truncated = anyTruncated(metrics.data?.metrics);
+    const recent = useMemo(() => (activity.data?.rows ?? []).slice(0, RECENT_LIMIT), [activity.data]);
 
     return (
         <WorkspaceOverviewStack data-testid="financials-overview">
@@ -164,6 +172,60 @@ export default function FinancialsOverview({
                             </div>
                         );
                     })}
+                </div>
+            </WorkspaceCard>
+
+            {/*
+              * ── WHAT MOVED ────────────────────────────────────────────────────────────────────
+              *
+              * A landing page that shows only totals answers "how much" and never "what happened".
+              * These are the same rows the Activity section renders, at a shorter density and
+              * capped — one read model shown twice, not a second history, and deliberately NOT
+              * summed: an arbitrary recent slice of deltas is not a balance, and the balance is
+              * owned above.
+              */}
+            <WorkspaceCard>
+                <div className="flex flex-col gap-2" data-financials-overview-recent="true">
+                    <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            Recent money movement
+                        </p>
+                        {recent.length > 0 ? (
+                            <button
+                                type="button"
+                                onClick={() => onOpenSection("activity")}
+                                data-financials-overview-open="activity"
+                                className="shrink-0 whitespace-nowrap rounded-md border border-alloy-stone/25 bg-white px-2.5 py-1 text-xs font-medium text-alloy-midnight/75 shadow-sm hover:bg-alloy-stone/[0.08]"
+                            >
+                                All activity
+                            </button>
+                        ) : null}
+                    </div>
+                    {activity.loading && recent.length === 0 ? (
+                        <p className="text-xs text-alloy-midnight/50">Loading recent activity…</p>
+                    ) : recent.length === 0 ? (
+                        /* A calm nothing-happened, not a row of dashes. */
+                        <p className="text-xs text-alloy-midnight/55">
+                            Nothing has been posted, paid or corrected for {scopeLabel.toLowerCase()} yet.
+                        </p>
+                    ) : (
+                        recent.map((row) => (
+                            <div
+                                key={row.entryId}
+                                className="flex items-baseline justify-between gap-3 border-b border-alloy-stone/10 pb-1.5 last:border-b-0 last:pb-0"
+                                data-financials-overview-recent-row={row.entryId}
+                            >
+                                <span className="min-w-0 truncate text-sm text-alloy-midnight">
+                                    {/* The operator's words for the event, and whose money it was. */}
+                                    {row.label}
+                                    {row.householdName ? ` · ${row.householdName}` : ""}
+                                </span>
+                                <span className="shrink-0 text-xs tabular-nums text-alloy-midnight/60">
+                                    {moneyExact(row.amountCents, row.currencyCode)} · {shortDate(row.postedAt)}
+                                </span>
+                            </div>
+                        ))
+                    )}
                 </div>
             </WorkspaceCard>
 

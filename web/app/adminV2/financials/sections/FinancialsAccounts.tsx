@@ -70,9 +70,27 @@ function groupByAccount(cohort: FinancialPositionCohort | null): AccountRow[] {
         if (row.locationScope === "org") existing.hasOrgScoped = true;
         byAccount.set(row.customerId, existing);
     }
+    /*
+     * ── A SETTLED HOUSEHOLD IS STILL A HOUSEHOLD ──
+     *
+     * This used to drop any account with nothing outstanding, suppressed or in variance, which
+     * made the rail a collections queue wearing the word Accounts: a family that had just paid in
+     * full vanished from the only surface an operator would think to look them up on, and the
+     * answer to "did the Brennans pay?" was an empty list that looks identical to "no such family".
+     *
+     * So the rail lists every account carrying financial activity, and ORDERS by attention instead
+     * of filtering by it — money owed first, then money held with an agency, then the settled ones.
+     * Nothing is hidden; what needs a decision simply floats.
+     */
     return [...byAccount.values()]
-        .filter((a) => a.outstandingCents > 0 || a.suppressionCents > 0 || a.varianceCents !== 0)
-        .sort((a, b) => b.outstandingCents - a.outstandingCents);
+        .filter((a) => a.charges > 0)
+        .sort(
+            (a, b) =>
+                b.outstandingCents - a.outstandingCents
+                || b.suppressionCents - a.suppressionCents
+                || Math.abs(b.varianceCents) - Math.abs(a.varianceCents)
+                || (a.householdName ?? "").localeCompare(b.householdName ?? ""),
+        );
 }
 
 export default function FinancialsAccounts({
@@ -97,8 +115,8 @@ export default function FinancialsAccounts({
                         </p>
                     ) : accounts.length === 0 ? (
                         <WorkspaceEmptyState
-                            title="No account carries posted money"
-                            body={`Nothing outstanding, suppressed or in variance for ${scopeLabel.toLowerCase()}.`}
+                            title="No account carries financial activity"
+                            body={`No posted charges for ${scopeLabel.toLowerCase()}.`}
                         />
                     ) : (
                         accounts.map((account) => (
@@ -107,6 +125,15 @@ export default function FinancialsAccounts({
                                 type="button"
                                 onClick={() => setSelected(account.customerId)}
                                 data-financials-account-row={account.customerId}
+                                data-financials-account-state={
+                                    account.outstandingCents > 0
+                                        ? "outstanding"
+                                        : account.suppressionCents > 0
+                                          ? "with_agency"
+                                          : account.varianceCents !== 0
+                                            ? "variance"
+                                            : "settled"
+                                }
                                 aria-current={selected === account.customerId ? "true" : undefined}
                                 className={`block w-full border-b border-alloy-stone/10 px-3 py-2 text-left transition hover:bg-alloy-stone/5 ${
                                     selected === account.customerId ? "bg-alloy-bend-pine/5" : ""
@@ -129,7 +156,17 @@ export default function FinancialsAccounts({
                                      * between them is a submitted subsidy claim doing its job, and hiding
                                      * one of the two figures is how that gap becomes unexplainable.
                                      */}
-                                    {money(account.collectibleCents, account.currencyCode)} collectible now
+                                    {/*
+                                      * A settled account says so, rather than reading as a row of
+                                      * zeroes an operator has to interpret. "$0.00 collectible now"
+                                      * is technically true and tells nobody that this family is
+                                      * fine.
+                                      */}
+                                    {account.outstandingCents <= 0
+                                    && account.suppressionCents <= 0
+                                    && account.varianceCents === 0
+                                        ? `Settled · ${account.charges} ${account.charges === 1 ? "charge" : "charges"}`
+                                        : `${money(account.collectibleCents, account.currencyCode)} collectible now`}
                                     {account.suppressionCents > 0
                                         ? ` · ${money(account.suppressionCents, account.currencyCode)} with an agency`
                                         : ""}

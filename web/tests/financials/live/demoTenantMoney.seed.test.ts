@@ -48,6 +48,10 @@ import {
     readPaymentUnappliedCents,
 } from "@/lib/financials/childcarePaymentService";
 import { resolveFinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { buildSubsidyClaim, submitSubsidyClaim } from "@/lib/financials/subsidy/subsidyService";
+import { configureResponsibilityArrangement } from "@/lib/financials/responsibility/arrangementService";
+import { configureExpectedFunding } from "@/lib/financials/responsibility/expectedFundingService";
+import { resolveChargeResponsibility } from "@/lib/financials/responsibility/responsibilityService";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     const fromProcess = {
@@ -222,6 +226,98 @@ describeSeed("demo tenant money — seeded through the canonical services", () =
             actorUserId: ACTOR,
         });
         expect(draft.status).toBe("draft");
+    }, 180_000);
+
+    /*
+     * ── SUBSIDY NEEDS A CLAIM, NOT JUST AN AUTHORIZATION ──────────────────────────────────────
+     *
+     * The structural fixture creates an agency, a program and an authorization for Chen. That is
+     * enough to be ELIGIBLE for agency money and not enough to be WORK: the Subsidy surface lists
+     * positions with expected funding, a submitted claim or an open variance, and an authorization
+     * on its own is none of the three. So the tenant had a subsidy story with nothing to do about
+     * it, and the section was empty for a correct reason.
+     *
+     * The claim is built and submitted through Thread 9's own services rather than inserted,
+     * because a submitted claim SUPPRESSES family collection for the amount claimed — that is a
+     * financial consequence, and hand-writing it would produce a suppression the product could not
+     * have created and then show it as fact.
+     */
+    it("builds and submits a subsidy claim so Chen is real subsidy work", async () => {
+        const AUTHORIZATION = "fd000000-0000-4000-8000-0000000f0003";
+        const PARENT = "fd000000-0000-4000-8000-0000000b0001";
+        const period = ymd(-5).slice(0, 7);
+
+        /*
+         * The chain is longer than "make a claim", and the length is the point. A claim covers
+         * EXPECTED FUNDING attached to a period's obligations, expected funding attaches to a
+         * responsibility SHARE, and a share names a person. Agency money that belongs to nobody is
+         * exactly what Thread 6 refuses — so the demo has to walk the same road an operator does:
+         *
+         *   arrangement (who owes) -> expected funding (what the agency will cover)
+         *     -> resolve the charge (allocations exist) -> build claim -> submit
+         */
+        const arrangement = await configureResponsibilityArrangement(supabase, {
+            orgId: ORG,
+            customerId: HH.chen,
+            effectiveStart: "2026-01-01",
+            actorUserId: ACTOR,
+            shares: [{ responsiblePartyId: PARENT, method: "remainder", priority: 1 }],
+            sourceKey: "demo_tenant",
+        } as never);
+        expect(arrangement.arrangementId, "Chen has a responsible adult").toBeTruthy();
+
+        const { data: shareRows } = await supabase
+            .from("financial_responsibility_shares")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("arrangement_id", arrangement.arrangementId);
+        const shareId = ((shareRows ?? []) as Array<{ id: string }>)[0]?.id;
+        expect(shareId, "the arrangement produced a share to fund").toBeTruthy();
+
+        await configureExpectedFunding(supabase, {
+            orgId: ORG,
+            shareId,
+            arrangementId: arrangement.arrangementId,
+            fundingSourceType: "government_subsidy",
+            fundingSourceLabel: "State Childcare Assistance (demo)",
+            basis: "fixed_amount",
+            expectedAmountCents: 75_000,
+            idempotencyKey: "fef:demo-chen-subsidy",
+            actorUserId: ACTOR,
+        } as never);
+
+        // Chen's posted charge has to be RESOLVED for the obligation to carry allocations.
+        const { data: chenCharges } = await supabase
+            .from("charges")
+            .select("id, status")
+            .eq("org_id", ORG)
+            .eq("billable_source_id", AGR.chen)
+            .eq("status", "posted");
+        const chargeId = ((chenCharges ?? []) as Array<{ id: string }>)[0]?.id;
+        expect(chargeId, "Chen has a posted charge to divide").toBeTruthy();
+        const resolved = await resolveChargeResponsibility(supabase, {
+            orgId: ORG,
+            chargeId: chargeId!,
+            actorUserId: ACTOR,
+        });
+        expect(resolved.kind, JSON.stringify(resolved)).toBe("resolved");
+
+        const claim = await buildSubsidyClaim(supabase, {
+            orgId: ORG,
+            authorizationId: AUTHORIZATION,
+            periodKey: period,
+            actorUserId: ACTOR,
+        });
+        expect(claim.claimId, "a claim exists for the authorized period").toBeTruthy();
+        expect(claim.lines, "the claim covers Chen's posted charge").toBeGreaterThan(0);
+
+        const submitted = await submitSubsidyClaim(supabase, {
+            orgId: ORG,
+            claimId: claim.claimId,
+            externalReference: "DEMO-CLAIM-1",
+            actorUserId: ACTOR,
+        });
+        expect(submitted.state, "a submitted claim is what suppresses family collection").toBe("submitted");
     }, 180_000);
 
     /*
