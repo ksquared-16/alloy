@@ -50,7 +50,7 @@ How **admin portal** auth works in `web/` today. Canonical product semantics:
 | **`loadAdminAccessBundleCached`** (`lib/admin/getAdminAccessContext.ts`) | 1 | wraps the enforcing resolver with the signed-in `user_id` (service-role client). Exposes **`portalEligible`**. |
 | **`getAdminAccessContextCached`** (`lib/admin/getAdminAccessContext.ts`) | 1 | the same bundle **without** `portalEligible` — use when enforcing **CRM/workspace scope** (`permissionKeys`, department/site dimensions). |
 | **`getAdminContextCached`** (`lib/admin/getAdminContext.ts`) | 1 | org + compatibility `role` + `userId`. Requires `portalEligible`. |
-| **`getAdminAuthCached`** (`lib/adminAuth.ts`) | 1 | as above, for layouts. |
+| **`getAdminAuthCached`** (`lib/adminAuth.ts`) | 1 | as above, for layouts. Also returns **`permissionKeys`** — the same grant union every capability gate reads — so shell chrome can decide what to OFFER without asking a second question and getting a second answer (`M2-13`). |
 | **`loadAdminRouteGate`** (`lib/admin/adminRouteGate.ts`) | 1 | **preferred at route entry.** One bundle resolution per request, instead of separate `getAdminContextCached` + `getAdminAccessContextCached`. 403s a caller who is not portal-eligible. |
 | **`getAdminOrgContextLightCached`** (`lib/admin/getAdminOrgContextLight.ts`) | **3** | count/summary routes. **Reads no grants and no scope** — a route gated only by this has resolved *admission*, never *capability* or *visibility*. |
 
@@ -110,19 +110,22 @@ Three cases, and they are deliberately different:
 
 ---
 
-## Legacy fallback (still true at runtime)
+## Legacy fallback — GONE, and this section is what it left behind
 
-If a resolver finds **no** membership-based org/roles from `user_roles`, it calls
-`fetchLegacyAdminOpsOrgAndRole`:
+**There is no legacy fallback at runtime.** This document described one until 2026-09-10, and the
+description was three weeks stale: `W-20` deleted `fetchLegacyAdminOpsOrgAndRole` from
+`resolveAdminAccessCore` **and** the byte-for-byte copy in `resolveAdminPortalOrgCore` (`M2-5`), on
+evidence rather than confidence — the `Q15` census re-measured the lockout population on the
+deployed tenant and found it empty in three independent questions, so the deletion revoked nothing.
 
-1. `user_profiles` — if `role` is `admin` or `ops`, org comes from `app_users` (`id` or `auth_user_id` match).
-2. Else an `app_users` row with `role` `admin` | `ops` and an `org_id`.
+Membership is now the single source of authority. **No usable `user_roles` row is not a reason to
+look somewhere else; it is the answer**, and both resolvers return `null`.
 
-These paths exist for **bootstrap / migration** periods. **Preferred:** ensure each portal user has
-`user_roles` (+ grants + optional access profile) so behaviour matches RBAC V1.
-
-> Path 3 (`resolveAdminPortalOrgCore`) carries a **duplicate** of this fallback. `W-41` owns the
-> consolidation; a source-discovered scan holds the two copies together until then.
+> A stale as-built section is the defect `M2-15` names, and it is worth stating what this one cost:
+> anyone reading this page would have believed a `user_profiles.role` of `admin` still admitted
+> somebody to the portal, and would have provisioned or debugged an operator on a path that no code
+> reads. `app_users.role` still carries a `CHECK` constraint enumerating a fourth role vocabulary
+> (`M2-8`) — it is simply no longer on an authority path, because only the fallback read it.
 
 ---
 
@@ -139,6 +142,56 @@ Layouts and `adminAuth` still expose one string `role` (`admin` or `ops`) for UI
   individual **API** routes may still allow ops via `requireAdminOrOps` or permission checks.
 
 ---
+
+## Capabilities that are actually enforced today — Financials
+
+The rule above says check `permissionKeys`; the *What is not true yet* section says most surfaces do
+not. **Financials is the domain where it is true**, so it is worth naming as the worked example of
+what a complete package looks like:
+
+| Capability | Key | Enforced by |
+|---|---|---|
+| View Financials | `fin.read` | `assertFinancialsReadAllowed` — all five workspace read routes |
+| Create / post a charge, record a payment, collect a card, apply authored discounts, resolve responsibility, generate tuition | `fin.write` | the registered actions' own `execute` |
+| Reverse or credit a posted charge, adjust an account by hand, refund a payment | `fin.adjust` | as above |
+| Configure who is responsible, expected funding | `fin.responsibility` | `financialResponsibilityActions` |
+| Administer subsidy | `fin.subsidy` | `financialSubsidyActions` |
+
+Two things follow that are easy to get wrong elsewhere:
+
+- **Enforcement is in the ACTION, not in the route.** `/api/admin/actions/execute` gates on
+  `requireAdminOrOps`, which resolves admission and nothing finer — it reads no role and no grant.
+  An action that does not check a capability is therefore open to every portal-eligible principal,
+  whatever the organization configured. Six financial actions were in exactly that state until
+  2026-09-10.
+- **Navigation is not the gate.** `lib/access/financialsSurfaceVisibility.ts` decides what to
+  *offer* and deliberately fails OPEN on an unknown capability set, because the server is
+  authoritative and the alternative — hiding Financials from someone who holds `fin.read` — is the
+  operator report this work began with, arriving from the other side.
+
+## The default role package, and where it comes from
+
+`seed_default_rbac(org_id)` is the grant half of seeding an organization, and it runs from the
+`orgs_seed_default_rbac` **trigger on `public.orgs`**. Until 2026-09-10 it had no trigger and no
+caller anywhere in the tree, so an organization created by any route but the local seed had four
+role definitions and zero capabilities — and because portal admission is a role literal that
+consults no grant, its administrator was admitted to the shell and refused by every surface that
+checks one.
+
+- **`admin` receives every active catalog key.** That is the Organization Administrator contract,
+  and it is asserted twice: inside the migration against the database it is applied to, and in
+  `web/tests/access/grantSeedEnumeration.test.ts` against the catalog the migration tree defines.
+  Adding a catalog key without adding it to the admin enumeration fails the repository lock.
+- **`ops` receives that less nine keys**, each withheld by the decision of the migration that
+  introduced it (health ×2 per `D-H6`, the enrollment exception, the pricing override, the three
+  financial mutation authorities, and the two the pre-`W-12` blanket withheld).
+- **`school_director` and `regional_lead` receive `fin.read` and nothing else.** That they hold one
+  capability across a 66-key catalog is a known gap and an open product decision, not an oversight.
+
+**Revocation is a `DELETE`** (`replace_role_permission_grants`), so an absent grant row means either
+"never seeded" or "removed on purpose" and nothing in the table tells them apart. Any repair that
+backfills grants has to establish which — see the completeness migration's §3 for the two cases where
+it is decidable.
 
 ## API guards (patterns)
 
@@ -180,14 +233,17 @@ lock. Adding a handler without an entry fails the lock.
 1. **Auth user** in Supabase Auth (`auth.users`).
 2. **`user_roles`** — `(user_id, org_id, role)` where `role` is a `role_definitions.role_key` for
    that org. Today the portal still requires `admin` or `ops` among `roleKeys` (`W-13`).
-3. **`role_permission_grants`** — seeded per org (e.g. `seed_default_rbac` in migrations) so
-   `permissionKeys` are populated.
+3. **`role_permission_grants`** — seeded per org by `seed_default_rbac`, which runs from the
+   `orgs_seed_default_rbac` trigger on `public.orgs`. Nothing to do by hand for a new org; if a role
+   holds no grants, that is the defect described under *The default role package*, not a step you
+   missed.
 4. **`user_access_profiles`** (+ `user_department_access` / `user_site_access` when scope should be
    restricted).
 
-**Legacy-only bootstrap (discouraged for new installs):** insert `user_profiles` (`id` = auth user
-id, `role` = `admin` | `ops`) **and** ensure `app_users` supplies `org_id` as resolved by
-`fetchLegacyAdminOpsOrgAndRole`.
+**There is no legacy bootstrap.** Inserting `user_profiles.role` or `app_users.role` provisions
+nothing: `W-20` deleted the only code that read them. Steps 1 and 2 are the whole of what makes a
+portal user, and step 3 happens on its own for a new organization — `orgs_seed_default_rbac` fires
+on `public.orgs`.
 
 ---
 

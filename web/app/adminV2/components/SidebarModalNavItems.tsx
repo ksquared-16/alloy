@@ -8,6 +8,8 @@ import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operat
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
+import { offersFinancialsSurface } from "@/lib/access/financialsSurfaceVisibility";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { warmOperationsWorkspace } from "@/lib/scheduling/operationsWorkspaceWarmCache";
 import { dispatchAdminV2OpenFinancialsModal } from "@/lib/adminV2/workspaceModalEvents";
@@ -275,8 +277,36 @@ export function SidebarOperationsNavItem({ collapsed }: { collapsed: boolean }) 
     );
 }
 
+/**
+ * Financials in the primary navigation, offered only to a principal who can read it.
+ *
+ * ── WHAT THIS IS, AND WHAT IT IS NOT ──
+ *
+ * It is not the gate. `fin.read` is enforced by `assertFinancialsReadAllowed` on every Financials
+ * read route, and every financial mutation is enforced by its own registered action; both refuse a
+ * direct API call that never rendered a screen, and both would refuse if this component always drew
+ * the button. Removing the item is a product decision about what to put in front of an operator,
+ * and the doctrine is explicit that navigation hiding is never the security boundary.
+ *
+ * ── WHY IT IS THE ITEM AND NOT A DISABLED STATE ──
+ *
+ * A disabled control that never becomes enabled teaches an operator that the product is broken. A
+ * role configured without Financials is not a temporary condition to wait out; it is the
+ * organization's answer. The surface is simply not theirs, and the Access workspace is where that
+ * changes.
+ *
+ * ── AND IT FAILS OPEN ──
+ *
+ * `permissionKeys` is `null` when the shell that mounted the context did not supply it, and
+ * `offersFinancialsSurface` answers "offer" in that case. A missed mount must not hide Financials
+ * from someone who holds the grant: that would recreate the operator report this work began with,
+ * with a vanished nav item instead of a message that at least explained itself. The server gives the
+ * real answer either way.
+ */
 export function SidebarFinancialsNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
+    const auth = useAdminAuthOptional();
+    if (!offersFinancialsSurface(auth?.permissionKeys)) return null;
     return (
         <SidebarModalNavButton
             collapsed={collapsed}

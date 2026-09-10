@@ -44,11 +44,71 @@ import {
     type CorrectionKind,
 } from "@/lib/financials/childcareChargeService";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const CHARGE_ADD_ACTION_KEY = "charge.add";
 export const CHARGE_POST_ACTION_KEY = "charge.post";
 export const CHARGE_REVERSE_ACTION_KEY = "charge.reverse";
+
+/**
+ * ── WHO MAY MOVE THIS MONEY ──
+ *
+ * Until now: anybody the portal admitted. `/api/admin/actions/execute` gates on `requireAdminOrOps`,
+ * which resolves ADMISSION and nothing else — it does not read a role and it does not read a grant —
+ * and none of these three actions checked a capability of its own. So an organization that set a
+ * role to "view Financials only" had said something the server did not honour: the same principal
+ * could still create a charge, post it, and reverse it. Every neighbouring financial action already
+ * enforced (`fin.write` for discounts, `fin.adjust` for hand reductions, `fin.responsibility`,
+ * `fin.subsidy`); the charge lifecycle was the hole in the middle of them.
+ *
+ * **Creating and posting are billing.** `charge.add` writes a draft from a configured template and
+ * `charge.post` makes it owed. Both are running the billing machine over authored configuration,
+ * which is what `fin.write` names, and it is the same key `billing.apply_discounts` uses for the
+ * same reason.
+ *
+ * **Reversing is not.** A posted charge is immutable, so a correction writes a new line that moves
+ * the balance — deciding by hand that a family owes something other than what was billed.
+ * `financialReductionActions` already settled that this is a different act and minted `fin.adjust`
+ * for it: *"otherwise everyone who can bill can also forgive, and nothing in the record tells them
+ * apart."* A reversal forgives a whole charge. Filing it under `fin.write` would hand every biller
+ * the stronger authority through the one door that had no lock on it.
+ *
+ * This is a NARROWING, and a deliberate one. `admin` and `ops` hold both keys by default, so no
+ * seeded role loses anything; what changes is that a role configured without them is now refused by
+ * the server rather than only by the screen.
+ */
+export const CHARGE_WRITE_PERMISSION = "fin.write" as const;
+/** Correcting posted money is the same authority as reducing it by hand. */
+export const CHARGE_CORRECTION_PERMISSION = "fin.adjust" as const;
+
+/**
+ * Whether the caller holds `key` in this org.
+ *
+ * A grant read that FAILED answers `null` and denies here, exactly as it does everywhere else this
+ * resolver is used: an unidentified caller is not an unprivileged one, and treating the two alike is
+ * how a broken lookup becomes an open door.
+ */
+async function permitted(
+    supabase: SupabaseClient,
+    orgId: string,
+    userId: string | null | undefined,
+    key: string,
+): Promise<boolean> {
+    const grants = await resolveActorPermissionGrants(supabase, orgId, userId ?? null);
+    return (grants.permissionKeys ?? []).includes(key);
+}
+
+/** The refusal shape the financial actions already use — a 403 with a machine-readable blocker. */
+function denied(correlationId: string, sentence: string, key: string, code: string): ActionResult {
+    return {
+        ok: false,
+        correlationId,
+        status: 403,
+        error: `${sentence} requires ${key}.`,
+        blockers: [{ code, message: "Permission required." }],
+    };
+}
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -229,6 +289,7 @@ const addCharge: RegisteredAction = {
     },
 
     async resolveEligibility({ supabase, ctx, payload, invocation }) {
+        const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION);
         const subject = await resolveChargeSubject(
             supabase as SupabaseClient,
             ctx.orgId,
@@ -236,8 +297,13 @@ const addCharge: RegisteredAction = {
             t(payload?.customer_id) || null,
         );
         return {
-            eligible: subject.ok,
-            blockers: subject.ok ? [] : [{ code: subject.code, message: subject.message }],
+            eligible: allowed && subject.ok,
+            blockers: [
+                ...(allowed
+                    ? []
+                    : [{ code: "charge_permission_required", message: `Creating a charge requires ${CHARGE_WRITE_PERMISSION}.` }]),
+                ...(subject.ok ? [] : [{ code: subject.code, message: subject.message }]),
+            ],
             availableTransitions: [],
             requiredInputs: [],
         };
@@ -296,6 +362,9 @@ const addCharge: RegisteredAction = {
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION))) {
+            return denied(correlationId, "Creating a charge", CHARGE_WRITE_PERMISSION, "charge_permission_required");
+        }
         try {
             const childId = childIdFrom(payload, invocation.entityId, invocation.entityType);
             const subject = await resolveChargeSubject(
@@ -382,11 +451,17 @@ const postCharge: RegisteredAction = {
         return { ok: true, value: src };
     },
 
-    async resolveEligibility({ payload }) {
+    async resolveEligibility({ supabase, ctx, payload }) {
         const chargeId = t(payload?.charge_id);
+        const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION);
         return {
-            eligible: Boolean(chargeId),
-            blockers: chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }],
+            eligible: Boolean(chargeId) && allowed,
+            blockers: [
+                ...(chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }]),
+                ...(allowed
+                    ? []
+                    : [{ code: "charge_permission_required", message: `Posting a charge requires ${CHARGE_WRITE_PERMISSION}.` }]),
+            ],
             availableTransitions: [],
             requiredInputs: [],
         };
@@ -401,6 +476,9 @@ const postCharge: RegisteredAction = {
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION))) {
+            return denied(correlationId, "Posting a charge", CHARGE_WRITE_PERMISSION, "charge_permission_required");
+        }
         try {
             const { charge, alreadyPosted } = await postChildcareCharge(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
@@ -474,11 +552,20 @@ const reverseCharge: RegisteredAction = {
         return { ok: true, value: src };
     },
 
-    async resolveEligibility({ payload }) {
+    async resolveEligibility({ supabase, ctx, payload }) {
         const chargeId = t(payload?.charge_id);
+        const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_CORRECTION_PERMISSION);
         return {
-            eligible: Boolean(chargeId),
-            blockers: chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }],
+            eligible: Boolean(chargeId) && allowed,
+            blockers: [
+                ...(chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }]),
+                ...(allowed
+                    ? []
+                    : [{
+                          code: "correction_permission_required",
+                          message: `Correcting a posted charge requires ${CHARGE_CORRECTION_PERMISSION}.`,
+                      }]),
+            ],
             availableTransitions: [],
             requiredInputs: [],
         };
@@ -499,6 +586,14 @@ const reverseCharge: RegisteredAction = {
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_CORRECTION_PERMISSION))) {
+            return denied(
+                correlationId,
+                "Correcting a posted charge",
+                CHARGE_CORRECTION_PERMISSION,
+                "correction_permission_required",
+            );
+        }
         try {
             const kind = (t(payload.kind) || "reversal") as CorrectionKind;
             const row = await createChildcareCorrection(supabase as SupabaseClient, {

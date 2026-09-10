@@ -41,6 +41,7 @@ export default async function AdminV2Layout({
         orgId={typeof auth.orgId === "string" ? auth.orgId : ""}
         role={auth.role}
         roleKeys={auth.roleKeys ?? []}
+        permissionKeys={auth.permissionKeys ?? []}
       >
         <AdminV2Shell>{children}</AdminV2Shell>
       </AdminV2RootAuthProvider>

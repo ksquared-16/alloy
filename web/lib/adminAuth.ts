@@ -27,6 +27,15 @@ export interface AdminAuthResult {
     roleKeys: string[];
     /** Primary org from {@link resolveAdminAccessCore} — same id used by Settings → Users & Roles members API. */
     orgId: string;
+    /**
+     * The union of `role_permission_grants` for the resolved org — the SAME set every capability
+     * gate consults.
+     *
+     * Carried so the shell can decide what to OFFER without asking a second question and getting a
+     * second answer. `M2-13` is this initiative's record of two gates in one request disagreeing
+     * about the same principal; a navigation layer that re-derived capability would be a third.
+     */
+    permissionKeys: string[];
 }
 
 async function loadAdminAuth(): Promise<AdminAuthResult | null> {
@@ -57,7 +66,7 @@ async function loadAdminAuth(): Promise<AdminAuthResult | null> {
             total_ms: totalMs,
         });
     }
-    return { user, role, roleKeys: bundle.roleKeys, orgId: bundle.orgId };
+    return { user, role, roleKeys: bundle.roleKeys, orgId: bundle.orgId, permissionKeys: bundle.permissionKeys };
 }
 
 const resolveAdminAuthOnce = cache(async (): Promise<AdminAuthResult | null> => {

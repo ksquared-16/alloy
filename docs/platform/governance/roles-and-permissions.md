@@ -101,6 +101,26 @@ hold several role keys in one org and `permissionKeys` is their **union**. Any s
 - **Failed** access-profile read: **denies** (`restricted`, empty allow-lists) — `W-43`. Absence and
   failure are deliberately different populations
 
+### Where a role's capabilities come from
+
+`seed_default_rbac(org_id)` writes the default grants, and it runs from the `orgs_seed_default_rbac`
+trigger on `public.orgs` — the grant half of what `orgs_seed_default_role_definitions` does for
+roles. **Until 2026-09-10 it had no trigger and no caller**, so an organization created by any route
+but the local seed had four roles and zero capabilities. Because admission is a role literal that
+consults no grant (see layer 1), such an organization admitted its administrator to the portal and
+refused them everywhere that checks a capability. Financials was the surface that reported it,
+because it is the one that says so out loud rather than rendering an empty list.
+
+| Role | Default package |
+|---|---|
+| `admin` | **every active catalog key.** The Organization Administrator contract, asserted inside the migration and by `web/tests/access/grantSeedEnumeration.test.ts` — a catalog key added without a place in the admin enumeration fails the repository lock |
+| `ops` | the same, less nine keys, each withheld by the decision of the migration that introduced it |
+| `school_director`, `regional_lead` | `fin.read` only — a known gap across the other ~65 keys, and an open product decision |
+
+**Revocation is a `DELETE`**, not `allowed = false`. So an absent grant row means either "never
+seeded" or "an administrator removed this", and nothing in the table distinguishes them. Any repair
+that backfills grants must first establish which.
+
 ### What is not true yet
 
 The rule above says capabilities are checked. **Most admin surfaces gate on admission alone** and

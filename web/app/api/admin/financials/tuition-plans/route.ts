@@ -10,6 +10,7 @@ import type { ProgramOffering } from "@/lib/programs/programOfferings";
 import type { ProgramOfferingVariant } from "@/lib/programs/programOfferingVariants";
 import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
 import type { BillingCadence } from "@/lib/commercial/billingCadences";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 function mapOffering(r: Record<string, unknown>): ProgramOffering {
     return {
@@ -85,6 +86,13 @@ export async function GET() {
     }
 
     const supabase = createAdminClient();
+    const allowedRead = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
 
     const { data: cadenceSet } = await supabase
         .from("option_sets")

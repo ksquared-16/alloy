@@ -20,9 +20,10 @@
     "not_a_live_measurement": "This is the tree, not the database. Live catalog width, live grant counts, and any key seeded on the target outside the tree are M5 preflight subjects (§11)."
   },
   "catalog_width": 57,
-  "enforced_count": 22,
-  "deletion_candidate_count": 35,
+  "enforced_count": 24,
+  "deletion_candidate_count": 33,
   "w13_restatement": "Enforced was 21 and the deletion list 36 until W-13/AD-22 removed the `portalEligible` role literal from `requirePortalOrUsersRolesManageAuth`, which gave `settings.users_roles.read` its first enforcement site. Catalog width is unchanged at 57 — one key moved between the two sets, and it moved OUT of the deletion list, which is the only such movement this initiative has recorded.",
+  "financials_restatement": "2026-09-10. Enforced was 22 and the deletion list 35 until `fin.read` and `fin.write` were recovered from it. Both had in fact been enforced for some time and nothing re-derived the measurement — the same staleness, in the same direction, that `web/lib/admin/unenforcedPermissionKeys.json` carried, where it had the sharper consequence of making Financials ungrantable from the role editor. Catalog width is unchanged by this movement, and as with W-13 the movement is OUT of the deletion list, which is the direction that means the product grew a real gate rather than lost one.",
   "addition_candidate_count": 1,
   "discovery": {
     "finding": "The catalog is 57 keys. Every static instrument in this workstream measured 35, because the parser they shared was pinned to one INSERT column order.",
@@ -88,7 +89,9 @@
     { "key": "settings.manage", "sites": ["web/app/api/admin/configuration/programs/route.ts"] },
     { "key": "settings.read", "sites": ["web/app/api/admin/configuration/programs/route.ts"] },
     { "key": "settings.users_roles", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"] },
-    { "key": "settings.users_roles.read", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"], "note": "W-13/AD-22 — acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal." }
+    { "key": "settings.users_roles.read", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"], "note": "W-13/AD-22 — acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal." },
+    { "key": "fin.read", "sites": ["web/lib/financials/financialsPermissions.ts"], "note": "assertFinancialsReadAllowed — the five Financials workspace read routes, and from 2026-09-10 the twelve financial record-data routes that had been on admission alone. Appended rather than sorted into place: this array's order records when each key was measured." },
+    { "key": "fin.write", "sites": ["web/lib/adminV2/actions/definitions/financialChargeActions.ts", "web/lib/adminV2/actions/definitions/financialPaymentActions.ts", "web/lib/adminV2/actions/definitions/financialReductionActions.ts", "web/lib/adminV2/actions/definitions/financialResponsibilityActions.ts", "web/lib/adminV2/actions/definitions/tuitionGenerationActions.ts", "web/lib/financials/financialsPermissions.ts"], "note": "The billing authority: creating and posting charges, recording payments and collecting cards, applying authored discounts, resolving responsibility, generating tuition, and the two GL-account mutations." }
   ],
   "deletion_candidates": [
     "admin.roles.read",
@@ -105,8 +108,6 @@
     "crm.opportunities.read",
     "crm.opportunities.write",
     "documents.write",
-    "fin.read",
-    "fin.write",
     "operational_expectations.authority.assign",
     "operational_expectations.authority.manage",
     "ops.contacts.read",
@@ -132,7 +133,7 @@
       "count": 21,
       "seeded_by": "20260329165048_remote_schema.sql (seed_default_rbac), re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "An operator has never been offered these as controls in a product surface, but since W-10 the grid projects the whole catalog, so they became visible controls that change nothing.",
-      "keys": ["admin.roles.read", "admin.roles.write", "admin.users.read", "admin.users.write", "fin.read", "fin.write", "ops.contacts.read", "ops.contacts.write", "ops.customers.read", "ops.customers.write", "ops.jobs.read", "ops.jobs.write", "ops.locations.read", "ops.locations.write", "ops.messaging.read", "ops.opportunities.read", "ops.opportunities.write", "ops.schedules.read", "ops.schedules.write", "ops.workflows.read", "ops.workflows.write"]
+      "keys": ["admin.roles.read", "admin.roles.write", "admin.users.read", "admin.users.write", "ops.contacts.read", "ops.contacts.write", "ops.customers.read", "ops.customers.write", "ops.jobs.read", "ops.jobs.write", "ops.locations.read", "ops.locations.write", "ops.messaging.read", "ops.opportunities.read", "ops.opportunities.write", "ops.schedules.read", "ops.schedules.write", "ops.workflows.read", "ops.workflows.write"]
     },
     "grid_vocabulary": {
       "count": 10,
