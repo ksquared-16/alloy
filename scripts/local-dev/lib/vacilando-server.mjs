@@ -2877,8 +2877,33 @@ export function createVacilandoServer() {
       }).catch(() => {});
     } catch { /* best-effort */ }
     try {
-      import("./vacilando/trusted-host-actions.mjs").then(({ reconcileTrustedHostActionsOnBoot }) => {
-        const tha = reconcileTrustedHostActionsOnBoot();
+      import("./vacilando/trusted-host-actions.mjs").then((TH) => {
+        /*
+         * THE PRODUCTION COMPOSITION ROOT, AND THE ONLY ONE.
+         *
+         * The production migration runners no longer default to psql. Nothing
+         * reaches the deployed primary unless a process has explicitly declared
+         * itself a production-capable trusted host, and this is where that
+         * declaration is made — in the Gateway server, which is the only process
+         * that executes governed actions.
+         *
+         * A harness, a CLI, a scratch script or a test never runs this line, so
+         * for all of them the production database is not merely discouraged, it
+         * is unreachable. That is the invariant an integration harness violated
+         * when a mis-keyed runner bag fell through to the real runners and
+         * migrated the deployed primary four times with no approved production
+         * mutation behind it.
+         *
+         * Failure is logged and not thrown: arming is a capability, and a
+         * Gateway that cannot arm should still serve everything else and refuse
+         * the production apply on its own terms.
+         */
+        const armed = TH.armProductionDatabaseExecution({ reason: "vacilando gateway server startup" });
+        console.log(armed.ok
+          ? "[trusted-host] production database execution armed for this process"
+          : `[trusted-host] production database execution NOT armed (${armed.code}); production migrations will refuse`);
+
+        const tha = TH.reconcileTrustedHostActionsOnBoot();
         if (tha.interrupted?.length) {
           console.log(`[trusted-host] reconciled ${tha.interrupted.length} in-flight action(s) after restart`);
         }

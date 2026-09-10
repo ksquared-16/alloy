@@ -637,10 +637,33 @@ await test("NC39 — every executor fallback identifier actually resolves", () =
   // validateInputs drops whatever it does not name.
   const src = readFileSync(new URL("../lib/vacilando/trusted-host-actions.mjs", import.meta.url), "utf8");
   const used = [...src.matchAll(/\|\|\s*([a-zA-Z_$][\w$]*)\(\)/g)].map((m) => m[1]);
+  // A MULTI-LINE IMPORT IS STILL AN IMPORT.
+  //
+  // This asked whether the name appeared on a line that also said `from "`,
+  // which is only true for single-line imports. `findRepoRoot` is imported in a
+  // braced block spanning many lines, so the first fallback that used it was
+  // flagged as undefined — the guard failing in the direction that blocks
+  // correct code rather than the one that lets a ReferenceError through. The
+  // import BLOCK is read now; an identifier that is genuinely absent still
+  // fails, which is the whole point.
+  const imported = new Set(
+    [...src.matchAll(/import\s*\{([^}]*)\}\s*from\s+["']/g)]
+      .flatMap((m) => m[1].split(","))
+      .map((n) => n.split(/\s+as\s+/).pop().trim())
+      .filter(Boolean),
+  );
   for (const fn of new Set(used)) {
-    const defined = new RegExp(`(function\\s+${fn}\\s*\\(|const\\s+${fn}\\s*=|\\b${fn}\\b[^\\n]*from\\s+")`).test(src);
+    const defined = imported.has(fn)
+      || new RegExp(`(function\\s+${fn}\\s*\\(|const\\s+${fn}\\s*=|\\b${fn}\\b[^\\n]*from\\s+")`).test(src);
     assert.ok(defined, `${fn}() is used as a fallback but is not defined or imported in trusted-host-actions.mjs`);
   }
+  // And the repaired detection still has teeth: a name that is neither
+  // imported nor defined must still be caught.
+  assert.equal(imported.has("aFunctionNobodyImported"), false);
+  assert.equal(
+    /(function\s+aFunctionNobodyImported\s*\(|const\s+aFunctionNobodyImported\s*=)/.test(src),
+    false,
+  );
 });
 
 await test("NC40 — normalised retirement inputs keep the runtime root", () => {

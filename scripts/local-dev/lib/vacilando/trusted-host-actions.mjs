@@ -69,8 +69,19 @@ import {
   ledgerLookupSql,
   migrationPostconditionSql,
   migrationPostconditionDescription,
+  listMigrationsAtSha,
 } from "./trusted-host-migrate.mjs";
-import { PRODUCTION_APPLY_TARGETS } from "./trusted-host-production-migrate.mjs";
+import {
+  PRODUCTION_APPLY_TARGETS,
+  validateProductionMigrationInputs,
+} from "./trusted-host-production-migrate.mjs";
+import {
+  executeProductionMigrationApply,
+  publicProductionApplyResult,
+  containsCredentialMaterial,
+  PRODUCTION_APPLY_FAILURES,
+} from "./trusted-host-production-apply.mjs";
+import { requiredVersionsFromFilenames } from "./migration-parity.mjs";
 import {
   assertLedgerRepairPreconditions,
   buildLedgerRepairSql,
@@ -109,6 +120,7 @@ function runtimeRoot() {
 }
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUN_SQL_SH = join(HERE, "trusted-host-run-sql.sh");
+const PRODUCTION_IDENTITY_SH = join(HERE, "trusted-host-production-identity.sh");
 const iso = (ms) => new Date(ms ?? Date.now()).toISOString();
 
 function ensureDir(p = storeDir()) {
@@ -1091,6 +1103,7 @@ export function setOpenPrGhForTests(fn) {
 }
 
 let migrationRunnersForTests = null;
+let productionRunnersForTests = null;
 
 export function setTrustedHostMergeGhForTests(fn) {
   mergeGhForTests = typeof fn === "function" ? fn : null;
@@ -1098,6 +1111,40 @@ export function setTrustedHostMergeGhForTests(fn) {
 
 export function setTrustedHostMigrationRunnersForTests(runners = null) {
   migrationRunnersForTests = runners;
+}
+
+/**
+ * Replace the SECRET SOURCE and the hosted reading, and nothing else.
+ *
+ * ── AN IGNORED SUBSTITUTION IS HOW A TEST WRITES TO PRODUCTION ──
+ *
+ * MEASURED, NOT HYPOTHETICAL. An integration harness passed `inspectLedger` and
+ * `applyFile` in THIS bag, believing it had isolated the database. The executor
+ * read those two from `migrationRunnersForTests`, so the keys were silently
+ * dropped and the DEFAULT runners ran: psql opened the deployed primary and
+ * applied two migrations that had no operator approval behind them. The harness
+ * reported success, because every assertion it made was against the mocks that
+ * WERE honoured.
+ *
+ * A seam that accepts a key it does not use is not a seam, it is a trapdoor.
+ */
+const PRODUCTION_RUNNER_KEYS = Object.freeze([
+  "revalidate", "resolveExecutorIdentity", "readHostedVersions", "readRequiredVersions",
+  "applyBatch", "inspectLedger", "applyFile", "readContent",
+]);
+
+export function setTrustedHostProductionRunnersForTests(runners = null) {
+  if (runners) {
+    const unknown = Object.keys(runners).filter((k) => !PRODUCTION_RUNNER_KEYS.includes(k));
+    if (unknown.length) {
+      throw new Error(
+        `setTrustedHostProductionRunnersForTests: unknown runner(s) ${unknown.join(", ")}. `
+        + `A substitution this executor ignores would silently fall through to the REAL production `
+        + `database. Known runners: ${PRODUCTION_RUNNER_KEYS.join(", ")}.`,
+      );
+    }
+  }
+  productionRunnersForTests = runners;
 }
 
 function payloadHasSecrets(value) {
@@ -1364,6 +1411,504 @@ export function executeMigrationTrustedHostAction(action, { actor = "director", 
  * somehow reached here naming anything else refuses instead of writing to
  * whatever happens to be configured.
  */
+// ── PRODUCTION MIGRATION: THE TRUSTED-HOST ADAPTERS ──────────────────────────
+//
+// The production orchestrator holds no credential and spawns nothing. These
+// three functions are where that path touches the world, and they live HERE
+// because this file already owns the trusted-host child boundary: the same
+// store, the same redaction, the same distinct exit code for an absent
+// credential.
+
+/**
+ * Prove the deployed-primary credential resolves, and name the project publicly.
+ *
+ * Proof 6 of `assertProductionApplyPreconditions` requires the executor to be
+ * running with sanctioned credentials that resolve to the requested target.
+ * Nothing could satisfy that by inspection — the credential is deliberately
+ * unreachable from any lane — so the trusted host asks the credential about
+ * itself, in its own child process, and only two public refs come back.
+ */
+function defaultResolveProductionExecutorIdentity() {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const outFile = join(tmpDir, "production-identity.out");
+  const errFile = join(tmpDir, "production-identity.err");
+  try { chmodSync(PRODUCTION_IDENTITY_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [PRODUCTION_IDENTITY_SH, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 60_000,
+    encoding: "utf8",
+  });
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(outFile); } catch { /* */ }
+  if (child.status !== 0) {
+    const code = classifySqlChildFailure(errText, PRODUCTION_APPLY_FAILURES.CREDENTIAL_UNAVAILABLE);
+    return {
+      ok: false,
+      code: code === "trusted_credential_unavailable" ? PRODUCTION_APPLY_FAILURES.CREDENTIAL_UNAVAILABLE : code,
+      detail: errText.slice(0, 300) || "The trusted host could not resolve the deployed-primary credential.",
+    };
+  }
+  const read = (key) => {
+    const line = String(outText).split("\n").find((l) => l.startsWith(`${key}=`));
+    return line ? line.slice(key.length + 1).trim() : "";
+  };
+  return {
+    ok: true,
+    dbHostKind: read("DB_HOST_KIND"),
+    dbProjectRef: read("DB_PROJECT_REF"),
+    apiProjectRef: read("API_PROJECT_REF"),
+  };
+}
+
+/** The LIVE hosted migration ledger. Read-only, through the same trusted child as a census. */
+function defaultReadHostedMigrationVersions() {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, "hosted-migration-versions.sql");
+  const outFile = join(tmpDir, "hosted-migration-versions.out");
+  const errFile = join(tmpDir, "hosted-migration-versions.err");
+  writeFileSync(sqlFile, "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version");
+  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 120_000,
+    encoding: "utf8",
+  });
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(sqlFile); } catch { /* */ }
+  if (child.status !== 0) {
+    const code = classifySqlChildFailure(errText, PRODUCTION_APPLY_FAILURES.HOSTED_READ_FAILED);
+    return {
+      ok: false,
+      code: code === "trusted_credential_unavailable"
+        ? PRODUCTION_APPLY_FAILURES.CREDENTIAL_UNAVAILABLE
+        : PRODUCTION_APPLY_FAILURES.HOSTED_READ_FAILED,
+      detail: errText.slice(0, 300) || "Hosted migration ledger could not be read.",
+    };
+  }
+  const versions = String(outText)
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /^\d{14}$/.test(l));
+  // A ledger read that returns NOTHING is unreadable, not empty. The deployed
+  // primary has carried migrations for as long as it has existed, so treating
+  // silence as "no migrations" would report every identity missing and invite
+  // an apply over a database nobody actually measured.
+  if (!versions.length) {
+    return {
+      ok: false,
+      code: PRODUCTION_APPLY_FAILURES.HOSTED_READ_FAILED,
+      detail: "The hosted ledger returned no identities. UNKNOWN refuses.",
+    };
+  }
+  return { ok: true, versions, head: versions[versions.length - 1] };
+}
+
+/**
+ * ── PRODUCTION DATABASE RUNNERS ARE COMPOSED, NEVER DEFAULTED ──
+ *
+ * THE INCIDENT THIS EXISTS TO MAKE IMPOSSIBLE. An integration harness supplied
+ * isolating runners in the wrong bag. From this executor's point of view that is
+ * indistinguishable from supplying none, and "none" fell through to the real
+ * psql runners: the deployed primary was migrated four times with no approved
+ * production mutation behind it. Every assertion the harness made passed,
+ * because they were all against the mocks that were honoured.
+ *
+ * The defect was not the typo. It was that the DEFAULT was production. A missing
+ * runner should be the least capable outcome available, not the most.
+ *
+ * So the dependency is inverted. Nothing defaults to psql. Callers that isolate
+ * the database are honoured; callers that isolate nothing are REFUSED; and the
+ * real runners exist only for a process that has explicitly declared itself a
+ * production-capable trusted host. The Gateway host declares it at startup and
+ * is the only thing that does. A harness, a CLI, a test or a scratch script
+ * never does, so for all of them the production database is not merely
+ * discouraged — it is unreachable.
+ */
+let productionExecutionArmed = null;
+
+/**
+ * Declare THIS PROCESS a production-capable trusted host.
+ *
+ * Called by the Gateway host at startup and by nothing else. It is deliberately
+ * an explicit act with a recorded reason rather than an inferred property: a
+ * capability that turns itself on when the conditions look right is a capability
+ * that will eventually be on when they only looked right.
+ */
+export function armProductionDatabaseExecution({ reason = null, nowMs = Date.now() } = {}) {
+  if (process.env.NODE_TEST_CONTEXT) {
+    // Defence in depth, and not redundant: this refuses even if some future
+    // caller decides arming is harmless in a test.
+    return { ok: false, code: "production_runners_refused_in_test_context" };
+  }
+  productionExecutionArmed = { reason: reason || "trusted host startup", at: iso(nowMs) };
+  return { ok: true, armed: productionExecutionArmed };
+}
+
+/** Testing hook: return to the unarmed default. Never widens anything. */
+export function disarmProductionDatabaseExecution() {
+  productionExecutionArmed = null;
+}
+
+export function productionDatabaseExecutionArmed() {
+  return productionExecutionArmed ? { ...productionExecutionArmed } : null;
+}
+
+/**
+ * Resolve the two runners that open a database connection.
+ *
+ * The ONLY reference to the real psql runners in this file. Everything else
+ * reaches them through here, so "can this path touch production" is one
+ * function's answer rather than a property of every call site.
+ */
+function composeProductionDatabaseRunners(explicit = {}) {
+  const hasLedger = typeof explicit.inspectLedger === "function";
+  const hasApply = typeof explicit.applyFile === "function";
+
+  if (hasLedger && hasApply) {
+    return {
+      ok: true,
+      source: "injected",
+      runners: {
+        inspectLedger: explicit.inspectLedger,
+        applyFile: explicit.applyFile,
+        readContent: explicit.readContent || readMigrationContent,
+      },
+    };
+  }
+  // HALF AN ISOLATION IS NOT AN ISOLATION. A caller that stubbed one and forgot
+  // the other is making the incident's mistake at a smaller scale; completing it
+  // from the real runners would put psql behind a call site that reads as mocked.
+  if (hasLedger || hasApply) {
+    return {
+      ok: false,
+      code: "production_runners_partially_injected",
+      detail: `Both inspectLedger and applyFile must be supplied together; got only ${hasLedger ? "inspectLedger" : "applyFile"}.`,
+    };
+  }
+  if (process.env.NODE_TEST_CONTEXT) {
+    return {
+      ok: false,
+      code: "production_runners_refused_in_test_context",
+      detail: "A test process may not reach the production database runners. Inject inspectLedger and applyFile.",
+    };
+  }
+  if (!productionExecutionArmed) {
+    return {
+      ok: false,
+      code: "production_runners_not_composed",
+      detail:
+        "This process has not declared itself a production-capable trusted host, so the production database runners do not exist for it. "
+        + "A governed execution arms them through armProductionDatabaseExecution at Gateway startup; a harness must inject inspectLedger and applyFile instead.",
+    };
+  }
+  return {
+    ok: true,
+    source: "trusted_host",
+    armed_reason: productionExecutionArmed.reason,
+    runners: {
+      inspectLedger: defaultInspectLedger,
+      applyFile: defaultApplyMigrationFile,
+      readContent: explicit.readContent || readMigrationContent,
+    },
+  };
+}
+
+/** The identities the candidate revision requires, from the git object store. */
+function defaultReadRequiredVersions({ sha, worktreePath = null, gitCwd = null } = {}) {
+  const root = worktreePath || findRepoRoot();
+  return requiredVersionsFromFilenames(listMigrationsAtSha({ root, sha, gitCwd }));
+}
+
+// ── MIGRATION LEDGER RECONCILIATION: THE TRUSTED-HOST ADAPTERS ──────────────
+
+/**
+ * The governed-action records, read from this host's own store.
+ *
+ * Resolved locally rather than imported from `governed-action-request.mjs`,
+ * which imports the action registry, which imports this file — closing that
+ * cycle makes `ACTION_TYPES` unreachable before initialisation.
+ * `trusted-host-production-migrate` resolves the same path the same way, for the
+ * same reason.
+ */
+function readGovernedActionRecordsForHost() {
+  try {
+    const store = join(runtimeRoot(), "vacilando", "governed-actions", "requests.json");
+    if (!existsSync(store)) return [];
+    const parsed = JSON.parse(readFileSync(store, "utf8"));
+    return Array.isArray(parsed) ? parsed : (parsed?.requests || []);
+  } catch {
+    // Unreadable proof is NO proof, never assumed proof.
+    return [];
+  }
+}
+
+/** Read the ledger rows for the named identities, plus head and total. */
+function defaultReadLedgerRows({ versions = [] }) {
+  const wanted = versions.map((v) => String(v)).filter((v) => /^\d{14}$/.test(v));
+  if (!wanted.length) {
+    return { ok: false, code: LEDGER_RECONCILE_FAILURES.READ_FAILED, detail: "No identities to read." };
+  }
+  const list = wanted.map((v) => `'${v}'`).join(", ");
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, "ledger-reconcile-read.sql");
+  const outFile = join(tmpDir, "ledger-reconcile-read.out");
+  const errFile = join(tmpDir, "ledger-reconcile-read.err");
+  writeFileSync(sqlFile, [
+    "select 'row'::text as k, m.version::text, coalesce(m.name, '')",
+    `from supabase_migrations.schema_migrations m where m.version in (${list})`,
+    "union all select 'total'::text, (select count(*)::text from supabase_migrations.schema_migrations), ''",
+    "union all select 'head'::text, (select coalesce(max(version), 'none') from supabase_migrations.schema_migrations), ''",
+  ].join("\n"));
+  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 60_000,
+    encoding: "utf8",
+  });
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(sqlFile); } catch { /* */ }
+  if (child.status !== 0) {
+    return { ok: false, code: LEDGER_RECONCILE_FAILURES.READ_FAILED, detail: errText.slice(0, 300) || "Ledger read failed." };
+  }
+  const rows = [];
+  let total = null;
+  let head = null;
+  for (const line of String(outText).split("\n")) {
+    const t = line.trim();
+    if (!t || t === "BEGIN" || t === "COMMIT") continue;
+    const [k, a, b] = t.split("|");
+    if (k === "row") rows.push({ version: a, name: b ?? "" });
+    else if (k === "total") total = Number(a);
+    else if (k === "head") head = a;
+  }
+  // A total that did not come back means the read did not really answer. The
+  // reconciliation refuses on UNKNOWN rather than proceeding on partial evidence.
+  if (!Number.isFinite(total)) {
+    return { ok: false, code: LEDGER_RECONCILE_FAILURES.READ_FAILED, detail: "The ledger read returned no total. UNKNOWN refuses." };
+  }
+  return { ok: true, rows, total, head };
+}
+
+/**
+ * Write the ledger rows.
+ *
+ * Dollar-quoted with a tag proven absent from every statement, so no migration's
+ * own SQL can terminate the literal that contains it. ON CONFLICT DO NOTHING, so
+ * a replay is a no-op rather than a second row or an overwrite.
+ *
+ * `created_by`, `idempotency_key` and `rollback` are left to their defaults. That
+ * is not an omission: a census of all 393 hosted rows found every one of them
+ * null, so null IS the shape this migration system writes.
+ */
+function defaultWriteLedgerRows({ rows = [] }) {
+  if (!rows.length) return { ok: true, written: [] };
+  let tag = "alloyledger";
+  const all = rows.flatMap((r) => r.statements).join("\n");
+  while (all.includes(`$${tag}$`)) tag += "x";
+  const q = (text) => `$${tag}$${text}$${tag}$`;
+  const values = rows
+    .map((r) => `(${q(r.version)}, ${q(r.name)}, ARRAY[${r.statements.map(q).join(", ")}]::text[])`)
+    .join(",\n  ");
+  const sql = [
+    "INSERT INTO supabase_migrations.schema_migrations (version, name, statements)",
+    "VALUES",
+    `  ${values}`,
+    "ON CONFLICT (version) DO NOTHING;",
+    "",
+  ].join("\n");
+
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, "ledger-reconcile-write.sql");
+  const outFile = join(tmpDir, "ledger-reconcile-write.out");
+  const errFile = join(tmpDir, "ledger-reconcile-write.err");
+  writeFileSync(sqlFile, sql);
+  try { chmodSync(LEDGER_WRITE_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [LEDGER_WRITE_SH, sqlFile, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 120_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(sqlFile); } catch { /* */ }
+  if (child.status !== 0) {
+    return { ok: false, code: LEDGER_RECONCILE_FAILURES.WRITE_FAILED, detail: errText.slice(0, 400) || "Ledger write failed." };
+  }
+  return { ok: true, written: rows.map((r) => r.version) };
+}
+
+/**
+ * Compose the ledger adapters.
+ *
+ * The same inversion as the migration runners, for the same reason: nothing
+ * defaults to a production connection, and a process that has not declared
+ * itself production-capable cannot reach one.
+ */
+function composeLedgerRunners(explicit = {}) {
+  const hasRead = typeof explicit.readLedgerRows === "function";
+  const hasWrite = typeof explicit.writeLedgerRows === "function";
+  if (hasRead && hasWrite) return { ok: true, source: "injected", runners: explicit };
+  if (hasRead || hasWrite) {
+    return {
+      ok: false,
+      code: LEDGER_RECONCILE_FAILURES.RUNNERS_NOT_COMPOSED,
+      detail: "Both readLedgerRows and writeLedgerRows must be supplied together.",
+    };
+  }
+  if (process.env.NODE_TEST_CONTEXT) {
+    return {
+      ok: false,
+      code: LEDGER_RECONCILE_FAILURES.RUNNERS_NOT_COMPOSED,
+      detail: "A test process may not reach the production ledger. Inject readLedgerRows and writeLedgerRows.",
+    };
+  }
+  if (!productionExecutionArmed) {
+    return {
+      ok: false,
+      code: LEDGER_RECONCILE_FAILURES.RUNNERS_NOT_COMPOSED,
+      detail: "This process has not declared itself a production-capable trusted host.",
+    };
+  }
+  return {
+    ok: true,
+    source: "trusted_host",
+    runners: { readLedgerRows: defaultReadLedgerRows, writeLedgerRows: defaultWriteLedgerRows },
+  };
+}
+
+/**
+ * RECONCILE THE PRODUCTION MIGRATION LEDGER.
+ *
+ * Writes the row the migration system would have written, for SQL that provably
+ * already ran. It refuses unless the physical schema the row would claim is
+ * independently proven present — that proof is what separates reconciliation
+ * from fabrication, and it is supplied as evidence rather than assumed.
+ */
+export function executeLedgerReconcileTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const inputs = action.requestedInputs || action.inputs || {};
+  const repoRoot = inputs.worktreePath || inputs.worktree_path || findRepoRoot();
+  // Revalidated at execution: ledger content is re-derived from the committed
+  // files now, never carried from the filing.
+  const revalidated = validateLedgerReconcileInputs(inputs, {
+    readMigrationFile: ({ sha, relative }) => readMigrationContent({
+      environment: "alloy_deployed_primary",
+      root: repoRoot,
+      sha,
+      relative,
+      gitCwd: repoRoot,
+      preMergeCandidate: true,
+    }),
+  });
+  if (!revalidated.ok) return failTrustedAction(action, revalidated.code, revalidated.detail, { nowMs });
+
+  // THE EQUIVALENCE CLAIM IS TRACED, NOT TRUSTED. It must name a completed
+  // governed census of the production target that ran the reviewed artifact.
+  const claim = action.schemaEquivalence || inputs.schemaEquivalence || inputs.schema_equivalence || null;
+  const evidence = verifySchemaEquivalenceEvidence({
+    evidence: claim,
+    records: readGovernedActionRecordsForHost(),
+    expectedQueryHash: claim?.census_query_hash || null,
+    target: revalidated.normalized.target,
+  });
+  if (!evidence.ok) return failTrustedAction(action, evidence.code, evidence.detail, { nowMs });
+
+  const composed = composeLedgerRunners(ledgerRunnersForTests || {});
+  if (!composed.ok) return failTrustedAction(action, composed.code, composed.detail, { nowMs });
+
+  const out = executeLedgerReconciliation({
+    normalized: revalidated.normalized,
+    schemaEquivalence: { ...claim, verified_by: evidence },
+    approval: action.productionApproval || null,
+    readLedgerRows: composed.runners.readLedgerRows,
+    writeLedgerRows: composed.runners.writeLedgerRows,
+    nowMs,
+  });
+
+  const publicResult = publicLedgerReconcileResult(out);
+  if (containsCredentialMaterial(publicResult)) {
+    return failTrustedAction(action, "result_contained_secrets", "Reconciliation result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    const failed = failTrustedAction(action, out?.code || "ledger_write_failed", out?.detail || "Ledger reconciliation refused.", { nowMs });
+    if (failed.action) {
+      failed.action.result = { ...publicResult, ok: false };
+      failed.action.audit = buildAudit(failed.action, { success: false, failureCode: out?.code || "ledger_write_failed" });
+      writeAction(failed.action);
+    }
+    return failed;
+  }
+  action.audit = buildAudit(action, { success: true });
+  return completeTrustedAction(action, publicResult, { nowMs });
+}
+
+/**
+ * EXECUTE A PRODUCTION DATABASE MIGRATION.
+ *
+ * The dispatch that reaches this function closed the `action_unavailable`
+ * defect. It did not close the one underneath it: `assertProductionApplyPre-
+ * conditions` — the seven proofs that stand between a governed approval and a
+ * production schema mutation — still had no caller outside its own tests, and
+ * this executor applied migrations without ever consulting them. A control that
+ * nothing calls is not a weak control; it is an absent one wearing the name of
+ * a present one.
+ *
+ * So the cheap structural guards below stay exactly where they were — they
+ * refuse before anything is written and their refusal codes are already in the
+ * failure taxonomy — and everything after them now runs through the production
+ * orchestrator: revalidate, resolve the credential, re-measure hosted state,
+ * run the seven proofs, apply, re-measure again, and return an audit.
+ *
+ * TIME OF CHECK IS NOT TIME OF USE. Nothing measured when the action was filed
+ * is execution authority here. The whole reason a production apply exists is
+ * that hosted is behind, and "behind" is a measurement with an age.
+ */
 export function executePromotedMigrationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
@@ -1398,52 +1943,91 @@ export function executePromotedMigrationTrustedHostAction(action, { actor = "dir
   action.updated_at = iso(nowMs);
   writeAction(action);
 
-  const runners = migrationRunnersForTests || {};
-  const out = applyMigrationBatch(inputs, {
-    inspectLedger: runners.inspectLedger || defaultInspectLedger,
-    applyFile: runners.applyFile || defaultApplyMigrationFile,
-    readContent: runners.readContent || readMigrationContent,
+  const runners = productionRunnersForTests || {};
+  const migrationRunners = migrationRunnersForTests || {};
+  const repoRoot = inputs.worktreePath || inputs.worktree_path || findRepoRoot();
+
+  const out = executeProductionMigrationApply({
+    // REVALIDATED AT EXECUTION, against the world as it is now — not the
+    // normalized snapshot the request was filed with. The requested inputs are
+    // re-put through the action's own validator, so the candidate SHA, the
+    // governed promotion authority, the delta bound and every migration
+    // artefact are re-established rather than inherited.
+    revalidate: runners.revalidate
+      || (() => validateProductionMigrationInputs(action.requestedInputs || inputs, { repoRoot, nowMs })),
+    resolveExecutorIdentity: runners.resolveExecutorIdentity || defaultResolveProductionExecutorIdentity,
+    readHostedVersions: runners.readHostedVersions || defaultReadHostedMigrationVersions,
+    readRequiredVersions: runners.readRequiredVersions
+      || (({ sha }) => defaultReadRequiredVersions({ sha, worktreePath: repoRoot, gitCwd: inputs.gitCwd || null })),
+    // Composed, never defaulted. `composeProductionDatabaseRunners` is the only
+    // thing in this file that can hand back the real psql runners, and it does
+    // so only for a process that declared itself a production-capable trusted
+    // host. An un-isolated harness gets a refusal here rather than a connection.
+    applyBatch: runners.applyBatch || ((normalized) => {
+      const composed = composeProductionDatabaseRunners({
+        inspectLedger: runners.inspectLedger || migrationRunners.inspectLedger,
+        applyFile: runners.applyFile || migrationRunners.applyFile,
+        readContent: runners.readContent || migrationRunners.readContent,
+      });
+      if (!composed.ok) {
+        return {
+          ok: false,
+          stopped: true,
+          environment: normalized.environment,
+          expectedSha: normalized.expectedSha,
+          // Shaped as a batch result so the orchestrator classifies it through
+          // the same path as any other pre-execution refusal: no effect, and
+          // therefore never reported as an ambiguous partial apply.
+          results: [{
+            ok: false,
+            version: normalized.migrations?.[0]?.version || null,
+            path: normalized.migrations?.[0]?.path || null,
+            code: composed.code,
+            detail: composed.detail,
+          }],
+        };
+      }
+      return applyMigrationBatch(normalized, { ...composed.runners, nowMs });
+    }),
+    approval: action.productionApproval || null,
+    approvedHostedHead: action.productionApproval?.hosted_head_at_approval || null,
     nowMs,
   });
-  if (payloadHasSecrets(out)) {
+
+  const publicResult = publicProductionApplyResult(out);
+  /*
+   * A VALUE CHECK, NOT A WORD CHECK — and the one place in this file where the
+   * difference matters. `payloadHasSecrets` flags the bare token DATABASE_URL,
+   * which is right for a migration payload that should never mention it and
+   * wrong for a production audit whose job is to NAME the credential reference
+   * it used. Both still refuse a connection string, a key or an assignment.
+   */
+  if (containsCredentialMaterial(publicResult)) {
     return failTrustedAction(action, "result_contained_secrets",
-      "Migration result contained secrets and was discarded.", { nowMs });
+      "Production migration result contained secrets and was discarded.", { nowMs });
   }
   if (!out?.ok) {
-    const failed = out?.results?.find((r) => !r.ok);
-    const publicResult = publicMigrationResult(out);
-    const failedAction = failTrustedAction(
-      action,
-      failed?.code || "apply_failed",
-      failed?.detail || "Migration batch stopped on failure.",
-      { nowMs },
-    );
-    if (failedAction.action) {
-      // The partial record is preserved: which migrations ran, which did not,
-      // and where it stopped. A production apply that fails halfway is exactly
-      // the case where "what actually happened" must survive.
-      failedAction.action.result = {
-        ...publicResult,
-        ok: false,
-        target,
-        code: failed?.code || "apply_failed",
-        detail: failed?.detail || "Migration batch stopped on failure.",
-      };
-      writeAction(failedAction.action);
+    const failed = failTrustedAction(action, out?.code || "apply_failed",
+      out?.detail || "Production migration refused.", { nowMs });
+    // The partial record and the audit both survive the failure. A production
+    // apply that refuses, or that fails halfway, is exactly the case where
+    // "what did it check, what did it see, and what actually ran" must be on
+    // the record — a bare failure code answers none of the three.
+    if (failed.action) {
+      failed.action.result = { ...publicResult, ok: false, target };
+      failed.action.audit = buildAudit(failed.action, { success: false, failureCode: out?.code || "apply_failed" });
+      writeAction(failed.action);
     }
-    return failedAction;
+    return failed;
   }
-  // POST-APPLY PARITY IS NOT ASSERTED HERE, and that is deliberate. A successful
-  // exit proves migrations ran, never that the deployed primary now satisfies
-  // the revision — only a governed census establishes that. The result says so
-  // explicitly so no reader mistakes execution for proof.
-  const result = {
-    ...publicMigrationResult(out),
-    ok: true,
-    target,
-    recensus_required: true,
-  };
+  // A SUCCESSFUL EXIT IS STILL NOT A PROMOTION. The orchestrator re-read the
+  // hosted ledger and verified the identities landed, which is strictly more
+  // than "the executor exited zero" — but the promotion is released by the
+  // governed census, and `recensus_required` says so unless parity already
+  // re-measured PASS.
+  const result = { ...publicResult, ok: true, target };
   action.result = result;
+  action.audit = buildAudit(action, { success: true });
   return completeTrustedAction(action, result, { nowMs });
 }
 
@@ -2454,6 +3038,16 @@ export function fulfillPromotedMigrationForMission(missionId, {
   grant = null,
   authorizationId = null,
   exactContext = null,
+  /**
+   * The governed record's own approval, carried rather than reconstructed.
+   *
+   * It is the one fact the trusted host cannot re-derive from inputs, and
+   * proof 5 refuses without it. A delegated or policy decision is carried
+   * through as what it IS rather than dropped, because the proof has to be able
+   * to refuse it — silently omitting one would make the request look unapproved
+   * instead of improperly approved, and those are different faults.
+   */
+  approval = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId,
@@ -2467,6 +3061,23 @@ export function fulfillPromotedMigrationForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  if (approval) {
+    // Written BEFORE authorization, so a refusal cannot leave behind an action
+    // that executes later with no recorded approver.
+    req.action.productionApproval = {
+      decision: approval.decision || null,
+      actor: approval.actor || approval.decision_actor || null,
+      decision_actor: approval.decision_actor || approval.actor || null,
+      at: approval.at || null,
+      delegated: approval.delegated === true,
+      authorization_id: authorizationId || approval.authorization_id || null,
+      content_fingerprint: approval.content_fingerprint || exactContext?.contentFingerprint || null,
+      approved_versions: Array.isArray(approval.approved_versions) ? approval.approved_versions.map(String) : [],
+      hosted_head_at_approval: approval.hosted_head_at_approval || null,
+    };
+    req.action.updated_at = iso(nowMs);
+    writeAction(req.action);
+  }
   const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) {
     return { ok: false, error: "authorization_required", action: auth.action };
