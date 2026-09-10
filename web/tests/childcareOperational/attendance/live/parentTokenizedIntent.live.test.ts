@@ -23,6 +23,10 @@ import { PARENT_INTENT_CAPABILITY } from "@/lib/childcareOperational/attendance/
 import { ratifyOperationalExpectation } from "@/lib/operationalExpectations/ratification/ratifyOperationalExpectation";
 import { createSupabaseRatificationGateway } from "@/lib/operationalExpectations/ratification/supabaseRatificationGateway";
 import { effectiveExpectationsForWindow } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
+import { authorOperationalExpectation } from "@/lib/operationalExpectations/intake/authorOperationalExpectation";
+import { createSupabaseAuthoringGateway } from "@/lib/operationalExpectations/intake/supabaseAuthoringGateway";
+import { reviseChildAway } from "@/lib/childcareOperational/attendance/serviceDayExceptionCommands";
+import { ATTENDANCE_EXPECTATION_PURPOSE } from "@/lib/childcareOperational/attendance/serviceDayExpectations";
 import { createSupabaseExpectationQueryGateway } from "@/lib/operationalExpectations/query/supabaseExpectationQueryGateway";
 import {
     ATTENDANCE_SUBJECT_KINDS,
@@ -54,12 +58,15 @@ if (env) {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||= env.url;
     process.env.SUPABASE_SERVICE_ROLE_KEY ||= env.serviceKey;
     /*
-     * Ratification's gateway resolves the GENERIC `oe.ledger.author` env flag —
-     * it has no purpose seam, unlike authoring. Without this, P7 would report
-     * `disabled` and prove nothing. That asymmetry is a real finding, recorded in
-     * the checkpoint rather than hidden by this line.
+     * DELIBERATELY NOT SET: `OE_LEDGER_AUTHOR_ENABLED`.
+     *
+     * An earlier version of this suite switched the global flag on so that P7
+     * could pass. That would have certified a path which cannot run in
+     * production as configured — the flag is OFF by default and governs the
+     * GENERIC intake. Ratification now takes the same activated-purpose seam
+     * authoring has, so these scenarios run in the configuration a real tenant
+     * has, and if that seam regresses they report `disabled` instead of passing.
      */
-    process.env.OE_LEDGER_AUTHOR_ENABLED = "true";
 }
 
 const ORG = "00000000-0000-4000-8000-000000000001";
@@ -216,6 +223,7 @@ describeLive("parent tokenized intent — live", () => {
 
         // And the resolver reads it back as this child being known away.
         const { effective } = await effectiveFor(CHILD_A, SICK_DAY);
+        expect(effective.map((e) => e.expectationId)).toContain(out.act.id);
         const interpreted = interpretServiceDay({
             siteLocationId: RIVERSIDE,
             scheduledChildIds: [CHILD_A],
@@ -243,9 +251,11 @@ describeLive("parent tokenized intent — live", () => {
             reasonKey: "holiday",
         });
         expect(out.status).toBe("authored");
+        if (out.status !== "authored") return;
 
         for (const day of [HOLIDAY_FROM, HOLIDAY_TO]) {
             const { effective } = await effectiveFor(CHILD_A, day);
+            expect(effective.map((e) => e.expectationId)).toContain(out.act.id);
             const interpreted = interpretServiceDay({
                 siteLocationId: RIVERSIDE,
                 scheduledChildIds: [CHILD_A],
@@ -254,13 +264,17 @@ describeLive("parent tokenized intent — live", () => {
             expect(interpreted[0]?.interpretation).toBe("known_away");
         }
 
-        // The day AFTER the holiday is a normal day. An off-by-one here would
-        // silently suppress a missing-arrival signal for a child who is expected.
+        /*
+         * The day AFTER the holiday is not covered. An off-by-one here would
+         * silently suppress a missing-arrival signal for a child who IS expected.
+         *
+         * Asserted as "this expectation does not reach that day" rather than "that
+         * day is normal": the expectation ledger is append-only, so this shared
+         * certification child carries every previous run's holidays, and a claim
+         * about the whole day would be a claim about all of them.
+         */
         const { effective: after } = await effectiveFor(CHILD_A, dayOffset(15));
-        expect(
-            interpretServiceDay({ siteLocationId: RIVERSIDE, scheduledChildIds: [CHILD_A], effective: after })[0]
-                ?.interpretation,
-        ).toBe("normal");
+        expect(after.map((e) => e.expectationId)).not.toContain(out.act.id);
     });
 
     // ── P3 — subject escalation ────────────────────────────────────────────
@@ -269,14 +283,21 @@ describeLive("parent tokenized intent — live", () => {
         const out = await submit("valid", {
             assertedChildCustomerMemberId: CHILD_B,
             fromDate: dayOffset(20),
+            note: `escalation-${run}`,
         });
         expect(out.status).toBe("denied");
         if (out.status !== "denied") return;
         expect(out.code).toBe("subject_mismatch");
 
-        // Fail CLOSED: nothing was authored for either child.
+        /*
+         * Fail CLOSED. Asserted by IDENTITY rather than by an empty list: the
+         * expectation ledger is append-only and this certification child carries
+         * every previous run's expectations, so "nothing exists for this child on
+         * this date" is a claim about history rather than about this scenario.
+         */
+        expect(out).not.toHaveProperty("act");
         const { effective } = await effectiveFor(CHILD_B, dayOffset(20));
-        expect(effective).toHaveLength(0);
+        expect(effective.map((e) => e.condition?.note ?? null)).not.toContain(`escalation-${run}`);
     });
 
     it("P3 — the subject comes from the link even when the caller asserts nothing", async () => {
@@ -284,11 +305,15 @@ describeLive("parent tokenized intent — live", () => {
         const out = await submit("childB", { fromDate: day, reasonKey: "family" });
         expect(out.status).toBe("authored");
 
-        // Child B's link speaks for child B, and only for child B.
+        if (out.status !== "authored") return;
+
+        // Child B's link speaks for child B, and only for child B — asserted by
+        // the authored expectation's identity, not by counting rows on a child
+        // whose ledger accumulates across every certification run.
         const b = await effectiveFor(CHILD_B, day);
-        expect(b.effective.length).toBeGreaterThan(0);
+        expect(b.effective.map((e) => e.expectationId)).toContain(out.act.id);
         const a = await effectiveFor(CHILD_A, day);
-        expect(a.effective).toHaveLength(0);
+        expect(a.effective.map((e) => e.expectationId)).not.toContain(out.act.id);
     });
 
     // ── P4 — expired / revoked / consumed ──────────────────────────────────
@@ -300,7 +325,7 @@ describeLive("parent tokenized intent — live", () => {
             ["revoked", "revoked"],
             ["consumed", "consumed"],
         ] as const) {
-            const out = await submit(name, { fromDate: day });
+            const out = await submit(name, { fromDate: day, note: `refused-${run}` });
             expect(out.status).toBe("denied");
             if (out.status !== "denied") continue;
             expect(out.code).toBe(code);
@@ -309,8 +334,10 @@ describeLive("parent tokenized intent — live", () => {
             expect(out.message).toBe("This link is no longer valid.");
         }
 
+        // Nothing this scenario submitted reached the ledger. Identified by the
+        // note it would have carried, for the append-only reason above.
         const { effective } = await effectiveFor(CHILD_A, day);
-        expect(effective).toHaveLength(0);
+        expect(effective.map((e) => e.condition?.note ?? null)).not.toContain(`refused-${run}`);
     });
 
     it("P4 — a token nobody issued is refused", async () => {
@@ -361,8 +388,10 @@ describeLive("parent tokenized intent — live", () => {
         expect(second.act.id).toBe(first.act.id);
         expect(second.idempotent).toBe(true);
 
+        // ONE expectation for that one report — counted by identity, not by the
+        // size of a ledger that never forgets.
         const { effective } = await effectiveFor(CHILD_A, day);
-        expect(effective).toHaveLength(1);
+        expect(effective.filter((e) => e.expectationId === first.act.id)).toHaveLength(1);
     });
 
     it("P6 — a genuinely different report is a new expectation, not a swallowed retry", async () => {
@@ -393,7 +422,7 @@ describeLive("parent tokenized intent — live", () => {
                 actorAuthenticated: true,
                 ratifierAuthorityKey: FAMILY_SUBMITTED_INTENT_AUTHORITY_KEY,
             },
-            createSupabaseRatificationGateway(supabase),
+            createSupabaseRatificationGateway(supabase, ATTENDANCE_EXPECTATION_PURPOSE),
         );
         expect(ratified.status).toBe("ratified");
         if (ratified.status !== "ratified") return;
@@ -426,6 +455,123 @@ describeLive("parent tokenized intent — live", () => {
             ratified_by_user_id: ratifierUserId,
             ratifier_authority_key: FAMILY_SUBMITTED_INTENT_AUTHORITY_KEY,
         });
+
+        /*
+         * AND THE CONSUMER SEES IT. This is the leg that was missing: the write
+         * path was real while every reader still said `proposed`, so a ratified
+         * expectation was indistinguishable from an unratified one. The resolver
+         * now derives governed standing from the ratification evidence, and
+         * reports BOTH — what was authored, and what governs now.
+         */
+        const { effective } = await effectiveFor(CHILD_A, day);
+        const governed = effective.find((e) => e.expectationId === authored.act.id);
+        expect(governed).toBeTruthy();
+        expect(governed?.standing).toBe("proposed");
+        expect(governed?.effectiveStanding).toBe("binding");
+        expect(governed?.ratifiedUnderAuthorityKey).toBe(FAMILY_SUBMITTED_INTENT_AUTHORITY_KEY);
+        expect(governed?.ratifiedAt).toBeTruthy();
+    });
+
+    it("P7 — without a ratification, the consumer sees a proposal and nothing more", async () => {
+        const day = dayOffset(52);
+        const authored = await submit("valid", { fromDate: day, reasonKey: "family" });
+        expect(authored.status).toBe("authored");
+        if (authored.status !== "authored") return;
+
+        const { effective } = await effectiveFor(CHILD_A, day);
+        const e = effective.find((x) => x.expectationId === authored.act.id);
+        expect(e?.standing).toBe("proposed");
+        // The whole point: unratified must NOT read as governed.
+        expect(e?.effectiveStanding).toBe("proposed");
+        expect(e?.ratifiedAt).toBeNull();
+    });
+
+    it("P7 — a ratification that was refused makes nothing effective", async () => {
+        const day = dayOffset(53);
+        const authored = await submit("ratifiable", { fromDate: day });
+        expect(authored.status).toBe("authored");
+        if (authored.status !== "authored") return;
+
+        // A real authenticated user who holds no grant on this authority.
+        const outsider = await supabase.auth.admin.createUser({
+            email: `cert-outsider-${run}@example.test`,
+            password: `Cert-${run}-Outsider!`,
+            email_confirm: true,
+        });
+        if (outsider.error || !outsider.data.user) throw new Error("outsider fixture failed");
+        createdUserIds.push(outsider.data.user.id);
+
+        const refused = await ratifyOperationalExpectation(
+            { idempotencyKey: `cert-badratify-${run}-${day}`, expectationId: authored.act.id },
+            {
+                orgId: ORG,
+                actorUserId: outsider.data.user.id,
+                actorAuthenticated: true,
+                ratifierAuthorityKey: FAMILY_SUBMITTED_INTENT_AUTHORITY_KEY,
+            },
+            createSupabaseRatificationGateway(supabase, ATTENDANCE_EXPECTATION_PURPOSE),
+        );
+        expect(refused.status).toBe("rejected");
+        if (refused.status === "rejected") expect(refused.code).toBe("insufficient_authority");
+
+        // No evidence written, so nothing for the resolver to promote.
+        const { effective } = await effectiveFor(CHILD_A, day);
+        expect(effective.find((x) => x.expectationId === authored.act.id)?.effectiveStanding).toBe("proposed");
+    });
+
+    it("P7 — a revision does not inherit its predecessor's ratification", async () => {
+        const day = dayOffset(54);
+        const authored = await submit("ratifiable", { fromDate: day, reasonKey: "holiday" });
+        expect(authored.status).toBe("authored");
+        if (authored.status !== "authored") return;
+
+        const ratified = await ratifyOperationalExpectation(
+            { idempotencyKey: `cert-ratify-super-${run}`, expectationId: authored.act.id },
+            {
+                orgId: ORG,
+                actorUserId: ratifierUserId,
+                actorAuthenticated: true,
+                ratifierAuthorityKey: FAMILY_SUBMITTED_INTENT_AUTHORITY_KEY,
+            },
+            createSupabaseRatificationGateway(supabase, ATTENDANCE_EXPECTATION_PURPOSE),
+        );
+        expect(ratified.status).toBe("ratified");
+        expect(
+            (await effectiveFor(CHILD_A, day)).effective.find((e) => e.expectationId === authored.act.id)
+                ?.effectiveStanding,
+        ).toBe("binding");
+
+        /*
+         * The plan changes. `operational_expectation_ratifications` has no
+         * revocation column — the model supports supersession of the EXPECTATION
+         * instead, and a ratification names one expectation. So the revision must
+         * come back to `proposed`: governance attaches to what was actually
+         * reviewed, not to a lineage a later author can silently extend.
+         */
+        const revised = await authorOperationalExpectation(
+            reviseChildAway({
+                idempotencyKey: `cert-revise-${run}-${day}`,
+                actorUserId: "",
+                authority: {
+                    authorityKey: FAMILY_SUBMITTED_INTENT_AUTHORITY_KEY,
+                    authorClass: "external",
+                },
+                reasonKey: "holiday",
+                childId: CHILD_A,
+                range: { fromDate: day, toDate: dayOffset(55) },
+                predecessorId: authored.act.id,
+            }),
+            { orgId: ORG, actorUserId: null, actorLabel: "Family (link)", actorAuthenticated: true },
+            createSupabaseAuthoringGateway(supabase, ATTENDANCE_EXPECTATION_PURPOSE),
+        );
+        expect(revised.status).toBe("authored");
+        if (revised.status !== "authored") return;
+
+        const { effective } = await effectiveFor(CHILD_A, day);
+        const now = effective.find((e) => e.expectationId === revised.act.id);
+        expect(now).toBeTruthy();
+        expect(now?.effectiveStanding).toBe("proposed");
+        expect(now?.ratifiedAt).toBeNull();
     });
 
     it("P7 — a family cannot ratify its own intent", async () => {
@@ -446,7 +592,7 @@ describeLive("parent tokenized intent — live", () => {
                 actorAuthenticated: true,
                 ratifierAuthorityKey: FAMILY_SUBMITTED_INTENT_AUTHORITY_KEY,
             },
-            createSupabaseRatificationGateway(supabase),
+            createSupabaseRatificationGateway(supabase, ATTENDANCE_EXPECTATION_PURPOSE),
         );
         expect(selfRatified.status).toBe("rejected");
 
@@ -473,7 +619,7 @@ describeLive("parent tokenized intent — live", () => {
                 actorAuthenticated: true,
                 ratifierAuthorityKey: FAMILY_SUBMITTED_INTENT_AUTHORITY_KEY,
             },
-            createSupabaseRatificationGateway(supabase),
+            createSupabaseRatificationGateway(supabase, ATTENDANCE_EXPECTATION_PURPOSE),
         );
         expect(ratified.status).toBe("ratified");
 

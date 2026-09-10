@@ -31,6 +31,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { recordAttendanceEvent, correctAttendanceEvent } from "@/lib/childcareOperational/attendance/attendanceService";
 import { resolveExternalMapping } from "@/lib/childcareOperational/attendance/integration/externalMapping";
+import { resolveChildMemberEligibility } from "@/lib/records/childMemberEligibility";
 import {
     resolveIntegrationProducer,
     type ResolvedIntegrationProducer,
@@ -309,6 +310,26 @@ export async function ingestExternalAttendanceEvent(params: {
             detail: "The mapping for that identifier does not name a child.",
         };
     }
+    /*
+     * THE MAPPING RESOLVED A UUID. IT DID NOT PROVE A CHILD.
+     *
+     * `attendance_integration_mappings.child_customer_member_id` is a foreign key
+     * into `customer_members`, and that household table holds adults too. A
+     * provider that maps a parent's badge — deliberately or by an operator's
+     * honest mistake at mapping time — would otherwise produce a canonical
+     * attendance fact saying a CHILD was present because an ADULT moved.
+     *
+     * The provider's own `entity_type = "child"` is not evidence of this: it
+     * describes what the provider believes its identifier means, and the entire
+     * point of the boundary is that the provider does not get to describe Alloy's
+     * subjects. So the canonical resolver decides, and it fails closed.
+     */
+    const eligible = await resolveChildMemberEligibility(supabase, producer.orgId, child.customerMemberId);
+    if (!eligible.ok) {
+        await setDisposition(supabase, evidenceId, "rejected", eligible.code);
+        return { disposition: "rejected", evidenceId, code: eligible.code, detail: eligible.message };
+    }
+
     const agreement = await resolveAgreementForChild(supabase, producer.orgId, child.customerMemberId);
     if (!agreement) {
         await setDisposition(supabase, evidenceId, "rejected", "no_enrollment_agreement");

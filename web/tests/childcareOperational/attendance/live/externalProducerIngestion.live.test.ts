@@ -78,6 +78,8 @@ describeLive("external producer ingestion — live", () => {
     let producerId = "";
     let otherProducerId = "";
     let readOnlyProducerId = "";
+    /** A real ADULT household member, for the subject-validity guard. */
+    let guardianMemberId = "";
     const writtenFactIds: string[] = [];
 
     /**
@@ -90,7 +92,20 @@ describeLive("external producer ingestion — live", () => {
      */
     async function cleanup() {
         // Evidence first: it holds an ON DELETE RESTRICT reference to producers.
-        await supabase.from("attendance_integration_events").delete().eq("provider_key", PROVIDER);
+        // Scoped to this suite's own producers and event ids — a delete by
+        // `provider_key` alone reaches into every other suite sharing it.
+        for (const id of [producerId, otherProducerId, readOnlyProducerId].filter(Boolean)) {
+            await supabase.from("attendance_integration_events").delete().eq("producer_id", id);
+        }
+        await supabase
+            .from("attendance_integration_events")
+            .delete()
+            .is("producer_id", null)
+            .like("provider_event_id", `cc-evt-${run}%`);
+        if (guardianMemberId) {
+            await supabase.from("attendance_integration_mappings").delete().eq("child_customer_member_id", guardianMemberId);
+            await supabase.from("customer_members").delete().eq("id", guardianMemberId);
+        }
         await supabase.from("attendance_integration_producers").delete().in("producer_key", [
             `integration:cert:${run}`,
             `integration:cert:${run}-other`,
@@ -132,6 +147,34 @@ describeLive("external producer ingestion — live", () => {
             return id;
         };
 
+        /*
+         * A guardian in the same household as the certified child. Created here
+         * rather than assumed, because the guard being tested is precisely that
+         * an ADULT canonical member cannot become a child's attendance — and a
+         * tenant whose members all happen to be children would prove nothing.
+         */
+        const { data: childRow } = await supabase
+            .from("customer_members")
+            .select("customer_id")
+            .eq("org_id", ORG)
+            .eq("id", CHILD)
+            .single();
+        const guardian = await supabase
+            .from("customer_members")
+            .insert({
+                org_id: ORG,
+                customer_id: (childRow as { customer_id: string }).customer_id,
+                relationship: "guardian",
+                first_name: "Cert",
+                last_name: `Guardian ${run}`,
+                display_name: `Cert Guardian ${run}`,
+                is_active: true,
+            })
+            .select("id")
+            .single();
+        if (guardian.error) throw new Error(`guardian fixture failed: ${guardian.error.message}`);
+        guardianMemberId = (guardian.data as { id: string }).id;
+
         producerId = await mk(`integration:cert:${run}`, SECRET, [RIVERSIDE]);
         // A second producer authorized for a DIFFERENT site, for the wrong-site
         // and cross-producer-mapping cases.
@@ -153,6 +196,17 @@ describeLive("external producer ingestion — live", () => {
                 .insert({ org_id: ORG, producer_id: producerId, ...m });
             if (r.error) throw new Error(`mapping fixture failed: ${r.error.message}`);
         }
+
+        // The dangerous mapping, deliberately ALLOWED to exist: the generic mapping
+        // schema cannot tell a child from an adult, which is why ingestion must.
+        const adultMapping = await supabase.from("attendance_integration_mappings").insert({
+            org_id: ORG,
+            producer_id: producerId,
+            external_entity_type: "child",
+            external_id: "CC-ADULT-BADGE",
+            child_customer_member_id: guardianMemberId,
+        });
+        if (adultMapping.error) throw new Error(`adult mapping fixture failed: ${adultMapping.error.message}`);
 
         /*
          * Producers two and three get their OWN mappings, under their own
@@ -503,6 +557,103 @@ describeLive("external producer ingestion — live", () => {
             event: evt({ externalEventId: `cc-evt-${run}-kindmix`, externalChildId: "CC-ROOM-A" }),
         });
         expect(out.disposition).toBe("unmapped");
+    });
+
+    // ── M — the mapped subject must be a CHILD, not merely a row ───────────
+
+    it("M1 — a mapping to a legitimate child still commits", async () => {
+        // The positive control for the guard below: without it, M2 would only
+        // prove that something refused the event.
+        const out = await ingestExternalAttendanceEvent({
+            supabase,
+            presentedCredential: SECRET,
+            providerKey: PROVIDER,
+            event: evt({ externalEventId: `cc-evt-${run}-m1`, physicalEventAt: `${TODAY}T08:05:00.000Z` }),
+        });
+        expect(out.disposition).toBe("applied");
+        if (out.attendanceEventId) writtenFactIds.push(out.attendanceEventId);
+    });
+
+    it("M2 — a mapping that resolves to an ADULT authors no attendance", async () => {
+        const out = await ingestExternalAttendanceEvent({
+            supabase,
+            presentedCredential: SECRET,
+            providerKey: PROVIDER,
+            event: evt({ externalEventId: `cc-evt-${run}-m2`, externalChildId: "CC-ADULT-BADGE" }),
+        });
+        /*
+         * The mapping RESOLVED — it is active, correctly scoped to this producer,
+         * and points at a real row this org owns. Everything the mapping layer
+         * can check passed. The refusal comes from the canonical subject
+         * resolver, which is the only thing that knows the row is a guardian.
+         */
+        expect(out.disposition).toBe("rejected");
+        expect(out.code).toBe("member_not_a_child");
+        expect(out.attendanceEventId).toBeFalsy();
+
+        // And nothing was written anywhere in the Attendance ledger for them.
+        const { data } = await supabase
+            .from("child_attendance_events")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("customer_member_id", guardianMemberId);
+        expect(data ?? []).toHaveLength(0);
+    });
+
+    it("M2 — the provider's own claim that the identifier is a child changes nothing", async () => {
+        // `external_entity_type = 'child'` is what the PROVIDER believes its
+        // identifier means. The whole boundary exists because the provider does
+        // not get to describe Alloy's subjects.
+        const { data } = await supabase
+            .from("attendance_integration_mappings")
+            .select("external_entity_type, status")
+            .eq("producer_id", producerId)
+            .eq("external_id", "CC-ADULT-BADGE")
+            .single();
+        expect(data).toMatchObject({ external_entity_type: "child", status: "active" });
+    });
+
+    it("M5 — a mapping REPOINTED at an adult stops working, mapping changes and all", async () => {
+        // Disable the good child mapping and replace it with one naming the
+        // guardian. A guard applied only at mapping-creation time would miss
+        // this; the check runs on every ingestion, so it does not.
+        await supabase
+            .from("attendance_integration_mappings")
+            .update({ status: "disabled", disabled_at: new Date().toISOString() })
+            .eq("producer_id", producerId)
+            .eq("external_id", "CC-CHILD-1");
+
+        const repointed = await supabase.from("attendance_integration_mappings").insert({
+            org_id: ORG,
+            producer_id: producerId,
+            external_entity_type: "child",
+            external_id: "CC-CHILD-1",
+            child_customer_member_id: guardianMemberId,
+        });
+        expect(repointed.error).toBeNull();
+
+        const out = await ingestExternalAttendanceEvent({
+            supabase,
+            presentedCredential: SECRET,
+            providerKey: PROVIDER,
+            event: evt({ externalEventId: `cc-evt-${run}-m5` }),
+        });
+        expect(out.disposition).toBe("rejected");
+        expect(out.code).toBe("member_not_a_child");
+
+        // Put the good mapping back for anything that follows.
+        await supabase
+            .from("attendance_integration_mappings")
+            .delete()
+            .eq("producer_id", producerId)
+            .eq("external_id", "CC-CHILD-1")
+            .eq("child_customer_member_id", guardianMemberId);
+        await supabase
+            .from("attendance_integration_mappings")
+            .update({ status: "active", disabled_at: null })
+            .eq("producer_id", producerId)
+            .eq("external_id", "CC-CHILD-1")
+            .eq("child_customer_member_id", CHILD);
     });
 
     // ── I — revocation, and the credential itself ──────────────────────────

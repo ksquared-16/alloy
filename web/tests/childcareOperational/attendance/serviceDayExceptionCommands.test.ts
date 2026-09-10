@@ -236,7 +236,7 @@ async function project(rows: ExpectationQueryRow[], scheduled = [EMMA]) {
             ],
             asOf: serviceDayAsOf(DAY),
         },
-        { loadRowsForSubjects: async () => rows },
+        { loadRowsForSubjects: async () => rows, loadRatifications: async () => [] },
     );
     return interpretServiceDay({
         siteLocationId: SITE,

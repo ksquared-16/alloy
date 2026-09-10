@@ -21,6 +21,7 @@ import type {
     EffectiveExpectationsQuery,
     ExpectationQueryGateway,
     ExpectationQueryRow,
+    ExpectationRatificationEvidence,
 } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
 
 /** Columns the resolver reads, plus the two facets it deliberately ignores. */
@@ -59,6 +60,42 @@ export function createSupabaseExpectationQueryGateway(
             return ((data ?? []) as unknown as ExpectationQueryRow[]).filter((row) =>
                 expectationSubjectRefMatches(row.subject_ref, wanted),
             );
+        },
+
+        async loadRatifications(
+            orgId: string,
+            expectationIds: readonly string[],
+        ): Promise<readonly ExpectationRatificationEvidence[]> {
+            const ids = [...new Set(expectationIds.filter(Boolean))];
+            if (ids.length === 0) return [];
+
+            const { data, error } = await supabase
+                .from("operational_expectation_ratifications")
+                .select("expectation_id, ratified_at, ratifier_authority_key")
+                .eq("org_id", orgId)
+                .in("expectation_id", ids);
+
+            if (error) {
+                /*
+                 * The same fail-closed reasoning as the rows query, pointing the
+                 * other way. Returning [] here would silently report every
+                 * ratified expectation as merely proposed, which is the exact
+                 * defect this loader exists to fix — so an unreadable
+                 * ratification is an error the caller must decide about, not an
+                 * answer.
+                 */
+                throw new Error(`operational expectation ratifications query failed: ${error.message}`);
+            }
+
+            return ((data ?? []) as unknown as Array<{
+                expectation_id: string;
+                ratified_at: string;
+                ratifier_authority_key: string;
+            }>).map((r) => ({
+                expectationId: r.expectation_id,
+                ratifiedAt: r.ratified_at,
+                ratifierAuthorityKey: r.ratifier_authority_key,
+            }));
         },
     };
 }

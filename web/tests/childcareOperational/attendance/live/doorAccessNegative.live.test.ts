@@ -32,6 +32,19 @@
  *
  * ── WHERE THE BOUNDARY IS ACTUALLY ENFORCED ──
  *
+ * ── THE LAW THIS ESTABLISHES ──
+ *
+ *   Capture-channel vocabulary represents PROVENANCE POSSIBILITIES. Product
+ *   support and authorization determine whether a channel may actually author
+ *   Attendance.
+ *
+ * `child_attendance_events.source_type` already permits `door_access`. That the
+ * enum can REPRESENT a door says nothing about whether a door may AUTHOR, and
+ * the enum is deliberately left alone: a provenance vocabulary that could only
+ * express currently-supported channels would have to be migrated every time
+ * support changed, and would quietly lose the ability to describe a fact's real
+ * origin. Representability is not authorization.
+ *
  * At REGISTRATION, by capability. A door producer is registered without
  * `attendance.record`, and is then refused however well-formed its payload is,
  * however correct its mappings, and whatever its site grants. That is a real
@@ -102,7 +115,14 @@ describeLive("door / access capture — negative certification", () => {
     });
 
     async function cleanup() {
-        await supabase.from("attendance_integration_events").delete().eq("provider_key", PROVIDER);
+        for (const id of [doorProducerId, controlProducerId].filter(Boolean)) {
+            await supabase.from("attendance_integration_events").delete().eq("producer_id", id);
+        }
+        await supabase
+            .from("attendance_integration_events")
+            .delete()
+            .is("producer_id", null)
+            .like("provider_event_id", `door-${run}%`);
         await supabase.from("attendance_integration_producers").delete().in("producer_key", [
             `door:cert:${run}`,
             `door:cert:${run}-control`,

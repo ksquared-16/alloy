@@ -111,7 +111,15 @@ describeLive("cross-channel convergence — live", () => {
     const ids: Record<string, string> = {};
 
     async function cleanup() {
-        await supabase.from("attendance_integration_events").delete().eq("provider_key", PROVIDER);
+        /*
+         * Scoped to THIS suite's producer, never to the provider key. Deleting by
+         * `provider_key` would reach into every other suite using the same
+         * provider — which it did, and which made two unrelated scenarios fail
+         * only when the directory ran together.
+         */
+        if (externalProducerId) {
+            await supabase.from("attendance_integration_events").delete().eq("producer_id", externalProducerId);
+        }
         await supabase.from("attendance_integration_producers").delete().eq("producer_key", EXTERNAL_PRODUCER_KEY);
         await supabase.from("action_links").delete().eq("token_hash", hashFormLinkToken(PARENT_TOKEN));
     }
