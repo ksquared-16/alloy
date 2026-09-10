@@ -25,6 +25,20 @@ export interface ProposedValue {
     value: string | null;
     entityType: string | null;
     fieldKey?: string | null;
+    /**
+     * WHICH FORM THIS ANSWER CAME FROM.
+     *
+     * A single-form case has one source and needs none of this. A packet has several, and merging
+     * their values into one list without provenance is what produced an operator panel showing
+     * "Child First Name / Child Last Name / Child Date Of Birth" three times over with no way to
+     * tell which form each belonged to — or which one was wrong.
+     *
+     * Optional so the single-form path is untouched; present whenever a coordinator (a packet
+     * session) merged several submissions.
+     */
+    sourceFormName?: string | null;
+    sourceStepIndex?: number | null;
+    sourceSubmissionId?: string | null;
 }
 
 /** Raw evidence a per-kind loader returns for one source id. */
