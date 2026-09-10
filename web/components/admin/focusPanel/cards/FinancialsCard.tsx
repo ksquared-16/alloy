@@ -1652,11 +1652,29 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                         currency={currency}
                                     />
                                 ) : null}
+                                {/* ── THE NET OBLIGATION, CALLED THAT ────────────────────────
+                                    This figure is gross plus discounts, funding and adjustments —
+                                    the type that produces it says so by construction. It was
+                                    labelled "Responsibility", which is also the word directly
+                                    beneath it for the split between named parties, so one word
+                                    stood for two different things: what the family owes after
+                                    reductions, and who owes it. An operator reading a total of
+                                    $900 above a list adding to $900 had no way to tell whether
+                                    the list explained the total or repeated it. */}
                                 <Line
-                                    label="Responsibility"
+                                    label="Net obligation"
                                     cents={reconciliation!.responsibilityCents}
                                     currency={currency}
                                     strong
+                                    testId="net-obligation"
+                                />
+                                {/* The part of that net someone has actually been made responsible
+                                    for. Allocated and unassigned sum to the net above, which is
+                                    what makes the two readable together. */}
+                                <Line
+                                    label="Responsibility"
+                                    cents={vm.responsibility.allocatedCents}
+                                    currency={currency}
                                     testId="responsibility"
                                 />
                                 {/* ── WHO OWES IT ────────────────────────────────────────────
@@ -1687,6 +1705,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                         cents={vm.responsibility.unassignedCents}
                                         currency={currency}
                                         testId="responsibility-unassigned"
+                                    />
+                                ) : null}
+                                {/* ── WHAT MAY BE COLLECTED FROM THE FAMILY TODAY ────────────
+                                    Only shown when a submitted claim is actually suppressing
+                                    something. Outstanding is what is owed; collectible-now is what
+                                    an operator may ask this family for while an agency has been
+                                    told it will pay part of it. With no claim in flight the two
+                                    are the same number and a second line would be noise. The
+                                    figure is the canonical one — nothing here subtracts. */}
+                                {vm.collectible.submittedClaimSuppressionCents > 0 ? (
+                                    <Line
+                                        label="Collectible now"
+                                        cents={vm.collectible.currentlyCollectibleCents}
+                                        currency={currency}
+                                        testId="collectible-now"
                                     />
                                 ) : null}
                                 {vm.expectedFunding.length > 0 ? (

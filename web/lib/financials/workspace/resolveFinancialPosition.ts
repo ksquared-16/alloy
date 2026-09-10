@@ -55,6 +55,22 @@ export type FinancialPositionRow = {
     customerId: string | null;
     /** The household's own name, so an accounts list names families rather than ids. */
     householdName: string | null;
+    /*
+     * WHICH CHILD THIS OBLIGATION IS ABOUT, or null when it is genuinely the household's.
+     *
+     * The charge already knows: an `enrollment_agreement` source carries the agreement's
+     * `customer_member_id`, and a `customer` source is childless BY CONSTRUCTION — a registration
+     * fee belongs to the family, not to one of its children. Every other financial reader keeps
+     * that distinction (draft resolution, responsibility, both reduction paths, and the card's own
+     * per-child reconciliation); only this cohort dropped it, by selecting the agreement's
+     * household and site and not its child. So a two-child family arrived at Accounts as one
+     * undifferentiated balance.
+     *
+     * Null here means household-level and is never a missing value to be filled in later. Nothing
+     * infers a child from household membership: a household charge has no child to name, and
+     * naming one would be an invention the rest of the spine would then have to honour.
+     */
+    customerMemberId: string | null;
     enrollmentAgreementId: string | null;
     serviceDate: string | null;
     postedAt: string | null;
@@ -194,13 +210,18 @@ export async function resolveFinancialPositionCohort(
      * it does not produce a wrong number — it produces no account at all, which is indistinguishable
      * on screen from a family that has no financial history.
      */
-    const agreementRows = await readInBatches<{ id: string; customer_id: string | null; site_location_id: string | null }>(
+    const agreementRows = await readInBatches<{
+        id: string;
+        customer_id: string | null;
+        customer_member_id: string | null;
+        site_location_id: string | null;
+    }>(
         "the agreements charges were billed from",
         agreementIds,
         (batch) =>
             supabase
                 .from("child_enrollment_agreements")
-                .select("id, customer_id, site_location_id")
+                .select("id, customer_id, customer_member_id, site_location_id")
                 .eq("org_id", args.orgId)
                 .in("id", batch),
     );
@@ -217,6 +238,7 @@ export async function resolveFinancialPositionCohort(
     const visible: Array<{
         charge: (typeof charges)[number];
         customerId: string | null;
+        customerMemberId: string | null;
         enrollmentAgreementId: string | null;
         locationScope: FinancialWorkLocationScope;
         siteLocationId: string | null;
@@ -245,6 +267,10 @@ export async function resolveFinancialPositionCohort(
             customerId: charge.billable_source_type === "customer"
                 ? charge.billable_source_id
                 : agreement?.customer_id ?? null,
+            // A household source has no child, and does not borrow one from the family.
+            customerMemberId: charge.billable_source_type === "enrollment_agreement"
+                ? agreement?.customer_member_id ?? null
+                : null,
             enrollmentAgreementId: charge.billable_source_type === "enrollment_agreement"
                 ? charge.billable_source_id
                 : null,
@@ -309,6 +335,7 @@ export async function resolveFinancialPositionCohort(
         return {
             position,
             customerId: v.customerId,
+            customerMemberId: v.customerMemberId,
             householdName: v.customerId ? customerNames.get(v.customerId) ?? null : null,
             enrollmentAgreementId: v.enrollmentAgreementId,
             serviceDate: v.charge.service_date,
