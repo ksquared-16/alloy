@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Documents / Forms API
 
 **Domain size:** ~46 route handlers. Full list: [`api-index.md` → Documents / Forms](api-index.md#documents--forms).

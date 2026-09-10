@@ -1,3 +1,9 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # `POST /api/admin/actions/execute` — Envelope Consumer Audit
 
 > Phase 2B working note. Inventory of every consumer of the action-execute endpoint

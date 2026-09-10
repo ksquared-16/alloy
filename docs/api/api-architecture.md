@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Alloy API Platform Architecture
 
 **Status:** Doctrine (June 2026). This is the governing architecture document for **all**

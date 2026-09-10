@@ -1,3 +1,10 @@
+---
+owner: platform
+status: generated
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # API index (generated)
 
 **Generated:** 2026-09-10 by `scripts/generate-api-inventory.mjs`. Do not edit by hand — re-run the script.

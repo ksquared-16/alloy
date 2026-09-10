@@ -50,10 +50,17 @@ const CANONICAL_LINK_SCOPES = [
   /^docs\/system\//,
 ];
 
-const GENERATED_MARKERS = [
+// Directories whose every file is machine-produced. docs/api/ is deliberately NOT
+// one of them: it holds a single generated index alongside hand-authored doctrine,
+// so membership there says nothing about how a file was produced.
+const GENERATED_DIRS = [
   { dir: "docs/schema/", pattern: /Generated reference|Do not edit by hand/i },
-  { dir: "docs/api/", pattern: /Generated:|Do not edit by hand/i },
 ];
+
+// A document that declares `status: generated` must name its generator, wherever it
+// lives — governance placement rule 6. Accept either phrasing in use: a "Generator:"
+// attribution or a do-not-hand-edit warning naming the regeneration path.
+const GENERATED_MARKER = /Generated:|Generator:|Do not edit by hand|do not hand-edit/i;
 
 const BLOCKING_ON_CHANGED = new Set([
   "broken-link",
@@ -160,9 +167,24 @@ export function parseFrontmatter(text) {
   if (!match) return { raw: null, data: null, error: null };
   const body = match[1];
   const data = {};
+  let lastKey = null;
   for (const line of body.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
+    // YAML block sequence ("  - item") continues the preceding key. Treating it as a
+    // malformed line both failed valid documents and, because parsing then returned
+    // no data, silently skipped every other check on them (status, owner, successor).
+    if (trimmed.startsWith("- ")) {
+      if (lastKey === null) {
+        return { raw: body, data: null, error: `invalid frontmatter line: ${trimmed}` };
+      }
+      const item = trimmed.slice(2).trim();
+      if (!Array.isArray(data[lastKey])) {
+        data[lastKey] = data[lastKey] ? [data[lastKey]] : [];
+      }
+      if (item) data[lastKey].push(item);
+      continue;
+    }
     const idx = trimmed.indexOf(":");
     if (idx === -1) return { raw: body, data: null, error: `invalid frontmatter line: ${trimmed}` };
     const key = trimmed.slice(0, idx).trim();
@@ -177,6 +199,7 @@ export function parseFrontmatter(text) {
       value = value.slice(1, -1);
     }
     data[key] = value;
+    lastKey = key;
   }
   return { raw: body, data, error: null };
 }
@@ -244,10 +267,13 @@ function loadReadmeIndexedPaths(readmeText) {
   return indexed;
 }
 
+function generatedDirFor(relPath) {
+  return GENERATED_DIRS.find((m) => relPath.startsWith(m.dir)) ?? null;
+}
+
 function isGeneratedDoc(relPath, text) {
-  if (!relPath.startsWith("docs/schema/") && !relPath.startsWith("docs/api/")) return false;
-  const marker = GENERATED_MARKERS.find((m) => relPath.startsWith(m.dir));
-  return marker ? marker.pattern.test(text) : false;
+  const dir = generatedDirFor(relPath);
+  return dir ? dir.pattern.test(text) : false;
 }
 
 export function lintDocumentation(options = {}) {
@@ -340,11 +366,21 @@ export function lintDocumentation(options = {}) {
       });
     }
 
-    if ((relPath.startsWith("docs/schema/") || relPath.startsWith("docs/api/")) && !isGeneratedDoc(relPath, text)) {
+    // Generated status is a property of the document, not of its directory.
+    const declaresGenerated = fm.data?.status === "generated";
+    const inGeneratedDir = generatedDirFor(relPath) !== null;
+    if (inGeneratedDir && !isGeneratedDoc(relPath, text)) {
       violations.push({
         type: "generated-boundary",
         file: relPath,
-        message: "Generated reference doc missing generator marker",
+        message: "Hand-authored file in a generated reference directory",
+        blocking: false,
+      });
+    } else if (declaresGenerated && !GENERATED_MARKER.test(text)) {
+      violations.push({
+        type: "generated-boundary",
+        file: relPath,
+        message: "Doc declares status: generated but does not name its generator",
         blocking: false,
       });
     }

@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Entity / Record / Resolver API
 
 **Domain size:** ~126 route handlers. Full list: [`api-index.md` → Entity / Record / Resolver](api-index.md#entity--record--resolver).

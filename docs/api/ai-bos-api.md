@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # AI / BOS API
 
 **Domain size:** ~23 route handlers. Full list: [`api-index.md` → AI / BOS](api-index.md#ai--bos).

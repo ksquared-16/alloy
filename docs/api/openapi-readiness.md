@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Alloy API — OpenAPI Readiness Gate
 
 **Status:** Phase 3 finalized — **API Platform Complete**. This is the canonical decision doc for

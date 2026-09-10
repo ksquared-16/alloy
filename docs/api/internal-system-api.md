@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Internal / System / Diagnostics API
 
 **Domain size:** ~26 route handlers. Full list: [`api-index.md` → Internal / System / Diagnostics](api-index.md#internal--system--diagnostics).
