@@ -221,6 +221,9 @@ export async function POST(request: NextRequest) {
         dim: gate.dim,
         siteLocationId: subjectSiteLocationId,
         roomLocationIds: rooms,
+        // The day the fact belongs to, so an assignment-scoped caller is judged
+        // against the rooms they held THEN rather than today.
+        serviceDate,
     });
     if (!authorized.ok) {
         return NextResponse.json(

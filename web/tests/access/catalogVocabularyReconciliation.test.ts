@@ -61,6 +61,11 @@ const artifactEnforced = artifact.enforced.map((e) => e.key);
 const APPROVED_ADDITIONS: Record<string, string> = {
     "health.view": "D-H6 — structured health visibility boundary",
     "health.manage": "D-H6 — structured health mutation boundary",
+    // Thread 6 staff identity decision. NARROWS attendance.record rather than
+    // granting anything: a holder captures only inside their current staff
+    // assignments. Granted to no role by default, so its arrival could not
+    // reduce any existing operator's reach.
+    "attendance.record.assigned_only": "Thread 6 — assignment-scoped teacher attendance authority",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {
