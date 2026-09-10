@@ -393,3 +393,108 @@ test("applying a migration does not by itself unblock promotion", () => {
     provenHead: provenAfter.head, provenAtMs: provenAfter.atMs,
   }).status, "ok", "re-measurement is what unblocks promotion");
 });
+
+// ── THE RESIDENT SHAPE: policy evaluation, not just the collector ───────────
+//
+// WHAT THIS CAUGHT, AND WHY A DIRECT CALL COULD NOT. The collector measured
+// hosted_migration_parity correctly and the recorded decision still read null,
+// because the policy NAMED a gate that was never registered in GATES — and the
+// evaluator answers an unregistered name with null unconditionally, before it
+// ever looks at evidence. Every direct call to the collector passed; the gate
+// could not once pass inside the Gateway. Naming is not registering, and only
+// evaluating the POLICY can tell the difference.
+const A = await import("../lib/vacilando/director-authority.mjs");
+
+const MERGE_REQ = {
+  request_id: "gar_resident",
+  action_key: "repository.merge_pull_request",
+  target: "staging",
+  content_fingerprint: "c".repeat(32),
+  inputs: { base: "staging", expectedHeadSha: "a".repeat(40) },
+};
+// A merge evidence set that satisfies every OTHER gate, so the only variable
+// under test is the migration gate.
+const MERGE_EV = {
+  repository: "r", managed_repository: true, source_sha: "a".repeat(40),
+  environment: "staging", base_branch: "staging",
+  required_checks_total: 2, required_checks_passing: 2, required_checks_failing: 0, required_checks_pending: 0,
+  pull_request_mergeable: true, pull_request_head_sha: "a".repeat(40),
+  unresolved_governance_findings: 0, certification_suite_passed: true,
+  governance_exception_active: false, operator_hold: false,
+};
+
+test("MP33 — every gate a policy names has a reader", () => {
+  // The general form of the shipped defect. A gate with no reader is not a
+  // strict gate; it is a gate that can never pass, and it silently converts
+  // an autonomous policy into a permanent escalation.
+  const missing = [];
+  for (const p of A.DELEGATED_POLICIES_V1) {
+    for (const name of p.gates || []) {
+      if (typeof A.GATES[name] !== "function") missing.push(`${p.policy_id}:${name}`);
+    }
+  }
+  assert.deepEqual(missing, [], `policies name gates with no reader: ${missing.join(", ")}`);
+  // Pin the specific one, so deleting the reader fails here by name.
+  assert.equal(typeof A.GATES.hosted_migration_parity, "function");
+  assert.ok(
+    A.DELEGATED_POLICIES_V1.find((p) => p.policy_id === "certified_staging_merge_v1")
+      .gates.includes("hosted_migration_parity"),
+  );
+});
+
+test("MP34 — the migration gate reader is tri-state, and null is never a pass", () => {
+  assert.equal(A.GATES.hosted_migration_parity({ hosted_migration_parity: true }), true);
+  assert.equal(A.GATES.hosted_migration_parity({ hosted_migration_parity: false }), false);
+  assert.equal(A.GATES.hosted_migration_parity({ hosted_migration_parity: null }), null);
+  assert.equal(A.GATES.hosted_migration_parity({}), null, "absent evidence is unmeasured, never true");
+});
+
+test("MP35 — measured-true reaches the recorded decision as true, not null", () => {
+  // This is the exact assertion the shipped code failed: the collector said
+  // true, the decision recorded null.
+  const d = A.evaluateDirectorAuthority({
+    request: MERGE_REQ,
+    evidence: { ...MERGE_EV, hosted_migration_parity: true },
+  });
+  assert.equal(d.deterministic_evidence.hosted_migration_parity, true,
+    "a measured gate must not be recorded as unmeasured");
+  assert.equal(d.decision, "director_approved");
+
+  // Positive control: the same request with the measurement absent must NOT
+  // approve, so MP35 cannot pass by the gate being ignored altogether.
+  const absent = A.evaluateDirectorAuthority({ request: MERGE_REQ, evidence: MERGE_EV });
+  assert.equal(absent.decision, "operator_approval_required");
+  assert.deepEqual(absent.unmeasured_gates, ["hosted_migration_parity"]);
+});
+
+test("MP36 — behind is a denial, not an escalation", () => {
+  const d = A.evaluateDirectorAuthority({
+    request: MERGE_REQ,
+    evidence: { ...MERGE_EV, hosted_migration_parity: false },
+  });
+  assert.equal(d.decision, "policy_denied");
+  assert.ok(d.failed_gates.includes("hosted_migration_parity"));
+});
+
+test("MP37 — an unmeasured gate reports WHY when the collector knew", () => {
+  // A Director should never see only "gate not measured" while the evidence
+  // itself says which lookup failed.
+  const reason = "could not read the promoted revision's migration set";
+  const d = A.evaluateDirectorAuthority({
+    request: MERGE_REQ,
+    evidence: { ...MERGE_EV, hosted_migration_parity: null, hosted_migration_parity_detail: reason },
+  });
+  assert.equal(d.decision, "operator_approval_required");
+  assert.equal(d.unmeasured_gate_details.hosted_migration_parity, reason);
+  assert.match(d.escalation_reason, /hosted_migration_parity \(could not read the promoted revision's migration set\)/);
+  // Fail-closed is unchanged by carrying the reason.
+  assert.equal(d.deterministic_evidence.hosted_migration_parity, null);
+
+  // A detail without a measurement never becomes one, and a gate that PASSED
+  // carries no detail into the record.
+  const passed = A.evaluateDirectorAuthority({
+    request: MERGE_REQ,
+    evidence: { ...MERGE_EV, hosted_migration_parity: true, hosted_migration_parity_detail: reason },
+  });
+  assert.equal(passed.unmeasured_gate_details, undefined);
+});

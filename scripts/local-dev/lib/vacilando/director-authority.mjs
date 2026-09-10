@@ -227,6 +227,16 @@ export const GATES = Object.freeze({
   no_live_process_affected: (ev) => (ev.live_process_affecting == null ? null : ev.live_process_affecting === 0),
   metadata_store_known: (ev) => (ev.metadata_store_known == null ? null : ev.metadata_store_known === true),
   certification_suite_passed: (ev) => (ev.certification_suite_passed == null ? null : ev.certification_suite_passed === true),
+  // NAMING A GATE IN A POLICY DOES NOT MAKE IT READABLE.
+  //
+  // This reader was missing while `certified_staging_merge_v1` already listed
+  // `hosted_migration_parity`, and the loop below answers an unregistered name
+  // with `null` — so the gate was UNCONDITIONALLY unmeasured no matter what the
+  // collector produced. Measured on a real merge: director-evidence returned
+  // hosted_migration_parity true, and the recorded decision still read null with
+  // "an unmeasured gate is not a passed gate". Fail-closed, so nothing unsafe
+  // shipped, but the gate could never once pass and every merge escalated.
+  hosted_migration_parity: (ev) => (ev.hosted_migration_parity == null ? null : ev.hosted_migration_parity === true),
   // ── Toolkit convergence ──────────────────────────────────────────────────
   // Installing the commit that is ALREADY promoted staging carries no content
   // decision — that was taken at merge by the certified merge gates. What is
@@ -625,6 +635,7 @@ export function evaluateDirectorAuthority({
   // 6. Gates. Every one must be measured AND true.
   const results = {};
   const unmeasured = [];
+  const unmeasuredDetails = {};
   const failed = [];
   for (const name of policy.gates) {
     const gate = GATES[name];
@@ -632,13 +643,24 @@ export function evaluateDirectorAuthority({
     let value = null;
     try { value = gate(evidence); } catch { value = null; }
     results[name] = value;
-    if (value === null) unmeasured.push(name);
-    else if (value !== true) failed.push(name);
+    if (value === null) {
+      unmeasured.push(name);
+      // A COLLECTOR THAT KNOWS WHY MUST NOT BE SILENCED BY THE RECORD.
+      //
+      // `results` is keyed by gate name, so a collector's own explanation had
+      // nowhere to go and was dropped: a Director saw "gate not measured" while
+      // the evidence itself said, in words, which lookup failed. The reason is
+      // carried alongside rather than inside `results`, so the gate's public
+      // value stays exactly the tri-state the policy reasons about.
+      const detail = evidence?.[`${name}_detail`];
+      if (detail) unmeasuredDetails[name] = String(detail).slice(0, 300);
+    } else if (value !== true) failed.push(name);
   }
   const common = {
     matched_policy: policy.policy_id,
     consequence_class: policy.consequence_class,
     deterministic_evidence: results,
+    ...(Object.keys(unmeasuredDetails).length ? { unmeasured_gate_details: unmeasuredDetails } : {}),
   };
   if (failed.length) {
     return {
@@ -650,7 +672,11 @@ export function evaluateDirectorAuthority({
   }
   if (unmeasured.length) {
     return escalate(
-      `Required gate${unmeasured.length === 1 ? " was" : "s were"} not measured: ${unmeasured.join(", ")}. An unmeasured gate is not a passed gate.`,
+      // Say WHY where the collector knew. "Not measured" alone sends a Director
+      // to read logs for something the evidence already explained.
+      `Required gate${unmeasured.length === 1 ? " was" : "s were"} not measured: ${
+        unmeasured.map((g) => (unmeasuredDetails[g] ? `${g} (${unmeasuredDetails[g]})` : g)).join(", ")
+      }. An unmeasured gate is not a passed gate.`,
       { ...common, unmeasured_gates: unmeasured },
     );
   }
