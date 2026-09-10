@@ -421,6 +421,43 @@ export function presentationForGovernedAction(req = {}) {
       detail: `Restore the browser session for ${identity}${slot ? ` on Slot ${slot}` : ""} · lane ${lane} · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
     };
   }
+  if (key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    /*
+     * IT MUST NOT READ LIKE A MIGRATION, BECAUSE IT IS NOT ONE.
+     *
+     * Without this branch the ledger repair inherited the DEFAULT card —
+     * "Authorize" over whatever title the filing happened to carry — so the one
+     * fact that decides this approval, that NO SCHEMA CHANGES, was left to the
+     * requester's prose. An operator who approved it believing it applied
+     * migrations would have approved the wrong thing in the safer direction,
+     * which still means the card lied. The sibling production actions each got
+     * their own words for exactly this reason.
+     *
+     * The state matters as much as the versions: this capability asks the
+     * operator to approve a ledger going FROM one head and count TO another, so
+     * both ends are on the card rather than inferred.
+     */
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
+    const target = inputs.target || inputs.environment || req.target || DEFAULT_TARGET;
+    const expected = inputs.expectedLedger || inputs.expected_ledger || {};
+    const from = expected.head ?? expected.ledgerHead;
+    const to = expected.postHead ?? expected.post_head;
+    const fromCount = expected.count ?? expected.ledgerCount;
+    const toCount = expected.postCount ?? expected.post_count;
+    const move = (from && to)
+      ? ` · Ledger ${from} (${fromCount ?? "?"} rows) → ${to} (${toCount ?? "?"} rows)`
+      : "";
+    return {
+      approve_label: "Authorize ledger reconciliation",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — PRODUCTION migration ledger",
+      mission_need: `Needs approval — RECORD ${versions.length || "already-applied"} migration${versions.length === 1 ? "" : "s"} as applied on ${target}`,
+      detail: `PRODUCTION MIGRATION LEDGER · NO SCHEMA CHANGES — nothing is applied, created or altered.`
+        + ` Registers ${versions.length ? versions.join(", ") : "the named migrations"} on ${target} as already applied${move}.`
+        + " Refused unless a governed census already proves those effects physically present and matching the approved artifact.",
+    };
+  }
   if (key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
     /*
      * PRODUCTION MUST NOT BE APPROVABLE BY HABIT.

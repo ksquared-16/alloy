@@ -315,3 +315,38 @@ await test("LR19 — SQL is never accepted, on any spelling", () => {
     assert.equal(r.code, "arbitrary_sql_rejected", `${key} was accepted`);
   }
 });
+
+await test("LR20 — the approval card says NO SCHEMA CHANGES, and cannot be read as a migration", async () => {
+  /*
+   * The card is the operator's only protection against approving the wrong
+   * thing, and without its own branch this action inherited the DEFAULT one:
+   * "Authorize" over whatever title the filing happened to carry. The single
+   * fact that decides this approval — that nothing is applied — was left to the
+   * requester's prose. Its two production siblings each got their own words for
+   * exactly this reason.
+   */
+  const G = await import("../lib/vacilando/governed-action-request.mjs");
+  const req = {
+    action_key: "database.repair_migration_ledger",
+    target: "alloy_deployed_primary",
+    inputs: {
+      target: "alloy_deployed_primary",
+      migrations: [{ version: "20260910120000" }, { version: "20260910130000" }],
+      expectedLedger: { head: "20260909270000", count: 396, postHead: "20260910130000", postCount: 398 },
+    },
+  };
+  const card = G.presentationForGovernedAction(req);
+  const all = `${card.approve_label} ${card.wait_label} ${card.mission_need} ${card.detail}`;
+  assert.match(all, /NO SCHEMA CHANGES/);
+  assert.match(all, /LEDGER/i);
+  // Both ends of the state the operator is approving, not just the versions.
+  assert.match(all, /20260909270000/);
+  assert.match(all, /396/);
+  assert.match(all, /398/);
+  // And it is not the apply card.
+  const apply = G.presentationForGovernedAction({ ...req, action_key: "database.apply_promoted_migration" });
+  assert.notEqual(card.approve_label, apply.approve_label);
+  assert.notEqual(card.mission_need, apply.mission_need);
+  // It must not have fallen through to the generic default.
+  assert.notEqual(card.approve_label, "Authorize");
+});
