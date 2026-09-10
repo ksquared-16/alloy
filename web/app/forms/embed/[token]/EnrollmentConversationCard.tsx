@@ -1100,7 +1100,11 @@ export function EnrollmentConversationCard({
                                         disabled={busy}
                                         data-participant-party-decline="true"
                                         onClick={() => void submit({ party: { decline: true }, settledAs: "No, continue" })}
-                                        className="mt-1 self-start text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
+                                        /* 44px: this is how a parent DECLINES a party, on the same
+                                           path as adding one, and at 375px it was a 20px-high text
+                                           link — below any thumb target. The look is unchanged; only
+                                           the tappable area grows. */
+                                        className="mt-1 flex min-h-[44px] items-center self-start text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
                                     >
                                         No, continue
                                     </button>
