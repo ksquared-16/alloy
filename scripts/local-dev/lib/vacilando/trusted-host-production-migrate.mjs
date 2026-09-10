@@ -74,7 +74,7 @@ function governedActionRequestsPath() {
 }
 
 /** Governed-action records, or an empty list when the store cannot be read. */
-function readGovernedActionRecords() {
+export function readGovernedActionRecords() {
   try {
     const store = governedActionRequestsPath();
     if (!existsSync(store)) return [];

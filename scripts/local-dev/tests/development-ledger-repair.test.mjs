@@ -267,3 +267,51 @@ await test("LR16 — a ledger already carrying a version reports no gap, and the
   assert.equal(pre.code, "version_not_in_measured_gap",
     "a version already registered must not be registered again");
 });
+
+await test("LR17 — the validator hands the core its candidate authority", () => {
+  // THE FIRST REAL ATTEMPT DIED HERE. gar_da28033efa52d1 was refused
+  // `source_sha_not_reachable`: these migrations live on a governed promotion
+  // candidate that has not merged — which is precisely why their versions are
+  // absent from staging — and without candidateProof the core falls back to
+  // plain staging-ancestry. An approval was spent on a request that could not
+  // resolve its own source.
+  let seen = null;
+  const core = (inputs, opts) => { seen = opts; return { ok: false, code: "stop_after_capture" }; };
+  L.validateLedgerRepairInputs({
+    target: "alloy_deployed_primary",
+    expectedSha: "a".repeat(40),
+    migrations: MIGS,
+    expectedLedger: { head: "20260909240000", count: 393, postHead: V3, postCount: 396 },
+  }, { core, promotionRequests: [] });
+
+  assert.ok(seen, "the core must be called");
+  assert.equal(typeof seen.candidateProof, "function",
+    "a governed pre-merge candidate cannot be resolved without it");
+  assert.equal(seen.actionType, "database.repair_migration_ledger");
+  assert.equal(seen.environment, "alloy_deployed_primary");
+});
+
+await test("LR18 — the approved ledger state is required, not optional", () => {
+  const core = () => ({ ok: true, normalized: { expectedSha: "a".repeat(40), migrations: MIGS } });
+  for (const bad of [undefined, { head: "x" }, { head: "x", count: 1 }, { head: "x", count: 1, postHead: "y" }]) {
+    const r = L.validateLedgerRepairInputs({
+      target: "alloy_deployed_primary", expectedSha: "a".repeat(40), migrations: MIGS,
+      ...(bad ? { expectedLedger: bad } : {}),
+    }, { core });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, "missing_expected_ledger_state",
+      "the operator approves a STATE, not only a version list");
+  }
+});
+
+await test("LR19 — SQL is never accepted, on any spelling", () => {
+  const core = () => ({ ok: true, normalized: { expectedSha: "a".repeat(40), migrations: MIGS } });
+  for (const key of ["sql", "statement", "body", "database_url", "databaseUrl"]) {
+    const r = L.validateLedgerRepairInputs({
+      target: "alloy_deployed_primary", expectedSha: "a".repeat(40), migrations: MIGS,
+      expectedLedger: { head: "h", count: 1, postHead: "p", postCount: 2 },
+      [key]: "insert into anything",
+    }, { core });
+    assert.equal(r.code, "arbitrary_sql_rejected", `${key} was accepted`);
+  }
+});
