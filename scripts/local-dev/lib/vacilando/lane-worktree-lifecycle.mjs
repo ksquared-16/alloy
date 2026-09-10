@@ -801,6 +801,14 @@ export async function registerCreatedWorktree({
   worktreeName,
   provider = "claude",
   slot = null,
+  // EXPLICITLY slotless, as opposed to "pick one for me". `slot: null` means
+  // the latter — it is the ordinary creation call — so reclamation needs a way
+  // to say "register this WITHOUT a slot" that cannot be confused with it.
+  slotless = false,
+  // Re-adopt a worktree that is already registered. The canonical writer
+  // refuses to overwrite a record without this, which is right for creation and
+  // wrong for moving a slot between two worktrees that both already exist.
+  force = false,
   toolkitDir = null,
   root = runtimeRoot(),
   cfg = null,
@@ -808,7 +816,7 @@ export async function registerCreatedWorktree({
 } = {}) {
   const name = norm(worktreeName);
   if (!name) return { ok: false, error: "missing_worktree_name" };
-  const chosen = asSlot(slot) ?? freeSlots({ cfg, metadata })[0] ?? null;
+  const chosen = slotless ? null : (asSlot(slot) ?? freeSlots({ cfg, metadata })[0] ?? null);
 
   // A FULL SLOT POOL IS NOT A REASON TO LEAVE A WORKTREE UNKNOWN.
   //
@@ -842,8 +850,8 @@ export async function registerCreatedWorktree({
   const bin = join(toolkitDir || join(process.env.HOME || "", ".local", "share", "alloy", "toolkit", "current"), "alloy-worktree-adopt");
   const run = registerImpl || ((cmd, args, opts) => spawnSync(cmd, args, opts));
   const args = chosen == null
-    ? ["--no-slot", name, "--provider", provider]
-    : [String(chosen), name, "--provider", provider];
+    ? ["--no-slot", name, "--provider", provider, ...(force ? ["--force"] : [])]
+    : [String(chosen), name, "--provider", provider, ...(force ? ["--force"] : [])];
   const out = run(bin, args, {
     encoding: "utf8", timeout: 60_000, env: { ...process.env, ALLOY_RUNTIME_ROOT: root },
   });
@@ -858,7 +866,7 @@ export async function registerCreatedWorktree({
     return {
       ok: true, slot: null, port: null, worktree: name, provider,
       slotless: true,
-      reason: "no_free_slot",
+      reason: slotless ? "slotless_requested" : "no_free_slot",
       // Counted from the topology owner, not asserted. The literal "six" here
       // outlived the six-slot host and would have told an operator with twelve
       // slots something plainly untrue.
@@ -894,6 +902,225 @@ export function slotHoldersSummary({ cfg = null, metadata = null, root = runtime
   } catch {
     return "The registry could not be read to say which slots are held.";
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * SLOT RECLAMATION — a held slot is not the same as a used one.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * WHICH SLOTS COULD BE GIVEN UP, BEST CANDIDATE FIRST.
+ *
+ * THE PROBLEM THIS SOLVES. The managed pool is fixed, so a fleet at capacity
+ * hands every new lane a slotless registration: dispatchable, but with no port,
+ * no dev server and no browser session. Measured on this host — twelve slots,
+ * eleven held by lanes, ONE held by a registration no lane owns at all, and two
+ * lanes waiting with nothing. The pool was not out of capacity; it was out of
+ * FREE capacity, which is a different thing and has a different remedy.
+ *
+ * A SLOT IS A PORT, NOT A LIFE. Reclaiming one does not close a lane, delete a
+ * worktree, touch a branch or discard work: the donor keeps its registration
+ * and simply becomes slotless, which is a supported, dispatchable state. It
+ * keeps chatting; what it loses is localhost and the QA route. That is what
+ * makes offering the choice reasonable rather than destructive.
+ *
+ * ORDER IS BY HOW LITTLE IS BEING GIVEN UP, and the groups are the operator's:
+ *
+ *   unowned    a registration NO durable lane owns. Nothing is given up at all.
+ *   offline    the lane is closed, retired, or its worktree is gone from disk.
+ *   inactive   an open lane with no run in flight, oldest activity first.
+ *   active     a run is in flight. Listed so the operator can see the whole
+ *              pool, and refused by `reassignSlot` — a lane mid-turn must not
+ *              lose its dev server because someone opened a new tab.
+ *
+ * This function DECIDES NOTHING. It ranks, explains, and hands the choice back.
+ */
+export const SLOT_RECLAIM_GROUPS = Object.freeze(["unowned", "offline", "inactive", "active"]);
+
+export async function slotReclaimCandidates({
+  root = runtimeRoot(),
+  cfg = null,
+  metadata = null,
+  nowMs = Date.now(),
+  activeRun = null,
+} = {}) {
+  const conf = cfg || resolveRuntimeConfig();
+  const meta = metadata || readAllMetadata(conf);
+  const audit = auditLaneWorktrees({ root, cfg: conf, metadata: meta });
+
+  // A run store that cannot be read must make every lane look BUSY, never free.
+  // Guessing "idle" here is precisely how a lane mid-turn loses its dev server.
+  let activeRunForLane = null;
+  if (!activeRun) {
+    try { ({ activeRunForLane } = await import("./execution-run.mjs")); }
+    catch { activeRunForLane = null; }
+  }
+  // FAIL CLOSED AROUND THE CALL, NOT AROUND ONE SOURCE. The first cut guarded
+  // only the imported reader, so an injected probe that threw propagated out and
+  // took the whole ranking with it — the one shape where "I cannot tell" must
+  // mean BUSY rather than an exception.
+  const probe = activeRun || ((laneId) => (activeRunForLane ? Boolean(activeRunForLane(laneId, root)) : true));
+  const hasActiveRun = (laneId) => { try { return Boolean(probe(laneId)); } catch { return true; } };
+
+  const out = [];
+
+  // A CLOSED LANE IS UNOWNED, AND SAYING "no lane owns this" WOULD BE A LIE.
+  // `listDurableLanes` excludes retired lanes, so a closed lane's registration
+  // arrives here as an orphan. That classification is right — nothing LIVE owns
+  // the slot — but the operator is choosing what to take, and "nobody owns it"
+  // reads very differently from "the lane you closed still holds it". The
+  // retired records are consulted so the reason can say which it is.
+  const retired = new Map();
+  try {
+    for (const l of listDurableLanes(root, { includeRetired: true })) {
+      const n = norm(l?.binding?.worktree_name);
+      if (n) retired.set(n, l);
+    }
+  } catch { /* an unreadable store only costs the nicer wording */ }
+
+  for (const o of audit.orphans) {
+    if (o.slot == null) continue;
+    const closed = retired.get(norm(o.worktree)) || null;
+    out.push({
+      slot: o.slot, port: o.port, worktree: o.worktree, path: o.path,
+      group: "unowned", holder_kind: closed ? "closed_lane" : "orphan",
+      lane_id: closed?.lane_id ?? null, lane_name: closed?.name ?? null,
+      last_activity_ms: closed ? (Date.parse(closed.updated_at || "") || 0) : null,
+      reclaimable: true,
+      reason: closed
+        ? `${closed.name || o.worktree} is closed and still holds slot ${o.slot}.`
+        : `No Development Lane owns ${o.worktree}; its slot is held by a registration alone.`,
+    });
+  }
+
+  for (const l of audit.lanes) {
+    // Read the slot from the REGISTRATION, not from the resolution. A lane whose
+    // worktree is gone from disk resolves early with `slot: null` — and it is
+    // still occupying that slot in the registry, which makes it one of the best
+    // candidates rather than an invisible one.
+    const heldSlot = asSlot(l.slot) ?? asSlot(l.registry?.slot);
+    if (heldSlot == null) continue;
+    const open = l.lane_open === true;
+    const missing = Boolean(l.worktree_path) && !existsSync(l.worktree_path);
+    const finished = norm(l.registry?.lifecycle).toLowerCase() === "finished";
+    const busy = open && !missing && !finished ? hasActiveRun(l.lane_id) : false;
+    const group = (!open || finished || missing) ? "offline" : (busy ? "active" : "inactive");
+    out.push({
+      slot: heldSlot, port: l.port ?? asPort(l.registry?.port), worktree: l.worktree_name, path: l.worktree_path,
+      group, holder_kind: "lane",
+      lane_id: l.lane_id, lane_name: l.lane_name,
+      last_activity_ms: laneLastActivityMs(l.lane_id, root),
+      reclaimable: group !== "active",
+      reason: group === "offline"
+        ? (missing ? `${l.lane_name} has no worktree on disk.`
+          : finished ? `${l.lane_name}'s registration is marked finished.`
+            : `${l.lane_name} is closed.`)
+        : group === "active"
+          ? `${l.lane_name} has a run in flight — taking its slot would pull the dev server out from under it.`
+          : `${l.lane_name} is open with nothing running.`,
+    });
+  }
+
+  const rank = (c) => SLOT_RECLAIM_GROUPS.indexOf(c.group);
+  out.sort((a, b) => {
+    const g = rank(a) - rank(b);
+    if (g !== 0) return g;
+    // Within a group: least recently active first — the least disruptive to take.
+    const aa = a.last_activity_ms ?? 0;
+    const bb = b.last_activity_ms ?? 0;
+    if (aa !== bb) return aa - bb;
+    return a.slot - b.slot;
+  });
+  return { ok: true, candidates: out, free: freeSlots({ cfg: conf, metadata: meta }) };
+}
+
+/** Most recent meaningful timestamp for a lane, for ordering only. */
+function laneLastActivityMs(laneId, root) {
+  try {
+    const lane = getDurableLane(laneId, root);
+    const t = Date.parse(lane?.updated_at || "");
+    return Number.isFinite(t) ? t : 0;
+  } catch { return 0; }
+}
+
+/**
+ * MOVE ONE SLOT FROM ONE WORKTREE TO ANOTHER.
+ *
+ * Two calls to the canonical writer and nothing else: the donor is re-adopted
+ * WITHOUT a slot, the recipient is adopted WITH it. There is no third registry,
+ * no direct metadata write, and no retirement — `alloy-sprint-finish` closes a
+ * worktree, and that is emphatically not what this is.
+ *
+ * FAILS CLOSED ON EVERY AMBIGUITY. A donor with a run in flight, a donor that
+ * does not hold the slot it is said to hold, a recipient that already has one,
+ * a missing worktree: each is refused by name rather than resolved by guessing.
+ * The donor is demoted FIRST, because adopting the recipient onto a slot the
+ * registry still shows as taken is exactly what `alloy-worktree-adopt` refuses.
+ */
+export async function reassignSlot({
+  fromWorktree,
+  toWorktree,
+  provider = "claude",
+  root = runtimeRoot(),
+  cfg = null,
+  metadata = null,
+  toolkitDir = null,
+  acknowledgeActive = false,
+  activeRun = null,
+  nowMs = Date.now(),
+} = {}) {
+  const donor = norm(fromWorktree);
+  const recipient = norm(toWorktree);
+  if (!donor || !recipient) return { ok: false, error: "missing_worktree_name" };
+  if (donor === recipient) return { ok: false, error: "same_worktree" };
+
+  const conf = cfg || resolveRuntimeConfig();
+  const meta = metadata || readAllMetadata(conf);
+  const donorReg = registrationForWorktree(donor, { cfg: conf, metadata: meta });
+  if (!donorReg) return { ok: false, error: "donor_not_registered", detail: `${donor} has no managed registration.` };
+  const slot = asSlot(donorReg.slot);
+  if (slot == null) return { ok: false, error: "donor_has_no_slot", detail: `${donor} holds no slot to give.` };
+
+  const recipientReg = registrationForWorktree(recipient, { cfg: conf, metadata: meta });
+  if (recipientReg && asSlot(recipientReg.slot) != null) {
+    return { ok: false, error: "recipient_already_slotted", detail: `${recipient} already holds slot ${asSlot(recipientReg.slot)}.` };
+  }
+
+  const ranked = await slotReclaimCandidates({ root, cfg: conf, metadata: meta, nowMs, activeRun });
+  const chosen = ranked.candidates.find((c) => norm(c.worktree) === donor);
+  if (chosen && !chosen.reclaimable && !acknowledgeActive) {
+    return { ok: false, error: "donor_active", detail: chosen.reason, candidate: chosen };
+  }
+
+  // 1. The donor gives up the port and KEEPS its registration.
+  const demoted = await registerCreatedWorktree({
+    worktreeName: donor, provider: donorReg.provider || provider,
+    slotless: true, force: true, toolkitDir, root, cfg: conf, metadata: meta,
+  });
+  if (!demoted.ok || demoted.slot != null) {
+    return { ok: false, error: "donor_demote_failed", detail: demoted.detail || "the donor did not give up its slot", donor_result: demoted };
+  }
+
+  // 2. The recipient takes it. Re-read the registry: step 1 just changed it.
+  const taken = await registerCreatedWorktree({
+    worktreeName: recipient, provider, slot, force: Boolean(recipientReg),
+    toolkitDir, root, metadata: null, cfg: conf,
+  });
+  if (!taken.ok || taken.slot !== slot) {
+    return {
+      ok: false, error: "recipient_adopt_failed",
+      detail: taken.detail || `${recipient} did not take slot ${slot}; ${donor} is now slotless and the slot is free.`,
+      recipient_result: taken, freed_slot: slot,
+    };
+  }
+
+  try { reconcileLaneSlotBinding(chosen?.lane_id || "", { root, nowMs, cfg: conf }); } catch { /* binding follows on next resolve */ }
+
+  return {
+    ok: true, slot, port: taken.port,
+    from: { worktree: donor, lane_id: chosen?.lane_id ?? null, lane_name: chosen?.lane_name ?? null, group: chosen?.group ?? null },
+    to: { worktree: recipient, provider },
+  };
 }
 
 /**
