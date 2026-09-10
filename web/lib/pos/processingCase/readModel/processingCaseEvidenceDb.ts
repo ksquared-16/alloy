@@ -14,6 +14,12 @@ import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptS
 import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
 import type { ProcessingCollectionGroupEvidence } from "@/lib/pos/processingCase/collection/types";
+import { classifyReturnedValue } from "@/lib/pos/processingCase/returnClassification/classifyReturnedValue";
+import {
+    currentValueForBinding,
+    loadCanonicalCurrentValues,
+    type CanonicalCurrentValues,
+} from "@/lib/pos/processingCase/returnClassification/resolveCanonicalCurrentValues";
 
 function stringifyValue(v: unknown): string | null {
     if (v === null || v === undefined) return null;
@@ -49,19 +55,57 @@ function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unkn
     return out;
 }
 
+/**
+ * Say what one returned answer means next to canonical truth.
+ *
+ * An answer with no `fieldKey` names no destination and is form-only. An answer whose owner is not
+ * the child record comes back unresolved from `currentValueForBinding`, and the classifier refuses
+ * it rather than guessing — a relationship-owned fact must not be read off the child row.
+ */
+function classifyProposedValue(value: ProposedValue, canonical: CanonicalCurrentValues): ProposedValue {
+    const providerRef = value.entityType && value.fieldKey ? `${value.entityType}.${value.fieldKey}` : null;
+    if (!providerRef) {
+        return { ...value, classification: "form_only", canonicalCurrentValue: null };
+    }
+    const current = currentValueForBinding(canonical, providerRef);
+    const classified = classifyReturnedValue({
+        hasCanonicalBinding: true,
+        canonicalCurrentValue: current.resolved ? current.value : undefined,
+        participantValue: value.value,
+    });
+    return {
+        ...value,
+        classification: classified.classification,
+        canonicalCurrentValue: current.resolved ? stringifyValue(current.value) : null,
+        refusalReason: classified.refusalReason ?? null,
+    };
+}
+
 function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: string): SourceEvidenceLoader {
+    // One read per subject per batch — several submissions in a packet share one child.
+    const canonicalCache = new Map<string, CanonicalCurrentValues>();
+    const canonicalFor = async (id: string | null): Promise<CanonicalCurrentValues> => {
+        const key = String(id ?? "");
+        const hit = canonicalCache.get(key);
+        if (hit) return hit;
+        const loaded = await loadCanonicalCurrentValues(supabase, orgId, id);
+        canonicalCache.set(key, loaded);
+        return loaded;
+    };
+
     return async (ids) => {
         const out = new Map<string, SourceEvidenceRaw>();
         if (ids.length === 0) return out;
         const { data: subs } = await supabase
             .from("form_submissions")
-            .select("id, payload, form_definition_version_id")
+            .select("id, payload, form_definition_version_id, customer_member_id")
             .eq("org_id", orgId)
             .in("id", ids);
         const subRows = (subs ?? []) as {
             id: string;
             payload: Record<string, unknown> | null;
             form_definition_version_id: string | null;
+            customer_member_id: string | null;
         }[];
 
         const versionIds = [
@@ -101,8 +145,15 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
             const collectionEvidence = proposalBundle
                 ? projectRelatedRecordProposalsToEvidence(proposalBundle, { processingCaseId: null })
                 : undefined;
+            /*
+             * Read canonical truth ONCE per subject, then say what each answer means next to it.
+             * Without this the panel lists every re-answered field as a proposed change; with it an
+             * operator sees the two that actually are.
+             */
+            const canonical = await canonicalFor(s.customer_member_id);
+            const values = schema ? labelSubmissionValues(schema, s.payload) : [];
             out.set(s.id, {
-                proposedValues: schema ? labelSubmissionValues(schema, s.payload) : [],
+                proposedValues: values.map((v) => classifyProposedValue(v, canonical)),
                 documentId: null,
                 collectionEvidence,
             });

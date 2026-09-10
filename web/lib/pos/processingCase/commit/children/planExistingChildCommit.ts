@@ -7,10 +7,10 @@ import {
     validateMutationValue,
 } from "@/lib/fields/mutation/resolveMutationCapability";
 import type {
-    ExistingChildCommitFieldState,
     ExistingChildCommitPlan,
     ExistingChildSkippedChange,
 } from "@/lib/pos/processingCase/commit/children/types";
+import { staleStateFor } from "@/lib/pos/processingCase/returnClassification/classifyReturnedValue";
 
 export type ExistingChildRecordSnapshot = {
     id: string;
@@ -19,15 +19,12 @@ export type ExistingChildRecordSnapshot = {
     profile: Record<string, unknown>;
 };
 
-function sameValue(a: unknown, b: unknown): boolean {
-    return String(a ?? "") === String(b ?? "");
-}
-
-function staleState(current: unknown, observed: unknown | undefined, proposed: unknown): ExistingChildCommitFieldState {
-    if (sameValue(current, proposed)) return "already_applied";
-    if (observed !== undefined && !sameValue(current, observed)) return "stale_conflict";
-    return "clean";
-}
+/*
+ * The freshness comparison now lives in `classifyReturnedValue`, where operator REVIEW can reach it
+ * too. It used to be private here, which meant "this value is already applied" was discovered only
+ * after the operator had approved it as a change. One definition, two readers.
+ */
+const staleState = staleStateFor;
 
 function skip(provider_ref: string, reason: string, outcome: ExistingChildSkippedChange["outcome"]): ExistingChildSkippedChange {
     return { provider_ref, reason, outcome };
