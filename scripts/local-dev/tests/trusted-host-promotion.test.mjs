@@ -84,6 +84,12 @@ const openPr = {
 
 function ghFor(pr, { mergeStatus = 0, mergeErr = "" } = {}) {
   return (args) => {
+    // The migration parity gate asks for the promoted revision's migration set.
+    // These fixtures are about merge readiness, not schema: an empty set is the
+    // honest answer for them, and it resolves parity without a census.
+    if (args.includes("api") && args.some((a) => String(a).includes("supabase/migrations"))) {
+      return { status: 0, stdout: "[]", stderr: "" };
+    }
     if (args.includes("view")) return { status: 0, stdout: JSON.stringify(pr), stderr: "" };
     if (args.includes("merge")) return { status: mergeStatus, stdout: mergeStatus === 0 ? "ok" : "", stderr: mergeErr };
     return { status: 1, stderr: "unexpected gh argv", stdout: "" };
@@ -267,7 +273,9 @@ assert.equal(validateMergeInputs({
 }).code, "force_merge_rejected");
 
 const graphqlShaped = evaluateMergeReadiness(inspectPullRequest(mergeInputs, {
-  gh: () => ({
+  gh: (args) => (args.includes("api") && args.some((a) => String(a).includes("supabase/migrations"))
+    ? { status: 0, stdout: "[]", stderr: "" }
+    : {
     status: 0,
     stdout: JSON.stringify({
       number: 479,

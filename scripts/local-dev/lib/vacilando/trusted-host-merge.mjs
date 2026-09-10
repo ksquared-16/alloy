@@ -1,6 +1,14 @@
 /**
  * Bounded trusted-host GitHub merge. No generic shell. No worker tokens.
  */
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import {
+  migrationMergeGate,
+  provenHostedHeadFromCensusRecords,
+  requiredVersionsFromFilenames,
+} from "./migration-parity.mjs";
 import { spawnSync } from "node:child_process";
 // The remote-mutation guard is shared: merging is not the only thing here that
 // leaves this machine, and one guard in one place is the point.
@@ -461,7 +469,76 @@ function rollupFrom(pr = {}) {
   return [];
 }
 
-export function inspectPullRequest(inputs, { gh = defaultGh } = {}) {
+/**
+ * The migration parity measurement for one pull request.
+ *
+ * Reads the REQUIRED set from the pull request's own tree — what the merged
+ * revision will require — and the PROVEN hosted head from the governed census
+ * records, which are the only sanctioned reader of the deployed primary. It
+ * never opens a database and never holds a credential.
+ *
+ * Every failure to measure returns a non-ok verdict rather than throwing, so a
+ * caller cannot accidentally treat an exception as absence of a problem.
+ */
+// The governed-action store, located the same way every other module here
+// locates it. Deliberately a local copy rather than an import: this file is
+// already imported BY governed-action-request.mjs, so importing its path helper
+// would close a cycle for the sake of one join().
+function runtimeRoot() {
+  return process.env.ALLOY_RUNTIME_ROOT?.trim()
+    || join(homedir(), ".local", "state", "alloy-dev");
+}
+
+function governedActionRequestsPath(root = runtimeRoot()) {
+  return join(root, "vacilando", "governed-actions", "requests.json");
+}
+
+export function measureMergeMigrationParity(n, { gh = defaultGh, nowMs = Date.now(), censusRequests = null } = {}) {
+  try {
+    const res = gh(["api", `repos/${n.repository}/contents/supabase/migrations?ref=${n.expectedHeadSha}`,
+      "--jq", "[.[].name]"]);
+    if (res.status !== 0) {
+      return { status: "unknown", promote: false, measured: false, reason: "could not read the promoted revision's migration set" };
+    }
+    const names = parseJson(res.stdout);
+    if (!Array.isArray(names)) {
+      return { status: "unknown", promote: false, measured: false, reason: "unparseable migration listing for the promoted revision" };
+    }
+    const required = requiredVersionsFromFilenames(names);
+    // A revision that requires no migrations needs no proof, so do not go and
+    // read one. This is not only a saved file read: it keeps the answer for
+    // "this promotion has no schema requirement" independent of whether any
+    // census has ever run.
+    if (!required.length) {
+      return migrationMergeGate({ requiredHead: null, requiredCount: 0, nowMs });
+    }
+    let records = censusRequests;
+    if (!Array.isArray(records)) {
+      records = [];
+      try {
+        const store = governedActionRequestsPath();
+        if (existsSync(store)) {
+          const parsed = JSON.parse(readFileSync(store, "utf8"));
+          records = Array.isArray(parsed) ? parsed : (parsed?.requests || []);
+        }
+      } catch { /* unreadable proof -> UNKNOWN below */ }
+    }
+    const proven = provenHostedHeadFromCensusRecords(records, {
+      artifactPath: "hosted-migration-identity-census.sql",
+    });
+    return migrationMergeGate({
+      requiredHead: required.length ? required[required.length - 1] : null,
+      requiredCount: required.length,
+      provenHead: proven?.head || null,
+      provenAtMs: proven?.atMs || null,
+      nowMs,
+    });
+  } catch (err) {
+    return { status: "unknown", promote: false, measured: false, reason: String(err?.message || err).slice(0, 200) };
+  }
+}
+
+export function inspectPullRequest(inputs, { gh = defaultGh, censusRequests = null, nowMs = Date.now() } = {}) {
   const v = validateMergeInputs(inputs);
   if (!v.ok) return v;
   const n = v.normalized;
@@ -483,6 +560,10 @@ export function inspectPullRequest(inputs, { gh = defaultGh } = {}) {
   return {
     ok: true,
     normalized: n,
+    // Measured here because this is where `gh` already is, and refused below,
+    // where refusals are enforced. Keeping the two apart is what lets the
+    // verdict be unit-tested without a network.
+    migration_parity: measureMergeMigrationParity(n, { gh, censusRequests, nowMs }),
     pr: {
       number: pr.number,
       title: pr.title,
@@ -543,6 +624,36 @@ export function evaluateMergeReadiness(inspected) {
       code: "stale_expected_head",
       detail: "PR head SHA does not match expected_head_sha.",
       evidence: checkEvidence(pr),
+      pr,
+      normalized: n,
+    };
+  }
+  // ── THE SCHEMA THIS REVISION NEEDS MUST BE PROVEN PRESENT ─────────────────
+  //
+  // Enforced HERE, not only as a policy gate, and the difference is the whole
+  // point. A policy gate decides whether the merge may proceed WITHOUT asking a
+  // person; an approval satisfies it. This runs at execution, after any
+  // approval, so no approval can authorise merging application code into an
+  // environment whose schema cannot run it.
+  //
+  // That boundary is deliberate rather than absolute distrust of the Director:
+  // approving a DATABASE MUTATION is a judgement a person can make, because
+  // they can decide the migration is safe to apply. Approving a merge does not
+  // make the schema present — the code would simply run against a database
+  // that cannot serve it — so there is nothing for judgement to fix, and the
+  // right answer is to apply the migration and re-measure, not to override.
+  //
+  // UNKNOWN refuses on the same footing as BEHIND. "I could not establish it"
+  // is not evidence of safety, and treating it as one is the fail-open this
+  // exists to close.
+  const parity = inspected.migration_parity || null;
+  if (!parity || parity.status !== "ok") {
+    return {
+      ok: false,
+      code: parity?.status === "blocked" ? "hosted_migration_behind" : "hosted_migration_parity_unknown",
+      detail: parity?.reason
+        || "hosted migration parity could not be established for this promotion",
+      migration_parity: parity,
       pr,
       normalized: n,
     };

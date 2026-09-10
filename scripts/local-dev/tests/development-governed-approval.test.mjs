@@ -462,6 +462,14 @@ await test("a merge attempt under the test runner refuses instead of merging", (
       mergeCalled = true;
       return { status: 0, stdout: "", stderr: "" };
     }
+    // The migration parity gate reads the promoted revision's migration set.
+    // It answers here so that the LIVE-MERGE GUARD remains the reason nothing is
+    // merged — which is the property this test exists to defend. Leaving it
+    // unanswered would still refuse, but for the wrong reason, and the guard
+    // would stop being what the test proves.
+    if (args[0] === "api" && args.some((a) => String(a).includes("supabase/migrations"))) {
+      return { status: 0, stdout: "[]", stderr: "" };
+    }
     if (args[0] === "api") return { status: 1, stdout: "", stderr: "no graphql in tests" };
     return {
       status: 0,

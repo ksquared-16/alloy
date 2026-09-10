@@ -235,3 +235,161 @@ test("a census of some other artifact is not this proof", () => {
   ];
   assert.equal(P.provenHostedHeadFromCensusRecords(rows, { artifactPath: "hosted-migration-identity-census.sql" }), null);
 });
+
+// ── the HARD gate: an approval cannot merge code its schema cannot run ──────
+//
+// The policy gate decides whether a merge may proceed WITHOUT a person. This
+// runs at execution, after any approval, which is the difference that matters:
+// approving a database mutation is a judgement a person can make, but approving
+// a merge does not make the schema present, so there is nothing for judgement
+// to fix and the answer is to apply and re-measure, not to override.
+const M = await import("../lib/vacilando/trusted-host-merge.mjs");
+
+const openPr = (over = {}) => ({
+  ok: true,
+  normalized: { repository: "o/r", pullRequestNumber: 1, targetBranch: "staging", expectedHeadSha: "a".repeat(40), mergeMethod: "merge" },
+  pr: {
+    state: "OPEN", draft: false, baseRefName: "staging", headRefOid: "a".repeat(40),
+    mergeable: "MERGEABLE", mergeStateStatus: "CLEAN",
+    checks: { failing: [], pending: [], unknown: [], required: [], passing: [] },
+  },
+  ...over,
+});
+
+test("PASS · parity ok lets the merge proceed past the schema gate", () => {
+  const r = M.evaluateMergeReadiness(openPr({ migration_parity: { status: "ok", promote: true, measured: true } }));
+  // It may still be refused for other reasons, but never for the schema gate.
+  assert.notEqual(r.code, "hosted_migration_behind");
+  assert.notEqual(r.code, "hosted_migration_parity_unknown");
+});
+
+test("BLOCKED · hosted behind refuses the merge at execution, after approval", () => {
+  const r = M.evaluateMergeReadiness(openPr({
+    migration_parity: { status: "blocked", promote: false, measured: true, reason: "hosted head X is behind the required head Y" },
+  }));
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "hosted_migration_behind");
+  assert.match(r.detail, /behind the required head/);
+});
+
+test("UNKNOWN · unmeasured parity refuses on the same footing as behind", () => {
+  const r = M.evaluateMergeReadiness(openPr({
+    migration_parity: { status: "unknown", promote: false, measured: false, reason: "no census has positively established the hosted migration head" },
+  }));
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "hosted_migration_parity_unknown");
+});
+
+test("a MISSING parity measurement is refused, never treated as absent-problem", () => {
+  // The shape an older caller, or a thrown measurement, would produce.
+  const r = M.evaluateMergeReadiness(openPr());
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "hosted_migration_parity_unknown");
+});
+
+test("the schema gate is checked BEFORE mergeability, so it cannot be skipped", () => {
+  // A conflicted PR with bad parity must still report the schema refusal: if
+  // parity were checked last, a PR could be refused for conflicts, fixed, and
+  // merged without the schema question ever being asked.
+  const r = M.evaluateMergeReadiness(openPr({
+    pr: { ...openPr().pr, mergeable: "CONFLICTING", mergeStateStatus: "DIRTY" },
+    migration_parity: { status: "blocked", promote: false, measured: true, reason: "behind" },
+  }));
+  assert.equal(r.code, "hosted_migration_behind");
+});
+
+test("an already-merged PR is still idempotent and not re-refused", () => {
+  // Idempotency is resolved before the schema gate: re-reporting a merge that
+  // already happened as a schema failure would be a false alarm.
+  const r = M.evaluateMergeReadiness({
+    ok: true,
+    normalized: { repository: "o/r", pullRequestNumber: 1, targetBranch: "staging", expectedHeadSha: "a".repeat(40), mergeMethod: "merge" },
+    pr: { state: "MERGED", headRefOid: "a".repeat(40), mergeCommitSha: "b".repeat(40) },
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.idempotent, true);
+});
+
+// ── the canonical apply owner ───────────────────────────────────────────────
+//
+// database.apply_migration is the ONLY registered way to mutate a hosted
+// schema, and these pin the properties that make it safe to be that: it takes
+// migration IDENTITIES from the promoted tree, never SQL, and it will not aim
+// at an environment it was not registered for.
+const MIG = await import("../lib/vacilando/trusted-host-migrate.mjs");
+
+test("the apply owner refuses arbitrary SQL outright", () => {
+  for (const bad of [{ sql: "drop table x" }, { statement: "select 1" }, { body: "x" }, { databaseUrl: "postgres://x" }]) {
+    const r = MIG.validateMigrationInputs({ environment: "staging", expectedSha: "a".repeat(40), migrations: [], ...bad });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, "arbitrary_sql_rejected");
+  }
+});
+
+test("the apply owner refuses production targets", () => {
+  const r = MIG.validateMigrationInputs({ environment: "production", expectedSha: "a".repeat(40), migrations: [] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "production_database_rejected");
+});
+
+test("the apply owner requires the promoted revision it is applying from", () => {
+  const r = MIG.validateMigrationInputs({ environment: "staging", migrations: [] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "missing_expected_sha");
+});
+
+test("the apply owner refuses a duplicate version in one request", () => {
+  const r = MIG.validateMigrationInputs({
+    environment: "staging",
+    expectedSha: "a".repeat(40),
+    migrations: [{ version: "20260909210000" }, { version: "20260909210000" }],
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "version_collision");
+});
+
+// ── post-apply re-measurement is required before promotion continues ────────
+test("applying a migration does not by itself unblock promotion", () => {
+  // THE PROPERTY THAT MAKES RE-MEASUREMENT MANDATORY, and it is structural
+  // rather than a rule someone must remember: the gate reads the proven head
+  // from CENSUS records. Applying a migration writes no census, so the proven
+  // head is unchanged and the promotion stays blocked until the deployed
+  // primary is measured again. There is no code path by which "we applied it"
+  // becomes "it is proven".
+  const required = [V(1), V(2), V(3)];
+  const beforeApply = [
+    { action_key: "database.read_census", status: "complete", request_id: "c1",
+      inputs: { queryArtifactPath: "hosted-migration-identity-census.sql" },
+      execution_ended_at: new Date().toISOString(),
+      result: { census: { questions: { ledger_head: { rows: [V(2)] } } } } },
+  ];
+  const provenBefore = P.provenHostedHeadFromCensusRecords(beforeApply, { artifactPath: "hosted-migration-identity-census.sql" });
+  const blocked = P.migrationMergeGate({
+    requiredHead: V(3), requiredCount: required.length,
+    provenHead: provenBefore.head, provenAtMs: provenBefore.atMs,
+  });
+  assert.equal(blocked.status, "blocked");
+
+  // An apply happens. No census is written by it, so nothing the gate reads moves.
+  const afterApplyOnly = [...beforeApply];
+  const provenStill = P.provenHostedHeadFromCensusRecords(afterApplyOnly, { artifactPath: "hosted-migration-identity-census.sql" });
+  assert.equal(provenStill.head, V(2), "an apply must not advance the proven head");
+  assert.equal(P.migrationMergeGate({
+    requiredHead: V(3), requiredCount: required.length,
+    provenHead: provenStill.head, provenAtMs: provenStill.atMs,
+  }).status, "blocked", "promotion stays blocked until re-measured");
+
+  // Only a fresh census moves it.
+  const afterReMeasure = [...beforeApply, {
+    action_key: "database.read_census", status: "complete", request_id: "c2",
+    inputs: { queryArtifactPath: "hosted-migration-identity-census.sql" },
+    execution_ended_at: new Date(Date.now() + 1000).toISOString(),
+    result: { census: { questions: { ledger_head: { rows: [V(3)] } } } },
+  }];
+  const provenAfter = P.provenHostedHeadFromCensusRecords(afterReMeasure, { artifactPath: "hosted-migration-identity-census.sql" });
+  assert.equal(provenAfter.head, V(3));
+  assert.equal(P.migrationMergeGate({
+    requiredHead: V(3), requiredCount: required.length,
+    provenHead: provenAfter.head, provenAtMs: provenAfter.atMs,
+  }).status, "ok", "re-measurement is what unblocks promotion");
+});
