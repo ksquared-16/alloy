@@ -1895,8 +1895,38 @@ export function shouldPollOutput({ hidden, routeName, laneId }) {
   return !hidden && routeName === "lanes" && Boolean(laneId);
 }
 
-export function shouldPollList({ hidden, routeName }) {
-  return !hidden && routeName === "lanes";
+/**
+ * SHOULD THE LANE INDEX REFRESH RIGHT NOW?
+ *
+ * THE DEFECT THIS CLOSES, reported from the fleet: a lane that finished work
+ * did not move to its place in the list until the operator OPENED it. Opening
+ * a lane must never be what makes its state current.
+ *
+ * THE CAUSE WAS THIS PREDICATE, and it was wrong about which surfaces show
+ * lanes. It required `routeName === "lanes"`, but `#/home` parses to "home" —
+ * and Home renders the lane list, from `G.lanes`, through `buildHomeVm`. The
+ * desktop rail is painted from the same array on every route. So on Home the
+ * interval ran and returned immediately, `fetchLanes()` ran only once per
+ * session behind `!G.listReady`, and `fetchHome()` fetches a different payload
+ * that never touches `G.lanes`. The index was frozen from first paint.
+ *
+ * Opening a lane moved the route to `#/lanes/:id`, which satisfied this
+ * predicate, so the next tick finally called `fetchLanes()` and the lane sorted
+ * correctly — which is exactly the symptom, and why it looked like navigation
+ * was doing the work.
+ *
+ * WHAT THE PREDICATE IS ACTUALLY FOR. It is not a route filter; it is "is
+ * anyone looking at lane state". The answer is yes on every route this app
+ * serves, because the rail is always mounted and Home leads with the list. The
+ * only real reason to hold off is a document nobody can see, which is what
+ * `hidden` already says. Nothing here polls faster — the interval is unchanged.
+ */
+export function shouldPollList({ hidden, routeName } = {}) {
+  if (hidden) return false;
+  // Named rather than defaulted to true, so a route added later has to decide.
+  // Every one of these renders lane state: the list itself, Home's lane list,
+  // and the rail that is mounted beside all of them.
+  return ["lanes", "home", "activity", "system", "settings"].includes(String(routeName || "home"));
 }
 
 export function outputPollIntervalMs({ burstUntil, nowMs = Date.now(), liveWork = false } = {}) {
