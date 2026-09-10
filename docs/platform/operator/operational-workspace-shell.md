@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -196,7 +196,7 @@ Business Process → Work View → Operational Work → Focus Panel / Record
 
 **General / Cross-process fallback.** Tasks without Business Process metadata — manual tasks, Task Assist tasks, and any row lacking `department_id` — group under a single explicit **General / Cross-process** bucket. We never fabricate a Business Process for them.
 
-**Phase 2 gaps (next implementation phase).** (1) Configured Work Views are not yet rendered inside Work Items — Stage grouping is the interim stand-in for the Work View lens. (2) The client has **no Business Process / department *name* source** and **no Stage *label* source**, so process groups render with a generic fallback label and stages are humanized from the stage key — pass `processLabels` / `stageLabels` to `deriveWorkItemsProcessGroups` once a label source exists. (3) Workflow-created tasks may carry `lifecycle_stage_key` (via `context_snapshot`) but no `department_id`; they fall into General until a department is resolvable. (4) "Open record" does not yet route through the Work View / Focus Panel layout context (it opens the bare entity drawer).
+**Phase 2 gaps (next implementation phase).** (1) Configured Work Views are not yet rendered inside Work Items — Stage grouping is the interim stand-in for the Work View lens. (2) The client has **no Business Process / department *name* source** and **no Stage *label* source**, so process groups render with a generic fallback label and stages are humanized from the stage key — pass `processLabels` / `stageLabels` to `deriveWorkItemsProcessGroups` once a label source exists. (3) Workflow-created tasks may carry `lifecycle_stage_key` (via `context_snapshot`) but no `department_id`; they fall into General until a department is resolvable. (4) "Open record" does not yet route through the Work View / Focus Panel layout context (it opens the Focus Panel; the modal record overlay was deleted in August 2026 and `AdminEntityDrawer` no longer exists).
 
 ---
 
@@ -213,7 +213,7 @@ Categories/views sit on the left (or as a subordinate view strip); the selected 
 
 ## Operational work returns to context
 
-Operational work must always expose a path back to the operating context. Wherever a work item, queue row, or analytics object carries linked record context, the surface must offer a way to **open the record / open the Focus Panel / drawer**, or navigate to the relevant work unit / record surface. Work Items implements this today via "Open record" (and the linked entity name) for opportunity-backed items, which opens the entity drawer. Operators should never reach a dead end away from the record.
+Operational work must always expose a path back to the operating context. Wherever a work item, queue row, or analytics object carries linked record context, the surface must offer a way to **open the record / open the Focus Panel / drawer**, or navigate to the relevant work unit / record surface. Work Items implements this today via "Open record" (and the linked entity name) for opportunity-backed items, which opens the Focus Panel — the modal record overlay was deleted in August 2026. Operators should never reach a dead end away from the record.
 
 ---
 

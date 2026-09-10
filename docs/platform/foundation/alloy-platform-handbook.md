@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-01
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -24,7 +24,7 @@ Deeper truth lives under `docs/platform/`, locked runtime detail under `docs/sys
 
 Alloy is a **configurable operating system for service businesses**.
 
-Operators should run high-context work from one trusted workspace: records, queues, communication, workflows, documents, scheduling, financial-adjacent operations, and AI-assisted action — without treating Alloy as a CRM, a form builder, or a vertical point solution.
+Operators should run high-context work from one trusted workspace: records, queues, communication, workflows, documents, attendance, scheduling, billing and payments, and AI-assisted action — without treating Alloy as a CRM, a form builder, or a vertical point solution.
 
 Childcare enrollment is the first primary market and a **reference implementation**. Platform layers stay industry-agnostic. Vertical labels, presets, and templates belong in tenant configuration — not in shared platform identity.
 
@@ -262,6 +262,36 @@ Do not invent parallel data planes or privileged client-side service-role shortc
 - [`../../system/bos-identity-doctrine.md`](../../system/bos-identity-doctrine.md)
 - [`../../product/bos-foundation.md`](../../product/bos-foundation.md)
 - [`../../product/ai-system.md`](../../product/ai-system.md)
+
+---
+
+## Chapter 10a — Operational domains (September 2026)
+
+The chapters above describe the platform. This one names the **domains built on it**, because a
+reader who stops at Chapter 10 will not know they exist.
+
+Read the maturity honestly: several domains below are **Complete (foundation)** — schema,
+invariants, commands and certification exist, and the operator surface does not. That is a real
+distinction, not a hedge, and [`platform-capabilities.md`](./platform-capabilities.md) carries the
+full matrix.
+
+| Domain | September 2026 | Go to |
+|---|---|---|
+| **Attendance** | Complete — append-only fact ledger enforced in the database, corrections by reference, kiosk producer channel, capability-gated | [`../modules/attendance-system.md`](../modules/attendance-system.md) |
+| **Staffing** | Complete (foundation) — employment, assignment eligibility, presence facts, combined roster. Roster surfaces are read-only | same document, § Attendance V1 |
+| **Scheduling** | Complete (foundation) — assignment model, patterns, projections. **No shift model exists**, and the write path is child-only | split: [`../core/placement-system.md`](../core/placement-system.md) (child), attendance-system (staff), [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) (architecture) |
+| **Billing** | Complete — Add Charge, posting, reversal, tuition generation | [`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md) |
+| **Payments** | Partial — Stripe Connect card and ACH, refunds. No merchant onboarding in the product, no family-facing way to pay | same document, § Thread 8B/8C |
+| **Subsidy / Funding** | Complete (foundation) — seven tables, nine commands, certified, **no operator surface at all** | same document, § Subsidy |
+| **Processing** | Partial — registry-bound plan/approve/execute over identity, with an operator surface | [`../modules/documents-and-forms.md`](../modules/documents-and-forms.md) |
+| **Forms & the participant runtime** | Partial — a deterministic turn engine drives enrollment conversations over public token routes | same document |
+| **Work Items** | Complete — cross-record execution visibility over authoritative domain work; it resolves nothing itself | [`../operator/queue-system.md`](../operator/queue-system.md) § Work Items queue |
+| **Access & Identity** | Partial — four layers enumerated in code and test-locked; much of the catalog is not yet enforced | [`../governance/roles-and-permissions.md`](../governance/roles-and-permissions.md) |
+| **Operational Expectations** | Complete (foundation) — P0/P1 certified; one activated purpose authors in production | [`../core/operational-expectations-system-design.md`](../core/operational-expectations-system-design.md) |
+
+**Where to go next as an engineer.** Start at the domain above, then its migrations — the schema is
+the most reliable statement of what is true. Where a document and the code disagree, the code wins
+and the document is a defect.
 
 ---
 

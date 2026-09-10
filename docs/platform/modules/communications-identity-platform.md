@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -95,7 +95,6 @@ On resolution failure: enqueues with `metadata.sender_resolution_deferred` + Pyt
 ## Deferred
 
 - Google Workspace / Microsoft 365 OAuth and sync
-- Inbound email
 - Voice / internal messaging
 - Provider-admin UX
 - Grant-management UX

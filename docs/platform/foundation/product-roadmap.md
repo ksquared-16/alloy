@@ -103,7 +103,11 @@ against migrations and certification packs; see
 Genuinely still future:
 
 1. **Automation**
-2. **AI**
+2. **AI** — the *product* is future. The **foundation shipped and is dark by default**: policy
+   model, fail-closed gate, capability registry and the Trust seam all exist and are
+   test-locked, three switches default off, and no operator UI turns any of them on. See the
+   AI / BOS row in [`platform-capabilities.md`](./platform-capabilities.md) — Complete
+   (foundation), not Planned.
 3. **Parent Experience**
 4. **Teacher Experience**
 5. **Partner APIs** — nothing exists today: no inbound machine credential, no API versioning, no

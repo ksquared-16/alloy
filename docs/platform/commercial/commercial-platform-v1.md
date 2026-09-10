@@ -1,7 +1,7 @@
 ---
 owner: commercial
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -23,10 +23,10 @@ supersedes: []
 | **Programs** | Programs, Program Offerings, Program Offering Variants | ✅ Shipped |
 | **Commercial** | Commercial Products, Commercial Categories, Commercial Rates (tuition), Billing Frequencies, Revenue Categories | ✅ Shipped |
 | **Accounting** | GL Accounts (chart of accounts), Revenue Category → GL Account mappings | ✅ Shipped (V1 mapping; posting deferred) |
-| **Billing** | Charge generation, posting, deposit refund lifecycle, package consumption | 🔜 Future |
-| **Policies** | Conditional rules — waivers, auto-apply, discounts, proration | 🔜 Future |
-| **Funding** | Multi-payer — subsidy, voucher, corporate splits | 🔜 Future |
-| **Simulator** | Consumes all of the above to model outcomes | 🔜 Future |
+| **Billing** | Charge generation, posting, deposit refund lifecycle, package consumption | ✅ **Shipped Sept 2026** — generation, posting, reversal, payments, refunds. Deposit refund lifecycle and package consumption remain future. See [`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md) |
+| **Policies** | Conditional rules — waivers, auto-apply, discounts, proration | ✅ **Shipped** — `commercial_policies` (`20260715000001`), reductions (`20260907140000`). Reductions have no operator surface yet |
+| **Funding** | Multi-payer — subsidy, voucher, corporate splits | ⚠️ **Foundation only** — responsibility (`20260908120000`) and subsidy (`20260909120000`) schemas, commands and certification exist; **no operator surface** |
+| **Simulator** | Consumes all of the above to model outcomes | ✅ **Shipped** — `/organization/financials?chapter=simulator`, `POST /api/admin/commercial/execution/preview` |
 
 **Boundary rule:** Commercial *defines what a charge is*. Accounting *decides where it posts*. Billing *executes*. Policies *condition*. Funding *splits*. Simulator *reads*. No domain reaches across these lines.
 

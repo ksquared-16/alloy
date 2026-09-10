@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-01
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -31,6 +31,80 @@ Detailed behavior always lives in the **canonical owner** documents linked below
 **Status:** Active | Superseded
 **Superseded by:** link when applicable.
 ```
+
+---
+
+## 2026-09 — Domain capability gating moves from feature flags to RBAC capabilities
+
+**Decision:**
+A shipped operational domain is gated by a **granted capability**, not by a feature flag. Attendance
+ships behind `attendance.record` / `attendance.read`; financial adjustment, responsibility and subsidy
+each ship behind their own permission migration. Feature flags remain only for genuine rollout
+controls, not for deciding whether a domain exists for a tenant.
+
+**Why:**
+A feature flag answers "is this code enabled here", which is a deployment question. Whether an
+operator may record attendance or adjust a charge is an **authority** question, and authority already
+has an owner — the four-layer access model. Flag-gating a domain put authority in a second place,
+where it could not be audited, granted, or reasoned about alongside every other permission.
+
+**Consequences:**
+A new domain declares capability keys in a migration and grants them to roles; it does not add an
+`org_settings.metadata.feature_flags` entry. Two flag readers remain in the codebase
+(`web/lib/childcareOperational/featureFlag.ts` and the Operational Expectations ledger authoring
+flag); both are rollout controls, and the latter is the subject of an open decision. Documentation
+must not describe a capability as "flag-gated off" when it is in fact permission-gated — the two
+mean different things to a reader deciding whether a tenant has the feature.
+
+**Canonical owners:** [`../governance/roles-and-permissions.md`](../governance/roles-and-permissions.md), [`platform-capabilities.md`](./platform-capabilities.md).
+
+**Status:** Active
+
+---
+
+## 2026-08 — Organization is the canonical configuration namespace
+
+**Decision:**
+Every configuration surface lives under `/organization/*`. `/admin` and `/settings` are
+**compatibility redirects**, not control planes.
+
+**Why:**
+Configuration had accumulated three entry namespaces, so no document could name "the configuration
+plane" without being wrong somewhere. Operators configure an organization; the route now says so.
+
+**Consequences:**
+Documentation names `/organization/*` when it means the configuration control plane. `/admin` and
+`/settings` may be described as redirects and must not be presented as where configuration lives.
+New configuration surfaces are added under `/organization/*`; the redirects in `web/next.config.ts`
+are compatibility, not extension points.
+
+**Canonical owners:** [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../operator/configuration-workspace-platform-doctrine.md`](../operator/configuration-workspace-platform-doctrine.md), [`system-overview.md`](./system-overview.md).
+
+**Status:** Active
+
+---
+
+## 2026-08 — The modal record product is deleted; the Focus Panel is the only record surface
+
+**Decision:**
+Operators reach a record through the **Focus Panel**. The modal record overlay and its router are
+deleted, not deprecated. "Drawer" survives only as the name of ViewModel and reveal infrastructure
+that now feeds the Focus Panel.
+
+**Why:**
+Two record surfaces meant two answers to "where does an operator work a subject", and the modal one
+could not carry the composition, subject identity and readiness model the runtime had grown.
+
+**Consequences:**
+This is enforced, not merely stated: `web/tests/operator/drawerProductEradication.test.ts` asserts the
+modules do not exist, and `certification/playwright/drawer-eradication.cert.spec.ts` certifies no
+operator path produces the overlay. Documentation uses **Focus Panel** for the operator construct and
+must explain, rather than hide, that `drawer` persists in module and ViewModel names as compatibility
+vocabulary. Do not reintroduce a record overlay.
+
+**Canonical owners:** [`../operator/focus-panel-architecture-vocabulary.md`](../operator/focus-panel-architecture-vocabulary.md), [`../operator/drawer-system.md`](../operator/drawer-system.md), [`../operator/drawer-sunset-roadmap.md`](../operator/drawer-sunset-roadmap.md).
+
+**Status:** Active
 
 ---
 

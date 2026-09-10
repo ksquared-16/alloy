@@ -217,7 +217,11 @@ Locations remains frozen. Organization Runtime reuses its object-workspace gramm
 The Configuration Publication Runtime is a subsystem of the existing
 Configuration Runtime for domains that require explicit Organization
 publication and durable Location delivery.
-Programs is the first and only reference consumer in V1.
+Programs is the reference consumer that proved the runtime. **Business Process adopted it in
+July 2026** (`supabase/migrations/20260730120000_business_process_configuration_publication_v1.sql`),
+reusing `configuration_publications` unchanged under `domain_key = 'business_process'` and adding
+the compare-and-swap on `base_revision_id` that the Programs publish RPC still lacks. Surfaces and
+the Calculation library also publish explicitly.
 
 The runtime owns:
 
@@ -325,7 +329,9 @@ second canonical page.
 
 **Presentation primitives:** `ConfigurationSection`, `ConfigurationSectionItem`, `config-platform-*` CSS in `configurationRuntime.css`. IA source: `lib/adminV2/configurationModeNav.ts`.
 
-**Hidden from primary nav:** Financials (route may still exist).
+**Hidden from primary nav:** Action definitions and Command capability diagnostics — both
+`internal: true` in `configurationModeNav.ts`. **Financials is no longer hidden:** it is the
+Business chapter's first-class entry at `/organization/financials`.
 
 **Entities:** `/settings/entities` (entity label configuration).
 
