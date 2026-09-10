@@ -6,7 +6,7 @@ supersedes: []
 ---
 # Alloy API — OpenAPI Readiness Gate
 
-**Status:** Phase 3 finalized — **API Platform Complete**. This is the canonical decision doc for
+**Status:** Phase 3 finalized — **Internal API Platform Complete** (the qualifier this document's own body carries at §"As of Phase 3 finalization"; there is no external Developer Platform — see [`developer-platform/`](developer-platform/README.md)). This is the canonical decision doc for
 **when** and **for what** Alloy generates OpenAPI. It consolidates the contract work
 already completed (Actions → Analytics Metrics → Entity Read → reference-data families) and
 defines the exact readiness bar a route family must clear before it enters an OpenAPI spec.

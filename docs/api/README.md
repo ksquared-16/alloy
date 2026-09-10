@@ -20,6 +20,7 @@ current scope. See [`api-platform-completion.md`](api-platform-completion.md).
 
 | File | Contents |
 |------|----------|
+| [`developer-platform/`](developer-platform/README.md) | **Thread 4 — the ratified V1 architecture for the external Developer Platform** (application principal, installation, credentials, scopes, public surface, command adapter, request contract). Specification only; nothing is built. |
 | [`api-platform-completion.md`](api-platform-completion.md) | **Closeout** — the record that the internal API Platform foundation is complete: what exists (doctrine/implementation/guardrails), the OpenAPI v0 families, what remains as expansion (not gaps), and why API foundation work pauses here. |
 | [`api-architecture.md`](api-architecture.md) | **Doctrine** — the governing API platform architecture: principles, surface taxonomy, response/error contract, auth & org-scoping rules, versioning, consumer doctrine, the OpenAPI gate, SDK direction, and governance. Read this first for any API work. |
 | [`api-platform-governance.md`](api-platform-governance.md) | **Doctrine** — the platform operating contract: Definition of Done, OpenAPI admission, contract/correlation/pagination/freshness/versioning requirements, legacy & public-API policy, the self-governing CI command (`npm run api:check`), the API lifecycle, and the maturity snapshot. |

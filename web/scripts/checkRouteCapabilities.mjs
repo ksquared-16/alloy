@@ -684,7 +684,7 @@ export function discoverCatalogKeys() {
         for (const region of regions) {
             for (const literal of region.matchAll(SQL_STRING)) {
                 const key = literal[1].replace(/''/g, "'");
-                if (PERMISSION_KEY_GRAMMAR.test(key)) keys.add(key);
+                if (PERMISSION_KEY_GRAMMAR.test(key) && !SQL_SCHEMA_QUALIFIER.test(key)) keys.add(key);
             }
         }
     }
@@ -818,6 +818,20 @@ export function gateInventory(table, catalogKeys = discoverCatalogKeys()) {
 
 /** A permission key: lowercase dotted segments. Matches the catalog's own grammar. */
 const PERMISSION_KEY_GRAMMAR = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/;
+
+/**
+ * A schema-qualified relation name satisfies the grammar and is not a capability.
+ *
+ * The twin of `isSchemaQualifiedRelation` in `web/tests/access/permissionCatalogDiscovery.ts`, and it
+ * has to be, because `routeCapabilityDeclaration.test.ts` asserts these two discoveries return the
+ * SAME catalog. `20260909230000_attendance_capability.sql` guards its seed with
+ * `IF to_regclass('public.permissions') IS NOT NULL`, and region-based discovery takes every
+ * key-shaped literal inside that region — so three table names entered the catalog. The exclusion is
+ * by schema rather than by table name: a capability key's first segment is a domain, never a Postgres
+ * schema, so the next guard naming a different relation is covered without another edit here.
+ */
+const SQL_SCHEMA_QUALIFIER =
+    /^(?:public|auth|storage|graphql|graphql_public|realtime|vault|extensions|pg_catalog|information_schema|supabase_migrations|supabase_functions|net|cron|pgbouncer)\./;
 const TS_KEY_LITERAL = /["'`]([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)["'`]/g;
 
 function resolveImport(spec, fromFile) {

@@ -61,6 +61,14 @@ const artifactEnforced = artifact.enforced.map((e) => e.key);
 const APPROVED_ADDITIONS: Record<string, string> = {
     "health.view": "D-H6 — structured health visibility boundary",
     "health.manage": "D-H6 — structured health mutation boundary",
+    "enrollment.requirement_exception.manage":
+        "20260901120000 — excepting an Enrollment requirement is not working the Enrollment queue",
+    "enrollment.pricing.override": "20260906130000 — overriding recommended tuition, admin only",
+    "fin.adjust": "20260907150000 — deciding by hand that a family owes less is not billing them",
+    "fin.responsibility": "20260908130000 — who contractually bears a family's obligations",
+    "fin.subsidy": "20260909130000 — administering agency funding",
+    "attendance.read": "20260909230000 — viewing child attendance",
+    "attendance.record": "20260909230000 — recording child attendance",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {
@@ -70,6 +78,12 @@ describe("W-11 — the catalog is discovered completely", () => {
         // 57 is not a number chosen here. The Phase 0 migration measured the shared database on
         // 2026-07-29 and recorded it in its own comment before writing the literal that reproduces it;
         // this derivation from the migration tree arrives at the same width independently.
+        //
+        // Every key beyond it is in APPROVED_ADDITIONS with the migration that authorized it. That
+        // list grew from two to nine on 2026-09-10, and the growth is the finding rather than an
+        // inconvenience: each of the seven was catalogued, granted to the orgs that existed that day,
+        // and never added to `seed_default_rbac`. Which capabilities an organization's administrator
+        // held therefore depended on the date its `orgs` row was created.
         const added = Object.keys(APPROVED_ADDITIONS).filter((k) => catalog.has(k));
         expect(catalog.size).toBe(artifact.catalog_width + added.length);
         expect(catalog.size).toBe(57 + added.length);
@@ -138,8 +152,10 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         expect(enforced.filter((k) => !(k in APPROVED_ADDITIONS)).sort()).toEqual(
             [...artifactEnforced].sort(),
         );
-        // 21 until W-13/AD-22 gave `settings.users_roles.read` an enforcement site.
-        expect(enforced.length).toBe(22 + added.length);
+        // 21 until W-13/AD-22 gave `settings.users_roles.read` an enforcement site; 22 until the
+        // Financials workspace and the financial action package gave `fin.read` and `fin.write`
+        // theirs, which the artifact records as `financials_restatement`.
+        expect(enforced.length).toBe(24 + added.length);
         /*
          * A health key that is SEEDED but not ENFORCED would be the D-H6 failure mode: the catalogue
          * would advertise a boundary the product does not apply. Both keys must have call sites.
@@ -150,8 +166,11 @@ describe("W-11 — catalog against enforcement, both directions", () => {
     it("the deletion list is exactly the catalog keys no product source names", () => {
         const unenforced = [...catalog.keys()].filter((k) => (scan.sitesByKey.get(k) ?? []).length === 0);
         expect(unenforced.sort()).toEqual([...artifact.deletion_candidates].sort());
-        // 36 until W-13/AD-22 recovered `settings.users_roles.read` from the deletion list.
-        expect(unenforced.length).toBe(35);
+        // 36 until W-13/AD-22 recovered `settings.users_roles.read`; 35 until `fin.read` and
+        // `fin.write` were recovered the same way. Every movement this initiative has recorded has
+        // been OUT of the deletion list, which is the direction that means the product grew a real
+        // gate rather than lost one.
+        expect(unenforced.length).toBe(33);
     });
 
     it("C13 resolves against the measurement: nothing enforces a workflows key", () => {

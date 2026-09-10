@@ -51,12 +51,42 @@ export async function assertFinancialsReadAllowed(params: {
     supabase: SupabaseClient;
     orgId: string;
     userId: string | null | undefined;
-}): Promise<{ ok: true } | { ok: false; message: string; requiredPermission: string }> {
+}): Promise<FinancialsVerdict> {
+    return assertKey(params, FINANCIALS_READ_PERMISSION_KEY, FINANCIALS_READ_DENIED_MESSAGE);
+}
+
+/**
+ * Managing financial configuration and records — the write half of the same package.
+ *
+ * Named beside the read gate rather than inlined for the reason the read gate was: the declared
+ * route-capability table binds a claim to its enforcement through three joins, and an inline grants
+ * lookup satisfies none of them. It is the SAME key the registered financial actions enforce
+ * (`fin.write`), so a role configured to view Financials and not manage them gets one answer from
+ * the workspace, the API and the command surface rather than three.
+ */
+export const FINANCIALS_WRITE_PERMISSION_KEY = "fin.write" as const;
+
+export const FINANCIALS_WRITE_DENIED_MESSAGE =
+    "You don't have access to change financial information for this organization. "
+    + "Contact an administrator to request access.";
+
+export async function assertFinancialsWriteAllowed(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    userId: string | null | undefined;
+}): Promise<FinancialsVerdict> {
+    return assertKey(params, FINANCIALS_WRITE_PERMISSION_KEY, FINANCIALS_WRITE_DENIED_MESSAGE);
+}
+
+export type FinancialsVerdict = { ok: true } | { ok: false; message: string; requiredPermission: string };
+
+/** One implementation, so the read gate and the write gate cannot come to disagree about `null`. */
+async function assertKey(
+    params: { supabase: SupabaseClient; orgId: string; userId: string | null | undefined },
+    key: string,
+    message: string,
+): Promise<FinancialsVerdict> {
     const grants = await resolveActorPermissionGrants(params.supabase, params.orgId, params.userId ?? null);
-    if ((grants.permissionKeys ?? []).includes(FINANCIALS_READ_PERMISSION_KEY)) return { ok: true };
-    return {
-        ok: false,
-        message: FINANCIALS_READ_DENIED_MESSAGE,
-        requiredPermission: FINANCIALS_READ_PERMISSION_KEY,
-    };
+    if ((grants.permissionKeys ?? []).includes(key)) return { ok: true };
+    return { ok: false, message, requiredPermission: key };
 }

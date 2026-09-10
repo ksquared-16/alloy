@@ -3,7 +3,7 @@
   "query_hash": "3528e048c8ca3d3f0a076019ec817f67bcb2814027692a25a2f466cc09747dc6",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-10T01:26:36.605Z",
+    "census_run_at": "2026-09-10T21:42:44.538Z",
     "question_ids": [
       "ledger",
       "ledger_head",
@@ -68,24 +68,41 @@
           20260909210000,
           20260909220000,
           20260909230000,
-          20260909240000
+          20260909240000,
+          20260909250000,
+          20260909260000,
+          20260909270000,
+          20260910120000,
+          20260910130000
         ]
       },
       "ledger_head": {
         "question_id": "ledger_head",
         "row_count": null,
         "rows": [
-          20260909240000
+          20260910130000
         ]
       },
       "ledger_total": {
         "question_id": "ledger_total",
         "row_count": null,
         "rows": [
-          393
+          398
         ]
       }
     },
-    "row_count": 57
+    "row_count": 62
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-10T21:42:43.609Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_124c46c86ff25c",
+    "authorization_id": "grnt_78b75c17db1741c0",
+    "query_hash": "3528e048c8ca3d3f0a076019ec817f67bcb2814027692a25a2f466cc09747dc6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
   }
 }

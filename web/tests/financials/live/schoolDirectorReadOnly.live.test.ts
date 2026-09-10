@@ -21,13 +21,18 @@
  * `fin.adjust`, `fin.responsibility`, `fin.subsidy` — and this asserts each by name so that
  * widening any one of them later fails here rather than in production.
  *
- * ── charge.post IS A SEPARATE, PRE-EXISTING QUESTION ──
+ * ── charge.post WAS A SEPARATE QUESTION, AND IS NO LONGER ──
  *
- * Thread 1's `charge.post` declares no Financials-specific write permission and is gated by the
- * admin/ops route gate instead. That is known debt, owned elsewhere, and NOT what this file
- * claims: the absence of `fin.write` for a director says nothing about whether `charge.post` would
- * refuse them. Conflating the two would let a real gap hide behind a green test, so the
- * distinction is asserted explicitly below rather than glossed.
+ * This file used to carry the opposite assertion: that `charge.post` declared no Financials-specific
+ * write permission, was gated by the admin/ops route gate instead, and that the absence of
+ * `fin.write` for a director therefore said NOTHING about whether posting would refuse them. It was
+ * pinned as an absence precisely so that closing the debt would surface here as a failing
+ * expectation rather than a silent change of meaning. It did.
+ *
+ * `charge.add` and `charge.post` now require `fin.write` and `charge.reverse` requires `fin.adjust`,
+ * enforced in the action bodies — so the four absent grants below are load-bearing rather than
+ * decorative, and the claim this file makes has become the stronger one: a director cannot move
+ * money because the server refuses, not merely because a table lacks a row.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -66,6 +71,15 @@ const ORG = "00000000-0000-4000-8000-000000000001";
 /** This file's own principal, so it can be created and removed without touching a seeded operator. */
 const DIRECTOR = "fd000000-0000-4000-8000-0000000e0001";
 const NOBODY = "fd000000-0000-4000-8000-0000000e0002";
+/**
+ * The seeded certification operator — a real `admin` membership in this org.
+ *
+ * Present so a refusal can be shown to be about AUTHORITY rather than about the arguments: the same
+ * nonsense payload that stops the director at 403 must reach the domain when an administrator sends
+ * it. Without a contrasting principal, "the director was refused" is compatible with "everybody is
+ * refused, and the gate proves nothing".
+ */
+const ADMIN_USER = "00000000-0000-4000-8000-000000000002";
 
 /** Authority to MOVE money. None of it may follow from being able to read. */
 const MUTATION_PERMISSIONS = ["fin.write", "fin.adjust", "fin.responsibility", "fin.subsidy"] as const;
@@ -186,20 +200,74 @@ describeLive("the school_director persona — live", () => {
     }, 60_000);
 
     /*
-     * charge.post's gate is NOT fin.write, and this file must not be read as claiming it is. The
-     * assertion is deliberately about the ABSENCE of a declaration — that absence is the known debt,
-     * and pinning it here means closing the debt later will surface as a failing expectation rather
-     * than a silent change of meaning.
+     * ── THE DEBT THIS FILE USED TO PIN, NOW CLOSED AND PROVED AS BEHAVIOUR ──
+     *
+     * The old assertion read the source of `financialChargeActions.ts` and required `charge.post` to
+     * name no Financials permission. Reading source was the right instrument for pinning an ABSENCE;
+     * it is the wrong one for a presence, because a file that mentions `fin.write` in a comment
+     * would satisfy it. So the replacement asks the server.
+     *
+     * A school director holds `fin.read` and none of the four mutation keys. All three charge
+     * actions must refuse them, and refuse with 403 rather than by failing to find something.
      */
-    it("does not claim charge.post is governed by fin.write — that debt is still open", async () => {
-        const source = readFileSync(
-            resolve(__dirname, "../../../lib/adminV2/actions/definitions/financialChargeActions.ts"),
-            "utf8",
+    it.each([
+        ["charge.add", { template_id: "any", customer_id: "any", today: "2027-03-01" }, "fin.write"],
+        ["charge.post", { charge_id: "any" }, "fin.write"],
+        ["charge.reverse", { charge_id: "any" }, "fin.adjust"],
+    ])("refuses %s to a school director, server-side", async (actionKey, payload, requiredKey) => {
+        const { financialChargeActions } = await import(
+            "@/lib/adminV2/actions/definitions/financialChargeActions"
         );
-        const postBlock = source.slice(source.indexOf("CHARGE_POST_ACTION_KEY"));
+        const action = financialChargeActions.find((a) => a.actionKey === actionKey)!;
+        expect(action, `${actionKey} is registered`).toBeTruthy();
+
+        const result = await action.execute!({
+            supabase,
+            ctx: { orgId: ORG, userId: DIRECTOR } as never,
+            payload,
+            invocation: {
+                actionKey,
+                entityType: "opportunity_customer_member",
+                entityId: "",
+                payload,
+            },
+        } as never);
+
+        expect(result.ok, `a director may not ${actionKey}`).toBe(false);
+        expect((result as { status?: number }).status, "refused as forbidden").toBe(403);
+        expect((result as { error?: string }).error ?? "").toContain(requiredKey);
+    }, 120_000);
+
+    /*
+     * AND THE REFUSAL IS ABOUT AUTHORITY, NOT ABOUT THE ARGUMENTS.
+     *
+     * Every payload above names ids that do not exist. If the capability check ran after the domain
+     * lookups, a director would be refused with 404 or 409 and this file would read as proof of a
+     * gate that is not there — the failure mode the source-reading assertion had in the other
+     * direction. The administrator, holding the same nonsense payload, must get PAST the gate and be
+     * refused by the domain instead: a different status is what shows the gate is the thing that
+     * stopped the director.
+     */
+    it("refuses the director at the gate, not at the lookup", async () => {
+        const { financialChargeActions } = await import(
+            "@/lib/adminV2/actions/definitions/financialChargeActions"
+        );
+        const post = financialChargeActions.find((a) => a.actionKey === "charge.post")!;
+        const payload = { charge_id: "00000000-0000-4000-8000-00000000beef" };
+        const invocation = { actionKey: "charge.post", entityType: "opportunity_customer_member", entityId: "", payload };
+
+        const asDirector = await post.execute!({
+            supabase, ctx: { orgId: ORG, userId: DIRECTOR } as never, payload, invocation,
+        } as never);
+        const asAdmin = await post.execute!({
+            supabase, ctx: { orgId: ORG, userId: ADMIN_USER } as never, payload, invocation,
+        } as never);
+
+        expect((asDirector as { status?: number }).status, "the director is stopped by the gate").toBe(403);
+        expect(asAdmin.ok, "the admin gets past the gate and fails on the missing charge").toBe(false);
         expect(
-            /requiredPermission|fin\.write/.test(postBlock.slice(0, 2_000)),
-            "charge.post still declares no Financials-specific write permission (known debt, owned elsewhere)",
-        ).toBe(false);
-    }, 60_000);
+            (asAdmin as { status?: number }).status,
+            "an administrator holding fin.write is refused by the DOMAIN, not by authority",
+        ).not.toBe(403);
+    }, 120_000);
 });

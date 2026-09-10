@@ -4809,6 +4809,89 @@ function stepRail(current, draft) {
  * form and the prompt chain this replaces: a prompt chain has already acted by
  * the time you realise you picked the wrong repository.
  */
+/**
+ * CHOOSING WHICH LANE GIVES UP ITS DEVELOPMENT SLOT.
+ *
+ * Shown at exactly one moment: a lane was created, it needs a slot, and every
+ * slot is held. It is not a management screen — there is no route to it and no
+ * way to reach it except by hitting that wall, because turning "the pool is
+ * full" into a standing administration product would invite reshuffling for its
+ * own sake.
+ *
+ * THE OPERATOR IS BEING ASKED TO TAKE SOMETHING FROM A COLLEAGUE'S LANE, so the
+ * row says all of it: which slot, who holds it, why it is ranked where it is,
+ * and — from the server, in one place — what the donor loses and keeps. A lane
+ * with a run in flight is SHOWN and disabled rather than hidden: seeing the
+ * whole pool is how the operator understands why the good candidates are the
+ * ones offered.
+ */
+export const SLOT_GROUP_COPY = Object.freeze({
+  unowned: { label: "Nobody is using it", note: "No open lane holds this slot. Taking it costs nothing." },
+  offline: { label: "Offline", note: "This lane is closed or its worktree is gone." },
+  inactive: { label: "Not working right now", note: "Open, with nothing running." },
+  active: { label: "Working right now", note: "This lane has a run in flight and cannot give up its slot." },
+});
+
+export function renderSlotReclaimSheet(state = {}) {
+  const { laneLabel = "the new lane", candidates = [], consequence = null, selected = null, busy = false, error = null } = state;
+  const groups = ["unowned", "offline", "inactive", "active"];
+  const byGroup = groups
+    .map((g) => ({ g, rows: candidates.filter((c) => c.group === g) }))
+    .filter((x) => x.rows.length);
+
+  const row = (c) => {
+    const copy = SLOT_GROUP_COPY[c.group] || { label: c.group, note: "" };
+    const holder = c.lane_name || c.worktree;
+    const chosen = selected === c.worktree;
+    return `<label class="gw-reclaim-row${c.reclaimable ? "" : " is-blocked"}${chosen ? " is-chosen" : ""}">
+      <input type="radio" name="gw-reclaim-pick" value="${esc(c.worktree)}" data-gw-reclaim-pick="${esc(c.worktree)}"
+        ${chosen ? "checked" : ""}${c.reclaimable ? "" : " disabled"}>
+      <span class="gw-reclaim-main">
+        <span class="gw-reclaim-holder">${esc(holder)}</span>
+        <span class="gw-reclaim-slot">Slot ${esc(String(c.slot))}${c.port ? ` · localhost:${esc(String(c.port))}` : ""}</span>
+      </span>
+      <span class="gw-reclaim-why">${esc(c.reason)}</span>
+      ${c.reclaimable ? "" : `<span class="gw-reclaim-blocked">Cannot be taken</span>`}
+    </label>`;
+  };
+
+  const chosenRow = candidates.find((c) => c.worktree === selected) || null;
+  const preview = chosenRow
+    ? `<div class="gw-reclaim-preview" data-gw-reclaim-preview>
+        <div class="gw-reclaim-preview-h">If you continue</div>
+        <p><strong>${esc(chosenRow.lane_name || chosenRow.worktree)}</strong> loses ${esc(consequence?.loses || "its localhost address and QA browser session")}.</p>
+        <p>It keeps ${esc(consequence?.keeps || "its branch, worktree, messages and work")}.</p>
+        <p><strong>${esc(laneLabel)}</strong> takes slot ${esc(String(chosenRow.slot))}.</p>
+      </div>`
+    : "";
+
+  return `<section class="gw-sheet gw-reclaim" data-gw-reclaim-sheet>
+    <h2 class="gw-sheet-h">Every Development Slot is in use</h2>
+    <p class="gw-sheet-lead">${esc(laneLabel)} was created and can already be sent instructions, but it has no localhost address or QA browser session until it has a slot. Choose a lane to take one from.</p>
+    ${/*
+      LOSES AND KEEPS ARE RENDERED AS FIELDS, NOT LEFT TO A SENTENCE.
+      The first cut printed only the server's summary, so the guarantee the
+      operator reads depended on how that sentence happened to be worded — and
+      a control caught it by handing in a summary that omitted the cost. The
+      two halves now render whatever else is said.
+    */ ""}
+    <div class="gw-reclaim-safety">
+      <p class="gw-reclaim-loses"><strong>Loses:</strong> ${esc(consequence?.loses || "its localhost address and QA browser session")}</p>
+      <p class="gw-reclaim-keeps"><strong>Keeps:</strong> ${esc(consequence?.keeps || "its branch, worktree, messages and work — and it can still be sent instructions")}</p>
+    </div>
+    ${error ? `<div class="gw-notice err" data-gw-reclaim-error>${esc(error)}</div>` : ""}
+    ${byGroup.map(({ g, rows }) => `<div class="gw-reclaim-group" data-gw-reclaim-group="${esc(g)}">
+      <div class="gw-reclaim-group-h">${esc(SLOT_GROUP_COPY[g].label)}<span class="gw-reclaim-group-note">${esc(SLOT_GROUP_COPY[g].note)}</span></div>
+      ${rows.map(row).join("")}
+    </div>`).join("")}
+    ${preview}
+    <div class="gw-sheet-acts">
+      <button type="button" class="btn" data-gw-reclaim-cancel>Leave it without a slot</button>
+      <button type="button" class="btn primary" data-gw-reclaim-confirm ${selected && !busy ? "" : "disabled"}>${busy ? "Moving the slot…" : "Take this slot"}</button>
+    </div>
+  </section>`;
+}
+
 export function renderLaneWizard(state = {}) {
   const draft = state.draft || {};
   const repositories = (state.repositories || []).filter((r) => r.state !== "RETIRED");
@@ -5643,6 +5726,7 @@ export function renderGatewayShell({
   lightbox = null,
   repositories = [],
   repositorySheet = null,
+  slotReclaim = null,
   laneWizard = null,
   cancelPending = false,
   providers = null,
@@ -5673,9 +5757,13 @@ export function renderGatewayShell({
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders, repositories });
   // A sheet owns the screen while it is open: it is a decision the operator is
   // in the middle of, and the lane list behind it must not steal the tap.
-  const openSheet = repositorySheet
-    ? renderRepositorySheet(repositorySheet)
-    : (laneWizard ? renderLaneWizard({ ...laneWizard, repositories, folders }) : "");
+  // A slot choice owns the screen while it is open, the same as the other
+  // sheets: the operator is mid-decision about another lane's port.
+  const openSheet = slotReclaim
+    ? renderSlotReclaimSheet(slotReclaim)
+    : (repositorySheet
+      ? renderRepositorySheet(repositorySheet)
+      : (laneWizard ? renderLaneWizard({ ...laneWizard, repositories, folders }) : ""));
   if (openSheet) {
     return `<div class="gw is-sheet" data-gw data-gw-mode="sheet">${openSheet}</div>`;
   }

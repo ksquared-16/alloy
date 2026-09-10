@@ -10,6 +10,7 @@ import { REGISTERED_ACTION_CAPABILITY_KEYS } from "@/lib/platform/commands/capab
 import {
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
+    financialAuthority,
     ORG_ID,
 } from "@/tests/childcareOperational/mockOperationalEnrollmentSupabase";
 
@@ -24,6 +25,9 @@ function action(key: string) {
 
 function setup(over: Record<string, unknown> = {}) {
     const store = createOperationalEnrollmentMockStore({
+        // Recording and collecting are `fin.write`; sending money back is `fin.adjust`. The
+        // lifecycle scenarios seed both so a refusal here always means what the scenario says.
+        ...financialAuthority(["fin.write", "fin.adjust"], ACTOR),
         charges: [
             {
                 id: "charge-1",
@@ -281,5 +285,103 @@ describe("financial payment actions — the operator can settle what is owed", (
         expect(bad.ok === false && bad.blockers[0]?.code).toBe("invalid_amount");
         // Omitting the amount is the FULL refund, and is valid.
         expect(validate({ payment_id: "p1" }).ok).toBe(true);
+    });
+});
+
+/*
+ * ── WHO MAY MOVE THIS MONEY ──────────────────────────────────────────────────────────────────
+ *
+ * Same repair as the charge lifecycle, and the same reason it was needed: the execute route
+ * resolves ADMISSION and nothing finer, so every portal-eligible principal could take money in,
+ * charge a card, and send money back regardless of what the organization had configured.
+ *
+ * Taking money in runs the billing machine — `fin.write`. Sending it back does not: a refund
+ * reverses received money and the money LEAVES, which is the strongest form of the act `fin.adjust`
+ * was minted to keep separate from billing. The middle assertion below is the one that would fail
+ * if the two were collapsed.
+ */
+describe("payments refuse server-side without the capability", () => {
+    const authCtx = { orgId: ORG_ID, userId: ACTOR } as never;
+
+    function supabaseWith(permissions: readonly string[]) {
+        const store = createOperationalEnrollmentMockStore({
+            ...financialAuthority(permissions, ACTOR),
+            charges: [
+                {
+                    id: "charge-1",
+                    org_id: ORG_ID,
+                    job_id: null,
+                    billable_source_type: "enrollment_agreement",
+                    billable_source_id: AGREEMENT_ID,
+                    source_charge_id: null,
+                    charge_type: "service",
+                    charge_category: "tuition",
+                    status: "posted",
+                    currency_code: "USD",
+                    amount_cents: 130_000,
+                    posted_at: "2026-09-01T00:00:00.000Z",
+                    metadata: {},
+                },
+            ],
+        });
+        return createOperationalEnrollmentMockSupabase(store);
+    }
+
+    it("refuses Record payment with 403 when the caller lacks fin.write", async () => {
+        const result = await action(PAYMENT_RECORD_ACTION_KEY).execute({
+            supabase: supabaseWith([]),
+            ctx: authCtx,
+            payload: { charge_id: "charge-1", amount_cents: 10_000, payment_method: "cash" },
+            invocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
+        expect((result as { error: string }).error).toContain("fin.write");
+    });
+
+    it("refuses a refund to a caller who may bill but may not adjust", async () => {
+        const result = await action(PAYMENT_REFUND_ACTION_KEY).execute({
+            supabase: supabaseWith(["fin.write"]),
+            ctx: authCtx,
+            payload: { payment_id: "pay-1" },
+            invocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
+        expect((result as { error: string }).error).toContain("fin.adjust");
+    });
+
+    it("refuses a card collection with 403 when the caller lacks fin.write", async () => {
+        const result = await action(PAYMENT_COLLECT_CARD_ACTION_KEY).execute({
+            supabase: supabaseWith([]),
+            ctx: authCtx,
+            payload: { charge_id: "charge-1" },
+            invocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
+    });
+
+    it("says so before the operator acts, not only on submit", async () => {
+        const eligibility = await action(PAYMENT_RECORD_ACTION_KEY).resolveEligibility({
+            supabase: supabaseWith([]),
+            ctx: authCtx,
+            payload: { charge_id: "charge-1" },
+            invocation,
+        } as never);
+        expect(eligibility.eligible).toBe(false);
+        expect(eligibility.blockers.map((b) => b.code)).toContain("payment_permission_required");
+    });
+
+    /* An unidentified actor is not an anonymous-but-valid one. Fail closed. */
+    it("refuses when the caller cannot be identified at all", async () => {
+        const result = await action(PAYMENT_RECORD_ACTION_KEY).execute({
+            supabase: supabaseWith([]),
+            ctx: { orgId: ORG_ID, userId: null } as never,
+            payload: { charge_id: "charge-1", amount_cents: 10_000, payment_method: "cash" },
+            invocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
     });
 });

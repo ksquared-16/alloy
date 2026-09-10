@@ -39,11 +39,56 @@ import {
 import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
 import { resolveCollectionMerchant } from "@/lib/financials/payments/providerMerchant";
 import { recognizeProviderRefund, requestProviderRefund } from "@/lib/financials/payments/refundCollection";
+import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const PAYMENT_RECORD_ACTION_KEY = "payment.record";
 export const PAYMENT_REFUND_ACTION_KEY = "payment.refund";
 export const PAYMENT_COLLECT_CARD_ACTION_KEY = "payment.collect_card";
+
+/**
+ * ── WHO MAY MOVE THIS MONEY ──
+ *
+ * These three actions enforced nothing. `/api/admin/actions/execute` resolves ADMISSION through
+ * `requireAdminOrOps` — no role, no grant — so every portal-eligible principal could take money in,
+ * charge a card, and send money back, whatever the organization had configured for their role.
+ *
+ * **Taking money in is billing.** `payment.record` writes an authoritative receipt against a posted
+ * charge and `payment.collect_card` asks the processor for one. Both run the billing machine, which
+ * is `fin.write` — the key `charge.add` and `billing.apply_discounts` already use.
+ *
+ * **Sending money back is not.** A refund reverses received money and raises the balance again. That
+ * is the act `fin.adjust` was minted to separate from billing — *"otherwise everyone who can bill
+ * can also forgive, and nothing in the record tells them apart"* — and giving money back is the
+ * strongest form of it, because the money leaves. It takes the stronger key.
+ *
+ * A narrowing, deliberately: `admin` and `ops` hold both keys by default, so no seeded role loses
+ * anything, and a role an organization configured without them is now refused by the server.
+ */
+export const PAYMENT_WRITE_PERMISSION = "fin.write" as const;
+/** Money leaving is the stronger authority, not the billing one. */
+export const PAYMENT_REFUND_PERMISSION = "fin.adjust" as const;
+
+/** A grant read that FAILED answers `null` and denies — an unidentified caller is not an unprivileged one. */
+async function permitted(
+    supabase: SupabaseClient,
+    orgId: string,
+    userId: string | null | undefined,
+    key: string,
+): Promise<boolean> {
+    const grants = await resolveActorPermissionGrants(supabase, orgId, userId ?? null);
+    return (grants.permissionKeys ?? []).includes(key);
+}
+
+function denied(correlationId: string, sentence: string, key: string, code: string): ActionResult {
+    return {
+        ok: false,
+        correlationId,
+        status: 403,
+        error: `${sentence} requires ${key}.`,
+        blockers: [{ code, message: "Permission required." }],
+    };
+}
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -143,6 +188,17 @@ const recordPayment: RegisteredAction = {
     },
 
     async resolveEligibility({ supabase, ctx, payload }) {
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_WRITE_PERMISSION))) {
+            return {
+                eligible: false,
+                blockers: [{
+                    code: "payment_permission_required",
+                    message: `Recording a payment requires ${PAYMENT_WRITE_PERMISSION}.`,
+                }],
+                availableTransitions: [],
+                requiredInputs: [],
+            };
+        }
         const chargeId = t(payload?.charge_id);
         if (!chargeId) {
             return {
@@ -255,6 +311,9 @@ const recordPayment: RegisteredAction = {
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_WRITE_PERMISSION))) {
+            return denied(correlationId, "Recording a payment", PAYMENT_WRITE_PERMISSION, "payment_permission_required");
+        }
         try {
             const result = await recordAndApplyChildcarePayment(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
@@ -349,11 +408,17 @@ const refundPayment: RegisteredAction = {
         return { ok: true, value: src };
     },
 
-    async resolveEligibility({ payload }) {
+    async resolveEligibility({ supabase, ctx, payload }) {
         const paymentId = t(payload?.payment_id);
+        const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_REFUND_PERMISSION);
         return {
-            eligible: Boolean(paymentId),
-            blockers: paymentId ? [] : [{ code: "missing_payment", message: "A payment is required." }],
+            eligible: Boolean(paymentId) && allowed,
+            blockers: [
+                ...(paymentId ? [] : [{ code: "missing_payment", message: "A payment is required." }]),
+                ...(allowed
+                    ? []
+                    : [{ code: "refund_permission_required", message: `Refunding a payment requires ${PAYMENT_REFUND_PERMISSION}.` }]),
+            ],
             availableTransitions: [],
             requiredInputs: [],
         };
@@ -372,6 +437,9 @@ const refundPayment: RegisteredAction = {
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_REFUND_PERMISSION))) {
+            return denied(correlationId, "Refunding a payment", PAYMENT_REFUND_PERMISSION, "refund_permission_required");
+        }
         try {
             const paymentId = t(payload.payment_id);
 
@@ -524,6 +592,17 @@ const collectCardPayment: RegisteredAction = {
      * platform account.
      */
     async resolveEligibility({ supabase, ctx, payload }) {
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_WRITE_PERMISSION))) {
+            return {
+                eligible: false,
+                blockers: [{
+                    code: "payment_permission_required",
+                    message: `Collecting a card payment requires ${PAYMENT_WRITE_PERMISSION}.`,
+                }],
+                availableTransitions: [],
+                requiredInputs: [],
+            };
+        }
         const chargeId = t(payload?.charge_id);
         if (!chargeId) {
             return {
@@ -564,6 +643,14 @@ const collectCardPayment: RegisteredAction = {
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_WRITE_PERMISSION))) {
+            return denied(
+                correlationId,
+                "Collecting a card payment",
+                PAYMENT_WRITE_PERMISSION,
+                "payment_permission_required",
+            );
+        }
         try {
             const chargeId = t(payload.charge_id);
             // The amount is the SERVER's, always. An omitted amount means "whatever is collectible",

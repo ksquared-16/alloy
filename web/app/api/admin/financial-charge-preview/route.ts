@@ -6,6 +6,7 @@ import { previewDraftChargeForAgreementPeriod } from "@/lib/financials/chargeRes
 import { buildDraftChargePreviewDto } from "@/lib/financials/chargeResolution/previewDraftChargePresentation";
 import type { ServicePeriod } from "@/lib/financials/chargeResolution/resolveDraftCharges";
 import { operationalEnrollmentErrorResponse } from "@/lib/childcareOperational/operationalEnrollmentApi";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -33,6 +34,18 @@ export async function GET(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const allowedRead = await assertFinancialsReadAllowed({
+        supabase: createAdminClient(),
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
 
     const { searchParams } = new URL(request.url);
     const enrollmentAgreementId = (searchParams.get("enrollment_agreement_id") ?? "").trim();

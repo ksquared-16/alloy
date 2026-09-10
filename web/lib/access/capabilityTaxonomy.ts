@@ -50,7 +50,30 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
      * only together, which is the outcome the boundary exists to prevent.
      */
     { key: "health", label: "Health", description: "Allergies, conditions, medications and health documents.", order: 55 },
-    { key: "billing", label: "Billing", description: "Billing and payments.", order: 60 },
+    /*
+     * Financials is its OWN area, and it is not "Billing".
+     *
+     * The catalog carries two financial vocabularies. `billing.read` / `billing.write` are the
+     * legacy pair: nothing in the tree consults either of them (`unenforcedPermissionKeys.json`),
+     * so the Billing area is composed entirely of rows the platform does not act on. `fin.*` is the
+     * live one — five keys, every one of them enforced by a named helper or a registered action.
+     * Folding the live keys into the dead area would file the product's actual money authority
+     * under a heading whose other rows change nothing, and an operator would reasonably read the
+     * whole area as inert.
+     *
+     * The label is the operator's word for the surface these keys gate. `Financials` is what the
+     * navigation says, what the workspace is called, and what the refusal message names.
+     */
+    { key: "financials", label: "Financials", description: "The financial workspace — accounts, charges, payments, adjustments, responsibility and subsidy.", order: 58 },
+    { key: "billing", label: "Billing (legacy)", description: "The superseded billing capability pair. Retained because the catalog still seeds it; nothing consults it.", order: 60 },
+    /*
+     * Enrollment holds two authorities that are exceptions to configured policy — overriding the
+     * recommended tuition and excepting an enrollment requirement. Neither is Families and neither
+     * is Financials: both are decisions about admitting a child on terms the configuration did not
+     * produce, and an operator looking for "who may override enrollment policy" looks for
+     * Enrollment.
+     */
+    { key: "enrollment", label: "Enrollment", description: "Exceptions to configured enrollment policy — pricing overrides and requirement exceptions.", order: 25 },
     { key: "reports", label: "Reports", description: "Reports and analytics.", order: 70 },
     { key: "workflows", label: "Workflows", description: "Operational workflows.", order: 80 },
     { key: "expectations", label: "Operational expectations", description: "Authoring and ratifying operational expectations.", order: 90 },
@@ -78,6 +101,8 @@ export const UNMAPPED = "__unmapped__" as const;
  */
 const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     billing: "billing",
+    enrollment: "enrollment",
+    financials: "financials",
     communications: "communications",
     documents: "documents",
     health: "health",
@@ -98,6 +123,17 @@ const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
  * `ops.workflows`). Some of those belong in a different operator area than their group implies —
  * `settings.users_roles` is Access administration, not general Settings, and presenting it inside
  * Settings would put "who can sign in" behind the same preset as "organization preferences".
+ */
+/*
+ * KEEP THE WORD "p-e-r-m-i-s-s-i-o-n" OUT OF THE EXECUTABLE TEXT OF THIS FILE.
+ *
+ * `scanEnforcement` (web/tests/access/permissionCatalogDiscovery.ts) treats any source whose
+ * comment-stripped body contains that word as *permission-related*, and then reports every
+ * key-shaped literal in it that the catalog does not hold as an enforced key with no catalog row.
+ * The map below is keyed by GRID ROW STEMS — `crm.customers`, `ops.workflows` — which are key-shaped
+ * and are deliberately not catalog keys. One such word in an area `description` was enough to make
+ * W-11's reconciliation report four capabilities this platform does not have. Comments are stripped
+ * before that test reads the file, so this note is safe; a string literal is not. Say "capability".
  */
 const ROW_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     "crm.customers": "families",

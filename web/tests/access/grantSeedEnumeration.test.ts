@@ -33,7 +33,29 @@ import {
 } from "./grantSeedDiscovery";
 import { discoverCatalog } from "./permissionCatalogDiscovery";
 
+/**
+ * W-12's migration — where the enumeration form came from, and still the file the fail-closed guard
+ * assertions at the foot of this file are written against.
+ */
 const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
+
+/**
+ * The migration that defines `seed_default_rbac` TODAY.
+ *
+ * W-12 froze the enumeration at the 57 keys the catalog held on 2026-08-07 and left a fail-closed
+ * assertion to catch a thinner set — but that assertion runs once, at its own apply, and nine keys
+ * were catalogued afterwards. Each arrived with a one-shot backfill over the orgs that existed at
+ * that moment and none of them touched the function, so which capabilities an organization's
+ * administrator held became a function of the date its `orgs` row was created. Meanwhile the local
+ * seed's own comment still asserted the property W-12 was supposed to keep: *"that migration REFUSES
+ * to install if its enumeration omits any active catalog key. So this stays correct as the catalog
+ * grows."*
+ *
+ * The lock below is what actually keeps it correct as the catalog grows, and it is why the numbers
+ * here are derived from the tree rather than restated: the tenth key fails this file, in the
+ * repository, before a tenant is created without it.
+ */
+const LIVE_SEED = "20260910183000_access_v2_default_role_package_completeness.sql";
 
 /**
  * Blanket grants that predate W-12 and are frozen in applied migrations: the baseline's pair in
@@ -47,7 +69,28 @@ const HISTORICAL_BLANKET_FILES = [
 ];
 const HISTORICAL_BLANKET_CEILING = 4;
 
-const OPS_WITHHELD = ["admin.users.write", "admin.roles.write"];
+/**
+ * What `ops` does not receive, and who decided each one.
+ *
+ * The first two are the exclusion the pre-W-12 blanket carried. The other seven are each a decision
+ * the migration that introduced that key stated in its own words — D-H6 for health ("an operator who
+ * already works Attendance or Financials must not acquire allergies, conditions and medications
+ * merely because a Health card was placed on a Surface"), `20260901120000` for the enrollment
+ * exception, and admin-only grants for the three financial mutation authorities and the pricing
+ * override. None of them is a judgement invented by the seed; the seed now states the settled shape
+ * instead of leaving it to the order in which migrations happened to run.
+ */
+const OPS_WITHHELD = [
+    "admin.users.write",
+    "admin.roles.write",
+    "enrollment.pricing.override",
+    "enrollment.requirement_exception.manage",
+    "fin.adjust",
+    "fin.responsibility",
+    "fin.subsidy",
+    "health.view",
+    "health.manage",
+];
 
 const statements = discoverGrantStatements();
 
@@ -96,16 +139,25 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
     describe("the end state", () => {
         const live = liveFunctionDefinition("seed_default_rbac");
 
-        it("is defined by M6", () => {
+        it("is defined by the completeness migration, not by the frozen one", () => {
             expect(live).not.toBeNull();
-            expect(live!.file).toBe(M6);
+            expect(live!.file).toBe(LIVE_SEED);
         });
 
         it("contains no blanket grant", () => {
-            const inLive = statements.filter((s) => s.file === M6);
-            expect(inLive.length).toBe(2);
-            expect(inLive.map((s) => s.binding)).toEqual(["literal", "literal"]);
-            expect(inLive.map((s) => s.boundingKeys.length)).toEqual([57, 55]);
+            /*
+             * Three statements now, not two: `admin`, `ops`, and the pair of director roles the
+             * function never mentioned at all. `20260909240000` gave `school_director` and
+             * `regional_lead` their `fin.read` in a one-shot over the orgs that existed on
+             * 2026-09-09 and did not touch the seed, so a NEW org's directors would have been born
+             * without it and the same defect would have reappeared on the next tenant.
+             *
+             * The widths are asserted against the catalog two assertions below rather than restated
+             * as constants here — a number typed in a test is a number that can be typed wrong.
+             */
+            const inLive = statements.filter((s) => s.file === LIVE_SEED && /seed_default_rbac|p_org_id/.test(s.text));
+            expect(inLive.length).toBe(3);
+            expect(inLive.every((s) => s.binding === "literal")).toBe(true);
         });
 
         it("reads the catalog only to narrow the enumeration, never to source it", () => {
@@ -114,7 +166,10 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
             // joining the catalog. Dropping it would widen. The distinction RL-8 draws is between
             // a catalog read that *decides* the key set and one that can only remove from a list
             // already fixed by literals.
-            const inLive = statements.filter((s) => s.file === M6);
+            const inLive = statements.filter(
+                (s) => s.file === LIVE_SEED && /select p_org_id, '(admin|ops)'/.test(s.text),
+            );
+            expect(inLive.length).toBe(2);
             expect(inLive.every((s) => s.readsCatalog)).toBe(true);
             for (const statement of inLive) {
                 expect(statement.text).toMatch(
@@ -167,12 +222,27 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
             expect(opsRegion).not.toBeNull();
         });
 
-        it("grants admin exactly the function's own catalog literal", () => {
-            const admin = keyLiterals(adminRegion!).sort();
+        it("carries the historical catalog literal forward without narrowing it", () => {
+            /*
+             * The two lists inside the function are no longer the same list, and the change is the
+             * point of the completeness migration.
+             *
+             * The catalog literal is a REPRODUCTION of what `permission_definitions` held on
+             * 2026-07-29, carried unchanged through W-12 into the current definition. Narrowing it is
+             * W-11/M5 and belongs to the operator review that owns the deletion list, so it must
+             * survive here byte-for-byte rather than being trimmed to whatever the seed grants.
+             *
+             * The admin enumeration is the WHOLE catalog, including the keys later migrations added.
+             * Requiring the two to be equal — which is what this assertion used to say — is what
+             * froze the grant list at 57 while the catalog grew to 66, so the relationship asserted
+             * now is containment in the one direction that can be true: every key the function seeds
+             * into the catalog is a key it grants the administrator.
+             */
+            const admin = new Set(keyLiterals(adminRegion!));
             const catalog = [...new Set(catalogLiteral)].sort();
             expect(catalog.length).toBe(57);
-            expect(admin.length).toBe(57);
-            expect(admin).toEqual(catalog);
+            expect(admin.size).toBeGreaterThan(catalog.length);
+            expect(catalog.filter((k) => !admin.has(k))).toEqual([]);
         });
 
         it("grants ops the same set less the two keys the blanket withheld", () => {
@@ -186,19 +256,30 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
             expect([...admin].filter((k) => !ops.includes(k)).sort()).toEqual([...OPS_WITHHELD].sort());
         });
 
-        it("agrees with the catalog W-11 discovers from the whole tree", () => {
-            // Cross-instrument: the enumeration is pinned to a width a second, independent method
-            // produced. W-11's non-vacuity guard could not tell 35 keys from 57; this can.
+        it("grants the administrator every capability the tree catalogues — no exceptions", () => {
             /*
-             * The seed function reproduces the catalog AS OF ITS OWN MIGRATION. Keys seeded later by
-             * an approved decision (D-H6's health.view / health.manage, granted to admin in their
-             * own migration) are legitimately absent from this literal — back-editing them into a
-             * historical migration would rewrite what that migration did.
+             * THE ONE ASSERTION THAT WOULD HAVE PREVENTED THE DEFECT, and it is stated with no
+             * exception list on purpose.
+             *
+             * It used to carry one — `health.view` and `health.manage` were excused as "keys seeded
+             * later by an approved decision", legitimately absent from a historical literal. That
+             * excuse is what made the assertion unable to notice the next seven. An exception list on
+             * a completeness check is a list of the failures it has agreed not to see, and this one
+             * grew until an organization's administrator could not open Financials.
+             *
+             * Organization Administrator administers the tenant. That contract is not a comment
+             * anywhere; it is this line. A key added to the catalog with no home in the admin
+             * enumeration fails here, in the repository, on the commit that adds it — which is the
+             * only place the failure is cheap. The alternative is what happened: nine one-shot
+             * backfills, an administrator whose capabilities depend on the date their org row was
+             * created, and an operator discovering it by being refused.
+             *
+             * Cross-instrument by construction: `discoverCatalog` reads the migration tree by region
+             * and this reads the function's sentinelled enumeration. Two independent methods, one
+             * answer.
              */
-            const POST_SEED_ADDITIONS = new Set(["health.view", "health.manage"]);
-            const discovered = [...discoverCatalog().keys()]
-                .filter((k) => !POST_SEED_ADDITIONS.has(k))
-                .sort();
+            const discovered = [...discoverCatalog().keys()].sort();
+            expect(discovered.length).toBeGreaterThan(60);
             expect(keyLiterals(adminRegion!).sort()).toEqual(discovered);
         });
     });
@@ -230,10 +311,48 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
         });
 
         it("asserts the ops exclusion survives the rewrite", () => {
-            for (const withheld of OPS_WITHHELD) {
+            // W-12's guard covers the pair the blanket withheld. The seven added since are asserted
+            // by the migration that added them to the enumeration — checked separately below, so
+            // neither guard can be quietly dropped in favour of the other.
+            for (const withheld of ["admin.users.write", "admin.roles.write"]) {
                 expect(migration).toContain(`'${withheld}'`);
             }
             expect(migration).toMatch(/the ops enumeration grants %, which the blanket it replaces explicitly withheld/);
+        });
+
+        it("the completeness migration re-runs the check against the database it is applied to", () => {
+            /*
+             * W-12's guard was correct and it still could not prevent this: a check that runs once,
+             * at its own apply, cannot notice a catalog that grows afterwards. So the property is
+             * asserted in two places with different lifetimes — here, in the repository, on every
+             * run; and inside the migration, against whichever database it lands on, at apply time.
+             * Neither one alone was enough.
+             */
+            const live = readMigration(LIVE_SEED);
+            expect(live).toMatch(/pg_get_functiondef\('public\.seed_default_rbac\(uuid\)'::regprocedure\)/);
+            expect(live).toMatch(/ACCESS-V2 ABORT: % of % active catalog key\(s\) are absent from the enumerated admin grant list/);
+            for (const withheld of OPS_WITHHELD) {
+                expect(live, `${withheld} is withheld from ops but the migration does not assert it`).toContain(
+                    `'${withheld}'`,
+                );
+            }
+            // And the repair itself is asserted: no active system role may be left holding nothing.
+            expect(live).toMatch(/active system role\(s\) still hold no capability after the repair/);
+        });
+
+        it("wires the grant half to the org, the way the role half already was", () => {
+            /*
+             * The initiating defect in one line. `orgs_seed_default_role_definitions` has been an
+             * AFTER INSERT trigger on `public.orgs` since Phase 0, so every organization gets its four
+             * roles automatically. `seed_default_rbac` — the grants — had no trigger and no caller
+             * anywhere in the tree except the local seed, which W-12's own inventory recorded and
+             * nobody acted on. An org created by any other path therefore had roles and no
+             * capabilities, and portal admission is a role literal that consults no grant, so its
+             * administrator was admitted to the shell and refused by every surface that checks one.
+             */
+            const live = readMigration(LIVE_SEED);
+            expect(live).toMatch(/CREATE TRIGGER orgs_seed_default_rbac\s+AFTER INSERT ON public\.orgs/);
+            expect(live).toMatch(/perform public\.seed_default_rbac\(new\.id\)/);
         });
     });
 });

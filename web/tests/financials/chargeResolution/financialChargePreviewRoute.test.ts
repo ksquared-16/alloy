@@ -63,13 +63,56 @@ const resolvedPreview = {
 const BASE = "http://localhost/api/admin/financial-charge-preview";
 const VALID = `${BASE}?enrollment_agreement_id=agr-1&period_start=2026-03-01&period_end=2026-03-31`;
 
+/**
+ * The narrowest client that answers what `resolveActorPermissionGrants` asks.
+ *
+ * The route resolves the caller's grants now, so a client that answers nothing makes every case
+ * below fail for a reason none of them is about. `permissions` is what the caller holds; `[]` is a
+ * principal with a membership and no grants, which is the case the refusal test needs.
+ */
+function grantingClient(permissions: string[]) {
+    return {
+        from: (name: string) => ({
+            select: () => {
+                const rows =
+                    name === "user_roles"
+                        ? [{ org_id: orgId, role: "admin" }]
+                        : permissions.map((permission_key) => ({ permission_key }));
+                const chain: Record<string, unknown> = {};
+                const self = () => chain;
+                chain.eq = self;
+                chain.in = self;
+                chain.then = (r: (v: unknown) => unknown) => r({ data: rows, error: null });
+                return chain;
+            },
+        }),
+    };
+}
+
 describe("GET /api/admin/financial-charge-preview (P3.3.1)", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockRequireAdminOrOps.mockResolvedValue(null);
         mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin" });
-        mockCreateAdminClient.mockReturnValue({ from: vi.fn() });
+        mockCreateAdminClient.mockReturnValue(grantingClient(["fin.read"]));
         mockPreview.mockResolvedValue(resolvedPreview);
+    });
+
+    /*
+     * PREVIEWING A CHARGE IS READING FINANCIAL INFORMATION.
+     *
+     * This route was gated on admission alone until 2026-09-10 — `requireAdminOrOps` reads neither a
+     * role nor a grant — so a role an organization had withheld Financials from could still price a
+     * family's tuition through it. The refusal below is the whole of the repair, and it is asserted
+     * before the input cases so a future edit that moves the gate below the query parsing turns this
+     * red rather than quietly letting a denied caller reach a 400.
+     */
+    it("refuses a caller who may not view financial information", async () => {
+        mockCreateAdminClient.mockReturnValue(grantingClient([]));
+        const res = await getPreview(new NextRequest(VALID));
+        expect(res.status).toBe(403);
+        expect((await res.json()).required_permission).toBe("fin.read");
+        expect(mockPreview, "and the preview is never computed for them").not.toHaveBeenCalled();
     });
 
     it("enforces the financial role gate (403 when forbidden)", async () => {

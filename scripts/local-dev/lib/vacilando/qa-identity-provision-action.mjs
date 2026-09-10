@@ -27,6 +27,8 @@ export const FORBIDDEN_PROVISION_INPUTS = Object.freeze([
 ]);
 
 /** Keys the governed layer injects into every validator; ignored, never honoured. */
+import { managedSlots } from "./managed-slots.mjs";
+
 const FRAMEWORK_INJECTED_INPUTS = Object.freeze([
     "queryArtifactPath", "databaseTarget", "worktreePath", "worktree_path", "artifactRoot",
 ]);
@@ -38,7 +40,48 @@ const FRAMEWORK_INJECTED_INPUTS = Object.freeze([
  * checked here AND again inside the trusted child, because a single check in one process is a
  * single edit away from being removed.
  */
-export const MANAGED_QA_IDENTITY = /^qa-slot[1-6]-[a-z0-9-]+@[a-z0-9.-]+$/i;
+/*
+ * THE FOURTH COPY OF "HOW MANY SLOTS EXIST", AND IT SILENTLY DENIED HALF THE
+ * FLEET A QA BROWSER SESSION.
+ *
+ * This read `qa-slot[1-6]`. The host has run twelve slots since ALLOY_MAX_AGENTS
+ * moved, and `managed-slots.mjs` was created precisely because that number was
+ * re-encoded as a literal in ten files — "a Gateway that will not allocate slot
+ * 7, a census that skips it, a lane that cannot bind it". Three of those copies
+ * were consolidated onto the topology owner. This one was missed, so it kept
+ * enforcing six.
+ *
+ * MEASURED ON THE LIVE HOST, which is how it surfaced: slots 1-6 report an
+ * expected identity and slots 7, 8, 9, 11 and 12 report `expected_identity
+ * missing`, blocking `vac browser-auth status` and `restore` for every lane
+ * above six. The host config defines ALLOY_SLOT_1..6_QA_IDENTITY beside
+ * ALLOY_MAX_AGENTS="12", so the configuration is short too — but configuration
+ * is the operator's to extend, and this pattern would have REJECTED the
+ * extension: `qa-slot7-…` and `qa-slot12-…` both fail it. Fixing the config
+ * alone could not have worked while this stood.
+ *
+ * The bound now comes from the topology owner, so it cannot disagree with how
+ * many slots the host actually has. What it still refuses is unchanged and is
+ * the point of the check: anything that is not a managed `qa-slot<N>-` alias
+ * inside the current range — a customer account, an employee account, a slot
+ * that does not exist.
+ */
+export function managedQaIdentityPattern(env = process.env) {
+  const slots = managedSlots(env).join("|");
+  return new RegExp(`^qa-slot(?:${slots})-[a-z0-9-]+@[a-z0-9.-]+$`, "i");
+}
+
+/** Is this a managed QA alias for a slot this host actually has? */
+export function isManagedQaIdentity(identity, env = process.env) {
+  return managedQaIdentityPattern(env).test(String(identity || ""));
+}
+
+/**
+ * Retained for callers that want the pattern itself. Built from the topology at
+ * import time; `isManagedQaIdentity` re-reads it per call and is what the
+ * validators use, so a topology change does not need a restart to take effect.
+ */
+export const MANAGED_QA_IDENTITY = managedQaIdentityPattern();
 
 export function validateProvisionQaIdentityInputs(rawInputs = {}) {
     const inputs = Object.fromEntries(
@@ -102,7 +145,7 @@ export function executeProvisionQaIdentitySync({
 
     // Second, independent check on the identity SHAPE. The registry resolved it, but a registry can
     // be misconfigured, and this action must never be the thing that creates a customer account.
-    if (!MANAGED_QA_IDENTITY.test(String(validated.expected_identity || ""))) {
+    if (!isManagedQaIdentity(validated.expected_identity)) {
         return safeProvisionFailure({
             code: "identity_not_managed_qa_shape",
             lane: validated.lane_id,

@@ -10,8 +10,18 @@ import { REGISTERED_ACTION_CAPABILITY_KEYS } from "@/lib/platform/commands/capab
 import {
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
+    financialAuthority,
     ORG_ID,
 } from "../childcareOperational/mockOperationalEnrollmentSupabase";
+
+/**
+ * The capabilities the charge lifecycle now requires, named once.
+ *
+ * Every scenario below is about the lifecycle, not about authority, so each one seeds a caller who
+ * holds both. The scenarios that ARE about authority seed deliberately less, and they live in their
+ * own describe block at the foot of this file.
+ */
+const FULL_CHARGE_AUTHORITY = ["fin.write", "fin.adjust"] as const;
 
 function action(key: string) {
     const found = financialChargeActions.find((a) => a.actionKey === key);
@@ -125,6 +135,7 @@ describe("charge.add — the subject the resolver is handed", () => {
     /** `enrolled: false` is the pre-enrolment family — a household, children, and no agreement. */
     function setup(opts: { enrolled: boolean }) {
         const store = createOperationalEnrollmentMockStore({
+            ...financialAuthority(FULL_CHARGE_AUTHORITY),
             financial_charge_templates: [template()],
             child_enrollment_agreements: opts.enrolled
                 ? [
@@ -233,6 +244,7 @@ describe("charge.add — the subject the resolver is handed", () => {
      */
     it("never matches an agreement by an opportunity's id", async () => {
         const store = createOperationalEnrollmentMockStore({
+            ...financialAuthority(FULL_CHARGE_AUTHORITY),
             financial_charge_templates: [template()],
             child_enrollment_agreements: [
                 {
@@ -300,5 +312,170 @@ describe("charge.add — the subject the resolver is handed", () => {
         const idOf = (r: typeof first) =>
             r.ok === true ? (r.result as { affectedId?: string }).affectedId : null;
         expect(idOf(second)).toBe(idOf(first));
+    });
+});
+
+/*
+ * ── WHO MAY MOVE THIS MONEY ──────────────────────────────────────────────────────────────────
+ *
+ * These three actions used to enforce nothing at all. `/api/admin/actions/execute` resolves
+ * ADMISSION through `requireAdminOrOps` — which reads neither a role nor a grant — so an
+ * organization that had configured a role to "view Financials only" was saying something the server
+ * did not honour: the same principal could still create a charge, post it, and reverse it.
+ *
+ * The assertions below are the whole of that repair, stated as behaviour rather than as a call:
+ *
+ *   - a caller WITHOUT the capability is refused with 403, and refused by the SERVER, not by the
+ *     screen — `execute` is the entry point every surface and every direct API call shares;
+ *   - the refusal is also visible BEFORE the operator acts, through `resolveEligibility`, so the
+ *     product can grey a control it knows will be refused rather than discovering it on submit;
+ *   - creating and posting take `fin.write`, correcting takes `fin.adjust`, and holding one does
+ *     NOT confer the other. That separation is the point: everyone who can bill would otherwise be
+ *     able to forgive, and nothing in the record would tell them apart.
+ */
+describe("the charge lifecycle refuses server-side without the capability", () => {
+    const TEMPLATE = "tmpl-auth";
+    const CUSTOMER_ID = "cust-auth";
+
+    function storeWith(permissions: readonly string[]) {
+        const store = createOperationalEnrollmentMockStore({
+            ...financialAuthority(permissions),
+            financial_charge_templates: [
+                {
+                    id: TEMPLATE,
+                    org_id: ORG_ID,
+                    template_key: "registration_fee",
+                    status: "active",
+                    charge_type: "fee",
+                    charge_category: "registration",
+                    currency_code: "USD",
+                    amount_strategy: "fixed",
+                    unit_amount_cents: 15_000,
+                    occurs_on_strategy: "today",
+                    billable_on_strategy: "immediate",
+                    posting_review: "draft",
+                    metadata: {},
+                },
+            ],
+            charges: [
+                {
+                    id: "chg-auth",
+                    org_id: ORG_ID,
+                    billable_source_type: "customer",
+                    billable_source_id: CUSTOMER_ID,
+                    source_charge_id: null,
+                    status: "posted",
+                    currency_code: "USD",
+                    amount_cents: 15_000,
+                    charge_type: "fee",
+                    charge_category: "registration",
+                    metadata: {},
+                },
+            ],
+        });
+        return createOperationalEnrollmentMockSupabase(store);
+    }
+
+    const authCtx = { orgId: ORG_ID, userId: "user-1" } as never;
+    const authInvocation = { entityType: "customer", entityId: CUSTOMER_ID } as never;
+
+    it("refuses Add charge with 403 when the caller lacks fin.write", async () => {
+        const result = await action(CHARGE_ADD_ACTION_KEY).execute({
+            supabase: storeWith([]),
+            ctx: authCtx,
+            payload: { template_id: TEMPLATE, customer_id: CUSTOMER_ID, today: "2026-09-10" },
+            invocation: authInvocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
+        expect((result as { error: string }).error).toContain("fin.write");
+    });
+
+    it("refuses Post charge with 403 when the caller lacks fin.write", async () => {
+        const result = await action(CHARGE_POST_ACTION_KEY).execute({
+            supabase: storeWith([]),
+            ctx: authCtx,
+            payload: { charge_id: "chg-auth" },
+            invocation: authInvocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
+        expect((result as { error: string }).error).toContain("fin.write");
+    });
+
+    /*
+     * THE SEPARATION, STATED AS THE CASE THAT WOULD HIDE IT.
+     *
+     * A biller holds `fin.write` and must still be refused a correction. If reversal had been filed
+     * under the billing key this assertion would fail — which is exactly why it is written as a
+     * caller who holds something rather than a caller who holds nothing.
+     */
+    it("refuses Reverse charge to a caller who may bill but may not adjust", async () => {
+        const result = await action(CHARGE_REVERSE_ACTION_KEY).execute({
+            supabase: storeWith(["fin.write"]),
+            ctx: authCtx,
+            payload: { charge_id: "chg-auth" },
+            invocation: authInvocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
+        expect((result as { error: string }).error).toContain("fin.adjust");
+    });
+
+    it("refuses Add charge to a caller who may adjust but may not bill", async () => {
+        const result = await action(CHARGE_ADD_ACTION_KEY).execute({
+            supabase: storeWith(["fin.adjust"]),
+            ctx: authCtx,
+            payload: { template_id: TEMPLATE, customer_id: CUSTOMER_ID, today: "2026-09-10" },
+            invocation: authInvocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
+    });
+
+    /*
+     * A FAILED GRANT READ IS NOT AN EMPTY ONE. An actor the membership table cannot identify is
+     * unidentified, not unprivileged, and `resolveActorPermissionGrants` answers null. Every caller
+     * fails CLOSED — including this one, where there is no membership row at all.
+     */
+    it("refuses when the caller cannot be identified at all", async () => {
+        const store = createOperationalEnrollmentMockStore({});
+        const result = await action(CHARGE_POST_ACTION_KEY).execute({
+            supabase: createOperationalEnrollmentMockSupabase(store),
+            ctx: { orgId: ORG_ID, userId: null } as never,
+            payload: { charge_id: "chg-auth" },
+            invocation: authInvocation,
+        } as never);
+        expect(result.ok).toBe(false);
+        expect((result as { status: number }).status).toBe(403);
+    });
+
+    it("says so before the operator acts, not only on submit", async () => {
+        const eligibility = await action(CHARGE_POST_ACTION_KEY).resolveEligibility({
+            supabase: storeWith([]),
+            ctx: authCtx,
+            payload: { charge_id: "chg-auth" },
+            invocation: authInvocation,
+        } as never);
+        expect(eligibility.eligible).toBe(false);
+        expect(eligibility.blockers.map((b) => b.code)).toContain("charge_permission_required");
+    });
+
+    it("permits the whole lifecycle to a caller who holds both", async () => {
+        const supabase = storeWith(["fin.write", "fin.adjust"]);
+        const posted = await action(CHARGE_POST_ACTION_KEY).execute({
+            supabase,
+            ctx: authCtx,
+            payload: { charge_id: "chg-auth" },
+            invocation: authInvocation,
+        } as never);
+        expect(posted.ok).toBe(true);
+        const reversed = await action(CHARGE_REVERSE_ACTION_KEY).execute({
+            supabase,
+            ctx: authCtx,
+            payload: { charge_id: "chg-auth" },
+            invocation: authInvocation,
+        } as never);
+        expect(reversed.ok).toBe(true);
     });
 });

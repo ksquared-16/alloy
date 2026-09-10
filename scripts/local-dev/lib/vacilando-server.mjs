@@ -181,6 +181,18 @@ const MIME = {
   ".md": "text/plain; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".log": "text/plain; charset=utf-8",
 };
 
+/**
+ * WHAT RECLAIMING A SLOT ACTUALLY COSTS, in the operator's words.
+ *
+ * Stated once, on the server, and handed to every surface that offers the
+ * choice — so the promise the operator reads is the promise the mutation keeps.
+ */
+const SLOT_RECLAIM_CONSEQUENCE = Object.freeze({
+  loses: "its localhost address and QA browser session",
+  keeps: "its branch, worktree, messages and work — and it can still be sent instructions",
+  summary: "Reclaiming a Development Slot takes away that lane's localhost and QA browser session. Nothing else changes: the lane stays registered, keeps its branch, worktree and messages, and can still be sent instructions.",
+});
+
 function sendJson(res, status, obj, extraHeaders = {}) {
   const body = JSON.stringify(obj);
   res.writeHead(status, {
@@ -1069,6 +1081,42 @@ export function createVacilandoServer() {
     }
 
     if (req.method === "POST") {
+      /*
+       * SLOT RECLAMATION — two routes, no second brain.
+       *
+       * Both delegate to `lane-worktree-lifecycle`: the ranking is
+       * `slotReclaimCandidates` and the mutation is `reassignSlot`. Neither
+       * ordering nor eligibility nor the registry write is reimplemented here,
+       * because a second copy of "which slot is safe to take" is exactly the
+       * kind of thing that drifts and then takes a port from a lane mid-turn.
+       */
+      if (path === "/api/lanes/slots/reclaim") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const fromWorktree = String(body.value?.from_worktree || "").trim();
+        const toWorktree = String(body.value?.to_worktree || "").trim();
+        if (!fromWorktree || !toWorktree) {
+          return sendJson(res, 400, { ok: false, error: "from_worktree and to_worktree are required" });
+        }
+        const L = await import("./vacilando/lane-worktree-lifecycle.mjs");
+        // `reassignSlot` re-ranks internally before it acts, so the donor's
+        // eligibility is decided HERE and now — never by whatever the client
+        // was looking at when it rendered the list.
+        const out = await L.reassignSlot({ fromWorktree, toWorktree });
+        if (!out.ok) {
+          // A refusal hands back the CURRENT ranking, so the operator's next
+          // choice is made from what is true now rather than from the list that
+          // just went stale under them.
+          const fresh = await L.slotReclaimCandidates({ excludeWorktree: toWorktree });
+          return sendJson(res, 409, {
+            ok: false, error: out.error, detail: out.detail || null,
+            candidates: fresh.candidates, free_slots: fresh.free,
+            consequence: SLOT_RECLAIM_CONSEQUENCE,
+          });
+        }
+        return sendJson(res, 200, { ok: true, ...out, consequence: SLOT_RECLAIM_CONSEQUENCE });
+      }
+
       if (path === "/api/lanes/create") {
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
@@ -2003,6 +2051,35 @@ export function createVacilandoServer() {
       return sendJson(res, 200, { slot, requests: readRequests(slot) });
     }
     // ---- Single source of truth: who is this slot, and where does this runtime live? ----
+    /*
+     * THIS ROUTE LIVES WITH THE OTHER GET LANE ROUTES, AND THAT IS THE POINT.
+     *
+     * It was first written next to `/api/lanes/create` for readability — the
+     * two halves of one feature, side by side. `/api/lanes/create` is inside
+     * `if (req.method === "POST")`, so the GET never matched and the route
+     * answered 404 on the running build while every test passed: the unit
+     * control asserted the route's SOURCE TEXT, and the mounted proof ran
+     * against a stubbed server. Only probing the promoted runtime found it.
+     *
+     * A control now pins it to the same method scope as `/api/lanes`, because
+     * "the handler exists" and "the handler is reachable" are different claims
+     * and only the second one is worth anything.
+     */
+    if (path === "/api/lanes/slots/reclaim-candidates") {
+      const forWorktree = url.searchParams.get("for") || null;
+      const { slotReclaimCandidates } = await import("./vacilando/lane-worktree-lifecycle.mjs");
+      const out = await slotReclaimCandidates({ excludeWorktree: forWorktree });
+      return sendJson(res, 200, {
+        ok: true,
+        free_slots: out.free,
+        candidates: out.candidates,
+        // Said once, by the server, so every surface tells the operator the
+        // same thing about what a reclaim costs.
+        consequence: SLOT_RECLAIM_CONSEQUENCE,
+      });
+    }
+
+
     if (path === "/api/lanes") {
       try {
         try { evaluateExclusiveWindow(); } catch { /* exclusive tick must not fail discovery */ }

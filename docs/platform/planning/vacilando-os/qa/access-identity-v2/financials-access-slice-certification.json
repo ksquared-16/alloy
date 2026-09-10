@@ -1,0 +1,95 @@
+{
+  "title": "Access & Identity V2 — role / effective-access productization, Financials vertical slice",
+  "date": "2026-09-10",
+  "lane": "lane_141c9c1f3f2f",
+  "run": "erun_8029e7e58d4c961c",
+  "branch": "agent/access-identity",
+  "base_at_start": "bbc53a01de8c7c89305ce361a0b8a320174c09f2",
+  "merged_staging_during": "20871b305096622d56762b1111d1070359073e70",
+
+  "initiating_report": "An operator who is an administrator opens the promoted Financials Workspace and is told: 'You don't have access to view financial information for this organization. Contact an administrator to request access.'",
+
+  "root_cause": {
+    "one_sentence": "Seeding an organization has two halves and only one of them was wired to anything: roles arrive from a trigger on public.orgs, grants did not, so an organization created by any route but the local seed had four role definitions and zero capabilities — and portal admission is a role literal that consults no grant, so its administrator was admitted to the shell and refused by every surface that checks one.",
+    "why_financials_reported_it": "Financials is the surface that says so out loud. Every other capability-checked surface renders an empty list, which is the same defect without the sentence.",
+    "evidence": "Certification database before the repair: of four organizations, THREE had `admin` and `ops` role definitions and not one grant row between them (aaaa1111…, aaaa3333…, bbbb2222…). seed_default_rbac had no trigger and no caller anywhere in the tree — recorded by W-12's own inventory in August and not acted on.",
+    "second_cause": "seed_default_rbac's enumeration was frozen at 57 keys on 2026-08-07 while the catalog grew to 66. Each of the nine later keys arrived with a one-shot backfill over the orgs that existed at that moment. An organization inherits a key if and only if it existed on the day that key was catalogued: the representative tenant, created 2026-09-06, was missing exactly the three whose migrations ran before it (health.view, health.manage, enrollment.requirement_exception.manage) and held the six that came after.",
+    "third_cause": "unenforcedPermissionKeys.json still listed fin.read and fin.write as keys nothing consults, so rowEnforcement called the whole `fin` row inert and the role editor rendered NO control for View or Manage Financials. An organization could not grant or withhold Financials from the product at all, while the server enforced it the whole time.",
+    "fourth_cause": "capabilityTaxonomy mapped the dead `billing` group and not `financials`, so all five live fin keys landed in 'Not yet mapped to a product area'.",
+    "fifth_cause": "Six registered financial actions and fourteen financial API handlers enforced no capability. /api/admin/actions/execute gates on requireAdminOrOps, which resolves admission and reads neither a role nor a grant."
+  },
+
+  "red_locks_found_on_staging": [
+    "web/tests/access/permissionEnforcementTruth.test.ts — fin.read and fin.write had gained enforcement sites and the inert list had not been re-derived",
+    "web/tests/access/capabilityTaxonomy.test.ts — the enrollment and financials catalog groups mapped to no operator area",
+    "web/tests/access/catalogVocabularyReconciliation.test.ts (5 assertions) — the W-11 artifact predates seven approved catalog additions",
+    "web/tests/access/grantSeedEnumeration.test.ts — the seed enumeration no longer agreed with the catalog the tree defines",
+    "web/tests/access/catalogConsolidationLock.test.ts (2 assertions) — NOT FIXED, see remaining_gaps"
+  ],
+
+  "default_role_matrix": {
+    "before": {
+      "admin": "63 of 66 on the representative tenant; 0 on three of four organizations; a NEW organization would receive 57",
+      "ops": "57 on the representative tenant; 0 on three of four; a NEW organization would receive 55",
+      "school_director": "fin.read only",
+      "regional_lead": "fin.read only"
+    },
+    "after": {
+      "admin": "66 of 66, on every organization and on every new one",
+      "ops": "57 — the administrator package less nine keys, each withheld by the decision of the migration that introduced it",
+      "school_director": "fin.read, now from the seed rather than from a one-shot that has already run",
+      "regional_lead": "fin.read, same"
+    },
+    "ops_withholds": [
+      "admin.users.write", "admin.roles.write",
+      "health.view", "health.manage",
+      "enrollment.requirement_exception.manage", "enrollment.pricing.override",
+      "fin.adjust", "fin.responsibility", "fin.subsidy"
+    ]
+  },
+
+  "financials_capability_map": [
+    { "operator_name": "View Financials", "key": "fin.read", "enforced_by": "assertFinancialsReadAllowed", "routes": 17, "actions": [], "default_roles": ["admin", "ops", "school_director", "regional_lead"] },
+    { "operator_name": "Create and post charges, record payments, collect cards, apply authored discounts, resolve responsibility, generate tuition, manage GL accounts", "key": "fin.write", "enforced_by": "action bodies + assertFinancialsWriteAllowed", "actions": ["charge.add", "charge.post", "payment.record", "payment.collect_card", "billing.apply_discounts", "billing.resolve_responsibility", "billing.generate_tuition"], "default_roles": ["admin", "ops"] },
+    { "operator_name": "Adjust balances, credit, reverse posted charges, refund payments", "key": "fin.adjust", "enforced_by": "action bodies", "actions": ["charge.reverse", "payment.refund", "billing.adjust_account", "billing.reverse_adjustment"], "default_roles": ["admin"] },
+    { "operator_name": "Manage responsibility and expected funding", "key": "fin.responsibility", "enforced_by": "financialResponsibilityActions", "actions": ["billing.configure_responsibility", "billing.reallocate_responsibility", "billing.configure_expected_funding", "billing.attribute_payment"], "default_roles": ["admin"] },
+    { "operator_name": "Administer subsidy", "key": "fin.subsidy", "enforced_by": "financialSubsidyActions", "actions": ["subsidy configuration and claim actions"], "default_roles": ["admin"] }
+  ],
+
+  "action_authorization_disposition": {
+    "repaired_this_slice": {
+      "charge.add": "fin.write — was route-gated only",
+      "charge.post": "fin.write — was route-gated only; this is the debt the school-director live test had pinned as an ABSENCE",
+      "charge.reverse": "fin.adjust — was route-gated only; correcting posted money is the act fin.adjust was minted to separate from billing",
+      "payment.record": "fin.write — was route-gated only",
+      "payment.collect_card": "fin.write — was route-gated only",
+      "payment.refund": "fin.adjust — was route-gated only; the money leaves"
+    },
+    "already_capability_owned": [
+      "billing.apply_discounts (fin.write)", "billing.adjust_account (fin.adjust)", "billing.reverse_adjustment (fin.adjust)",
+      "billing.configure_responsibility / resolve / reallocate / configure_expected_funding / attribute_payment (fin.responsibility, fin.write)",
+      "billing.generate_tuition (fin.write)", "subsidy actions (fin.subsidy)",
+      "enrollment.pricing.override", "enrollment.requirement_exception.grant / revoke"
+    ],
+    "still_route_gated_and_reported": "The `financial/*` configuration API — charge-templates, policies, rate-plans, rate-rules, services, gl-config, consumption/obligations and simulate — remains on requireAdminOrOps. Who may configure Financials (the Studio question) is a product decision, not a mechanical conversion, and it spans the commercial configuration model."
+  },
+
+  "certification": {
+    "database": "real Postgres — the shared alloy-cert stack, migration applied and ledgered as 20260910183000",
+    "initiating_defect_regression": "web/tests/access/live/adminAddChargeRegression.live.test.ts — 5 assertions: grants resolve, fin.read present, the guard admits, the workspace cohort is POPULATED (rows and money, not `ok`), Add Charge runs through the registered action, the row is in Postgres at the template's own amount, posting makes it owed, the correction moves the canonical resolver by exactly what was billed, and every organization defining an active admin role has one that can administer it. Re-run twice; the household nets to zero both times.",
+    "personas": "web/tests/access/live/accessIdentityPersonas.live.test.ts — 19 assertions across Organization Administrator, Regional Lead, School / Center Director, a custom Financials manager, a custom Financials viewer, and a role with no Financials access. Both custom roles are created the way an organization would: a role_definitions row and a call to replace_role_permission_grants, the RPC the Access editor's route calls.",
+    "school_director": "web/tests/financials/live/schoolDirectorReadOnly.live.test.ts — 12 assertions; the charge.post debt marker replaced by behaviour, including a refusal proved to be at the GATE and not at the lookup (an administrator sending the same non-existent charge id is refused by the domain, not by authority).",
+    "role_editor": "web/tests/access/financialsRoleEditorGroup.test.ts — 8 assertions; every fin key reachable, no dead control, presets touch only their own rows, a partially-granted area reads Limited with its arithmetic.",
+    "one_door": "web/tests/access/financialsHasOneDoor.test.ts — walks the Financials API directory; every handler declares a Financials capability, names the Financials helper, calls it, and no mutation declares a read capability.",
+    "mounted_browser": "NOT PERFORMED — see remaining_gaps.validation_channel."
+  },
+
+  "remaining_gaps": {
+    "validation_channel": "This lane is registered WITHOUT A SLOT — `~/.local/state/alloy-dev/gateway/metadata/access-identity.env` carries ALLOY_WORKTREE_UNSLOTTED=\"1\" and ALLOY_ADOPTED_REASON=\"identity registered without a slot: no free slot, no port, no dev server\". So `vac run typecheck|build` refuses with `metadata missing ALLOY_WORKTREE_SLOT`, and the heavy-validation watchdog kills every unbrokered equivalent (npx tsc, npm run typecheck, npm run build, certification/alloy-certify build) at ~15s with exit 144 and a zero-byte log. Confirmed identical on unmodified origin/staging, so it is the lane and not this change. CONSEQUENCE: no full-project typecheck, no production build, and no mounted browser certification. Types were validated instead by five bounded tsc projects covering the whole blast radius (all clean); behaviour by vitest and by live tests against real Postgres. A slot and port are the operator's to allocate.",
+    "rl7_two_assertions": "catalogConsolidationLock.test.ts remains red on two assertions, both against APPLIED migrations, which this repository's own doctrine holds cannot be edited: (1) 20260909230000_attendance_capability.sql writes catalog rows through the deprecated `permissions` and `permission_keys` names — guarded by to_regclass so it is a no-op, but the text offends RL-7; (2) 20260909240000_financials_read_for_director_roles.sql inserts grants without naming permission_definitions. Both are one day old and from other lanes. Either the lock gains an explicit historical exemption (a Director decision, since RL numbers are Director-minted) or the migrations are superseded.",
+    "access_change_audit": "There is NO audit trail for access changes. PUT /api/admin/rbac/grants writes no audit record, activity_log is empty, and replace_role_permission_grants revokes by DELETE — so who changed whose access, and when, is not recoverable. role_permission_grants carries created_at/updated_at and nothing else. This is the top recommended next slice.",
+    "portal_admission_is_a_role_literal": "W-13 is still open. PORTAL_ROLES = {admin, ops} is a literal test, so a purely custom role — including a Financials-only one — cannot reach the portal at all. The preserving grants landed in 20260818170000; the code change did not. This is why the read-only and no-access personas are certified as custom roles held in the org rather than as principals signing in.",
+    "director_role_packages": "school_director and regional_lead hold ONE capability across a 66-key catalog. Establishing what a school director and a regional lead should be able to do spans domains this slice has no standing to speak for, and is returned as a product decision.",
+    "shared_database_divergence": "attendance.record.assigned_only is active on the shared certification database, created there at 19:15 on 2026-09-10, with no migration in this tree — another lane's in-flight catalog key. When its migration lands, the RL-8 enumeration lock will require it be added to the admin package deliberately. That is the mechanism this slice installed, working as intended, and the owning lane should expect it."
+  }
+}
