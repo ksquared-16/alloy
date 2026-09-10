@@ -12,13 +12,16 @@ Verified against `origin/staging` at `005c0da228e37c22388bafc14d91857c897feb43`.
 the tree, not by reading the specification.
 
 
-> **Updated 2026-09-10 by Slice B.1.** The rows below described the estate when
+> **Updated 2026-09-10 by Slice B.1, and again by B.2.** The rows below described the estate when
 > Slice A ran, and six of them have since changed: application, installation,
 > credential, principal, scopes/boundary and audit are now **implemented**. The
 > table is annotated in place rather than rewritten, because the Slice A finding
 > — that Thread 4 shipped a specification and no implementation — is the reason
 > Slice B.1 exists and should stay legible. See
-> [`07-slice-b1-trust-foundation.md`](07-slice-b1-trust-foundation.md).
+> [`07-slice-b1-trust-foundation.md`](07-slice-b1-trust-foundation.md) and
+> [`08-slice-b2-external-boundary.md`](08-slice-b2-external-boundary.md). B.2 added
+> the HTTP boundary: token exchange, `GET /api/v1/context`, a shared limiter, the
+> public error contract, correlation, API activity and the guarded public OpenAPI.
 
 ## Headline
 
@@ -62,17 +65,17 @@ would find a backend to productize.
 | External scopes | ✅ | **✅ B.1** | **✅ B.1** | ❌ | ❌ | ✅ | ❌ | Evaluation built; catalog/mapping table still absent |
 | Resource/location boundary | ✅ | **✅ B.1** | **✅ B.1** | ❌ | ❌ | ✅ | ❌ | — |
 | `integration_resource_refs` | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | — |
-| `/api/v1` namespace | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | No routes, no prebuild guard |
+| `/api/v1` namespace | ✅ | n/a | **✅ B.2** | n/a | n/a | ✅ | ❌ | Two routes; drift guard replaces the planned prebuild guard |
 | Canonical resource adapters | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
 | Governed operation adapter | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
 | Attendance external ingestion | ✅ | **partial** | ❌ | n/a | n/a | ✅ | ❌ | `integration_api` channel exists; **no producer** |
-| Public OpenAPI | ✅ | n/a | ❌ | n/a | ❌ | ✅ | ❌ | Artifact does not exist |
-| Error contract | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | Internal envelope exists, public one does not |
+| Public OpenAPI | ✅ | n/a | **✅ B.2** | n/a | ❌ | ✅ | ❌ | `alloy-public-api.v1.json`, coverage enforced both ways |
+| Error contract | ✅ | n/a | **✅ B.2** | n/a | n/a | ✅ | ❌ | Public envelope implemented |
 | Collection/pagination | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
 | Idempotency | ✅ | **partial** | ❌ | n/a | n/a | ✅ | ❌ | Domain layer real (attendance); platform layer absent |
 | Concurrency | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
 | Audit / provenance | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | `app_security_audit` exists for the trust boundary. `logAdminAudit` is still a `console.log` for everything else. |
-| Rate limiting | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | Durable limiter absent |
+| Rate limiting | ✅ | **✅ B.2** | **✅ B.2** | ❌ | ❌ | ✅ | ❌ | Shared durable limiter; per-installation quotas not configurable |
 | Security prerequisites | ✅ documented | — | — | — | — | ✅ | **❌ unmet** | All three still open |
 
 **Legend:** ✅ exists · ❌ absent · partial = a domain-level piece exists that the

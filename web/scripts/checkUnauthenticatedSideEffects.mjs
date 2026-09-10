@@ -105,7 +105,18 @@ const SIDE_EFFECT_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  * pass as "the caller proved who it is". The device authenticates; the code
  * identifies. This list must only ever contain the first kind.
  */
-export const CREDENTIAL_COLUMNS = new Set(["token", "token_hash", "secret", "api_key", "credential_hash"]);
+export const CREDENTIAL_COLUMNS = new Set([
+    "token",
+    "token_hash",
+    "secret",
+    "api_key",
+    "credential_hash",
+    // Thread 5 B.1/B.2 — the external application credential and its bounded
+    // rotation slot. Same class as `credential_hash`: the SENDER's own secret,
+    // hashed, selected on. Not a subject identifier.
+    "secret_hash",
+    "secret_hash_secondary",
+]);
 
 // ---------------------------------------------------------------------------
 // The three terminals

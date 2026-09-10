@@ -4777,7 +4777,7 @@
     "rpcs": [],
     "domain": "Admin / Configuration",
     "stability": "admin-only",
-    "lines": 90
+    "lines": 103
   },
   {
     "apiPath": "/api/admin/financial-config/opportunity/[id]",
@@ -5052,7 +5052,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 128
+    "lines": 153
   },
   {
     "apiPath": "/api/admin/financials/accounts",
@@ -5074,7 +5074,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 110
+    "lines": 135
   },
   {
     "apiPath": "/api/admin/financials/activity",
@@ -5113,7 +5113,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 51
+    "lines": 64
   },
   {
     "apiPath": "/api/admin/financials/collection-state",
@@ -5135,7 +5135,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 75
+    "lines": 88
   },
   {
     "apiPath": "/api/admin/financials/job/[id]",
@@ -5161,7 +5161,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 185
+    "lines": 193
   },
   {
     "apiPath": "/api/admin/financials/journal-entries/[id]",
@@ -5185,7 +5185,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 99
+    "lines": 107
   },
   {
     "apiPath": "/api/admin/financials/journal-entries",
@@ -5207,7 +5207,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 101
+    "lines": 109
   },
   {
     "apiPath": "/api/admin/financials/ledger/[id]",
@@ -5235,7 +5235,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 103
+    "lines": 111
   },
   {
     "apiPath": "/api/admin/financials/ledger",
@@ -5260,7 +5260,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 106
+    "lines": 114
   },
   {
     "apiPath": "/api/admin/financials/overview-metrics",
@@ -5345,7 +5345,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 238
+    "lines": 246
   },
   {
     "apiPath": "/api/admin/financials/snapshot",
@@ -5364,7 +5364,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 18
+    "lines": 26
   },
   {
     "apiPath": "/api/admin/financials/statements",
@@ -5387,7 +5387,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 180
+    "lines": 188
   },
   {
     "apiPath": "/api/admin/financials/tuition-plans",
@@ -5415,7 +5415,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 220
+    "lines": 228
   },
   {
     "apiPath": "/api/admin/financials/work-queue",
@@ -13137,6 +13137,44 @@
     "domain": "Admin / Configuration",
     "stability": "admin-only",
     "lines": 54
+  },
+  {
+    "apiPath": "/api/v1/context",
+    "file": "web/app/api/v1/context/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "application-principal"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 144
+  },
+  {
+    "apiPath": "/api/v1/oauth/token",
+    "file": "web/app/api/v1/oauth/token/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "application-principal"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 211
   },
   {
     "apiPath": "/api/vendor-application",

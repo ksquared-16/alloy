@@ -7,7 +7,10 @@ supersedes: []
 
 # Alloy API — Conventions
 
-> ⚠ Describes the ratified V1 contract. Not yet implemented.
+> ⚠ **Mixed status.** The error envelope, rate-limit headers and request
+> correlation described here are **implemented**. Collections, idempotency,
+> concurrency and external IDs are **contract only** — no endpoint exercises them
+> yet, because no domain resource is exposed.
 
 ## Resources vs Operations
 

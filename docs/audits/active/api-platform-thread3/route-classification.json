@@ -19219,6 +19219,64 @@
   }
  },
  {
+  "apiPath": "/api/v1/context",
+  "file": "web/app/api/v1/context/route.ts",
+  "methods": [
+   "GET"
+  ],
+  "domain": "Admin / Configuration",
+  "stability": "admin-only",
+  "auth": [
+   "application-principal"
+  ],
+  "validation": "none",
+  "serviceRole": true,
+  "writes": false,
+  "events": false,
+  "tables": [],
+  "rpcs": [],
+  "classification": "EXTERNAL_PUBLIC_V1",
+  "classificationBasis": "public contract, application principal, org from installation",
+  "inOpenApi": false,
+  "externalReady": false,
+  "externalReadyChecks": {
+   "nonSession": true,
+   "orgFromCredential": false,
+   "validated": false,
+   "inSpec": false,
+   "idempotentIfMutating": true
+  }
+ },
+ {
+  "apiPath": "/api/v1/oauth/token",
+  "file": "web/app/api/v1/oauth/token/route.ts",
+  "methods": [
+   "POST"
+  ],
+  "domain": "Admin / Configuration",
+  "stability": "admin-only",
+  "auth": [
+   "application-principal"
+  ],
+  "validation": "none",
+  "serviceRole": true,
+  "writes": false,
+  "events": false,
+  "tables": [],
+  "rpcs": [],
+  "classification": "EXTERNAL_PUBLIC_V1",
+  "classificationBasis": "public contract, application principal, org from installation",
+  "inOpenApi": false,
+  "externalReady": false,
+  "externalReadyChecks": {
+   "nonSession": true,
+   "orgFromCredential": false,
+   "validated": false,
+   "inSpec": false,
+   "idempotentIfMutating": true
+  }
+ },
+ {
   "apiPath": "/api/vendor-application",
   "file": "web/app/api/vendor-application/route.ts",
   "methods": [

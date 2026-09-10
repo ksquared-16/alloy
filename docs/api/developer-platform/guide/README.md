@@ -7,10 +7,24 @@ supersedes: []
 
 # Alloy API — Getting Started
 
-> ## ⚠ Not yet available
-> This documents the **ratified V1 contract**. The Alloy Public API is not
-> implemented and issues no credentials today. Everything here describes what
-> V1 will be, so integrators can design against it — not a live service.
+> ## ⚠ Partially implemented — read this before you build
+>
+> **Implemented and callable:** the application, installation and credential
+> model; token exchange at `POST /api/v1/oauth/token`; bearer authentication;
+> `GET /api/v1/context`; the error envelope; rate limiting; request correlation.
+> These are described by the governed contract at
+> [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json), whose
+> coverage is enforced by a drift guard in both directions.
+>
+> **Contract only, NOT callable:** every domain resource (children, locations,
+> people, enrollment, schedules), every governed operation, attendance
+> ingestion, webhooks, and anything Classroom Coach. The sections below that
+> describe them state the intended contract so you can design against it — they
+> do not describe a live endpoint, and no credential can reach one.
+>
+> **Not yet safe to issue production credentials.** Three security prerequisites
+> remain open; see
+> [`../product/08-slice-b2-external-boundary.md`](../product/08-slice-b2-external-boundary.md).
 
 ## The model, in four words
 

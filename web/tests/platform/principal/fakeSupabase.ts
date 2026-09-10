@@ -77,8 +77,34 @@ export function createFakeSupabase(tables: Tables) {
         return api;
     }
 
+    // Shared fixed-window counters, so a rate-limit test exercises the same
+    // consume-and-decide contract the SQL function implements.
+    const windows = new Map<string, number>();
+
+    async function rpc(fn: string, args: Record<string, unknown>) {
+        if (fn !== "consume_rate_limit") throw new Error(`fakeSupabase: unsupported rpc ${fn}`);
+        const key = String(args.p_bucket_key);
+        const limit = Number(args.p_limit);
+        const windowSeconds = Number(args.p_window_seconds);
+        const next = (windows.get(key) ?? 0) + 1;
+        windows.set(key, next);
+        return {
+            data: [
+                {
+                    allowed: next <= limit,
+                    current_count: next,
+                    reset_at: new Date(Date.now() + windowSeconds * 1000).toISOString(),
+                },
+            ],
+            error: null,
+        };
+    }
+
     return {
-        client: { from } as unknown as SupabaseClient,
+        client: { from, rpc } as unknown as SupabaseClient,
+        resetWindows() {
+            windows.clear();
+        },
         db,
         rows(table: string) {
             return db[table] ?? [];

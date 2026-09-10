@@ -93,17 +93,36 @@ export async function resolveApplicationPrincipal(
 
     const digest = hashCredentialSecret(secret);
 
-    // Indexed equality against both secret slots. Never a scan, never a prefix
-    // match, and never `like`.
-    const { data: credRow, error: credErr } = await supabase
+    // Indexed equality against the primary secret, then the bounded rotation
+    // slot. Never a scan, never a prefix match, never `like`.
+    //
+    // Two explicit `.eq` lookups rather than one `.or(...)`: the second lookup
+    // only runs during a rotation overlap, and `checkUnauthenticatedSideEffects`
+    // recognises `.eq("<credential column>", …)` as sender authentication —
+    // an `or()` string is opaque to it, so the token route would have read as
+    // authenticating nobody. The guard should be able to see what is true.
+    const SELECT_COLUMNS =
+        "id, installation_id, client_id, status, expires_at, secret_hash, secret_hash_secondary, secondary_expires_at";
+
+    const primary = await supabase
         .from("app_credentials")
-        .select(
-            "id, installation_id, client_id, status, expires_at, secret_hash, secret_hash_secondary, secondary_expires_at",
-        )
-        .or(`secret_hash.eq.${digest},secret_hash_secondary.eq.${digest}`)
+        .select(SELECT_COLUMNS)
+        .eq("secret_hash", digest)
         .maybeSingle();
 
-    if (credErr) return { ok: false, refusal: "lookup_failed", auditReason: "lookup_failed" };
+    if (primary.error) return { ok: false, refusal: "lookup_failed", auditReason: "lookup_failed" };
+
+    let credRow = primary.data;
+    if (!credRow) {
+        const secondary = await supabase
+            .from("app_credentials")
+            .select(SELECT_COLUMNS)
+            .eq("secret_hash_secondary", digest)
+            .maybeSingle();
+        if (secondary.error) return { ok: false, refusal: "lookup_failed", auditReason: "lookup_failed" };
+        credRow = secondary.data;
+    }
+
     if (!credRow) return { ok: false, refusal: "invalid_credential", auditReason: "unknown_credential" };
 
     const credential = credRow as CredentialRow;

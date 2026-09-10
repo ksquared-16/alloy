@@ -23,6 +23,14 @@ function classify(r) {
     return ['DEVICE_MACHINE', 'device credential, org+site read off the resolved row'];
   if (/^\/api\/(public\/(forms|tour-booking)|action|action-links)\//.test(p))
     return ['PARTICIPANT_PUBLIC', 'opaque participant token'];
+  // Thread 5 B.2 — the public contract surface. Not internal transport, and not
+  // a participant token: an application principal whose organization is read from
+  // its installation. Its coverage is guarded by the PUBLIC spec and
+  // web/tests/platform/external/openApiDriftGuard.test.ts, not by the internal
+  // v0 artifact this generator measures, which is why `inSpec` below stays false
+  // for it and it does not claim EXTERNAL_READY here.
+  if (/^\/api\/v1\//.test(p))
+    return ['EXTERNAL_PUBLIC_V1', 'public contract, application principal, org from installation'];
   if (auth.includes('cron-token'))
     return ['INTERNAL_ONLY', 'shared global cron secret'];
   if (r.stability === 'experimental')

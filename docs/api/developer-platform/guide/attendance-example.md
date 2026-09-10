@@ -7,8 +7,10 @@ supersedes: []
 
 # Alloy API — Attendance integration example
 
-> ⚠ Describes the ratified V1 contract. Not yet implemented. Uses only the six
-> V1 paths — no endpoint here is invented.
+> ⚠ **Contract only — none of this is callable.** Attendance ingestion is not
+> implemented. This describes the intended end-to-end shape so an integrator can
+> design against it, using only paths Thread 4 ratified. The only endpoints that
+> exist today are `/api/v1/oauth/token` and `/api/v1/context`.
 
 A system that observes children arriving and departing, recording each as a fact
 in Alloy.

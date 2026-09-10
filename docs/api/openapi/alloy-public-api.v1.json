@@ -1,0 +1,429 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Alloy Public API",
+    "version": "1.0.0",
+    "x-spec-status": "public-v1",
+    "description": "The Alloy Public API. This artifact describes ONLY endpoints that exist. Coverage is a build gate, not a report: a documented path with no route, or a route under /api/v1 with no documentation, fails the drift guard in web/tests/platform/external/openApiDriftGuard.test.ts.\n\nAuthority is never chosen by the caller. An access token resolves to exactly one installation, and that installation determines the organization, the granted scopes and the resource boundary. There is no org_id parameter anywhere in this contract."
+  },
+  "servers": [
+    {
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "app.alloy.example"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Exchanging an installation credential for a short-lived access token."
+    },
+    {
+      "name": "Context",
+      "description": "The caller's own installation context."
+    }
+  ],
+  "paths": {
+    "/api/v1/oauth/token": {
+      "post": {
+        "operationId": "issueAccessToken",
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Exchange an installation credential for an access token",
+        "description": "Client-credentials grant. The returned token is opaque, expires in 15 minutes, and carries no authority of its own \u2014 scopes and resource boundary are re-read from the installation on every request, so a revocation takes effect on the next call.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An access token.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "RateLimit-Limit": {
+                "$ref": "#/components/headers/RateLimitLimit"
+              },
+              "RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "RateLimit-Reset": {
+                "$ref": "#/components/headers/RateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidCredential"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/context": {
+      "get": {
+        "operationId": "getContext",
+        "tags": [
+          "Context"
+        ],
+        "summary": "Describe the calling installation",
+        "description": "Returns the caller's own application, installation, organization, granted scopes and resource boundary. Touches no domain data. This is the correct first call for any integration: it answers which tenant you are and what you may do, before anything depends on the answer.",
+        "responses": {
+          "200": {
+            "description": "The caller's installation context.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "RateLimit-Limit": {
+                "$ref": "#/components/headers/RateLimitLimit"
+              },
+              "RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "RateLimit-Reset": {
+                "$ref": "#/components/headers/RateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Context"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidCredential"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An opaque access token from /api/v1/oauth/token. Not a JWT; do not parse it."
+      }
+    },
+    "headers": {
+      "RequestId": {
+        "description": "Server-generated identifier for this request. Quote it to support. Present on every response.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "RateLimitLimit": {
+        "description": "Requests permitted in the current window.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      "RateLimitRemaining": {
+        "description": "Requests remaining in the current window.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      "RateLimitReset": {
+        "description": "Seconds until the window resets.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    },
+    "schemas": {
+      "TokenRequest": {
+        "type": "object",
+        "required": [
+          "grant_type",
+          "client_id",
+          "client_secret"
+        ],
+        "properties": {
+          "grant_type": {
+            "type": "string",
+            "enum": [
+              "client_credentials"
+            ]
+          },
+          "client_id": {
+            "type": "string",
+            "description": "Public, non-secret credential identifier."
+          },
+          "client_secret": {
+            "type": "string",
+            "description": "Shown once at creation and never retrievable afterwards."
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "Opaque. Do not parse."
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Seconds until expiry."
+          },
+          "scope": {
+            "type": "string",
+            "description": "Space-delimited scopes the installation currently grants. Informational \u2014 authority is re-read from the installation on every request, not carried by the token."
+          }
+        }
+      },
+      "Context": {
+        "type": "object",
+        "required": [
+          "application",
+          "installation",
+          "organization",
+          "scopes",
+          "resource_boundary"
+        ],
+        "properties": {
+          "application": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "environment": {
+                "type": "string",
+                "enum": [
+                  "sandbox",
+                  "production"
+                ]
+              }
+            }
+          },
+          "installation": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active"
+                ]
+              }
+            }
+          },
+          "organization": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resource_boundary": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "org_wide"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "mode",
+                  "location_ids"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "locations"
+                    ]
+                  },
+                  "location_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "An EMPTY list denies everything. It never means all locations."
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "type",
+              "message",
+              "request_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Stable and machine-readable. Branch on this."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "invalid_request",
+                  "unauthenticated",
+                  "forbidden_scope",
+                  "forbidden_resource",
+                  "not_found",
+                  "conflict",
+                  "rate_limited",
+                  "internal_error"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "description": "For humans. NOT a contract; it may change."
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "InvalidRequest": {
+        "description": "The request could not be parsed or is not a supported grant.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "InvalidCredential": {
+        "description": "Authentication failed. Deliberately identical for unknown, wrong, revoked and expired credentials \u2014 distinguishing them would tell a prober which half of a guess was right.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limited. Honour Retry-After.",
+        "headers": {
+          "Retry-After": {
+            "description": "Seconds to wait.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "An unexpected failure. Carries a request_id and nothing else.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  }
+}
