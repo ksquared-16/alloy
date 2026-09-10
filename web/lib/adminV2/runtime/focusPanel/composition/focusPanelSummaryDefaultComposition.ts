@@ -115,10 +115,10 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
         key: "employment",
         tier: "reference",
         visibility: "visible",
-        // ⚠ SIX columns in the right-hand reference lane, not a full-width row. A card spanning all
-        // 12 columns cannot be planned into lanes, so `planPublishedLayout` fell back from `lanes`
-        // to `grid` for the WHOLE panel — every other card's placement changed with it. Employment
-        // sits under Billing Preview, beside the other reference cards.
+        // Six columns in the right-hand reference band, not a full-width row: Employment sits under
+        // Billing Preview, beside the other reference cards. This used to carry a warning that a
+        // 12-column card would drop the whole panel from `lanes` to `grid`; there is no lanes
+        // reading of a grid any more, so the span is a composition choice and nothing else.
         area: { colStart: 7, colSpan: 6, rowStart: 10, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
@@ -175,9 +175,8 @@ export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryComposition
         key: "staff",
         tier: "reference",
         visibility: "visible",
-        // Six columns in the left lane. A 12-column card cannot be planned into lanes and forces
-        // `planPublishedLayout` to fall back from `lanes` to `grid` for the whole panel — the same
-        // trap documented on the case composition's Employment entry.
+        // Six columns in the left band — a composition choice. (This once cited a rule about a
+        // 12-column card forcing the panel out of `lanes`; that rule is gone with the lane reading.)
         area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
         encodedSpan: 1,
         encodedDensity: "standard",
@@ -206,8 +205,7 @@ export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionE
         key: "children",
         tier: "reference",
         visibility: "visible",
-        // Six columns in the left lane — a 12-column card forces `planPublishedLayout` to fall back
-        // from `lanes` to `grid`, the trap documented on the case composition's Employment entry.
+        // Six columns in the left band — a composition choice, not a constraint the planner imposes.
         area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
         encodedSpan: 1,
         encodedDensity: "standard",
@@ -273,13 +271,11 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
      *
      * This composition previously placed Process, Health & Safety and Attendance at six columns
      * each, on a recorded rule that "a 12-column card forces `planPublishedLayout` from `lanes` to
-     * `grid` for the whole panel". That rule is REAL — `planLanesFromGrid` returns null the moment
-     * any area has `colSpan >= columns` — but the consequence was mis-stated as a prohibition. Grid
-     * is not a failure mode: it is the strategy that file documents as "the richest model
-     * (vertical/horizontal spans, independent regions) — when present it wins", and it honours
-     * colStart/colSpan exactly. The only thing lanes buys is transposition so a short card cannot
-     * inherit a tall neighbour's row height. The case composition has shipped a `colSpan: 12`
-     * Employment card all along, so grid is already the live strategy on the case surface.
+     * `grid` for the whole panel". The rule was real while a grid had two readings, and the
+     * consequence was mis-stated as a prohibition. Both are moot now: an authored grid has ONE
+     * reading, which honours colStart/colSpan exactly, and the transposition lanes bought — so a
+     * short card could not inherit a tall neighbour's row height — is what the column-aware
+     * vertical model does without discarding a span. Widths here are composition, not workaround.
      *
      * Half-width Process is what QA read as "the stage sequence renders vertically". The band CSS
      * has no vertical mode to switch into — `.alloy-os-progression` is `grid-auto-flow: column`
