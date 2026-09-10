@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -9,7 +9,7 @@ supersedes: []
 
 **Status:** Canonical (July 2026 stabilization). Sequencing and gaps — not a commit log.
 
-> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The "Future" framing of **Attendance/labor** and **Billing/payments** below is stale for the *backend truth-flow*: the L1–L4 operational spine (config rules, agreements/placements/schedule assignments, immutable attendance facts, expected/actual occupancy & staffing read models) and the L4→L5 Operational Consumption runtime (Slices 1–4, draft obligations) are **built** — see [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) §1 and the module docs (`../modules/attendance-system.md`, `../modules/billing-financials-platform.md`, `../modules/operational-consumption-platform.md`). What remains *future* is the operator-facing product (surfaces, Posting/authoritative money, staffing supply, forecasting) — the Implementation Waves in the RFC §6. Treat the RFC as canonical for expansion sequencing.
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The "Future" framing of **Attendance/labor** and **Billing/payments** below is stale for the *backend truth-flow*: the L1–L4 operational spine (config rules, agreements/placements/schedule assignments, immutable attendance facts, expected/actual occupancy & staffing read models) and the L4→L5 Operational Consumption runtime (Slices 1–4, draft obligations) are **built** — see [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) §1 and the module docs (`../modules/attendance-system.md`, `../modules/billing-financials-platform.md`, `../modules/operational-consumption-platform.md`). What that note called *future* — surfaces, Posting/authoritative money, staffing supply — has since shipped too; see the Future section below, corrected 2026-09-10. Forecasting remains future. Treat the RFC as canonical for expansion sequencing, but not for what is built.
 
 For capability inventory see `platform-capabilities.md`. For shipped milestones see `release-history.md`.
 
@@ -86,17 +86,29 @@ Near-term after in-progress core:
 
 Platform construction is complete ([`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md)). New execution lanes extend domain capability atop existing runtimes:
 
-1. **Scheduling**
-2. **Attendance**
-3. **Billing**
-4. **Payments**
-5. **Commercial**
-6. **Automation**
-7. **AI**
-8. **Operational Intelligence** — **V1 frozen** (Questions → Measurements → Definitions → Answers). Next: Phase 2 consumers present Answers (`platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`).
-9. **Parent Experience**
-10. **Teacher Experience**
-11. **Partner APIs**
+**Four of these have since shipped and are no longer future work** — corrected 2026-09-10
+against migrations and certification packs; see
+[`release-history.md`](./release-history.md) §2026 H2 and
+[`platform-capabilities.md`](./platform-capabilities.md).
+
+| Lane | State | Evidence |
+|---|---|---|
+| **Attendance** | **Shipped** Sept 2026 | Capture hardening, `attendance.record`/`attendance.read` capability, kiosk producers and person codes (`20260909220000` … `20260910130000`); `AttendanceWorkspace`, `web/app/kiosk/`. Permission-gated, not flag-gated |
+| **Billing** | **Shipped** Sept 2026 | Financial periods + journal, charge correction lineage, reduction applications, financial responsibility, subsidy (`20260902130000` … `20260909140000`); `certification/financials/` |
+| **Payments** | **Shipped** Sept 2026 | Stripe Connect collection: merchant, collection attempts (card + ACH), provider events, refunds, provider-initiated reversal (`20260909160000` … `20260909270000`); webhook `web/app/api/stripe/webhook/route.ts`. Not built: autopay, dunning, card chargebacks |
+| **Commercial** | **Shipped** (largely) | Accounting v1, catalog RLS, fees/addons/deposits, policies, products primitive, revenue categories, tuition rates v2 |
+| **Scheduling** | **Partial** | Employment foundation, staff assignment eligibility, staff presence facts (Aug 2026) and `web/app/adminV2/scheduling/` exist. **No shift model** — staff supply is `schedule_assignments` with `subject_type='staff'`. No canonical module doc owns this domain yet |
+| **Operational Intelligence** | **V1 frozen; Phase 2 begun** | The Answer-presentation seam ships (`web/lib/presentation/runtime/useOperationalAnswers.ts`) and renders on Workspace and Work Unit — two of the five named consumers. Neither "next" nor complete |
+
+Genuinely still future:
+
+1. **Automation**
+2. **AI**
+3. **Parent Experience**
+4. **Teacher Experience**
+5. **Partner APIs** — nothing exists today: no inbound machine credential, no API versioning, no
+   outbound event delivery. See
+   [`../../audits/active/documentation-truth-audit-2026-09/api-inventory-and-gaps.md`](../../audits/active/documentation-truth-audit-2026-09/api-inventory-and-gaps.md).
 
 Additional product lanes (not foundational runtime):
 

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -36,8 +36,8 @@ Work units, departments, and internal routing constructs support this model but 
 
 | Plane | Entry | Purpose |
 |-------|-------|---------|
-| **Operator** | `/workspace` | Business process landing → stage queues → record drawer |
-| **Configuration** | `/admin` | Business processes, fields, layouts, actions, forms, workflows |
+| **Operator** | `/workspace` | Business process landing → stage queues → **Focus Panel** (the modal record product was deleted August 2026; "drawer" survives only as infrastructure naming) |
+| **Configuration** | `/organization/*` | Business processes, fields, layouts, actions, forms, workflows. `/admin` and `/settings` are 307 compatibility redirects to `/organization` (`web/next.config.ts`), not the control plane |
 | **Data** | Supabase + RLS | Org-scoped truth; service-role server mutations |
 
 `/legacy-admin` is archived — landing redirects to `/workspace`. Settings and operator surfaces are canonical.
