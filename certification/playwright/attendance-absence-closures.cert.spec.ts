@@ -129,12 +129,23 @@ async function openPopulatedRoom(page: Page): Promise<string> {
  * that looks like a product defect and is not.
  */
 async function ensureDayOpen(page: Page) {
-    const reopen = page.locator('[data-attendance-reopen-site="true"]');
-    if (await reopen.count()) {
+    /*
+     * LOOPS, because closures are independent statements and reopening revises
+     * ONE of them. Two runs that each closed the day leave two lineages in force,
+     * and a single click reopens one — the banner correctly stays up, because the
+     * site is in fact still closed by the other. An operator would click again;
+     * so does this. Bounded, so a genuine failure to reopen still fails.
+     */
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+        const reopen = page.locator('[data-attendance-reopen-site="true"]');
+        if (!(await reopen.count())) return;
         await reopen.click();
         await page.waitForTimeout(COMMAND);
-        await expect(page.locator('[data-attendance-closed="true"]')).toHaveCount(0, { timeout: SETTLE });
     }
+    await expect(
+        page.locator('[data-attendance-closed="true"]'),
+        "the day could not be reopened after six attempts",
+    ).toHaveCount(0, { timeout: SETTLE });
 }
 
 /** How the day reads for one child, straight off the rendered chip. */
