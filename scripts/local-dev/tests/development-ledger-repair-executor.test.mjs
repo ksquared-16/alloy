@@ -63,3 +63,39 @@ await test("LX4 — the result still refuses to claim reconciliation", () => {
   assert.match(EXECUTOR, /source: "transaction_assertion"/);
   assert.match(EXECUTOR, /payloadHasSecrets/);
 });
+
+await test("LRX5 — evidence ages by when the census RAN, not when the request ended", async () => {
+  /*
+   * MEASURED. requestTrustedHostAction dedupes an identical census onto the
+   * trusted-host action that already ran and hands back its stored result. So
+   * re-filing the same artifact yields a NEW governed request with a NEW
+   * execution_ended_at carrying an OLD reading — and reading the request's clock
+   * made the one-hour window on production ledger evidence defeatable
+   * indefinitely: keep re-filing and the proof never ages.
+   *
+   * Three requests for the Thread 5 physical-state census all resolved to one
+   * execution at 16:17:49; the third "ended" at 16:35 and still described the
+   * database as it was eighteen minutes earlier.
+   */
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../lib/vacilando/trusted-host-actions.mjs", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("function defaultLedgerRepairEvidence"));
+  // CODE ONLY. The comment above the fix names the fallback while explaining why
+  // it is the fallback, so a scan that counted prose would read the order
+  // backwards and fail a correct implementation.
+  const body = fn.slice(0, fn.indexOf("\n}\n"))
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  // The reading's own clock is consulted first.
+  assert.match(body, /census_run_at/,
+    "the freshness gate must age the reading, not the request that fetched it");
+  const runAtAt = body.indexOf("census_run_at");
+  const endedAt = body.indexOf("execution_ended_at");
+  assert.ok(runAtAt > -1 && endedAt > runAtAt,
+    "execution_ended_at must be the FALLBACK, consulted after census_run_at");
+
+  // And an unknown age must still refuse rather than pass.
+  assert.match(body, /!Number\.isFinite\(at\)[\s\S]*?physical_state_census_stale/,
+    "an unparseable age must still refuse");
+});

@@ -2709,12 +2709,35 @@ function defaultLedgerRepairEvidence({ inputs = {}, nowMs = Date.now() } = {}) {
       detail: `No completed ${named.artifact} census against ${target}; this repair may not proceed on inference.`,
     };
   }
-  const at = Date.parse(latest.execution_ended_at || latest.updated_at || 0);
+  /*
+   * AGE THE READING, NOT THE REQUEST.
+   *
+   * MEASURED. `requestTrustedHostAction` dedupes an identical census onto the
+   * trusted-host action that already ran and hands back its stored result, so
+   * re-filing the same artifact produces a NEW governed request, with a new
+   * `execution_ended_at`, carrying an OLD reading. Three requests for the Thread
+   * 5 physical-state census all resolved to one execution at 16:17:49; the third
+   * "ended" at 16:35 and still described the database as it was eighteen minutes
+   * earlier.
+   *
+   * Reading the request's clock therefore made the one-hour window on production
+   * ledger evidence defeatable indefinitely: keep re-filing and the proof never
+   * ages. `census_run_at` is stamped when the census actually ran and is right
+   * there in the result, so that is the clock. The request's own timestamps stay
+   * as a fallback for a result shape that carries no run time — an unknown age
+   * still refuses, as it did before.
+   */
+  const ranAt = Date.parse(latest.result?.census?.census_run_at || "");
+  const at = Number.isFinite(ranAt)
+    ? ranAt
+    : Date.parse(latest.execution_ended_at || latest.updated_at || 0);
   if (!Number.isFinite(at) || (nowMs - at) > LEDGER_EVIDENCE_MAX_AGE_MS) {
     return {
       ok: false,
       code: "physical_state_census_stale",
-      detail: "The physical-state proof is older than an hour; re-measure before registering history.",
+      detail: Number.isFinite(ranAt)
+        ? `The physical-state proof was measured at ${latest.result.census.census_run_at}, more than an hour ago; re-measure before registering history.`
+        : "The physical-state proof is older than an hour; re-measure before registering history.",
     };
   }
   const versions = (inputs.migrations || []).map((m) => String(m.version));
