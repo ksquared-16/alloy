@@ -9,6 +9,7 @@ import type { FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { adaptFormSubmissionToRelatedRecordProposals } from "@/lib/forms/processing/adaptFormSubmissionToRelatedRecordProposals";
 import type { RelatedRecordProposalBundle } from "@/lib/intake/proposals/types";
+import type { AuthoritativeSubject } from "@/lib/forms/processing/adaptTopLevelFieldsToRelatedRecordProposals";
 
 export type AdaptSourceToProposalsContext = {
     accessibleExistingItemIds?: ReadonlySet<string>;
@@ -17,6 +18,8 @@ export type AdaptSourceToProposalsContext = {
     /** Packet step and form name, carried onto the proposal's lineage. */
     packetStepIndex?: number | null;
     formName?: string | null;
+    /** The record this session was launched against, when it was targeted. */
+    subject?: AuthoritativeSubject | null;
 };
 
 export type AdaptFormSubmissionSourceInput = {
@@ -44,6 +47,7 @@ export function adaptSourceToRelatedRecordProposals(
             packetSessionId: ctx.packetSessionId ?? null,
             packetStepIndex: ctx.packetStepIndex ?? null,
             formName: ctx.formName ?? null,
+            subject: ctx.subject ?? null,
             accessibleExistingItemIds: ctx.accessibleExistingItemIds,
         });
     }

@@ -70,6 +70,8 @@ export function buildMatchedRecords(input: {
     recommendation: IntakeRecommendation;
     intent: OperationalIntentKey | null | undefined;
     submitted: SubmittedValue[];
+    /** The child this paperwork was sent for, when the session named one. */
+    authoritativeSubject?: { displayName: string | null; dob: string | null } | null;
 }): MatchedRecordCard[] {
     const cards: MatchedRecordCard[] = [];
     const rec = input.recommendation;
@@ -89,21 +91,34 @@ export function buildMatchedRecords(input: {
         });
     }
 
-    // Child — from submitted values (the person-spine recommendation does not match children,
-    // so this is honestly presented as a new record, not a fabricated match).
-    const childName = joinName(
-        findValue(input.submitted, "child", "first"),
-        findValue(input.submitted, "child", "last")
-    );
-    const childDob = formatDob(findValue(input.submitted, "child", "birth") ?? findValue(input.submitted, "child", "dob"));
+    /*
+     * Child.
+     *
+     * The person-spine recommendation does not match children, so when nothing else is known this
+     * is honestly presented as a NEW record rather than a fabricated match.
+     *
+     * But "nothing else is known" stopped being true. A session launched deliberately against an
+     * existing child carries that child on the submission itself, and presenting it as a new record
+     * anyway told the operator that approving would CREATE a second Pathb Certopp. That is not a
+     * presentation nicety — it is the duplicate the operator would have made. When the subject is
+     * authoritative, the card states the existing record, and its name comes from the RECORD rather
+     * than from the answers, so a returned answer can never rename the child it matched.
+     */
+    const subject = input.authoritativeSubject ?? null;
+    const childName = subject
+        ? subject.displayName
+        : joinName(findValue(input.submitted, "child", "first"), findValue(input.submitted, "child", "last"));
+    const childDob = subject
+        ? formatDob(subject.dob)
+        : formatDob(findValue(input.submitted, "child", "birth") ?? findValue(input.submitted, "child", "dob"));
     if (childName || childDob) {
         cards.push({
             role: "child",
             title: "Child",
             name: childName,
             details: [childDob].filter(Boolean) as string[],
-            basis: "New child record",
-            basisTone: "new",
+            basis: subject ? "Existing child record — this paperwork was sent for them" : "New child record",
+            basisTone: subject ? "match" : "new",
         });
     }
 

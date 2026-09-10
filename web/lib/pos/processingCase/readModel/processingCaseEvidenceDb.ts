@@ -110,7 +110,7 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
         if (ids.length === 0) return out;
         const { data: subs } = await supabase
             .from("form_submissions")
-            .select("id, payload, form_definition_version_id, customer_member_id")
+            .select("id, payload, form_definition_version_id, customer_member_id, customer_id")
             .eq("org_id", orgId)
             .in("id", ids);
         const subRows = (subs ?? []) as {
@@ -118,6 +118,7 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
             payload: Record<string, unknown> | null;
             form_definition_version_id: string | null;
             customer_member_id: string | null;
+            customer_id: string | null;
         }[];
 
         const versionIds = [
@@ -150,6 +151,10 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
                       },
                       {
                           formDefinitionVersionId: s.form_definition_version_id,
+                          // Same subject the commit loader uses, so review shows what can commit.
+                          subject: s.customer_member_id
+                              ? { customerMemberId: s.customer_member_id, customerId: s.customer_id }
+                              : null,
                           accessibleExistingItemIds: accessibleIds,
                       },
                   )
