@@ -397,3 +397,42 @@ await test("LR24 — coverage is judged per version, and an empty check list doe
   assert.match(r.detail, /20260910120000/);
   assert.ok(!/20260910130000/.test(r.detail));
 });
+
+await test("LR25 — the artifact name survives normalisation, or the executor never sees it", () => {
+  /*
+   * MEASURED. `requestTrustedHostAction` stores the NORMALIZED inputs and the
+   * executor reads its evidence from those, so a field this validator does not
+   * carry forward is a field the executor never receives. The Thread 5 repair
+   * named thread5-physical-state-census.sql, got the Thread 8C default back, and
+   * refused `physical_state_census_stale` against a census it was never asked to
+   * use — with a fresh covering one sitting in the store two minutes old.
+   *
+   * The generalisation was reader-side only. This is the carry-through.
+   */
+  const core = () => ({
+    ok: true,
+    normalized: { expectedSha: "a".repeat(40), migrations: [{ version: "20260910120000" }] },
+  });
+  const base = {
+    target: "alloy_deployed_primary",
+    expectedSha: "a".repeat(40),
+    migrations: [{ version: "20260910120000" }],
+    expectedLedger: { head: "h", count: 1, postHead: "p", postCount: 2 },
+  };
+
+  const named = L.validateLedgerRepairInputs(
+    { ...base, physicalStateArtifact: "thread5-physical-state-census.sql" }, { core },
+  );
+  assert.equal(named.ok, true);
+  assert.equal(named.normalized.physicalStateArtifact, "thread5-physical-state-census.sql");
+
+  // The default is carried EXPLICITLY rather than left to the reader to infer,
+  // so what the executor will use is visible on the stored action.
+  const defaulted = L.validateLedgerRepairInputs(base, { core });
+  assert.equal(defaulted.normalized.physicalStateArtifact, L.PHYSICAL_STATE_ARTIFACT);
+
+  // And a bad name is refused when PROPOSED, not after an operator approved it.
+  const bad = L.validateLedgerRepairInputs({ ...base, physicalStateArtifact: "../x.sql" }, { core });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.code, "physical_state_artifact_not_a_name");
+});
