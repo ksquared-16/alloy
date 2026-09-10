@@ -327,12 +327,30 @@ export function validateLedgerRepairInputs(inputs = {}, {
   });
   if (!resolved.ok) return resolved;
 
+  /*
+   * THE ARTIFACT NAME HAS TO SURVIVE NORMALISATION.
+   *
+   * `requestTrustedHostAction` stores the NORMALIZED inputs and the executor
+   * reads its evidence from those, so a field this function does not carry
+   * forward is a field the executor never sees. Naming
+   * `thread5-physical-state-census.sql` and silently getting the Thread 8C
+   * default back is exactly what happened: the repair refused
+   * `physical_state_census_stale` against a census it was never asked to use,
+   * with a fresh covering census sitting in the store two minutes old.
+   *
+   * Validated HERE as well, so a bad name is refused when it is proposed rather
+   * than after an operator has approved it.
+   */
+  const artifact = physicalStateArtifactFor(inputs);
+  if (!artifact.ok) return artifact;
+
   return {
     ok: true,
     normalized: {
       ...resolved.normalized,
       target,
       expectedLedger: nums,
+      physicalStateArtifact: artifact.artifact,
       dedupeKey: `ledger-repair:${target}:${resolved.normalized.expectedSha.slice(0, 12)}:${
         resolved.normalized.migrations.map((m) => m.version).join(",")
       }`,
