@@ -817,7 +817,10 @@ await test("lane list shows current execution run state without becoming a board
   const needs = { ...identity, lane_id: "alloy-comms", label: "Communications", execution_run: { state: "NEEDS_INPUT", state_reason: "Which ingress?" } };
   const html = renderLaneList([executing, needs], null);
   assert.match(html, /Working/);
-  assert.match(html, /Needs input/);
+  // The row now carries the OPERATOR primary. "Needs input" was the runtime
+  // synonym for it, and a synonym in the secondary slot — which otherwise holds
+  // exceptions — reads like a problem, so it is no longer printed.
+  assert.match(html, /class="gw-lane-posture[^"]*">.*?Needs you</);
   assert.match(html, /gw-lane-posture is-run/);
   assert.match(html, /gw-lane-posture is-needs/);
   assert.equal(html.includes("Kanban"), false);
@@ -950,9 +953,9 @@ await test("lane list shows resource wait and queue position; ready-to-resume is
   // is actually about, rides as the runtime detail on the same row. This used
   // to assert `is-ready`, the runtime tone, which was the lane list answering a
   // different question from the lane it opens.
-  assert.match(html, /class="gw-lane-posture is-run">Working</);
-  assert.equal((html.match(/class="gw-lane-posture[^"]*">Working</g) || []).length, 3);
-  assert.match(html, /class="gw-lane-meta">[^<]*Ready to resume/, "and the distinction survives, demoted");
+  assert.match(html, /class="gw-lane-posture is-run"><span class="gw-lane-mark"[^>]*>[^<]*<\/span>Working</);
+  assert.equal((html.match(/class="gw-lane-posture[^"]*"><span class="gw-lane-mark"[^>]*>[^<]*<\/span>Working</g) || []).length, 3);
+  assert.match(html, /class="gw-lane-why">Ready to resume</, "and the distinction survives in the secondary slot");
   assert.equal(html.includes("% complete"), false);
   assert.equal(executionRunListHint(records.execution_run), "Ready to resume");
 });
@@ -1541,7 +1544,10 @@ await test("six-lane representation keeps lane / run / admission / session disti
   assert.match(html, /Waiting for browser certification/);
   assert.match(html, /Validating/);
   assert.match(html, /Queued for capacity/);
-  assert.match(html, /Idle/);
+  // "Ready" and "Idle" are ONE operator state — both can take work — and the
+  // difference is whether an agent is resident. That now rides on the dot
+  // (filled for resident, hollow for not) rather than as a second line of text.
+  assert.match(html, /class="gw-lane-mark"[^>]*>\u25cb<\/span>Ready</);
   assert.match(gwSrc, /agent-session\/start/);
 });
 

@@ -421,9 +421,14 @@ export function laneRowV2(l, { nowMs = Date.now(), active = false, showProgress 
   const bar = showProgress && l.progress?.available
     ? `<span class="vlane-progress"><span class="vlane-progress-fill" style="width:${l.progress.percent}%"></span></span>`
     : "";
+  // The exception rides UNDER the state, never inside it: the row answers "what
+  // is this lane doing" first, and "what is odd about it" second.
+  const why = l.explanation
+    ? `<span class="vlane-why">${esc(l.explanation)}</span>`
+    : "";
   return `<a class="vlane${active ? " is-active" : ""}" href="${esc(l.href)}" data-gw-lane="${esc(l.lane_id)}" data-v-lane="${esc(l.lane_id)}">
     <span class="vlane-name">${esc(l.label)}</span>
-    <span class="vlane-state">${stateDot(l.state, { tone: l.tone, live: l.live })}</span>
+    <span class="vlane-state">${stateDot(l.state, { tone: l.tone, live: l.live })}${why}</span>
     ${bar}
     <span class="vlane-when">${esc(when)}</span>
     ${badge}
