@@ -34,6 +34,8 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 
+import { governedPromotionCandidateFor, readGovernedActionRecords } from "./trusted-host-production-migrate.mjs";
+
 export const REPAIR_LEDGER_ACTION_KEY = "database.repair_migration_ledger";
 
 /** Exactly the production targets this capability may reconcile. */
@@ -269,7 +271,12 @@ COMMIT;
  * production target, and the approved pre/post ledger state, which the operator
  * is approving as much as the version list.
  */
-export function validateLedgerRepairInputs(inputs = {}, { core, repoRoot = null } = {}) {
+export function validateLedgerRepairInputs(inputs = {}, {
+  core,
+  repoRoot = null,
+  promotionRequests = null,
+  nowMs = Date.now(),
+} = {}) {
   if (inputs.sql || inputs.statement || inputs.body || inputs.database_url || inputs.databaseUrl) {
     return { ok: false, code: "arbitrary_sql_rejected", detail: "This action never accepts SQL." };
   }
@@ -294,10 +301,29 @@ export function validateLedgerRepairInputs(inputs = {}, { core, repoRoot = null 
       detail: "expectedLedger requires head, count, postHead and postCount: the operator approves a STATE, not only a version list.",
     };
   }
+  /*
+   * THE SAME CANDIDATE AUTHORITY THE APPLY PATH USES, not a second idea of it.
+   *
+   * These migrations live on a governed promotion candidate that has not merged
+   * — which is the whole reason their versions are absent from staging. Without
+   * this the core falls back to plain staging-ancestry and refuses with
+   * `source_sha_not_reachable`, which is exactly what happened on the first real
+   * attempt: an approval spent on a request that could not resolve its own
+   * source. Reusing `governedPromotionCandidateFor` means this capability cannot
+   * develop a more permissive notion of "approved candidate" than the action
+   * that applies migrations.
+   */
+  const candidateProof = ({ fullSha }) => governedPromotionCandidateFor(fullSha, {
+    requests: Array.isArray(promotionRequests) ? promotionRequests : readGovernedActionRecords(),
+    repository: inputs.repository || inputs.repo || null,
+    nowMs,
+  });
+
   const resolved = core(inputs, {
     environment: target,
     actionType: REPAIR_LEDGER_ACTION_KEY,
     repoRoot: repoRoot || inputs.worktreePath || inputs.worktree_path,
+    candidateProof,
   });
   if (!resolved.ok) return resolved;
 
