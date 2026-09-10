@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const WORK_VIEW = "/workspace/work-unit/new-leads";
 const BOS_PRESENTATION_STATE_KEY = "alloy:v1:admV2:shell:bosPresentationState";
@@ -126,6 +126,55 @@ async function canonical(page: Page) {
     };
 }
 
+/**
+ * BRING THE FINANCIALS CARD FORWARD, the way an operator does.
+ *
+ * The Focus Panel arms a scrim over cards that are not in front. While it is armed the whole
+ * Financials subtree computes `pointer-events: none` — the control up through the grid cell, which
+ * also dims to 0.64 opacity — and a sibling `.alloy-os-fp-depth-scrim` takes the click. A probe
+ * measured exactly that: `Details` present, enabled, visible, correctly positioned, and
+ * `elementFromPoint` at its centre returning the scrim. Playwright then waited for an element that
+ * could never receive events until the test budget ran out, which reads as a hung product and is a
+ * panel doing its job.
+ *
+ * Clicking the scrim is the gesture that brings the card forward. Forcing the click instead would
+ * have proved nothing: a force-click passing is evidence the product is unreachable, which is the
+ * lesson Slice H already paid for.
+ */
+/** Say how long a leg took, so a slow one names itself instead of the clock naming a random line. */
+function phase(label: string, since: number): void {
+    // eslint-disable-next-line no-console
+    console.log(`[cert-phase] ${label} ${((Date.now() - since) / 1000).toFixed(1)}s`);
+}
+
+async function bringCardForward(page: Page): Promise<void> {
+    const scrim = page.locator(".alloy-os-fp-depth-scrim").first();
+    if (await scrim.count() === 0) return;
+    await scrim.click({ timeout: 30_000 }).catch(() => { /* already in front */ });
+    await page.waitForTimeout(400);
+}
+
+/**
+ * Click something on the Financials card, bringing the card forward first if it is behind the scrim.
+ *
+ * Dismissing once after navigation was not enough: the panel arms the scrim on its own schedule, so
+ * a card that was in front when the page settled can be behind one by the time the certification
+ * reaches for a control. Checking immediately before each click is what an operator effectively does
+ * — you click the thing in front of you — and it keeps the interaction honest rather than forcing a
+ * click through content the panel has deliberately made inert.
+ */
+async function panelClick(page: Page, target: Locator, what: string): Promise<void> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        await bringCardForward(page);
+        try {
+            await target.click({ timeout: 30_000 });
+            return;
+        } catch (error) {
+            if (attempt === 1) throw new Error(`could not click ${what}: ${String(error).split("\n")[0]}`);
+        }
+    }
+}
+
 async function openSubject(page: Page) {
     await page.addInitScript(
         ([k, v]) => { try { sessionStorage.setItem(k, v); } catch { /* private mode */ } },
@@ -142,6 +191,7 @@ async function openSubject(page: Page) {
     await expect
         .poll(async () => await page.locator('[data-financials-card="true"]').count(), { timeout: 90_000 })
         .toBeGreaterThan(0);
+    await bringCardForward(page);
 }
 
 /** A posted, enrolment-backed obligation — the only kind ACH can collect against. */
@@ -177,8 +227,13 @@ async function seedCharge(page: Page, amountCents?: number): Promise<string> {
     if (existing) return existing;
 
     let lastAddResponse = "(no attempt made)";
-    for (let step = 0; step < 12; step += 1) {
-        const back = 1 + ((RUN + step * 37) % 900);
+    /*
+     * Days inside the charge template's effective window. Walking far back produced
+     * `template_not_yet_effective` — the product refusing to bill a service date from before the
+     * template existed, which is correct. The dedicated subject is clean, so recent days are free.
+     */
+    for (let step = 0; step < 20; step += 1) {
+        const back = 1 + ((RUN + step * 13) % 300);
         const day = new Date(Date.now() - back * 86_400_000).toISOString().slice(0, 10);
         const added = await execute(page, {
             action_key: "charge.add", entity_type: "child", entity_id: CERT_MEMBER, mode: "execute",
@@ -218,7 +273,7 @@ async function mountedCollectionState(page: Page, attemptId: string) {
     await openSubject(page);
     const details = page.locator('[data-financials-card="true"]').first().getByRole("button", { name: /Details/ });
     await expect.poll(async () => await details.count(), { timeout: 60_000 }).toBeGreaterThan(0);
-    await page.getByRole("button", { name: /Take payment/ }).click();
+    await panelClick(page, page.getByRole("button", { name: /Take payment/ }), "Take payment");
     const row = page.locator(`[data-financials-collection="${attemptId}"]`);
     await expect(row, "the in-flight collection must survive a reload and be on the surface")
         .toBeVisible({ timeout: 60_000 });
@@ -260,13 +315,16 @@ async function mountedPaymentRow(page: Page, paymentId: string) {
      */
     const t0 = Date.now();
     await openSubject(page);
+    phase("row:navigate", t0);
     const tNav = Date.now();
     /*
      * The read model first, then the browser. Separating them is what tells a missing receipt from a
      * receipt the surface declines to draw — two different defects that look identical from a failing
      * locator.
      */
+    const tVm = Date.now();
     const vmHasIt = (await canonical(page)).payments.some((p) => p.paymentId === paymentId);
+    phase("row:readModel", tVm);
     expect(vmHasIt, "the read model knows about the recognised receipt").toBe(true);
 
     /*
@@ -277,7 +335,10 @@ async function mountedPaymentRow(page: Page, paymentId: string) {
      * density has hidden it, rather than assuming one of the two.
      */
     const row = page.locator(`[data-financials-payments="true"] [data-financials-payment-id="${paymentId}"]`);
-    if (await row.count() === 0) {
+    const tFind = Date.now();
+    const alreadyOnCard = await row.count() > 0;
+    phase(`row:onCard=${alreadyOnCard}`, tFind);
+    if (!alreadyOnCard) {
         /*
          * DETAILS, not `Take payment →`.
          *
@@ -287,43 +348,38 @@ async function mountedPaymentRow(page: Page, paymentId: string) {
          * unreachable there and the band now renders in Details too, which is where an operator
          * works the ledger and the only place with room for it.
          */
-        /*
-         * DISMISS THE DEPTH SCRIM FIRST — the operator's own gesture, not a way around one.
-         *
-         * The Focus Panel arms a scrim over a card that is not the one in front. While it is armed
-         * the whole Financials subtree computes `pointer-events: none` — the button up through the
-         * grid cell — and a sibling `.alloy-os-fp-depth-scrim` sits over it taking the click. A probe
-         * measured exactly that: `Details` present, enabled, visible, correctly positioned, and
-         * `elementFromPoint` at its centre returning the scrim instead. Playwright then waited for an
-         * element that could never receive events until the test budget ran out.
-         *
-         * Clicking the scrim is what an operator does to bring the card forward, and afterwards
-         * `Details` takes a real click. Forcing the click instead would have proved nothing: a
-         * force-click passing is evidence the product is unreachable, which is the lesson Slice H
-         * already paid for.
-         */
-        const scrim = page.locator(".alloy-os-fp-depth-scrim").first();
-        if (await scrim.count() > 0) {
-            await scrim.click({ timeout: 30_000 }).catch(() => { /* already in front */ });
-            await page.waitForTimeout(500);
-        }
         const details = page.locator('[data-financials-card="true"]').first()
             .getByRole("button", { name: /Details/ });
+        const tDetails = Date.now();
         await expect(details, "a settled account still opens its ledger").toBeVisible({ timeout: 60_000 });
-        await details.click({ timeout: 30_000 });
+        await panelClick(page, details, "Details");
+        phase("row:openDetails", tDetails);
     }
+    const tDraw = Date.now();
     await expect(row, "and the surface draws it").toBeVisible({ timeout: 90_000 });
+    phase("row:draw", tDraw);
     test.info().annotations.push({
         type: "timing",
         description: `nav ${((tNav - t0) / 1000).toFixed(1)}s · read+draw ${((Date.now() - tNav) / 1000).toFixed(1)}s`,
     });
     console.log(`[cert] payment row: nav ${((tNav - t0) / 1000).toFixed(1)}s, read+draw ${((Date.now() - tNav) / 1000).toFixed(1)}s`);
+    /*
+     * OPTIONAL ATTRIBUTES ARE READ ONLY WHERE THEY EXIST.
+     *
+     * `origin` is on reversals and `applied` on money that has been applied, so on an ordinary
+     * receipt neither is there — and `.getAttribute(...).catch(() => null)` still waits the full
+     * action timeout before the catch ever runs. Two absent attributes at eight minutes each is
+     * where twenty minutes went, reported from whichever line the clock happened to land on. Ask
+     * whether the element exists first; absence is an answer, not a wait.
+     */
+    const optional = async (selector: string, attribute: string): Promise<string | null> => {
+        const found = row.locator(selector).first();
+        return await found.count() === 0 ? null : await found.getAttribute(attribute);
+    };
     return {
         kind: await row.getAttribute("data-financials-payment-kind"),
-        origin: await row.locator("[data-financials-payment-origin]").first()
-            .getAttribute("data-financials-payment-origin").catch(() => null),
-        applied: await row.locator("[data-financials-payment-applied]").first()
-            .getAttribute("data-financials-payment-applied").catch(() => null),
+        origin: await optional("[data-financials-payment-origin]", "data-financials-payment-origin"),
+        applied: await optional("[data-financials-payment-applied]", "data-financials-payment-applied"),
         text: (await row.innerText()).replace(/\s+/g, " ").trim(),
     };
 }
@@ -336,7 +392,7 @@ test.describe("Thread 8C — bank collection in the mounted product", () => {
 
         const details = page.locator('[data-financials-card="true"]').first().getByRole("button", { name: /Details/ });
         await expect.poll(async () => await details.count(), { timeout: 60_000 }).toBeGreaterThan(0);
-        await page.getByRole("button", { name: /Take payment/ }).click();
+        await panelClick(page, page.getByRole("button", { name: /Take payment/ }), "Take payment");
         const chooser = page.locator('[data-financials-payment-method="true"]').first();
         await expect(chooser).toBeVisible({ timeout: 60_000 });
 
@@ -409,7 +465,7 @@ test.describe("Thread 8C — bank collection in the mounted product", () => {
 
             // 5 · AND THE SURFACE AGREES. The chooser must not offer what the server will refuse.
             await openSubject(page);
-            await page.getByRole("button", { name: /Take payment/ }).click();
+            await panelClick(page, page.getByRole("button", { name: /Take payment/ }), "Take payment");
             const chooser = page.locator('[data-financials-payment-method="true"]').first();
             await expect(chooser).toBeVisible({ timeout: 60_000 });
             const disabled = await chooser.locator('option[value="ach"]')
@@ -719,7 +775,9 @@ test.describe("Thread 8C — bank collection in the mounted product", () => {
         const outstanding = outstandingOf(chargeId);
         expect(outstanding, "the charge is a real obligation").toBeGreaterThan(0);
 
+        const tSeed = Date.now();
         const created = await collectByBank(page, chargeId, outstanding);
+        phase("collect", tSeed);
         const detail = created.json.data?.execution_result ?? {};
         const pi = String(detail.provider_transaction_id ?? "");
         const account = String(detail.connected_account ?? "");
@@ -736,8 +794,12 @@ test.describe("Thread 8C — bank collection in the mounted product", () => {
         expect(sql(`select count(*) from payments where processor_transaction_id = '${pi}'`),
             "provider state alone creates nothing").toBe("0");
 
+        const tProvider = Date.now();
         await awaitIntentStatus(pi, account, ["succeeded"]);
+        phase("provider-settle", tProvider);
+        const tRecognise = Date.now();
         const paymentId = await awaitRecognition(pi);
+        phase("recognise", tRecognise);
 
         // 12 · EXACTLY ONE of each consequence.
         expect(sql(`select count(*) from payments where processor_transaction_id = '${pi}'`),
@@ -749,7 +811,9 @@ test.describe("Thread 8C — bank collection in the mounted product", () => {
             "filed as bank money").toBe("ach");
 
         // 10 + 18 · AND ONLY NOW does the surface say Received — read back after a real reload.
+        const tMounted = Date.now();
         const row = await mountedPaymentRow(page, paymentId);
+        phase("mounted-read", tMounted);
         expect(row.kind).toBe("receipt");
         expect(row.text, "the operator is told the money arrived").toMatch(/Received/);
         expect(row.text, "by bank transfer").toMatch(/Bank transfer/i);
@@ -773,8 +837,12 @@ test.describe("Thread 8C — bank collection in the mounted product", () => {
             "mandate_data[customer_acceptance][online][ip_address]": "127.0.0.1",
             "mandate_data[customer_acceptance][online][user_agent]": "alloy-certification",
         }, account);
+        const tProvider = Date.now();
         await awaitIntentStatus(pi, account, ["succeeded"]);
+        phase("provider-settle", tProvider);
+        const tRecognise = Date.now();
         const paymentId = await awaitRecognition(pi);
+        phase("recognise", tRecognise);
 
         const received = Number(sql(`select amount_cents from payments where id = '${paymentId}'`));
         const applied = Number(sql(`select coalesce(sum(allocated_amount_cents), 0)
