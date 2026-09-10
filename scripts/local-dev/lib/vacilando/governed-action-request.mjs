@@ -60,6 +60,7 @@ import {
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
+  fulfillPromotedMigrationForMission,
   fulfillSetProviderCeilingForMission,
   fulfillInstallToolkitForMission,
   fulfillLaneDispatchForMission,
@@ -1586,6 +1587,12 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) return "promotion";
   if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) return "promotion";
   if (actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION) return "migration_apply";
+  // Same governed mode as its non-production sibling: it IS a migration apply.
+  // Omitting it here is what made an operator-approved production migration
+  // fail `policy_denied` — the read_only default meets the non-read risk class
+  // in validateAgainstRegistry, and the refusal reads as the operator forbidding
+  // the action rather than nobody having assigned it a mode.
+  if (actionKey === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) return "migration_apply";
   /*
    * A privileged_write action must not inherit the read_only default. `validateAgainstRegistry`
    * refuses any non-read risk class in read_only mode, so an action added to the registry without
@@ -2039,9 +2046,21 @@ export function requestGovernedAction(input = {}, {
   }
 
   const worktreePath = resolveWorktreePath(input, laneId, run, storeRoot);
-  const artifactRefs = shape.artifactRefs.length
-    ? shape.artifactRefs
-    : (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS ? [Q15_CENSUS_ARTIFACT] : []);
+  /*
+   * THE SUBSTITUTION HAD TWO HALVES AND ONLY ONE WAS CLOSED.
+   *
+   * `artifactPathFrom` was repaired to stop defaulting to Q15 — its comment
+   * records the incident, gar_a1d647be39e8b6 filed with no refs and executed
+   * q15-authority-census.json. But the fallback was ALSO here, upstream of it,
+   * writing Q15_CENSUS_ARTIFACT into the request's own artifact_refs. So the
+   * reader never saw the empty case for this path, the substitution still
+   * happened, and the store still recorded a query the filer never asked for.
+   *
+   * A privileged read whose SUBJECT is guessed is not a governed action. Absence
+   * stays absent; validateInputs turns it into `missing_query_artifact` and the
+   * request fails closed before any database is touched.
+   */
+  const artifactRefs = shape.artifactRefs;
   // AN ABBREVIATED SHA CANNOT BE APPROVED INTO ANYTHING.
   //
   // A merge was requested with expectedHeadSha "d40f469b4". The operator pressed
@@ -2831,6 +2850,33 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return fulfillDatabaseMigrationForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  /*
+   * THE THIRD MISSING BRANCH. database.apply_promoted_migration was registered,
+   * validated, authority-bounded and operator-approvable — and had no dispatch,
+   * so an approved production migration fell through to `action_unavailable`.
+   * Same shape as capacity.set_provider_ceiling and the restore actions before
+   * it; development-governed-action-contract now fails CI for the next one.
+   *
+   * The worktree path is threaded exactly as the non-production sibling does,
+   * because the migration artifacts are resolved out of the approved worktree's
+   * git object store rather than any working copy.
+   */
+  if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
+    return fulfillPromotedMigrationForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: {
@@ -4127,7 +4173,15 @@ function doNotRetryLine(actionKey) {
   if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
     return "Do not retry the merge from this lane. It already landed.";
   }
-  return "Do not retry the census from this lane. Read the result file and continue.";
+  if (actionKey === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    return "Do not retry the census from this lane. Read the result file and continue.";
+  }
+  // SAME DEFECT, SMALLER BLAST RADIUS. The census sentence was the fallback for
+  // every action without a branch, so a completed toolkit install told the lane
+  // "Do not retry the census". Naming the wrong action is the same failure as
+  // claiming the wrong outcome; the default now describes no action in
+  // particular, which is the only honest thing a default can do.
+  return "Do not retry this action from this lane. It already executed; read the result and continue.";
 }
 
 export function continuationTextForGovernedAction(rec, action = null) {
@@ -4163,7 +4217,22 @@ export function continuationTextForFailedGovernedAction(rec) {
     rec.failure_reason || null,
     "",
     "Director could not complete this trusted-host action.",
-    "The merge into staging already succeeded. Do not retry the merge.",
+    /*
+     * THIS LINE USED TO SAY "The merge into staging already succeeded."
+     *
+     * Unconditionally, on EVERY failed action, whatever it was. Observed on a
+     * failed repository.close_pull_request and a failed host.install_toolkit in
+     * the same session: neither involved a merge, and no merge had occurred.
+     * A failure notice that asserts a success is worse than a silent one — it
+     * invites a lane to move on from work that did not happen, and it teaches
+     * the reader to distrust the notices that ARE true.
+     *
+     * Nothing here claims an outcome. The repository and the action record are
+     * authoritative about what happened; this says only that this action did
+     * not complete.
+     */
+    "This action did NOT complete, and nothing it would have changed has changed.",
+    "Repository and database state remain whatever they were before this attempt — check them rather than inferring from this message.",
     "The current Execution Run is still open. Wait for the next operator instruction in this lane, then continue the assignment.",
   ].filter((line) => line != null).join("\n"));
 }
