@@ -74,6 +74,16 @@ export type ChildServiceDayState = {
     reasonKey: string | null;
     /** True only for a genuine unexplained missing arrival. */
     raisesAttention: boolean;
+    /**
+     * The GRAIN was not operating today, independent of who turned up.
+     *
+     * Kept separate from `state` because observed presence overwrites the state —
+     * a child who arrives on a closed day reads `attended_despite_plan`, which is
+     * correct for her and wrong for the day. A surface that asked `state ===
+     * "closed"` therefore stopped believing the site was shut the moment somebody
+     * walked in, which is precisely backwards.
+     */
+    dayClosed: boolean;
 };
 import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
 import { formatCompactScheduleHours } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
@@ -475,6 +485,7 @@ export async function buildCombinedRoster(
                 return {
                     state,
                     expectationId: expectation.expectationId,
+                    dayClosed: expectation.interpretation === "closed",
                     reasonKey: expectation.reasonKey,
                     raisesAttention: raisesMissingArrivalAttention(state),
                 };

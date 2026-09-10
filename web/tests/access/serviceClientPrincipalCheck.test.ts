@@ -86,6 +86,39 @@ describe("W-4 · the check is not vacuous", () => {
         expect(byRoute.get("app/api/public/booking-config/route.ts")?.resolvesPrincipal).toBe(false);
     });
 
+    it("credits a kiosk route through the NON-HUMAN principal terminal", () => {
+        /*
+         * A trusted device holds no Alloy session and never will, so it can never
+         * reach `.auth.getUser()`. Before the second terminal existed, the only
+         * way to ship these was the exception list — which would have recorded
+         * "resolves no principal" about two routes that authenticate their sender
+         * on every request. A security ledger that says something untrue is worse
+         * than one whose count moved.
+         *
+         * The credit is earned through the graph walk, exactly as a human wrapper
+         * earns it: route → resolveKioskRequestDevice → resolveKioskDevice.
+         */
+        for (const route of [
+            "app/api/public/kiosk/identify/route.ts",
+            "app/api/public/kiosk/attendance/route.ts",
+        ]) {
+            expect(byRoute.get(route)?.holdsServiceClient, route).toBe(true);
+            expect(byRoute.get(route)?.resolvesPrincipal, route).toBe(true);
+        }
+    });
+
+    it("did not buy that credit by widening the exception ledger", () => {
+        // The kiosk must not have cost the ratchet anything: it resolves, so it is
+        // not exempted, and the reviewed-exception ceiling is untouched.
+        expect(report.ratchet.max_subject_unresolved).toBe(23);
+        expect(report.violations).toEqual([]);
+        // And the kiosk routes resolve WITHOUT reaching a human session, which is
+        // the distinction the W-40 cross-check depends on staying visible.
+        for (const route of ["app/api/public/kiosk/identify/route.ts", "app/api/public/kiosk/attendance/route.ts"]) {
+            expect((byRoute.get(route) as unknown as { resolvesSessionPrincipal: boolean })?.resolvesSessionPrincipal, route).toBe(false);
+        }
+    });
+
     it("analyses bare re-export routes rather than silently passing them", () => {
         // `export { GET } from "…"` carries no identifier reference in the module body. Before
         // this was handled, three admin drawer routes read as "no principal" purely because the

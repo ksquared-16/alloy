@@ -38,6 +38,7 @@ export type OverviewChild = {
         state: string;
         reasonKey: string | null;
         raisesAttention: boolean;
+        dayClosed?: boolean;
     } | null;
 };
 

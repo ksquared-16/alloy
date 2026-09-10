@@ -19,6 +19,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { CREDENTIAL_COLUMNS } from "../../scripts/checkUnauthenticatedSideEffects.mjs";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runUnauthenticatedSideEffectCheck } from "../../scripts/checkUnauthenticatedSideEffects.mjs";
@@ -62,6 +63,19 @@ const report = runUnauthenticatedSideEffectCheck() as Report;
 const byRoute = new Map(report.rows.map((r) => [r.route, r]));
 
 describe("W-40 · S-1 · the unauthenticated side-effect check", () => {
+    it("credits the kiosk write by the DEVICE credential, and never by the person code", () => {
+        /*
+         * The device's `credential_hash` is the sender's secret and selects the
+         * row, exactly as `token_hash` does for a form link. A person's
+         * `code_hash` is deliberately NOT a credential column: it identifies the
+         * human standing at the tablet — the subject of the interaction, not its
+         * sender — and crediting it would let "the caller named somebody" pass as
+         * "the caller proved who it is".
+         */
+        expect(CREDENTIAL_COLUMNS.has("credential_hash")).toBe(true);
+        expect(CREDENTIAL_COLUMNS.has("code_hash")).toBe(false);
+    });
+
     it("passes against the committed register", () => {
         expect({ violations: report.violations, stale: report.stale }).toEqual({ violations: [], stale: [] });
         expect(report.ok).toBe(true);
@@ -262,9 +276,13 @@ describe("W-40 · agreement with W-4 on the shared base case", () => {
      */
     it("agrees with the W-4 check on session-principal resolution for every route", () => {
         const w4 = runServiceClientPrincipalCheck() as {
-            rows: { route: string; resolvesPrincipal: boolean }[];
+            rows: { route: string; resolvesSessionPrincipal: boolean }[];
         };
-        const w4ByRoute = new Map(w4.rows.map((r) => [r.route, r.resolvesPrincipal]));
+        // The SESSION base case specifically. W-4 also credits a named non-human
+        // credential resolver, which this check models as `credential` rather than
+        // `session` — comparing against that broader answer would report a
+        // difference in meaning as drift between the two walkers.
+        const w4ByRoute = new Map(w4.rows.map((r) => [r.route, r.resolvesSessionPrincipal]));
 
         const disagreements = report.rows
             .filter((r) => w4ByRoute.has(r.route))

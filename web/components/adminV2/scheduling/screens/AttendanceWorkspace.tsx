@@ -61,6 +61,8 @@ type SubjectActual = {
  */
 type ServiceDayReading = {
     state: ServiceDayState;
+    /** The grain was not operating, whatever anybody observed. */
+    dayClosed?: boolean;
     /** The statement this reading came from — what a change would replace. */
     expectationId: string | null;
     reasonKey: string | null;
@@ -995,8 +997,14 @@ export default function AttendanceWorkspace({
      * that tells a director to go home.
      */
     const allChildren = (model?.cells ?? []).flatMap((c) => c.children);
+    /*
+     * The DAY, not the room's population. Asking `state === "closed"` meant a
+     * single child arriving on a public holiday made the banner disappear —
+     * because her state is `attended_despite_plan`, correctly. The site is still
+     * shut; that is the whole point of recording her as unexpected.
+     */
     const closure =
-        allChildren.length > 0 && allChildren.every((c) => c.serviceDay?.state === "closed")
+        allChildren.length > 0 && allChildren.every((c) => c.serviceDay?.dayClosed === true)
             ? {
                   reasonLabel: serviceDayReasonLabel(allChildren[0]?.serviceDay?.reasonKey ?? null),
                   expectationId: allChildren[0]?.serviceDay?.expectationId ?? null,

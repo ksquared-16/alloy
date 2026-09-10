@@ -258,13 +258,14 @@ cmd_domain_fixtures() {
     local fixture
     for fixture in \
         "$CERT_DIR/search-platform/01-search-certification-fixtures.sql" \
-        "$CERT_DIR/attendance/01-attendance-fixture.sql"
+        "$CERT_DIR/attendance/01-attendance-fixture.sql" \
+        "$CERT_DIR/kiosk/01-kiosk-fixture.sql"
     do
         [ -f "$fixture" ] || continue
         cert_psql_f "$db" "$fixture" \
             || die "domain fixture failed: $(basename "$fixture")"
     done
-    green "Domain fixtures applied (search platform, attendance)"
+    green "Domain fixtures applied (search platform, attendance, kiosk)"
 }
 
 # ----------------------------------------------------------- inbound webhook

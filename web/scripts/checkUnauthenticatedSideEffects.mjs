@@ -92,8 +92,20 @@ const REGISTER_PATH = join(import.meta.dirname, "unauthenticatedSideEffects.allo
 /** Methods whose export declares a side effect. Next.js's contract, not our inference. */
 const SIDE_EFFECT_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-/** Columns whose equality filter means "the row is selected BY the credential". */
-const CREDENTIAL_COLUMNS = new Set(["token", "token_hash", "secret", "api_key"]);
+/**
+ * Columns whose equality filter means "the row is selected BY the credential".
+ *
+ * `credential_hash` is the kiosk device's secret, presented in a header and used
+ * as the selector exactly as `token_hash` is for form and tour links. It is the
+ * SENDER's credential, which is what this check is about.
+ *
+ * `code_hash` is deliberately ABSENT. A person's kiosk code identifies the human
+ * standing at the device — the SUBJECT of the interaction, not its sender — and
+ * crediting a route for selecting by it would let "the caller named somebody"
+ * pass as "the caller proved who it is". The device authenticates; the code
+ * identifies. This list must only ever contain the first kind.
+ */
+export const CREDENTIAL_COLUMNS = new Set(["token", "token_hash", "secret", "api_key", "credential_hash"]);
 
 // ---------------------------------------------------------------------------
 // The three terminals
