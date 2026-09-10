@@ -11,7 +11,8 @@ import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateProductionMigrationInputs } from "./trusted-host-production-migrate.mjs";
-import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
+import { validateLedgerRepairInputs } from "./trusted-host-ledger-repair.mjs";
+import { validateMigrationInputs, validateMigrationRequestCore } from "./trusted-host-migrate.mjs";
 import { validateRestoreDeployedQaSessionInputs } from "./deployed-qa-session-restore-action.mjs";
 import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
 import { validateProvisionQaIdentityInputs } from "./qa-identity-provision-action.mjs";
@@ -33,6 +34,7 @@ export const ACTION_TYPES = Object.freeze({
   PROMOTION_OPEN_PR: "promotion.open_pr",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
   DATABASE_APPLY_PROMOTED_MIGRATION: "database.apply_promoted_migration",
+  DATABASE_REPAIR_MIGRATION_LEDGER: "database.repair_migration_ledger",
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
   ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION: "environment.restore_deployed_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
@@ -573,6 +575,48 @@ function defineLaneDispatchMeasurementInstruction() {
  * `alloy_deployed_primary` stays production-classed. This does not make it less
  * protected; it gives the protection an authorized operator.
  */
+/**
+ * Reconcile the canonical migration ledger with schema that is already there.
+ *
+ * A SEPARATE CAPABILITY, and deliberately a narrow one. It writes the sentence
+ * "this migration ran" and must never be what makes that sentence true, so it
+ * registers a version only when independent governed evidence — the hosted
+ * parity gap and a physical-state census — already proves the effects present
+ * and matching. It applies nothing, creates nothing, and accepts no SQL.
+ */
+function defineDatabaseRepairMigrationLedger() {
+  return {
+    actionType: ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER,
+    version: 1,
+    title: "Reconcile the migration ledger with already-applied schema",
+    requiredCapability: "trusted_host.database.repair_ledger",
+    riskClass: "privileged_write",
+    operatorApprovalRequired: true,
+    delegable: false,
+    timeoutMs: 300_000,
+    // ONE ATTEMPT. The write is atomic and self-verifying; a retry policy that
+    // cannot see why it failed would be re-running a decision, not a command.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["target", "expectedSha", "migrations", "expectedLedger"],
+    },
+    outputSchema: {
+      target: "string", requested: "array", inserted: "array",
+      pre_state: "object", post_state: "object", recensus_required: "boolean",
+    },
+    evidenceSchema: [
+      "expected_sha", "ledger_pre_state", "ledger_post_state",
+      "physical_state_proof", "parity_gap", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      return validateLedgerRepairInputs(inputs, {
+        core: validateMigrationRequestCore,
+        repoRoot: inputs.worktreePath || inputs.worktree_path || inputs.artifactRoot,
+      });
+    },
+  };
+}
+
 function defineDatabaseApplyPromotedMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION,
@@ -753,6 +797,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
   [ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION, defineDatabaseApplyPromotedMigration()],
+  [ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER, defineDatabaseRepairMigrationLedger()],
   [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
   [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
   [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, defineLaneDispatchMeasurementInstruction()],

@@ -71,6 +71,12 @@ import {
   migrationPostconditionDescription,
 } from "./trusted-host-migrate.mjs";
 import { PRODUCTION_APPLY_TARGETS } from "./trusted-host-production-migrate.mjs";
+import {
+  assertLedgerRepairPreconditions,
+  buildLedgerRepairSql,
+  ledgerRepairEvidenceFromCensus,
+  PHYSICAL_STATE_ARTIFACT,
+} from "./trusted-host-ledger-repair.mjs";
 
 import { appendTimelineEvent } from "./timeline.mjs";
 import { attachEvidence } from "./evidence.mjs";
@@ -630,6 +636,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
     return executePromotedMigrationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    return executeLedgerRepairTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH) {
     return executePushTrustedHostAction(action, { actor, nowMs, grant });
@@ -2202,6 +2211,227 @@ export function fulfillDatabaseMigrationForMission(missionId, {
       action: auth.action,
     };
   }
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * RECONCILE THE LEDGER WITH SCHEMA THAT IS ALREADY THERE.
+ *
+ * The evidence is re-gathered HERE, at execution, and not trusted from the
+ * request. A request is a claim made minutes ago; the ledger and the hosted
+ * parity can both have moved since, and this action's entire safety rests on
+ * them not having. So the parity gap, the ledger head/count and the physical
+ * proof are read again immediately before the write, and the generated
+ * transaction re-checks the pre-state a third time inside the database — where
+ * a concurrent writer's row aborts the repair rather than being papered over.
+ *
+ * The migration text is read from the git object store, so the ledger row's
+ * `statements` are the approved artifact's own bytes and not anything a caller
+ * supplied.
+ */
+export function executeLedgerRepairTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const inputs = action.inputs || {};
+  const expected = inputs.expectedLedger || {};
+  const evidence = ledgerRepairEvidenceForTests || {};
+
+  // Read the migration bodies from the approved object, exactly as the apply
+  // path does — same environment rule, same source of truth.
+  const migrations = [];
+  for (const entry of (inputs.migrations || [])) {
+    const read = (evidence.readContent || readMigrationContent)({
+      environment: inputs.environment,
+      root: inputs.worktreePath,
+      sha: inputs.expectedSha,
+      relative: entry.path,
+      gitCwd: inputs.gitCwd,
+      currentStagingSha: inputs.stagingSha,
+      preMergeCandidate: inputs.preMergeCandidate === true,
+    });
+    if (!read.ok) {
+      return failTrustedAction(action, read.code || "artifact_unreadable",
+        read.detail || `Could not read ${entry.path} at ${inputs.expectedSha}.`, { nowMs });
+    }
+    if (sha256(read.text) !== entry.fileSha) {
+      return failTrustedAction(action, "artifact_hash_mismatch",
+        "Committed migration blob does not match the approved artifact hash.", { nowMs });
+    }
+    migrations.push({ ...entry, text: read.text });
+  }
+
+  // Re-measure, then refuse unless every precondition still holds.
+  const measured = (evidence.measure || defaultLedgerRepairEvidence)({ inputs, nowMs });
+  if (!measured.ok) {
+    return failTrustedAction(action, measured.code || "evidence_unavailable",
+      measured.detail || "Could not re-establish the evidence this repair depends on.", { nowMs });
+  }
+  const pre = assertLedgerRepairPreconditions({
+    normalized: { ...inputs, migrations },
+    parity: measured.parity,
+    physical: measured.physical,
+    ledgerHead: measured.ledgerHead,
+    ledgerCount: measured.ledgerCount,
+    expectedHead: expected.head,
+    expectedCount: expected.count,
+    expectedPostHead: expected.postHead,
+    expectedPostCount: expected.postCount,
+  });
+  if (!pre.ok) return failTrustedAction(action, pre.code, pre.detail, { nowMs });
+
+  const built = buildLedgerRepairSql({
+    migrations,
+    expectedHead: expected.head,
+    expectedCount: expected.count,
+    expectedPostHead: expected.postHead,
+    expectedPostCount: expected.postCount,
+  });
+  if (!built.ok) return failTrustedAction(action, built.code, built.detail, { nowMs });
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const run = (evidence.runSql || defaultRunLedgerRepairSql)({ sql: built.sql });
+  if (!run?.ok) {
+    return failTrustedAction(action, run?.code || "ledger_repair_failed",
+      run?.detail || "The ledger repair transaction did not commit.", { nowMs });
+  }
+
+  const result = {
+    target: pre.target,
+    requested: pre.versions,
+    inserted: pre.versions,
+    pre_state: { head: measured.ledgerHead, count: measured.ledgerCount },
+    post_state: { head: expected.postHead, count: expected.postCount, source: "transaction_assertion" },
+    sql_sha256: built.sqlHash,
+    // THE TRANSACTION COMMITTING IS NOT THE DATABASE BEING RECONCILED. The
+    // post-state above is what the transaction asserted before committing, not
+    // an independent observation, and only a governed census is that.
+    recensus_required: true,
+  };
+  if (payloadHasSecrets(result)) {
+    return failTrustedAction(action, "result_contained_secrets",
+      "Ledger repair result contained secrets and was discarded.", { nowMs });
+  }
+  action.result = result;
+  return completeTrustedAction(action, result, { nowMs });
+}
+
+/** Injection seam, for the same reason the migration runners have one. */
+let ledgerRepairEvidenceForTests = null;
+export function setLedgerRepairEvidenceForTests(impl) { ledgerRepairEvidenceForTests = impl || null; }
+
+/**
+ * The most recent COMPLETED physical-state census for this target.
+ *
+ * Read straight from the governed store rather than through
+ * governed-action-request, which imports this file — the same cycle the merge
+ * gate had to avoid. A stale proof is refused by age: evidence gathered long
+ * before the write is evidence about a different database.
+ */
+const LEDGER_EVIDENCE_MAX_AGE_MS = 60 * 60 * 1000;
+
+function defaultLedgerRepairEvidence({ inputs = {}, nowMs = Date.now() } = {}) {
+  const root = process.env.ALLOY_RUNTIME_ROOT?.trim()
+    || join(os.homedir(), ".local", "state", "alloy-dev");
+  const storePath = join(root, "vacilando", "governed-actions", "requests.json");
+  let records = [];
+  try {
+    const parsed = JSON.parse(readFileSync(storePath, "utf8"));
+    records = Array.isArray(parsed) ? parsed : (parsed?.requests || []);
+  } catch {
+    return { ok: false, code: "evidence_store_unreadable", detail: "The governed action store could not be read." };
+  }
+  const target = String(inputs.target || inputs.environment || "");
+  const candidates = records.filter((r) => r.action_key === "database.read_census"
+    && r.status === "complete"
+    && String(r.inputs?.databaseTarget || "") === target
+    && String(r.inputs?.queryArtifactPath || "").endsWith(PHYSICAL_STATE_ARTIFACT)
+    && r.result?.census);
+  const latest = candidates[candidates.length - 1] || null;
+  if (!latest) {
+    return {
+      ok: false,
+      code: "physical_state_census_missing",
+      detail: `No completed ${PHYSICAL_STATE_ARTIFACT} census against ${target}; this repair may not proceed on inference.`,
+    };
+  }
+  const at = Date.parse(latest.execution_ended_at || latest.updated_at || 0);
+  if (!Number.isFinite(at) || (nowMs - at) > LEDGER_EVIDENCE_MAX_AGE_MS) {
+    return {
+      ok: false,
+      code: "physical_state_census_stale",
+      detail: "The physical-state proof is older than an hour; re-measure before registering history.",
+    };
+  }
+  const versions = (inputs.migrations || []).map((m) => String(m.version));
+  const derived = ledgerRepairEvidenceFromCensus(latest.result.census, { versions });
+  return derived.ok ? { ...derived, census_request_id: latest.request_id } : derived;
+}
+
+function defaultRunLedgerRepairSql({ sql }) {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const file = join(tmpDir, `ledger-repair-${Date.now()}.sql`);
+  const outFile = `${file}.out`;
+  const errFile = `${file}.err`;
+  writeFileSync(file, sql);
+  try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 180_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(file); } catch { /* */ }
+  if (child.status !== 0) {
+    return { ok: false, code: classifySqlChildFailure(errText, "ledger_repair_failed"), detail: errText.slice(0, 400) };
+  }
+  return { ok: true };
+}
+
+/**
+ * The ledger-repair sibling of the migration fulfillers. Same
+ * request -> authorize -> execute shape, its own action type, so an approval
+ * minted for a migration apply can never be spent reconciling history.
+ */
+export function fulfillLedgerRepairForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 

@@ -61,6 +61,7 @@ import {
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
   fulfillPromotedMigrationForMission,
+  fulfillLedgerRepairForMission,
   fulfillSetProviderCeilingForMission,
   fulfillInstallToolkitForMission,
   fulfillLaneDispatchForMission,
@@ -1593,6 +1594,11 @@ function defaultModeForAction(actionKey, requested) {
   // in validateAgainstRegistry, and the refusal reads as the operator forbidding
   // the action rather than nobody having assigned it a mode.
   if (actionKey === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) return "migration_apply";
+  // A ledger reconciliation is a privileged production write. It shares the
+  // migration_apply mode because it belongs to the same governed family, and it
+  // is named here explicitly so it can never inherit read_only and surface as
+  // policy_denied — the trap two actions have already fallen into.
+  if (actionKey === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) return "migration_apply";
   /*
    * A privileged_write action must not inherit the read_only default. `validateAgainstRegistry`
    * refuses any non-read risk class in read_only mode, so an action added to the registry without
@@ -2875,6 +2881,22 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
    * because the migration artifacts are resolved out of the approved worktree's
    * git object store rather than any working copy.
    */
+  if (rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    return fulfillLedgerRepairForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
     return fulfillPromotedMigrationForMission(scope, {
       assignmentId: rec.run_id || null,
