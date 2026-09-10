@@ -29,6 +29,7 @@ import { canonicalKeyFor } from "@/lib/pos/packet/packetFieldPlan";
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 import { parseProcessScopedAnswerKey } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
+import { valueFitsFieldType } from "@/lib/forms/valueFitsFieldType";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 
 /**
@@ -81,6 +82,15 @@ export function sharedValuesToFieldIds(
         for (const key of [resolved.shared_value_key, resolved.key]) {
             if (!key) continue;
             if (!Object.prototype.hasOwnProperty.call(sharedValues, key)) continue;
+            /*
+             * Same fact, different shape.
+             *
+             * Two forms may bind one canonical key differently — a free-text answer on one, a
+             * boolean acknowledgement on another. Filling regardless put a string into a boolean
+             * the parent never saw and made the whole form unsubmittable. A field that cannot hold
+             * the value stays the artifact's own to collect.
+             */
+            if (!valueFitsFieldType(sharedValues[key], field.type)) return;
             out[field.id] = sharedValues[key];
             return;
         }

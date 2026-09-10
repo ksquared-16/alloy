@@ -25,7 +25,7 @@ import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/forms/engine/FormEngineRenderer";
 import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
-import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
+import { participantValidationCopy } from "@/lib/public/forms/formatPublicValidationErrors";
 import { subSchemaForFieldsGrouped } from "@/lib/forms/guidedIntakePartition";
 import { buildGuidedQuestionPlan, mirrorCanonicalValues, type GuidedQuestionPlan } from "@/lib/forms/guidedQuestionPlan";
 import {
@@ -910,7 +910,19 @@ export function FormEmbedClient({
     const artifactRenderable = schema != null && schema.fields.length > 0;
     const reviewWithoutArtifact = participantPhase === "artifact_review" && !artifactRenderable;
 
-    const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
+    /*
+     * What the PARENT reads when a submission is refused.
+     *
+     * The validator's own output — "values › field_9: Expected boolean" — names a schema path and an
+     * internal id that appears nowhere on their screen. The technical detail still travels in the
+     * response for logs and operator diagnosis; it is simply not the copy.
+     */
+    const errorLines = validationErrors?.length
+        ? (() => {
+              const copy = participantValidationCopy(validationErrors, schema);
+              return [copy.summary];
+          })()
+        : [];
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
     /**
      * The guided WIZARD is for packets the participant fills from scratch.
@@ -927,10 +939,32 @@ export function FormEmbedClient({
     const guidedStep = guided ? guidedSteps[stepIdx] : null;
     const isLastStep = guided ? stepIdx >= guidedSteps.length - 1 : false;
     const PHASE_LABEL: Record<string, string> = { confirm: "Confirm", provide: "Add details", uploads: "Sign & upload" };
+    /**
+     * Field id → declared type, so the canonical mirror cannot write a value into a sibling that
+     * cannot hold it (a text answer into a boolean acknowledgement, for instance).
+     *
+     * Deliberately NOT a hook: several participant states return early above this line, so a hook
+     * here would change hook order between renders and throw. The map is a few dozen entries.
+     */
+    const fieldTypesById: Record<string, string> = {};
+    {
+        const walk = (fields: readonly FormField[]) => {
+            for (const f of fields) {
+                fieldTypesById[f.id] = f.type;
+                if (f.type === "group") walk((f.fields ?? []) as readonly FormField[]);
+            }
+        };
+        walk((schema?.fields ?? []) as readonly FormField[]);
+    }
+
     const onGuidedChange = (next: FormPayload) => {
         const mirrored: FormPayload = {
             ...next,
-            values: mirrorCanonicalValues((next.values ?? {}) as Record<string, unknown>, guidedPlan?.canonicalGroups ?? {}),
+            values: mirrorCanonicalValues(
+                (next.values ?? {}) as Record<string, unknown>,
+                guidedPlan?.canonicalGroups ?? {},
+                fieldTypesById,
+            ),
         };
         setValidationErrors(null);
         setMessage(null);

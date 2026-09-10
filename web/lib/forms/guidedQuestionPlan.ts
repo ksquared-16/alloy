@@ -17,6 +17,7 @@
  * to siblings. Pure, deterministic, no I/O.
  */
 
+import { valueFitsFieldType } from "@/lib/forms/valueFitsFieldType";
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 
@@ -116,10 +117,25 @@ export function buildGuidedQuestionPlan(schema: FormSchemaV1, values: Record<str
 /**
  * Mirror each canonical group's representative value to its sibling field ids (collect
  * once, write everywhere). Returns a new values map only when a mirror is needed.
+ *
+ * ## Siblings must be able to HOLD what they are given
+ *
+ * A canonical group says two fields mean the same thing. It does not say they are the same shape,
+ * and across two forms in one packet they often are not: a text answer on one form and a boolean
+ * acknowledgement on another can share a key. The mirror wrote the representative value into every
+ * sibling regardless, so a string landed in a boolean field — a field the parent was never shown,
+ * on a form they had not reached — and the submission was refused with `Expected boolean` for an
+ * answer nobody had given. Live QA hit exactly that on Health & Medical's "Medical Authorization
+ * Ack" after typing into Northwind.
+ *
+ * So a sibling that cannot hold the value is skipped and keeps whatever it had. Collect once, write
+ * everywhere it FITS. `fieldTypesById` is optional: without it the previous behaviour is preserved
+ * exactly, so no caller is silently changed by upgrading this function.
  */
 export function mirrorCanonicalValues(
     values: Record<string, unknown>,
-    canonicalGroups: Record<string, string[]>
+    canonicalGroups: Record<string, string[]>,
+    fieldTypesById?: Readonly<Record<string, string>>
 ): Record<string, unknown> {
     let next: Record<string, unknown> | null = null;
     for (const ids of Object.values(canonicalGroups)) {
@@ -128,6 +144,7 @@ export function mirrorCanonicalValues(
         const v = values[rep];
         for (const id of ids) {
             if (id === rep) continue;
+            if (fieldTypesById && !valueFitsFieldType(v, fieldTypesById[id])) continue;
             if (values[id] !== v) {
                 next ??= { ...values };
                 next[id] = v;
