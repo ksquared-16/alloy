@@ -471,3 +471,51 @@ test("R7b — the merge gate is unchanged: it still measures against the candida
   assert.equal(gate.status, "blocked");
   assert.match(gate.reason, /behind the required head 20260910130000/);
 });
+
+// ── THE EXEMPTION MUST SURVIVE INTO EXECUTION ───────────────────────────────
+//
+// THE INCIDENT. gar_4727b063b4222e — the first real trusted-host run of the
+// promoted-migration path — was approved by the operator at 14:06:22Z and then
+// failed `migration_changed_since_approval`. The three Thread 8C migrations are
+// absent from staging BECAUSE their candidate has not merged, which is exactly
+// the state a governed pre-merge promotion exists to serve, and validation
+// exempted them correctly. Execution did not: `applyMigrationBatch` re-reads
+// every migration, and the exemption was computed at validation and never
+// carried onto `normalized`, so the runtime read applied staging semantics to a
+// candidate. The file already documents this trap for `environment` — "the
+// runtime re-read applies the SAME environment rule as validation" — and
+// preMergeCandidate had the same hole.
+test("R-EXEC — a pre-merge candidate exemption reaches the runtime re-read", async () => {
+  const M = await import("../lib/vacilando/trusted-host-migrate.mjs");
+
+  // The batch must FORWARD the flag, not merely accept one.
+  const seen = [];
+  const normalized = {
+    environment: "alloy_deployed_primary",
+    worktreePath: "/wt",
+    expectedSha: "a".repeat(40),
+    gitCwd: "/wt",
+    stagingSha: "b".repeat(40),
+    preMergeCandidate: true,
+    migrations: [{ version: "20260909250000", path: "supabase/migrations/20260909250000_x.sql", fileSha: "deadbeef" }],
+  };
+  M.applyMigrationBatch(normalized, {
+    readContent: (args) => { seen.push(args); return { ok: false, code: "stop", detail: "stop after capture" }; },
+    inspectLedger: () => ({ applied: false }),
+    applyFile: () => ({ ok: true }),
+  });
+  assert.equal(seen.length, 1, "the batch must re-read the migration");
+  assert.equal(seen[0].preMergeCandidate, true,
+    "validation exempted this candidate; execution must not re-apply staging semantics to it");
+  assert.equal(seen[0].environment, "alloy_deployed_primary", "and the environment rule still travels too");
+
+  // A non-candidate must NOT be exempted — the guard still has to catch real
+  // drift, which is the whole reason it exists.
+  const seen2 = [];
+  M.applyMigrationBatch({ ...normalized, preMergeCandidate: false }, {
+    readContent: (args) => { seen2.push(args); return { ok: false, code: "stop", detail: "stop" }; },
+    inspectLedger: () => ({ applied: false }),
+    applyFile: () => ({ ok: true }),
+  });
+  assert.equal(seen2[0].preMergeCandidate, false, "absence of a candidate must not become an exemption");
+});
