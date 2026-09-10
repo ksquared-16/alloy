@@ -78,6 +78,18 @@ export const WORK_ITEM_VIEW_DEFS: { key: WorkItemViewKey; label: string }[] = [
     { key: "completed", label: "Completed" },
 ];
 
+/**
+ * Views the rail keeps permanently visible. The rest stay reachable under "More": Unassigned,
+ * Due Today and Completed are real lenses, but showing all seven at equal weight is what made the
+ * rail unscannable. `waiting` stays primary — it is the one state an operator must not lose track of.
+ */
+export const WORK_ITEM_PRIMARY_VIEW_KEYS: WorkItemViewKey[] = [
+    "mine",
+    "waiting",
+    "due_soon",
+    "overdue",
+];
+
 export type WorkItemSourceDef = {
     key: WorkItemSourceKey;
     label: string;
