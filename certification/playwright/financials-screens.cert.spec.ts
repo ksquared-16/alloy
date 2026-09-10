@@ -53,44 +53,53 @@ test("financials product screenshots", async ({ page }) => {
     await settle(page);
     await page.screenshot({ path: `${OUT}/01-overview.png`, fullPage: false });
 
-    // 2 · ACCOUNTS, with a household selected and its canonical detail open
+    // 2 · ACCOUNTS — the rail itself, with the settled household discoverable in it.
+    //     Photographed BEFORE a selection, because the claim under review is that an account
+    //     which owes nothing is still present and still says what it is.
     await sectionTab(shell, "accounts").click();
     await page.waitForTimeout(6_000);
     await settle(page);
+    await expect(
+        page.locator('[data-financials-account-state="settled"]').first(),
+        "the settled household must be visible in the photograph",
+    ).toBeVisible({ timeout: 60_000 });
+    await page.screenshot({ path: `${OUT}/02-accounts-settled.png`, fullPage: false });
+
+    // 3 · ACCOUNTS + the canonical Thread 2 detail for a selected household
     await page.locator("[data-financials-account-row]").first().click();
     await page.waitForTimeout(8_000);
     await settle(page);
-    await page.screenshot({ path: `${OUT}/02-accounts-detail.png`, fullPage: false });
+    await page.screenshot({ path: `${OUT}/03-accounts-detail.png`, fullPage: false });
 
     // 3 · CHARGES
     await sectionTab(shell, "charges").click();
     await page.waitForTimeout(6_000);
     await settle(page);
-    await page.screenshot({ path: `${OUT}/03-charges.png`, fullPage: false });
+    await page.screenshot({ path: `${OUT}/04-charges.png`, fullPage: false });
 
     // 4 · PAYMENTS
     await sectionTab(shell, "payments").click();
     await page.waitForTimeout(6_000);
     await settle(page);
-    await page.screenshot({ path: `${OUT}/04-payments.png`, fullPage: false });
+    await page.screenshot({ path: `${OUT}/05-payments.png`, fullPage: false });
 
     // 5 · SUBSIDY
     await sectionTab(shell, "subsidy").click();
     await page.waitForTimeout(6_000);
     await settle(page);
-    await page.screenshot({ path: `${OUT}/05-subsidy.png`, fullPage: false });
+    await page.screenshot({ path: `${OUT}/06-subsidy.png`, fullPage: false });
 
     // 6 · ACTIVITY
     await sectionTab(shell, "activity").click();
     await page.waitForTimeout(6_000);
     await settle(page);
-    await page.screenshot({ path: `${OUT}/06-activity.png`, fullPage: false });
+    await page.screenshot({ path: `${OUT}/07-activity.png`, fullPage: false });
 
     // 7 · STUDIO
     await modeTab(shell, "studio").click();
     await page.waitForTimeout(6_000);
     await settle(page);
-    await page.screenshot({ path: `${OUT}/07-studio.png`, fullPage: false });
+    await page.screenshot({ path: `${OUT}/08-studio.png`, fullPage: false });
 
     // 8 · A SINGLE CAMPUS — the narrowed operational cohort
     await modeTab(shell, "work").click();
@@ -98,15 +107,19 @@ test("financials product screenshots", async ({ page }) => {
     await sectionTab(shell, "accounts").click();
     await page.waitForTimeout(6_000);
     await settle(page);
-    const picker = shell.getByRole("button", { name: "Site" });
-    if (await picker.isVisible().catch(() => false)) {
+    //     Each campus is photographed on its own, because "site narrowing works" is a claim about
+    //     two different answers, and one picture of one campus cannot show a difference.
+    async function narrowTo(label: RegExp, file: string) {
+        const picker = shell.getByRole("button", { name: "Site" });
+        if (!(await picker.isVisible().catch(() => false))) return;
         await picker.click();
-        const riverside = page.getByRole("option", { name: /Riverside/i });
-        if (await riverside.isVisible().catch(() => false)) {
-            await riverside.click();
-            await page.waitForTimeout(8_000);
-            await settle(page);
-        }
+        const option = page.getByRole("option", { name: label });
+        if (!(await option.isVisible().catch(() => false))) return;
+        await option.click();
+        await page.waitForTimeout(8_000);
+        await settle(page);
+        await page.screenshot({ path: `${OUT}/${file}`, fullPage: false });
     }
-    await page.screenshot({ path: `${OUT}/08-riverside-narrowed.png`, fullPage: false });
+    await narrowTo(/Riverside/i, "09-riverside.png");
+    await narrowTo(/Lakeside/i, "10-lakeside.png");
 });
