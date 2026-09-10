@@ -13,7 +13,9 @@
 #   certification/alloy-certify up        # start the isolated cert stack (idempotent)
 #   certification/alloy-certify reset     # db reset + reseed — a pristine, pre-publication tenant
 #   certification/alloy-certify env       # write web/.env.certification.local from the stack
-#   certification/alloy-certify serve     # start the app on :3011 against the cert stack
+#   certification/alloy-certify build     # production build of the app being certified
+#   certification/alloy-certify app-stop  # stop ONLY this session's certification server
+#   certification/alloy-certify serve     # start the OWNED production server on :3011 (CERT_MODE=dev for next dev)
 #   certification/alloy-certify verify    # playwright: capture session + run cert specs → evidence
 #   certification/alloy-certify journey   # the full proving journey, resetting only where a spec demands it
 #   certification/alloy-certify status    # print the readiness banner
@@ -29,6 +31,38 @@ ENV_FILE="$WEB_DIR/.env.certification.local"
 SERVER_PID_FILE="$CERT_DIR/.run/server.pid"
 APP_PORT="${CERT_APP_PORT:-3011}"
 APP_URL="http://localhost:${APP_PORT}"
+
+# ── THE CERTIFICATION SERVER IS A PRODUCTION SERVER, OWNED BY A SESSION ─────────
+#
+# Promoted browser certification used to run against `next dev`. Three separate
+# properties of that made promoted evidence untrustworthy, all measured:
+#
+#   * a cold Turbopack compile of /workspace took ~220s against a 240s test
+#     timeout, so the budget was spent on compilation rather than behaviour;
+#   * Turbopack panicked ("PostCSS worker died while processing app/globals.css")
+#     and the app then served 500 until the dev cache was cleared;
+#   * the dev server was a background job in the LAUNCHER'S process group, so it
+#     died when the invoking task ended.
+#
+# `next start` over a real `next build` removes the first two by construction:
+# there is no first-request compilation and no dev bundler in the loop. The third
+# is fixed by `lib/cert-detach.pl`, which gives the server a session of its own.
+#
+# Dev remains available with CERT_MODE=dev for local iteration; promoted
+# certification defaults to production.
+CERT_MODE="${CERT_MODE:-production}"
+
+# WHOSE SERVER IS THIS. Ownership is recorded per SESSION, not per worktree: two
+# certifications of different commits in one checkout are different owners, and
+# teardown must be able to tell them apart. The default keeps a plain local run
+# working without ceremony.
+CERT_SESSION_ID="${ALLOY_CERT_SESSION:-$(basename "$REPO_ROOT")}"
+SERVER_META_FILE="$CERT_DIR/.run/server.json"
+DETACH_HELPER="$CERT_DIR/lib/cert-detach.pl"
+# Next loads `.env.production.local` for `build` and `start`. Using the framework's
+# own convention is what lets the canonical build command stay canonical — the
+# broker runs `npx next build` and needs no certification-specific arguments.
+PROD_ENV_FILE="$WEB_DIR/.env.production.local"
 
 # Inbound SMS certification. Every value here is synthetic and local-only; the
 # token is a signing key for the certification's own requests, not a credential
@@ -193,6 +227,44 @@ cmd_seed() {
     cert_psql_f "$db" "$CERT_DIR/inbound-sms-binding.sql" \
         || die "inbound SMS binding provisioning failed"
     green "Inbound SMS destination provisioned (${CERT_INBOUND_TO_E164})"
+
+    cmd_domain_fixtures "$db"
+}
+
+# ------------------------------------------------------------- domain fixtures
+#
+# A COMMITTED FIXTURE THAT IS NEVER APPLIED IS AN EMPTY TENANT.
+#
+# THE DEFECT. `certification/attendance/01-attendance-fixture.sql` exists precisely
+# because its contents were once seeded by hand and vanished whenever the stack was
+# reset — its own header says so. The file was committed; nothing ever ran it. So
+# `up` reported a healthy seeded tenant, the Attendance surface correctly rendered a
+# day with no expected children, and every Attendance browser spec failed on
+# toBeVisible against elements that had no data to exist for.
+#
+# It failed the same way the lsof defect failed: a missing input read as an empty
+# ANSWER rather than as a missing INPUT. The A/B is unambiguous — same commit, same
+# specs, same session: without these fixtures 4 of 7 fail after 13.7 MINUTES of
+# element timeouts; with them 7 of 7 pass in 22 SECONDS.
+#
+# Order is load-bearing. The attendance fixture names the search fixture as its
+# prerequisite (the Smith household, Emma, and the M/W/F schedule pattern it
+# reuses), so search runs first. Both are upsert-shaped and safe to re-run.
+#
+# A fixture that fails is fatal: proceeding would certify against a tenant that
+# cannot express the scenarios, which is the failure this function exists to remove.
+cmd_domain_fixtures() {
+    local db="$1"
+    local fixture
+    for fixture in \
+        "$CERT_DIR/search-platform/01-search-certification-fixtures.sql" \
+        "$CERT_DIR/attendance/01-attendance-fixture.sql"
+    do
+        [ -f "$fixture" ] || continue
+        cert_psql_f "$db" "$fixture" \
+            || die "domain fixture failed: $(basename "$fixture")"
+    done
+    green "Domain fixtures applied (search platform, attendance)"
 }
 
 # ----------------------------------------------------------- inbound webhook
@@ -305,6 +377,186 @@ EOF
 # So the question is asked the only way that cannot be wrong: try to bind it, on
 # the interface the server will actually use. A refusal names the likely owner
 # instead of leaving an operator to hunt a process that does not exist.
+# WHO HOLDS THIS PORT — asked without assuming the host put `lsof` on PATH.
+#
+# THE FAILURE. `cmd_app_stop` finds the Next CHILD that outlives the launcher
+# entirely through `lsof`; the pid file only records the launcher. On this Mac
+# mini `lsof` lives at /usr/sbin/lsof and the profile PATH is
+# `~/bin:~/.local/bin:/usr/local/bin:/opt/homebrew/bin:…:/usr/bin:/bin` — no
+# /usr/sbin. So every `lsof -ti` produced NOTHING, and "no visible holder" was
+# read as "no holder", exactly as the port pre-flight above once read it.
+#
+# Measured, not imagined: a certification server for a stale commit survived
+# `app_stop`, kept :3011, and `cmd_serve` then took the "App already serving"
+# branch and certified against it — the precise outcome the staleness check
+# directly below was written to prevent. The teardown reported "app stopped".
+#
+# So the tool is resolved by location as well as by PATH, and when it cannot be
+# found at all the question is answered from `ps` using the command line this
+# script itself starts (`next dev … -p PORT`). A caller that gets an empty
+# answer must therefore treat it as "unknown", never as "free" — the bind probe
+# in `cert_assert_port_bindable` is the only authority on emptiness.
+CERT_LSOF="$(command -v lsof 2>/dev/null || true)"
+if [ -z "$CERT_LSOF" ]; then
+    for _cand in /usr/sbin/lsof /usr/bin/lsof /bin/lsof; do
+        [ -x "$_cand" ] && CERT_LSOF="$_cand" && break
+    done
+fi
+
+cert_port_listener_pids() {
+    local port="$1"
+    if [ -n "$CERT_LSOF" ]; then
+        "$CERT_LSOF" -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null
+        return 0
+    fi
+    # No lsof anywhere: match the process this script starts. Narrow on purpose —
+    # it must never return a pid this certification did not launch.
+    # The regex is assembled in BEGIN so the port cannot be read as a
+    # concatenation against the match result — awk binds `~` tighter than
+    # concatenation, and the anchor then decorates the ANSWER instead of the
+    # pattern, which matches far too much.
+    ps -eo pid,command 2>/dev/null \
+        | awk -v p="$port" 'BEGIN { re = "next dev.*-p[ =]?" p "($|[^0-9])" } $0 ~ re { print $1 }'
+}
+
+# ── OWNED SERVER RECORD ─────────────────────────────────────────────────────────
+#
+# The pid file alone was never enough to own anything: it recorded the launcher,
+# not the server, and it said nothing about WHICH certification the process
+# belonged to. Teardown then had to guess by pattern, and a previous Financials
+# run killed THREE unrelated lane wrappers doing exactly that.
+#
+# The record answers, for one process: which session, which checkout, which SHA,
+# which port, which command, since when. Teardown signals only a process that
+# still matches all of it.
+cert_meta_write() {
+    local pid="$1" port="$2" sha="$3" mode="$4" command="$5"
+    mkdir -p "$(dirname "$SERVER_META_FILE")"
+    SM_PID="$pid" SM_PORT="$port" SM_SHA="$sha" SM_MODE="$mode" SM_CMD="$command" \
+    SM_SESSION="$CERT_SESSION_ID" SM_ROOT="$REPO_ROOT" SM_FILE="$SERVER_META_FILE" \
+    node -e '
+        const fs = require("node:fs");
+        fs.writeFileSync(process.env.SM_FILE, JSON.stringify({
+            schema: "alloy.cert_server.v1",
+            session_id: process.env.SM_SESSION,
+            worktree: process.env.SM_ROOT,
+            sha: process.env.SM_SHA,
+            mode: process.env.SM_MODE,
+            pid: Number(process.env.SM_PID),
+            port: Number(process.env.SM_PORT),
+            command: process.env.SM_CMD,
+            started_at: new Date().toISOString(),
+        }, null, 2) + "\n");
+    '
+}
+
+cert_meta_get() {
+    [ -f "$SERVER_META_FILE" ] || return 1
+    SM_FILE="$SERVER_META_FILE" SM_KEY="$1" node -e '
+        const fs = require("node:fs");
+        try {
+            const j = JSON.parse(fs.readFileSync(process.env.SM_FILE, "utf8"));
+            const v = j[process.env.SM_KEY];
+            if (v === undefined || v === null) process.exit(1);
+            process.stdout.write(String(v));
+        } catch { process.exit(1); }
+    ' 2>/dev/null
+}
+
+cert_pid_alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
+
+# The full argv of a live pid, for proving the record still describes THIS process
+# rather than a pid the kernel has since handed to something else.
+cert_pid_command() { ps -o command= -p "${1:-0}" 2>/dev/null | head -1; }
+
+# none    — no record
+# stale   — a record whose process is gone, or now a different program
+# foreign — alive, but not this session/port/sha: never ours to stop or reuse
+# live    — alive and ours
+cert_owned_server_state() {
+    local pid port session sha cmd now
+    pid="$(cert_meta_get pid 2>/dev/null || true)"
+    [ -n "$pid" ] || { echo "none"; return 0; }
+    if ! cert_pid_alive "$pid"; then echo "stale"; return 0; fi
+    now="$(cert_pid_command "$pid")"
+    cmd="$(cert_meta_get command 2>/dev/null || true)"
+    # A recycled pid running something else is stale, not foreign: nothing of ours
+    # survives, so the record may be cleaned.
+    #
+    # The comparison is against the RECORDED command rather than a list of program
+    # names this file happens to know about. A hardcoded allowlist answers "does
+    # this look like a server we might start", which is a different and weaker
+    # question than "is this still the process we started" — and it goes wrong in
+    # both directions the moment the command changes.
+    local want; want="$(printf '%s\n' "$cmd" | sed 's/^exec //' | awk '{print $1}')"
+    if [ -n "$want" ]; then
+        case "$now" in
+            *"$want"*) : ;;
+            *) echo "stale"; return 0 ;;
+        esac
+    fi
+    session="$(cert_meta_get session_id 2>/dev/null || true)"
+    port="$(cert_meta_get port 2>/dev/null || true)"
+    sha="$(cert_meta_get sha 2>/dev/null || true)"
+
+    # OWNERSHIP AND CURRENCY ARE DIFFERENT QUESTIONS.
+    #
+    # This used to fold the SHA into the ownership test, so a server THIS session
+    # started reported `foreign` the moment HEAD moved — and `app-stop` then
+    # refused to stop the process it had itself launched, on the grounds that it
+    # belonged to somebody else. It did not. The port stayed held, and the advice
+    # printed was to go and find another port.
+    #
+    # Ownership is session + port + a live pid still running the command we
+    # recorded. Currency is whether that server serves the commit being certified.
+    # `outdated` is ours and wrong-SHA: never reusable for a certification, always
+    # safe for us to stop.
+    if [ "$session" != "$CERT_SESSION_ID" ] || [ "$port" != "$APP_PORT" ] || [ -z "$cmd" ]; then
+        echo "foreign"
+        return 0
+    fi
+    if [ "$sha" = "$(cert_head_sha)" ]; then echo "live"; else echo "outdated"; fi
+}
+
+cert_head_sha() { git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown"; }
+
+# ── READINESS IS AN ANSWER, NOT A PROCESS ───────────────────────────────────────
+#
+# The old contract was `curl -s -o /dev/null "$APP_URL"` — the root URL only, and
+# nothing about the process. A server that had already been killed could still
+# satisfy it from a socket that had not yet closed, and a server that answered "/"
+# could still be unable to serve the application. Readiness now requires the owned
+# pid alive, the port accepting a loopback connection, a real page, and the target
+# application route ANSWERING (a redirect to /login is an answer; a 5xx or a
+# refusal is not).
+cert_http_ready() {
+    local pid="$1" code
+    cert_pid_alive "$pid" || return 1
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$APP_URL/login" 2>/dev/null || echo 000)"
+    [ "$code" = "200" ] || return 1
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$APP_URL/workspace" 2>/dev/null || echo 000)"
+    case "$code" in
+        200|301|302|303|307|308) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# The exact command for the current mode, as one testable answer.
+#
+# Production is `next start` over a real build: no first-request compilation, no
+# dev bundler, and therefore a test timeout that covers application behaviour
+# rather than compile latency. Both modes bind 127.0.0.1 explicitly — the managed
+# slot ports are published by Tailscale Serve, which holds each on the tailnet
+# interface, so a wildcard bind to a mapped port fails EADDRINUSE while loopback
+# stays free. `exec` so the detached session leader IS the server.
+cert_server_command() {
+    if [ "$CERT_MODE" = "dev" ]; then
+        printf 'exec npx next dev -H 127.0.0.1 -p %s\n' "$APP_PORT"
+    else
+        printf 'exec npm run start -- -H 127.0.0.1 -p %s\n' "$APP_PORT"
+    fi
+}
+
 cert_assert_port_bindable() {
     local port="$1"
     command -v node >/dev/null 2>&1 || return 0   # cannot probe; let the server speak
@@ -325,48 +577,143 @@ cert_assert_port_bindable() {
     return 1
 }
 
+cmd_build() {
+    [ -f "$ENV_FILE" ] || cmd_env
+    # THE BUILD IS A SEPARATE OPERATION AND THE SERVER NEVER BUILDS IMPLICITLY.
+    # That is the local-dev contract (alloy-config: ALLOY_BUILD_COMMAND), and it
+    # is why certification builds here rather than inside serve: an implicit build
+    # is how a certification silently proves a different tree than it reports.
+    #
+    # The build runs through the validation broker, which is the sanctioned route
+    # for heavy work on a shared host — a direct `npx next build` is terminated by
+    # the PreToolUse routing hook (observed: exit 144, killed mid-optimisation).
+    cp "$ENV_FILE" "$PROD_ENV_FILE"
+    local sha; sha="$(cert_head_sha)"
+    info "Building the production application for ${sha} …"
+    local vac="$REPO_ROOT/scripts/local-dev/vac"
+    [ -x "$vac" ] || die "validation broker not found at ${vac}"
+    ( cd "$REPO_ROOT" && "$vac" run build ) || die "production build failed"
+    [ -d "$WEB_DIR/.next" ] || die "production build produced no ${WEB_DIR}/.next"
+    printf '%s\n' "$sha" > "$CERT_DIR/.run/build.sha"
+    green "Production build ready ($sha)"
+}
+
 cmd_serve() {
     [ -f "$ENV_FILE" ] || cmd_env
-    # "Already serving" is only reuse if that process was started from the CURRENT
-    # configuration. A server older than the env file is running with stale
-    # variables, and reusing it silently certifies the wrong build — an env-gated
-    # route stayed 404 across three runs because of exactly this.
-    if curl -s -o /dev/null "$APP_URL" 2>/dev/null; then
-        local pid; pid="$(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null | head -1)"
-        if [ -n "$pid" ] && [ -n "$(find "$ENV_FILE" -newermt "$(ps -o lstart= -p "$pid" 2>/dev/null)" 2>/dev/null)" ]; then
-            info "app on ${APP_PORT} predates ${ENV_FILE##*/} — restarting so it reads the current configuration"
-            cmd_app_stop >/dev/null 2>&1
-            for p in $(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null); do kill -9 "$p" 2>/dev/null || true; done
-            sleep 2
-        else
-            green "App already serving at $APP_URL"; return 0
-        fi
-    fi
-    mkdir -p "$(dirname "$SERVER_PID_FILE")"
+    mkdir -p "$CERT_DIR/.run"
+
+    # ── EXACTLY ONE SERVER PER SESSION ──────────────────────────────────────────
+    #
+    # Reuse only what is demonstrably ours: same session, same port, same SHA, a
+    # live pid still running the program we started. Anything else is refused
+    # rather than guessed at, because both wrong answers are expensive — reusing a
+    # foreign server certifies someone else's build, and stopping one takes down
+    # another lane.
+    local state; state="$(cert_owned_server_state)"
+    case "$state" in
+        live)
+            local opid; opid="$(cert_meta_get pid)"
+            if cert_http_ready "$opid"; then
+                green "Owned certification server already serving at $APP_URL (PID $opid)"
+                return 0
+            fi
+            info "owned server (PID $opid) is alive but not answering — replacing it"
+            cmd_app_stop >/dev/null 2>&1 || true
+            ;;
+        foreign)
+            echo "port ${APP_PORT} is held by a certification server this session does not own:" >&2
+            echo "  session=$(cert_meta_get session_id 2>/dev/null) sha=$(cert_meta_get sha 2>/dev/null) pid=$(cert_meta_get pid 2>/dev/null)" >&2
+            echo "  refusing to reuse or stop it — choose another port with CERT_APP_PORT=<port>" >&2
+            return 1
+            ;;
+        outdated)
+            # Ours, serving a different commit. Reusing it would certify the wrong
+            # tree — the same defect the build-SHA check below catches one layer
+            # down — so it is replaced rather than reused or refused.
+            info "replacing our own certification server (PID $(cert_meta_get pid), built for $(cert_meta_get sha)) — HEAD has moved"
+            cmd_app_stop >/dev/null 2>&1 || true
+            ;;
+        stale)
+            info "clearing a certification server record whose process is gone"
+            rm -f "$SERVER_META_FILE" "$SERVER_PID_FILE"
+            ;;
+    esac
+
     cert_assert_port_bindable "$APP_PORT" || return 1
-    info "Starting app at $APP_URL against the cert tenant…"
-    # BIND LOOPBACK, EXPLICITLY.
-    #
-    # `next dev` binds the wildcard by default, and the wildcard is the one thing
-    # this port cannot do. The managed slot ports (3011-3022) are published by
-    # Tailscale Serve, which holds each one on the tailnet interface; a wildcard
-    # bind to a mapped port fails EADDRINUSE while 127.0.0.1 stays free. Measured
-    # on this host: 3011 and 3013 (mapped, no app) refuse 0.0.0.0 and accept
-    # 127.0.0.1; 3023 and 3025 (unmapped) accept both.
-    #
-    # Certification drives $APP_URL — localhost — and a mounted browser runs on
-    # this machine, so no tailnet exposure is needed and binding it was never
-    # intentional. This also matches what the lane dev servers already do.
-    ( cd "$WEB_DIR" && env $(grep -v '^#' "$ENV_FILE" | xargs) npx next dev -H 127.0.0.1 -p "$APP_PORT" \
-        >"$CERT_DIR/.run/server.log" 2>&1 & echo $! > "$SERVER_PID_FILE" )
-    for _ in $(seq 1 60); do curl -s -o /dev/null "$APP_URL" && { green "Current Work app ready ($APP_URL)"; return 0; }; sleep 2; done
-    die "app did not become ready — see $CERT_DIR/.run/server.log"
+
+    local sha; sha="$(cert_head_sha)"
+    local server_command log
+    log="$CERT_DIR/.run/server.log"
+    if [ "$CERT_MODE" = "dev" ]; then
+        server_command="$(cert_server_command)"
+    else
+        [ -d "$WEB_DIR/.next" ] || die "no production build in ${WEB_DIR}/.next — run: certification/alloy-certify build"
+        local built; built="$(cat "$CERT_DIR/.run/build.sha" 2>/dev/null || true)"
+        # THE ARTEFACT MUST BE THE COMMIT BEING CERTIFIED. A build from another SHA
+        # is the same defect as reusing a stale server, one layer down.
+        [ "$built" = "$sha" ] || die "the production build is for ${built:-an unrecorded SHA}, not ${sha} — rebuild before certifying"
+        cp "$ENV_FILE" "$PROD_ENV_FILE"
+        # BIND LOOPBACK, EXPLICITLY — the managed slot ports are published by
+        # Tailscale Serve, which holds each on the tailnet interface, so a wildcard
+        # bind to a mapped port fails EADDRINUSE while 127.0.0.1 stays free.
+        # Certification drives localhost with a browser on this machine, so no
+        # tailnet exposure is wanted.
+        server_command="$(cert_server_command)"
+    fi
+
+    info "Starting the ${CERT_MODE} certification server at $APP_URL (${sha}) …"
+    rm -f "$SERVER_PID_FILE"
+    ( cd "$WEB_DIR" && env $(grep -v '^#' "$ENV_FILE" | xargs) \
+        perl "$DETACH_HELPER" "$log" "$SERVER_PID_FILE" "$server_command" ) \
+        || die "could not launch the certification server"
+
+    # The detached child writes its own pid; the launcher never knew it.
+    local pid="" i=0
+    while [ "$i" -lt 50 ]; do
+        pid="$(cat "$SERVER_PID_FILE" 2>/dev/null | tr -d "[:space:]")"
+        [ -n "$pid" ] && break
+        i=$((i + 1)); sleep 0.2
+    done
+    [ -n "$pid" ] || die "the certification server never reported a pid — see $log"
+
+    cert_meta_write "$pid" "$APP_PORT" "$sha" "$CERT_MODE" "$server_command"
+
+    # Production serves immediately; dev may still compile on first request.
+    local tries=60
+    [ "$CERT_MODE" = "dev" ] && tries=150
+    for _ in $(seq 1 "$tries"); do
+        if cert_http_ready "$pid"; then
+            green "Certification server ready at $APP_URL (PID $pid, ${CERT_MODE}, $sha)"
+            return 0
+        fi
+        cert_pid_alive "$pid" || { rm -f "$SERVER_META_FILE"; die "the certification server exited during startup — see $log"; }
+        sleep 2
+    done
+    die "app did not become ready — see $log"
 }
 
 cmd_verify() {
     cmd_serve
-    cmd_inbound_up
-    green "Communications mocked (no real email/SMS; local-delivery only)"
+    # THE INBOUND WEBHOOK IS A DEPENDENCY OF SOME SPECS, NOT OF CERTIFICATION.
+    #
+    # `cmd_inbound_up` ends in `die` when the FastAPI app will not start, and
+    # `die` exits. So on a host whose python has no uvicorn — this Mac mini's
+    # `/Library/Developer/CommandLineTools/usr/bin/python3` has none — the whole
+    # certification aborted before a single browser spec ran, including the
+    # authenticated-session specs that never touch SMS. One optional component
+    # took the entire suite down with it.
+    #
+    # Run it in a subshell so its exit cannot end this one, and say plainly what
+    # is now unavailable. Nothing is weakened: the inbound-SMS specs still need a
+    # live webhook and still fail without one, which is the honest result. What
+    # changes is that they fail alone instead of taking every other spec with
+    # them. `alloy-certify inbound-up`, invoked directly, stays strict.
+    if ( cmd_inbound_up ); then
+        green "Communications mocked (no real email/SMS; local-delivery only)"
+    else
+        echo "inbound webhook unavailable — see ${CERT_DIR}/.run/inbound.log" >&2
+        echo "  certification continues; inbound-SMS specs will fail on their own terms" >&2
+    fi
     info "Authenticating operator + running certification specs…"
     ( cd "$CERT_DIR" && NODE_PATH="$WEB_DIR/node_modules" CERT_APP_URL="$APP_URL" \
         CERT_OPERATOR_EMAIL="$OPERATOR_EMAIL" CERT_OPERATOR_PASSWORD="$OPERATOR_PASSWORD" \
@@ -433,7 +780,7 @@ cmd_journey() {
             printf '\n── %s  [inherits tenant]\n' "$name"
             needs_reset=0
         fi
-        cmd_app_stop >/dev/null 2>&1
+        cmd_app_stop >/dev/null 2>&1 || true
         if [ "$needs_reset" -eq 0 ]; then
             if ! ( cmd_serve ) > "$CERT_DIR/.run/journey/${name}.serve.log" 2>&1; then
                 printf '\033[31m✗ %s — app did not come up\033[0m\n' "$name" >&2
@@ -547,7 +894,9 @@ cmd_status() {
 # bypass the lease model exists to prevent. Releasing is the sanctioned way to say "I am
 # done" — alloy-stack stops the stack itself, but only when the last holder leaves.
 cmd_down() {
-    cmd_app_stop
+    # A port that will not release is reported by cmd_app_stop and must not abort
+    # the rest of teardown — the lease still has to be released.
+    cmd_app_stop || true
     local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
     if [ -x "$stack" ]; then
         "$stack" release "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" || true
@@ -559,24 +908,80 @@ cmd_down() {
 
 # Stop the app without touching the shared stack or the lease.
 cmd_app_stop() {
-    local stopped=0 pid
-    if [ -f "$SERVER_PID_FILE" ]; then
-        pid="$(cat "$SERVER_PID_FILE" 2>/dev/null)"
-        [ -n "$pid" ] && kill "$pid" 2>/dev/null && stopped=1
-        rm -f "$SERVER_PID_FILE"
+    # ── STOP EXACTLY THIS SESSION'S SERVER, OR NOTHING ──────────────────────────
+    #
+    # What this replaces: teardown used to find the server by pattern and by port.
+    # A previous Financials run killed THREE unrelated lane wrapper processes that
+    # way. Patterns cannot distinguish two lanes running the same program, and a
+    # port tells you what is listening, never who is entitled to stop it.
+    #
+    # The owned record answers that question, and `cert-detach.pl` made the answer
+    # actionable: the server is its own session leader, so its process GROUP holds
+    # the server and its children and nothing else on the machine. Signalling
+    # -PGID is therefore both complete and exact — no pattern, no port sweep, no
+    # possibility of reaching another lane.
+    local state; state="$(cert_owned_server_state)"
+    case "$state" in
+        none)
+            info "no certification server is recorded for this session"
+            return 0
+            ;;
+        stale)
+            info "clearing a certification server record whose process is gone"
+            rm -f "$SERVER_META_FILE" "$SERVER_PID_FILE"
+            return 0
+            ;;
+        foreign)
+            echo "the recorded certification server belongs to another session — refusing to stop it" >&2
+            echo "  session=$(cert_meta_get session_id 2>/dev/null) pid=$(cert_meta_get pid 2>/dev/null) port=$(cert_meta_get port 2>/dev/null)" >&2
+            return 1
+            ;;
+        outdated)
+            # Ours, older commit. A session must be able to clean up after itself;
+            # a moved HEAD is not a change of owner.
+            info "stopping our own certification server, which was built for $(cert_meta_get sha)"
+            ;;
+    esac
+
+    local pid port; pid="$(cert_meta_get pid)"; port="$(cert_meta_get port)"
+    info "stopping the certification server (PID ${pid}, port ${port}) …"
+
+    # The group id equals the leader pid because the leader called setsid. Guard
+    # anyway: signalling this script's own group would kill the caller.
+    local pgid; pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d "[:space:]")"
+    if [ -z "$pgid" ] || [ "$pgid" = "$(ps -o pgid= -p $$ 2>/dev/null | tr -d "[:space:]")" ]; then
+        kill -TERM "$pid" 2>/dev/null || true
+    else
+        kill -TERM "-${pgid}" 2>/dev/null || true
     fi
-    # The pid file records the launcher; Next spawns a child that outlives it and keeps
-    # the port bound, which is what left a dev server running after a "clean" teardown.
-    local held; held="$(lsof -ti "tcp:${APP_PORT}" 2>/dev/null || true)"
-    for pid in $held; do kill "$pid" 2>/dev/null && stopped=1; done
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1 || break
-        sleep 1
+
+    local i=0
+    while [ "$i" -lt 20 ]; do
+        cert_pid_alive "$pid" || break
+        i=$((i + 1)); sleep 0.5
     done
-    if lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1; then
-        for pid in $(lsof -ti "tcp:${APP_PORT}" 2>/dev/null); do kill -9 "$pid" 2>/dev/null || true; done
+
+    if cert_pid_alive "$pid"; then
+        # Escalate to the SAME known owned group, never to whatever holds the port.
+        if [ -n "$pgid" ] && [ "$pgid" != "$(ps -o pgid= -p $$ 2>/dev/null | tr -d "[:space:]")" ]; then
+            kill -KILL "-${pgid}" 2>/dev/null || true
+        else
+            kill -KILL "$pid" 2>/dev/null || true
+        fi
+        sleep 1
     fi
-    [ "$stopped" -eq 1 ] && info "app stopped (port ${APP_PORT} released)" || info "no app was running on ${APP_PORT}"
+
+    rm -f "$SERVER_META_FILE" "$SERVER_PID_FILE"
+
+    # Release is proven by binding, not by an empty pid list — the question the
+    # next serve actually asks is whether the port can be taken.
+    if cert_assert_port_bindable "$port" >/dev/null 2>&1; then
+        green "certification server stopped (port ${port} released)"
+        return 0
+    fi
+    echo "the certification server was signalled but port ${port} is still held" >&2
+    echo "  something else owns it now; this teardown will not kill what it does not own" >&2
+    return 1
 }
 
 # A test may source this file to exercise one helper without running a
@@ -591,11 +996,14 @@ case "${1:-all}" in
     serve) cmd_serve ;;
     verify) cmd_verify ;;
     status) cmd_status ;;
+    build) cmd_build ;;
     app-stop) cmd_app_stop ;;
     inbound-up) cmd_inbound_up ;;
     inbound-stop) cmd_inbound_stop ;;
     journey) cmd_journey ;;
     down) cmd_inbound_stop; cmd_down ;;
-    all) cmd_up; cmd_env; cmd_verify; cmd_status ;;
-    *) die "unknown command: $1 (up|env|serve|verify|inbound-up|inbound-stop|status|down|all)" ;;
+    # Production certification builds before it serves; the server never builds
+    # implicitly, so the journey has to say so out loud.
+    all) cmd_up; cmd_env; [ "$CERT_MODE" = "dev" ] || cmd_build; cmd_verify; cmd_status ;;
+    *) die "unknown command: $1 (up|env|build|serve|verify|inbound-up|inbound-stop|app-stop|status|down|all)" ;;
 esac

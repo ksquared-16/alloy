@@ -1,0 +1,49 @@
+# The gates the production build runs, run BEFORE the merge instead of after it.
+#
+# WHY THIS EXISTS. `scripts/vercel-ignored-build.sh` proceeds only for protected
+# refs, so a preview deployment never runs `npm run build` and therefore never
+# runs `prebuild`. Every gate in that chain — the declared route-capability
+# table, the service-client principal census, the unauthenticated side-effect
+# census — was real but unreachable until the merge had already happened. Twice
+# a lane merged a green PR and broke staging for everyone: Communications with
+# app/api/communications/unsubscribe on 2026-08-20, Attendance with
+# app/api/admin/childcare-attendance/service-day-exception on 2026-09-09. Both
+# times the gate worked perfectly and simply ran too late to be of use.
+#
+# IT RUNS `npm run prebuild`, NOT A COPY OF IT. A second implementation of the
+# route-capability check is the failure this repair must not introduce: it would
+# drift from the one the build runs, and then a PR could pass here and still
+# break the build. Invoking the identical script keeps pre-merge and build
+# validation the same thing by construction, so the ratchet, the manifest and
+# every refusal behave identically in both places.
+#
+# It does not replace or weaken the protected-ref build, which still runs this
+# same chain before `next build`. This is an earlier copy of that verdict, not a
+# substitute for it.
+name: Web prebuild gates
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web-prebuild-gates.yml"
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  prebuild-gates:
+    name: Prebuild gates (route capabilities)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "web/.nvmrc"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # The exact chain `npm run build` runs first. A new route missing from
+      # scripts/routeCapabilities.declared.json fails here, on the PR, instead
+      # of on staging after the merge.
+      - run: npm run prebuild

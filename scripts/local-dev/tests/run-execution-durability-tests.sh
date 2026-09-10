@@ -41,6 +41,8 @@ SUITES=(
   "development-run-cancel.test.mjs"
   "development-screen-answer.test.mjs"
   "development-lane-activity.test.mjs"
+  "development-operator-state-truth.test.mjs"
+  "development-migration-parity.test.mjs"
   "development-governed-approval.test.mjs"
   "development-merge-grant-binding.test.mjs"
   "development-input-contract-convergence.test.mjs"

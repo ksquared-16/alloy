@@ -195,7 +195,24 @@
    * reachable, never restacked into a second row that changes what the set looks like.
    */
   flex-wrap: nowrap;
+  /*
+   * `safe` IS LOAD-BEARING, NOT DECORATION.
+   *
+   * Plain `flex-end` aligns the set to the right, and when the set is wider than the column the
+   * overflow goes past the START edge. Leftward overflow in a left-to-right row is not scrollable
+   * -- the browser does not count it in `scrollWidth`, so `overflow-x: auto` never produces a
+   * scroll position that can reach it. Measured on a Work Unit: the row's box was x=910..1237 while
+   * "Contact Family" rendered at x=719, entirely outside its own container, with
+   * `scrollWidth === clientWidth`. The PRIMARY command was invisible and unreachable at every
+   * viewport width, which is the exact opposite of what the paragraph above promises.
+   *
+   * `safe flex-end` keeps the right alignment whenever the set fits and falls back to start
+   * alignment only when it would otherwise overflow the unreachable end, so the overflow lands on
+   * the scrollable side and the promise holds. The unprefixed declaration stays first as the
+   * fallback for engines that do not parse the keyword.
+   */
   justify-content: flex-end;
+  justify-content: safe flex-end;
   grid-template-columns: none;
   overflow-x: auto;
   /* The row is a rail, not a scroll region to look at — no gutter, no chained scrolling. */

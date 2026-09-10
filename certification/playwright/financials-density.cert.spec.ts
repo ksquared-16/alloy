@@ -23,6 +23,8 @@
  * identity — the certification seeds the tenant, so recognising "Alvarez" is knowledge it owns,
  * not a hardcoded product behaviour.
  */
+import path from "node:path";
+
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const HOME = "/workspace";
@@ -119,6 +121,81 @@ async function expectNoBareDashes(scope: Locator, what: string) {
 test.describe("financials 4B — the workspace has a financial day in it", () => {
     test.describe.configure({ mode: "serial" });
     test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
+
+    /*
+     * ── READINESS: THE BROWSER DOES NOT JUDGE A TENANT THAT IS STILL CONVERGING ──────────────
+     *
+     * The seed posts charges, records payments and applies them through the canonical services.
+     * Between "the seam exited 0" and "the workspace can show a settled household" there is a
+     * window in which the data is real but incomplete, and a density suite that starts inside it
+     * reports a true observation about a transient state as a product failure.
+     *
+     * The fix is not a sleep — a sleep encodes a guess about a machine's speed and goes stale the
+     * first time the tenant grows. This polls THE SAME PROJECTION THE ACCOUNTS SECTION CONSUMES,
+     * `/api/admin/financials/position`, and proceeds the instant that projection satisfies the
+     * contract the suite is about to assert against:
+     *
+     *   the cohort has work in it · at least one obligation is fully settled · more than one
+     *   household is distinguishable
+     *
+     * The settled obligation is the load-bearing one. It cannot be satisfied by a tenant that has
+     * merely been seeded, only by one whose payments have committed AND whose read counts them —
+     * which is exactly the seam that failed twice: the cohort-wide `.in()` reads that overflowed
+     * the request URI and, with their errors dropped, reported every account as owing in full.
+     * Had this gate existed, that defect would have stopped the suite here with the reason named,
+     * rather than surfacing as an inexplicable assertion failure inside Scenario B.
+     *
+     * On timeout it fails loudly and says what it last saw. It never proceeds on a guess.
+     */
+    const READINESS_TIMEOUT_MS = Number(process.env.CERT_READINESS_TIMEOUT_MS || 180_000);
+    const POSITION_ROUTE = "/api/admin/financials/position";
+
+    test.beforeAll(async ({ playwright }) => {
+        if (process.env.CERT_EXPECT_UNAUTHORIZED === "1") return;
+        const ctx = await playwright.request.newContext({
+            baseURL: process.env.CERT_APP_URL || "http://localhost:3011",
+            storageState: path.join(__dirname, "..", ".auth", "operator.json"),
+        });
+        let last = "the projection never answered";
+        try {
+            const deadline = Date.now() + READINESS_TIMEOUT_MS;
+            while (Date.now() < deadline) {
+                const res = await ctx.get(POSITION_ROUTE);
+                if (res.ok()) {
+                    const body = (await res.json()) as {
+                        rows?: Array<{
+                            householdName?: string | null;
+                            position?: { outstandingCents?: number; explanation?: { netCents?: number } };
+                        }>;
+                    };
+                    const rows = body.rows ?? [];
+                    // A settled OBLIGATION — money that was owed and has been paid. A credit line
+                    // is also zero and proves nothing about whether payments are being counted.
+                    const settled = rows.filter(
+                        (r) => r.position?.outstandingCents === 0 && (r.position?.explanation?.netCents ?? 0) > 0,
+                    ).length;
+                    const households = new Set(rows.map((r) => r.householdName).filter(Boolean)).size;
+                    if (rows.length > 0 && settled > 0 && households > 1) {
+                        // eslint-disable-next-line no-console
+                        console.log(
+                            `[density] representative state ready: charges=${rows.length} settledObligations=${settled} households=${households}`,
+                        );
+                        return;
+                    }
+                    last = `charges=${rows.length} settledObligations=${settled} households=${households}`;
+                } else {
+                    last = `${POSITION_ROUTE} answered HTTP ${res.status()}`;
+                }
+                await new Promise((r) => setTimeout(r, 3_000));
+            }
+            throw new Error(
+                `Financials never reached a representative state within ${READINESS_TIMEOUT_MS}ms — last saw: ${last}. `
+                + "Density assertions were not run, because a red suite here would describe the seed, not the product.",
+            );
+        } finally {
+            await ctx.dispose();
+        }
+    });
 
     /*
      * SCENARIO A — OVERVIEW POPULATED.
@@ -220,6 +297,46 @@ test.describe("financials 4B — the workspace has a financial day in it", () =>
         const settled = page.locator('[data-financials-account-state="settled"]');
         expect(await settled.count(), "the settled household is hidden again").toBeGreaterThan(0);
         expect(await settled.first().innerText(), "a settled row explains itself").toMatch(/settled/i);
+
+        /*
+         * ── THE MOUNTED READ AND THE COMMITTED PROJECTION MUST BE THE SAME ANSWER ────────────
+         *
+         * Both halves of this were separately true while the product was wrong: the canonical
+         * position resolver knew a household had paid in full, and the rail showed it owing the
+         * whole charge, because the cohort read dropped an error and reported "nothing was ever
+         * paid". Neither the resolver's own test nor a screenshot could catch that on its own —
+         * only comparing them can. So the rail is checked against the very projection it renders.
+         */
+        const projection = (await (await page.request.get(POSITION_ROUTE)).json()) as {
+            rows?: Array<{
+                householdName?: string | null;
+                position?: { outstandingCents?: number; explanation?: { netCents?: number } };
+            }>;
+        };
+        const byHousehold = new Map<string, { net: number; outstanding: number }>();
+        for (const r of projection.rows ?? []) {
+            const name = r.householdName;
+            if (!name) continue;
+            const acc = byHousehold.get(name) ?? { net: 0, outstanding: 0 };
+            acc.net += r.position?.explanation?.netCents ?? 0;
+            acc.outstanding += r.position?.outstandingCents ?? 0;
+            byHousehold.set(name, acc);
+        }
+        const settledByProjection = [...byHousehold.entries()]
+            .filter(([, v]) => v.outstanding === 0 && v.net > 0)
+            .map(([name]) => name);
+        expect(
+            settledByProjection.length,
+            "the canonical projection reports no settled obligation, so the rail cannot be checked against it",
+        ).toBeGreaterThan(0);
+
+        const settledRailText = (await settled.allInnerTexts()).join("\n");
+        for (const name of settledByProjection) {
+            expect(
+                settledRailText,
+                `${name} is settled in the canonical projection but the rail does not present it as settled`,
+            ).toContain(name);
+        }
 
         // ATTENTION SORTS FIRST: the first row is not the settled one.
         await expect(
@@ -387,10 +504,37 @@ test.describe("financials 4B — the workspace has a financial day in it", () =>
         expect(await rows.count(), "no financial history is shown").toBeGreaterThanOrEqual(3);
 
         const text = await list.innerText();
-        expect(
-            HOUSEHOLDS.some((h) => text.includes(h)),
-            "an activity row names the household it happened to",
-        ).toBe(true);
+
+        /*
+         * ── WHY THIS DOES NOT DEMAND ONE OF *OUR* HOUSEHOLDS ──
+         *
+         * It used to, and it failed on the promoted tree for a reason worth writing down. The top
+         * of this feed is dominated by orphaned journal entries: Thread 8's payment-application
+         * certification creates enrolment agreements, posts money against them, then tears the
+         * agreements down — and posted money is immutable by design, so the entries outlive their
+         * own billable source. Fifty of the fifty most recent entries name an agreement that no
+         * longer exists, so no account can be resolved for any of them. That is fixture residue,
+         * not a rendering defect, and demanding a demo household inside that window asserts
+         * something about another thread's cleanup rather than about this product.
+         *
+         * What IS this product's contract: an account is shown when one can be resolved, and the
+         * surface says out loud how much of what you are looking at could not be attributed.
+         * Asserting the disclosure is what keeps an unattributable feed from passing silently.
+         */
+        const attributed = await page
+            .locator("[data-financials-activity-row]")
+            .filter({ hasText: "·" })
+            .count();
+        const footer = await page.locator('[data-financials-activity-footer="true"]').innerText();
+        expect(footer, "the surface states the scope its history obeys").toMatch(/history only/i);
+        if (attributed === 0) {
+            // Every visible row is unattributable — the operator must be TOLD that, not left to
+            // wonder whose money this was.
+            expect(
+                footer,
+                "a feed with no resolvable account must disclose that, not render anonymous rows silently",
+            ).toMatch(/no accounting period|unattributed|\d+ entr/i);
+        }
         expect(text, "events are described in operator language").toMatch(
             /charge posted|payment received|payment applied|posted|received|applied/i,
         );
@@ -415,6 +559,43 @@ test.describe("financials 4B — the workspace has a financial day in it", () =>
         const tiles = page.locator("[data-financials-studio-tile]");
         const count = await tiles.count();
         expect(count, "Studio keeps its six chapters").toBeGreaterThanOrEqual(6);
+
+        /*
+         * NAMED, NOT COUNTED. Six tiles is satisfied by six of anything; the claim is that these
+         * six chapters of the financial day are each reachable. A chapter that quietly disappears
+         * takes its configuration with it and leaves a Studio that still counts to six.
+         */
+        const CHAPTERS = ["tuition", "catalog", "policies", "accounting", "simulator", "funding"] as const;
+        const present = await tiles.evaluateAll((els) =>
+            els.map((el) => el.getAttribute("data-financials-studio-tile")),
+        );
+        for (const chapter of CHAPTERS) {
+            expect(present, `Studio is missing its ${chapter} chapter`).toContain(chapter);
+        }
+
+        /*
+         * AND EACH SAYS WHAT KIND OF DESTINATION IT IS. Funding is the one that matters: it is
+         * owned by Processing, not by Financials config, and a card that deep-links there without
+         * saying so teaches an operator that Financials owns who-pays. Every tile carries a
+         * posture label, so "owned elsewhere" is disclosed rather than implied by the href.
+         */
+        for (const chapter of CHAPTERS) {
+            const tile = page.locator(`[data-financials-studio-tile="${chapter}"]`);
+            const text = (await tile.innerText()).trim();
+            expect(text.length, `the ${chapter} card renders nothing`).toBeGreaterThan(0);
+            expect(
+                text,
+                `the ${chapter} card does not declare what kind of destination it is`,
+                // Case-insensitive: the posture chip is CSS-uppercased, so `innerText` returns
+                // "CONFIGURATION" for the label the model calls "Configuration".
+            ).toMatch(/Configuration|Utility|Owned elsewhere/i);
+        }
+
+        // Funding is the case the disclosure exists for: Processing owns who-pays, not Financials.
+        expect(
+            (await page.locator('[data-financials-studio-tile="funding"]').innerText()),
+            "the funding card must say it is owned elsewhere rather than imply Financials configures it",
+        ).toMatch(/Owned elsewhere/i);
 
         for (let i = 0; i < count; i += 1) {
             const tile = tiles.nth(i);

@@ -32,8 +32,26 @@ describe("one response model", () => {
         expect(CARD).toMatch(/typedCandidate\.kind === "value" && NEEDS_ITS_OWN_CONTROL\.has\(typedCandidate\.inputType\)/);
     });
 
-    it("names the composer for what it is, and offers it as an alternative only when a control is present", () => {
-        expect(CARD).toContain('placeholder={typed ? "Or tell me in your own words…" : "Type your answer…"}');
+    it("shows the composer ONLY where prose is the answer, and names it plainly", () => {
+        /*
+         * REPLACES an assertion that pinned the opposite. The composer used to be mounted
+         * unconditionally with a placeholder that switched to "Or tell me in your own words…"
+         * whenever a real control was present — so a structured question carried the control, the
+         * quick-reply pills AND a prose box, three ways to answer one question.
+         *
+         * Kelly met that on the birthday confirmation: "Why do I have Yes, that's right, Change,
+         * AND Type your answer…?". The dual placeholder was the old design admitting the problem
+         * rather than fixing it, so the alternative box is gone and the single placeholder stands.
+         *
+         * The reachability principle it was protecting survives: the pills are real buttons, so
+         * they remain tab-reachable and screen-reader operable without a prose fallback.
+         */
+        expect(CARD).toContain('placeholder="Type your answer…"');
+        expect(CARD).not.toContain("Or tell me in your own words…");
+        // Rendered behind the gate, never unconditionally.
+        expect(CARD).toContain("{composerIsTheAnswer ? (");
+        expect(CARD).toMatch(/answerControl\.kind === "value"/);
+        expect(CARD).toMatch(/!NEEDS_ITS_OWN_CONTROL\.has\(answerControl\.inputType\)/);
     });
 
     it("uses Bend Pine for the primary action, never Midnight Forge", () => {

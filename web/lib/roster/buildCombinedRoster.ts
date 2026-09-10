@@ -49,6 +49,32 @@ import { loadOperationalExpectationInputs } from "@/lib/childcareOperational/exp
 import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
 import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 import { resolveCurrentWhereabouts } from "@/lib/roster/resolveCurrentWhereabouts";
+import {
+    ATTENDANCE_SUBJECT_KINDS,
+    applyObservedPresence,
+    interpretServiceDay,
+    raisesMissingArrivalAttention,
+    serviceDayAsOf,
+    type ServiceDayState,
+} from "@/lib/childcareOperational/attendance/serviceDayExpectations";
+import { effectiveExpectationsForWindow } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
+import { createSupabaseExpectationQueryGateway } from "@/lib/operationalExpectations/query/supabaseExpectationQueryGateway";
+
+/** The service-day reading attached to a roster child. */
+export type ChildServiceDayState = {
+    state: ServiceDayState;
+    /**
+     * The statement this reading came from. The operator surface needs it to say
+     * "they'll be in after all" or "we're opening after all": a change must name
+     * what it replaces, or it is not a change but a second, competing plan for the
+     * same child on the same day.
+     */
+    expectationId: string | null;
+    /** Operator-facing reason (illness, vacation, holiday_closure...). */
+    reasonKey: string | null;
+    /** True only for a genuine unexplained missing arrival. */
+    raisesAttention: boolean;
+};
 import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
 import { formatCompactScheduleHours } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import {
@@ -77,6 +103,14 @@ export type RosterChildSubject = {
     programCategoryId: string | null;
     /** Expected vs actual — `no_record` means nothing was authored, not absent. */
     actual: SubjectActualState;
+    /**
+     * How the SERVICE DAY reads for this child once known operational intent is
+     * applied — known away, closed, or an integrity failure we could not resolve.
+     * Observed presence still decides physical state; this decides how SILENCE
+     * reads, which is the difference between "nobody expected her" and "she is
+     * missing".
+     */
+    serviceDay?: ChildServiceDayState;
 };
 
 /** A staff member scheduled in a room on a date. Preview only — never Person detail. */
@@ -226,6 +260,7 @@ export async function buildCombinedRoster(
     // End of the service day: "where did today leave this child", not "where were
     // they at the instant this request happened to run".
     const whereaboutsAsOf = `${date}T23:59:59.999Z`;
+
     // The effective fact a child correction would target — same fold, so the
     // surface never has to interpret raw history to offer "Correct".
     const childLatestFactByAgreement = new Map<string, string>();
@@ -265,6 +300,41 @@ export async function buildCombinedRoster(
     });
 
     const expectedToday = expectations.expectedAttendance.filter((e) => e.date === date);
+
+    /*
+     * KNOWN OPERATIONAL INTENT FOR THIS SERVICE DAY.
+     *
+     * The schedule says who normally attends and the facts say who turned up;
+     * neither knows that Emma is on holiday or that the centre is shut. Without
+     * this the roster reports a holiday as a hundred unexplained missing
+     * arrivals, which is the defect Thread 4 exists to remove.
+     *
+     * A failed read THROWS rather than yielding an empty set: "no expectations"
+     * and "we could not ask" must never look alike, because the first renders as
+     * a normal day.
+     */
+    const expectationSubjects = [
+        { kind: ATTENDANCE_SUBJECT_KINDS.site, id: siteLocationId },
+        ...rooms.map((r) => ({ kind: ATTENDANCE_SUBJECT_KINDS.operationalGroup, id: r.id })),
+        ...[...new Set(expectedToday.map((e) => e.customerMemberId))].map((id) => ({
+            kind: ATTENDANCE_SUBJECT_KINDS.child,
+            id,
+        })),
+    ];
+    const serviceDayExpectations = await effectiveExpectationsForWindow(
+        { orgId, subjects: expectationSubjects, asOf: serviceDayAsOf(date) },
+        createSupabaseExpectationQueryGateway(supabase),
+    );
+
+    const serviceDayByChild = new Map(
+        interpretServiceDay({
+            siteLocationId,
+            scheduledChildIds: expectedToday.map((e) => e.customerMemberId),
+            groupByChildId: new Map(expectedToday.map((e) => [e.customerMemberId, e.roomLocationId])),
+            effective: serviceDayExpectations.effective,
+            unresolved: serviceDayExpectations.unresolved,
+        }).map((row) => [row.childId, row]),
+    );
 
     // Batched identity resolution — one query per population, never per subject.
     const memberIds = [...new Set(expectedToday.map((e) => e.customerMemberId))];
@@ -382,6 +452,31 @@ export async function buildCombinedRoster(
                     departedAt: day.lastCheckOutAt,
                     actualRoomLocationId: here.locationId,
                     latestFactId: childLatestFactByAgreement.get(e.agreementId) ?? null,
+                };
+            })(),
+            serviceDay: (() => {
+                const expectation = serviceDayByChild.get(e.customerMemberId);
+                if (!expectation) return undefined;
+
+                // Observed presence is read through the SAME fold the row above
+                // uses, so the physical answer and the interpreted answer cannot
+                // come from two different readings of the day.
+                const here = resolveCurrentWhereabouts(
+                    eventsByAgreement.get(e.agreementId) ?? [],
+                    whereaboutsAsOf,
+                );
+                const observed =
+                    here.state === "present" ? "present"
+                    : here.state === "checked_out" ? "checked_out"
+                    : here.state === "absent" ? "absent"
+                    : "no_record";
+
+                const state = applyObservedPresence(expectation, observed);
+                return {
+                    state,
+                    expectationId: expectation.expectationId,
+                    reasonKey: expectation.reasonKey,
+                    raisesAttention: raisesMissingArrivalAttention(state),
                 };
             })(),
         };

@@ -101,11 +101,34 @@ export async function preflightStageChangingOutcomeReadiness(params: {
     let firstDestination: string | null = null;
     let firstTransition: string | null = null;
 
+    /*
+     * TRANSITION REQUIREMENTS ARE READ OFF THE OPPORTUNITY RECORD.
+     *
+     * `evaluateTransitionRequirementPreflight` builds its completion context from the Opportunity
+     * (`buildOpportunityCompletionContextFromDb`), so with no acquisition episode there is no
+     * record to evaluate configured stage_exit fields against.
+     *
+     * Not blocking is the correct answer, and it is not a loosened gate: the sufficiency preflight
+     * that runs alongside this one is the check that owns a context-free child's readiness, and it
+     * is unaffected. Blocking here would refuse every context-free stage move with a message about
+     * fields that live on a record the child does not have.
+     */
+    const requirementScopeId = params.subject.opportunity_id;
+    if (!requirementScopeId) {
+        return {
+            blocked: false,
+            message: null,
+            blockingRequirements: [],
+            destinationStageKey: null,
+            transitionRef: null,
+        };
+    }
+
     for (const dest of destinations) {
         const preflight = await evaluateTransitionRequirementPreflight({
             supabase: params.supabase,
             orgId: params.orgId,
-            opportunityId: params.subject.opportunity_id,
+            opportunityId: requirementScopeId,
             departmentMetadata: params.departmentMetadata,
             fromBuilderStageKey: fromStageKey,
             toBuilderStageKey: dest.destinationStageKey,

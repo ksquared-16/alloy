@@ -23,6 +23,16 @@ import {
 } from "@/lib/scheduling/operationsWorkspaceWarmCache";
 import { createLatestWinsGate } from "@/lib/runtime/latestWins";
 import { buildAttendanceOverviewModel } from "@/lib/roster/attendanceOverviewModel";
+import {
+    CHILD_AWAY_REASONS,
+    CLOSURE_REASONS,
+    serviceDayReasonLabel,
+    serviceDayChipLabel,
+    serviceDayStateSentence,
+    serviceDayTone,
+    type ServiceDayTone,
+} from "@/lib/childcareOperational/attendance/serviceDayCopy";
+import type { ServiceDayState } from "@/lib/childcareOperational/attendance/serviceDayExpectations";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, UserRound, Users } from "lucide-react";
 
@@ -44,6 +54,19 @@ type SubjectActual = {
     latestFactId: string | null;
 };
 
+/**
+ * How the day reads once known intent is applied — off sick, on holiday, room
+ * closed, or here-when-nobody-expected-her. Absent for a child nobody has said
+ * anything about, which is most of them on most days.
+ */
+type ServiceDayReading = {
+    state: ServiceDayState;
+    /** The statement this reading came from — what a change would replace. */
+    expectationId: string | null;
+    reasonKey: string | null;
+    raisesAttention: boolean;
+};
+
 type RosterChild = {
     subjectType: "child";
     customerMemberId: string;
@@ -52,6 +75,7 @@ type RosterChild = {
     displayName: string;
     timeLabel: string | null;
     actual: SubjectActual;
+    serviceDay?: ServiceDayReading | null;
 };
 
 type RosterStaff = {
@@ -152,6 +176,52 @@ function stateSentence(actual: SubjectActual): string {
         default:
             return "Not arrived";
     }
+}
+
+/**
+ * Chrome for an interpreted state. Colour is semantic: a child on holiday is
+ * settled, not an alarm; a plan we could not resolve is never healthy; and a
+ * child who is here when nobody expected her is worth an operator's eye without
+ * being an error.
+ */
+function toneChrome(tone: ServiceDayTone): string {
+    switch (tone) {
+        case "present":
+            return "bg-[#00A283]/10 text-[#00715C] ring-1 ring-[#00A283]/25";
+        case "attention":
+            return "bg-alloy-gold/15 text-alloy-midnight ring-1 ring-alloy-gold/40";
+        case "settled":
+            return "bg-alloy-stone/12 text-alloy-midnight/70 ring-1 ring-alloy-stone/25";
+        case "unknown":
+            return "bg-alloy-ember/12 text-alloy-midnight ring-1 ring-alloy-ember/35";
+        default:
+            return "bg-alloy-stone/15 text-alloy-midnight/60 ring-1 ring-alloy-stone/25";
+    }
+}
+
+/**
+ * What a child's row says.
+ *
+ * The interpreted reading wins when there is one, because it already folded the
+ * observed fact in — `attended_despite_plan` is a PRESENT child, and the raw
+ * state would say only "Present" and lose the half the operator needs.
+ */
+function childSentence(child: RosterChild): string {
+    const arrivedLabel = formatTime(child.actual.arrivedAt);
+    const departedLabel = formatTime(child.actual.departedAt);
+    if (child.serviceDay) {
+        return serviceDayStateSentence({
+            state: child.serviceDay.state,
+            reasonKey: child.serviceDay.reasonKey,
+            arrivedLabel,
+            departedLabel,
+        });
+    }
+    return stateSentence(child.actual);
+}
+
+function childChrome(child: RosterChild): string {
+    return child.serviceDay ? toneChrome(serviceDayTone(child.serviceDay.state)) : stateChip(child.actual.state);
 }
 
 function stateChip(state: ActualState): string {
@@ -391,6 +461,116 @@ export default function AttendanceWorkspace({
                 },
             },
             "/api/admin/actions/execute"
+        );
+    }
+
+    /*
+     * "WE'RE SHUT ON THE 25TH" IS ONE STATEMENT ABOUT THE SITE.
+     *
+     * Not one absence per child: a hundred rows that all say the same thing, none
+     * of which is the fact, and all of which would need changing together when the
+     * closure moves. The projection applies the single closure to whoever was
+     * scheduled.
+     *
+     * This posts to the service-day-exception route rather than the action bus
+     * because a closure's subject is a SITE, and the action runtime's entity
+     * vocabulary has no location in it. The route applies the identical
+     * authorization primitive, so the two paths cannot disagree about who may
+     * write — which is the property that actually matters here.
+     */
+    function closeSiteDay(reasonKey: string) {
+        return runAction(
+            `site:${siteLocationId}`,
+            {
+                action: "close_grain",
+                grain_kind: "site",
+                grain_id: siteLocationId,
+                reason_key: reasonKey,
+                from_date: date,
+            },
+            "/api/admin/childcare-attendance/service-day-exception"
+        );
+    }
+
+    /*
+     * "SHE'S OFF SICK" AUTHORS A PLAN, NOT A WITNESS STATEMENT.
+     *
+     * The old Mark absent appended an observed absence fact — a statement that we
+     * saw something we did not see, and for a future day, about a day that has
+     * not happened. This states what is EXPECTED instead, which leaves the
+     * schedule true and leaves the physical record free to disagree: a child who
+     * arrives during her own holiday shows as here AND unexpected.
+     *
+     * Picking the reason IS the whole decision, so it is a select rather than a
+     * dialog — the same judgement Move makes two functions down.
+     */
+    function planChildAbsence(child: RosterChild, room: Cell, reasonKey: string) {
+        return runAction(
+            `child:${child.customerMemberId}`,
+            {
+                action_key: "attendance.plan_absence",
+                entity_type: "child",
+                entity_id: child.customerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                context: { surface: "workspace" },
+                payload: {
+                    customer_member_id: child.customerMemberId,
+                    child_label: child.displayName,
+                    reason_key: reasonKey,
+                    from_date: room.date,
+                    service_date: room.date,
+                },
+            },
+            "/api/admin/actions/execute"
+        );
+    }
+
+    /*
+     * "THEY'LL BE IN AFTER ALL" NAMES WHAT IT REPLACES.
+     *
+     * Without the predecessor this is not a change of plan but a SECOND plan for
+     * the same child on the same day, and the two would sit side by side with
+     * nothing to say which one is current. The operator says "cancel that"; the
+     * platform records that the intent was validly held until it changed.
+     */
+    function withdrawChildAbsence(child: RosterChild, room: Cell) {
+        const predecessorId = child.serviceDay?.expectationId;
+        if (!predecessorId) return;
+        return runAction(
+            `child:${child.customerMemberId}`,
+            {
+                action_key: "attendance.withdraw_absence",
+                entity_type: "child",
+                entity_id: child.customerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                context: { surface: "workspace" },
+                payload: {
+                    customer_member_id: child.customerMemberId,
+                    child_label: child.displayName,
+                    predecessor_id: predecessorId,
+                    reason_key: "plans_changed",
+                    from_date: room.date,
+                    service_date: room.date,
+                },
+            },
+            "/api/admin/actions/execute"
+        );
+    }
+
+    function reopenSiteDay(predecessorId: string) {
+        return runAction(
+            `site:${siteLocationId}`,
+            {
+                action: "reopen_grain",
+                grain_kind: "site",
+                grain_id: siteLocationId,
+                predecessor_id: predecessorId,
+                reason_key: "reopened",
+                from_date: date,
+            },
+            "/api/admin/childcare-attendance/service-day-exception"
         );
     }
 
@@ -674,10 +854,14 @@ export default function AttendanceWorkspace({
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span
-                                                className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${stateChip(c.actual.state)}`}
+                                                className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${childChrome(c)}`}
                                                 data-attendance-child-state={c.actual.state}
+                                                data-attendance-child-day={c.serviceDay?.state ?? ""}
+                                                title={childSentence(c)}
                                             >
-                                                {stateSentence(c.actual)}
+                                                {c.serviceDay
+                                                    ? serviceDayChipLabel(c.serviceDay.state, c.serviceDay.reasonKey)
+                                                    : stateSentence(c.actual)}
                                             </span>
                                             {c.actual.state === "no_record" ? (
                                                 <>
@@ -690,14 +874,42 @@ export default function AttendanceWorkspace({
                                                     >
                                                         {busy ? "…" : "Check in"}
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        className={ACTION_SECONDARY}
-                                                        disabled={busy}
-                                                        onClick={() => childAttendance(c, openRoom, "absence")}
-                                                    >
-                                                        Mark absent
-                                                    </button>
+                                                    {/* Already explained — offering "Mark absent"
+                                                        again would invite a second, competing plan
+                                                        for the same child on the same day. Check in
+                                                        stays, because she may still walk in. */}
+                                                    {c.serviceDay?.state === "known_away" && c.serviceDay.expectationId ? (
+                                                        <button
+                                                            type="button"
+                                                            className={ACTION_SECONDARY}
+                                                            disabled={busy}
+                                                            onClick={() => void withdrawChildAbsence(c, openRoom)}
+                                                            data-attendance-child-expected-again={c.customerMemberId}
+                                                        >
+                                                            {busy ? "…" : "In after all"}
+                                                        </button>
+                                                    ) : null}
+                                                    {c.serviceDay && !c.serviceDay.raisesAttention ? null : (
+                                                        <select
+                                                            className={`${ACTION} border border-alloy-stone/25 bg-white pr-1 font-medium text-alloy-midnight/75`}
+                                                            disabled={busy}
+                                                            value=""
+                                                            onChange={(e) => {
+                                                                const reason = e.target.value;
+                                                                e.target.value = "";
+                                                                if (reason) void planChildAbsence(c, openRoom, reason);
+                                                            }}
+                                                            aria-label={`Mark ${c.displayName} absent`}
+                                                            data-attendance-child-absent={c.customerMemberId}
+                                                        >
+                                                            <option value="">Mark absent…</option>
+                                                            {CHILD_AWAY_REASONS.map((r) => (
+                                                                <option key={r.key} value={r.key}>
+                                                                    {r.label}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    )}
                                                 </>
                                             ) : c.actual.state === "present" ? (
                                                 <>
@@ -777,13 +989,47 @@ export default function AttendanceWorkspace({
     const overview = buildAttendanceOverviewModel(model?.cells ?? []);
     const { hereNowByRoom, awayFromPlacement } = overview;
 
+    /*
+     * The site reads as closed only when every scheduled child does. One room
+     * being shut is a room-level fact and belongs on that room, not on a banner
+     * that tells a director to go home.
+     */
+    const allChildren = (model?.cells ?? []).flatMap((c) => c.children);
+    const closure =
+        allChildren.length > 0 && allChildren.every((c) => c.serviceDay?.state === "closed")
+            ? {
+                  reasonLabel: serviceDayReasonLabel(allChildren[0]?.serviceDay?.reasonKey ?? null),
+                  expectationId: allChildren[0]?.serviceDay?.expectationId ?? null,
+              }
+            : null;
+
     const exceptions = [
         ...(model?.cells ?? []).flatMap((c) => [
-            ...c.children.filter((s) => s.actual.state === "no_record").map((s) => ({
-                key: `c:${s.customerMemberId}`,
-                label: `${s.displayName} has not arrived`,
-                room: c.roomName,
-            })),
+            // A child whose parent rang at seven has not "failed to arrive". Listing
+            // her here is how the exception list becomes noise and stops being read.
+            ...c.children
+                .filter((s) => s.actual.state === "no_record" && (s.serviceDay?.raisesAttention ?? true))
+                .map((s) => ({
+                    key: `c:${s.customerMemberId}`,
+                    label: `${s.displayName} has not arrived`,
+                    room: c.roomName,
+                })),
+            // Here, and nobody expected her. Not a fault — but the one thing a
+            // director would most want said out loud when she walks in.
+            ...c.children
+                .filter((s) => s.serviceDay?.state === "attended_despite_plan")
+                .map((s) => ({
+                    key: `u:${s.customerMemberId}`,
+                    label: `${s.displayName} is here and was not expected`,
+                    room: c.roomName,
+                })),
+            ...c.children
+                .filter((s) => s.serviceDay?.state === "unknown")
+                .map((s) => ({
+                    key: `x:${s.customerMemberId}`,
+                    label: `${s.displayName} — this child's plan could not be read`,
+                    room: c.roomName,
+                })),
             ...c.staff.filter((s) => s.actual.state === "no_record").map((s) => ({
                 key: `s:${s.personId}`,
                 label: `${s.displayName} has not arrived`,
@@ -810,20 +1056,70 @@ export default function AttendanceWorkspace({
                         <p className="mt-0.5 text-[12px] text-alloy-midnight/60">{siteName}</p>
                     </div>
                     {/* Back to what was EXPECTED, carrying the room. */}
-                    {onBackToRoster ? (
-                        <button
-                            type="button"
-                            className="rounded border border-alloy-stone/25 px-2.5 py-1 text-[11.5px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
-                            onClick={() => onBackToRoster(openRoomId)}
-                            data-attendance-back-to-roster="true"
-                        >
-                            ← Roster
-                        </button>
-                    ) : null}
+                    <div className="flex items-center gap-2">
+                        {/* Only offered while the day is open — a closure on a closed
+                            day would author a second statement saying the same thing. */}
+                        {closure ? null : (
+                            <select
+                                className="min-h-[32px] rounded border border-alloy-stone/25 bg-white px-2 text-[11.5px] font-medium text-alloy-midnight/75"
+                                value=""
+                                disabled={busySubject === `site:${siteLocationId}`}
+                                onChange={(e) => {
+                                    const reason = e.target.value;
+                                    e.target.value = "";
+                                    if (reason) void closeSiteDay(reason);
+                                }}
+                                aria-label="Close the site for this day"
+                                data-attendance-close-site="true"
+                            >
+                                <option value="">Close today…</option>
+                                {CLOSURE_REASONS.map((r) => (
+                                    <option key={r.key} value={r.key}>
+                                        {r.label}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                        {onBackToRoster ? (
+                            <button
+                                type="button"
+                                className="rounded border border-alloy-stone/25 px-2.5 py-1 text-[11.5px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                onClick={() => onBackToRoster(openRoomId)}
+                                data-attendance-back-to-roster="true"
+                            >
+                                ← Roster
+                            </button>
+                        ) : null}
+                    </div>
                 </header>
 
                 {error ? (
                     <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">{error}</p>
+                ) : null}
+
+                {/*
+                    A closed day is not a day of absences. Saying it once, at the
+                    top, is the difference between "we are shut" and a screen full
+                    of children who appear to have failed to turn up.
+                */}
+                {closure ? (
+                    <p
+                        className="rounded border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-[12.5px] font-medium text-alloy-midnight/80"
+                        data-attendance-closed="true"
+                    >
+                        Closed today{closure.reasonLabel ? ` · ${closure.reasonLabel}` : ""} — no children are expected.
+                        {closure.expectationId ? (
+                            <button
+                                type="button"
+                                className="ml-2 rounded border border-alloy-stone/30 bg-white px-2 py-0.5 text-[11.5px] font-medium text-alloy-midnight/75 hover:bg-alloy-stone/10"
+                                disabled={busySubject === `site:${siteLocationId}`}
+                                onClick={() => void reopenSiteDay(closure.expectationId as string)}
+                                data-attendance-reopen-site="true"
+                            >
+                                We are opening after all
+                            </button>
+                        ) : null}
+                    </p>
                 ) : null}
 
                 {model ? (
@@ -839,7 +1135,15 @@ export default function AttendanceWorkspace({
                             { label: "Expected", value: String(overview.counts.expected) },
                             { label: "Here now", value: String(overview.counts.present) },
                             { label: "Not arrived", value: String(overview.counts.notArrived) },
-                            { label: "Checked out", value: String(overview.counts.checkedOut) },
+                            /*
+                             * "Away" earns the fourth tile only when there IS
+                             * someone away. On an ordinary day the operator wants
+                             * Checked out; on a holiday week a zero would be the
+                             * least informative number on the screen.
+                             */
+                            overview.counts.knownAway > 0
+                                ? { label: "Away", value: String(overview.counts.knownAway) }
+                                : { label: "Checked out", value: String(overview.counts.checkedOut) },
                         ].map((m) => (
                             <div key={m.label} className={`${WS_PANEL_SURFACE} px-3 py-2.5`}>
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">

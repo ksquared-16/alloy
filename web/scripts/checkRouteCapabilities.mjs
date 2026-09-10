@@ -578,8 +578,14 @@ export function bindDeclaration(file, route, method, decl) {
 
     // Join 2 — a verdict that is bound must be tested. A helper that throws binds nothing and needs
     // no test; one that returns `{ok:false, response}` and is ignored is a gate in name only.
+    //
+    // `switch` counts, and had to be added: a handler whose helper returns a discriminated result
+    // branches on `switch (verdict.status)` — exhaustively, with a case per outcome — and reading
+    // only `if` reported that stricter test as no test at all. The bound identifier is still
+    // required in the discriminant, so a switch on something else, or a verdict left unread, fails
+    // exactly as before. This widens what counts as testing; it admits nothing untested.
     const bound = calls ? verdictBinding(body, helper) : null;
-    if (bound && !new RegExp(`if\\s*\\([^)]*\\b${bound}\\b`).test(body)) {
+    if (bound && !new RegExp(`(?:if|switch)\\s*\\([^)]*\\b${bound}\\b`).test(body)) {
         violations.push({ route, kind: "untested-verdict", detail: `${method} calls ${helper} and binds its verdict to '${bound}', but never tests '${bound}' — the verdict is discarded` });
     }
 

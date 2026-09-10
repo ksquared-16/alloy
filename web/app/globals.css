@@ -1864,3 +1864,25 @@ body {
     animation-duration: 0.01ms !important;
   }
 }
+
+
+/*
+ * PARTICIPANT-FACING CONTROLS WEAR ALLOY'S ACCENT, NOT THE BROWSER'S BLUE.
+ *
+ * The participant surface had no accent rule at all, so every native checkbox and radio a family
+ * met — the review acknowledgement rendered by the Forms engine, and the electronic-signature
+ * consent in the signing dialog — painted itself in the user agent's default blue. Two different
+ * components, one missing declaration: the surface simply never claimed the colour.
+ *
+ * `accent-color` is deliberately the whole fix. It tints the control the browser already draws, so
+ * checked/unchecked semantics, keyboard operation, the focus ring, disabled rendering and the
+ * native hit target all stay exactly as they were — none of which survives being rebuilt out of
+ * divs, which is how a checkbox usually stops being reachable by keyboard.
+ *
+ * Scoped to the participant shell rather than applied globally: adminV2 already sets its own accent
+ * in configurationRuntime.css, and this must not reach across into it.
+ */
+.alloy-participant-surface input[type="checkbox"],
+.alloy-participant-surface input[type="radio"] {
+  accent-color: var(--color-alloy-bend-pine);
+}

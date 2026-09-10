@@ -60,6 +60,25 @@ export const ENROLLMENT_START_ENTRY_INTENT: ProcessEntryIntentV1 = "enrollment_s
 /** The intent recorded when no creator named one — the default `buildEnrollmentProcessInstanceInsert` writes. */
 export const DEFAULT_PROCESS_ENTRY_INTENT: ProcessEntryIntentV1 = "create_lead";
 
+/**
+ * What KIND of subject each initiation creates — a platform fact, not a tenant choice.
+ *
+ * Create Lead begins a family's acquisition case; Start Enrollment begins one child's Enrollment
+ * execution. That is what the actions ARE, and no configuration can make Start Enrollment produce
+ * a family. Publication uses it to refuse an entry point that would drop a child into a stage the
+ * family case owns — which is exactly what this tenant had, and what made the child's completion
+ * outcome unreachable.
+ *
+ * Note this names no stage. Which stage each intent enters stays configuration's decision; only
+ * the GRAIN that stage must be able to hold is fixed here.
+ */
+export const PROCESS_ENTRY_INTENT_SUBJECT_GRAIN: Readonly<
+    Record<ProcessEntryIntentV1, "family" | "child">
+> = {
+    create_lead: "family",
+    enrollment_start: "child",
+};
+
 export type ProcessEntryPointsV1 = {
     readonly version: 1;
     /** intent → stage key. Object-keyed, so one intent cannot be defined twice. */

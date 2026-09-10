@@ -32,7 +32,7 @@
  * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
  */
 
-import { selectIn } from "@/lib/financials/workspace/inBatches";
+import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -449,7 +449,8 @@ async function readResponsibility(
 
     let allocationRows: Array<Record<string, unknown>>;
     try {
-        allocationRows = await selectIn(
+        allocationRows = await readInBatches<Record<string, unknown>>(
+            "who is responsible for these charges",
             [...chargeIds],
             (batch) => supabase
                 .from("financial_responsibility_allocations")
@@ -457,7 +458,6 @@ async function readResponsibility(
                 .eq("org_id", orgId)
                 .eq("state", "active")
                 .in("charge_id", batch) as never,
-            "who is responsible for these charges",
         );
     } catch {
         // A responsibility read that fails is an absence of responsibility on the card, never a
@@ -592,7 +592,8 @@ async function readAccountPayments(
          * rest of the response, and the card read the empty result as "none of this has been paid" —
          * showing a family the whole balance again after they had settled it.
          */
-        selectIn(
+        readInBatches<Record<string, unknown>>(
+            "money applied to these charges",
             [...chargeIds],
             (batch) => supabase
                 .from("payment_allocations")
@@ -600,8 +601,7 @@ async function readAccountPayments(
                 .eq("org_id", orgId)
                 .eq("status", "active")
                 .in("charge_id", batch) as never,
-            "money applied to these charges",
-        ).then((data) => ({ data: data as Array<Record<string, unknown>>, error: null })),
+        ).then((data) => ({ data, error: null })),
         supabase
             .from("payments")
             .select(

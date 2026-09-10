@@ -34,7 +34,6 @@
  * declares snapshot semantics.
  */
 
-import { selectIn } from "@/lib/financials/workspace/inBatches";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -190,15 +189,23 @@ export async function resolveFinancialPositionCohort(
             charges.filter((c) => c.billable_source_type === "enrollment_agreement").map((c) => c.billable_source_id),
         ),
     ];
-    const { data: agreementRows } = agreementIds.length
-        ? await supabase
-              .from("child_enrollment_agreements")
-              .select("id, customer_id, site_location_id")
-              .eq("org_id", args.orgId)
-              .in("id", agreementIds.slice(0, 200))
-        : { data: [] };
+    /*
+     * PROVENANCE FAILS CLOSED TOO. This read decides which household a charge belongs to. Dropped,
+     * it does not produce a wrong number — it produces no account at all, which is indistinguishable
+     * on screen from a family that has no financial history.
+     */
+    const agreementRows = await readInBatches<{ id: string; customer_id: string | null; site_location_id: string | null }>(
+        "the agreements charges were billed from",
+        agreementIds,
+        (batch) =>
+            supabase
+                .from("child_enrollment_agreements")
+                .select("id, customer_id, site_location_id")
+                .eq("org_id", args.orgId)
+                .in("id", batch),
+    );
     const agreements = new Map(
-        (((agreementRows ?? []) as unknown) as Array<{ id: string; customer_id: string | null; site_location_id: string | null }>)
+        agreementRows
             .map((a) => [a.id, a]),
     );
 
@@ -268,12 +275,12 @@ export async function resolveFinancialPositionCohort(
 
     /* Names, so a list of accounts reads as families. Presentation only — never a key. */
     const customerIds = [...new Set(visible.map((v) => v.customerId).filter((v): v is string => !!v))];
-    const { data: customerRows } = customerIds.length
-        ? await supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", customerIds.slice(0, 200))
-        : { data: [] };
-    const customerNames = new Map(
-        (((customerRows ?? []) as unknown) as Array<{ id: string; name: string | null }>).map((c) => [c.id, c.name]),
+    const customerRows = await readInBatches<{ id: string; name: string | null }>(
+        "household names",
+        customerIds,
+        (batch) => supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", batch),
     );
+    const customerNames = new Map(customerRows.map((c) => [c.id, c.name]));
 
     const rows: FinancialPositionRow[] = visible.map((v) => {
         const reductions = facts.reductionsByCharge.get(v.charge.id) ?? [];
@@ -350,6 +357,68 @@ type AllocationFact = { id: string; assignedAmountCents: number; isUnassigned: b
  * widened to `.in(charges)`. Keeping them recognisably identical is deliberate: a divergence
  * here would be a divergence in what the workspace believes about money.
  */
+/**
+ * ── A COHORT READ THAT FAILED SILENTLY BECAME MONEY A FAMILY DID NOT OWE ────────────────────────
+ *
+ * THE DEFECT. Every fact below was fetched with one `.in("charge_id", chargeIds)` covering the
+ * whole cohort, and the result was destructured as `const { data } = …` with the error dropped.
+ * Past a few hundred charges the request URI exceeds the server's limit, PostgREST answers
+ * `URI too long`, and `data` comes back null. Null applications do not read as "we could not
+ * find out" — they read as "nothing was ever paid", so every account's outstanding was overstated
+ * by exactly the payments applied to it. A household that had settled in full was shown owing the
+ * whole charge. That is worse than an empty list: it is a confident wrong number, and Thread 2's
+ * account detail sitting beside it answered zero for the same charge.
+ *
+ * THE REPAIR, in two halves, because either alone still lies:
+ *
+ *   1. CHUNK. The id list is spent in batches small enough that the URI cannot overflow, and the
+ *      batches are concatenated. Scale stops changing the answer.
+ *   2. THROW. A read that fails is an ERROR, never an empty result. Financial truth may be
+ *      unavailable, but it may not be silently replaced by a cheaper falsehood — the same
+ *      fail-closed rule `resolveActorPermissionGrants` already applies to grants.
+ *
+ * `resolveFamilyCollectible` issues these same queries with `.eq(charge)` and was therefore never
+ * exposed: one id per request. That is exactly the divergence the note above this function warned
+ * about, arriving through scale rather than through edits.
+ */
+/**
+ * How many identifiers one request may carry. Well under the server's URI limit with room for the
+ * longest column list in this file, so the bound holds as selects grow rather than only today.
+ */
+export const ID_BATCH = 80;
+
+/*
+ * NOT ONLY THE CHARGE-SCOPED FACTS. The first repair batched the four facts keyed by charge and
+ * left the follow-on read keyed by PAYMENT alone, because it looked small — it reads only the
+ * payments the applications referred to. It is not small: 432 applications on this tenant refer to
+ * 392 distinct payments, the request URI overflows exactly as before, and the discarded error left
+ * every application with a null payment status. An application whose payment cannot be shown to
+ * have settled is not counted, so every account read as owing its full posted amount and NO
+ * account could ever be settled. Same rule, same file, one read further down.
+ */
+export async function readInBatches<T>(
+    label: string,
+    ids: string[],
+    run: (batch: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+    /*
+     * De-duplicated once, here, so a repeated identifier cannot straddle two batches and return the
+     * same row twice — which in this file would be counted twice as money. Callers that already
+     * pass a Set lose nothing; callers that do not are made safe rather than trusted.
+     */
+    const unique = [...new Set(ids)];
+    const out: T[] = [];
+    for (let i = 0; i < unique.length; i += ID_BATCH) {
+        const batch = unique.slice(i, i + ID_BATCH);
+        const { data, error } = await run(batch);
+        if (error) {
+            throw new Error(`financial position: ${label} could not be read (${error.message.trim()})`);
+        }
+        for (const row of data ?? []) out.push(row);
+    }
+    return out;
+}
+
 async function readPositionFacts(supabase: SupabaseClient, orgId: string, chargeIds: string[]) {
     const [
         reductionRows,
@@ -357,27 +426,47 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         allocationRows,
         claimLineRows,
     ] = await Promise.all([
-        selectIn(chargeIds, (batch) => supabase
-            .from("financial_reduction_applications")
-            .select("source_charge_id, amount_cents")
-            .eq("org_id", orgId)
-            .in("source_charge_id", batch) as never, "reductions applied to these charges"),
-        selectIn(chargeIds, (batch) => supabase
-            .from("payment_allocations")
-            .select("charge_id, allocated_amount_cents, status, payment_id")
-            .eq("org_id", orgId)
-            .in("charge_id", batch) as never, "money applied to these charges"),
-        selectIn(chargeIds, (batch) => supabase
-            .from("financial_responsibility_allocations")
-            .select("id, charge_id, assigned_amount_cents, is_unassigned, share_id")
-            .eq("org_id", orgId)
-            .eq("state", "active")
-            .in("charge_id", batch) as never, "who is responsible for these charges"),
-        selectIn(chargeIds, (batch) => supabase
-            .from("financial_subsidy_claim_lines")
-            .select("id, charge_id, claim_id, claimed_amount_cents")
-            .eq("org_id", orgId)
-            .in("charge_id", batch) as never, "subsidy claim lines for these charges"),
+        readInBatches<{ source_charge_id: string; amount_cents: number }>(
+            "reductions",
+            chargeIds,
+            (batch) =>
+                supabase
+                    .from("financial_reduction_applications")
+                    .select("source_charge_id, amount_cents")
+                    .eq("org_id", orgId)
+                    .in("source_charge_id", batch),
+        ),
+        readInBatches<{ charge_id: string; allocated_amount_cents: number; status: string | null; payment_id: string }>(
+            "payment applications",
+            chargeIds,
+            (batch) =>
+                supabase
+                    .from("payment_allocations")
+                    .select("charge_id, allocated_amount_cents, status, payment_id")
+                    .eq("org_id", orgId)
+                    .in("charge_id", batch),
+        ),
+        readInBatches<{ id: string; charge_id: string; assigned_amount_cents: number; is_unassigned: boolean; share_id: string | null }>(
+            "responsibility allocations",
+            chargeIds,
+            (batch) =>
+                supabase
+                    .from("financial_responsibility_allocations")
+                    .select("id, charge_id, assigned_amount_cents, is_unassigned, share_id")
+                    .eq("org_id", orgId)
+                    .eq("state", "active")
+                    .in("charge_id", batch),
+        ),
+        readInBatches<{ id: string; charge_id: string; claim_id: string; claimed_amount_cents: number }>(
+            "subsidy claim lines",
+            chargeIds,
+            (batch) =>
+                supabase
+                    .from("financial_subsidy_claim_lines")
+                    .select("id, charge_id, claim_id, claimed_amount_cents")
+                    .eq("org_id", orgId)
+                    .in("charge_id", batch),
+        ),
     ]);
 
     const reductionsByCharge = new Map<string, number[]>();
@@ -394,14 +483,15 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         payment_id: string;
     }>);
     const paymentIds = [...new Set(rawApplications.map((a) => a.payment_id).filter(Boolean))];
-    const paymentRows = await selectIn<{ id: string; status: string; payer_entity_type: string | null }>(
+    const paymentRows = await readInBatches<{ id: string; status: string; payer_entity_type: string | null }>(
+        "payments backing applied money",
         paymentIds,
-        (batch) => supabase
-            .from("payments")
-            .select("id, status, payer_entity_type")
-            .eq("org_id", orgId)
-            .in("id", batch) as never,
-        "the payments behind these applications",
+        (batch) =>
+            supabase
+                .from("payments")
+                .select("id, status, payer_entity_type")
+                .eq("org_id", orgId)
+                .in("id", batch),
     );
     const payments = new Map(paymentRows.map((p) => [p.id, p]));
     const applicationsByCharge = new Map<string, Array<{
@@ -445,17 +535,19 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
     const shareIds = [
         ...new Set([...allocationsByCharge.values()].flat().map((a) => a.shareId).filter((v): v is string => !!v)),
     ];
-    const [fundingByAllocationRows, fundingByShareRows] = await Promise.all([
-        selectIn<Record<string, unknown>>(allocationIds, (batch) => supabase
-            .from("financial_expected_funding")
-            .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
-            .eq("org_id", orgId).eq("state", "active").in("allocation_id", batch) as never,
-            "expected funding for these responsibility allocations"),
-        selectIn<Record<string, unknown>>(shareIds, (batch) => supabase
-            .from("financial_expected_funding")
-            .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
-            .eq("org_id", orgId).eq("state", "active").is("allocation_id", null).in("share_id", batch) as never,
-            "expected funding for these responsibility shares"),
+    const [{ data: fundingByAllocationRows }, { data: fundingByShareRows }] = await Promise.all([
+        allocationIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
+                  .eq("org_id", orgId).eq("state", "active").in("allocation_id", allocationIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        shareIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
+                  .eq("org_id", orgId).eq("state", "active").is("allocation_id", null).in("share_id", shareIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
     ]);
     const fundingRow = (f: Record<string, unknown>) => ({
         basis: (f.basis as string | null) ?? null,
@@ -463,14 +555,14 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         percentBasisPoints: f.percent_basis_points == null ? null : Number(f.percent_basis_points),
     });
     const fundingByAllocationId = new Map<string, ReturnType<typeof fundingRow>[]>();
-    for (const f of fundingByAllocationRows) {
+    for (const f of ((fundingByAllocationRows ?? []) as Array<Record<string, unknown>>)) {
         const key = String(f.allocation_id);
         const list = fundingByAllocationId.get(key) ?? [];
         list.push(fundingRow(f));
         fundingByAllocationId.set(key, list);
     }
     const fundingByShareId = new Map<string, ReturnType<typeof fundingRow>[]>();
-    for (const f of fundingByShareRows) {
+    for (const f of ((fundingByShareRows ?? []) as Array<Record<string, unknown>>)) {
         const key = String(f.share_id);
         const list = fundingByShareId.get(key) ?? [];
         list.push(fundingRow(f));
@@ -487,14 +579,14 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
     const lineIds = rawClaimLines.map((l) => l.id);
     const [{ data: claimRows }, { data: varianceRows }] = await Promise.all([
         claimIds.length
-            ? supabase.from("financial_subsidy_claims").select("id, state").eq("org_id", orgId).in("id", claimIds.slice(0, 200))
+            ? supabase.from("financial_subsidy_claims").select("id, state").eq("org_id", orgId).in("id", claimIds)
             : Promise.resolve({ data: [] as Array<{ id: string; state: string }> }),
         lineIds.length
             ? supabase
                   .from("financial_subsidy_variances")
                   .select("claim_line_id, variance_cents, state, resolution_kind")
                   .eq("org_id", orgId)
-                  .in("claim_line_id", lineIds.slice(0, 200))
+                  .in("claim_line_id", lineIds)
             : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
     ]);
     const claimStateById = new Map(

@@ -294,14 +294,31 @@ export function BosPresentationControllerProvider({
             }
 
             /**
-             * Primary surface navigation the rail may never cover. The Focus Panel mode switch is
-             * the operator's way between Summary and Activity; a parked rail over it silently
-             * swallows the click.
+             * Primary surface navigation AND primary surface COMMANDS the rail may never cover.
+             *
+             * The Focus Panel mode switch is the operator's way between Summary and Activity; a
+             * parked rail over it silently swallows the click. The record's Current Work action row
+             * is the same kind of thing and was missing: measured at 1280x900 on a Work Unit, the
+             * rail parked across it and `document.elementFromPoint` at the centre of both "Contact
+             * Family" and "Move to Waitlist" returned the rail's own starter card. The operator
+             * could see the commands and could not press them.
+             *
+             * Navigation was never the point of the rule -- not covering what the operator has to
+             * press was. A command row is exactly that.
              */
             const forbidden: ObstacleRect[] = [];
             for (const el of Array.from(
                 document.querySelectorAll<HTMLElement>(
-                    ".alloy-os-focus-panel-mode-switch,[data-inline-focus-panel-header]",
+                    ".alloy-os-focus-panel-mode-switch"
+                        + ",[data-inline-focus-panel-header]"
+                        + ",.alloy-os-process__work-actions"
+                        // An OPEN command surface is the most actionable thing on the page.
+                        // Send form renders inline and unelevated (position: static, z-index auto),
+                        // so unlike the subject selector at z=60 it has nothing to lift it above the
+                        // rail at z=95. Measured: the rail's "Operational Intelligence" label sat on
+                        // the surface's Close button, so the operator could not dismiss the composer.
+                        + ",[data-work-action-panel]"
+                        + ",[data-work-action-surface]",
                 ),
             )) {
                 if (panel?.contains(el)) continue;

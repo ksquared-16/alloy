@@ -40,6 +40,7 @@ import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orche
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import {
+    ENROLLED_CHILD_STATUS_KEY,
     ENROLLING_CHILD_STATUS_KEY,
     isReusableActiveParticipationStatus,
 } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
@@ -59,7 +60,17 @@ import {
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
-    opportunity_id: string;
+    /**
+     * The acquisition Opportunity, when the subject has one.
+     *
+     * CONTEXT-FREE ENROLLMENT HAS NONE, and absence is `null` — never `""`. This was typed as a
+     * required `string`, which left a caller with no way to say "there is no Opportunity" and
+     * exactly one way to compile: pass the empty string. That is not absence, it is an invalid
+     * uuid, and it travelled through this executor into `.eq()` calls that reported
+     * `invalid input syntax for type uuid: ""` from whichever query reached Postgres first.
+     * Widening the type is the fix; the normalization below stops an older caller re-introducing it.
+     */
+    opportunity_id: string | null;
     /** Child subject = customer_members.id. Threaded so movement targets the process instance directly. */
     customer_member_id?: string | null;
     /** Optional direct process-instance id (most specific child identity). */
@@ -194,6 +205,33 @@ export type ApplyStageOutcomeRuleTargetResult = {
     degraded?: string;
 };
 
+/** Blank optional uuid -> null. Absence is null; "" is an invalid uuid, not an absent one. */
+function blankToNull(value: string | null | undefined): string | null {
+    const trimmed = (value ?? "").trim();
+    return trimmed ? trimmed : null;
+}
+
+/**
+ * Normalize every optional uuid-valued identity on an execution subject.
+ *
+ * Scoped deliberately to this boundary: these are the fields that reach uuid columns on the
+ * Complete Enrollment / stage-outcome path. `journey_segment` and `participant_label` are not
+ * identities and are passed through untouched.
+ */
+export function normalizeSubjectIdentities(
+    subject: StageOutcomeExecutionSubject,
+): StageOutcomeExecutionSubject {
+    return {
+        ...subject,
+        opportunity_id: blankToNull(subject.opportunity_id),
+        customer_member_id: blankToNull(subject.customer_member_id),
+        process_instance_id: blankToNull(subject.process_instance_id),
+        opportunity_customer_member_id: blankToNull(subject.opportunity_customer_member_id),
+        placement_candidate_id: blankToNull(subject.placement_candidate_id),
+        work_id: blankToNull(subject.work_id),
+    };
+}
+
 export async function applyStageOutcomeRuleTarget(
     supabase: SupabaseClient,
     params: {
@@ -206,7 +244,21 @@ export async function applyStageOutcomeRuleTarget(
         target: StageOutcomeRuleTargetV1;
     },
 ): Promise<ApplyStageOutcomeRuleTargetResult> {
-    const { orgId, userId, subject, target, plan, stageKey, departmentId } = params;
+    const { orgId, userId, target, plan, stageKey, departmentId } = params;
+
+    /*
+     * OPTIONAL UUIDS ARE NORMALIZED ONCE, HERE, AT THE BOUNDARY.
+     *
+     * Every optional identity on the subject is a uuid column downstream, and a blank string is
+     * not a uuid. Postgres refuses it with `invalid input syntax for type uuid: ""` — a message
+     * that names the type and not the field, which is why this one survived several layers and
+     * was read as a configuration fault rather than an identity one.
+     *
+     * Absence is `null` from here down. Coercing blanks at the single entry point every target
+     * kind passes through means no individual case has to remember, and a caller still typed
+     * against the old required-string shape cannot reintroduce it.
+     */
+    const subject = normalizeSubjectIdentities(params.subject);
 
     switch (target.kind) {
         case "no_movement":
@@ -255,6 +307,24 @@ export async function applyStageOutcomeRuleTarget(
             if (!statusKey) return { error: "Missing family case status key" };
             const closeReasonKey = target.close_reason_key?.trim();
 
+            /*
+             * THE FAMILY CASE IS THE OPPORTUNITY. With none, this target has no subject.
+             *
+             * `opportunity_id` became `string | null` so a context-free caller could state absence
+             * instead of encoding it as `""`. This target then still read it as a `string`, and the
+             * two paths below — the close guard's enumeration and the status write — would both
+             * have carried a null into an `.eq()` on a uuid column.
+             *
+             * Refusing here, by name, is the honest answer and the one the executor already gives
+             * for every other unsatisfiable target. Letting it fall through to the guard would have
+             * produced `child_track_enumeration_failed` instead, which says the guard could not see
+             * the children — when the truth is that there is no family case to close.
+             */
+            const familyCaseId = subject.opportunity_id;
+            if (!familyCaseId) {
+                return { error: "update_family_case_status needs a family case, and this subject has none" };
+            }
+
             /**
              * A family case cannot close out from under its children.
              *
@@ -270,7 +340,7 @@ export async function applyStageOutcomeRuleTarget(
             if (familyCaseStatusCloses(statusKey)) {
                 const read = await readEnrollmentInstancesForLead(supabase, {
                     orgId,
-                    opportunityId: subject.opportunity_id,
+                    opportunityId: familyCaseId,
                 });
                 const decision = evaluateFamilyCloseGuard(read);
                 if (!decision.allowed) {
@@ -291,13 +361,13 @@ export async function applyStageOutcomeRuleTarget(
             const { data: priorStatus } = await supabase
                 .from("opportunities")
                 .select("status_key, close_reason_key")
-                .eq("id", subject.opportunity_id)
+                .eq("id", familyCaseId)
                 .eq("org_id", orgId)
                 .maybeSingle();
             const res = await updateOpportunityStatusWithEvent({
                 supabase,
                 orgId,
-                opportunityId: subject.opportunity_id,
+                opportunityId: familyCaseId,
                 newStatusKey: statusKey,
                 actorUserId: userId,
                 normalizeContext: "stage_operating_plan_outcome",
@@ -366,6 +436,41 @@ export async function applyStageOutcomeRuleTarget(
             // The exact row the write landed on — the compensation must not re-derive it.
             const writtenInstanceId = journeyInstanceId ?? pi.instanceId ?? null;
             if (pi.error) return { error: pi.error };
+
+            /*
+             * A WRITE THAT TOUCHED NOTHING IS NOT A SUCCESS.
+             *
+             * `setEnrollmentInstanceStateByScope` already reports what it did — `moved: 0` when it
+             * resolved no journey, `moved: 2` when duplicates make the target ambiguous — and its own
+             * comment says the caller's single-write assertion is what refuses those. That assertion
+             * was missing: only `pi.error` was checked, so a target that matched zero rows returned a
+             * clean success and the outcome reported no failed targets while changing nothing.
+             *
+             * That is how a child could be "enrolled" by an operator, with every surface reporting
+             * the action succeeded, while the durable state never moved.
+             *
+             * STRICT FOR `enrolled` ONLY. Making every disposition strict was tried earlier in this
+             * program and broke governed family close and participant decisions, which legitimately
+             * run against journeys this scope does not resolve. `enrolled` is the one disposition
+             * that must never be silently skipped: it is the terminal, operator-owned decision the
+             * whole gate exists to protect. The others keep their established declarative semantics.
+             */
+            if (dispositionKey === ENROLLED_CHILD_STATUS_KEY) {
+                if (pi.moved === 0) {
+                    return {
+                        error:
+                            "Enrollment was not completed: no Enrollment journey matched this child, so nothing was "
+                            + "updated. Nothing has changed.",
+                    };
+                }
+                if (pi.moved > 1) {
+                    return {
+                        error:
+                            `Enrollment was not completed: ${pi.moved} Enrollment journeys matched this child, so it `
+                            + "is not clear which one to enrol. Nothing has changed.",
+                    };
+                }
+            }
 
             const degradedEffects: string[] = [];
             let undoChildState = async () => {
@@ -535,18 +640,37 @@ export async function applyStageOutcomeRuleTarget(
             // schedule assignment). The process produces the facts; it does not own them. Non-blocking
             // and idempotent — a failure here must not roll back the state transition (retryable).
             if (dispositionKey === "enrolled" && (await isChildcareOperationalEnrollmentV1EnabledForOrg(supabase, orgId))) {
-                try {
-                    await materializeEnrollmentForChildScope(supabase, {
-                        orgId,
-                        opportunityId: subject.opportunity_id,
-                        customerMemberId: childId,
-                        userId,
-                    });
-                } catch (e) {
-                    console.error("[stageOutcomeRuleTargetExecutor] enrollment materialization", e);
+                /*
+                 * MATERIALIZATION IS OPPORTUNITY-SCOPED; THE STATE TRANSITION IS NOT.
+                 *
+                 * `update_child_enrollment_status` is child-grain and must succeed for a
+                 * context-free child — it is one of the three targets that were already applying
+                 * correctly while the outcome reported failure. Only this trailing step needs an
+                 * Opportunity, and it is already declared non-blocking and retryable.
+                 *
+                 * So absence is recorded as a degraded effect, exactly like a materialization that
+                 * throws, rather than being refused (which would roll back a durable enrolment) or
+                 * passed through as null (which is what reached Postgres as an invalid uuid).
+                 */
+                const materializeScopeId = subject.opportunity_id;
+                if (!materializeScopeId) {
                     degradedEffects.push(
-                        `enrollment materialization did not run: ${e instanceof Error ? e.message : String(e)}`,
+                        "enrollment materialization did not run: this child has no acquisition episode to materialize against",
                     );
+                } else {
+                    try {
+                        await materializeEnrollmentForChildScope(supabase, {
+                            orgId,
+                            opportunityId: materializeScopeId,
+                            customerMemberId: childId,
+                            userId,
+                        });
+                    } catch (e) {
+                        console.error("[stageOutcomeRuleTargetExecutor] enrollment materialization", e);
+                        degradedEffects.push(
+                            `enrollment materialization did not run: ${e instanceof Error ? e.message : String(e)}`,
+                        );
+                    }
                 }
             }
             return {
@@ -748,11 +872,21 @@ export async function applyStageOutcomeRuleTarget(
             if (!templateKey) return { error: "Missing work template key" };
             const workTpl = plan.work_templates.find((t) => t.template_key === templateKey);
             if (!workTpl) return { error: `Unknown work template: ${templateKey}` };
+            /*
+             * Stage work hangs off the Opportunity, so there is nowhere to hang it without one.
+             * Named refusal for the same reason as `update_family_case_status`: the executor
+             * reports failed targets by name, and "create_next_work" is a far more useful answer
+             * than the uuid-syntax error a null produced one layer down.
+             */
+            const nextWorkScopeId = subject.opportunity_id;
+            if (!nextWorkScopeId) {
+                return { error: "create_next_work needs an acquisition episode, and this subject has none" };
+            }
             const result = await instantiateStageWorkFromTemplate({
                 supabase,
                 orgId,
                 userId,
-                opportunityId: subject.opportunity_id,
+                opportunityId: nextWorkScopeId,
                 stageKey,
                 departmentId,
                 template: workTpl,

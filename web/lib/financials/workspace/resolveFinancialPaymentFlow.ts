@@ -36,7 +36,7 @@ import {
     type FinancialWorkLocationScope,
 } from "@/lib/financials/workspace/financialWorkLocation";
 
-import { selectIn } from "@/lib/financials/workspace/inBatches";
+import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 
 export const FINANCIAL_PAYMENT_SCAN_CAP = 2000;
 
@@ -194,14 +194,14 @@ export async function resolveFinancialPaymentFlow(
 
     /* APPLIED IS THE CARD'S DEFINITION: active allocations of this payment, summed. */
     const paymentIds = visible.map((v) => v.payment.id);
-    const allocationRows = await selectIn<{ payment_id: string; allocated_amount_cents: number; status: string | null }>(
+    const allocationRows = await readInBatches<{ payment_id: string; allocated_amount_cents: number; status: string | null }>(
+        "what each payment has been applied to",
         paymentIds,
         (batch) => supabase
             .from("payment_allocations")
             .select("payment_id, allocated_amount_cents, status")
             .eq("org_id", args.orgId)
             .in("payment_id", batch) as never,
-        "what each payment has been applied to",
     );
     const appliedByPaymentId = new Map<string, number>();
     for (const a of allocationRows) {

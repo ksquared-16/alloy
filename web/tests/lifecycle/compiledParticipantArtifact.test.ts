@@ -182,11 +182,28 @@ describe("negative controls — the raw Form cannot silently become the review",
         expect(host.slice(reviewEnd)).toContain("schema={schema}");
     });
 
-    it("acknowledgment precedes signature structurally, and signing is last", () => {
+    it("the document precedes the attestation about it, and signing is last", () => {
+        /*
+         * RE-POINTED, not relaxed. This used to require the acknowledgment marker BEFORE the
+         * signature marker, which described a sign step that opened with "Please confirm you've
+         * reviewed the information above" and rendered the application underneath it. Kelly read
+         * that as backward, and it was: the sentence named something that was not yet above it.
+         *
+         * The parent must see the thing before attesting they reviewed it, so the attestation now
+         * sits after the document and immediately above "Sign and finish". The signature PROMPT
+         * still precedes the canvas because it is the instruction for the signature line inside it
+         * — the signature stays embedded in the document, which is explicitly not to regress.
+         */
         const ack = reviewBranch.indexOf('data-artifact-final-phase="acknowledgment"');
         const sig = reviewBranch.indexOf('data-artifact-final-phase="signature"');
+        const canvas = reviewBranch.indexOf("<ParticipantDocumentCanvas");
         expect(ack).toBeGreaterThan(-1);
-        expect(sig).toBeGreaterThan(ack);
+        expect(sig).toBeGreaterThan(-1);
+        expect(canvas).toBeGreaterThan(-1);
+        // The document is rendered before the attestation that refers to it.
+        expect(ack).toBeGreaterThan(canvas);
+        // Finishing remains the last act, and waits for the attestation.
+        expect(reviewBranch).toContain("acknowledgementOutstanding");
     });
 
     it("an edit at review records the D-99 confirmation with the value, in one write", () => {

@@ -101,12 +101,22 @@ const lane = (run, activity, extra = {}) => ({
   execution_run: run, provider_activity: activity ? { activity } : null, ...extra,
 });
 
-test("a working agent with NO run reads as Working, not Ready", () => {
-  // This is the exact case the operator hit on Surfaces and Runtime Performance.
+test("a working agent with NO run is Provider active, never Working", () => {
+  // CONTRACT CHANGED, DELIBERATELY. This used to assert "Working", to fix an
+  // operator who could not tell which lanes were running. It overshot: Surfaces
+  // then read Working repeatedly with no work ever started, because a busy PANE
+  // is a fact about a process and "Working" is a claim about this lane's
+  // authorized work. Only a canonical occupying execution state may say Working.
+  //
+  // The original symptom is still answered — the lane is visibly not idle, and
+  // now it names the contradiction activityContradictsRun() already detects as
+  // `working_without_run` instead of hiding it behind the headline.
   const st = V.canonicalLaneWorkState(lane(null, "working"));
-  assert.equal(st.label, "Working");
-  assert.equal(st.group, "active");
-  assert.equal(st.source, "agent_observed", "and it says where that came from");
+  assert.equal(st.label, "Provider active");
+  assert.notEqual(st.label, "Working");
+  assert.equal(st.key, "provider_active");
+  assert.equal(st.live, false, "no run owns it, so nothing is live");
+  assert.equal(st.source, "agent_observed_without_run", "and it says where that came from");
 });
 
 test("a working agent after a COMPLETE run still reads as Working", () => {
@@ -222,12 +232,20 @@ test("a working lane with no run shows live narration, not the previous answer",
   assert.equal(html.includes("Shipped yesterday"), false);
 });
 
-test("an idle agent with an EXECUTING run is Ready, not Working", () => {
-  // Trust Runtime sat EXECUTING for 19 hours after Claude had cooked. The
-  // leftover run is not work.
+test("an idle agent with an EXECUTING run is Finalizing — neither Working nor Ready", () => {
+  // CONTRACT CHANGED, DELIBERATELY. Trust Runtime sat EXECUTING for 19 hours
+  // after Claude had cooked, so this asserted "Ready" to stop it reading as
+  // Working. That fixed the wrong half: the provider going quiet does not mean
+  // the RUN is over. Validation, checkpointing, the run report and the
+  // completion summary all happen after the last token, and calling that Ready
+  // invites the next instruction into a lane still writing its own result.
+  //
+  // Finalizing answers both: it is not Working (nothing is being produced) and
+  // it is not Ready (the run has not finished recording).
   const st = V.canonicalLaneWorkState(lane({ state: "EXECUTING" }, "ready"));
-  assert.equal(st.label, "Ready");
-  assert.equal(st.group, "idle");
+  assert.equal(st.label, "Finalizing");
+  assert.notEqual(st.label, "Ready");
+  assert.notEqual(st.label, "Working");
   assert.equal(st.source, "agent_idle_run_open");
   assert.notEqual(V.canonicalLaneWorkState(lane({ state: "EXECUTING" }, "working")).label, "Ready");
 });

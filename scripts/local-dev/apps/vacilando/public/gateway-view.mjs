@@ -1147,10 +1147,24 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
     // after Claude had already cooked and returned to a prompt — "Working" plus
     // a frozen vac run-status is what the operator read as stuck.
     if (observed === "ready") {
+      // READY IS A CLAIM ABOUT THE RUN, NOT ABOUT THE PANE.
+      //
+      // This used to answer "Ready". It was added for a real defect — Trust
+      // Runtime sat EXECUTING for 19 hours after Claude had already returned to
+      // a prompt — but it overshot: the provider being idle does not mean the
+      // RUN is over. Between the last token and a durable terminal state sit
+      // validation, checkpointing, the run report and the completion summary,
+      // and during all of it this said Ready. An operator who reads Ready sends
+      // the next instruction, which is exactly what Ready is supposed to
+      // promise is safe.
+      //
+      // Finalizing is the truthful name for that gap: the agent has stopped
+      // producing, the run has not finished recording. It is not idle, so it is
+      // not Ready; no one is being asked anything, so it is not Needs you.
       return {
-        key: "ready", label: "Ready", group: "idle", tone: "", mark: "●",
-        hint: `${who} ready · run still open`,
-        headline: `Ready · ${who}`,
+        key: "finalizing", label: "Finalizing", group: "active", tone: "run", mark: "◷",
+        hint: `${who} idle · run still finalizing`,
+        headline: `Finalizing · ${who}`,
         live: false, stale: false,
         source: "agent_idle_run_open",
       };
@@ -1179,6 +1193,29 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   // outcomes, which are the ones that were lying.
   if (observed === "working") {
     const quiet = quietWorkerNote(lane, nowMs);
+    // WORKING IS A PROPERTY OF THE LANE'S WORK, NOT OF ITS PANE.
+    //
+    // A busy pane is a fact about a PROCESS. "Working" is a claim about this
+    // lane's authorized work, and the two come apart: a resident provider can
+    // be mid-draw, mid-compaction, or answering something nobody attributed to
+    // a run. Surfaces read Working repeatedly with no work ever started, which
+    // is precisely this branch firing on a pane with `run: none`.
+    //
+    // The contradiction already has a name — activityContradictsRun() calls it
+    // `working_without_run` — so it is reported as itself instead of being
+    // promoted to the lane headline. Provider active is visible and honest; it
+    // is not Working, because no canonical execution state owns it, and it is
+    // not Ready, because something really is happening in that pane.
+    if (!run) {
+      return {
+        key: "provider_active", label: "Provider active", group: "attention", tone: "needs", mark: "!",
+        hint: `${who} is busy with no Execution Run open`,
+        headline: `Provider active · ${who} · no run`,
+        quiet_for: quiet,
+        live: false, stale: false,
+        source: "agent_observed_without_run",
+      };
+    }
     return {
       key: "working", label: "Working", group: "active", tone: "run", mark: "●",
       // Working AND silent is the state the operator could not read: alive, but
@@ -1187,14 +1224,48 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
       headline: quiet ? `Working · ${who} · ${quiet}` : `Working · ${who}`,
       quiet_for: quiet,
       live: true, stale: false,
-      // Say where this came from, so "Working" with no run is explainable.
-      source: run ? "run_and_agent" : "agent_observed",
+      source: "run_and_agent",
     };
   }
   if (run?.state === "COMPLETE") {
     return { key: "complete", label: "Complete", group: "completed", tone: "complete", mark: "✓", hint: "Complete", headline: "Complete", live: false, stale: false };
   }
   if (!run && prev?.state === "COMPLETE") {
+    // ── A COMPLETED RUN IS NOT AUTOMATICALLY A FINISHED ONE ──────────────────
+    //
+    // Measured across 104 terminal runs on this host: `completion_report
+    // .report_id` is present for exactly the 82 that also carry a durable
+    // `agent_report.message`, and absent for exactly the 22 that do not — 82
+    // both, 22 neither, zero mixed. So report_id is an exact predicate for "an
+    // account of this turn survives", and nothing downstream was asking it.
+    //
+    // Eight of those 22 are state COMPLETE: the run says it succeeded and there
+    // is no summary anywhere. They are closed by the system rather than by the
+    // agent — Send superseding the previous turn, the stale reaper, an
+    // unanswerable input gate — so the agent never filed. Rendering that as
+    // plain Ready is how a completed turn silently loses its account.
+    //
+    // It is NOT repaired by inventing prose. The run is reported as what it is.
+    if (!prev?.completion_report?.report_id) {
+      return {
+        key: "completion_unreported", label: "Completed · no summary", group: "attention", tone: "needs", mark: "!",
+        hint: "The run closed without a filed summary",
+        headline: "Completed · no summary filed",
+        live: false, stale: false,
+        source: "terminal_without_account",
+      };
+    }
+    // Completed WITH an account the operator has not opened. Attention, but not
+    // an obligation: nobody is being asked anything.
+    if (laneUnseenCount(lane) > 0) {
+      return {
+        key: "completed_unread", label: "New", group: "completed", tone: "complete", mark: "●",
+        hint: `${who} finished · unread`,
+        headline: "New · completed output unread",
+        live: false, stale: false,
+        source: "completion_unseen",
+      };
+    }
     return { key: liveAgent ? "ready" : "idle", label: liveAgent ? "Ready" : "Idle", group: "idle", tone: "", mark: liveAgent ? "●" : "○", hint: liveAgent ? `${who} ready` : "Idle", headline: liveAgent ? "Ready" : "Idle", live: false, stale: false };
   }
   if (lane?.runtime === "offline" && !run && !liveAgent) {

@@ -3,6 +3,13 @@
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
+
+import WorkspaceArtifactZoomControls from "@/components/workspace/WorkspaceArtifactZoomControls";
+import {
+    ARTIFACT_ZOOM_STEP,
+    clampArtifactScale,
+    type ArtifactScaleMode,
+} from "@/lib/workspace/artifactViewportScale";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { ParticipantUploads } from "./ParticipantUploads";
 import { ParticipantArtifactHeader } from "./ParticipantArtifactHeader";
@@ -322,6 +329,49 @@ export function FormEmbedClient({
      */
     const [reviewStep, setReviewStep] = useState<"handoff" | "review" | "edit" | "sign">("handoff");
     const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+    /**
+     * The review presents the document FITTED, with a way to open it larger.
+     *
+     * The task at review is "decide whether this is correct", not "read this at maximum size". A
+     * letter page rendered at container width is taller than a laptop viewport, so Make a change and
+     * Everything looks good sat below the fold and a parent had to discover them by scrolling past
+     * the document. Fitting the page puts the document and the decision in one view; enlarging is
+     * then an intentional act rather than the default that hides the decision.
+     */
+    /**
+     * DOCUMENT READING MODE — a view, never a step.
+     *
+     * "View larger" used to magnify inside the same small preview box, which Kelly correctly called
+     * a worse reading experience: a cropped window onto a huge page. Reading is a different task
+     * from deciding, so it gets the browser viewport and the platform's own fit-page / fit-width /
+     * zoom controls. Opening or closing it touches no participant state, so Enrollment progress
+     * cannot move while the parent is simply looking at their paperwork.
+     */
+    const [readingOpen, setReadingOpen] = useState(false);
+    const [readingMode, setReadingMode] = useState<ArtifactScaleMode>("fit-page");
+    const [readingManualScale, setReadingManualScale] = useState(1);
+    const readingBodyRef = useRef<HTMLDivElement | null>(null);
+    const [readingViewportH, setReadingViewportH] = useState(0);
+    useEffect(() => {
+        if (!readingOpen) return;
+        const measure = () => setReadingViewportH(readingBodyRef.current?.clientHeight ?? 0);
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, [readingOpen]);
+    const [fitHeightPx, setFitHeightPx] = useState<number | null>(null);
+    useEffect(() => {
+        const measure = () => {
+            // The room a fitted page may take: enough to read, never so much that the decision
+            // controls beneath it leave the viewport. Below a phone's height, fitting is abandoned
+            // in favour of a readable preview the parent scrolls (see the mobile branch).
+            const h = window.innerHeight;
+            setFitHeightPx(h < 700 ? Math.round(h * 0.42) : Math.round(h * 0.56));
+        };
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, []);
     /** What the parent captured, for previewing the mark ON the document before submitting. */
     const [capturedSignature, setCapturedSignature] = useState<{
         typedName?: string;
@@ -744,11 +794,37 @@ export function FormEmbedClient({
                 packetName={packetProgress?.packet_name}
                 previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
             >
-                <IntakeCompletion
-                    tone="neutral"
-                    title="Packet already completed"
-                    body="This packet has already been submitted. You can close this window."
-                />
+                {/* A PARENT WHO COMES BACK IS STILL A PARENT, and was the only one still told
+                    about "a packet".
+
+                    The two other terminal states — finishing the last document, and submitting —
+                    already speak in the journey's own words. This branch, the one a parent reaches
+                    by reopening their link after they are done, kept the generic copy: "Packet
+                    already completed. This packet has already been submitted." That is the only
+                    place the word reaches a family, and it reaches them on a return visit, when
+                    they are most likely to be checking whether their paperwork actually landed.
+
+                    It also has to keep the distinction the completion message makes: paperwork
+                    submitted is not the child enrolled, and staff review is still to come. Saying
+                    only "already been submitted" drops that, so a returning parent could read a
+                    finished packet as a finished enrolment.
+
+                    Same conditional as the other two terminal states, and the generic copy stays
+                    byte-identical for every non-enrollment link. */}
+                {enrollmentObjective ? (
+                    <IntakeCompletion
+                        tone="neutral"
+                        title="You're all set."
+                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has already been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        hint="You can close this window."
+                    />
+                ) : (
+                    <IntakeCompletion
+                        tone="neutral"
+                        title="Packet already completed"
+                        body="This packet has already been submitted. You can close this window."
+                    />
+                )}
             </IntakeFrame>
         );
     }
@@ -1017,6 +1093,17 @@ export function FormEmbedClient({
     const signatureFieldIds = compiled ? compiled.signatures.map((c) => c.field_id) : [];
 
     /**
+     * A REQUIRED ACKNOWLEDGEMENT IS PART OF "COMPLETE", so the primary action waits for it.
+     *
+     * `Sign and finish` was gated on the signature alone. The acknowledgement was required too, but
+     * only the server said so — the parent could press a live button and be answered with a
+     * validation error. That was survivable while the conversation pre-answered the field; now that
+     * the attestation is made where it belongs, beside the document, it is the parent who ticks it
+     * and the button has to reflect that.
+     */
+    const acknowledgementOutstanding = ackFieldIds.some((id) => payload.values?.[id] !== true);
+
+    /**
      * Where the parent is, in the five words a parent uses.
      *
      * Derived on every render from what the artifact still wants, so it cannot drift from the state
@@ -1174,6 +1261,64 @@ export function FormEmbedClient({
             )}
         >
             {/*
+              * DOCUMENT READING MODE.
+              *
+              * Deliberately a sibling of the whole review rather than something nested inside the
+              * preview card: the complaint was that enlarging stayed trapped in the same small box,
+              * so the reading surface takes the browser viewport. The toolbar is the platform's own
+              * `WorkspaceArtifactZoomControls`, and the scale maths is `artifactViewportScale` —
+              * the operator viewport's rules, not a second participant-only viewer.
+              *
+              * It holds no participant state. Closing restores the review exactly as it was,
+              * because nothing about opening it changed anything.
+              */}
+            {readingOpen && artifactRenderable ? (
+                <div
+                    className="fixed inset-0 z-50 flex flex-col bg-white"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={schema?.title ?? "Document"}
+                    data-participant-document-reader="open"
+                >
+                    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-midnight/[0.08] px-4 py-3">
+                        <h2 className="truncate text-[15px] font-semibold text-alloy-midnight">
+                            {schema?.title ?? "Your paperwork"}
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={() => setReadingOpen(false)}
+                            className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-4 text-[14px] font-medium text-alloy-midnight"
+                            data-participant-document-reader-close="true"
+                        >
+                            Close
+                        </button>
+                    </header>
+                    <WorkspaceArtifactZoomControls
+                        zoom={Math.round(readingManualScale * 100)}
+                        fitActive={readingMode === "fit-page"}
+                        onFitPage={() => setReadingMode("fit-page")}
+                        onFitWidth={() => setReadingMode("fit-width")}
+                        onZoomIn={() => {
+                            setReadingManualScale((z) => clampArtifactScale(z + ARTIFACT_ZOOM_STEP));
+                            setReadingMode("manual");
+                        }}
+                        onZoomOut={() => {
+                            setReadingManualScale((z) => clampArtifactScale(z - ARTIFACT_ZOOM_STEP));
+                            setReadingMode("manual");
+                        }}
+                    />
+                    <div ref={readingBodyRef} className="min-h-0 flex-1 overflow-auto bg-alloy-stone/20 p-3">
+                        {readingViewportH > 0 ? (
+                            <ParticipantDocumentCanvas
+                                url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
+                                onUnavailable={() => setDocumentUnavailable(true)}
+                                view={{ mode: readingMode, manualScale: readingManualScale, viewportH: readingViewportH }}
+                            />
+                        ) : null}
+                    </div>
+                </div>
+            ) : null}
+            {/*
               * V1.2 — the conversational Enrollment turn, ABOVE the packet flow.
               *
               * Rendered only when this token resolves an Enrollment journey; `enrollmentObjective`
@@ -1192,6 +1337,25 @@ export function FormEmbedClient({
                         token={token}
                         initialObjective={enrollmentObjective}
                         onPhaseChange={setEnrollmentPhase}
+                        /*
+                         * ONE OWNER OF THE OBJECTIVE, kept current.
+                         *
+                         * This host fetched the objective once and handed it down as a seed; the
+                         * card advanced its own copy from there. So the host's copy froze at page
+                         * load while the parent moved on — and the host still reads it for the
+                         * artifact header's progress, and re-seeds the card from it on any remount.
+                         *
+                         * Kelly saw the consequence during Round 2: the surface jumped back to the
+                         * first question after a save. Reproduced here — a source edit remounts the
+                         * card via Fast Refresh, it re-seeds from the frozen copy, and the parent is
+                         * walked back to a question they had already answered. No page reload was
+                         * involved; the load counter never moved.
+                         *
+                         * That trigger is development-only, and there is no production path back
+                         * into the conversation once it hands off. The stale copy is not
+                         * development-only, so it is fixed rather than explained away.
+                         */
+                        onObjectiveAdvanced={setEnrollmentObjective}
                         artifactRenderable={artifactRenderable}
                         onValueSettled={(fieldIds, value) => {
                             // Merge into the rendered artifact immediately. The session already
@@ -1200,6 +1364,28 @@ export function FormEmbedClient({
                                 const values = { ...((prev.values ?? {}) as Record<string, unknown>) };
                                 for (const id of fieldIds) values[id] = value;
                                 return { ...prev, values };
+                            });
+                            /*
+                             * AND INTO THE RESOLVED SNAPSHOT, WHICH IS WHAT THE REVIEW LIST READS.
+                             *
+                             * `compiled` prefers `resolvedArtifactValues ?? payload.values`, and the
+                             * resolved snapshot is fetched once per artifact and never refreshed. So
+                             * merging only into the payload left the stale copy winning: after
+                             * correcting a birthday to Jun 15 the document regenerated correctly to
+                             * 06/15 in all three positions, while "Make a change" still listed
+                             * Jun 14 and its editor opened on Jun 14 — the parent being offered the
+                             * value they had just replaced.
+                             *
+                             * Server truth was right throughout; a reload showed Jun 15. This was
+                             * client staleness, and it was survivable only because an extra
+                             * acknowledgement turn used to sit here and trigger another fetch.
+                             * Removing that redundant question is what exposed it.
+                             */
+                            setResolvedArtifactValues((prev) => {
+                                if (!prev) return prev;
+                                const next = { ...prev };
+                                for (const id of fieldIds) next[id] = value;
+                                return next;
                             });
                         }}
                     />
@@ -1280,29 +1466,6 @@ export function FormEmbedClient({
                     ) : reviewStep === "sign" ? (
                         <IntakeCard>
                             <ParticipantArtifactHeader status={artifactStatus} />
-                            {/* Acknowledge, then sign AT the document’s own signature line. */}
-                            {ackFieldIds.length > 0 ? (
-                                <div className="pb-5 [&_header]:hidden" data-artifact-final-phase="acknowledgment">
-                                    <p className="pb-3 text-[15px] text-alloy-midnight">
-                                        Please confirm you&rsquo;ve reviewed the information above.
-                                    </p>
-                                    <FormEngineRenderer
-                                        schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
-                                        payload={payload}
-                                        onChange={(next) => {
-                                            setValidationErrors(null);
-                                            setMessage(null);
-                                            setPayload(next);
-                                            void persistDraft(next);
-                                        }}
-                                        mode="edit"
-                                        optionValuesByFieldId={optionValuesByFieldId}
-                                        optionChoicesByFieldId={optionChoicesByFieldId}
-                                        variant="embed"
-                                        validationErrors={validationErrors ?? undefined}
-                                    />
-                                </div>
-                            ) : null}
                             <p className="pb-4 text-[15px] text-alloy-midnight" data-artifact-final-phase="signature">
                                 {participantSignaturePrompt(artifactStatus.state !== "complete")}
                             </p>
@@ -1346,6 +1509,41 @@ export function FormEmbedClient({
                                     />
                                 </div>
                             )}
+                            {/*
+                              * THE DOCUMENT COMES FIRST, THEN THE ATTESTATION ABOUT IT.
+                              *
+                              * This block used to render ABOVE the document, so the sentence
+                              * "Please confirm you've reviewed the information above" sat with
+                              * nothing above it and the application it referred to appeared
+                              * underneath. Kelly met exactly that and called the sequence backward.
+                              *
+                              * The signing prompt still precedes the canvas, because it is the
+                              * instruction for the signature line INSIDE the canvas. What moves is
+                              * only the attestation, to directly above "Sign and finish" — where
+                              * what it refers to is genuinely above it.
+                              */}
+                            {ackFieldIds.length > 0 ? (
+                                <div className="pb-5 [&_header]:hidden" data-artifact-final-phase="acknowledgment">
+                                    <p className="pb-3 text-[15px] text-alloy-midnight">
+                                        Please confirm you&rsquo;ve reviewed the information above.
+                                    </p>
+                                    <FormEngineRenderer
+                                        schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
+                                        payload={payload}
+                                        onChange={(next) => {
+                                            setValidationErrors(null);
+                                            setMessage(null);
+                                            setPayload(next);
+                                            void persistDraft(next);
+                                        }}
+                                        mode="edit"
+                                        optionValuesByFieldId={optionValuesByFieldId}
+                                        optionChoicesByFieldId={optionChoicesByFieldId}
+                                        variant="embed"
+                                        validationErrors={validationErrors ?? undefined}
+                                    />
+                                </div>
+                            ) : null}
                             <IntakeFooter
                                 errorLines={errorLines}
                                 message={message}
@@ -1353,7 +1551,10 @@ export function FormEmbedClient({
                                 primaryLabel={submitting ? "Finishing…" : "Sign and finish"}
                                 onPrimary={() => void handleSubmit()}
                                 primaryDisabled={
-                                    submitting || !submissionId || (signaturePlacement != null && !capturedSignature)
+                                    submitting
+                                    || !submissionId
+                                    || (signaturePlacement != null && !capturedSignature)
+                                    || acknowledgementOutstanding
                                 }
                                 primaryBusy={submitting}
                             />
@@ -1363,10 +1564,28 @@ export function FormEmbedClient({
                            paperwork; the machinery stays out of sight. */
                         <IntakeCard>
                             <ParticipantArtifactHeader status={artifactStatus} />
-                            <ParticipantDocumentCanvas
-                                url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
-                                onUnavailable={() => setDocumentUnavailable(true)}
-                            />
+                            <div
+                                className="relative flex justify-center overflow-hidden rounded-xl border border-alloy-midnight/[0.08] bg-alloy-stone/20 p-3"
+                                style={fitHeightPx ? { height: fitHeightPx + 24 } : undefined}
+                                data-participant-document-region="fit"
+                            >
+                                <ParticipantDocumentCanvas
+                                    url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
+                                    onUnavailable={() => setDocumentUnavailable(true)}
+                                    fitHeightPx={fitHeightPx ?? undefined}
+                                />
+                            </div>
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                                <span className="text-[13px] text-alloy-midnight/55">Whole page shown</span>
+                                <button
+                                    type="button"
+                                    onClick={() => { setReadingMode("fit-page"); setReadingOpen(true); }}
+                                    className="rounded-xl border border-alloy-midnight/15 px-3.5 py-2 text-[14px] font-medium text-alloy-midnight"
+                                    data-participant-document-zoom="enlarge"
+                                >
+                                    View larger
+                                </button>
+                            </div>
                             {message ? (
                                 <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[13px] text-amber-950">
                                     {message}
@@ -1382,7 +1601,24 @@ export function FormEmbedClient({
                                     />
                                 </div>
                             ) : null}
-                            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-alloy-midnight/[0.07] pt-5">
+                            {/*
+                              * THE DECISION STAYS ON SCREEN ON A PHONE.
+                              *
+                              * Fitting the page put both controls in view on a laptop, but at 375
+                              * the primary action still landed at 779px in an 812px viewport — the
+                              * one button the parent is meant to press, cut off by the fold. Fitting
+                              * the document harder would have meant shrinking it past legibility to
+                              * win 40 pixels, which trades the wrong thing.
+                              *
+                              * So the decision row sticks to the bottom while the review is on
+                              * screen, and returns to normal flow from `sm` up where it already
+                              * fits. `Make a change` travels with it, so correcting stays exactly
+                              * as reachable as accepting.
+                              */}
+                            <div
+                                className="sticky bottom-0 z-10 -mx-5 mt-6 flex flex-wrap items-center gap-3 border-t border-alloy-midnight/[0.07] bg-white/95 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:backdrop-blur-none"
+                                data-review-decision-row="true"
+                            >
                                 <span className="text-[14px] text-alloy-midnight/55">Something not right?</span>
                                 <button
                                     type="button"

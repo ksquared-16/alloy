@@ -252,6 +252,46 @@ export function bosParkingCandidates(
 }
 
 /**
+ * The candidates that intrude least on regions the rail may not cover.
+ *
+ * Count before area, matching the obstacle scorer's reasoning: touching two protected regions a
+ * little is worse than touching one of them a lot. Returns every candidate tied for best so the
+ * obstacle scorer still chooses among them, and returns the input unchanged when nothing is
+ * forbidden -- a rail with nothing to avoid must not be moved by this step.
+ */
+function leastForbiddenCandidates(
+    candidates: BosFloatingGeometry[],
+    forbidden: ObstacleRect[],
+): BosFloatingGeometry[] {
+    if (!forbidden.length || !candidates.length) return candidates;
+
+    let bestCount = Number.POSITIVE_INFINITY;
+    let bestArea = Number.POSITIVE_INFINITY;
+    let best: BosFloatingGeometry[] = [];
+
+    for (const candidate of candidates) {
+        let count = 0;
+        let area = 0;
+        for (const f of forbidden) {
+            const overlap = rectOverlapArea(candidate, f);
+            if (overlap > 0) {
+                count += 1;
+                area += overlap;
+            }
+        }
+        if (count < bestCount || (count === bestCount && area < bestArea)) {
+            bestCount = count;
+            bestArea = area;
+            best = [candidate];
+        } else if (count === bestCount && area === bestArea) {
+            best.push(candidate);
+        }
+    }
+
+    return best.length ? best : candidates;
+}
+
+/**
  * Pick the parking spot that obstructs the fewest actionable controls.
  *
  * Ties keep the earlier candidate, so an unobstructed bottom-right always wins
@@ -281,7 +321,28 @@ export function chooseBosParkingGeometry(params: {
     const permitted = forbidden.length
         ? allCandidates.filter((c) => !forbidden.some((f) => rectOverlapArea(c, f) > 0))
         : allCandidates;
-    const candidates = permitted.length ? permitted : allCandidates;
+
+    /*
+     * WHEN NOTHING IS FULLY PERMITTED, INTRUDE AS LITTLE AS POSSIBLE — DO NOT GIVE UP.
+     *
+     * The original fallback was `permitted.length ? permitted : allCandidates`, which drops the
+     * forbidden set ENTIRELY the moment no candidate clears it. That is an all-or-nothing veto, and
+     * it fails in exactly the case it was written for. Measured on a Work Unit at 1280x900: the rail
+     * is 400x620, so only three candidate `y` values exist (80, 152, 232) and every one of them
+     * spans the sticky Focus Panel header band (y 161-247). That single 878px-wide forbidden region
+     * disqualified all 16 candidates on its own -- permitted was empty, the veto evaporated, and
+     * scoring alone parked the rail across the record's Current Work command row. "Contact Family"
+     * and "Move to Waitlist" stopped receiving pointer events entirely.
+     *
+     * So a forbidden region is now a RANKED penalty when it cannot be satisfied outright: fewest
+     * distinct forbidden regions intruded upon, then least intruded area. A candidate that covers
+     * an unavoidable header still beats one that ALSO covers the command row, which is the whole
+     * distinction the all-or-nothing form could not draw.
+     *
+     * Behaviour where a permitted candidate exists is unchanged -- that set is used as before, so
+     * the veto is still absolute whenever it can be honoured.
+     */
+    const candidates = permitted.length ? permitted : leastForbiddenCandidates(allCandidates, forbidden);
     const obstacles = params.obstacles ?? [];
     if (obstacles.length === 0) return { geometry: candidates[0]!, obstructed: 0 };
 

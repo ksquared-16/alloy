@@ -32,19 +32,30 @@ describe("canonical enrollment operating-plan defaults", () => {
         );
     });
 
-    it("Decision default is Outcome Led with Family Enrolling transition", () => {
+    it("Decision default is Outcome Led, and Family Enrolling hands off at the CHILD grain", () => {
+        /*
+         * This used to require the decision to carry `transition_ref: "decision_to_enrolling"` —
+         * moving the family Opportunity onto `enrolling`, the child's Enrollment stage. That shared
+         * occupancy is what made a child-grain stage look family-grain, and it ended with the
+         * child's completion outcome sitting on a stage no child could reach.
+         *
+         * The outcome is unchanged where it matters: Family Enrolling is still the human decision
+         * that a specific child proceeds. It just expresses that as a child-grain effect instead of
+         * a family movement.
+         */
         const plan = defaultStageOperatingPlanForEnrollmentStage("decision")!;
         const primary = plan.work_templates.find((row) => row.primary);
         expect(primary?.template_key).toBe("support_enrollment_decision");
         expect(primary?.execution_mode).toBe("outcome_led");
         expect(plan.outcomes.some((row) => row.outcome_key === "family_enrolling")).toBe(true);
+
+        const rule = plan.outcome_rules.find((r) => r.when_outcome_key === "family_enrolling")!;
+        expect(rule.targets.some((target) => target.kind === "enter_child_enrollment")).toBe(true);
+        expect(rule.targets.some((target) => target.kind === "move_to_stage")).toBe(false);
+        // And the stage declares no exit onto the child track at all.
         expect(
-            plan.outcome_rules.some(
-                (rule) =>
-                    rule.when_outcome_key === "family_enrolling"
-                    && rule.targets.some((target) => target.transition_ref === "decision_to_enrolling"),
-            ),
-        ).toBe(true);
+            (plan.outgoing_transitions ?? []).some((t) => t.target_stage_key === "enrolling"),
+        ).toBe(false);
     });
 
     it("Enrolling has Send Enrollment Packet stage-entry work", () => {

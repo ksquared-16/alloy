@@ -1,0 +1,51 @@
+{
+  "trusted_host_action_id": "tha_ebdeb562b02c0c",
+  "query_hash": "42352cfc3b4d317cb1e5b74ca9c3ca7b39faeb0c0427c941a60652c75f937c30",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-03T20:30:00.689Z",
+    "question_ids": [
+      "journeys_now",
+      "totals_now"
+    ],
+    "questions": {
+      "journeys_now": {
+        "question_id": "journeys_now",
+        "row_count": null,
+        "rows": [
+          {
+            "context_type": "enrollment_participation",
+            "subject_child_exists": false,
+            "journeys": 2
+          },
+          {
+            "context_type": "null",
+            "subject_child_exists": true,
+            "journeys": 6
+          },
+          {
+            "context_type": "opportunity",
+            "subject_child_exists": true,
+            "journeys": 19
+          }
+        ]
+      },
+      "totals_now": {
+        "question_id": "totals_now",
+        "row_count": null,
+        "rows": [
+          {
+            "enrollment_journeys": 27,
+            "participations": 2,
+            "opportunities": 2,
+            "children": 19,
+            "sessions": 23,
+            "agreements": 2,
+            "placements": 2
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

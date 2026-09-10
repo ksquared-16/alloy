@@ -342,6 +342,28 @@ describeSeed("demo tenant money — seeded through the canonical services", () =
             cohort.counts.chargesWithOutstanding,
             "more than one account is carrying it",
         ).toBeGreaterThan(1);
+
+        /*
+         * AND SOME OF IT HAS BEEN PAID. Everything above is satisfied by a cohort that has read the
+         * charges and none of the payments — which is precisely what happened: the read of the
+         * payments behind each application overflowed the request URI, its error was dropped, and
+         * every account came back owing its full posted amount. Gross was right, outstanding was
+         * "right" too, and the tenant looked seeded. Only the ABSENCE of a settled obligation gave
+         * it away, so the seam now refuses to declare the tenant representative without one.
+         *
+         * A positive net obligation matters: a credit line is also zero and was never owed.
+         */
+        const settled = cohort.rows.filter(
+            (r) => r.position.outstandingCents === 0 && r.position.explanation.netCents > 0,
+        );
+        expect(
+            settled.length,
+            "no obligation in the seeded cohort is paid in full — applied payments are not being counted",
+        ).toBeGreaterThan(0);
+        expect(
+            new Set(settled.map((r) => r.householdName).filter(Boolean)).size,
+            "the settled money belongs to a household the surface can name",
+        ).toBeGreaterThan(0);
     }, 180_000);
 
     /*

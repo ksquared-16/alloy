@@ -2126,8 +2126,13 @@ await test("canonical work state maps live execution to Working and stale heartb
     provider_activity: { activity: "ready" },
     last_activity_ms: now - 5_000,
   }, { nowMs: now });
-  assert.equal(idleOpen.label, "Ready");
-  assert.equal(idleOpen.group, "idle");
+  // CONTRACT CHANGED, DELIBERATELY: an idle provider on an open run is
+  // Finalizing, not Ready. The run has not finished recording — validation,
+  // checkpointing, the run report and the completion summary all land after the
+  // last token — and Ready is the word that invites the next instruction.
+  assert.equal(idleOpen.label, "Finalizing");
+  assert.equal(idleOpen.group, "active");
+  assert.notEqual(idleOpen.label, "Ready");
   assert.equal(deriveLaneExecutionPosture({
     ...identity,
     execution_run: { state: "EXECUTING" },
@@ -2152,7 +2157,11 @@ await test("canonical work state maps live execution to Working and stale heartb
   const idle = canonicalLaneWorkState({
     lane_id: "lane_idleidleidle",
     durable: true,
-    previous_run: { state: "COMPLETE" },
+    // report_id is what says an account of that turn survives. The fixture is
+    // about idleness, so it describes a normally-accounted completion; a
+    // previous_run WITHOUT one is now its own state and is covered in
+    // development-operator-state-truth.
+    previous_run: { state: "COMPLETE", completion_report: { report_id: "rep_fixture" } },
   }, { nowMs: now });
   assert.equal(idle.label, "Idle");
   const thinking = canonicalLaneWorkState({

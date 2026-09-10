@@ -316,7 +316,14 @@ export async function completeStageWorkWithOutcome(
 
             const workTemplateKey =
                 outcome.work_template_key?.trim() ?? plan.work_templates[0]?.template_key ?? "";
-            if (workTemplateKey) {
+            /*
+             * The contact trace is written against the Opportunity's own event stream and metadata,
+             * so a context-free subject has no stream to trace onto. Skipping the step is the
+             * honest outcome and costs nothing else: the trace is an activity record, not part of
+             * the completion it accompanies.
+             */
+            const traceOpportunityId = input.subject.opportunity_id;
+            if (workTemplateKey && traceOpportunityId) {
                 steps.push({
                     name: "contact_outcome_trace",
                     stage: "activity",
@@ -325,7 +332,7 @@ export async function completeStageWorkWithOutcome(
                             supabase: input.supabase,
                             orgId: input.orgId,
                             userId: input.userId,
-                            opportunityId: input.subject.opportunity_id,
+                            opportunityId: traceOpportunityId,
                             stageKey,
                             workId: input.workId,
                             workTemplateKey,
@@ -410,9 +417,24 @@ async function preflightParticipantResolutionGate(
     const decisions = template.participant_decisions ?? [];
     if (!decisions.length) return { ok: true };
 
+    /*
+     * "ALL PARTICIPANTS RESOLVED" IS A QUESTION ABOUT A FAMILY CASE.
+     *
+     * The policy asks whether every child riding on one lead has been decided, and it answers it
+     * by enumerating that lead's children. A context-free child rides on no lead: there is one
+     * participant, and it is the subject itself.
+     *
+     * So the gate does not apply rather than fails. Falling through would have handed a null to
+     * the reader, whose strict refusal `evaluateFamilyCloseGuard`-style would surface as "could
+     * not enumerate this family's children" — a database-sounding error for a family that does
+     * not exist by design.
+     */
+    const familyCaseId = input.subject.opportunity_id;
+    if (!familyCaseId) return { ok: true };
+
     const read = await readEnrollmentInstancesForLead(input.supabase, {
         orgId: input.orgId,
-        opportunityId: input.subject.opportunity_id,
+        opportunityId: familyCaseId,
     });
     if (!read.ok) {
         return {

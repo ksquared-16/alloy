@@ -18,11 +18,13 @@ import { governedActionStorePath } from "./governed-action-request.mjs";
 import { executionRunStorePath } from "./execution-run.mjs";
 import { developmentLaneStorePath } from "./development-lane.mjs";
 import { branchIsReferenced } from "./branch-reference.mjs";
+import * as migrationGate from "./migration-parity.mjs";
 import { isSafeCorrection, WITHHELD_CORRECTION_KINDS } from "./reconciliation-apply.mjs";
 import { observeRetirementCandidates } from "./worktree-retirement-observe.mjs";
 import { homedir } from "node:os";
 import {
   measureClosePullRequestGates,
+  measureHostedMigrationParity,
   measureMergePullRequestGates,
   measureDeleteRemoteBranchGates,
   isNeverDeletable,
@@ -281,6 +283,30 @@ export function collectDirectorEvidence(rec, {
       // head_sha_still_matches compares the PR head against the sha the
       // REQUEST named, so the request's claim must be the one on trial.
       if (evidence.source_sha == null) evidence.source_sha = sha;
+    } catch { /* unmeasured -> escalates */ }
+    // The schema gate is measured separately: a failure to read the migration
+    // set must not also lose the pull-request evidence above, and vice versa.
+    try {
+      // The census records ARE the proof, so they are read from where the
+      // census was recorded rather than copied into a second store. Read
+      // directly: importing the request module's readers here would close a
+      // cycle, since governed-action-request already imports this file.
+      let censusRequests = [];
+      const store = governedActionStorePath(stateRoot);
+      if (existsSync(store)) {
+        const parsed = JSON.parse(readFileSync(store, "utf8"));
+        censusRequests = Array.isArray(parsed) ? parsed : (parsed?.requests || []);
+      }
+      Object.assign(evidence, measureHostedMigrationParity({
+        repository,
+        expectedHeadSha: sha,
+      }, {
+        censusRequests,
+        gate: migrationGate,
+        provenFrom: (rows) => migrationGate.provenHostedHeadFromCensusRecords(rows, {
+          artifactPath: "hosted-migration-identity-census.sql",
+        }),
+      }));
     } catch { /* unmeasured -> escalates */ }
   }
   if (rec?.action_key === "lane.dispatch_measurement_instruction") {
