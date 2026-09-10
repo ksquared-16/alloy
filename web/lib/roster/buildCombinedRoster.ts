@@ -63,6 +63,13 @@ import { createSupabaseExpectationQueryGateway } from "@/lib/operationalExpectat
 /** The service-day reading attached to a roster child. */
 export type ChildServiceDayState = {
     state: ServiceDayState;
+    /**
+     * The statement this reading came from. The operator surface needs it to say
+     * "they'll be in after all" or "we're opening after all": a change must name
+     * what it replaces, or it is not a change but a second, competing plan for the
+     * same child on the same day.
+     */
+    expectationId: string | null;
     /** Operator-facing reason (illness, vacation, holiday_closure...). */
     reasonKey: string | null;
     /** True only for a genuine unexplained missing arrival. */
@@ -467,6 +474,7 @@ export async function buildCombinedRoster(
                 const state = applyObservedPresence(expectation, observed);
                 return {
                     state,
+                    expectationId: expectation.expectationId,
                     reasonKey: expectation.reasonKey,
                     raisesAttention: raisesMissingArrivalAttention(state),
                 };

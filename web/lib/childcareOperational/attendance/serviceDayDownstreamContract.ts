@@ -16,9 +16,17 @@ import type { ServiceDayState } from "@/lib/childcareOperational/attendance/serv
 /**
  * ── 1. THE STANDING CONTRACT, STATED FOR CONSUMERS ──
  *
- * Every service-day expectation this product authors currently lands at
- * `proposed` standing, and the projection consumes it anyway. That is deliberate
- * and it is NOT a promise that the expectation binds anyone.
+ * The projection consumes an expectation at ANY standing, and that is deliberate.
+ * It is NOT a promise that the expectation binds anyone.
+ *
+ * Standing is not something this product chooses. The authoring RPC resolves it
+ * from GOVERNED authority — a holder self-ratifies to `binding`, everyone else
+ * lands `proposed` — so it is a property of who authored an act, not of what the
+ * act said. Attendance authors under `user:<id>`, which names an individual and
+ * not a governed authority, so in practice today everything it writes is
+ * `proposed`. A consumer must not encode that as a rule: the day an operator is
+ * granted a governed authority, the same command starts producing `binding` acts
+ * without a line of this code changing.
  *
  * Standing is binding FORCE — whether someone is obliged. The roster asks a
  * different question ("is this child expected today?"), and an operator's sick
@@ -38,8 +46,13 @@ import type { ServiceDayState } from "@/lib/childcareOperational/attendance/serv
  * proposal — and no downstream decision may turn on the difference.
  */
 export const SERVICE_DAY_STANDING_CONTRACT = {
-    /** Every authored service-day expectation currently lands here. */
-    authoredStanding: "proposed",
+    /**
+     * What an act lands at when its author holds no governed authority — which is
+     * every act Attendance writes today. NOT a guarantee: the database decides.
+     */
+    standingWithoutGovernedAuthority: "proposed",
+    /** Standing comes from the authoring RPC, never from this product. */
+    standingResolvedByLedger: true,
     /** Consumers may read the interpretation at any standing. */
     interpretationIgnoresStanding: true,
     /** No consumer may treat a reading as proof that anyone was obliged. */

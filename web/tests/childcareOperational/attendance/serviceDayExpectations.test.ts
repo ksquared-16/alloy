@@ -262,9 +262,10 @@ describe("the standing contract is explicit, not accidental", () => {
     });
 
     it("interprets a known-away child at proposed standing", () => {
-        // The intake clamps every act to `proposed` (Wave C · C2 unwired). If this
-        // stopped working, every sick call would silently become an unexplained
-        // missing arrival — the defect Thread 4 exists to remove.
+        // An author holding no governed authority lands `proposed`, which is
+        // every sick call today. If this stopped being consumed, each of them
+        // would silently become an unexplained missing arrival — the defect
+        // Thread 4 exists to remove.
         const [emma] = interpretServiceDay({
             ...base,
             scheduledChildIds: [EMMA],

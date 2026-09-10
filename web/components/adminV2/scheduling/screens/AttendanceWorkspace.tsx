@@ -61,6 +61,8 @@ type SubjectActual = {
  */
 type ServiceDayReading = {
     state: ServiceDayState;
+    /** The statement this reading came from — what a change would replace. */
+    expectationId: string | null;
     reasonKey: string | null;
     raisesAttention: boolean;
 };
@@ -525,6 +527,54 @@ export default function AttendanceWorkspace({
     }
 
     /*
+     * "THEY'LL BE IN AFTER ALL" NAMES WHAT IT REPLACES.
+     *
+     * Without the predecessor this is not a change of plan but a SECOND plan for
+     * the same child on the same day, and the two would sit side by side with
+     * nothing to say which one is current. The operator says "cancel that"; the
+     * platform records that the intent was validly held until it changed.
+     */
+    function withdrawChildAbsence(child: RosterChild, room: Cell) {
+        const predecessorId = child.serviceDay?.expectationId;
+        if (!predecessorId) return;
+        return runAction(
+            `child:${child.customerMemberId}`,
+            {
+                action_key: "attendance.withdraw_absence",
+                entity_type: "child",
+                entity_id: child.customerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                context: { surface: "workspace" },
+                payload: {
+                    customer_member_id: child.customerMemberId,
+                    child_label: child.displayName,
+                    predecessor_id: predecessorId,
+                    reason_key: "plans_changed",
+                    from_date: room.date,
+                    service_date: room.date,
+                },
+            },
+            "/api/admin/actions/execute"
+        );
+    }
+
+    function reopenSiteDay(predecessorId: string) {
+        return runAction(
+            `site:${siteLocationId}`,
+            {
+                action: "reopen_grain",
+                grain_kind: "site",
+                grain_id: siteLocationId,
+                predecessor_id: predecessorId,
+                reason_key: "reopened",
+                from_date: date,
+            },
+            "/api/admin/childcare-attendance/service-day-exception"
+        );
+    }
+
+    /*
      * MOVE — the ordinary afternoon operation, and until now impossible here.
      *
      * `attendance.move` has been registered since Thread 0 and reachable from
@@ -828,6 +878,17 @@ export default function AttendanceWorkspace({
                                                         again would invite a second, competing plan
                                                         for the same child on the same day. Check in
                                                         stays, because she may still walk in. */}
+                                                    {c.serviceDay?.state === "known_away" && c.serviceDay.expectationId ? (
+                                                        <button
+                                                            type="button"
+                                                            className={ACTION_SECONDARY}
+                                                            disabled={busy}
+                                                            onClick={() => void withdrawChildAbsence(c, openRoom)}
+                                                            data-attendance-child-expected-again={c.customerMemberId}
+                                                        >
+                                                            {busy ? "…" : "In after all"}
+                                                        </button>
+                                                    ) : null}
                                                     {c.serviceDay && !c.serviceDay.raisesAttention ? null : (
                                                         <select
                                                             className={`${ACTION} border border-alloy-stone/25 bg-white pr-1 font-medium text-alloy-midnight/75`}
@@ -936,7 +997,10 @@ export default function AttendanceWorkspace({
     const allChildren = (model?.cells ?? []).flatMap((c) => c.children);
     const closure =
         allChildren.length > 0 && allChildren.every((c) => c.serviceDay?.state === "closed")
-            ? { reasonLabel: serviceDayReasonLabel(allChildren[0]?.serviceDay?.reasonKey ?? null) }
+            ? {
+                  reasonLabel: serviceDayReasonLabel(allChildren[0]?.serviceDay?.reasonKey ?? null),
+                  expectationId: allChildren[0]?.serviceDay?.expectationId ?? null,
+              }
             : null;
 
     const exceptions = [
@@ -1044,6 +1108,17 @@ export default function AttendanceWorkspace({
                         data-attendance-closed="true"
                     >
                         Closed today{closure.reasonLabel ? ` · ${closure.reasonLabel}` : ""} — no children are expected.
+                        {closure.expectationId ? (
+                            <button
+                                type="button"
+                                className="ml-2 rounded border border-alloy-stone/30 bg-white px-2 py-0.5 text-[11.5px] font-medium text-alloy-midnight/75 hover:bg-alloy-stone/10"
+                                disabled={busySubject === `site:${siteLocationId}`}
+                                onClick={() => void reopenSiteDay(closure.expectationId as string)}
+                                data-attendance-reopen-site="true"
+                            >
+                                We are opening after all
+                            </button>
+                        ) : null}
                     </p>
                 ) : null}
 

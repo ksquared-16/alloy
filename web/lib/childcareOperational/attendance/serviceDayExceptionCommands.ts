@@ -107,8 +107,10 @@ function tuple(args: {
     return {
         idempotencyKey: args.common.idempotencyKey,
         verb: args.verb,
-        // The actor holds the authority personally; `authorClass: "human"` is what
-        // the expectations owner resolves to standing once Wave C · C2 is wired.
+        // The actor is named as the authority. That is deliberately an INDIVIDUAL
+        // rather than a governed authority key, so the authoring RPC resolves no
+        // held authority and the act lands `proposed` — Attendance does not get to
+        // grant itself binding force by choosing a grander-sounding key.
         authority: { authorityKey: `user:${args.common.actorUserId}`, authorClass: "human" },
         modality: args.modality,
         subjects: [{ kind: args.subjectKind, ref: args.subjectId }],

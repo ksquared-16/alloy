@@ -86,8 +86,12 @@ describe("the financial boundary", () => {
 describe("standing is stated, so no consumer has to guess", () => {
     it("says plainly that a reading conveys no obligation", () => {
         expect(SERVICE_DAY_STANDING_CONTRACT.conveysObligation).toBe(false);
-        expect(SERVICE_DAY_STANDING_CONTRACT.authoredStanding).toBe("proposed");
         expect(SERVICE_DAY_STANDING_CONTRACT.interpretationIgnoresStanding).toBe(true);
+        // Standing belongs to the ledger, not to this product — a consumer that
+        // hard-codes "these are always proposed" breaks the day an operator is
+        // granted a governed authority.
+        expect(SERVICE_DAY_STANDING_CONTRACT.standingResolvedByLedger).toBe(true);
+        expect(SERVICE_DAY_STANDING_CONTRACT.standingWithoutGovernedAuthority).toBe("proposed");
     });
 });
 

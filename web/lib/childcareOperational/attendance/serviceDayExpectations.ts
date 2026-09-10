@@ -162,12 +162,16 @@ const CLOSURE_MODALITY = "prohibited";
  *
  *   - Absence is `intended`, which imposes no obligation at ANY standing, so the
  *     question barely arises for the high-frequency case.
- *   - Closure is `prohibited` and deontic. Per the expectations architecture an
- *     authorized human holding the authority is "self-ratifying within authority"
- *     and should land `binding`; today the intake clamps every act to `proposed`
- *     because Wave C · C2 was never wired to `resolveAuthorityToStanding`. That is
- *     an Operational Expectations gap, NOT something Attendance should route
- *     around by inventing a standing.
+ *   - Closure is `prohibited` and deontic, and WOULD self-ratify to `binding` if
+ *     its author held the authority. Standing is not clamped in TypeScript: the
+ *     authoring RPC recomputes it authoritatively from
+ *     `resolve_held_operational_authority`, so a holder of a governed authority
+ *     binds and everyone else lands `proposed`. Attendance authors under
+ *     `user:<id>`, which names an individual rather than a governed authority, so
+ *     nothing self-ratifies today. Whether "site director" should be a governed
+ *     authority — so that a closure genuinely binds — is a configuration question
+ *     for the expectations owner, and NOT one Attendance should answer by
+ *     inventing an authority key.
  *
  * `expectationStandingIsConsumable` is the single place that decision lives, and
  * its tests fail if someone narrows it silently — so a future standing change
