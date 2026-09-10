@@ -1089,6 +1089,38 @@ alloy_worker_status_table() {
       "$i" "$sprint" "$prov" "$stage" "$posture_s" "$name" "$git_state" "${ahead}/${behind}" \
       "$lifecycle" "$server" "$port" "$health"
   done
+
+  # A REGISTRATION WITH NO SLOT MUST STILL BE VISIBLE HERE.
+  #
+  # This table is indexed by slot, so a worktree registered without one appears
+  # in no row at all — registered, owned, dispatchable, and invisible to the one
+  # view an operator reads to see what the fleet is doing. That is the same
+  # class of thing as a stale registration nothing can see or reclaim, arriving
+  # from the other direction, so it gets a section of its own rather than a row
+  # in a table whose first column it cannot fill.
+  local -a unslotted=()
+  local meta_name
+  while IFS= read -r meta_name; do
+    [[ -n "$meta_name" ]] || continue
+    local ms
+    ms="$(alloy_rc_meta_get "$(alloy_metadata_path "$meta_name")" ALLOY_WORKTREE_SLOT 2>/dev/null || true)"
+    [[ -z "$ms" ]] && unslotted+=("$meta_name")
+  done < <(alloy_list_metadata_names)
+
+  if (( ${#unslotted[@]} > 0 )); then
+    printf '\n'
+    printf 'REGISTERED WITHOUT A SLOT (%d) — dispatchable; no port, no dev server, no QA environment:\n' "${#unslotted[@]}"
+    local u upath ubranch ugit
+    for u in "${unslotted[@]}"; do
+      alloy_load_metadata "$u"
+      upath="$ALLOY_WORKTREE_PATH"
+      ubranch="$ALLOY_WORKTREE_BRANCH"
+      if [[ -d "$upath" ]]; then ugit="$(alloy_worktree_dirty_classification "$upath")"; else ugit="missing"; fi
+      printf '  %-24s %-38s %s\n' "${u:0:24}" "${ubranch:0:38}" "$ugit"
+    done
+    printf '  Give one a port by freeing a slot (alloy-sprint-finish <slot>) then\n'
+    printf '  alloy-worktree-adopt <slot> <worktree> --force\n'
+  fi
 }
 
 # --- Doctor (read-only by default) ---

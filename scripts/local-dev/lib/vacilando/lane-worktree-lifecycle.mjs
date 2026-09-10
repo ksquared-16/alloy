@@ -809,29 +809,177 @@ export async function registerCreatedWorktree({
   const name = norm(worktreeName);
   if (!name) return { ok: false, error: "missing_worktree_name" };
   const chosen = asSlot(slot) ?? freeSlots({ cfg, metadata })[0] ?? null;
-  if (chosen == null) {
-    // Saying this is the point. A lane created with no slot left is a lane that
-    // cannot run, and the operator has to be told at creation rather than
-    // discovering it on the first message.
-    // Counted from the topology owner, not asserted. The literal "six" here
-    // outlived the six-slot host and would have told an operator with twelve
-    // slots something plainly untrue.
-    return {
-      ok: false,
-      error: "no_free_slot",
-      detail: `All ${managedSlots().length} managed slots are registered; free one before creating another lane that needs a worktree.`,
-    };
-  }
+
+  // A FULL SLOT POOL IS NOT A REASON TO LEAVE A WORKTREE UNKNOWN.
+  //
+  // WHAT THIS USED TO DO, AND WHAT IT COST. It refused outright: no slot, no
+  // registration, nothing written. The lane still got its worktree, its branch,
+  // its tmux session and a live Claude — and, having no registration, was
+  // refused `lane_worktree_unregistered` on every single message. Measured on
+  // the Access & Identity lane, created while all twelve slots were held: pane
+  // %24 running claude.exe in the right worktree, and not one instruction able
+  // to reach it. That is the exact Financials failure this function was written
+  // to prevent, arriving through the other door.
+  //
+  // The two things had been fused, and they are not the same thing:
+  //
+  //   REGISTRATION is IDENTITY. It is how the fleet knows whose worktree that
+  //   is, and `resolveLaneWorktree` requires it before an instruction may enter.
+  //
+  //   A SLOT is a RESOURCE — a port and a managed QA environment. Only the
+  //   environment actions need it, and `assertManagedLaneEnvironment` already
+  //   refuses those separately on `lane_slot_unregistered`.
+  //
+  // The resolver has always modelled the middle state: a registered worktree
+  // with no slot resolves SLOT_UNREGISTERED, and `assertLaneDispatchable`
+  // deliberately passes it as `slotless` because delivery needs identity, not a
+  // port. What was missing was a WRITER for it. So a full pool now produces a
+  // slotless registration rather than nothing: the lane is dispatchable
+  // immediately, and it gets no port, no dev server and no QA environment until
+  // a slot is actually free — which is true, and says so.
+  //
+  // This takes no slot from anybody. Nothing is reclaimed, retired or reassigned.
   const bin = join(toolkitDir || join(process.env.HOME || "", ".local", "share", "alloy", "toolkit", "current"), "alloy-worktree-adopt");
   const run = registerImpl || ((cmd, args, opts) => spawnSync(cmd, args, opts));
-  const out = run(bin, [String(chosen), name, "--provider", provider], {
+  const args = chosen == null
+    ? ["--no-slot", name, "--provider", provider]
+    : [String(chosen), name, "--provider", provider];
+  const out = run(bin, args, {
     encoding: "utf8", timeout: 60_000, env: { ...process.env, ALLOY_RUNTIME_ROOT: root },
   });
   if (!out || out.status !== 0) {
     return {
       ok: false, error: "registration_failed", slot: chosen,
+      slotless: chosen == null,
       detail: String(out?.stderr || out?.error || "alloy-worktree-adopt failed").slice(0, 300),
     };
   }
-  return { ok: true, slot: chosen, port: 3010 + chosen, worktree: name, provider };
+  if (chosen == null) {
+    return {
+      ok: true, slot: null, port: null, worktree: name, provider,
+      slotless: true,
+      reason: "no_free_slot",
+      // Counted from the topology owner, not asserted. The literal "six" here
+      // outlived the six-slot host and would have told an operator with twelve
+      // slots something plainly untrue.
+      detail: `All ${managedSlots().length} managed slots are held, so this worktree is registered without one: it is dispatchable but has no port, no dev server and no managed QA environment. ${slotHoldersSummary({ cfg, metadata, root })}`,
+    };
+  }
+  return { ok: true, slot: chosen, port: 3010 + chosen, worktree: name, provider, slotless: false };
+}
+
+/**
+ * WHO IS HOLDING THE SLOTS — because "the pool is full" is not actionable.
+ *
+ * An operator told only that every slot is taken has to go find out which lane
+ * owns which, and whether any of them is a leftover. On this host one was: slot
+ * 10 held a registration for `wt10-trust-runtime-enrollment-e2e` that NO durable
+ * lane owned, and it was indistinguishable from the eleven live ones. So the
+ * unowned holders are named separately, since they are the ones worth freeing.
+ */
+export function slotHoldersSummary({ cfg = null, metadata = null, root = runtimeRoot() } = {}) {
+  try {
+    const classified = classifyRegistrations({ root, cfg, metadata });
+    if (!classified.ok) return "The registry could not be read to say which slots are held.";
+    const held = classified.registrations.filter((r) => r.slot != null);
+    const unowned = held.filter((r) => !r.owner_lane_id);
+    const holders = held
+      .sort((a, b) => a.slot - b.slot)
+      .map((r) => `${r.slot}=${r.worktree}${r.owner_lane_id ? "" : " (no owning lane)"}`)
+      .join(", ");
+    const tail = unowned.length
+      ? ` ${unowned.length === 1 ? "One slot is" : `${unowned.length} slots are`} held by a registration no durable lane owns (${unowned.map((r) => `slot ${r.slot}: ${r.worktree}`).join("; ")}) — freeing one of those with alloy-sprint-finish would give this lane a port.`
+      : "";
+    return `Slots: ${holders}.${tail}`;
+  } catch {
+    return "The registry could not be read to say which slots are held.";
+  }
+}
+
+/**
+ * A LANE THAT HAS A WORKTREE MUST END UP REGISTERED, WHATEVER CREATED IT.
+ *
+ * THE DEFECT THIS CLOSES. Registration happened in exactly one place — the
+ * `new_worktree` branch of lane creation — and only if it succeeded on the first
+ * try. Everything else produced a bound, unregistered, permanently undeliverable
+ * lane, and nothing ever went back:
+ *
+ *   - creation with no free slot registered nothing and moved on;
+ *   - `connect_existing` never called registration at all;
+ *   - a durable restore onto a new host carries lanes and bindings, and the slot
+ *     registry is host-local state no backup carries.
+ *
+ * In every one of those the operator's experience is identical and gives them
+ * nothing to act on: an agent that is demonstrably running, and a lane that says
+ * it is unregistered.
+ *
+ * So registration is repaired AT THE POINT OF USE rather than only at creation.
+ * A creation path can be missed; a send cannot. This runs before the dispatch
+ * guard, does nothing at all when the lane is already registered, and is the
+ * reason a newly created lane does not need creation to have gone perfectly.
+ *
+ * IT STILL NEVER GUESSES OWNERSHIP. It repairs exactly one condition —
+ * WORKTREE_UNREGISTERED, on a directory that exists, for a worktree no other
+ * open lane claims. A missing directory, a finished registration, a slot
+ * mismatch or a contested worktree are reported and left alone: those are
+ * genuine ambiguities, and adopting through them is how a lane would quietly
+ * take over another lane's work.
+ */
+export async function ensureLaneWorktreeRegistered(laneId, {
+  root = runtimeRoot(),
+  cfg = null,
+  metadata = null,
+  gitImpl = null,
+  toolkitDir = null,
+  nowMs = Date.now(),
+} = {}) {
+  const resolved = resolveLaneWorktree(laneId, { root, cfg, metadata, gitImpl });
+  if (resolved.code !== LANE_LIFECYCLE_ERRORS.WORKTREE_UNREGISTERED) {
+    // Includes the healthy case and every ambiguous one. Not this function's
+    // business, and reported as untouched rather than as a failure.
+    return { ok: true, changed: false, reason: resolved.code || "managed", resolution: resolved };
+  }
+  const name = norm(resolved.worktree_name);
+  const path = norm(resolved.worktree_path);
+  if (!name || !path) {
+    return { ok: false, changed: false, error: LANE_LIFECYCLE_ERRORS.WORKTREE_UNBOUND, detail: lifecycleDetail("lane_worktree_unbound"), resolution: resolved };
+  }
+  if (!existsSync(path)) {
+    return { ok: false, changed: false, error: LANE_LIFECYCLE_ERRORS.WORKTREE_MISSING, detail: lifecycleDetail("lane_worktree_missing"), resolution: resolved };
+  }
+  // A worktree two open lanes both claim is a conflict to report, never one to
+  // resolve by registering it to whichever lane happened to send first.
+  const contender = listDurableLanes(root).find((l) => l.lane_id !== resolved.lane_id
+    && OPEN_LANE_STATUSES.includes(norm(l.status) || LANE_OPEN)
+    && (norm(l.binding?.worktree_name) === name
+      || (norm(l.binding?.worktree_path) && norm(l.binding.worktree_path) === path)));
+  if (contender) {
+    return {
+      ok: false, changed: false, error: "worktree_claimed_by_another_lane",
+      detail: `${name} is also bound to ${contender.lane_id} (${contender.name || "unnamed"}); registration would decide an ownership question this cannot answer.`,
+      resolution: resolved,
+    };
+  }
+  const lane = getDurableLane(resolved.lane_id, root);
+  const provider = norm(lane?.binding?.provider) || norm(lane?.preferred_provider) || "claude";
+  const registered = await registerCreatedWorktree({ worktreeName: name, provider, toolkitDir, root, cfg, metadata });
+  if (!registered.ok) {
+    return { ok: false, changed: false, error: registered.error, detail: registered.detail || null, resolution: resolved };
+  }
+  // Re-read from disk: the metadata this just wrote is not in whatever snapshot
+  // the caller handed in, and reconciling against a stale one would write the
+  // absence back onto the binding.
+  const reconciled = reconcileLaneSlotBinding(resolved.lane_id, { root, nowMs, gitImpl });
+  return {
+    ok: true,
+    changed: true,
+    lane_id: resolved.lane_id,
+    worktree: name,
+    slot: registered.slot ?? null,
+    port: registered.port ?? null,
+    slotless: Boolean(registered.slotless),
+    detail: registered.detail || null,
+    reconciled: reconciled?.ok ? reconciled : null,
+    resolution: resolveLaneWorktree(resolved.lane_id, { root, gitImpl }),
+  };
 }

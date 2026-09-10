@@ -656,7 +656,17 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   // forgotten it. Dispatch never guesses ownership.
   // ---------------------------------------------------------------------
   try {
-    const { assertLaneDispatchable } = await import("./lane-worktree-lifecycle.mjs");
+    const { assertLaneDispatchable, ensureLaneWorktreeRegistered } = await import("./lane-worktree-lifecycle.mjs");
+    // REGISTER WHAT CREATION MISSED, BEFORE REFUSING FOR ITS ABSENCE.
+    //
+    // A lane that has a worktree it alone claims, on disk, and no registration
+    // is not an ambiguity — it is a step that did not happen, and the operator
+    // cannot see it or fix it from where they are standing. Registering it here
+    // is the difference between "your lane is unregistered" and a lane that
+    // simply works. It is a no-op for every already-registered lane, and it
+    // refuses every ambiguous case rather than guessing ownership.
+    try { await ensureLaneWorktreeRegistered(laneId, { root, nowMs }); }
+    catch { /* the guard below is still authoritative; a failed repair refuses */ }
     const guard = assertLaneDispatchable(laneId, { root, nowMs, repair: true });
     if (!guard.ok) {
       return refused(laneId, guard.error, nowMs, size, activeRunForLane(laneId, root), {

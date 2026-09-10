@@ -385,17 +385,26 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
         worktree_name: made.worktree_name,
         branch: made.branch,
         provider,
-        ...(registered.ok ? { slot: registered.slot, port: registered.port } : {}),
+        ...(registered.ok && registered.slot != null ? { slot: registered.slot, port: registered.port } : {}),
       }, { nowMs });
       workspace = {
         mode: workspaceMode,
         // Provisioned means USABLE. A worktree the fleet cannot see is not a
         // provisioned lane, and reporting it as one is what hid this.
+        //
+        // A SLOTLESS registration is usable: it is registered, owned and
+        // dispatchable, and what it lacks is a port. That is reported as its own
+        // fact rather than folded into "not provisioned", which would send the
+        // operator to fix a lane that already works.
         provisioned: registered.ok,
         worktree_path: made.worktree_path, branch: made.branch,
         base_ref: made.base_ref, repository_id: made.repository_id,
         ...(registered.ok
-          ? { slot: registered.slot, port: registered.port, registered: true }
+          ? {
+            slot: registered.slot ?? null, port: registered.port ?? null, registered: true,
+            slotless: Boolean(registered.slotless),
+            ...(registered.slotless ? { detail: registered.detail || null } : {}),
+          }
           : { registered: false, error: registered.error, detail: registered.detail || null }),
       };
     }
@@ -407,13 +416,31 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
     if (!conn.ok) {
       workspace = { mode: workspaceMode, provisioned: false, error: conn.error, detail: conn.actual || null };
     } else {
+      // A CONNECTED WORKTREE NEEDS REGISTERING EXACTLY AS MUCH AS A CREATED ONE.
+      //
+      // This branch bound the lane and stopped, so a lane connected to an
+      // existing worktree came out unregistered and undeliverable — the same
+      // end state as the created-with-no-free-slot case, reached by a path that
+      // never even attempted registration. Connecting to a worktree that is
+      // ALREADY registered is the common case and this is a no-op for it.
+      const registered = await registerCreatedWorktree({
+        worktreeName: conn.worktree_name,
+        provider,
+      });
       bindDurableLane(created.lane.lane_id, {
         worktree_path: conn.worktree_path,
         worktree_name: conn.worktree_name,
         branch: conn.branch,
         provider,
+        ...(registered.ok && registered.slot != null ? { slot: registered.slot, port: registered.port } : {}),
       }, { nowMs });
-      workspace = { mode: workspaceMode, provisioned: true, worktree_path: conn.worktree_path, branch: conn.branch, repository_id: conn.repository_id };
+      workspace = {
+        mode: workspaceMode, provisioned: true,
+        worktree_path: conn.worktree_path, branch: conn.branch, repository_id: conn.repository_id,
+        ...(registered.ok
+          ? { registered: true, slot: registered.slot ?? null, port: registered.port ?? null, slotless: Boolean(registered.slotless), detail: registered.detail || null }
+          : { registered: false, error: registered.error, detail: registered.detail || null }),
+      };
     }
   }
 
