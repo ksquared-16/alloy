@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { postProviderConfirmedCollection, type AttemptForPosting } from "./canonicalPosting";
 import { mapStripeStatus } from "./collectionAttempt";
 import { resolveOrgForConnectedAccount } from "./providerMerchant";
+import { recognizeProviderDispute } from "./providerDispute";
 import { mapStripeRefundStatus, recognizeProviderRefund } from "./refundCollection";
 
 export type WebhookOutcome =
@@ -32,6 +33,15 @@ export type WebhookOutcome =
     | "stale"
     | "unattributed"
     | "unsupported"
+    /*
+     * Understood, recorded, and correctly moved no money.
+     *
+     * Thread 8C needed a word the existing six did not have. A dispute that has been raised but has
+     * not withdrawn funds is not `unsupported` — it is modelled precisely — and it is not `applied`,
+     * because nothing happened to a balance. Calling it either would misreport the one thing an
+     * operator investigating a return needs to know.
+     */
+    | "observed"
     | "rejected";
 
 export type WebhookResult = {
@@ -107,6 +117,15 @@ const SUPPORTED = new Set([
     // refund happened rather than evidence of which one, so it stays observed-but-unmodelled.
     "refund.created",
     "refund.updated",
+    /*
+     * Thread 8C. One economic reversal, three events — measured on the governed test merchant:
+     * `created` announces it, `funds_withdrawn` is the money actually leaving, `closed` settles the
+     * outcome. All three are kept because all three are evidence; only one of them moves a balance.
+     */
+    "charge.dispute.created",
+    "charge.dispute.funds_withdrawn",
+    "charge.dispute.closed",
+    "charge.dispute.updated",
 ]);
 
 const TERMINAL = new Set(["succeeded", "failed", "canceled"]);
@@ -116,6 +135,13 @@ function stateForEvent(eventType: string, objectStatus: string | undefined): str
     if (eventType === "payment_intent.payment_failed") return "failed";
     if (eventType === "payment_intent.canceled") return "canceled";
     return mapStripeStatus(objectStatus);
+}
+
+/** The provider's own name for what the payer still has to do, or null when nothing is pending. */
+function nextAction(object: Record<string, unknown>): string | null {
+    const action = object.next_action as { type?: unknown } | null | undefined;
+    const type = action && typeof action === "object" ? action.type : null;
+    return typeof type === "string" && type ? type : null;
 }
 
 export async function handleStripeWebhook(
@@ -219,6 +245,55 @@ export async function handleStripeWebhook(
     }
 
     /*
+     * ── 4a. A DISPUTE EVENT (Thread 8C) ──────────────────────────────────────────────────────────
+     *
+     * An ACH return arrives here, and one day a card chargeback will too — Stripe uses the same
+     * family for both. The dispute object names itself (`du_…`) and the transaction it is about, so
+     * the receipt is found through Alloy's own attempt rather than from anything the payload claims.
+     *
+     * Only `funds_withdrawn` moves money. `created` is the provider saying a dispute exists, and
+     * restoring a family's outstanding on that would tell them they owe money again while the cash
+     * is still sitting in the account.
+     */
+    if (eventType.startsWith("charge.dispute.")) {
+        const disputeId = object.id ? String(object.id) : null;
+        if (!disputeId) {
+            return await finish("unsupported", "dispute event carries no dispute id", { org_id: orgId });
+        }
+        const amountCents = Number(object.amount ?? 0);
+        if (!Number.isFinite(amountCents) || amountCents <= 0) {
+            return await finish("rejected", "dispute event carries no usable amount", { org_id: orgId });
+        }
+        const outcome = await recognizeProviderDispute(supabase, {
+            orgId,
+            processor: "stripe",
+            providerDisputeId: disputeId,
+            providerAccountRef: connectedAccountRef,
+            providerTransactionId: object.payment_intent ? String(object.payment_intent) : null,
+            // The dispute's OWN amount. Never the balance impact, which carries the dispute fee.
+            amountCents,
+            currency: String(object.currency ?? "usd").toUpperCase(),
+            providerReason: object.reason ? String(object.reason) : null,
+            providerState: object.status ? String(object.status) : null,
+            fundsWithdrawn: eventType === "charge.dispute.funds_withdrawn",
+            providerStateAt: providerCreated,
+        });
+
+        if (outcome.recognized) {
+            return await finish(
+                outcome.alreadyRecognized ? "duplicate" : "applied",
+                outcome.alreadyRecognized
+                    ? `dispute ${disputeId} was already reversed canonically`
+                    : `provider-initiated reversal ${outcome.reversalPaymentId} recorded for dispute ${disputeId}`,
+                { org_id: orgId },
+            );
+        }
+        // Everything else is evidence kept and money untouched, which is the correct answer for a
+        // dispute that has not taken funds, or a receipt Alloy has not recognised yet.
+        return await finish("observed", `dispute ${disputeId}: ${outcome.reason}`, { org_id: orgId });
+    }
+
+    /*
      * ── 4a. A REFUND EVENT (Slice G) ─────────────────────────────────────────────────────────────
      *
      * Same discipline as a collection: the refund is resolved through Alloy's own record under the
@@ -289,7 +364,7 @@ export async function handleStripeWebhook(
         .from("payment_collection_attempts")
         .select(
             "id, org_id, processor_state, provider_account_ref, charge_id, currency, "
-            + "requested_amount_cents, payer_person_id, provider_transaction_id, canonical_payment_id",
+            + "requested_amount_cents, payer_person_id, provider_transaction_id, canonical_payment_id, rail",
         )
         .eq("org_id", orgId)
         .eq("processor", "stripe")
@@ -361,6 +436,20 @@ export async function handleStripeWebhook(
         .update({
             processor_state: nextState,
             processor_state_at: new Date().toISOString(),
+            /*
+             * WHAT THE PAYER HAS LEFT TO DO, captured here and not only at creation.
+             *
+             * At creation there is no `next_action` — no payment method has been attached yet — so
+             * this column was always null in practice, and the lifecycle could not tell a card
+             * challenge from a bank microdeposit verification. Both are "requires_action", and an
+             * operator told a bank debit was awaiting a card challenge would send the family looking
+             * for a code that is never coming. The provider says which one it is on the event that
+             * moves the attempt into that state, so that is where it is recorded.
+             *
+             * Cleared when the attempt moves on: an action that is no longer required is not a fact
+             * about the collection any more.
+             */
+            provider_action_type: nextAction(object),
             last_provider_detail: { event_id: eventId, event_type: eventType, status: object.status ?? null },
             updated_at: new Date().toISOString(),
         })

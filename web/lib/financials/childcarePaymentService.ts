@@ -878,6 +878,17 @@ export type RefundChildcarePaymentInput = {
     /** Required for a retried refund to be harmless. */
     idempotencyKey?: string | null;
     metadata?: Record<string, unknown>;
+    /**
+     * WHO TOOK THE MONEY BACK. Defaults to the operator, because until Thread 8C every reversal in
+     * the system was one they asked for.
+     *
+     * `provider` means nobody here decided: the bank or the network withdrew money Alloy had already
+     * recognised — an ACH return, and later a card chargeback. The financial consequence is the same
+     * reversal, which is why this reuses that machinery rather than growing a second one; the CAUSE
+     * is the opposite, which is why it is written down instead of inferred. Inferred from
+     * `processor`, a Stripe refund and a Stripe dispute look identical.
+     */
+    reversalOrigin?: "operator" | "provider";
 };
 
 export type RefundChildcarePaymentResult = {
@@ -972,6 +983,7 @@ export async function refundChildcarePayment(
             billable_source_type: original.billable_source_type,
             billable_source_id: original.billable_source_id,
             refunds_payment_id: original.id,
+            reversal_origin: input.reversalOrigin ?? "operator",
             idempotency_key: idempotencyKey,
             amount_cents: amountCents,
             currency: original.currency,

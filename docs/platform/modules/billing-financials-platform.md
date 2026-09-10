@@ -1125,17 +1125,77 @@ platform account, real partial and full refunds on that same account, and exactl
 journal consequence per canonical receipt. Cash, check and money order remained `processor = NULL`
 with no provider transaction throughout.
 
-### ACH is a follow-up over this model, not a new payment system
+## Thread 8C — collecting by bank, and money the bank takes back (built, September 2026)
 
-`ach` is present as a rail and deliberately not executable: it is offered, visibly unavailable, and
-cannot record canonical money, because an executor for it does not exist yet. When it is built it
-reuses the merchant binding, the attempt model, the event evidence, connected-account tenancy,
-webhook verification, canonical posting and the journal consequence unchanged. Only the genuinely
-rail-specific parts are new — bank PaymentMethod collection, mandate/verification, asynchronous
-settlement, and returns.
+ACH reuses Thread 8B unchanged: the merchant binding, the attempt model, the event evidence,
+connected-account tenancy, webhook verification, canonical posting and the journal consequence are
+the same objects. What is genuinely new is what a bank rail forces you to model.
 
-Provider-initiated reversals (card disputes, ACH returns) are **not** operator refunds and are not
-modelled here. They are a separate thread.
+### Time is the difference, and it changes what a state means
+
+A card collection resolves in seconds, so `processing` was a blink and the surface could ignore it.
+A bank debit takes days. That single fact is why this thread exists:
+
+- **Processing is a real, lasting state, and it is not money.** No receipt, no application, no
+  reduction in what a family owes, for as long as it lasts. The card says so in words and never
+  invents a settlement date, because nobody knows one.
+- **Lifecycle has to survive a reload.** The operator closes the tab while the money is in flight.
+  A lifecycle that lives in component state disappears exactly when it is needed, so `openCollections`
+  comes off the view model and the card reconstructs Verification required, Processing and Failed
+  from persistence.
+- **The rail has to survive recognition.** A settled bank debit is filed as `payment_method = 'ach'`.
+  Filing it as a card payment — which the posting seam did until certification caught it — makes the
+  receipt unreconcilable against the bank statement it corresponds to.
+
+### Readiness is per rail, and fails closed on the rail it affects
+
+`payment_provider_merchants.ach_readiness` is read from the connected account's own
+`us_bank_account_ach_payments` capability, never inferred from `charges_enabled`. The governed test
+merchant proved why: it was charges-enabled with `card_payments: active` and no ACH capability at
+all. `null` means nobody has asked, which is what every merchant written before this thread is — it
+refuses ACH and changes nothing for cards.
+
+The browser cannot override it. Readiness is resolved server-side from the session's org; a request
+that asserts `ach_ready: true` in its payload is refused exactly as one that does not.
+
+### What the payer must still do is a fact the provider owns
+
+A card challenge and a bank microdeposit verification are both "requires action" and they are not the
+same thing. `provider_action_type` records which — `redirect_to_url` against
+`verify_with_microdeposits` — and it is captured on the event that moves the attempt into that state,
+not at creation, when no payment method is attached and there is nothing to name yet.
+
+### An ACH return is a dispute, not a refund
+
+This is the Director decision that shapes the whole reversal path. A bank return after settlement
+arrives as `charge.dispute.created` → `funds_withdrawn` → `closed`. Its economic identity is the
+dispute (`du_…`), which is why `payment_provider_disputes` is keyed on `(processor,
+provider_dispute_id)` with a unique partial index on the canonical reversal it produced: one dispute
+can only ever become one reversal, however many events describe it.
+
+**The restored amount is `dispute.amount`, never the balance transaction net.** A $15.00 return with
+a $15.00 dispute fee moves −$30.00 through the Stripe balance. Restoring $30.00 of family debt would
+bill a family for the bank's fee — inventing a charge nobody made. The fee is a cost of doing
+business and stops at Alloy.
+
+Money only moves on `funds_withdrawn`. A dispute that has merely been *raised* is evidence and
+nothing more.
+
+### Returned is not Refunded
+
+An operator refund and a bank return are both outbound money against a receipt, and collapsing them
+was safe only while every reversal was a refund. `payments.reversal_origin` distinguishes them, and
+the surface says `Returned … reversed by the bank` for `provider` and `Refunded` for `operator`. An
+operator shown "Refunded" for money a bank took back would go looking for the person who decided it.
+
+The original receipt is never touched. It is not deleted, not rewritten, not turned into a negative
+payment — the reversal is its own outbound payment naming what it reverses, which is what keeps the
+lineage readable years later.
+
+### Still not built
+
+Autopay, Financial Connections, an operator-facing microdeposit verification product, and card
+chargebacks. Card disputes share the dispute plumbing but are deliberately out of scope.
 
 ---
 

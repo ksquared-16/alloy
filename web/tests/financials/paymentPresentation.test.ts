@@ -12,6 +12,7 @@ function payment(over: Partial<FinancialsPaymentRow>): FinancialsPaymentRow {
         paymentId: "p1",
         direction: "inbound",
         refundsPaymentId: null,
+        reversalOrigin: null,
         amountCents: 50_000,
         currencyCode: "USD",
         status: "posted",

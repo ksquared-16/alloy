@@ -49,13 +49,22 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+import { runPeriodKey } from "./certificationPeriod";
+
+/** This run's own unbilled periods — see `certificationPeriod` for why fixed ones cannot work. */
+/** The last calendar day of a `YYYY-MM`, so a service window can be asserted without a fixed year. */
+function lastDayOf(periodKey: string): string {
+    const [year, month] = periodKey.split("-").map(Number);
+    return new Date(Date.UTC(year!, month!, 0)).toISOString().slice(0, 10);
+}
+
 const ORG = "00000000-0000-4000-8000-000000000001";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
 const P = "77000000-0000-4000-8000-";
 const AGREEMENT = `${P}0000000000a1`;
 const TERM = `${P}0000000000b1`;
 const SUCCESSOR_TERM = `${P}0000000000b2`;
-const PERIOD = "2026-11";
+const PERIOD = runPeriodKey();
 
 describeLive("tuition generation — accepted term to draft charge, live", () => {
     const supabase = (env
@@ -191,12 +200,12 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
             periodKey: PERIOD,
             actorUserId: ACTOR,
             opportunityCustomerMemberIds: [ocmId],
-            today: "2026-11-01",
+            today: `${PERIOD}-01`,
         });
         expect(run.counts.errors, JSON.stringify(run.outcomes)).toBe(0);
         expect(run.counts.refused, JSON.stringify(run.outcomes)).toBe(0);
         expect(run.counts.generated).toBe(1);
-        expect(run.servicePeriod).toEqual({ start: "2026-11-01", end: "2026-11-30" });
+        expect(run.servicePeriod).toEqual({ start: `${PERIOD}-01`, end: lastDayOf(PERIOD) });
 
         const generated = run.outcomes.find((o) => o.kind === "generated");
         expect(generated).toBeTruthy();
@@ -216,7 +225,7 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
         const event = (events ?? [])[0] as Record<string, unknown>;
         expect(event.event_key).toBe("schedule.recurring_tuition");
         expect(event.source_entity_id).toBe(AGREEMENT);
-        expect(event.occurs_on).toBe("2026-11-01");
+        expect(event.occurs_on).toBe(`${PERIOD}-01`);
         expect((event.context as Record<string, unknown>).accepted_pricing_term_id).toBe(TERM);
 
         // ── ONE OBLIGATION ──────────────────────────────────────────────────────────────────
@@ -228,7 +237,7 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
         expect(obligations ?? []).toHaveLength(1);
         const obligation = (obligations ?? [])[0] as Record<string, unknown>;
         expect(obligation.amount_cents).toBe(121_000);
-        expect(obligation.period_start).toBe("2026-11-01");
+        expect(obligation.period_start).toBe(`${PERIOD}-01`);
         expect(obligation.draft_charge_id).toBe(generated.chargeId);
 
         // ── ONE DRAFT CHARGE, WITH ITS LINEAGE ──────────────────────────────────────────────
@@ -243,12 +252,12 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
         expect(charge.billable_source_type).toBe("enrollment_agreement");
         expect(charge.billable_source_id).toBe(AGREEMENT);
         // The service period and the billing period it lands in.
-        expect(String(charge.service_date)).toBe("2026-11-01");
+        expect(String(charge.service_date)).toBe(`${PERIOD}-01`);
         expect(String(charge.billable_on).slice(0, 7)).toBe(PERIOD);
 
         // ── A DRAFT IS NOT OWED ─────────────────────────────────────────────────────────────
-        const vm = await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: "2026-11-01" });
-        const rec = reconcileRows(vm.rows, PERIOD, "2026-11-01");
+        const vm = await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: `${PERIOD}-01` });
+        const rec = reconcileRows(vm.rows, PERIOD, `${PERIOD}-01`);
         expect(rec.balanceCents, "a draft charge must not move the balance").toBe(0);
 
         // ── A RETRY ADDS NOTHING ────────────────────────────────────────────────────────────
@@ -257,7 +266,7 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
             periodKey: PERIOD,
             actorUserId: ACTOR,
             opportunityCustomerMemberIds: [ocmId],
-            today: "2026-11-01",
+            today: `${PERIOD}-01`,
         });
         expect(retry.counts.generated).toBe(1);
         expect(retry.outcomes[0]!.kind === "generated" && retry.outcomes[0]!.chargeId).toBe(generated.chargeId);
@@ -276,33 +285,33 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
         const chargeId = charges[0]!.id as string;
 
         const before = reconcileRows(
-                (await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: "2026-11-01" })).rows,
+                (await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: `${PERIOD}-01` })).rows,
                 PERIOD,
-                "2026-11-01",
+                `${PERIOD}-01`,
             );
         expect(before.balanceCents).toBe(0);
 
         await postChildcareCharge(supabase, { orgId: ORG, chargeId, actorUserId: ACTOR });
 
-        const vmAfter = await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: "2026-11-01" });
+        const vmAfter = await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: `${PERIOD}-01` });
         expect(
             vmAfter.rows.map((r) => [r.chargeId, r.periodKey, r.lifecycleStatus, r.amountCents]),
             "the generated charge must be visible to the Financials read model",
         ).toContainEqual([chargeId, PERIOD, "posted", 121_000]);
 
         const after = reconcileRows(
-                (await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: "2026-11-01" })).rows,
+                (await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: `${PERIOD}-01` })).rows,
                 PERIOD,
-                "2026-11-01",
+                `${PERIOD}-01`,
             );
         expect(after.balanceCents, "posting makes the accepted amount owed").toBe(121_000);
 
         // Idempotent: posting again returns the charge already posted and moves nothing.
         await postChildcareCharge(supabase, { orgId: ORG, chargeId, actorUserId: ACTOR });
         const again = reconcileRows(
-                (await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: "2026-11-01" })).rows,
+                (await buildFinancialsCardVM(supabase, { orgId: ORG, customerId, customerMemberId: null, today: `${PERIOD}-01` })).rows,
                 PERIOD,
-                "2026-11-01",
+                `${PERIOD}-01`,
             );
         expect(again.balanceCents).toBe(121_000);
     }, 120_000);
@@ -357,7 +366,7 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
             periodKey: PERIOD,
             actorUserId: ACTOR,
             opportunityCustomerMemberIds: [ocmId],
-            today: "2026-11-01",
+            today: `${PERIOD}-01`,
         });
         expect(run.counts.errors, JSON.stringify(run.outcomes)).toBe(0);
         // The run says what happened rather than silently doing nothing.
@@ -411,13 +420,13 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
      * the successor's price.
      */
     it("a successor term over an unposted DRAFT period recalculates it in place", async () => {
-        const DRAFT_PERIOD = "2026-12";
+        const DRAFT_PERIOD = runPeriodKey(1);
         await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG);
         await acceptTerm(121_000);
 
         const first = await generateTuitionCharges(supabase, {
             orgId: ORG, periodKey: DRAFT_PERIOD, actorUserId: ACTOR,
-            opportunityCustomerMemberIds: [ocmId], today: "2026-12-01",
+            opportunityCustomerMemberIds: [ocmId], today: `${DRAFT_PERIOD}-01`,
         });
         expect(first.counts.generated, JSON.stringify(first.outcomes)).toBe(1);
         const firstCharge = first.outcomes[0]!.kind === "generated" ? first.outcomes[0]!.chargeId : null;
@@ -426,13 +435,13 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
         // The successor.
         await supabase
             .from("enrollment_pricing_terms")
-            .update({ superseded_at: new Date().toISOString(), effective_end: "2026-11-30" })
+            .update({ superseded_at: new Date().toISOString(), effective_end: lastDayOf(PERIOD) })
             .eq("id", TERM);
         await acceptTerm(150_000, { id: SUCCESSOR_TERM, resolution_key: "t7-live-draft-successor" });
 
         const second = await generateTuitionCharges(supabase, {
             orgId: ORG, periodKey: DRAFT_PERIOD, actorUserId: ACTOR,
-            opportunityCustomerMemberIds: [ocmId], today: "2026-12-01",
+            opportunityCustomerMemberIds: [ocmId], today: `${DRAFT_PERIOD}-01`,
         });
         expect(second.counts.errors, JSON.stringify(second.outcomes)).toBe(0);
         expect(second.counts.generated).toBe(1);
@@ -450,7 +459,7 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
 
         const { data: drafts } = await supabase
             .from("charges").select("id, status, amount_cents")
-            .eq("org_id", ORG).eq("charge_category", "tuition").eq("service_date", "2026-12-01");
+            .eq("org_id", ORG).eq("charge_category", "tuition").eq("service_date", `${DRAFT_PERIOD}-01`);
         expect(drafts ?? [], "the draft is recalculated, not duplicated").toHaveLength(1);
         expect((drafts ?? [])[0]!.id).toBe(firstCharge);
         expect((drafts ?? [])[0]!.status).toBe("draft");

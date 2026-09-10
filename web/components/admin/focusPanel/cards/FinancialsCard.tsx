@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import {
+    collectionLifecycle,
+    lifecycleLabel,
+    type CollectionRail,
+} from "@/lib/financials/payments/collectionLifecycle";
 import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
@@ -785,6 +790,43 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 ) : null}
 
                 {/*
+                    WHAT IS STILL ON ITS WAY, read from the DATABASE.
+
+                    A card collection lasts seconds and could live happily in component state. A bank
+                    debit lasts days — the operator closes the tab and comes back tomorrow — so an
+                    in-flight collection is read from the view model and survives a reload. The words
+                    come from the shared lifecycle module, so nothing here can invent a state that
+                    means money.
+                */}
+                {vm.openCollections.length ? (
+                    <ul className="alloy-os-financials__payments" data-financials-collections="true">
+                        {vm.openCollections.map((c) => {
+                            const rail = (c.rail === "ach" ? "ach" : "card") as CollectionRail;
+                            const state = collectionLifecycle({
+                                rail,
+                                processorState: c.processorState,
+                                providerActionType: c.providerActionType,
+                                canonicallyRecognized: false,
+                            });
+                            return (
+                                <li
+                                    key={c.attemptId}
+                                    className="alloy-os-financials__payment"
+                                    data-financials-collection={c.attemptId}
+                                    data-financials-collection-rail={c.rail}
+                                    data-financials-collection-state={state}
+                                >
+                                    <span>{money(c.amountCents, c.currencyCode)}</span>
+                                    <span className="alloy-os-financials__note">
+                                        {lifecycleLabel(state, rail)}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                ) : null}
+
+                {/*
                     WHAT ARRIVED, AND WHAT IT IS DOING.
                     `vm.payments` was composed by the read model and never
                     rendered, so a family could send $500, have $300 applied, and
@@ -808,11 +850,17 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     data-financials-payment-kind={p.kind}
                                 >
                                     <span data-financials-payment-received="true">
-                                        {p.kind === "refund" ? "−" : ""}
+                                        {p.kind === "receipt" ? "" : "−"}
                                         {money(p.receivedCents, p.currencyCode)}
                                     </span>
-                                    <span className="alloy-os-financials__note">
+                                    <span
+                                        className="alloy-os-financials__note"
+                                        data-financials-payment-origin={p.reversalOrigin ?? undefined}
+                                    >
                                         {p.statusLabel} · {p.methodLabel}
+                                        {/* A return says who did it, because "Returned" alone still
+                                            leaves an operator wondering which of them acted. */}
+                                        {p.kind === "return" ? " · reversed by the bank" : null}
                                     </span>
                                     {p.kind === "receipt" && p.isMoney ? (
                                         <span
@@ -841,7 +889,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                             className="alloy-os-financials__note"
                                             data-financials-payment-refunded={p.refundedCents}
                                         >
-                                            {money(p.refundedCents, p.currencyCode)} refunded ·{" "}
+                                            {money(p.refundedCents, p.currencyCode)} returned or refunded ·{" "}
                                             <span data-financials-payment-retained={p.receivedCents - p.refundedCents}>
                                                 {money(p.receivedCents - p.refundedCents, p.currencyCode)} net retained
                                             </span>
@@ -1079,7 +1127,17 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                 defect Card had; it stays visible and disabled so
                                 the model reads truthfully.
                             */}
-                            <option value="ach" disabled>Bank transfer — not yet available</option>
+                            {/*
+                                Availability is the SERVER's answer, carried on the view model from
+                                the merchant's own recorded capability. A chooser deciding this for
+                                itself would offer a collection the provider then refuses, after the
+                                operator was told it was under way.
+                            */}
+                            <option value="ach" disabled={!vm.achAvailable}>
+                                {vm.achAvailable
+                                    ? "Bank account"
+                                    : "Bank account — not enabled for this organization"}
+                            </option>
                             <option value="other">Other</option>
                         </select>
                         <span className="alloy-os-financials__preview-actions">
@@ -1095,7 +1153,20 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     const cents = Math.round(Number(payAmount) * 100);
                                     const subject = paymentEntityFor(payTarget.subjectMemberId ?? chargeTarget);
 
-                                    if (payMethod !== "card") {
+                                    /*
+                                     * ── WHICH RAILS ASK, AND WHICH ONES WRITE DOWN ──
+                                     *
+                                     * Card and bank account both COLLECT: money has to be asked for
+                                     * and confirmed by the provider before any of it is real. Cash,
+                                     * check and money order RECORD money that already arrived.
+                                     *
+                                     * Sending a bank debit down the record path would write a
+                                     * receipt for money no bank has moved yet — the same defect Card
+                                     * had, on a rail where settlement takes days rather than
+                                     * seconds, so the lie would last longer.
+                                     */
+                                    const collects = payMethod === "card" || payMethod === "ach";
+                                    if (!collects) {
                                         void runPaymentAction(
                                             "payment.record",
                                             {
@@ -1125,12 +1196,20 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                                 charge_id: payTarget.chargeId,
                                                 amount_cents: cents,
                                                 charge_label: payTarget.label,
+                                                // Intent only. The server resolves the merchant, its
+                                                // capability for this rail, and what may be taken.
+                                                rail: payMethod,
                                             },
                                             subject,
                                         );
                                         if (!outcome?.ok) {
                                             setCardStage("blocked");
-                                            setCardMessage(outcome?.error ?? "Card collection is unavailable.");
+                                            setCardMessage(
+                                                outcome?.error
+                                                    ?? (payMethod === "ach"
+                                                        ? "Bank collection is unavailable."
+                                                        : "Card collection is unavailable."),
+                                            );
                                             return;
                                         }
                                         const d = outcome.detail;
@@ -1144,7 +1223,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     })();
                                 }}
                             >
-                                {payMethod === "card" ? "Collect by card" : "Record payment"}
+                                {payMethod === "card"
+                                    ? "Collect by card"
+                                    : payMethod === "ach"
+                                        ? "Collect by bank account"
+                                        : "Record payment"}
                             </button>
                             <button
                                 type="button"
@@ -1422,6 +1505,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     onPayment={openSettle}
                     onAddCharge={() => setOverlay("add_charge")}
                 />
+                {/*
+                    WHAT ARRIVED, WHERE AN OPERATOR CAN STILL SEE IT.
+
+                    The payment band otherwise renders in exactly two places: the summary's side
+                    column, which a COMPACT card drops entirely, and the payment representation,
+                    which correctly stops being offered once an account has nothing left to collect.
+                    Certification found the consequence — on a compact card for a family who had just
+                    paid in full, there was no way to reach the receipt that settled it. The record
+                    of money arriving disappeared exactly when the account became healthy, which is
+                    the same reachability defect Slice H opened this band to fix.
+
+                    Details is where an operator works the ledger, and a ledger that cannot show what
+                    was received is only half of one.
+                */}
+                {paymentBand}
             </div>
         );
     }

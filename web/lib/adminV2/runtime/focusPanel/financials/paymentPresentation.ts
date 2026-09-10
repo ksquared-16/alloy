@@ -25,8 +25,14 @@ import type { FinancialsPaymentRow } from "@/lib/adminV2/runtime/focusPanel/fina
 
 export type PaymentPresentation = {
     paymentId: string;
-    /** A receipt is money in; a refund is money going back out and names the receipt it reverses. */
-    kind: "receipt" | "refund";
+    /**
+     * A receipt is money in. Money going back out is one of two different events wearing the same
+     * shape: a REFUND the operator asked for, or a RETURN the provider took. Collapsing them was
+     * safe while every reversal was a refund and stopped being safe the moment a bank could reverse
+     * a debit — an operator shown "Refunded" for a returned ACH would believe somebody here decided
+     * it, and would look for the person who did.
+     */
+    kind: "receipt" | "refund" | "return";
     /** Human-facing, never the raw status key. */
     statusLabel: string;
     /** True only for `posted` — the one status that is money. */
@@ -40,6 +46,8 @@ export type PaymentPresentation = {
     methodLabel: string;
     /** The receipt this refund reverses, for lineage. Null on a receipt. */
     refundsPaymentId: string | null;
+    /** Who caused it. `provider` is a return; `operator` is a refund. Null on a receipt. */
+    reversalOrigin: "operator" | "provider" | null;
     /**
      * Whether the card offers `payment.refund` on this row.
      *
@@ -101,10 +109,10 @@ export function presentPayment(
     const refundable = isRefund ? 0 : Math.max(0, received - refunded);
     return {
         paymentId: payment.paymentId,
-        kind: isRefund ? "refund" : "receipt",
+        kind: isRefund ? (payment.reversalOrigin === "provider" ? "return" : "refund") : "receipt",
         statusLabel:
             isRefund && isPosted
-                ? "Refunded"
+                ? (payment.reversalOrigin === "provider" ? "Returned" : "Refunded")
                 : STATUS_LABELS[payment.status] ?? humanize(payment.status),
         isMoney: isPosted,
         receivedCents: received,
@@ -115,6 +123,7 @@ export function presentPayment(
         currencyCode: payment.currencyCode,
         methodLabel: METHOD_LABELS[payment.method] ?? humanize(payment.method),
         refundsPaymentId: payment.refundsPaymentId,
+        reversalOrigin: payment.reversalOrigin ?? null,
         offersRefund: isPosted && !isRefund && !payment.refundsPaymentId && refundable > 0,
         refundedCents: isRefund ? 0 : refunded,
         refundableCents: refundable,

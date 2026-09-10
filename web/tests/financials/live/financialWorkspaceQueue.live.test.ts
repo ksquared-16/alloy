@@ -35,6 +35,11 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+import { runPeriodKey } from "./certificationPeriod";
+
+/** This run's own unbilled periods — see `certificationPeriod` for why fixed ones cannot work. */
+const RUN_PERIOD = runPeriodKey();
+
 const ORG = "00000000-0000-4000-8000-000000000001";
 const OTHER_ORG = "00000000-0000-4000-8000-0000000000ff";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
@@ -111,10 +116,27 @@ describeLive("financials workspace queue — live", () => {
             }
             const agreementId = `${W}00000000a00${index + 1}`;
             const siteId = index === 0 ? siteA : siteB;
-            await supabase.from("child_enrollment_agreements").delete().eq("id", agreementId);
+            /*
+             * Clear an incumbent agreement that a LIVE CERTIFICATION SUITE created, and nothing else.
+             *
+             * One operational agreement per child per site is a real constraint, and these suites
+             * work on whichever customer members the tenant happens to have, so they contend for the
+             * same children. Deleting only this suite's own ids left them blocking each other;
+             * deleting whatever the child held reached the mounted certification's OWN subject and
+             * left it with no enrolment at all, after which every seeded charge billed the household
+             * directly and the provider collection refused it — correctly.
+             *
+             * Provenance is the discriminator. Suites stamp `source_key` on what they create and
+             * clear only that, so a fixture belonging to anything else is never in range.
+             */
+            await supabase.from("enrollment_pricing_terms").delete()
+                .eq("org_id", ORG).eq("customer_member_id", member.id);
+            await supabase.from("child_enrollment_agreements").delete()
+                .eq("org_id", ORG).eq("customer_member_id", member.id)
+                .eq("source_key", "live-certification");
             await supabase.from("child_enrollment_agreements").insert({
                 id: agreementId, org_id: ORG, customer_member_id: member.id, customer_id: customerId,
-                site_location_id: siteId, opportunity_customer_member_id: ocmId, status: "active", start_date: "2026-01-01",
+                site_location_id: siteId, opportunity_customer_member_id: ocmId, status: "active", start_date: "2026-01-01", source_key: "live-certification",
             });
             await supabase.from("enrollment_pricing_terms").insert({
                 id: `${W}00000000b00${index + 1}`, org_id: ORG, opportunity_customer_member_id: ocmId,
@@ -139,10 +161,10 @@ describeLive("financials workspace queue — live", () => {
 
     it("lists draft charges at the site their own enrolment names", async () => {
         await clearMoney();
-        await generate("2033-01");
+        await generate(RUN_PERIOD);
         const queue = await resolveFinancialWorkQueue(supabase, orgScope);
 
-        const rows = queue.rows.filter((r) => r.periodKey === "2033-01");
+        const rows = queue.rows.filter((r) => r.periodKey === RUN_PERIOD);
         expect(rows).toHaveLength(2);
         expect(queue.counts.actionable).toBe(queue.rows.length);
         for (const kid of kids) {

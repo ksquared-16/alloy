@@ -469,7 +469,20 @@ test.describe("Slice H — collecting money through the mounted Financials card"
         expect(options.join(" | "), "and so are the manual ones").toMatch(/Cash/);
         expect(options.join(" | ")).toMatch(/Check/);
         expect(options.join(" | ")).toMatch(/Money order/);
-        expect(options.join(" | "), "ACH is named as unavailable rather than offered").toMatch(/not yet available/i);
+        /*
+         * Bank account is a real rail now. Whether it can be CHOSEN is the server's answer, carried
+         * on the view model from the merchant's own capability — so the option is always named, and
+         * says why when it cannot be used rather than vanishing.
+         */
+        expect(options.join(" | "), "bank account is named as a rail").toMatch(/Bank account/i);
+        const achOption = chooser.locator('option[value="ach"]');
+        const achDisabled = await achOption.evaluate((el) => (el as HTMLOptionElement).disabled);
+        if (achDisabled) {
+            expect(
+                await achOption.textContent(),
+                "an unavailable rail explains itself instead of pretending it does not exist",
+            ).toMatch(/not enabled/i);
+        }
         expect(options.join(" | "), "the chooser is rail-first, never processor-first").not.toMatch(/Stripe/i);
 
         // Choosing a manual rail keeps the commit verb honest: it RECORDS, it does not collect.

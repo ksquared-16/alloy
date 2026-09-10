@@ -49,6 +49,10 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+import { runHex } from "./certificationPeriod";
+
+/** This run's own fixture subjects — see `certificationPeriod` for why fixed ones cannot work. */
+
 const ORG = "00000000-0000-4000-8000-000000000001";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
 const W = "6f100000-0000-4000-8000-";
@@ -121,30 +125,53 @@ describeLive("financials workspace productization — live", () => {
         const firstOcm = (firstOcmRows ?? [])[0] as Record<string, string>;
 
         await clearMoney();
-        await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG);
+        /*
+         * This suite's OWN pricing terms. It used to delete every pricing term in the tenant, which
+         * is why running it left the tuition-generation suites with nothing to generate from — a
+         * collision that looked, from the other suite's failure, like a Thread 7 regression.
+         */
+        await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG)
+            .like("id", `${W}${runHex()}%`);
 
         for (const [index, member] of members.slice(0, 2).entries()) {
             const { data: ocmRows } = await supabase
                 .from("opportunity_customer_members").select("id").eq("org_id", ORG).eq("customer_member_id", member.id).limit(1);
             let ocmId = ((ocmRows ?? [])[0] as { id: string } | undefined)?.id;
             if (!ocmId) {
-                ocmId = `${W}00000000e00${index + 1}`;
+                ocmId = `${W}${runHex()}e00${index + 1}`;
                 await supabase.from("opportunity_customer_members").insert({
                     id: ocmId, org_id: ORG, opportunity_id: firstOcm.opportunity_id, customer_member_id: member.id,
                     schedule_type: firstOcm.schedule_type ?? "full_time", location_id: firstOcm.location_id,
                     program_category_id: firstOcm.program_category_id, metadata: { seed: "cert_workspace_4a" },
                 });
             }
-            const agreementId = `${W}00000000a00${index + 1}`;
+            const agreementId = `${W}${runHex()}a00${index + 1}`;
             const siteId = index === 0 ? siteA : siteB;
-            await supabase.from("child_enrollment_agreements").delete().eq("id", agreementId);
+            /*
+             * Clear an incumbent agreement that a LIVE CERTIFICATION SUITE created, and nothing else.
+             *
+             * One operational agreement per child per site is a real constraint, and these suites
+             * work on whichever customer members the tenant happens to have, so they contend for the
+             * same children. Deleting only this suite's own ids left them blocking each other;
+             * deleting whatever the child held reached the mounted certification's OWN subject and
+             * left it with no enrolment at all, after which every seeded charge billed the household
+             * directly and the provider collection refused it — correctly.
+             *
+             * Provenance is the discriminator. Suites stamp `source_key` on what they create and
+             * clear only that, so a fixture belonging to anything else is never in range.
+             */
+            await supabase.from("enrollment_pricing_terms").delete()
+                .eq("org_id", ORG).eq("customer_member_id", member.id);
+            await supabase.from("child_enrollment_agreements").delete()
+                .eq("org_id", ORG).eq("customer_member_id", member.id)
+                .eq("source_key", "live-certification");
             const { error: agreementError } = await supabase.from("child_enrollment_agreements").insert({
                 id: agreementId, org_id: ORG, customer_member_id: member.id, customer_id: customerId,
-                site_location_id: siteId, opportunity_customer_member_id: ocmId, status: "active", start_date: "2026-01-01",
+                site_location_id: siteId, opportunity_customer_member_id: ocmId, status: "active", start_date: "2026-01-01", source_key: "live-certification",
             });
             expect(agreementError, agreementError?.message).toBeNull();
             const { error: termError } = await supabase.from("enrollment_pricing_terms").insert({
-                id: `${W}00000000b00${index + 1}`, org_id: ORG, opportunity_customer_member_id: ocmId,
+                id: `${W}${runHex()}b00${index + 1}`, org_id: ORG, opportunity_customer_member_id: ocmId,
                 customer_member_id: member.id, enrollment_agreement_id: agreementId, term_kind: "tuition",
                 source_entity: "commercial_tuition_rates", source_id: rateId, recommended_source_id: rateId,
                 cadence_key: "monthly", payer_type: "private_pay", amount_cents: GROSS, currency_code: "USD",
@@ -171,7 +198,13 @@ describeLive("financials workspace productization — live", () => {
     afterAll(async () => {
         if (process.env.CERT_KEEP === "1") return;
         await clearMoney();
-        await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG);
+        /*
+         * This suite's OWN pricing terms. It used to delete every pricing term in the tenant, which
+         * is why running it left the tuition-generation suites with nothing to generate from — a
+         * collision that looked, from the other suite's failure, like a Thread 7 regression.
+         */
+        await supabase.from("enrollment_pricing_terms").delete().eq("org_id", ORG)
+            .like("id", `${W}${runHex()}%`);
         for (const kid of kids) await supabase.from("child_enrollment_agreements").delete().eq("id", kid.agreementId);
         await supabase.from("opportunity_customer_members").delete().eq("org_id", ORG).contains("metadata", { seed: "cert_workspace_4a" });
     });
@@ -225,7 +258,9 @@ describeLive("financials workspace productization — live", () => {
             amountCents: 40_000,
             paymentMethod: "check",
             status: "posted",
-            idempotencyKey: `cert-4a-unapplied-${PERIOD}`,
+            // Run-scoped: a fixed key is idempotent by design, so a re-run got back the previous
+            // run's payment — recorded against an agreement this run has already retired.
+            idempotencyKey: `cert-4a-unapplied-${runHex()}`,
             actorUserId: ACTOR,
         } as never);
 

@@ -97,8 +97,20 @@ async function clearMerchants(client: SupabaseClient) {
         await client.from("payment_provider_events").delete().in("collection_attempt_id", attemptIds);
         await client.from("payment_collection_attempts").delete().in("id", attemptIds);
     }
+    /*
+     * RETIRE THE MERCHANT RATHER THAN DELETE IT.
+     *
+     * "No connected account" is what `resolveCollectionMerchant` reports for an org with no ACTIVE
+     * merchant, so deactivating proves exactly what deleting proved — and unlike deleting, it stays
+     * possible once another lane's recognised attempts point at the row. Those attempts produced
+     * money and are not deletable, so the foreign key refused, the teardown threw, and every case in
+     * this file reported as skipped: a green-looking run that certified nothing.
+     *
+     * The removal is still attempted first, so a row this suite really can retire leaves no trace.
+     */
+    await client.from("payment_provider_merchants").delete().in("org_id", [ORG, OTHER_ORG]);
     const { error } = await client
-        .from("payment_provider_merchants").delete().in("org_id", [ORG, OTHER_ORG]);
+        .from("payment_provider_merchants").update({ is_active: false }).in("org_id", [ORG, OTHER_ORG]);
     if (error) throw new Error(`merchant teardown failed, so the next case would lie: ${error.message}`);
 }
 
@@ -140,7 +152,7 @@ describeLive("Slice C — the collecting merchant, live against Postgres and Str
 
         const readiness = readinessFromStripeAccount(account as { charges_enabled?: boolean });
 
-        await client.from("payment_provider_merchants").insert({
+        await client.from("payment_provider_merchants").upsert({
             org_id: ORG,
             processor: "stripe",
             provider_account_ref: accountRef,
@@ -207,7 +219,7 @@ describeLive("Slice C — the collecting merchant, live against Postgres and Str
 
         // A second active merchant for the same org is not richer configuration, it is an
         // unanswerable question at collection time.
-        const second = await client.from("payment_provider_merchants").insert({
+        const second = await client.from("payment_provider_merchants").upsert({
             org_id: ORG,
             processor: "stripe",
             provider_account_ref: "acct_a_second_one",

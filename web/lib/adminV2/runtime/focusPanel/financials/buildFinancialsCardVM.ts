@@ -32,6 +32,7 @@
  * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
  */
 
+import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -69,6 +70,12 @@ export type FinancialsPaymentRow = {
     direction: "inbound" | "outbound";
     /** The receipt this refund reverses, when it is one. */
     refundsPaymentId: string | null;
+    /**
+     * WHO caused this reversal — `operator` for a refund somebody asked for, `provider` for money a
+     * bank or network took back. Null on a receipt. Without it the surface cannot tell a family's
+     * refund from their bank reversing a debit, and the two mean opposite things about who acted.
+     */
+    reversalOrigin: "operator" | "provider" | null;
     amountCents: number;
     currencyCode: string;
     /** pending | posted | failed | voided. Only `posted` is money. */
@@ -244,6 +251,35 @@ export type FinancialsCardVM = {
      */
     paymentSetup: string | null;
     /**
+     * Whether this organization's merchant can actually take a bank debit.
+     *
+     * Resolved from the merchant's provider capability on the SERVER. The browser is told the
+     * answer and never computes it: a surface that decided its own rail availability would offer a
+     * collection the provider then refuses, after the operator had been told it was under way.
+     */
+    achAvailable: boolean;
+    /**
+     * Collections the provider has not finished, as the DATABASE holds them.
+     *
+     * An in-flight card collection lasts seconds and lived happily in component state. A bank debit
+     * lasts days: the operator closes the tab, comes back tomorrow, and must still be told the money
+     * is on its way. Lifecycle that exists only in React disappears on reload and takes the truth
+     * with it, so the open attempts travel on the view model and the surface reads them.
+     *
+     * Recognised collections are absent on purpose — once Thread 8 has the receipt, the payment
+     * history is the truth and an attempt is just how it got there.
+     */
+    openCollections: Array<{
+        attemptId: string;
+        rail: string;
+        processorState: string;
+        providerActionType: string | null;
+        chargeId: string | null;
+        amountCents: number;
+        currencyCode: string;
+        updatedAt: string | null;
+    }>;
+    /**
      * WHO is responsible for this account, from the canonical `payer` contact role.
      *
      * `share` is deliberately nullable and is null today for every payer. Alloy has a payer ROLE
@@ -349,6 +385,8 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         chargeTemplates: [],
         unavailable: [],
         paymentSetup: null,
+        achAvailable: false,
+        openCollections: [],
         unavailableReason: null,
     };
 }
@@ -409,15 +447,23 @@ async function readResponsibility(
     };
     if (chargeIds.length === 0) return empty;
 
-    const { data: allocationRows, error } = await supabase
-        .from("financial_responsibility_allocations")
-        .select("id, charge_id, responsible_party_id, is_unassigned, assigned_amount_cents, share_id")
-        .eq("org_id", orgId)
-        .eq("state", "active")
-        .in("charge_id", [...chargeIds]);
-    // A responsibility read that fails is an absence of responsibility on the card, never a reason
-    // to fail the account — the same rule the payer read has always followed.
-    if (error) return empty;
+    let allocationRows: Array<Record<string, unknown>>;
+    try {
+        allocationRows = await readInBatches<Record<string, unknown>>(
+            "who is responsible for these charges",
+            [...chargeIds],
+            (batch) => supabase
+                .from("financial_responsibility_allocations")
+                .select("id, charge_id, responsible_party_id, is_unassigned, assigned_amount_cents, share_id")
+                .eq("org_id", orgId)
+                .eq("state", "active")
+                .in("charge_id", batch) as never,
+        );
+    } catch {
+        // A responsibility read that fails is an absence of responsibility on the card, never a
+        // reason to fail the account — the same rule the payer read has always followed.
+        return empty;
+    }
     const allocations = (allocationRows ?? []) as Array<{
         id: string;
         charge_id: string;
@@ -540,18 +586,26 @@ async function readAccountPayments(
     const sourceIds = billableSourceIds.length ? [...billableSourceIds] : [NO_SOURCE_SENTINEL];
 
     const [allocResult, accountPaymentResult] = await Promise.all([
-        chargeIds.length
-            ? supabase
-                  .from("payment_allocations")
-                  .select("id, payment_id, charge_id, allocated_amount_cents, status")
-                  .eq("org_id", orgId)
-                  .eq("status", "active")
-                  .in("charge_id", [...chargeIds])
-            : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
+        /*
+         * Batched, because this list of charge ids goes into the URL. On an account with a few
+         * hundred charges the request came back `414 URI Too Long`, the error was discarded with the
+         * rest of the response, and the card read the empty result as "none of this has been paid" —
+         * showing a family the whole balance again after they had settled it.
+         */
+        readInBatches<Record<string, unknown>>(
+            "money applied to these charges",
+            [...chargeIds],
+            (batch) => supabase
+                .from("payment_allocations")
+                .select("id, payment_id, charge_id, allocated_amount_cents, status")
+                .eq("org_id", orgId)
+                .eq("status", "active")
+                .in("charge_id", batch) as never,
+        ).then((data) => ({ data, error: null })),
         supabase
             .from("payments")
             .select(
-                "id, direction, refunds_payment_id, amount_cents, currency, status, payment_method, "
+                "id, direction, refunds_payment_id, reversal_origin, amount_cents, currency, status, payment_method, "
                 + "processor, received_at, posted_at, reference_number, notes",
             )
             .eq("org_id", orgId)
@@ -576,9 +630,8 @@ async function readAccountPayments(
     if (accountPaymentResult.error) {
         throw new Error(accountPaymentResult.error.message);
     }
-    if (allocResult.error) {
-        throw new Error(allocResult.error.message);
-    }
+    // The allocation read raises on failure inside `selectIn` rather than returning an empty answer,
+    // which is the same rule this block already stated for the account read.
 
     const allocRows = (allocResult.data ?? []) as unknown as Array<Record<string, unknown>>;
     const paymentRows = (accountPaymentResult.data ?? []) as unknown as Array<Record<string, unknown>>;
@@ -625,6 +678,7 @@ async function readAccountPayments(
             paymentId: id,
             direction: t(raw.direction) === "outbound" ? "outbound" : "inbound",
             refundsPaymentId: t(raw.refunds_payment_id) || null,
+            reversalOrigin: (t(raw.reversal_origin) || null) as "operator" | "provider" | null,
             amountCents: Number(raw.amount_cents) || 0,
             currencyCode: t(raw.currency) || "USD",
             status: t(raw.status).toLowerCase(),
@@ -1044,6 +1098,51 @@ export async function buildFinancialsCardVM(
             occursOnStrategy: t(row.occurs_on_strategy),
             billableOnStrategy: t(row.billable_on_strategy),
         }));
+
+    /*
+     * ── WHETHER A BANK DEBIT IS EVEN POSSIBLE HERE ───────────────────────────────────────────────
+     *
+     * Read from the merchant's own recorded capability, on the server, so the browser is told the
+     * answer rather than deciding it. A surface that worked this out for itself would offer a
+     * collection the provider then refuses — after the operator had been told it was under way.
+     * Absent or non-ready is `false`, which is the honest reading of "nobody has asked the provider
+     * about this merchant".
+     */
+    const { data: merchantRow } = await supabase
+        .from("payment_provider_merchants")
+        .select("ach_readiness")
+        .eq("org_id", args.orgId)
+        .eq("processor", "stripe")
+        .eq("is_active", true)
+        .maybeSingle();
+    vm.achAvailable = (merchantRow as { ach_readiness: string | null } | null)?.ach_readiness === "ready";
+
+    /*
+     * The collections still in flight for the charges this card is about. Scoped to those charges so
+     * a household's card never reports another household's attempt, and limited to states the
+     * provider has not finished — a recognised attempt has become a payment and is read there.
+     */
+    const chargeIds = vm.rows.map((r) => r.chargeId).filter(Boolean);
+    if (chargeIds.length) {
+        const { data: attemptRows } = await supabase
+            .from("payment_collection_attempts")
+            .select("id, rail, processor_state, provider_action_type, charge_id, requested_amount_cents, currency, updated_at, canonical_payment_id")
+            .eq("org_id", args.orgId)
+            .in("charge_id", chargeIds.slice(0, 200))
+            .is("canonical_payment_id", null)
+            .in("processor_state", ["initiated", "requires_payment_method", "requires_action", "processing", "succeeded"])
+            .order("updated_at", { ascending: false });
+        vm.openCollections = ((attemptRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            attemptId: t(r.id),
+            rail: t(r.rail) || "card",
+            processorState: t(r.processor_state),
+            providerActionType: t(r.provider_action_type) || null,
+            chargeId: t(r.charge_id) || null,
+            amountCents: Number(r.requested_amount_cents) || 0,
+            currencyCode: t(r.currency) || "USD",
+            updatedAt: t(r.updated_at) || null,
+        }));
+    }
 
     return vm;
 }

@@ -149,8 +149,19 @@ async function clearAll(client: SupabaseClient) {
         await client.from("payment_provider_events").delete().in("collection_attempt_id", ids);
         await client.from("payment_collection_attempts").delete().in("id", ids);
     }
-    const { error } = await client.from("payment_provider_merchants").delete().eq("org_id", ORG);
-    if (error) throw new Error(`merchant teardown failed: ${error.message}`);
+    /*
+     * The merchant is SHARED INFRASTRUCTURE, and this suite does not own it.
+     *
+     * Deleting it asserted success, which stopped being possible the moment another lane's
+     * recognised collection attempt pointed at it: those attempts produced money and are not
+     * deletable, so the foreign key refuses, the teardown throws, and vitest reports every test in
+     * the file as skipped — a green-looking run that certified nothing. Certification hit exactly
+     * that after the Thread 8C mounted subject started leaving settled attempts behind.
+     *
+     * So the removal is attempted and its refusal accepted. What this suite needs is a merchant in a
+     * known state, which the upsert below guarantees whether or not the row survived.
+     */
+    await client.from("payment_provider_merchants").delete().eq("org_id", ORG);
 }
 
 describeLive("Slice G — Stripe refunds become canonical reversals, once", () => {
@@ -160,7 +171,7 @@ describeLive("Slice G — Stripe refunds become canonical reversals, once", () =
         const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", { headers: { Authorization: `Bearer ${secret}` } });
         const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
         connectedAccount = String(acct.id);
-        await client.from("payment_provider_merchants").insert({
+        await client.from("payment_provider_merchants").upsert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,
             readiness: readinessFromStripeAccount(acct as { charges_enabled?: boolean }),
             created_by: ACTOR, updated_by: ACTOR,

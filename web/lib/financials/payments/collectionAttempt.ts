@@ -24,10 +24,18 @@ export type CreateCardCollectionInput = {
     actorUserId?: string | null;
     /** Who is actually paying, when known. Evidence only — it never rewrites responsibility. */
     payerPersonId?: string | null;
+    /**
+     * WHICH RAIL is being asked for. Defaults to card, which is every caller written before
+     * Thread 8C. The rail is already part of the intent key, so a card and an ACH collection of the
+     * same charge for the same amount are correctly two different intents rather than one.
+     */
+    rail?: "card" | "ach";
 };
 
 export type CollectionRefusalReason =
     | MerchantRefusal["reason"]
+    /** The merchant can take cards but the provider has not enabled ACH for it. */
+    | "ach_not_enabled"
     | "charge_not_found"
     | "charge_not_collectible"
     | "amount_exceeds_collectible"
@@ -142,7 +150,7 @@ export async function createCardCollection(
     input: CreateCardCollectionInput,
     stripeCall: StripeCall = defaultStripeCall,
 ): Promise<CreateCardCollectionResult> {
-    const rail = "card";
+    const rail = input.rail ?? "card";
 
     if (!Number.isInteger(input.requestedAmountCents) || input.requestedAmountCents <= 0) {
         return {
@@ -156,6 +164,26 @@ export async function createCardCollection(
     const merchantResolution = await resolveCollectionMerchant(supabase, input.orgId, "stripe");
     if (!merchantResolution.ok) return merchantResolution;
     const merchant = merchantResolution.merchant;
+
+    /*
+     * ── 1b. AND WHETHER IT CAN TAKE THIS RAIL ────────────────────────────────────────────────────
+     *
+     * Being able to charge is not being able to take ACH. The governed test merchant was
+     * charges-enabled with `card_payments: active` and no `us_bank_account_ach_payments` capability
+     * at all — asking it for a bank collection would have been refused by the provider AFTER the
+     * operator was told the collection was under way. `null` readiness means nobody has asked the
+     * provider yet, which fails closed here and changes nothing for cards.
+     */
+    if (rail === "ach" && merchant.achReadiness !== "ready") {
+        return {
+            ok: false,
+            reason: "ach_not_enabled",
+            message:
+                merchant.achReadiness === "restricted"
+                    ? "Bank transfers are not enabled on this organization's merchant account yet."
+                    : "This organization's merchant account cannot accept bank transfers.",
+        };
+    }
 
     /*
      * ── 2. WHAT IS ACTUALLY COLLECTIBLE ──────────────────────────────────────────────────────────
@@ -338,7 +366,16 @@ export async function createCardCollection(
         {
             amount: String(input.requestedAmountCents),
             currency: currency.toLowerCase(),
-            "automatic_payment_methods[enabled]": "true",
+            /*
+             * The rail decides how the provider is asked.
+             *
+             * Card keeps the automatic methods it has always used. ACH names `us_bank_account`
+             * explicitly, because an automatic list would let the provider settle a bank collection
+             * onto a card — a different rail, a different cost, and not the one the operator chose.
+             */
+            ...(rail === "ach"
+                ? { "payment_method_types[]": "us_bank_account" }
+                : { "automatic_payment_methods[enabled]": "true" }),
             // Correlation only. Tenancy is resolved from the connected account through
             // payment_provider_merchants; metadata is never read as authority.
             "metadata[alloy_attempt_id]": attemptId,
@@ -356,18 +393,31 @@ export async function createCardCollection(
         throw new Error(`Stripe refused the collection request: ${err.message ?? stripeResponse.status}`);
     }
 
-    const intent = stripeResponse.body as { id?: string; client_secret?: string; status?: string };
+    const intent = stripeResponse.body as {
+        id?: string;
+        client_secret?: string;
+        status?: string;
+        next_action?: { type?: string } | null;
+    };
     const providerTransactionId = String(intent.id ?? "");
     const clientSecret = String(intent.client_secret ?? "");
 
     // Stripe's own first answer, recorded as processor state — never as a receipt status.
     const providerState = mapStripeStatus(intent.status);
+    /*
+     * WHY action is required, when it is. A bank debit answering `requires_action` with
+     * `verify_with_microdeposits` is waiting days on a verification, not offering a challenge the
+     * payer can finish now, and an operator told "action required" for that would go looking for a
+     * button nobody has. Presentation reads this; nothing financial depends on it.
+     */
+    const providerActionType = intent.next_action?.type ? String(intent.next_action.type) : null;
 
     await supabase
         .from("payment_collection_attempts")
         .update({
             provider_transaction_id: providerTransactionId,
             processor_state: providerState,
+            provider_action_type: providerActionType,
             processor_state_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             updated_by: input.actorUserId ?? null,

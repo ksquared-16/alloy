@@ -26,6 +26,9 @@ export type MerchantReadiness =
     | "restricted"
     | "ready";
 
+/** Which rail a collection is asking about. Readiness differs per rail, so the question does too. */
+export type CollectionRail = "card" | "ach";
+
 export type CollectionMerchant = {
     merchantId: string;
     orgId: string;
@@ -34,6 +37,14 @@ export type CollectionMerchant = {
     providerAccountRef: string;
     readiness: MerchantReadiness;
     readinessCheckedAt: string | null;
+    /**
+     * Whether this merchant can take ACH, from the provider's own capability.
+     *
+     * `null` means nobody has asked, which is what every merchant written before Thread 8C is. It
+     * is treated as not-ready for ACH and changes nothing for cards — an honest unknown that fails
+     * closed on the only rail it affects.
+     */
+    achReadiness: MerchantReadiness | null;
 };
 
 /**
@@ -62,7 +73,7 @@ export async function resolveCollectionMerchant(
 ): Promise<MerchantResolution> {
     const { data, error } = await supabase
         .from("payment_provider_merchants")
-        .select("id, org_id, processor, provider_account_ref, readiness, readiness_checked_at")
+        .select("id, org_id, processor, provider_account_ref, readiness, readiness_checked_at, ach_readiness")
         .eq("org_id", orgId)
         .eq("processor", processor)
         .eq("is_active", true)
@@ -87,6 +98,7 @@ export async function resolveCollectionMerchant(
         provider_account_ref: string;
         readiness: MerchantReadiness;
         readiness_checked_at: string | null;
+        ach_readiness: MerchantReadiness | null;
     };
 
     // Compared against the literal rather than a `const` of the union type: a widened const defeats
@@ -112,6 +124,7 @@ export async function resolveCollectionMerchant(
             processor: row.processor,
             providerAccountRef: row.provider_account_ref,
             readiness: row.readiness,
+            achReadiness: row.ach_readiness ?? null,
             readinessCheckedAt: row.readiness_checked_at,
         },
     };
@@ -125,6 +138,23 @@ export async function resolveCollectionMerchant(
  * submitted everything and still be restricted, which is why "onboarding complete" is not the same
  * question as "can collect".
  */
+/**
+ * Whether the provider says this account can take ACH.
+ *
+ * A separate question from `charges_enabled`, and the governed test merchant proved why: it was
+ * charges-enabled with `card_payments: active` and NO `us_bank_account_ach_payments` capability.
+ * Reading card readiness as ACH readiness would have promised a collection the provider then
+ * refused — after the operator had been told it was under way.
+ */
+export function achReadinessFromStripeAccount(account: {
+    capabilities?: Record<string, string> | null;
+}): MerchantReadiness {
+    const state = (account.capabilities ?? {})["us_bank_account_ach_payments"];
+    if (state === "active") return "ready";
+    if (state === "pending" || state === "inactive") return "restricted";
+    return "not_connected";
+}
+
 export function readinessFromStripeAccount(account: {
     charges_enabled?: boolean;
     details_submitted?: boolean;
