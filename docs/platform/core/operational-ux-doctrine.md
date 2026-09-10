@@ -68,7 +68,7 @@ Alloy's operating model is organized into five planes. Every domain participates
 
 **Operations** surfaces work that needs action. It begins with *work*, not with a thing. Operators arrive at `/workspace`, pick a business process, and work a stage's queue. Operations answers: *what needs my attention, and what should I do next?*
 
-**Records** are drawer-based execution surfaces for individual operational objects. A record begins with *a thing* — this child, this invoice, this shift, this enrollment. The drawer is where an operator executes against that one object across every domain relevant to it.
+**Records** are drawer-based execution surfaces for individual operational objects. A record begins with *a thing* — this child, this invoice, this assignment, this enrollment. The drawer is where an operator executes against that one object across every domain relevant to it.
 
 **Intelligence / BOS** provides recommendations, explanations, and approval-gated assistance across the platform. BOS is a **woven layer**, present in queues, drawers, configuration, and planning — never a destination operators "go to." It **proposes; humans approve** (see `../modules/ai-platform.md`).
 
@@ -184,7 +184,7 @@ Because the model is plane-based, each domain ships the *same* artifact set rath
 | **Attendance** | Daily roster work unit / perspective | Attendance | Record attendance, Mark present | Utilization forecasting | Absence pattern detection |
 | **Scheduling** | Scheduling work unit | Schedule | Set pattern, Adjust days | Capacity/demand modeling | Conflict detection |
 | **Billing** | AR / invoicing perspective | Billing, Payments | Start billing, Create invoice | Revenue forecast | Balance explanation, delinquency prediction |
-| **Staffing** | Staffing work unit | (staff drawer) Shifts, Assignments | Create shift, Assign staff | Labor demand modeling | Coverage gap suggestion |
+| **Staffing** | Staffing work unit | (staff record) Assignments, Presence | Assign staff, Record presence | Labor demand modeling | Coverage gap suggestion |
 | **Subsidy** | Subsidy / funding perspective | Subsidy | Start subsidy case, Submit claim | Funding forecast | Eligibility/renewal reminders |
 | **POS** | Point-of-sale surface | Transactions | New sale, Add charge | Revenue forecast | Reconciliation assist |
 | **Capacity** | Capacity / placement perspective | Placement, Capacity | Adjust capacity, Reserve seat | Fill-rate forecast | Overbooking/under-fill warnings |

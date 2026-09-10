@@ -111,7 +111,7 @@ Two limits are worth knowing before relying on this:
 | **Export packs** | `docs/archive/2026-06-handoff-packs/` | Portable handoff bundles (scheduled for retirement) |
 | **API** | `docs/api/` | API doctrine, per-domain reference, and one generated route index — see the mixed-directory note below |
 | **Product** | `docs/product/` | Vertical/reference-implementation material (childcare); governed for frontmatter |
-| **Runtime execution** | `docs/runtime/` | Runtime V1 freeze and certification execution history — **not** doctrine; see `docs/platform/runtime/` for the canonical runtime corpus |
+| **Runtime execution** | `docs/runtime/` | Mostly Runtime V1 freeze and certification execution history. **Not wholly non-doctrinal:** roughly ten files there state durable runtime authority with no equivalent under `docs/platform/`, and **20 `web/` source and test sites cite them** (`GRAIN-AUTHORITY-MAP.md`, `DURABLE-RECORD-ATTENTION.md`, `DEEPLINK-COMPOSE-OWNERSHIP.md`, `CARD-READINESS-LIFECYCLE.md`, `CARD-PLACEMENT-OWNERSHIP.md`, `SUBJECT-AUTHORITY.md`, `REFUSAL-HONEST-NOT-FATAL.md`, `BUSINESS-PROCESS-ENTRY-STAGE.md` and others). Promoting that subset into `docs/platform/runtime/` must rewrite those citations in the same change, or the doc-to-code binding breaks silently — open decision D9. The canonical runtime corpus is `docs/platform/runtime/`. |
 | **Handoffs** | `docs/handoffs/` | Session/sprint handoff artifacts — execution history |
 | **Marketing** | `docs/marketing/` | Positioning and messaging material |
 | **Schema source** | `docs/supabase/reference/` | The CSV export `docs/schema/` is generated from (no markdown) |
