@@ -25,6 +25,7 @@
  * those — through the paths that already own them — and reads everything else fresh.
  */
 
+import type { PacketSessionRow } from "@/lib/forms/packets/formPacketService";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { shallowMergeSharedValues } from "@/lib/forms/packets/formPacketService";
@@ -73,7 +74,13 @@ export async function applyParticipantTurnResponse(
     supabase: SupabaseClient,
     input: {
         orgId: string;
-        processInstanceId: string;
+        /** The journey, when there is one. Null for a packet-anchored participant. */
+        processInstanceId: string | null;
+        /**
+         * The session row the caller already read. Required when there is no journey — it is what
+         * the objective re-resolves from — and a pure latency saving when there is one.
+         */
+        session?: PacketSessionRow | null;
         candidate: StructuredCandidate;
         /** The authored control for the current need, for type validation. */
         field?: FormField | null;
@@ -117,6 +124,7 @@ export async function applyParticipantTurnResponse(
         orgId: input.orgId,
         processInstanceId: input.processInstanceId,
         canonicalValues: input.canonicalValues,
+        preloadedSession: input.session ?? null,
     });
     if (!before.ok) return before;
 
@@ -425,6 +433,7 @@ export async function applyParticipantTurnResponse(
         orgId: input.orgId,
         processInstanceId: input.processInstanceId,
         canonicalValues: input.canonicalValues,
+        preloadedSession: input.session ?? null,
     });
     if (!after.ok) return after;
 

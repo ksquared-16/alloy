@@ -19,10 +19,7 @@ import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
-import {
-    requireEnrollmentJourney,
-    resolveParticipantEnrollmentFromToken,
-} from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import {
     recomputeParticipantObjectiveFromContext,
     resolveParticipantEnrollmentObjectiveWithContext,
@@ -70,13 +67,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
     }
 
-    /*
-     * This route's answer is defined by Business Process requirements — what the stage requires, what
-     * remains against it — so it needs a journey and says so itself. Same refusal as before; the
-     * difference is that a session without one is no longer refused ACCESS, only this answer.
-     */
-    const journey = requireEnrollmentJourney(access.value);
-    if (!journey.ok) return publicErr(journey.error.message, 409, { code: journey.error.code });
 
     let body: {
         text?: unknown;
@@ -97,13 +87,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // values, and the context carries them forward for the post-write recompute.
     const parallelStart = timing.now();
     const [canonical, resolved] = await Promise.all([
-        resolveParticipantCanonicalContext(supabase, {
-            orgId: access.value.orgId,
-            processInstanceId: journey.processInstanceId,
-        }),
+        // Journey-shaped prefill. A packet-anchored session carries its child in the session's own
+        // CRM snapshot, which the form layer already applies.
+        access.value.processInstanceId
+            ? resolveParticipantCanonicalContext(supabase, {
+                  orgId: access.value.orgId,
+                  processInstanceId: access.value.processInstanceId,
+              })
+            : Promise.resolve({ values: {}, subjectDisplayName: null }),
         resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: journey.processInstanceId,
+            processInstanceId: access.value.processInstanceId,
             // The session row the access check already read — one fewer serial round trip.
             preloadedSession: access.value.session,
         }),
@@ -203,8 +197,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Re-resolve: the canonical graph moved, so the platform decides what comes next.
         const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: journey.processInstanceId,
+            processInstanceId: access.value.processInstanceId,
             canonicalValues: canonical.values,
+            preloadedSession: access.value.session,
         });
         if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
         const partyResponse = publicOk({
@@ -291,7 +286,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const applied = await applyParticipantTurnResponse(supabase, {
         orgId: access.value.orgId,
-        processInstanceId: journey.processInstanceId,
+        processInstanceId: access.value.processInstanceId,
+        session: access.value.session,
         candidate,
         field: authoredField,
         /**

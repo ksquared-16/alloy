@@ -317,7 +317,8 @@ export async function resolveParticipantEnrollmentObjective(
     supabase: SupabaseClient,
     input: {
         orgId: string;
-        processInstanceId: string;
+        /** The journey, when there is one. Null for a packet-anchored participant. */
+        processInstanceId: string | null;
         /** Canonical record prefill by shared key, when the caller already holds it. */
         canonicalValues?: Readonly<Record<string, unknown>>;
         /** The session row the caller already read — see the context variant. */
