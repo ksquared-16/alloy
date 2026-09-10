@@ -13,7 +13,10 @@ import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
-import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import {
+    requireEnrollmentJourney,
+    resolveParticipantEnrollmentFromToken,
+} from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import {
     recomputeParticipantObjectiveFromContext,
     resolveParticipantEnrollmentObjectiveWithContext,
@@ -47,6 +50,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             code: access.error.code,
         });
     }
+
+    /*
+     * This route's answer is defined by Business Process requirements — what the stage requires, what
+     * remains against it — so it needs a journey and says so itself. Same refusal as before; the
+     * difference is that a session without one is no longer refused ACCESS, only this answer.
+     */
+    const journey = requireEnrollmentJourney(access.value);
+    if (!journey.ok) return publicErr(journey.error.message, 409, { code: journey.error.code });
 
     let body: { field_id?: unknown; value?: unknown } = {};
     try {
@@ -102,7 +113,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const canonical = await resolveParticipantCanonicalContext(supabase, {
         orgId: access.value.orgId,
-        processInstanceId: access.value.processInstanceId,
+        processInstanceId: journey.processInstanceId,
     });
 
     /**
@@ -114,7 +125,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
      */
     const before = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
         orgId: access.value.orgId,
-        processInstanceId: access.value.processInstanceId,
+        processInstanceId: journey.processInstanceId,
         canonicalValues: canonical.values,
         // The session row the access check already read — one fewer serial round trip.
         preloadedSession: access.value.session,

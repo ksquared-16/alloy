@@ -12,7 +12,10 @@ import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
-import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import {
+    requireEnrollmentJourney,
+    resolveParticipantEnrollmentFromToken,
+} from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import {
     recomputeParticipantObjectiveFromContext,
     resolveParticipantEnrollmentObjectiveWithContext,
@@ -48,6 +51,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         });
     }
 
+    /*
+     * This route's answer is defined by Business Process requirements — what the stage requires, what
+     * remains against it — so it needs a journey and says so itself. Same refusal as before; the
+     * difference is that a session without one is no longer refused ACCESS, only this answer.
+     */
+    const journey = requireEnrollmentJourney(access.value);
+    if (!journey.ok) return publicErr(journey.error.message, 409, { code: journey.error.code });
+
     // What the organization already holds about this child. Without it every known fact arrives as
     // `missing`, and the participant is asked for information that is on file — which is exactly
     // what live QA hit.
@@ -58,11 +69,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const [canonical, resolved] = await Promise.all([
         resolveParticipantCanonicalContext(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: access.value.processInstanceId,
+            processInstanceId: journey.processInstanceId,
         }),
         resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: access.value.processInstanceId,
+            processInstanceId: journey.processInstanceId,
             // The session row the access check already read — one fewer serial round trip.
             preloadedSession: access.value.session,
         }),

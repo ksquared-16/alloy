@@ -19,7 +19,10 @@ import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
-import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import {
+    requireEnrollmentJourney,
+    resolveParticipantEnrollmentFromToken,
+} from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import {
     recomputeParticipantObjectiveFromContext,
     resolveParticipantEnrollmentObjectiveWithContext,
@@ -67,6 +70,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
     }
 
+    /*
+     * This route's answer is defined by Business Process requirements — what the stage requires, what
+     * remains against it — so it needs a journey and says so itself. Same refusal as before; the
+     * difference is that a session without one is no longer refused ACCESS, only this answer.
+     */
+    const journey = requireEnrollmentJourney(access.value);
+    if (!journey.ok) return publicErr(journey.error.message, 409, { code: journey.error.code });
+
     let body: {
         text?: unknown;
         value?: unknown;
@@ -88,11 +99,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const [canonical, resolved] = await Promise.all([
         resolveParticipantCanonicalContext(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: access.value.processInstanceId,
+            processInstanceId: journey.processInstanceId,
         }),
         resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: access.value.processInstanceId,
+            processInstanceId: journey.processInstanceId,
             // The session row the access check already read — one fewer serial round trip.
             preloadedSession: access.value.session,
         }),
@@ -192,7 +203,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Re-resolve: the canonical graph moved, so the platform decides what comes next.
         const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: access.value.processInstanceId,
+            processInstanceId: journey.processInstanceId,
             canonicalValues: canonical.values,
         });
         if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
@@ -280,7 +291,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const applied = await applyParticipantTurnResponse(supabase, {
         orgId: access.value.orgId,
-        processInstanceId: access.value.processInstanceId,
+        processInstanceId: journey.processInstanceId,
         candidate,
         field: authoredField,
         /**

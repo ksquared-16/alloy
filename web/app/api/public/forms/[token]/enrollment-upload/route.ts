@@ -29,7 +29,10 @@ import { randomUUID } from "crypto";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
-import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import {
+    resolveParticipantEnrollmentFromToken,
+    resolveParticipantSubjectCustomerMemberId,
+} from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { resolveParticipantUploadDestination } from "@/lib/enrollment/participantRuntime/resolveParticipantUploadDestination";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 
@@ -118,15 +121,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const destination = resolved.request;
     const artifact = { formDefinitionId: resolved.formDefinitionId, versionId: resolved.versionId };
 
-    // The session's own child — the D-95 anchor's subject — is the only entity this can attach to.
-    const { data: pi } = await supabase
-        .from("process_instances")
-        .select("subject_id")
-        .eq("org_id", access.value.orgId)
-        .eq("id", access.value.processInstanceId)
-        .maybeSingle();
-    const subjectId = ((pi as { subject_id?: string | null } | null)?.subject_id ?? "").trim();
-    if (!subjectId) return publicErr("Journey has no subject to attach the document to.", 409);
+    // The session's own child. A Business Process journey names it on the process instance;
+    // a manually launched packet names it in its CRM snapshot. Either way it is the child.
+    const subjectId = await resolveParticipantSubjectCustomerMemberId(supabase, access.value);
+    if (!subjectId) return publicErr("This packet has no child to attach the document to.", 409);
 
     const bucket = process.env.ADMIN_DOCUMENTS_BUCKET?.trim() || "org_documents";
     const filename = safeFilename(body.filename, kind.ext);

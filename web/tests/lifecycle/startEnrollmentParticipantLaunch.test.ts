@@ -666,7 +666,9 @@ describe("B1 — the participant becomes reachable", () => {
         // `FormEmbedClient` mounts `EnrollmentConversationCard` on.
         const objective = await resolveParticipantEnrollmentObjective(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: access.value.processInstanceId,
+            // Asserted equal to `access.value.processInstanceId` two lines above; taken from the
+            // launch result so this reads as the journey it is, not an optional that happens to be set.
+            processInstanceId: result.processInstanceId,
         });
         expect(objective.ok, objective.ok ? "" : objective.refusal.detail).toBe(true);
         if (!objective.ok) return;

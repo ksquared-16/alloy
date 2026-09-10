@@ -18,6 +18,23 @@
  * Every link in that chain already existed. Nothing here invents an Enrollment portal, a participant
  * account, or a second authentication story: a participant who can open their packet link can see
  * their objective, and one who cannot, cannot.
+ *
+ * ## The process instance is CONTEXT, not the anchor
+ *
+ * The last hop used to be a gate: no `process_instance_id`, no access, `NO_ENROLLMENT_JOURNEY`. That
+ * made a Business Process launch the only way to be a participant — so a packet an operator launched
+ * by hand got no conversation and, worse, no recognizable paperwork, even though the routes that
+ * render that paperwork read nothing but `orgId` and `sessionId`.
+ *
+ * The packet SESSION is the anchor. It already owns packet identity, ordered steps, session state,
+ * shared values, the current step, submissions and launch context — enough to be a participant
+ * experience on its own. A process instance, when there is one, ENRICHES it.
+ *
+ * So this resolver reports the instance instead of requiring it, and each route decides for itself.
+ * Routes whose work is genuinely journey-shaped (objective, turn, edit — all of which derive needs
+ * from Business Process requirements) still refuse with the same `NO_ENROLLMENT_JOURNEY` code, so
+ * nothing about their behaviour moved. Routes that only ever needed the session stop being denied
+ * for a reason that was never theirs.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -30,7 +47,8 @@ export type ParticipantEnrollmentAccess = {
     readonly orgId: string;
     readonly linkId: string;
     readonly sessionId: string;
-    readonly processInstanceId: string;
+    /** The Business Process journey this session is anchored to, when it has one. */
+    readonly processInstanceId: string | null;
     /**
      * The session row this access decision already read.
      *
@@ -115,18 +133,9 @@ export async function resolveParticipantEnrollmentFromToken(
     }
 
     const row = data as PacketSessionRow & { process_instance_id: string | null };
-    const processInstanceId = (row.process_instance_id ?? "").trim();
-    if (!processInstanceId) {
-        // A legitimate state, not a fault: single-form links and packets predating D-95 realize no
-        // Enrollment journey. They keep working as ordinary forms; they simply have no objective.
-        return {
-            ok: false,
-            error: {
-                code: "NO_ENROLLMENT_JOURNEY",
-                message: "This packet is not part of an Enrollment journey.",
-            },
-        };
-    }
+    // Reported, never required. A manually launched packet has no journey and is still a
+    // participant session; the routes that need a journey say so themselves.
+    const processInstanceId = (row.process_instance_id ?? "").trim() || null;
 
     return {
         ok: true,
@@ -138,4 +147,55 @@ export async function resolveParticipantEnrollmentFromToken(
             session: row,
         },
     };
+}
+
+/** The refusal a journey-shaped route returns when the session has no Business Process behind it. */
+export const NO_ENROLLMENT_JOURNEY_MESSAGE = "This packet is not part of an Enrollment journey.";
+
+/**
+ * Narrow an access result to one that carries a journey.
+ *
+ * For routes whose work is defined by Business Process requirements — the objective, the
+ * conversational turn, the edit path. They keep the exact refusal they returned before; the change
+ * is only that they now own the decision instead of inheriting it.
+ */
+export function requireEnrollmentJourney(
+    access: ParticipantEnrollmentAccess,
+): { ok: true; processInstanceId: string } | { ok: false; error: ParticipantEnrollmentAccessFailure } {
+    if (!access.processInstanceId) {
+        return {
+            ok: false,
+            error: { code: "NO_ENROLLMENT_JOURNEY", message: NO_ENROLLMENT_JOURNEY_MESSAGE },
+        };
+    }
+    return { ok: true, processInstanceId: access.processInstanceId };
+}
+
+/**
+ * The child this session's documents and signatures attach to.
+ *
+ * One concept, two sources: a Business Process journey names its subject on the process instance; a
+ * manual launch names it in the session's own CRM snapshot. Upload and signature storage need the
+ * child and nothing else about a journey, so they ask for the child.
+ */
+export async function resolveParticipantSubjectCustomerMemberId(
+    supabase: SupabaseClient,
+    access: ParticipantEnrollmentAccess,
+): Promise<string | null> {
+    if (access.processInstanceId) {
+        const { data } = await supabase
+            .from("process_instances")
+            .select("subject_id")
+            .eq("org_id", access.orgId)
+            .eq("id", access.processInstanceId)
+            .maybeSingle();
+        const subjectId = ((data as { subject_id?: string | null } | null)?.subject_id ?? "").trim();
+        if (subjectId) return subjectId;
+    }
+
+    const snapshot = (access.session as { crm_snapshot?: Record<string, unknown> | null }).crm_snapshot;
+    const fromSnapshot = snapshot && typeof snapshot === "object"
+        ? String((snapshot as { customer_member_id?: unknown }).customer_member_id ?? "").trim()
+        : "";
+    return fromSnapshot || null;
 }
