@@ -7,9 +7,63 @@ supersedes: []
 
 # Platform capabilities
 
-**Status:** Canonical inventory (July 2026 stabilization). Answers: *What has Alloy actually built?*
+**Status:** Canonical inventory, reconciled against promoted staging **September 2026**.
+Answers: *What has Alloy actually built?*
 
-Statuses: **Complete** · **In Progress** · **Planned** · **Future**
+## Reading the status column
+
+**`Complete` does not mean "something exists".** The distinction that matters most in September
+2026 is between a capability whose *authority* is built and one whose *product* is built — several
+domains ship registered, permissioned, certified commands that no operator can reach.
+
+| Status | Means |
+|--------|-------|
+| **Complete** | An operator can do the job end to end, on a shipped surface |
+| **Complete (foundation)** | Schema, invariants, commands and certification exist; **the operator surface does not**. Real, enforced, and not yet usable |
+| **Partial** | Some of the job is reachable; named gaps remain |
+| **In Progress** | Actively being built |
+| **Planned** | Sequenced, not started |
+| **Future** | Not sequenced |
+
+Where a capability is gated, the register says **which kind** of gate: a **permission** gate means
+a tenant grants it; a **flag** gate means a deployment enables it. Those mean different things to a
+reader deciding whether a tenant has the feature, and conflating them is how "Complete" starts
+lying.
+
+---
+
+## September 2026 platform maturity
+
+One row per major area. `Complete (foundation)` appears often below and is the single most
+important thing to read accurately.
+
+| Domain | Status | Canonical owner | Evidence | Material gaps |
+|---|---|---|---|---|
+| Runtime / Presentation | **Complete** | `../operator/alloy-runtime-specification.md`, `../runtime/alloy-runtime-kernel.md` | K1–K4 kernel mounted above Surface Host; Presentation Runtime V2 | Runtime-register supersession unresolved (D2) |
+| Business Processes | **Complete** | `../core/business-process-system.md`, `../modules/business-process-execution-platform.md` | Publication runtime with CAS on `base_revision_id`; revision pinning immutable and fail-closed | Running-instance revision pin undocumented in the owner |
+| Processing | **Partial** | `../modules/documents-and-forms.md` | 17 `processing_identity_*` migrations; plan/approve/execute triad; 20 admin routes; operator surface live | Only two certified source adapters; merge is escalation-only; no standalone route |
+| Communications | **Partial** | `../modules/communications-platform.md`, `communications-identity-platform.md` | Outbound + inbound email and SMS, canonical threads, identity resolution, provider onboarding, live-certified | Attachments absent; compliance and announcements dark; most V2 flags off |
+| Configuration | **Complete (foundation)** | `../modules/configuration-platform.md` | Generic publication runtime proven across two domains (Programs, Business Process); `/organization/*` realized | `distributionMode: "apply"` declared by no domain; Commands is diagnostics only |
+| Work Items | **Complete** | `../operator/queue-system.md` § Work Items queue | Folders · Views · Sources over `operational_tasks` plus two virtual projections; create, validate, navigate, invalidate | Recurring source declared unavailable by design |
+| Forms / Documents | **Partial** | `../modules/documents-and-forms.md` | Participant runtime (40 modules, deterministic turn engine); packet sessions; anchoring model | Studio Packets/Fields/Branding are placeholders; attachments absent |
+| Enrollment | **Complete** | `../core/placement-system.md` + enrollment corpus | Agreements, placements, pricing terms, participant runtime, live certification | — |
+| Placement | **Complete** | `../core/placement-system.md` | `child_enrollment_agreements → child_placements → schedule_assignments` | Owns the child branch only; commitment object unowned (D6) |
+| Scheduling | **Complete (foundation)** | *split* — `../core/placement-system.md` (child), `../modules/attendance-system.md` (staff), `../rfcs/operational-expansion-phase1.md` (architecture) | Assignment model, patterns, types Studio, projections, 79 test files | **No shift model exists.** Staff write path absent — `POST /api/admin/scheduling` is child-only; all four scheduling capability keys are inert |
+| Attendance | **Complete** | `../modules/attendance-system.md` | Append-only fact ledger enforced by DB trigger; corrections by reference; kiosk producer channel; capability-gated | Two read routes bypass the capability gate; no kiosk provisioning surface |
+| Staffing | **Complete (foundation)** | `../modules/attendance-system.md` § Attendance V1 | Employment foundation, assignment eligibility, staff presence facts, combined roster | Roster surfaces read-only; no staff-presence HTTP route; zero staff assignment rows |
+| Financials | **Partial** | `../modules/billing-financials-platform.md` | Transaction spine, periods, journal, correction lineage | Journal has no period open/close UI and no export |
+| Billing | **Complete** | same | Add Charge, posting, reversal, tuition generation with preview/confirm | Invoices, family statements and AR aging are absent, not deferred |
+| Payments | **Partial** | same § Thread 8B/8C | Stripe Connect card + ACH, provider events, refunds, reversal | **No merchant onboarding in the product**; no family-facing way to pay; autopay and dunning absent |
+| Subsidy / Funding | **Complete (foundation)** | same § Subsidy | 7 tables, 9 registered commands, `fin.subsidy`, certified | **No operator surface at all.** See D7 for the frozen-law divergence |
+| Commercial | **Complete** | `../commercial/commercial-platform-v1.md` | Catalog, rates, policies, accounting, simulator | Deposit refund lifecycle and package consumption future |
+| Access & Identity | **Partial** | `../governance/roles-and-permissions.md` | Four layers enumerated in code and test-locked; Access UI realized | About half the catalog is inert; most handlers are `pending` on the capability ratchet; two roles were seeded empty |
+| Operational Facts | **Complete** | `../core/operational-truth-flow-doctrine.md` | Append-only, correction-by-reference, DB-trigger enforced; attendance is the reference conformer | Consumption layer is *not* append-only — a deliberate asymmetry |
+| Operational Expectations | **Complete (foundation)** | `../core/operational-expectations-system-design.md` | P0/P1 complete and certified; ledger, intake, authority, ratification | P2/P3 genuinely not started. One activated purpose authors in production — see D10 |
+| Operational Intelligence | **Partial** | `../modules/operational-intelligence-platform.md` | 34 registered metric keys across 6 packs; org-authored Metric Platform with operator builders | Insights, Dashboards and Reports remain Planned; Answers consumed by two surfaces |
+| AI / BOS | **Complete (foundation)** | `../modules/ai-platform.md` | Policy model, fail-closed gate, capability registry, Trust seam, all test-locked | **Dark by default** — three switches all default off, and no operator UI turns any of them on |
+| Trust Platform | **Complete (V1)** | `../trust/trust-platform.md` | Runtime, 4 migrations, 25 subdirectories, 4 registered capabilities | Largest consumer is Processing; no API routes of its own |
+| Parent / participant runtime | **Partial** | *no canonical owner* — `../modules/documents-and-forms.md` § Participant Runtime | 40-module deterministic turn engine; 11 public token routes; live-certified | No parent portal, no family-facing payment; owner doc is a section, not a module |
+| API Platform | **Complete (foundation)** — internal | `../governance/api-contracts.md`, `../../api/` | 613 routes, envelope, correlation ids, OpenAPI v0, typed client, CI gate | Internal by construction. No inbound machine credential, no versioning, no outbound events — Thread 3 |
 
 ---
 
