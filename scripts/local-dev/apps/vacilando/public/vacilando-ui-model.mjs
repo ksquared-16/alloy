@@ -672,9 +672,13 @@ export function buildLaneSummaries({ lanes = [], laneState = () => null, nowMs =
       // keep. It travels with the state everywhere the operator picks a lane.
       label: l.label || l.lane_id,
       state: `${operatorStatusLine(op)}${st.read_only || l.observation_only ? " · read-only" : ""}`,
+      // Secondary travels as its OWN field. Appending it to `state` would put
+      // the exception back inside the primary status, which is the shape this
+      // batch exists to undo.
+      explanation: op.explanation || null,
       state_key: op.state,
       tone: op.tone,
-      mark: st.mark || "○",
+      mark: op.mark,
       live: op.live,
       blockers: Number(l.unseen_needs_you || 0) || (st.key === "needs_input" ? 1 : 0),
       at_ms: Number(l.last_activity_ms) || parseMs(run?.updated_at) || null,
@@ -1823,50 +1827,91 @@ export function laneOperatorPriorityRank(work, lane = null) {
 }
 
 /**
- * "ATTENTION" NAMES A CATEGORY, NOT A FACT — SO IT MUST CARRY ITS CAUSE.
+ * PRIMARY SAYS WHAT THE LANE IS DOING. SECONDARY SAYS WHAT IS ODD ABOUT IT.
  *
- * THE DEFECT, reported by the operator looking at their own fleet: "I'm seeing
- * ! Attention on the left side nav for status and then in the lane I see
- * Attention · Claude... I don't understand what attention means in this
- * context." They were right, and the test is the rest of the vocabulary: every
- * other operator state NAMES what is true. Working is working. Ready can take
- * work. Offline has no runtime. Needs you is being asked. Failed failed.
- * "Attention" says only that something is worth looking at, and then stops —
- * on the one surface whose whole job is to answer "what is this lane doing".
+ * THE FIRST FIX AND WHY IT WAS NOT ENOUGH. "Attention" named a bucket and
+ * stopped, so the cause was folded into the label: "Working · untracked",
+ * "Finished · no report". Accurate, and still the wrong shape — the operator's
+ * first question is "what is this lane doing right now", and a composite
+ * technical string answers it and something else in the same breath.
  *
- * There are exactly two ways into it, and each has a plain answer:
+ * So the two facts are separated rather than joined:
  *
- *   provider_active       Claude is busy in the lane's worktree with NO
- *                         Execution Run open, so the work exists and nothing is
- *                         tracking it. That is "Working · untracked", which
- *                         says both halves.
+ *   primary    the operational fact, in the same vocabulary as every other
+ *              lane: Working, Finished. Nothing about tracking or reports.
+ *   secondary  the exception, in plain words, as explanation beneath it.
  *
- *   completion_unreported The run finished and no account of the turn survived
- *                         (no completion_report.report_id). The work is done;
- *                         what is missing is the report. "Finished · no report".
+ * The runtime identity — `provider_active`, `completion_unreported`, the
+ * canonical band, anything about execution-run bookkeeping — appears on NO
+ * operator surface. It stays where a diagnostic belongs.
  *
- * This is NOT the runtime phrase leaking back into the headline. The rule that
- * removed it — a lane must not be described by a subsystem condition that
- * CONFLICTS with its execution state — is untouched: these two do not conflict
- * with the execution state, they ARE it, and "Attention" was erasing them. One
- * projection still owns the answer, and every surface still reads this one
- * function; it just no longer answers with the name of a bucket.
+ * NOTHING BELOW THIS LINE CHANGES RUNTIME TRUTH. The resolver, the canonical
+ * bands, the operator states and the priority ladder are exactly as Batch 1C
+ * left them; this is the copy the projection hands to the surfaces.
  */
-export const ATTENTION_CAUSE_LABEL = Object.freeze({
-  provider_active: "Working · untracked",
-  completion_unreported: "Finished · no report",
+export const ATTENTION_CAUSE_COPY = Object.freeze({
+  provider_active: Object.freeze({
+    primary: "Working",
+    secondary: "Execution isn\u2019t being tracked",
+  }),
+  completion_unreported: Object.freeze({
+    primary: "Finished",
+    secondary: "Completion report missing",
+  }),
 });
+
+/**
+ * An exceptional condition with no copy yet.
+ *
+ * It keeps the generic primary — inventing an operational fact for a state
+ * nobody has described would be worse than admitting the gap — and its
+ * secondary sends the operator to the surface that can actually show them
+ * what it is.
+ */
+const UNNAMED_ATTENTION_COPY = Object.freeze({
+  primary: "Attention",
+  secondary: "Unrecognised state \u2014 see Details",
+});
+
+export function attentionCauseCopy(key) {
+  return ATTENTION_CAUSE_COPY[String(key || "")] || UNNAMED_ATTENTION_COPY;
+}
+
+/**
+ * A STATUS GLYPH IS A DOT, NOT PUNCTUATION.
+ *
+ * The rail printed the runtime mark as literal text, so an exceptional lane
+ * read "! Attention" in the sidebar — an exclamation mark wedged into the
+ * status copy, where every other state showed a dot. The operator saw it as
+ * part of the words.
+ *
+ * The dot convention itself is real and stays: a filled dot for a lane with
+ * something resident, a hollow one for a lane without. Only the exclamation is
+ * replaced, because the warning is already carried by the tone class the same
+ * span sets and by the secondary explanation underneath it.
+ */
+export function operatorMark(runtimeMark) {
+  const m = String(runtimeMark || "");
+  return m === "!" ? "\u25cf" : (m || "\u25cb");
+}
 
 export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
   const state = operatorState(work, lane);
   const progress = laneProgress(lane?.execution_run, { nowMs });
   const finishClaimable = Boolean(progress.finish?.available)
     && finishClaimIsMeaningful(lane?.execution_run);
+  const attention = state === OPERATOR_STATE.ATTENTION ? attentionCauseCopy(work?.key) : null;
   return {
     state,
-    // The category name is the fallback, never the answer when a cause is known.
-    label: (state === OPERATOR_STATE.ATTENTION && ATTENTION_CAUSE_LABEL[work?.key])
-      || OPERATOR_STATE_LABEL[state],
+    // PRIMARY: the operational fact, and never the name of a bucket when a
+    // cause is known.
+    label: attention ? attention.primary : OPERATOR_STATE_LABEL[state],
+    // SECONDARY: what is odd about it, in plain words. Null for every ordinary
+    // state, so a healthy lane carries no warning copy at all.
+    explanation: attention ? attention.secondary : null,
+    // The glyph the surfaces should print, with the exclamation replaced by a
+    // dot. Tone and the secondary line carry the warning.
+    mark: operatorMark(work?.mark),
     tone: OPERATOR_STATE_TONE[state],
     live: state === OPERATOR_STATE.WORKING,
     // Progress rides with identity, not in a card of its own. Only a FRESH

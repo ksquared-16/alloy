@@ -3260,20 +3260,39 @@ export function agentSessionLine(telemetry, nowMs = Date.now()) {
  * `New output` still wins, because it is an operator-facing fact about what is
  * waiting for them rather than a subsystem condition.
  */
+/**
+ * Runtime phrases that say nothing the operator's primary status has not
+ * already said. The secondary slot is where exceptions live, so putting a
+ * synonym there gives a healthy lane the shape of a problem.
+ */
+const RUNTIME_SYNONYM_KEYS = Object.freeze(["ready", "idle", "needs_input"]);
+
+function runtimeAside(runtime, op) {
+  if (!runtime?.label || runtime.label === op.label) return null;
+  if (RUNTIME_SYNONYM_KEYS.includes(String(runtime.key || ""))) return null;
+  return runtime.label;
+}
+
 function laneListStatus(lane, attention, { nowMs = Date.now(), work = null } = {}) {
   const runtime = work || canonicalLaneWorkState(lane, { nowMs });
   const op = laneOperatorStatus(lane, runtime, { nowMs });
   if (attention?.listHint === "New output") {
-    return { label: "New output", mark: runtime.mark, tone: "needs", detail: runtime.label, operator_state: op.state };
+    return { label: "New output", mark: op.mark, tone: "needs", detail: op.explanation, operator_state: op.state };
   }
   return {
     label: op.label,
-    mark: runtime.mark,
+    mark: op.mark,
     tone: op.tone,
-    // The runtime phrase, kept and demoted. "Queued for capacity" or
-    // "Refreshing Claude context" is worth showing; it is not the answer to
-    // what the lane is doing.
-    detail: runtime.label !== op.label ? runtime.label : null,
+    // SECONDARY, in this order on purpose. The operator explanation wins where
+    // there is one, because the runtime phrase for those states is the internal
+    // identity — "Provider active" — and no operator surface should carry it.
+    // Where there is none, the runtime phrase still rides: "Queued for capacity"
+    // and "Refreshing Claude context" are worth showing and are already plain.
+    //
+    // A SYNONYM IS NOT AN EXPLANATION. "Ready" over "Idle" says the same thing
+    // twice and, in a slot that otherwise holds exceptions, reads like one.
+    // A quiet lane carries no secondary at all.
+    detail: op.explanation || runtimeAside(runtime, op),
     operator_state: op.state,
   };
 }
@@ -3314,16 +3333,29 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane, { nowMs = D
   // state used to each get their own line, so a row was five stacked strings
   // and none of them was the answer to "what is this lane doing".
   //
-  // The runtime phrase joins the meta line rather than the headline: it is the
-  // subsystem's answer, and it belongs beside the provider and the clock.
-  const metaBits = [who, st.detail, when, git].filter(Boolean).join(" · ");
+  // Secondary status gets its OWN line, the same as the rail, Home and the lane
+  // header. Concatenating it into the meta line put the explanation in among
+  // the provider, the clock and the git state, where it read as one more
+  // attribute rather than as the reason the lane looks the way it does.
+  const metaBits = [who, when, git].filter(Boolean).join(" · ");
+  const why = st.detail ? `<span class="gw-lane-why">${esc(st.detail)}</span>` : "";
   const extra = summary && summary !== st.label
     ? `<span class="gw-lane-summary">${esc(summary)}</span>`
     : "";
   const unseen = renderUnseenIndicator(lane);
   return `<a class="gw-lane${active}${unseen ? " has-unseen" : ""}${work.group === "active" || work.group === "needs_input" ? " is-live" : ""}" data-gw-lane="${esc(id)}" data-gw-group="${esc(work.group)}" href="${esc(laneDetailHash(id))}">
     <span class="gw-lane-title">${esc(lane.label || id)}${unseen}</span>
-    <span class="gw-lane-posture${st.tone ? ` is-${st.tone}` : ""}">${esc(st.label)}</span>
+    ${/*
+      THE GLYPH CARRIES WHAT THE COPY NO LONGER DOES. "Ready" and "Idle" are
+      one operator state — both can take work — and the difference between them
+      is whether an agent is resident. That used to ride as a second line of
+      text; a synonym in the slot that otherwise holds exceptions reads like a
+      problem, so it moved to the dot the rail has always used: filled for
+      resident, hollow for not. No information lost, and the exception slot
+      stays for exceptions.
+    */ ""}
+    <span class="gw-lane-posture${st.tone ? ` is-${st.tone}` : ""}"><span class="gw-lane-mark" aria-hidden="true">${esc(st.mark)}</span>${esc(st.label)}</span>
+    ${why}
     ${extra}
     <span class="gw-lane-meta">${esc(metaBits)}</span>
   </a>`;
@@ -5213,7 +5245,7 @@ export function renderLaneHeaderV2(lane, {
         <div class="vlane-head-state" data-gw-stage-status>${stateDot(
           operatorStatusLine(status, laneProviderLabel(lane)),
           { tone: status.tone, live: status.live },
-        )}</div>
+        )}${status.explanation ? `<span class="vlane-head-why">${esc(status.explanation)}</span>` : ""}</div>
         ${meta ? `<p class="vlane-head-meta">${esc(meta)}</p>` : ""}
       </div>
       <div class="vlane-head-acts">
@@ -5883,7 +5915,15 @@ export function railLaneRow(lane, selectedId, attentionByLane, telemetryByLane) 
   // "Needs input · suspended", which told the operator that a provider process
   // is not resident. That is scheduler machinery; it is in Details.
   const opStatus = laneOperatorStatus(lane, canonicalLaneWorkState(lane));
-  const attn = `<span class="gw-lane-attn${opStatus.tone ? ` is-${opStatus.tone}` : ""}">${esc(st.mark)} ${esc(operatorStatusLine(opStatus))}${esc(queue)}${esc(readOnly)}</span>`;
+  // THE GLYPH IS A DOT, NOT AN EXCLAMATION. This printed the RUNTIME mark, so
+  // an exceptional lane read "! Attention" in the sidebar — punctuation wedged
+  // into the status copy where every other state showed a dot. The warning is
+  // carried by the tone class this span already sets and by the explanation
+  // beneath it.
+  const why = opStatus.explanation
+    ? `<span class="gw-lane-why">${esc(opStatus.explanation)}</span>`
+    : "";
+  const attn = `<span class="gw-lane-attn${opStatus.tone ? ` is-${opStatus.tone}` : ""}">${esc(opStatus.mark)} ${esc(operatorStatusLine(opStatus))}${esc(queue)}${esc(readOnly)}${why}</span>`;
   // NAVIGATION CARRIES NAME, STATE, RECENCY AND A GENUINE BLOCKER COUNT.
   //
   // It used to carry the provider and the Claude context percentage too. Neither
