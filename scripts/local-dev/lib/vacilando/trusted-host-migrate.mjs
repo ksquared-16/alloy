@@ -688,6 +688,12 @@ export function validateMigrationRequestCore(inputs = {}, {
       repository: String(inputs.repository || inputs.repo || "").trim() || null,
       expectedSha: reach.fullSha || expectedSha,
       stagingSha: reach.stagingSha,
+      // CARRIED, BECAUSE EXECUTION RE-READS. The candidate exemption was
+      // computed here and handed to normalizeMigrationList, then dropped — so
+      // validation applied it and the runtime re-read did not. See the note on
+      // that re-read in applyMigrationBatch: this is the same trap the
+      // `environment` field was already fixed for.
+      preMergeCandidate: reach.relation === "governed_promotion_candidate",
       stagingRelation: reach.relation,
       gitCwd: store.cwd,
       artifactSource: "git_object",
@@ -840,6 +846,13 @@ export function applyMigrationBatch(normalized, {
       relative: entry.path,
       gitCwd: normalized.gitCwd,
       currentStagingSha: normalized.stagingSha,
+      // The candidate exemption too, for exactly the reason above. Without it
+      // a governed pre-merge promotion validates and then fails
+      // `migration_changed_since_approval` at execution — the migrations are
+      // absent from staging BECAUSE the candidate has not merged, which is the
+      // state this path exists to serve. Measured: gar_4727b063b4222e, approved
+      // by the operator at 14:06:22Z and failed on the runtime re-read.
+      preMergeCandidate: normalized.preMergeCandidate === true,
     });
     if (!latest.ok) {
       results.push({ ok: false, version: entry.version, path: entry.path, code: latest.code, detail: latest.detail });
