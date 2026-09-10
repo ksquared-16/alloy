@@ -212,9 +212,21 @@ export function projectProcessCardCommands(context: OperationalContext): Process
      */
     const outcomeKey = buttons.recordOutcome?.key ?? null;
 
+    /*
+     * Process transitions are admitted on their own provenance too, for the same reason the
+     * record-outcome affordance is: they come from the published `stage_operating_plan_v1`
+     * outgoing transitions, so they are configuration-derived even though they name no COMMAND
+     * ref — and `tracesToConfiguration` can only recognise command refs. Without this they were
+     * withheld silently, and Enrollment's configured `lead_to_tour → tour` had no control on any
+     * surface an operator uses.
+     */
+    const transitionKeys = new Set(
+        buttons.alternatePaths.map((action) => action.key?.trim()).filter((key): key is string => Boolean(key)),
+    );
+
     const admit = (action: CurrentWorkActionVM | null, prominence: ProcessCardCommand["prominence"]) => {
         if (!action) return;
-        if (!tracesToConfiguration(action) && action.key !== outcomeKey) {
+        if (!tracesToConfiguration(action) && action.key !== outcomeKey && !transitionKeys.has(action.key?.trim() ?? "")) {
             if (action.key?.trim()) withheld.push({ key: action.key.trim(), label: action.label });
             return;
         }
@@ -224,6 +236,21 @@ export function projectProcessCardCommands(context: OperationalContext): Process
 
     admit(buttons.dominant, "primary");
     for (const helpful of buttons.helpful) admit(helpful, "secondary");
+    /*
+     * The process's own other transitions — the configured ways this work can end.
+     *
+     * They come from the SAME derivation as everything above; only `CurrentWorkWorkspace` had ever
+     * read them, and the Focus Panel does not mount it, so a transition resolved all the way to the
+     * surface model and then had no control anywhere an operator could see. Enrollment's Lead stage
+     * declares `lead_to_tour → tour`, `available: true`: instrumenting the live panel showed
+     * `alternatePaths: ["lead_to_tour"]` on every recompute while the operator could not leave the
+     * first stage of the journey.
+     *
+     * Admitted last and as secondary, so nothing above changes position or emphasis — this module
+     * still decides nothing. They stay distinct from helpful commands because they answer a
+     * different question: "Schedule tour" arranges a tour, "Move to Tour" advances the process.
+     */
+    for (const transition of buttons.alternatePaths) admit(transition, "secondary");
     admit(buttons.subordinateOutcome, "secondary");
 
     // Identity, never label: a configured ref counts as rendered when its intent key is on the row.

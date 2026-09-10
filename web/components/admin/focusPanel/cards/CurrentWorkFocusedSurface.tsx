@@ -117,7 +117,7 @@ export default function CurrentWorkFocusedSurface({
 
     // SAME action buttons as the summary card (one shared derivation) so "View details" never shows
     // a different action set. Record outcome enters the dedicated outcome mode instead of dispatching.
-    const { dominant, helpful, subordinateOutcome, recordOutcome, dominantIsOutcome } =
+    const { dominant, helpful, alternatePaths, subordinateOutcome, recordOutcome, dominantIsOutcome } =
         resolveCurrentWorkActionButtons(surface);
     const transitions = surface.alternatePaths.filter(isCurrentWorkActionExecutable);
     const outcomes = surface.showOutcomeCompletion ? surface.completionOutcomes : [];
@@ -307,6 +307,25 @@ export default function CurrentWorkFocusedSurface({
                             :   null}
                         </div>
                     :   null}
+
+                    {/* Process-owned other transitions — the other ways this work can end.
+                        Distinct from helpful actions: "Schedule tour" arranges a tour,
+                        "Move to Tour" advances the journey. */}
+                    {alternatePaths.length > 0 ? (
+                        <div className="alloy-os-currentwork__helpful-row" data-work-alternate-paths-row="true">
+                            {alternatePaths.map((action) => (
+                                <button
+                                    key={action.key}
+                                    type="button"
+                                    className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                    data-work-alternate-path={action.key}
+                                    onClick={() => onActionButton(action)}
+                                >
+                                    {action.label}
+                                </button>
+                            ))}
+                        </div>
+                    ) : null}
 
                     {/* The dead end, explained — here, where the operator is looking for the
                         button that isn't there, rather than as a bare "Blocked" chip. */}

@@ -21,6 +21,20 @@ export type CurrentWorkActionButtons = {
     helpful: CurrentWorkActionVM[];
     /** "Record outcome" as a subordinate button, present only when a command already leads. */
     subordinateOutcome: CurrentWorkActionVM | null;
+    /**
+     * The process-owned other transitions — the other ways this work can legitimately end.
+     *
+     * `buildCurrentWorkSurfaceVM` resolves these from the published stage plan and puts them on
+     * `alternatePaths`. Only `CurrentWorkWorkspace` ever read them, and the Focus Panel does not
+     * mount that component — so a transition that resolved correctly all the way to the surface
+     * model had no control. Enrollment's Lead stage declares `lead_to_tour → tour`; instrumenting
+     * the live panel showed `alternatePaths: ["lead_to_tour"]` arriving on every recompute while the
+     * operator had no way to leave the first stage of the journey.
+     *
+     * Deliberately separate from `helpful`: "Schedule tour" arranges a tour, "Move to Tour" advances
+     * the journey. They answer different questions and must not merge into one control.
+     */
+    alternatePaths: CurrentWorkActionVM[];
     /** The raw record-outcome action (whether it is the dominant or the subordinate), for identity checks. */
     recordOutcome: CurrentWorkActionVM | null;
     /** True when the dominant action IS the record-outcome (outcome-led work with no command). */
@@ -28,7 +42,10 @@ export type CurrentWorkActionButtons = {
 };
 
 export function resolveCurrentWorkActionButtons(
-    surface: Pick<CurrentWorkSurfaceVM, "primaryAction" | "recordOutcomeAction" | "supportingActions">,
+    // `alternatePaths` is optional so callers building a partial surface keep compiling; an absent
+    // list renders no transitions, which is exactly what they showed before.
+    surface: Pick<CurrentWorkSurfaceVM, "primaryAction" | "recordOutcomeAction" | "supportingActions">
+        & Partial<Pick<CurrentWorkSurfaceVM, "alternatePaths">>,
 ): CurrentWorkActionButtons {
     const primary =
         surface.primaryAction
@@ -47,9 +64,13 @@ export function resolveCurrentWorkActionButtons(
     // Config fidelity: project every operator-visible configured helpful command (executable or
     // blocked/disabled with reason). Do not silently drop blocked related-subject commands.
     const helpful = surface.supportingActions.filter(isCurrentWorkActionOperatorVisible);
+    // Same fidelity rule as helpful actions: project everything operator-visible, including blocked
+    // with a reason, rather than silently dropping configured progression.
+    const alternatePaths = (surface.alternatePaths ?? []).filter(isCurrentWorkActionOperatorVisible);
     return {
         dominant,
         helpful,
+        alternatePaths,
         subordinateOutcome,
         recordOutcome,
         dominantIsOutcome: primary == null && recordOutcome != null,
