@@ -58,11 +58,12 @@ import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPa
  * the rest of that document is tenant configuration and has no business in a fixture.
  *
  * Keep these exact rectangles. Their defining property is that the column ranges OVERLAP
- * — business_process spans columns 1–8 while children and household start at column 7 —
- * so `planLanesFromGrid` cannot flatten them into lanes and the runtime must use the
- * `grid` strategy. That strategy is the only one that mounts the column-aware stack, and
- * it is where the crash lived. A tidier fixture with clean column bands would resolve to
- * `lanes` and quietly stop testing the failing path.
+ * — business_process spans columns 1–8 while children and household start at column 7. That
+ * used to be the one shape the runtime's lane reading refused, and therefore the only shape
+ * that reached the `grid` strategy, the column-aware stack, and the crash. The lane reading
+ * of a grid is gone and every published grid now takes that path, so the fixture no longer
+ * has to be irregular to exercise it — but it stays as authored, because these are the
+ * coordinates the crash was reported against.
  */
 const AUTHORED_GRID: FocusPanelGridLayout = {
     columns: 12,
@@ -178,10 +179,10 @@ describe("published Focus Panel Surface → Work Unit runtime", () => {
                 for (const [vName, vis] of Object.entries(VISIBILITIES)) {
                     const filtered = filterPublishedLayoutToVisibleCards(read(STORED_SHAPES[name]), vis)!;
                     for (const width of WIDTHS) {
-                        for (const preferLanesFromGrid of [true, false]) {
-                            const tag = `${name}/${vName}/${width}px/lanes=${preferLanesFromGrid}`;
+                        {
+                            const tag = `${name}/${vName}/${width}px`;
                             expect(() => {
-                                const plan = planPublishedLayout(filtered, width, { preferLanesFromGrid });
+                                const plan = planPublishedLayout(filtered, width);
                                 // The column-aware engine runs on the grid strategy; drive it at a
                                 // pre-measurement width (0) and at real ones.
                                 if (plan.strategy === "grid") {
@@ -207,7 +208,7 @@ describe("published Focus Panel Surface → Work Unit runtime", () => {
         it("every authored card reaches the plan, whatever the stored shape", () => {
             for (const name of Object.keys(STORED_SHAPES)) {
                 const layout = read(STORED_SHAPES[name]);
-                const plan = planPublishedLayout(layout, 1024, { preferLanesFromGrid: true });
+                const plan = planPublishedLayout(layout, 1024);
                 const planned = new Set([
                     ...plan.areas.map((a) => a.card),
                     ...plan.lanes.flatMap((l) => l.cards.map((c) => c.key)),
@@ -219,9 +220,7 @@ describe("published Focus Panel Surface → Work Unit runtime", () => {
 
         it("collapses to one readable column below the min width, losing no card", () => {
             for (const name of Object.keys(STORED_SHAPES)) {
-                const plan = planPublishedLayout(read(STORED_SHAPES[name]), 320, {
-                    preferLanesFromGrid: true,
-                });
+                const plan = planPublishedLayout(read(STORED_SHAPES[name]), 320);
                 expect(plan.collapsed, name).toBe(true);
                 expect(plan.rows.flatMap((r) => r.cells.flatMap((c) => c.cards)), name).toEqual(
                     AUTHORED_CARDS,
@@ -231,12 +230,10 @@ describe("published Focus Panel Surface → Work Unit runtime", () => {
     });
 
     describe("the strategy this composition must resolve to", () => {
-        it("cannot be flattened into lanes, so the runtime uses the grid strategy", () => {
+        it("is planned as a grid, whichever consumer asks", () => {
             // If this ever flips to "lanes", the fixture stopped covering the failing path.
             for (const name of Object.keys(STORED_SHAPES)) {
-                const plan = planPublishedLayout(read(STORED_SHAPES[name]), 1024, {
-                    preferLanesFromGrid: true,
-                });
+                const plan = planPublishedLayout(read(STORED_SHAPES[name]), 1024);
                 expect(plan.strategy, name).toBe("grid");
                 expect(plan.areas.map((a) => a.card), name).toEqual(AUTHORED_CARDS);
             }
@@ -245,9 +242,7 @@ describe("published Focus Panel Surface → Work Unit runtime", () => {
 
     describe("column-aware vertical semantics", () => {
         it("gives disjoint columns independent tops — rowStart orders, it does not pin", () => {
-            const plan = planPublishedLayout(read(STORED_SHAPES["grid-only"]), 1024, {
-                preferLanesFromGrid: false,
-            });
+            const plan = planPublishedLayout(read(STORED_SHAPES["grid-only"]), 1024);
             expect(plan.strategy).toBe("grid");
             const TALL = 600;
             const resolved = resolveColumnAwareLayout({

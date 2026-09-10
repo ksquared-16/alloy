@@ -131,8 +131,8 @@ export function useColumnAwareStack(args: {
      * That is an unbounded render loop, and React ends it by throwing "Maximum update
      * depth exceeded" — a client-side exception that took the whole Work Unit down. It
      * only fired on the `grid` strategy, because that is the only path that mounts these
-     * refs, which is why it appeared the moment an operator published a composition whose
-     * columns overlap (the shape `planLanesFromGrid` cannot flatten into lanes).
+     * refs — which, while a published grid still had a second lane reading, meant it appeared
+     * the moment an operator published a composition whose columns overlap.
      *
      * Caching by card key makes the identity stable, so React attaches each ref once and
      * detaches it only when the card genuinely leaves the layout.

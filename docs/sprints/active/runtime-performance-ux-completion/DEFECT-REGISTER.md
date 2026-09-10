@@ -207,6 +207,11 @@ per-PATH, not per-grain:
   the case composition records that a full-width card forces `planPublishedLayout` to fall back from
   `lanes` to `grid` for the whole panel.
 
+  > **Superseded (Sep 2026).** That constraint died with the fallback it described. `planPublishedLayout`
+  > has one reading of an authored grid, so a 12-column card changes nothing about how its neighbours
+  > are placed. The rule is left here as written because this file records what was observed at the
+  > time; do not carry it forward into new compositions.
+
 **Explicitly NOT the answer:** applying the family published doc to child subjects, or relaxing
 `isCaseGrain`. Both reintroduce the failure the guard exists to prevent — household/children on a
 subject that has neither.

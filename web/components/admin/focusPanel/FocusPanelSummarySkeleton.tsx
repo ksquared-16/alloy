@@ -131,13 +131,11 @@ export default function FocusPanelSummarySkeleton({
             <FocusPanelCardGrid
                 rows={inputs.gridRows}
                 publishedLayout={inputs.publishedLayout}
-                // MUST agree with the resolved body (`OpportunityFocusPanelModeGrid`). A
-                // disagreement here is a STRATEGY SWAP on settle — different DOM, different
-                // geometry — which is the exact reflow this component exists to prevent.
-                // The body writes `Boolean(grid) || mode === "work"`; this branch is reached
-                // only when the mode IS summary, so the work term cannot contribute and
-                // TypeScript rejects writing it (the narrowed type makes it unreachable).
-                preferLanesFromGrid={Boolean(inputs.publishedLayout?.grid)}
+                // The skeleton and the resolved body plan the SAME published layout the same
+                // way, and now they do so because there is nothing left to disagree about:
+                // `planPublishedLayout` takes no strategy hint. A disagreement here was a
+                // STRATEGY SWAP on settle — different DOM, different geometry — which is the
+                // exact reflow this component exists to prevent.
                 composeCards={inputs.composeCards}
                 compositionOverrides={inputs.compositionOverrides}
                 renderCell={() => <ReservedSettlementRegion />}

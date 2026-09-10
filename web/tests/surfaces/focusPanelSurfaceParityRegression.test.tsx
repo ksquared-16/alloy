@@ -8,9 +8,9 @@
  *    contents. New object = state change = re-render = new closure = detach again.
  *    React ends that with "Maximum update depth exceeded": the client-side exception.
  *
- *    It only reached operators who published a composition whose COLUMNS OVERLAP, because
- *    that is the only shape `planLanesFromGrid` refuses, and the `grid` strategy it falls
- *    back to is the only path that mounts these refs.
+ *    While a published grid still had a second lane reading, it only reached operators whose
+ *    composition had OVERLAPPING COLUMNS — the one shape that reading refused. Every published
+ *    grid takes the `grid` strategy now, so every one of them mounts these refs.
  *
  * 2. THE PENDING/RESOLVED SPLIT. The skeleton and the resolved body each chose the active
  *    LayoutDoc themselves, and disagreed for any non-case subject — the skeleton drew the
@@ -154,14 +154,17 @@ describe("2 · pending and resolved compose from the same document", () => {
         }
     });
 
-    it("plans lanes identically pending and resolved", () => {
+    it("plans identically pending and resolved, because neither may name a strategy", () => {
         const skeleton = readSrc("components/admin/focusPanel/FocusPanelSummarySkeleton.tsx");
         const body = readSrc("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx");
-        // The body carries a `|| mode === "work"` term the skeleton cannot: its composing
-        // branch is reachable only when the mode is summary, so the two expressions agree
-        // everywhere both are evaluated. A strategy split here is the reflow, not a nicety.
-        expect(skeleton).toMatch(/preferLanesFromGrid=\{Boolean\(inputs\.publishedLayout\?\.grid\)\}/);
-        expect(body).toMatch(/preferLanesFromGrid=\{Boolean\(publishedLayout\?\.grid\) \|\| mode === "work"\}/);
+        // These used to carry two different `preferLanesFromGrid` expressions and this test
+        // asserted both spellings, which made a strategy split a thing to keep in step rather
+        // than a thing that cannot happen. The hint is gone from the planner, so the only way
+        // to reintroduce the split is to reintroduce the hint.
+        for (const [name, src] of [["skeleton", skeleton], ["body", body]] as const) {
+            expect(src, name).toContain("<FocusPanelCardGrid");
+            expect(src, name).not.toContain("preferLanesFromGrid");
+        }
     });
 });
 
@@ -214,7 +217,7 @@ describe("2b · the published composition survives the whole path to the panel",
             expect(activeDoc, grain).toBe(publishedDoc);
 
             const inputs = deriveFocusPanelSummaryCompositionInputs(activeDoc);
-            const plan = planPublishedLayout(inputs.publishedLayout!, 1440, { preferLanesFromGrid: true });
+            const plan = planPublishedLayout(inputs.publishedLayout!, 1440);
 
             // Overlapping columns → the grid strategy, which honours colStart/colSpan exactly.
             expect(plan.strategy, grain).toBe("grid");
