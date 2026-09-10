@@ -34,6 +34,15 @@ export interface BuilderFieldSpec {
     options?: Array<{ value: string; label: string }>;
     /** Optional canonical binding; unbound fields are allowed. */
     field_source?: { entity_type: string; field_key: string; shared_value_key?: string };
+    /**
+     * For `file_ref` — the canonical document classification this upload satisfies.
+     *
+     * Without it every upload requirement is "a file". `participantUploadRequests` falls back to
+     * `enrollment_document`, which is honest but says only "a document this enrollment asked for" —
+     * so a family who attaches a physical cannot be told they still owe an immunization record. The
+     * schema has carried this field all along; only the builder had no way to set it.
+     */
+    document_type?: string;
     /** Inline authorization / explanatory content for text blocks. */
     content?: string;
     token_ids?: string[];
@@ -159,6 +168,13 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
             const fs = patch.field_source;
             if (fs && fs.entity_type && fs.field_key) (next as { field_source?: unknown }).field_source = { entity_type: fs.entity_type, field_key: fs.field_key, ...(fs.shared_value_key ? { shared_value_key: fs.shared_value_key } : {}) };
             else delete (next as { field_source?: unknown }).field_source;
+        }
+        if (patch.document_type !== undefined && next.type === "file_ref") {
+            const dt = patch.document_type.trim();
+            if (dt) (next as { document_type?: string }).document_type = dt;
+            // Cleared means unclassified, which the participant runtime reads as a plain
+            // enrollment document — a real choice, not an absent one.
+            else delete (next as { document_type?: string }).document_type;
         }
         if (patch.content !== undefined && next.type === "text_block") {
             (next as { content: string }).content = patch.content;

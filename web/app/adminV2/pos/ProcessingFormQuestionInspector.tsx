@@ -19,6 +19,7 @@ import {
     type ProcessingBuilderLibraryGroup,
 } from "@/lib/forms/processingFormBuilderLibrary";
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
+import { CLASSIFICATION_KEY_LABELS, OPERATOR_CLASSIFIED_KEYS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import {
     AlloyCheckbox,
     AlloyFieldLabel,
@@ -192,6 +193,18 @@ type Props = {
     fieldLibrary?: ProcessingLibraryGroupOffer[] | null;
 };
 
+/**
+ * The document classifications an operator may name, in their own words.
+ *
+ * Taken from the Processing operator vocabulary rather than restated: the same keys an operator can
+ * correct a case to are the ones a form may ask a family for, and two lists would drift the moment
+ * either changed. The blank entry is a real choice — "a document this enrolment asked for".
+ */
+const DOCUMENT_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+    { value: "", label: "Any supporting document" },
+    ...OPERATOR_CLASSIFIED_KEYS.map((k) => ({ value: k, label: CLASSIFICATION_KEY_LABELS[k] })),
+];
+
 export default function ProcessingFormQuestionInspector({
     field,
     schema,
@@ -269,6 +282,35 @@ export default function ProcessingFormQuestionInspector({
                     </div>
                 )}
             </AlloyInspectorGroup>
+
+            {field.type === "file_ref" ? (
+                <>
+                    <AlloyInspectorDivider />
+                    <AlloyInspectorGroup title="Document requested">
+                        <div data-inspector-document-type>
+                            <AlloyFieldLabel>What families attach here</AlloyFieldLabel>
+                            {editable ? (
+                                <AlloySelect
+                                    value={(field as { document_type?: string }).document_type ?? ""}
+                                    onChange={(document_type) => mutate((s) => updateField(s, field.id, { document_type }))}
+                                    options={DOCUMENT_TYPE_OPTIONS}
+                                    testId="form-builder-document-type"
+                                />
+                            ) : (
+                                <p className="text-[12px] font-medium text-alloy-midnight">
+                                    {DOCUMENT_TYPE_OPTIONS.find(
+                                        (o) => o.value === ((field as { document_type?: string }).document_type ?? ""),
+                                    )?.label ?? "—"}
+                                </p>
+                            )}
+                            <p className="mt-1.5 text-[10px] leading-snug text-alloy-midnight/45">
+                                Naming the document lets Alloy tell a family which paperwork they still owe. Left
+                                unspecified, anything attached here is filed as an enrolment document.
+                            </p>
+                        </div>
+                    </AlloyInspectorGroup>
+                </>
+            ) : null}
 
             {field.type !== "text_block" ? (
                 <>
