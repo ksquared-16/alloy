@@ -56,12 +56,26 @@ export type OperationalEnrollmentMockStore = {
     // Money received and its application to an obligation (Thread 8).
     payments: Row[];
     payment_allocations: Row[];
+    /*
+     * THE AUTHORITY TABLES, because the financial actions now read them.
+     *
+     * `resolveActorPermissionGrants` resolves `user_roles` -> `role_permission_grants` from the
+     * client the action already holds, and it DENIES on a read it cannot make — a caller with no
+     * membership is unidentified, not merely unprivileged. A store that cannot answer those two
+     * tables makes every financial action refuse for a reason the test never intended to assert,
+     * which is how a suite ends up proving that its own mock is incomplete. {@link financialAuthority}
+     * seeds them.
+     */
+    user_roles: Row[];
+    role_permission_grants: Row[];
 };
 
 export function createOperationalEnrollmentMockStore(
     seed?: Partial<OperationalEnrollmentMockStore>
 ): OperationalEnrollmentMockStore {
     return {
+        user_roles: seed?.user_roles ?? [],
+        role_permission_grants: seed?.role_permission_grants ?? [],
         child_enrollment_agreements: seed?.child_enrollment_agreements ?? [],
         child_placements: seed?.child_placements ?? [],
         schedule_patterns: seed?.schedule_patterns ?? [],
@@ -747,6 +761,34 @@ export function createOperationalEnrollmentMockSupabase(
 }
 
 export const ORG_ID = "org-1";
+
+/**
+ * Seed rows that give one actor a named set of capabilities in {@link ORG_ID}.
+ *
+ * One definition, because two would drift and the laxer one would be the one guarding a write. The
+ * role key is `admin` only so the membership row is realistic; nothing here reads it as a role
+ * literal — `resolveActorPermissionGrants` joins it to the grant rows and returns their union, so
+ * what the actor may do is exactly `permissions` and nothing else.
+ *
+ * Passing `[]` is a meaningful case and NOT the same as omitting the seed: an actor with a
+ * membership and no grants is a configured role that holds nothing, which is what a "view only" or
+ * "no Financials" persona looks like at this layer. Omitting it entirely models a caller the
+ * membership table cannot identify, which denies for a different reason.
+ */
+export function financialAuthority(
+    permissions: readonly string[],
+    actorUserId = "user-1",
+): { user_roles: Row[]; role_permission_grants: Row[] } {
+    return {
+        user_roles: [{ org_id: ORG_ID, user_id: actorUserId, role: "admin" }],
+        role_permission_grants: permissions.map((permission_key) => ({
+            org_id: ORG_ID,
+            role_key: "admin",
+            permission_key,
+            allowed: true,
+        })),
+    };
+}
 export const SITE_ID = "site-1";
 export const UNIT_ID = "unit-1";
 export const MEMBER_ID = "member-1";
