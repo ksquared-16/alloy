@@ -48,6 +48,7 @@ import {
   OPERATOR_PRIORITY,
   OPERATOR_STATE_LABEL,
   attentionCauseCopy,
+  laneActivityMs,
   laneOperatorPriority,
   laneOperatorPriorityRank,
   operatorStatusLine,
@@ -56,6 +57,7 @@ import {
   renderLaneHeaderV2,
   renderLaneList,
   railLaneRow,
+  shouldPollList,
   sortLanesForIndex,
   touchPrimaryInput,
 } from "../apps/vacilando/public/gateway-view.mjs";
@@ -717,6 +719,110 @@ test("H6. ordering is unchanged from the certified Batch 1C candidate", () => {
   ];
   assert.deepEqual(sortLanesForIndex(lanes, { nowMs: now }).map((l) => l.lane_id),
     ["work", "needs", "provact", "unrep", "idle", "complete", "failed", "off"]);
+});
+
+// ---------------------------------------------------------------------------
+// F — FRESHNESS: THE INDEX MUST NOT NEED NAVIGATION TO BECOME CURRENT
+// ---------------------------------------------------------------------------
+
+test("F1. every surface that shows lane state refreshes the index", () => {
+  // THE DEFECT. This predicate required routeName === "lanes", but `#/home`
+  // parses to "home" and HOME RENDERS THE LANE LIST from the same G.lanes the
+  // rail is painted from. So on Home the interval ran and returned immediately,
+  // fetchLanes() ran once per session behind !G.listReady, and fetchHome()
+  // fetches a different payload that never touches G.lanes. The index was
+  // frozen from first paint until the operator opened a lane.
+  for (const routeName of ["lanes", "home", "activity", "system", "settings"]) {
+    assert.equal(shouldPollList({ hidden: false, routeName }), true,
+      `${routeName} renders lane state and must refresh the index`);
+  }
+});
+
+test("F2. a document nobody can see still does not poll", () => {
+  // Passive refresh of an unobservable surface is the one case worth skipping,
+  // and it is the only reason this predicate says no.
+  for (const routeName of ["lanes", "home", "activity", "system", "settings"]) {
+    assert.equal(shouldPollList({ hidden: true, routeName }), false, routeName);
+  }
+});
+
+test("F3. becoming visible refreshes immediately rather than waiting a tick", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url), "utf8");
+  assert.match(src, /addEventListener\("visibilitychange", refreshLaneIndexOnVisible\)/);
+  const fn = src.slice(src.indexOf("function refreshLaneIndexOnVisible"), src.indexOf("\n}", src.indexOf("function refreshLaneIndexOnVisible")));
+  assert.match(fn, /fetchLanes\(\)/, "it re-reads the authoritative index");
+  assert.match(fn, /shouldPollList/, "through the same predicate, so there is one rule");
+  assert.match(fn, /G\.listInflight/, "and it cannot race the interval");
+});
+
+test("F4. the fix is invalidation, not a faster or heavier poll", async () => {
+  const { readFileSync } = await import("node:fs");
+  const view = readFileSync(new URL("../apps/vacilando/public/gateway-view.mjs", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url), "utf8");
+  // The interval is untouched.
+  assert.match(view, /export const LIST_POLL_MS = 15000;/);
+  // And none of the forbidden shortcuts crept in.
+  assert.ok(!/location\.reload\(/.test(src), "no full page reload");
+  assert.ok(!/last_activity_ms\s*=|last_active_at\s*=/.test(src), "no client-side recency mutation");
+});
+
+test("F5. opening or viewing a lane is NOT activity", () => {
+  // The ordering input must be the authoritative event, never navigation. Two
+  // identical lanes, one of them "opened": the order must not move.
+  const now = Date.now();
+  const a = laneWith({ lane_id: "a", label: "a", last_activity_ms: now - 60e3 });
+  const b = laneWith({ lane_id: "b", label: "b", last_activity_ms: now - 30e3 });
+  const before = sortLanesForIndex([a, b], { nowMs: now }).map((l) => l.lane_id);
+  // renderLaneList takes the selected lane id — "this one is open right now".
+  const openedOrder = [...renderLaneList([a, b], "a", {}).matchAll(/data-gw-lane="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(openedOrder, before, "selecting a lane must not reorder the index");
+  assert.deepEqual(sortLanesForIndex([a, b], { nowMs: now }).map((l) => l.lane_id), before,
+    "and it leaves no trace behind it");
+});
+
+test("F6. a finished lane sorts by its completion, with no navigation involved", () => {
+  // The acceptance scenario, as a pure function of the authoritative record.
+  const now = Date.now();
+  const working = (id, ms) => laneWith({ lane_id: id, label: id, execution_run: { state: "EXECUTING", updated_at: at(ms) }, provider_activity: { activity: "working" } });
+  const A = working("A", now - 120e3);
+  let B = working("B", now - 90e3);
+  const C = laneWith({ lane_id: "C", label: "C", last_activity_ms: now - 3600e3 });
+  // Both are Working, so between them it is recency, and B reported more
+  // recently. Stated exactly rather than assumed: getting this wrong is how a
+  // fixture ends up asserting the behaviour it meant to detect.
+  assert.deepEqual(sortLanesForIndex([A, B, C], { nowMs: now }).map((l) => l.lane_id), ["B", "A", "C"]);
+
+  // B finishes: the run closes and files its report. Nothing else happens — no
+  // click, no navigation, no synthetic timestamp.
+  B = laneWith({
+    lane_id: "B", label: "B",
+    previous_run: { state: "COMPLETE", completed_at: at(now), completion_report: { report_id: "rep_B" } },
+    provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" },
+  });
+  const after = sortLanesForIndex([A, B, C], { nowMs: now }).map((l) => l.lane_id);
+  assert.deepEqual(after, ["A", "B", "C"], "A stays working, B heads its group, C stays below");
+  assert.equal(canonicalLaneWorkState(A, { nowMs: now }).group, "active", "A is still Working");
+  assert.equal(laneOperatorStatus(B, canonicalLaneWorkState(B, { nowMs: now })).label, "Ready",
+    "and B's displayed status updated with it");
+  assert.ok(laneActivityMs(B) > laneActivityMs(C), "recency came from the completion, not from a visit");
+});
+
+test("F7. a failure transition moves the lane the same way", () => {
+  const now = Date.now();
+  const failed = laneWith({ lane_id: "F", label: "F", execution_run: { state: "FAILED", updated_at: at(now) } });
+  const older = laneWith({ lane_id: "O", label: "O", last_activity_ms: now - 3600e3 });
+  assert.equal(laneOperatorStatus(failed, canonicalLaneWorkState(failed, { nowMs: now })).label, "Failed");
+  assert.ok(laneActivityMs(failed) > laneActivityMs(older));
+});
+
+test("F8. passive observation still does not count as activity", () => {
+  // observed_at is stamped on every lane on every poll. Now that the index
+  // polls on more surfaces, this matters more, not less.
+  const now = Date.now();
+  const polled = laneWith({ lane_id: "p", label: "p", observed_at: at(now), last_activity_ms: now - 3600e3 });
+  const real = laneWith({ lane_id: "r", label: "r", observed_at: at(now - 3600e3), last_activity_ms: now - 60e3 });
+  assert.deepEqual(sortLanesForIndex([polled, real], { nowMs: now }).map((l) => l.lane_id), ["r", "p"]);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

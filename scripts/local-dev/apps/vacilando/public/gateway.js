@@ -1780,6 +1780,31 @@ function paintAttentionBadge() {
   badge.setAttribute("aria-hidden", n === 0 ? "true" : "false");
 }
 
+/**
+ * A HIDDEN TAB DOES NOT POLL, SO COMING BACK MUST NOT WAIT FOR THE NEXT TICK.
+ *
+ * `shouldPollList` correctly refuses to refresh a document nobody can see. The
+ * consequence is that everything which happened while the tab was in the
+ * background is still unrendered at the moment the operator looks at it, for up
+ * to a full interval — the one moment they are most likely to be checking
+ * whether something finished.
+ *
+ * So becoming visible is itself the trigger. This is not a faster poll: the
+ * interval is untouched, and this fires once, on a transition the browser
+ * reports, when a surface that shows lane state becomes observable again.
+ */
+function refreshLaneIndexOnVisible() {
+  if (document.hidden) return;
+  if (!View.shouldPollList({ hidden: false, routeName: routeName() })) return;
+  if (G.listInflight) return;
+  G.listInflight = true;
+  fetchLanes()
+    .then(() => { paintRail(); paint(); })
+    .catch(() => { /* the interval remains the backstop */ })
+    .finally(() => { G.listInflight = false; });
+}
+document.addEventListener("visibilitychange", refreshLaneIndexOnVisible);
+
 function startListPoll() {
   stopListPoll();
   G.pollList = setInterval(async () => {
