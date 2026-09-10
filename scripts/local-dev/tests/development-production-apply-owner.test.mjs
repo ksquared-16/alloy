@@ -16,6 +16,7 @@ import { dirname, resolve } from "node:path";
 import * as P from "../lib/vacilando/trusted-host-production-migrate.mjs";
 import { validateMigrationInputs } from "../lib/vacilando/trusted-host-migrate.mjs";
 import { evaluateMergeReadiness } from "../lib/vacilando/trusted-host-merge.mjs";
+import * as M from "../lib/vacilando/migration-parity.mjs";
 import { getActionDefinition, loadedActionKeys } from "../lib/vacilando/trusted-host-action-registry.mjs";
 import { OPERATOR_OWNED_ACTION_KEYS, evaluateDirectorAuthority } from "../lib/vacilando/director-authority.mjs";
 
@@ -274,4 +275,199 @@ test("DIRECTOR EXPERIENCE — the block names the missing files, not a count", (
   assert.match(said.headline, /20260909240000_financials_read_for_director_roles\.sql/);
   assert.equal(said.action_required, "database.apply_promoted_migration");
   assert.equal(P.describeMissingMigrations({ missing: [] }), null);
+});
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * THE PRE-MERGE CANDIDATE PATH.
+ *
+ * The promotion state machine had an unsatisfiable cycle: the merge gate
+ * refuses a migration-bearing candidate until hosted carries its schema, and
+ * this action refused to give hosted that schema until the candidate merged.
+ * These tests pin the repair AND the six ways it must still refuse — because a
+ * path that unblocks a promotion is exactly the path somebody will reach for
+ * when they want to unblock something else.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * ANY sanctioned agent candidate that actually introduces migrations.
+ *
+ * Pinning one branch — and one branch's migration filenames — made this suite
+ * depend on a feature branch nobody promised to keep, and on that branch still
+ * carrying the same schema. What the pre-merge path needs is generic: a
+ * published commit staging does not have, which introduces at least one
+ * migration. The suite finds one and derives the rest, so it keeps testing the
+ * control after Thread 5 is long merged. If the repository has no such branch,
+ * these say so rather than passing quietly.
+ */
+function findMigrationBearingCandidate() {
+  const listed = git(["for-each-ref", "--format=%(objectname)", "refs/remotes/origin/agent/**"]);
+  for (const sha of listed.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    try {
+      execFileSync("git", ["merge-base", "--is-ancestor", sha, PROMOTED_SHA], { cwd: REPO });
+      continue; // already on staging — not the shape under test
+    } catch { /* not an ancestor, which is what we want */ }
+    const delta = P.candidateMigrationDelta(sha, { cwd: REPO });
+    if (!delta || !delta.length) continue;
+    const names = git(["ls-tree", "-r", "--name-only", sha, "supabase/migrations"]).split("\n");
+    const migrations = delta
+      .map((version) => ({ version, path: names.find((n) => n.includes(`/${version}_`)) }))
+      .filter((m) => m.path);
+    if (migrations.length) return { sha, migrations };
+  }
+  return null;
+}
+const CANDIDATE = findMigrationBearingCandidate();
+const CANDIDATE_SHA = CANDIDATE?.sha ?? null;
+const CANDIDATE_MIGRATIONS = CANDIDATE?.migrations ?? [];
+
+/** The record governance writes when the parity gate refuses a merge. */
+const refusedMerge = (over = {}) => ({
+  action_key: "repository.merge_pull_request",
+  request_id: "gar_test",
+  policy_decision: "operator_approved",
+  status: "failed",
+  failure_code: "execution_failed",
+  failure_reason: "hosted_migration_behind",
+  updated_at: new Date().toISOString(),
+  inputs: {
+    repository: "ksquared-16/alloy",
+    pullRequestNumber: 782,
+    expectedHeadSha: CANDIDATE_SHA,
+    targetBranch: "staging",
+  },
+  ...over,
+});
+
+const applyCandidate = (over = {}, opts = {}) =>
+  P.validateProductionMigrationInputs({
+    target: "alloy_deployed_primary",
+    repository: "ksquared-16/alloy",
+    expectedSha: CANDIDATE_SHA,
+    migrations: CANDIDATE_MIGRATIONS,
+    ...over,
+  }, { promotionRequests: [refusedMerge()], ...opts });
+
+const candidateTest = CANDIDATE_SHA
+  ? test
+  : (name) => test(name, { skip: "no unmerged sanctioned agent branch introduces a migration in this checkout" }, () => {});
+
+candidateTest("R2 — an exact governed pre-merge candidate may apply its own migrations", () => {
+  const r = applyCandidate();
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(r.normalized.sourceRelation, "governed_promotion_candidate");
+  assert.equal(r.normalized.candidate.pullRequestNumber, 782);
+  assert.equal(r.normalized.candidate.headSha, CANDIDATE_SHA.toLowerCase());
+});
+
+candidateTest("R3 — an arbitrary sanctioned agent SHA with no governed promotion is refused", () => {
+  // Branch membership is not authority. This is the rule the repair must NOT be.
+  const r = applyCandidate({}, { promotionRequests: [] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "no_governed_promotion_candidate");
+});
+
+candidateTest("R4 — authority does not follow the branch when it advances", () => {
+  /*
+   * Governance approved head A. The branch moves to B. B is on the same
+   * sanctioned ref and is not authorized by anything, and must be refused —
+   * otherwise "approve this candidate" would silently mean "approve whatever
+   * this branch becomes".
+   */
+  const authorizedElsewhere = refusedMerge({ inputs: { ...refusedMerge().inputs, expectedHeadSha: "b".repeat(40) } });
+  const r = applyCandidate({}, { promotionRequests: [authorizedElsewhere] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "no_governed_promotion_candidate");
+});
+
+candidateTest("R5 — a merge record for a different PR head does not authorize this SHA", () => {
+  const otherPr = refusedMerge({
+    inputs: { repository: "ksquared-16/alloy", pullRequestNumber: 999, expectedHeadSha: "c".repeat(40) },
+  });
+  const r = applyCandidate({}, { promotionRequests: [otherPr] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "no_governed_promotion_candidate");
+});
+
+candidateTest("R5b — a merge that was never approved authorizes nothing", () => {
+  const unapproved = refusedMerge({ policy_decision: null });
+  const r = applyCandidate({}, { promotionRequests: [unapproved] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "candidate_authority_insufficient");
+});
+
+candidateTest("R5c — a merge refused for some OTHER reason establishes no hosted gap", () => {
+  const differentFailure = refusedMerge({ failure_reason: "missing_repository", failure_code: "missing_repository" });
+  const r = applyCandidate({}, { promotionRequests: [differentFailure] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "candidate_authority_insufficient");
+});
+
+candidateTest("R5d — a stale refusal is not standing authority", () => {
+  const old = refusedMerge({ updated_at: new Date(Date.now() - 40 * 3600_000).toISOString() });
+  const r = applyCandidate({}, { promotionRequests: [old] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "candidate_authority_stale");
+});
+
+candidateTest("R5e — another repository's candidate does not authorize this one", () => {
+  const foreign = refusedMerge({ inputs: { ...refusedMerge().inputs, repository: "someone-else/app" } });
+  const r = applyCandidate({}, { promotionRequests: [foreign] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "no_governed_promotion_candidate");
+});
+
+candidateTest("R6 — a pre-merge apply may not reach outside the candidate's own delta", () => {
+  /*
+   * `20260909240000` exists at the candidate SHA — it is already promoted — so
+   * the artifact check alone would admit it. The delta bound is what stops this
+   * path being used to replay migrations the promoted floor already owns.
+   */
+  const r = applyCandidate({
+    // Ordered correctly on purpose: an out-of-order list is refused by the sort
+    // check first, which would let this test pass without the delta bound
+    // existing at all.
+    migrations: [
+      { version: "20260909240000", path: HEAD_MIGRATION },
+      ...CANDIDATE_MIGRATIONS,
+    ],
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "migration_outside_candidate_delta");
+});
+
+candidateTest("R6b — a short SHA is not an identity, even when it prefixes the candidate", () => {
+  const r = applyCandidate({ expectedSha: CANDIDATE_SHA.slice(0, 12) });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "candidate_sha_not_exact");
+});
+
+test("R7 — once the candidate's migrations are applied, the merge gate lets the promotion through", () => {
+  /*
+   * The two controls, related rather than mocked apart. Before: hosted is behind
+   * and the merge is correctly blocked. After: the same gate, the same required
+   * head, and a hosted head that now satisfies it.
+   */
+  const requiredHead = "20260910130000";
+  const before = M.migrationMergeGate({
+    requiredHead, requiredCount: 395, provenHead: "20260909240000", provenAtMs: Date.now(),
+  });
+  assert.equal(before.status, "blocked");
+  assert.equal(before.promote, false);
+
+  const after = M.migrationMergeGate({
+    requiredHead, requiredCount: 395, provenHead: requiredHead, provenAtMs: Date.now(),
+  });
+  assert.equal(after.status, "ok");
+  assert.equal(after.promote, true);
+});
+
+test("R7b — the merge gate is unchanged: it still measures against the candidate head", () => {
+  // Explicitly rejected alternative: comparing hosted against staging instead of
+  // the candidate would let code merge whose schema is not deployed.
+  const gate = M.migrationMergeGate({
+    requiredHead: "20260910130000", requiredCount: 395,
+    provenHead: "20260909240000", provenAtMs: Date.now(),
+  });
+  assert.equal(gate.status, "blocked");
+  assert.match(gate.reason, /behind the required head 20260910130000/);
 });

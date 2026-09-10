@@ -239,19 +239,67 @@ export function assertShaReachableFromStaging(sha, {
  * symbolic HEAD, never arbitrary origin/*, and never the working copy's own
  * HEAD merely because the object is present.
  */
+/**
+ * Which sanctioned remote ref, if any, carries this commit.
+ *
+ * Extracted so the certification fallback and the production promotion-candidate
+ * path answer this question with ONE definition. Two copies of "is this ref
+ * sanctioned" is how one of them quietly grows a glob the other does not have.
+ *
+ * Returns `{ refname, relation }` or null. Never throws.
+ */
+export function sanctionedRefCarrying(fullSha, { git = defaultGit, cwd } = {}) {
+  const listed = git(
+    ["for-each-ref", "--format=%(refname) %(objectname)", ...CERTIFICATION_SANCTIONED_REF_GLOBS],
+    { cwd },
+  );
+  if (!gitOk(listed)) return null;
+
+  for (const line of String(listed.stdout || "").split("\n")) {
+    const [refname, tip] = line.trim().split(/\s+/);
+    if (!refname || !tip) continue;
+    // Belt and braces: the globs already scope to remote-tracking refs, but a
+    // pattern is a filter and this is an assertion.
+    if (!refname.startsWith("refs/remotes/")) continue;
+    if (refname.endsWith("/HEAD")) continue;
+    if (shaEquals(fullSha, tip)) return { refname, relation: "equals_sanctioned_ref" };
+    if (gitOk(git(["merge-base", "--is-ancestor", fullSha, tip], { cwd }))) {
+      return { refname, relation: "ancestor_of_sanctioned_ref" };
+    }
+  }
+  return null;
+}
+
 export function assertShaReachableForEnvironment(sha, {
   environment = "staging",
   git = defaultGit,
   cwd,
   stagingRef = "origin/staging",
   fetchIfMissing = true,
+  /**
+   * OPTIONAL, and never a branch rule.
+   *
+   * A caller may supply a proof that this exact SHA is a governed promotion
+   * candidate awaiting hosted migration parity. It exists because the promotion
+   * state machine had an unsatisfiable cycle: the merge gate refuses to promote
+   * a migration-bearing candidate until hosted carries its schema, and this
+   * function refused to let production receive that schema until the candidate
+   * had merged. Neither control was wrong; together they could not both be
+   * satisfied, and Thread 5 was the first migration-bearing promotion to
+   * exercise the whole loop.
+   *
+   * The proof is asked for an EXACT commit and must establish candidate
+   * identity itself. Branch membership is used only to show the commit is
+   * published on a sanctioned ref — it is never, on its own, production
+   * authority.
+   */
+  candidateProof = null,
 } = {}) {
   const primary = assertShaReachableFromStaging(sha, { git, cwd, stagingRef, fetchIfMissing });
   if (primary.ok) return primary;
 
-  const env = String(environment || "").trim().toLowerCase();
-  if (!CERTIFICATION_ENVIRONMENTS.includes(env)) return primary;
-  // A SHA that is not a commit at all is not made into one by the environment.
+  // A SHA that is not a commit at all is not made into one by any of the paths
+  // below.
   if (primary.code === "source_sha_unavailable") return primary;
 
   if (fetchIfMissing) {
@@ -261,36 +309,53 @@ export function assertShaReachableForEnvironment(sha, {
   if (!gitOk(rev)) return primary;
   const fullSha = String(rev.stdout || "").trim();
 
-  const listed = git(
-    ["for-each-ref", "--format=%(refname) %(objectname)", ...CERTIFICATION_SANCTIONED_REF_GLOBS],
-    { cwd },
-  );
-  if (!gitOk(listed)) return primary;
+  const env = String(environment || "").trim().toLowerCase();
+  const carried = sanctionedRefCarrying(fullSha, { git, cwd });
 
-  for (const line of String(listed.stdout || "").split("\n")) {
-    const [refname, tip] = line.trim().split(/\s+/);
-    if (!refname || !tip) continue;
-    // Belt and braces: the globs already scope to remote-tracking refs, but a
-    // pattern is a filter and this is an assertion.
-    if (!refname.startsWith("refs/remotes/")) continue;
-    if (refname.endsWith("/HEAD")) continue;
-    if (shaEquals(fullSha, tip)) {
+  if (CERTIFICATION_ENVIRONMENTS.includes(env)) {
+    if (carried) {
       return {
         ok: true, fullSha, stagingSha: primary.stagingSha ?? null,
-        relation: "equals_sanctioned_certification_ref", sanctionedRef: refname, environment: env,
+        relation: carried.relation === "equals_sanctioned_ref"
+          ? "equals_sanctioned_certification_ref"
+          : "ancestor_of_sanctioned_certification_ref",
+        sanctionedRef: carried.refname, environment: env,
       };
     }
-    if (gitOk(git(["merge-base", "--is-ancestor", fullSha, tip], { cwd }))) {
-      return {
-        ok: true, fullSha, stagingSha: primary.stagingSha ?? null,
-        relation: "ancestor_of_sanctioned_certification_ref", sanctionedRef: refname, environment: env,
-      };
-    }
+    return {
+      ...primary,
+      detail: `${primary.detail}; and it is not reachable from any sanctioned certification ref (${CERTIFICATION_SANCTIONED_REF_GLOBS.join(", ")})`,
+    };
   }
-  return {
-    ...primary,
-    detail: `${primary.detail}; and it is not reachable from any sanctioned certification ref (${CERTIFICATION_SANCTIONED_REF_GLOBS.join(", ")})`,
-  };
+
+  if (candidateProof) {
+    // The commit must be PUBLISHED on a sanctioned ref before its identity is
+    // even considered: a SHA that exists only in somebody's checkout proves
+    // nothing about what anyone else can see.
+    if (!carried) {
+      return {
+        ...primary,
+        detail: `${primary.detail}; and it is not published on any sanctioned ref (${CERTIFICATION_SANCTIONED_REF_GLOBS.join(", ")})`,
+      };
+    }
+    const proof = candidateProof({ fullSha, sanctionedRef: carried.refname, environment: env });
+    if (proof && proof.ok === true) {
+      return {
+        ok: true, fullSha, stagingSha: primary.stagingSha ?? null,
+        relation: "governed_promotion_candidate",
+        sanctionedRef: carried.refname,
+        candidate: proof.candidate ?? null,
+        environment: env,
+      };
+    }
+    return {
+      ...primary,
+      code: proof?.code || primary.code,
+      detail: proof?.detail || `${primary.detail}; and it is not a governed promotion candidate awaiting hosted migration parity`,
+    };
+  }
+
+  return primary;
 }
 
 export function parseMigrationFilename(pathRel) {
@@ -340,6 +405,8 @@ export function readMigrationContent({
   gitCwd = null,
   currentStagingSha = null,
   fetchIfMissing = true,
+  /** True when the source is a governed pre-merge promotion candidate. */
+  preMergeCandidate = false,
 } = {}) {
   const inside = assertCanonicalMigrationPath(relative);
   if (!inside.ok) return inside;
@@ -374,8 +441,15 @@ export function readMigrationContent({
        *
        * A NEW migration is not a CHANGED one. What must still fail everywhere
        * is the case below: present on staging and different.
+       *
+       * A GOVERNED PRE-MERGE PROMOTION CANDIDATE is the same situation wearing
+       * production's coat, and it arrived by the same route: the candidate's
+       * migrations are absent from staging precisely because the candidate has
+       * not merged, which is the state this whole path exists to serve. The
+       * exemption is for ABSENCE only — a file present on staging and different
+       * is still drift, and still refused, on every environment.
        */
-      if (!CERTIFICATION_ENVIRONMENTS.includes(envName(environment))) {
+      if (!CERTIFICATION_ENVIRONMENTS.includes(envName(environment)) && !preMergeCandidate) {
         return {
           ok: false,
           code: "migration_changed_since_approval",
@@ -413,6 +487,7 @@ export function resolveMigrationEntry(item = {}, {
   gitCwd = null,
   currentStagingSha = null,
   fetchIfMissing = true,
+  preMergeCandidate = false,
 } = {}) {
   const version = String(item.version || item.expected_version || "").trim();
   let pathRel = String(item.path || item.migration_path || "").trim().replace(/\\/g, "/");
@@ -451,6 +526,7 @@ export function resolveMigrationEntry(item = {}, {
     gitCwd,
     currentStagingSha,
     fetchIfMissing,
+    preMergeCandidate,
   });
   if (!content.ok) return content;
   if (item.fileSha || item.file_sha || item.expectedHash || item.expected_hash) {
@@ -548,6 +624,8 @@ export function validateMigrationRequestCore(inputs = {}, {
   git = defaultGit,
   fetchIfMissing = true,
   stagingRef = "origin/staging",
+  /** Production-only. See assertShaReachableForEnvironment. */
+  candidateProof = null
 } = {}) {
   const expectedSha = String(inputs.expected_sha || inputs.expectedSha || "").trim().toLowerCase();
   if (!/^[a-f0-9]{7,40}$/.test(expectedSha)) {
@@ -588,6 +666,7 @@ export function validateMigrationRequestCore(inputs = {}, {
     cwd: store.cwd,
     stagingRef,
     fetchIfMissing,
+    candidateProof,
   });
   if (!reach.ok) return reach;
   const migrations = normalizeMigrationList(inputs, {
@@ -598,6 +677,7 @@ export function validateMigrationRequestCore(inputs = {}, {
     gitCwd: store.cwd,
     currentStagingSha: reach.stagingSha,
     fetchIfMissing,
+    preMergeCandidate: reach.relation === "governed_promotion_candidate",
   });
   if (!migrations.ok) return migrations;
   return {
