@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-09
+supersedes: []
+---
+
 # Database target vocabulary
 
 Written because this exact ambiguity has been reopened more than once. A target
