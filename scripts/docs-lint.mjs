@@ -37,6 +37,25 @@ const GOVERNED_GLOBS = [
   /^docs\/product\//,
 ];
 
+// `docs/platform/planning/` is a named, dated exception to placement rule 3.
+//
+// It holds 242 files of planning, discovery and execution tracking inside the canonical
+// tree. A September 2026 documentation audit examined relocating it and decided against:
+// a live acceptance gate keys on the literal prefix
+// (`ALLOWED_CHANGE_PREFIX` in scripts/local-dev/lib/vacilando/acceptance.mjs), a test reads
+// one of its documents at runtime, two npm scripts write evidence JSON into it, and moving
+// the tree would silence ~363 violations by dropping the files out of GOVERNED_GLOBS rather
+// than resolving them. See docs/audits/active/documentation-truth-audit-2026-09/ (D1).
+//
+// The exception is scoped, not blanket: these files are still governed for frontmatter, and
+// two rules below exist *because* of the exception — a file here may not claim canonical
+// status, and canonical docs elsewhere may not depend on this tree.
+const PLANNING_EXCEPTION_PREFIX = "docs/platform/planning/";
+
+export function isPlanningException(relPath) {
+  return relPath.startsWith(PLANNING_EXCEPTION_PREFIX);
+}
+
 const ACTIVE_CANONICAL_PREFIXES = [
   "docs/README.md",
   "docs/platform/",
@@ -357,11 +376,43 @@ export function lintDocumentation(options = {}) {
       });
     }
 
-    if (relPath.startsWith("docs/platform/") && relPath.endsWith(".md") && !indexedPaths.has(relPath)) {
+    if (
+      relPath.startsWith("docs/platform/") &&
+      relPath.endsWith(".md") &&
+      !isPlanningException(relPath) &&
+      !indexedPaths.has(relPath)
+    ) {
       violations.push({
         type: "orphan-canonical",
         file: relPath,
         message: "Canonical platform doc not referenced from docs/README.md",
+        blocking: false,
+      });
+    }
+
+    // Placement rule 3, finally implemented: execution artifacts do not live in the
+    // canonical tree. The planning exception is carved out explicitly above, so this fires
+    // on everything else — and prevents a second such tree accumulating unnoticed.
+    if (
+      relPath.startsWith("docs/platform/") &&
+      !isPlanningException(relPath) &&
+      fm.data?.status === "sprint"
+    ) {
+      violations.push({
+        type: "sprint-artifact-in-platform",
+        file: relPath,
+        message: "Execution artifact (status: sprint) inside docs/platform/ — placement rule 3",
+        blocking: false,
+      });
+    }
+
+    // Inside the exception, claiming canonical status contradicts the tree's own README
+    // and is how planning material gets mistaken for doctrine.
+    if (isPlanningException(relPath) && fm.data?.status === "canonical") {
+      violations.push({
+        type: "canonical-in-planning",
+        file: relPath,
+        message: "Planning document declares status: canonical — the planning tree is not doctrine",
         blocking: false,
       });
     }
@@ -398,6 +449,20 @@ export function lintDocumentation(options = {}) {
           blocking: isCanonicalLinkScope(relPath),
         });
       }
+      // Governance rule 5, applied to the planning exception: canonical doctrine may not
+      // delegate current truth into a tree whose own README says not to cite it.
+      if (
+        fm.data?.status === "canonical" &&
+        !isPlanningException(relPath) &&
+        (link.target.includes("platform/planning/") || resolved.resolved?.startsWith("docs/platform/planning/"))
+      ) {
+        violations.push({
+          type: "canonical-planning-dependency",
+          file: relPath,
+          message: `Canonical doc depends on the planning exception: '${link.target}'`,
+          blocking: false,
+        });
+      }
       if (
         relPath.startsWith("docs/platform/") &&
         (link.target.includes("sprints/") || resolved.resolved?.includes("/sprints/"))
@@ -414,7 +479,9 @@ export function lintDocumentation(options = {}) {
 
   for (const [base, paths] of basenameIndex.entries()) {
     if (paths.length <= 1 || base === "README.md") continue;
-    const activePaths = paths.filter((p) => ACTIVE_CANONICAL_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix)));
+    const activePaths = paths.filter(
+      (p) => !isPlanningException(p) && ACTIVE_CANONICAL_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix)),
+    );
     if (activePaths.length < 2) continue;
     violations.push({
       type: "duplicate-basename",

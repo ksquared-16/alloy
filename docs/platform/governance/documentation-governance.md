@@ -76,6 +76,41 @@ document body. `generated` is a property of the **document**, not of its directo
 7. **Doctrine-changing product PRs must update the owning canonical document** in the same PR.
 8. **Sprint closeout documents do not become doctrine by declaration alone** — summarize into `release-history.md` and archive sprint detail.
 
+### The `docs/platform/planning/` exception
+
+Placement rule 3 has one **named, dated exception**: `docs/platform/planning/` (242 files).
+
+A September 2026 audit examined relocating it and decided against, on evidence:
+
+- A live acceptance gate keys on the literal prefix — `ALLOWED_CHANGE_PREFIX` in
+  `scripts/local-dev/lib/vacilando/acceptance.mjs`.
+- `web/tests/enrollment/assignmentCommitmentAuthority.test.ts` reads a document from the tree
+  **at runtime**, and two `web/package.json` scripts write evidence JSON into it.
+- Roughly 46 hardcoded code paths and 186 depth-sensitive relative links would break.
+- About 38 of the files are genuine doctrine. `docs/sprints/` is not a legal home for doctrine —
+  this document says sprint material is *never* primary current truth — so a wholesale move would
+  strand them worse than leaving them.
+- `GOVERNED_GLOBS` does not cover `docs/sprints/**`, so moving the tree would **hide** its debt
+  rather than resolve it.
+
+The exception is scoped, not blanket. Files there stay governed for frontmatter, and three rules
+exist **because** of the exception:
+
+| Rule | Meaning |
+|------|---------|
+| `canonical-in-planning` | A document inside the exception may not declare `status: canonical`. The tree's own README says it is not doctrine; a canonical status line inside it contradicts that and is how planning material gets mistaken for truth. |
+| `canonical-planning-dependency` | A `status: canonical` document elsewhere may not take a planning document as its source of truth (governance rule 5, applied to this tree). |
+| `sprint-artifact-in-platform` | Placement rule 3 itself, now enforced everywhere **outside** the exception — so a second such tree cannot accumulate unnoticed. |
+
+All three are report-only. They are deliberately visible rather than suppressed: the point of the
+exception is that it is legible, not that it is silent.
+
+**Known limit:** these rules read markdown links. A path written in backticks is invisible to
+them, which is how a canonical document came to delegate `commitment_kind` truth into the tree
+without the linter noticing.
+
+---
+
 ### Governed paths
 
 These are the paths `scripts/docs-lint.mjs` enforces frontmatter on

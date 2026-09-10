@@ -65,18 +65,18 @@ planning tree. 242 of the 381 are that tree.
 | Platform introduction | `foundation/alloy-platform-handbook.md` | Current; no chapter for Attendance / Financials / Employment |
 | Capability register | `foundation/platform-capabilities.md` | **Corrected** — Trust, Comms V2, Payments, Financials, Attendance, Employment |
 | Release milestones | `foundation/release-history.md` | **Corrected** — 2026 H2 section added |
-| Roadmap | `foundation/product-roadmap.md` | **Stale, not corrected** — "Future" still lists Attendance/Billing/Payments/Scheduling |
-| Architecture | `foundation/architecture.md` | Stale (routes, runtime register); link depth fixed |
-| System overview | `foundation/system-overview.md` | Stale (`/admin` config plane, "record drawer") |
+| Roadmap | `foundation/product-roadmap.md` | **Corrected** — shipped lanes separated from genuinely future ones, each with evidence |
+| Architecture | `foundation/architecture.md` | Runtime register reconciled (the two "nines" disambiguated; kernel stated as substrate, not a tenth runtime). Route staleness remains — residual debt |
+| System overview | `foundation/system-overview.md` | **Corrected** — configuration plane is `/organization/*`; `/admin` and `/settings` are redirects. Operator row no longer says "record drawer" |
 | Decision register | `foundation/platform-decisions.md` | Stale — last entry 2026-08; ≥6 decisions unregistered |
 | Runtime register | `foundation/architecture.md` (9 runtimes) · `platform-manifesto.md` and `freeze-july-2026.md` (12 = the 9 plus 3 contained sub-runtimes) · `platform/runtime/alloy-runtime-kernel.md` (K1–K4 kernel, a different altitude) | **Mostly reconciled** in the continuation pass. The audit's original "9 layers" was a mis-citation: the nine *layers* are `os-runtime-map.md`, a different list from the nine *runtimes*. What remains is a real ownership question — D2 |
 | Interaction spine | `operator/canonical-interaction-model.md` + grammar + story | Current; two competing *synthesis* docs |
-| Card primitive | `operator/universal-card-system.md` | **Collision** — density ladder stated 3 ways; only this one matches code |
+| Card primitive | `operator/universal-card-system.md` | **Resolved.** Not a collision — one chain at seven altitudes in which every candidate disclaims the primitive. `operational-grammar.md` and `card-language.md` had put behaviour values (*Focused*, *Immersive*) on the sizing axis; corrected to point at the owner. Colour Language de-duplicated to System 5 |
 | Workspace / navigation | `core/navigation-and-workspace-doctrine.md` (V3) | Stale on the `/workspace` landing; competes with `operator/operational-workspace-shell.md` |
 | Queue | `operator/queue-system.md` | Current with drift |
 | Focus Panel / drawer | `operator/focus-panel-architecture-vocabulary.md`, `operator/drawer-system.md` | Current; `docs/system/` drawer docs **bannered and corrected** |
-| Work Items | **missing canonical owner** | Split across queue-system, workspace-shell, glossary |
-| Scheduling / staffing | **missing canonical owner** | Employment, presence, assignment all shipped |
+| Work Items | `operator/queue-system.md` §Work Items queue | **Resolved.** queue-system.md was already accurate (Folders · Views · Sources) and is now named as the owner; `operational-workspace-shell.md`'s stale process-rail description corrected. No `work_item*` table exists — it is a presentation layer over `operational_tasks` plus two virtual projections |
+| Scheduling / staffing | **MISSING CANONICAL OWNER — recorded gap** | Employment foundation, staff assignment eligibility and staff presence facts shipped Aug 2026; `web/app/adminV2/scheduling/` exists. No module doc owns the domain. Writing one would require defining the domain model, which is product work, not documentation maintenance. Recorded in the roadmap and here; **D6** |
 | Identity / roles / access | `governance/roles-and-permissions.md` | **Corrected** to Membership → Role → Capability → Scope; still an 89-line stub over ~30 workstreams |
 | Attendance | `modules/attendance-system.md` | Current |
 | Billing / financials | `modules/billing-financials-platform.md` | **Header reconciled to its own body** |

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-11
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -190,8 +190,19 @@ already holds it.
 | **Start Date** | Earliest qualifying committed `schedule_assignments.start_date` for the child | Fallback: enrollment agreement `start_date` when no OA row exists. Later supersedes do not rewrite the original Start Date. |
 
 Requested care (`requested_days_per_week`, preferred `weekdays`) remains proposal intent.
-Proposed vs committed schedule assignments use `commitment_kind` on `schedule_assignments`
-(see `docs/platform/planning/assignment-proposed-commitment-authority.md`).
+Proposed vs committed schedule assignments use `commitment_kind` on `schedule_assignments`:
+
+| Value | Meaning |
+|---|---|
+| `commitment_kind = proposed` | Planned / proposed assignment |
+| `commitment_kind = committed` | Active / upcoming assignment, agreement-backed |
+
+`commitment_kind` is **not** a parallel lifecycle or status vocabulary — it says whether an
+assignment is intended or agreed, nothing more. Staff subjects are always `committed` and carry
+no agreement. This canonical doc owns that rule; the derivation and its worked cases are
+provenance in `docs/platform/planning/assignment-proposed-commitment-authority.md`, which is
+planning material and not itself doctrine. `web/tests/enrollment/assignmentCommitmentAuthority.test.ts`
+currently asserts against that planning file at runtime.
 Quote/estimate snapshots on the assignment proposal are commercial proposals — never ledger charges.
 
 Configuration controls labels, visibility, requiredness, and timing. Code owns calculation,

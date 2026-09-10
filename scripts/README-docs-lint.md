@@ -42,3 +42,27 @@ cd web && npm run test -- tests/scripts/docsLint.test.ts
 8. Generated-document boundary markers (`docs/schema/`, `docs/api/`)
 
 See `docs/platform/governance/documentation-governance.md` for the metadata contract.
+
+---
+
+## The `docs/platform/planning/` exception (September 2026)
+
+`docs/platform/planning/` is a declared exception to placement rule 3 — see
+`docs/platform/governance/documentation-governance.md`. It is scoped in `scripts/docs-lint.mjs`
+by `PLANNING_EXCEPTION_PREFIX` / `isPlanningException()`.
+
+**What the exception removes:** the tree is no longer counted as active canonical doctrine for
+`orphan-canonical` (it is not doctrine, so absence from `docs/README.md` is correct, not a defect)
+or for `duplicate-basename` (which compares active canonical docs). Together these were ~252 of
+the repository's reported violations, and they were masking real debt: `orphan-canonical` fell
+from 381 to 139, and the 139 that remain are genuinely unreachable canonical docs.
+
+**What the exception adds** — three report-only rules that exist because of it:
+
+| Rule | Fires when |
+|------|-----------|
+| `canonical-in-planning` | a file under the exception declares `status: canonical` |
+| `canonical-planning-dependency` | a `status: canonical` file elsewhere links into the exception |
+| `sprint-artifact-in-platform` | a `status: sprint` file sits under `docs/platform/` **outside** the exception — placement rule 3, enforced at last |
+
+**Limit:** all link-based rules read markdown links only. A path in backticks is invisible.
