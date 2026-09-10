@@ -10,6 +10,12 @@ import {
     type DrawerPolicyEntityType,
 } from "@/lib/fields/drawerFieldPolicyAdapter";
 import { resolveFieldEditability } from "@/lib/fields/fieldInteractionPolicy";
+import { FIELD_BEHAVIOR_SURFACE_DRAWER_OVERVIEW } from "@/lib/fields/fieldPlacementV1";
+import {
+    fieldPolicyWriteSurfaceFromHeaders,
+    requirementAppliesToWriteSurface,
+    type FieldPolicyWriteSurface,
+} from "@/lib/fields/fieldPolicyWriteContext";
 import {
     evaluateFieldRequirementViolations,
     legacyIsRequiredFromPolicy,
@@ -185,8 +191,14 @@ export function evaluateDrawerFieldPoliciesOnPatch(params: {
     customValuesByFieldKey?: Record<string, unknown>;
     /** Card 3 — opportunity only: placement-aware effective policies when provided. */
     layoutConfig?: RecordLayoutConfigJson | null;
+    /**
+     * Surface this write declared. A placement-sourced requirement is enforced only on writes from
+     * the surface it was authored against; definition-sourced requirements ignore this entirely.
+     */
+    writeSurface?: FieldPolicyWriteSurface;
 }): EnforceDrawerFieldPoliciesResult {
     const { entityType, defs, body, persisted } = params;
+    const writeSurface = params.writeSurface ?? null;
     const customValuesByFieldKey = params.customValuesByFieldKey ?? {};
     const resolvedMap = buildResolvedMapForEnforcement(entityType, defs, params.layoutConfig);
     const merged = mergeValuesForPolicyCheck(entityType, persisted, body, resolvedMap, customValuesByFieldKey);
@@ -236,6 +248,19 @@ export function evaluateDrawerFieldPoliciesOnPatch(params: {
         }
 
         if (!requirementPolicyEnforceableOnSave(reqPolicy)) continue;
+
+        // Honor the scope the requirement was authored with. A placement says "required on THIS
+        // surface"; enforcing it against a stage transition or a command is enforcing a rule nobody
+        // wrote. Definition-sourced requirements are unscoped and fall through untouched.
+        if (
+            !requirementAppliesToWriteSurface({
+                requirementSource: resolved.requirement_source,
+                authoredSurface: FIELD_BEHAVIOR_SURFACE_DRAWER_OVERVIEW,
+                writeSurface,
+            })
+        ) {
+            continue;
+        }
 
         const reqViolations = evaluateFieldRequirementViolations(
             requirementSourceForEvaluation(def, resolved),
@@ -302,6 +327,8 @@ export async function enforceDrawerFieldPoliciesOnPatch(params: {
     body: Record<string, unknown>;
     persistedRow: Record<string, unknown>;
     layoutConfig?: RecordLayoutConfigJson | null;
+    /** Declared by the caller (see `fieldPolicyWriteSurfaceFromRequest`). Never inferred here. */
+    writeSurface?: FieldPolicyWriteSurface;
 }): Promise<EnforceDrawerFieldPoliciesResult> {
     const entityType = normalizeEntityType(params.entityType);
     if (!entityType) return { ok: true };
@@ -342,6 +369,7 @@ export async function enforceDrawerFieldPoliciesOnPatch(params: {
         persisted,
         customValuesByFieldKey: customValues,
         layoutConfig,
+        writeSurface: params.writeSurface ?? null,
     });
 }
 
@@ -350,4 +378,11 @@ export function fieldPolicyValidationResponse(violations: FieldPolicyPatchViolat
         error: FIELD_POLICY_VALIDATION_ERROR,
         violations,
     };
+}
+
+/** Read the caller-declared write surface off a mutating request. */
+export function fieldPolicyWriteSurfaceFromRequest(request: {
+    headers: { get(name: string): string | null };
+}): FieldPolicyWriteSurface {
+    return fieldPolicyWriteSurfaceFromHeaders(request.headers);
 }

@@ -26,6 +26,7 @@ import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import {
     enforceDrawerFieldPoliciesOnPatch,
+    fieldPolicyWriteSurfaceFromRequest,
     fieldPolicyValidationResponse,
 } from "@/lib/fields/enforceDrawerFieldPoliciesOnPatch";
 import { opportunityBodyHasCustomFieldUpdates } from "@/lib/admin/drawer/opportunityDrawerFieldSave";
@@ -153,6 +154,7 @@ export async function PATCH(
             body,
             persistedRow: existingRow as Record<string, unknown>,
             layoutConfig: opportunityLayoutConfig,
+            writeSurface: fieldPolicyWriteSurfaceFromRequest(request),
         });
         if (!policyCheck.ok) {
             logOpportunityPatchRejected("field_policy", {
