@@ -7,6 +7,10 @@ import {
     countTasksForFolder,
     countTasksForSource,
     countTasksForView,
+    filterTasksByView,
+    resolveServerFilterForView,
+    WORK_ITEM_PRIMARY_VIEW_KEYS,
+    WORK_ITEM_VIEW_DEFS,
     type WorkItemQueueScope,
 } from "@/lib/workItems/workItemQueueScope";
 
@@ -117,5 +121,23 @@ describe("resolveWorkItemQueueEmptyState", () => {
             sort: "due_date",
         });
         expect(state.message).toBe("No work items assigned to you");
+    });
+});
+
+describe("Waiting is not offered as navigation", () => {
+    /**
+     * The lens is guaranteed empty — nothing in the model carries a waiting state — so offering it
+     * taught operators that nothing is ever waiting. The KEY and its filter branches stay for
+     * compatibility; only the affordance is gone.
+     */
+    it("is absent from the selectable views", () => {
+        expect(WORK_ITEM_VIEW_DEFS.map((d) => d.key)).not.toContain("waiting");
+        expect(WORK_ITEM_PRIMARY_VIEW_KEYS).not.toContain("waiting");
+    });
+
+    it("still resolves rather than crashing if a stored scope names it", () => {
+        const anyOpenWork = [row({ id: "w1", assigned_to_user_id: "u1", source: "manual" })];
+        expect(filterTasksByView(anyOpenWork, "waiting", "u1")).toEqual([]);
+        expect(resolveServerFilterForView("waiting")).toBe("open");
     });
 });

@@ -69,6 +69,19 @@ export const WORK_ITEM_FOLDER_DEFS: { key: WorkItemFolderKey; label: string }[] 
     { key: "compliance", label: "Compliance" },
 ];
 
+/*
+ * `waiting` is intentionally ABSENT from the selectable views.
+ *
+ * `filterTasksByView` returns [] for it unconditionally, because nothing in the model carries a
+ * waiting state: operational_tasks has no such column and WorkItemDraftV1.waiting_on never reaches
+ * the commit adapter. A rail entry that is guaranteed empty is a false affordance -- it teaches an
+ * operator that nothing is ever waiting, which is worse than not offering the lens.
+ *
+ * The KEY and its filter branches stay for compatibility (a resumed position or a stored scope may
+ * still name it; it resolves to an empty list rather than crashing). This removes the NAVIGATION,
+ * not the vocabulary, and adds no waiting state. See
+ * docs/platform/governance/work-items-folders-and-views.md.
+ */
 export const WORK_ITEM_VIEW_DEFS: { key: WorkItemViewKey; label: string }[] = [
     /*
      * Visible copy is deliberately explicit. "Mine" read as ownership, and sat on the same screen as
@@ -77,7 +90,6 @@ export const WORK_ITEM_VIEW_DEFS: { key: WorkItemViewKey; label: string }[] = [
      */
     { key: "mine", label: "Assigned to me" },
     { key: "unassigned", label: "Unassigned" },
-    { key: "waiting", label: "Waiting" },
     { key: "due_today", label: "Due Today" },
     { key: "due_soon", label: "Due Soon" },
     { key: "overdue", label: "Overdue" },
@@ -88,12 +100,8 @@ export const WORK_ITEM_VIEW_DEFS: { key: WorkItemViewKey; label: string }[] = [
  * Views the rail keeps permanently visible. The rest stay reachable under "More" — showing all
  * seven at equal weight is what made the rail unscannable.
  *
- * `waiting` is NOT among them, and that is a finding rather than a layout preference:
- * `filterTasksByView` returns [] for it unconditionally, because nothing in the model carries a
- * waiting state. `operational_tasks` has no such column, and WorkItemDraftV1.waiting_on is
- * draft-only and never reaches the commit adapter. Promoting a lens that can only ever be empty
- * teaches an operator that nothing is ever waiting. See
- * docs/platform/governance/work-items-folders-and-views.md.
+ * `waiting` is not here because it is no longer a selectable view at all -- see the note on
+ * WORK_ITEM_VIEW_DEFS above. De-promoting a guaranteed-empty lens was not enough: it still rendered.
  */
 export const WORK_ITEM_PRIMARY_VIEW_KEYS: WorkItemViewKey[] = [
     "mine",
