@@ -96,9 +96,23 @@ export async function fillPdfWithFidelity(input: {
 }
 
 /**
- * Place signing marks on the populated PDF, then FLATTEN → immutable signed bytes.
+ * FLATTEN the populated PDF, then place signing marks on it → immutable signed bytes.
  * Flattening bakes AcroForm values into page content and removes interactivity, so the signed
  * artifact can no longer be edited via form fields.
+ *
+ * ## Why the flatten comes first
+ *
+ * It used to come last, and on a document whose signature line is an actual AcroForm widget the
+ * mark vanished. Drawing painted "Kelly Smith" onto the page, and flattening then baked the EMPTY
+ * signature widget's appearance stream on top of it — an opaque box over the signature. The text
+ * was in the file the whole time (extraction found it twice) and no human could see it.
+ *
+ * That is the normal case for imported paperwork: a school's fillable form draws a real field on
+ * the signature line. The in-repo template fixture signs onto blank page area, which is why the
+ * order held for so long.
+ *
+ * Flattening first keeps both properties the old order was after — values baked immutable, marks
+ * visible — because the form is already gone by the time anything is drawn.
  */
 export async function placeSignaturesAndFlatten(input: {
     populatedPdf: Uint8Array;
@@ -107,6 +121,16 @@ export async function placeSignaturesAndFlatten(input: {
     now: string;
 }): Promise<{ bytes: Uint8Array; flattened: boolean }> {
     const doc = await PDFDocument.load(input.populatedPdf);
+
+    // Flatten the AcroForm so field values become immutable page content — and so that no widget
+    // appearance can be painted over a mark placed below.
+    let flattened = false;
+    const form = doc.getForm();
+    if (form.getFields().length > 0) {
+        form.flatten();
+        flattened = true;
+    }
+
     const pages = doc.getPages();
     const font = await doc.embedFont(StandardFonts.HelveticaBold);
 
@@ -124,14 +148,6 @@ export async function placeSignaturesAndFlatten(input: {
             const size = Math.max(8, Math.min(sig.height * 0.7, 22));
             page.drawText(text, { x: sig.x, y: sig.y + sig.height * 0.15, size, font, color: rgb(0.05, 0.1, 0.35) });
         }
-    }
-
-    // Flatten the AcroForm so field values become immutable page content.
-    let flattened = false;
-    const form = doc.getForm();
-    if (form.getFields().length > 0) {
-        form.flatten();
-        flattened = true;
     }
 
     stampProvenance(doc, input.documentId, input.now);
