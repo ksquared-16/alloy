@@ -123,14 +123,16 @@ export function SemanticFactEditor({
                                     setEditing(null);
                                     onBack();
                                 }}
-                                className="rounded-xl bg-alloy-midnight px-4 py-2 text-[14px] font-medium text-white"
+                                /* 44px, matching the input above it: this is the control that SAVES
+                                   a parent's correction, and at 375px it was 37px high. */
+                                className="min-h-[44px] rounded-xl bg-alloy-midnight px-4 py-2 text-[14px] font-medium text-white"
                             >
                                 Update
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setEditing(null)}
-                                className="text-[14px] text-alloy-midnight/55 underline underline-offset-2"
+                                className="flex min-h-[44px] items-center text-[14px] text-alloy-midnight/55 underline underline-offset-2"
                             >
                                 Cancel
                             </button>
