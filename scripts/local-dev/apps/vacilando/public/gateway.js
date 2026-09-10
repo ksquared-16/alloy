@@ -840,6 +840,42 @@ function resources() {
  * drift into offering different destinations — which is precisely how "the
  * mobile app" and "the desktop app" stop being the same product.
  */
+/**
+ * TAB ATTENTION — the count the Director sees without opening Vacilando.
+ *
+ * The base title is captured once from the document rather than hardcoded, so
+ * the tab keeps saying what it always said and simply gains a count in front
+ * of it. `(3) Vacilando — Development Gateway` reads at a glance from another
+ * window; a colour-only dot does not, which is why the number is the baseline
+ * and the app badge is the extra rather than the other way round.
+ */
+const ATTENTION_BASE_TITLE = (typeof document !== "undefined" && document.title) || "Vacilando";
+
+function setAppBadge(count) {
+  const n = Math.max(0, Number(count) || 0);
+  try {
+    // Native shell first — it is the one that survives the tab being hidden.
+    if (window.vacilandoNative?.setDockBadge) window.vacilandoNative.setDockBadge(n);
+  } catch { /* ignore */ }
+  try {
+    if (n > 0) navigator.setAppBadge?.(n);
+    else navigator.clearAppBadge?.();
+  } catch { /* badging unsupported */ }
+}
+
+function paintAttention(needsVm) {
+  const nowMs = Date.now();
+  const attention = View.attentionItems({
+    lanes: G.lanes || [],
+    needsYou: needsVm,
+    laneState: (l) => View.canonicalLaneWorkState(l, { nowMs }),
+  });
+  G.attention = attention;
+  const title = View.attentionTitle(attention.count, ATTENTION_BASE_TITLE);
+  if (document.title !== title) document.title = title;
+  setAppBadge(attention.count);
+}
+
 function paintNav() {
   // ONE COUNT, FROM THE SET THAT IS ACTUALLY RENDERED.
   //
@@ -850,7 +886,12 @@ function paintNav() {
   // list could still be carried in the notification count, and the badge would
   // insist something needed the operator while the panel it opens said nothing
   // did. The badge now counts exactly what the panel will show.
-  const needs = needsYouCommitted().count;
+  const needsVm = needsYouCommitted();
+  const needs = needsVm.count;
+  // The tab title is the same answer as the badge, from the same model. It is
+  // painted here rather than in its own loop so it cannot lag the panel it
+  // summarises.
+  paintAttention(needsVm);
   const primary = document.getElementById("primary-nav");
   if (primary) primary.innerHTML = View.renderPrimaryNav(G.page, { needsYou: needs });
   const tabs = document.getElementById("mobile-nav");

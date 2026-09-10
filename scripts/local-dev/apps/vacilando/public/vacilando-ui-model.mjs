@@ -1632,3 +1632,116 @@ export function messageNeedsPreview(text, { lines = MESSAGE_PREVIEW_LINES, chars
   const soft = hard.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / charsPerLine)), 0);
   return soft > lines;
 }
+
+/**
+ * TAB ATTENTION — what the Director can see without looking at the page.
+ *
+ * ── WHY THE COUNT IS BUILT HERE AND NOT IN THE RENDERER ──
+ *
+ * The badge in the nav already learned this lesson the hard way: it read the
+ * notification store's own actionable number while the panel it opened was
+ * built by buildNeedsYou(), so the two were free to disagree and the badge
+ * could insist something needed the operator while the panel said nothing did.
+ * The title is a third surface for the same question, and it gets the same
+ * answer from the same place rather than a fourth count.
+ *
+ * ── WHAT COUNTS ──
+ *
+ * The four things that are genuinely addressed to a person: a question
+ * (NEEDS_ANSWER), work that cannot continue (STUCK), a state that cannot
+ * settle itself (ATTENTION), and finished work nobody has opened
+ * (COMPLETED_UNREAD). Routine mechanics — a push, a merge, an install, a
+ * scheduler tick — are not in this list and must never be: a title that counts
+ * the system working is a title the operator learns to ignore, which costs
+ * more than showing nothing at all.
+ *
+ * ── WHY IT IS KEYED ──
+ *
+ * One durable event shows up in more than one projection. A governed action
+ * awaiting the operator is an item in Needs You AND the reason its lane reads
+ * NEEDS_YOU; counting both would say two things need attention when one does.
+ * Every entry carries a key derived from what it actually IS — the lane, or
+ * the request — and the set is collapsed on that key. `operatorState` returns
+ * exactly one state per lane, so lane-derived entries cannot collide with each
+ * other; the overlap that needed solving is between lanes and Needs You.
+ */
+export const ATTENTION_CATEGORY = Object.freeze({
+  NEEDS_ANSWER: "needs_answer",
+  STUCK: "stuck",
+  ATTENTION: "attention",
+  COMPLETED_UNREAD: "completed_unread",
+});
+
+/** Operator states that are addressed to a person, and their category. */
+const ATTENTION_STATE_CATEGORY = Object.freeze({
+  [OPERATOR_STATE.NEEDS_YOU]: ATTENTION_CATEGORY.NEEDS_ANSWER,
+  [OPERATOR_STATE.FAILED]: ATTENTION_CATEGORY.STUCK,
+  [OPERATOR_STATE.ATTENTION]: ATTENTION_CATEGORY.ATTENTION,
+  [OPERATOR_STATE.COMPLETED_UNREAD]: ATTENTION_CATEGORY.COMPLETED_UNREAD,
+});
+
+/** Is this operator state something the Director is being shown, not told? */
+export function isAttentionState(state) {
+  return Object.prototype.hasOwnProperty.call(ATTENTION_STATE_CATEGORY, String(state || ""));
+}
+
+/**
+ * The deduplicated set of things asking for the Director right now.
+ *
+ * Takes the SAME inputs the Needs You panel and the lane list already use, so
+ * a disagreement between the title and the page is not expressible.
+ */
+export function attentionItems({
+  lanes = [],
+  needsYou = null,
+  laneState = () => null,
+} = {}) {
+  const byKey = new Map();
+  const add = (key, category, label, laneId) => {
+    if (!key || !category) return;
+    // First writer wins. A Needs You item and its lane describe one obligation;
+    // whichever is seen first names it, and the second must not add a count.
+    if (byKey.has(key)) return;
+    byKey.set(key, { key, category, label: label || null, lane_id: laneId || null });
+  };
+
+  // Needs You first, because it is the projection the operator can open and it
+  // carries the request's own identity.
+  for (const item of (needsYou?.items || [])) {
+    const key = item.lane_id ? `lane:${item.lane_id}` : `request:${item.request || item.lane_label || ""}`;
+    add(key, ATTENTION_CATEGORY.NEEDS_ANSWER, item.lane_label || item.lane_id, item.lane_id);
+  }
+
+  for (const lane of (Array.isArray(lanes) ? lanes : [])) {
+    const state = operatorState(laneState(lane), lane);
+    const category = ATTENTION_STATE_CATEGORY[state];
+    if (!category) continue;
+    add(`lane:${lane.lane_id}`, category, lane.label || lane.lane_id, lane.lane_id);
+  }
+
+  const items = [...byKey.values()];
+  const byCategory = {};
+  for (const c of Object.values(ATTENTION_CATEGORY)) byCategory[c] = 0;
+  for (const i of items) byCategory[i.category] += 1;
+  return { items, count: items.length, byCategory };
+}
+
+/** The document title. The required baseline of tab attention. */
+export function attentionTitle(count, base = "Vacilando") {
+  const n = Math.max(0, Number(count) || 0);
+  return n > 0 ? `(${n}) ${base}` : base;
+}
+
+/**
+ * Badge text for a favicon or app badge.
+ *
+ * Deliberately not colour alone: a colour-only dot says "something" to a
+ * Director who can distinguish it and nothing to one who cannot, and the whole
+ * point of this affordance is to be readable at a glance from another window.
+ * Capped, because a two-digit badge is a smudge at favicon size.
+ */
+export function attentionBadge(count) {
+  const n = Math.max(0, Number(count) || 0);
+  if (n <= 0) return null;
+  return n > 9 ? "9+" : String(n);
+}

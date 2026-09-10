@@ -470,8 +470,17 @@ function recoveryPosture(root) {
     if (!read.ok) return { unavailable: true, reason: read.error };
     const ep = read.episode;
     if (!ep) return { episode_active: false, failure_class: null, recovery_level: 0, director_action_required: false };
+    // A RESOLVED EPISODE ASKS NOTHING OF ANYBODY.
+    //
+    // `director_action_required` was computed from the attempt count alone, so
+    // an episode that exhausted its attempts kept demanding the Director
+    // forever — including after it was resolved, because `resolved_at` was
+    // never consulted here. Exhausting the attempts is what made the alarm
+    // permanent rather than transient, and a permanent alarm is one the
+    // Director learns to ignore.
+    const active = !ep.resolved_at;
     return {
-      episode_active: !ep.resolved_at,
+      episode_active: active,
       episode_id: ep.episode_id,
       failure_class: ep.failure_class,
       recovery_level: ep.level,
@@ -479,8 +488,10 @@ function recoveryPosture(root) {
       attempts_allowed: ATTEMPT_CEILINGS[ep.failure_class] ?? 0,
       first_observed_at: ep.first_observed_at,
       resolved_at: ep.resolved_at,
+      resolved_by: ep.resolved_by ?? null,
       last_known_good: ep.last_known_good,
-      director_action_required: Boolean(ep.escalated) || (ep.attempts || []).length >= (ATTEMPT_CEILINGS[ep.failure_class] ?? 0),
+      director_action_required: active
+        && (Boolean(ep.escalated) || (ep.attempts || []).length >= (ATTEMPT_CEILINGS[ep.failure_class] ?? 0)),
     };
   } catch {
     return { unavailable: true };

@@ -172,3 +172,67 @@ await test("collectPromotionEvidence is not the merge path — it has no callers
     });
     for (const u of uses) assert.equal(u.includes("collectPromotionEvidence"), false);
 });
+
+// ── A REQUIRED CONTEXT THAT NEVER REPORTED ──────────────────────────────────
+//
+// THE INCIDENT. `Prebuild gates (route capabilities)` was made a required check
+// while its workflow still carried a `paths:` filter. Every pull request that
+// touched no `web/**` path therefore had no such check — GitHub held them at
+// "Expected — waiting for status to be reported" and refused the merge, while
+// this summary counted 2 of 3 required, reported nothing failing or pending,
+// and `evaluateMergeReadiness` returned ok:true. The gate approved a merge that
+// could not happen and could not say why.
+{
+  const M = await import("../lib/vacilando/trusted-host-merge.mjs");
+  const REQUIRED = ["Trust Adoption certification", "Trust DB certification", "Prebuild gates (route capabilities)"];
+  const chk = (name, st) => ({
+    name, status: st === "pending" ? "IN_PROGRESS" : "COMPLETED",
+    conclusion: st === "success" ? "SUCCESS" : st === "failure" ? "FAILURE" : null,
+    __typename: "CheckRun",
+  });
+  const SHA = "a".repeat(40);
+  const readiness = (checks) => M.evaluateMergeReadiness({
+    ok: true,
+    normalized: { repository: "ksquared-16/alloy", pullRequestNumber: 903, targetBranch: "staging", expectedHeadSha: SHA },
+    pr: { number: 903, state: "OPEN", draft: false, baseRefName: "staging", headRefOid: SHA, mergeable: "MERGEABLE", checks },
+    migration_parity: { status: "ok" },
+  });
+  const summarize = (rows) => M.summarizeCheckRollup(rows, { requiredNames: REQUIRED });
+  const GREEN_TWO = [chk("Trust Adoption certification", "success"), chk("Trust DB certification", "success")];
+
+  await test("MRC-N1 — a required context with no row is counted, named, and refused", () => {
+    const s = summarize(GREEN_TWO);
+    assert.equal(s.required, 3, "required must count what protection imposes, not only what showed up");
+    assert.equal(s.reported, 2);
+    assert.deepEqual(s.missingRequired, ["Prebuild gates (route capabilities)"]);
+    // It is neither failing nor pending — that is precisely why it needs its own name.
+    assert.deepEqual(s.failing, []);
+    assert.deepEqual(s.pending, []);
+
+    const r = readiness(s);
+    assert.equal(r.ok, false, "a merge GitHub will refuse must not be reported as ready");
+    assert.equal(r.code, "required_checks_never_reported");
+    assert.match(r.detail, /Prebuild gates \(route capabilities\)/);
+    assert.match(r.detail, /does not resolve on its own/);
+  });
+
+  await test("MRC-N2 — reporting checks are unaffected, in every state", () => {
+    const all = (st) => [...GREEN_TWO, chk("Prebuild gates (route capabilities)", st)];
+    for (const [st, code] of [["success", null], ["failure", "required_checks_failed"], ["pending", "required_checks_pending"]]) {
+      const s = summarize(all(st));
+      assert.equal(s.required, 3);
+      assert.deepEqual(s.missingRequired, [], `${st} must not be reported as missing`);
+      const r = readiness(s);
+      if (code === null) assert.equal(r.ok, true, "all-green must still proceed");
+      else assert.equal(r.code, code);
+    }
+  });
+
+  await test("MRC-N3 — unknown required names are not invented when protection is unreadable", () => {
+    // requiredNames empty means protection could not be read. Inventing a
+    // missing context there would refuse every merge on an unrelated failure.
+    const s = M.summarizeCheckRollup(GREEN_TWO, { requiredNames: [] });
+    assert.deepEqual(s.missingRequired, []);
+    assert.equal(readiness(s).ok, true);
+  });
+}
