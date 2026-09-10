@@ -24,7 +24,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const P = await import("../../../supabase/scripts/migration-parity.mjs");
+const P = await import("../lib/vacilando/migration-parity.mjs");
 
 const V = (n) => `2026090900${String(n).padStart(4, "0")}`;
 const req3 = [V(1), V(2), V(3)];
@@ -148,4 +148,90 @@ test("the deployed-primary census taken in this audit passes the gate", () => {
   });
   assert.equal(r.status, "ok");
   assert.equal(r.promote, true);
+});
+
+// ── the merge gate: required head vs the head a census actually proved ──────
+test("A · proven head satisfies the required head → gate allows", () => {
+  const g = P.migrationMergeGate({
+    requiredHead: V(3), requiredCount: 3, provenHead: V(3), provenAtMs: Date.now(),
+  });
+  assert.equal(g.status, "ok");
+  assert.equal(g.promote, true);
+});
+
+test("B · proven head behind the required head → blocked, both heads named", () => {
+  const g = P.migrationMergeGate({
+    requiredHead: V(3), requiredCount: 3, provenHead: V(2), provenAtMs: Date.now(),
+  });
+  assert.equal(g.status, "blocked");
+  assert.equal(g.promote, false);
+  assert.equal(g.required_head, V(3));
+  assert.equal(g.proven_head, V(2));
+});
+
+test("D · no census has ever proved a head → UNKNOWN, blocked", () => {
+  const g = P.migrationMergeGate({ requiredHead: V(3), requiredCount: 3, provenHead: null });
+  assert.equal(g.status, "unknown");
+  assert.equal(g.promote, false);
+});
+
+test("G · a proof older than its window is UNKNOWN, not still-good", () => {
+  // A head proved before these migrations existed says nothing about them.
+  const g = P.migrationMergeGate({
+    requiredHead: V(3), requiredCount: 3, provenHead: V(3),
+    provenAtMs: Date.now() - (P.PROVEN_HEAD_MAX_AGE_MS + 1000),
+  });
+  assert.equal(g.status, "unknown");
+  assert.equal(g.promote, false);
+});
+
+test("H · a revision with no migrations needs no proof and is not blocked", () => {
+  const g = P.migrationMergeGate({ requiredHead: null, requiredCount: 0, provenHead: null });
+  assert.equal(g.status, "ok");
+  assert.equal(g.promote, true);
+});
+
+test("an UNREADABLE migration set is UNKNOWN, never 'no migrations'", () => {
+  // Caught live: a shell slip passed an empty head and an earlier draft answered
+  // "requires no migrations · promote" — a green gate produced by a failed
+  // measurement, which is the exact shape this gate exists to refuse.
+  const g = P.migrationMergeGate({ requiredHead: null, requiredCount: null, provenHead: V(3) });
+  assert.equal(g.status, "unknown");
+  assert.equal(g.promote, false);
+});
+
+// ── the proof is read from the census records, not a second store ───────────
+test("the proven head comes from the latest completed identity census", () => {
+  const rows = [
+    { action_key: "database.read_census", status: "complete", request_id: "old",
+      inputs: { queryArtifactPath: "certification/migrations/hosted-migration-identity-census.sql" },
+      execution_ended_at: "2026-09-01T00:00:00.000Z",
+      result: { census: { questions: { ledger_head: { rows: [V(1)] } } } } },
+    { action_key: "database.read_census", status: "complete", request_id: "new",
+      inputs: { queryArtifactPath: "certification/migrations/hosted-migration-identity-census.sql" },
+      execution_ended_at: "2026-09-09T00:00:00.000Z",
+      result: { census: { questions: { ledger_head: { rows: [V(3)] } } } } },
+  ];
+  const proven = P.provenHostedHeadFromCensusRecords(rows, { artifactPath: "hosted-migration-identity-census.sql" });
+  assert.equal(proven.head, V(3));
+  assert.equal(proven.request_id, "new");
+});
+
+test("a pending or failed census proves nothing", () => {
+  const rows = [
+    { action_key: "database.read_census", status: "requested", request_id: "pending",
+      inputs: { queryArtifactPath: "hosted-migration-identity-census.sql" },
+      result: { census: { questions: { ledger_head: { rows: [V(3)] } } } } },
+  ];
+  assert.equal(P.provenHostedHeadFromCensusRecords(rows, { artifactPath: "hosted-migration-identity-census.sql" }), null);
+});
+
+test("a census of some other artifact is not this proof", () => {
+  const rows = [
+    { action_key: "database.read_census", status: "complete", request_id: "other",
+      inputs: { queryArtifactPath: "certification/communications/hosted-migration-and-privilege-census.sql" },
+      execution_ended_at: "2026-09-09T00:00:00.000Z",
+      result: { census: { questions: { ledger_head: { rows: [V(3)] } } } } },
+  ];
+  assert.equal(P.provenHostedHeadFromCensusRecords(rows, { artifactPath: "hosted-migration-identity-census.sql" }), null);
 });
