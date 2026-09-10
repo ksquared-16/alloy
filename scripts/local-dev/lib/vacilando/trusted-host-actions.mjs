@@ -4,7 +4,7 @@
  * Workers may request; workers never receive credentials.
  * Director authorizes; this runtime executes outside the managed sandbox.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -2255,7 +2255,12 @@ export function executeLedgerRepairTrustedHostAction(action, { actor = "director
       return failTrustedAction(action, read.code || "artifact_unreadable",
         read.detail || `Could not read ${entry.path} at ${inputs.expectedSha}.`, { nowMs });
     }
-    if (sha256(read.text) !== entry.fileSha) {
+    // HASHED HERE, because this module has no sha256 of its own: the migration
+    // executor never needed one, since applyMigrationBatch hashes inside
+    // trusted-host-migrate. Calling a helper that does not exist in this scope
+    // threw at execution and cost an operator decision — the first ledger repair
+    // failed `execution_threw` after being approved.
+    if (createHash("sha256").update(read.text).digest("hex") !== entry.fileSha) {
       return failTrustedAction(action, "artifact_hash_mismatch",
         "Committed migration blob does not match the approved artifact hash.", { nowMs });
     }
