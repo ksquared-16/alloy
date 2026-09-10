@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { resolveParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
-import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import { requireEnrollmentJourney, resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 
 const ORG = "93667019-bd28-49b5-a688-acc9bb1e0a19";
 const text = readFileSync("/Users/Kelly/Alloy/web/.env.local", "utf8");
@@ -38,12 +38,16 @@ async function main() {
         console.log(`\nrun ${run}`);
         const access = await time("token → anchored session", () => resolveParticipantEnrollmentFromToken(supabase, token));
         if (!access.ok) { console.log("  refused:", access.error.code); return; }
+        // These measure the BP-launched participant read path; a session with no journey is
+        // not what they are timing.
+        const journey = requireEnrollmentJourney(access.value);
+        if (!journey.ok) { console.log("no journey:", journey.error.code); return; }
         const canonical = await time("canonical record", () =>
-            resolveParticipantCanonicalContext(supabase, { orgId: access.value.orgId, processInstanceId: access.value.processInstanceId }));
+            resolveParticipantCanonicalContext(supabase, { orgId: access.value.orgId, processInstanceId: journey.processInstanceId }));
         await time("objective recompute", () =>
             resolveParticipantEnrollmentObjective(supabase, {
                 orgId: access.value.orgId,
-                processInstanceId: access.value.processInstanceId,
+                processInstanceId: journey.processInstanceId,
                 canonicalValues: canonical.values,
             }));
     }
