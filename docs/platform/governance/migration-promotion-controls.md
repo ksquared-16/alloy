@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Migration promotion controls
 
 Written after the 2026-07-31 staging ledger repair. Scope is deliberately narrow:

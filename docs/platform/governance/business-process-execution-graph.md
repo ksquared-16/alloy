@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # The Business Process execution graph
 
 Law 4 / Law 6, editor family 2. Companion to

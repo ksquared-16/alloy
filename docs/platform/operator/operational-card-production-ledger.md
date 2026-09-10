@@ -1,3 +1,10 @@
+---
+owner: operator
+status: sprint
+last_reviewed: 2026-08-27
+supersedes: []
+---
+
 # Operational Cards — Production Implementation Ledger
 
 **Lane:** slot 6 · `agent/claude/6-surfaces-faacca` · Phase 0 complete 2026-08-25

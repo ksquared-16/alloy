@@ -1,3 +1,10 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Incident — Thread 5 migrations executed against the deployed primary without an approved production mutation
 
 **Date:** 2026-09-10 · **Severity:** production schema mutated without governed authority

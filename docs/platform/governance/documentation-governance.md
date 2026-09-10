@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -55,7 +55,13 @@ Optional fields (`concept`, `layer`) may be added when the lint system enforces 
 proposed → canonical / frozen → superseded → historical / archive
 ```
 
-Generated references (`docs/schema/`, `docs/api/`) use `status: generated` and must name their generator in the document body.
+Generated references use `status: generated` and must name their generator in the
+document body. `generated` is a property of the **document**, not of its directory:
+
+- `docs/schema/` is wholly machine-produced; a hand-authored file there is a violation.
+- `docs/api/` is **mixed** — `api-index.md` is generated; every other file is authored
+  doctrine, reference, or a point-in-time record, and each declares its own status.
+  Do not assume a file is generated because of where it lives.
 
 ---
 
@@ -70,13 +76,25 @@ Generated references (`docs/schema/`, `docs/api/`) use `status: generated` and m
 7. **Doctrine-changing product PRs must update the owning canonical document** in the same PR.
 8. **Sprint closeout documents do not become doctrine by declaration alone** — summarize into `release-history.md` and archive sprint detail.
 
-### Governed paths (Wave 1)
+### Governed paths
+
+These are the paths `scripts/docs-lint.mjs` enforces frontmatter on
+(`GOVERNED_GLOBS`), and this list is kept in step with it:
 
 - `docs/README.md`
 - `docs/platform/**`
-- `docs/sprints/active/documentation-rebaseline-v2/**`
+- `docs/system/**`
+- `docs/product/**`
 
 Remaining repository docs are **baselined** for metadata adoption in later waves.
+
+Two limits are worth knowing before relying on this:
+
+- The lint scans `docs/**` and the root `README.md` only. Markdown elsewhere in the
+  repository — including execution artifacts left at the repository root — is invisible to it.
+- Broken links **block** only within `docs/README.md`, `docs/platform/**` and `docs/system/**`
+  (`CANONICAL_LINK_SCOPES`). `docs/product/**` is governed for frontmatter but its broken
+  links are reported, not blocked.
 
 ---
 
@@ -91,6 +109,12 @@ Remaining repository docs are **baselined** for metadata adoption in later waves
 | **Audits** | `docs/audits/` | Point-in-time investigations and planning artifacts |
 | **Archive** | `docs/archive/` | Superseded material — not current truth |
 | **Export packs** | `docs/archive/2026-06-handoff-packs/` | Portable handoff bundles (scheduled for retirement) |
+| **API** | `docs/api/` | API doctrine, per-domain reference, and one generated route index — see the mixed-directory note below |
+| **Product** | `docs/product/` | Vertical/reference-implementation material (childcare); governed for frontmatter |
+| **Runtime execution** | `docs/runtime/` | Runtime V1 freeze and certification execution history — **not** doctrine; see `docs/platform/runtime/` for the canonical runtime corpus |
+| **Handoffs** | `docs/handoffs/` | Session/sprint handoff artifacts — execution history |
+| **Marketing** | `docs/marketing/` | Positioning and messaging material |
+| **Schema source** | `docs/supabase/reference/` | The CSV export `docs/schema/` is generated from (no markdown) |
 
 Navigation hub: `docs/README.md`
 

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-08-03
+supersedes: []
+---
+
 # Development Platform Stabilization — Closeout
 
 **Status: complete.** Final staging authority: `ecfb0974c5e0934e7fa1b96f9571d9a11aa93366`.
