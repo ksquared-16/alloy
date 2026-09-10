@@ -323,7 +323,7 @@ describeLive("subsidy — authorization, claim, remittance, variance, live", () 
         });
         expect(claim.lines).toBe(1);
         const { data: chargeRow } = await supabase
-            .from("charges").select("id").eq("org_id", ORG).eq("charge_category", "tuition").eq("service_date", "2032-02-01").limit(1).maybeSingle();
+            .from("charges").select("id").eq("org_id", ORG).eq("charge_category", "tuition").eq("service_date", `${runPeriodKey(0)}-01`).limit(1).maybeSingle();
         const position = await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId: (chargeRow as { id: string }).id });
         expect(position.submittedClaimSuppressionCents, "a draft has not been asked for").toBe(0);
         expect(position.currentlyCollectibleCents).toBe(GROSS);
