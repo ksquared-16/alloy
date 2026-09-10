@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { DistributionLinksPanel } from "@/components/forms/workspace/DistributionLinksPanel";
 import type { DistributionCreatedLinkPayload, DistributionLinkRow } from "@/lib/forms/distributionPresentation";
 
@@ -21,6 +23,15 @@ type Props = {
     viewerTz: string;
     onMintLink: () => void;
     onToggleLink: (link: PacketPublicLinkRow, nextActive: boolean) => void;
+    /**
+     * Who this launch is for, rendered above the launch control.
+     *
+     * A packet launched at nobody produces a session with an empty CRM snapshot, so the family is
+     * asked for everything the school already knows. The slot is optional because an unscoped link
+     * is still a legitimate thing to mint — for testing, or a packet that genuinely has no subject
+     * yet. It is a slot rather than a picker so this wrapper keeps owning presentation only.
+     */
+    launchTarget?: ReactNode;
 };
 
 function toCreatedLink(payload: PacketCreatedLinkPayload | null): DistributionCreatedLinkPayload | null {
@@ -40,9 +51,15 @@ export function PacketDistributionLaunchPanel({
     viewerTz,
     onMintLink,
     onToggleLink,
+    launchTarget,
 }: Props) {
     return (
         <div data-testid="packet-distribution-launch-panel">
+            {launchTarget ? (
+                <div className="mb-3" data-testid="packet-launch-target">
+                    {launchTarget}
+                </div>
+            ) : null}
             <DistributionLinksPanel
                 mode="packet"
                 subjectName={packetName}
