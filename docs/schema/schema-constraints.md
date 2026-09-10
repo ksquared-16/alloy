@@ -1,8 +1,15 @@
+---
+owner: platform
+status: generated
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Schema — constraints
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-17 · **Constraint count:** 1296
+**Generated:** 2026-09-10 by `scripts/generate-schema-docs.mjs` from the `docs/supabase/reference/*.csv` export (the export's state, not necessarily the live database) · **Constraint count:** 1296
 
 | Table | Name | Type | Definition |
 |-------|------|------|------------|

@@ -1,8 +1,8 @@
 # API index (generated)
 
-**Generated:** 2026-07-12 by `scripts/generate-api-inventory.mjs`. Do not edit by hand — re-run the script.
+**Generated:** 2026-09-10 by `scripts/generate-api-inventory.mjs`. Do not edit by hand — re-run the script.
 
-**Routes:** 524 `route.ts` handlers under `web/app/api/**`.
+**Routes:** 613 `route.ts` handlers under `web/app/api/**`.
 
 This is a static, heuristic inventory. Columns are extracted from source text:
 
@@ -16,23 +16,23 @@ This is a static, heuristic inventory. Columns are extracted from source text:
 
 | Domain | Routes |
 |---|---|
-| [Admin / Configuration](admin-configuration-api.md) | 125 |
-| [Workspace / Queue / Focus Panel](workspace-api.md) | 50 |
-| [Entity / Record / Resolver](entity-record-api.md) | 135 |
-| [Business Process / Status / Lifecycle](business-process-api.md) | 46 |
+| [Admin / Configuration](admin-configuration-api.md) | 171 |
+| [Workspace / Queue / Focus Panel](workspace-api.md) | 57 |
+| [Entity / Record / Resolver](entity-record-api.md) | 155 |
+| [Business Process / Status / Lifecycle](business-process-api.md) | 48 |
 | [Actions / Workflows](actions-workflows-api.md) | 31 |
-| [Documents / Forms](documents-forms-api.md) | 48 |
-| [Communications](communications-api.md) | 40 |
+| [Documents / Forms](documents-forms-api.md) | 59 |
+| [Communications](communications-api.md) | 42 |
 | [AI / BOS](ai-bos-api.md) | 23 |
-| [Internal / System / Diagnostics](internal-system-api.md) | 26 |
-| **Total** | **524** |
+| [Internal / System / Diagnostics](internal-system-api.md) | 27 |
+| **Total** | **613** |
 
 | Stability | Routes |
 |---|---|
-| admin-only | 473 |
+| admin-only | 550 |
 | experimental | 8 |
-| internal | 13 |
-| public/tokenized | 27 |
+| internal | 19 |
+| public/tokenized | 33 |
 | webhook | 3 |
 
 ## Admin / Configuration
@@ -44,9 +44,17 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | GET | `/api/admin/activity` | admin-context, admin-or-ops | manual | y | — | y | admin-only | workflow_events |
 | GET POST | `/api/admin/addons` | admin-context | manual | y | y | — | admin-only | pricing_addons, verticals |
 | DELETE PATCH | `/api/admin/addons/[id]` | admin-context | manual | y | y | — | admin-only | pricing_addons |
-| GET POST | `/api/admin/childcare-attendance` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET POST | `/api/admin/assignment-types` | admin-context | none | y | — | — | admin-only | — |
+| PATCH | `/api/admin/assignment-types/[id]` | admin-context | none | y | — | — | admin-only | — |
+| GET | `/api/admin/attendance/card` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/business-process/configuration` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/business-process/configuration/publish` | access-scope, admin-context, admin-or-ops | schema | y | — | — | admin-only | — |
+| POST | `/api/admin/business-process/configuration/validate` | access-scope, admin-context, admin-or-ops | schema | y | — | — | admin-only | — |
+| GET POST | `/api/admin/childcare-attendance` | route-gate, admin-or-ops | manual | y | — | — | admin-only | child_attendance_events, child_enrollment_agreements |
 | GET | `/api/admin/childcare-attendance/actual-compliance` | admin-context | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/childcare-attendance/expected-vs-actual` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/childcare-attendance/service-day-exception` | route-gate | none | y | — | — | admin-only | child_enrollment_agreements |
+| GET | `/api/admin/commands/[commandKey]` | admin-context, admin-or-ops | manual | y | — | — | admin-only | action_definitions, action_placements, departments |
 | GET POST | `/api/admin/commercial/addons` | admin-context | manual | y | y | — | admin-only | commercial_addons |
 | PATCH DELETE | `/api/admin/commercial/addons/[id]` | admin-context | manual | y | y | — | admin-only | commercial_addons |
 | GET | `/api/admin/commercial/billing-cadences` | admin-context | none | y | — | — | admin-only | option_set_items, option_sets |
@@ -68,18 +76,22 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | PUT | `/api/admin/config/field-definition-visibility` | admin-context | manual | y | — | — | admin-only | field_definitions |
 | GET | `/api/admin/config/layout-integrity` | admin-context | schema | y | — | — | admin-only | field_definitions, field_section_definitions, option_set_items, option_sets |
 | PUT | `/api/admin/config/record-overview-layout` | admin-context | manual | y | — | — | admin-only | — |
-| GET POST | `/api/admin/departments` | route-gate, access-scope, admin-context | manual | y | y | — | admin-only | departments |
+| GET POST | `/api/admin/configuration/programs` | access-scope, admin-context | schema | y | — | — | admin-only | — |
+| GET POST | `/api/admin/departments` | route-gate, admin-context | manual | y | y | — | admin-only | departments |
 | GET | `/api/admin/discount-code-options` | admin-context | none | y | — | — | admin-only | — |
 | GET | `/api/admin/discount-redemptions` | access-scope, admin-context, admin-or-ops | none | y | — | — | admin-only | contacts, customers, discount_codes, discount_redemptions, jobs, opportunities |
 | GET POST | `/api/admin/discounts` | admin-context | schema | y | — | — | admin-only | — |
 | DELETE PATCH | `/api/admin/discounts/[id]` | admin-context | schema | y | — | — | admin-only | — |
 | GET | `/api/admin/documents` | access-scope, admin-context | manual | y | — | — | admin-only | contacts, customers, documents, jobs, opportunities, persons, +2 |
+| GET | `/api/admin/durable-record` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET POST | `/api/admin/employment-positions` | admin-context, admin-or-ops | manual | y | y | — | admin-only | employment_positions |
+| POST | `/api/admin/enrollment/assignment-quote` | admin-context, admin-or-ops | manual | y | y | — | admin-only | opportunity_customer_members, process_instances |
 | GET PUT DELETE | `/api/admin/entity-labels` | route-gate, admin-context | schema | y | y | y | admin-only | entity_labels |
 | GET POST | `/api/admin/entity-layouts` | admin-context | manual | y | — | — | admin-only | — |
-| GET PATCH DELETE | `/api/admin/entity-layouts/[id]` | admin-context | manual | y | — | — | admin-only | — |
+| GET PATCH DELETE | `/api/admin/entity-layouts/[id]` | admin-context | schema | y | — | — | admin-only | — |
 | POST | `/api/admin/entity-layouts/[id]/duplicate` | admin-context | manual | y | — | — | admin-only | — |
-| POST | `/api/admin/entity-layouts/[id]/publish` | admin-context | manual | y | — | — | admin-only | — |
-| POST | `/api/admin/entity-layouts/[id]/rollback` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/entity-layouts/[id]/publish` | admin-context | schema | y | — | — | admin-only | — |
+| POST | `/api/admin/entity-layouts/[id]/rollback` | admin-context | schema | y | — | — | admin-only | — |
 | GET | `/api/admin/entity-layouts/effective` | admin-context | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/entity-layouts/field-catalog` | admin-context | none | y | — | — | admin-only | field_definitions |
 | GET | `/api/admin/entity-layouts/focus-panel-summary` | admin-context | none | y | — | — | admin-only | — |
@@ -91,7 +103,7 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | GET POST | `/api/admin/field-sections` | admin-context | manual | y | y | — | admin-only | field_section_definitions |
 | PATCH DELETE | `/api/admin/field-sections/[id]` | admin-context | manual | y | y | — | admin-only | field_definitions, field_section_definitions |
 | GET | `/api/admin/financial-charge-preview` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
-| GET | `/api/admin/financial-config/opportunity/[id]` | admin-context | manual | y | — | — | admin-only | commercial_tuition_rates, opportunities, opportunity_customer_members |
+| GET | `/api/admin/financial-config/opportunity/[id]` | admin-context | manual | y | — | — | admin-only | opportunities |
 | GET POST | `/api/admin/financial/charge-templates` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/financial/charge-templates/simulate` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET POST | `/api/admin/financial/consumption/obligations` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
@@ -103,9 +115,10 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | POST | `/api/admin/financial/rate-rules` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/financial/seed-demo` | admin-context, admin-or-ops | none | y | y | — | admin-only | childcare_rate_plans, childcare_rate_rules, financial_charge_templates, financial_policies, financial_services, gl_account_mappings, +1 |
 | GET POST | `/api/admin/financial/services` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/health/card` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/industries` | admin-context | none | y | — | — | admin-only | industries |
 | GET | `/api/admin/industries/[id]` | admin-context | manual | y | — | — | admin-only | industries, industry_default_entity_labels |
-| GET | `/api/admin/intelligence/operational` | access-scope, admin-context | none | y | — | — | admin-only | — |
+| GET | `/api/admin/intelligence/operational` | analytics-gate | none | y | — | — | admin-only | — |
 | GET | `/api/admin/lifecycle-catalog` | route-gate | none | y | — | — | admin-only | — |
 | POST | `/api/admin/mutations/execute` | admin-context, admin-or-ops | schema | y | — | y | admin-only | — |
 | GET | `/api/admin/operational-config-rules` | admin-context | none | y | — | — | admin-only | — |
@@ -114,12 +127,28 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | POST | `/api/admin/operational-config/ratio-rules` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/operational-config/schedule-rules` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/operational-expectations` | admin-context | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/operational-questions` | admin-context | none | — | — | — | admin-only | — |
+| POST | `/api/admin/operational-questions/answer` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/operational-questions/bos` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/operational-questions/configure` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/operator-focus/resolve` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET POST | `/api/admin/option-sets` | admin-context | schema | y | y | — | admin-only | option_set_items, option_sets |
 | GET PATCH DELETE | `/api/admin/option-sets/[setKey]` | admin-context | schema | y | y | — | admin-only | option_set_items, option_sets |
 | POST | `/api/admin/option-sets/[setKey]/items` | admin-context | manual | y | y | — | admin-only | option_set_items, option_sets |
 | PATCH DELETE | `/api/admin/option-sets/[setKey]/items/[itemId]` | admin-context | manual | y | y | — | admin-only | option_set_items, option_sets |
 | GET PATCH | `/api/admin/org-settings` | admin-context | manual | y | y | — | admin-only | org_settings |
 | PATCH | `/api/admin/org/industry` | admin-context | manual | y | y | — | admin-only | industries, orgs |
+| GET POST | `/api/admin/organization-calculations` | admin-context | manual | y | — | — | admin-only | — |
+| GET PATCH | `/api/admin/organization-calculations/[id]` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/organization-calculations/[id]/archive` | admin-context | none | y | — | — | admin-only | — |
+| POST | `/api/admin/organization-calculations/[id]/bind-runtime` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/organization-calculations/[id]/evaluate` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/organization-calculations/[id]/publish` | admin-context | none | y | — | — | admin-only | — |
+| POST | `/api/admin/organization-calculations/[id]/restore` | admin-context | none | y | — | — | admin-only | — |
+| GET | `/api/admin/organization-calculations/catalog` | admin-context | none | — | — | — | admin-only | — |
+| GET | `/api/admin/organization-calculations/runtime` | admin-context | manual | y | — | — | admin-only | — |
+| GET POST | `/api/admin/organization-populations` | admin-context | manual | y | — | — | admin-only | — |
+| GET POST | `/api/admin/organization-weightings` | admin-context | manual | y | — | — | admin-only | — |
 | GET POST | `/api/admin/pricing-dimension-values` | admin-context | manual | y | y | — | admin-only | pricing_dimension_values, pricing_dimensions |
 | DELETE PATCH | `/api/admin/pricing-dimension-values/[id]` | admin-context | manual | y | y | — | admin-only | pricing_dimension_values |
 | GET POST | `/api/admin/pricing-dimensions` | admin-context | manual | y | y | — | admin-only | pricing_dimensions, verticals |
@@ -137,35 +166,52 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | PATCH DELETE | `/api/admin/programs/offerings/[id]` | admin-context | manual | y | y | — | admin-only | commercial_tuition_rates, program_offering_variants, program_offerings |
 | GET POST | `/api/admin/programs/offerings/[id]/variants` | admin-context | manual | y | y | — | admin-only | program_offering_variants, program_offerings |
 | PATCH DELETE | `/api/admin/programs/offerings/[id]/variants/[variantId]` | admin-context | manual | y | y | — | admin-only | commercial_tuition_rates, program_offering_variants |
-| GET POST | `/api/admin/queue-row-layout/[surfaceId]` | admin-context | manual | y | y | — | admin-only | entity_layouts |
+| GET POST | `/api/admin/queue-row-layout/[surfaceId]` | admin-context | schema | y | y | — | admin-only | entity_layouts |
+| POST | `/api/admin/queue-view-totals` | route-gate | manual | y | — | — | admin-only | work_units |
 | GET | `/api/admin/quote-intake/catalog` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
-| GET PUT | `/api/admin/rbac/grants` | users-roles-gate | manual | y | y | — | admin-only | permission_definitions, role_permission_grants |
+| GET PUT | `/api/admin/rbac/grants` | users-roles-gate | manual | y | y | — | admin-only | role_definitions, role_permission_grants, rpc:replace_role_permission_grants |
 | GET | `/api/admin/rbac/permissions` | users-roles-gate | none | y | — | — | admin-only | permission_definitions |
 | GET POST | `/api/admin/rbac/roles` | users-roles-gate | manual | y | y | — | admin-only | role_definitions |
-| PATCH | `/api/admin/rbac/roles/[role_key]` | users-roles-gate | manual | y | y | — | admin-only | role_definitions |
+| PATCH | `/api/admin/rbac/roles/[role_key]` | users-roles-gate | manual | y | y | — | admin-only | role_definitions, rpc:save_role_definition_and_grants |
 | PATCH | `/api/admin/record-drawer-layouts/opportunity-workflow-v1-field-placements` | admin-context | manual | y | — | — | admin-only | field_definitions |
 | PATCH | `/api/admin/record-drawer-layouts/opportunity-workflow-v1-order` | admin-context | schema | y | y | — | admin-only | field_definitions, field_section_definitions, record_drawer_layouts |
 | PATCH | `/api/admin/record-drawer-layouts/opportunity-workflow-v1-sections` | admin-context | schema | y | — | — | admin-only | field_definitions, field_section_definitions |
 | GET | `/api/admin/record-layouts` | admin-context | manual | y | — | — | admin-only | record_drawer_layouts, record_layouts |
 | GET | `/api/admin/record-layouts/effective-preview` | admin-context | manual | y | — | — | admin-only | field_definitions, field_section_definitions |
 | GET | `/api/admin/record-overview-layouts` | admin-context | manual | y | — | — | admin-only | record_overview_layouts |
+| GET | `/api/admin/records/bootstrap` | admin-context, admin-or-ops | none | y | — | — | admin-only | locations |
+| POST | `/api/admin/records/child-identity` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/records/children` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | child_enrollment_agreements, child_placements, customer_members, customers, locations, persons, +1 |
+| GET | `/api/admin/records/households` | access-scope, admin-context, admin-or-ops | none | y | — | — | admin-only | customers |
+| GET | `/api/admin/records/schedule-patterns` | admin-context, admin-or-ops | none | y | — | — | admin-only | — |
+| GET | `/api/admin/roster` | admin-context | manual | y | — | — | admin-only | — |
+| GET POST | `/api/admin/scheduling` | access-scope, admin-context | schema | y | — | — | admin-only | child_placements, location_program_categories, locations, opportunities, process_instances, schedule_patterns |
 | GET | `/api/admin/service-frequency-options` | admin-context | none | y | — | — | admin-only | pricing_frequencies |
 | GET POST | `/api/admin/service-offerings` | admin-context | manual | y | y | — | admin-only | service_offerings, verticals |
 | DELETE PATCH | `/api/admin/service-offerings/[id]` | admin-context | manual | y | y | — | admin-only | service_offerings |
 | GET POST | `/api/admin/service-plan-templates` | admin-context | manual | y | y | — | admin-only | service_plan_templates |
 | DELETE PATCH | `/api/admin/service-plan-templates/[id]` | admin-context | manual | y | y | — | admin-only | service_plan_templates |
 | GET | `/api/admin/settings/users-roles/members` | users-roles-gate | none | y | — | — | admin-only | departments, locations, user_access_profiles, user_department_access, user_roles, user_site_access |
+| GET | `/api/admin/staff/directory` | access-scope, admin-context | none | y | — | — | admin-only | employment_positions, employments, locations, persons |
+| POST | `/api/admin/staff/resolve-person` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/surface-layouts/registry` | admin-context | none | — | — | — | admin-only | — |
-| GET PUT | `/api/admin/surfaces/work-unit-header` | admin-context | manual | y | y | — | admin-only | entity_layouts |
+| GET PUT | `/api/admin/surfaces/work-unit-header` | admin-context | schema | y | y | — | admin-only | entity_layouts |
 | GET PUT | `/api/admin/surfaces/workspace-header` | admin-context | manual | y | y | — | admin-only | entity_layouts |
 | GET PUT | `/api/admin/surfaces/workspace-processes` | admin-context | manual | y | — | — | admin-only | — |
-| GET POST | `/api/admin/users` | admin-context, users-roles-gate | manual | y | y | — | admin-only | role_definitions, user_roles |
+| GET POST | `/api/admin/users` | users-roles-gate | manual | y | — | — | admin-only | role_definitions, user_roles |
 | GET PATCH | `/api/admin/users/[userId]/access-scope` | users-roles-gate | manual | y | y | — | admin-only | departments, locations, user_access_profiles, user_department_access, user_roles, user_site_access |
 | POST | `/api/admin/users/[userId]/remove` | users-roles-gate | manual | y | y | — | admin-only | user_roles |
-| PATCH | `/api/admin/users/[userId]/role` | users-roles-gate | manual | y | y | — | admin-only | role_definitions, user_roles |
+| PATCH | `/api/admin/users/[userId]/role` | users-roles-gate | manual | y | — | — | admin-only | role_definitions, user_roles |
 | GET POST | `/api/admin/verticals` | admin-context, require-admin | manual | y | y | — | admin-only | verticals |
 | PATCH | `/api/admin/verticals/[id]` | admin-context, require-admin | manual | y | y | — | admin-only | verticals |
+| GET | `/api/build-info` | none-detected | none | — | — | — | admin-only | — |
+| GET POST | `/api/communications/unsubscribe` | none-detected | none | y | — | — | admin-only | — |
+| GET | `/api/dev/build-identity` | none-detected | none | — | — | — | internal | — |
+| GET | `/api/dev/supabase-origin` | none-detected | none | — | — | — | internal | — |
+| POST | `/api/public/kiosk/attendance` | none-detected | schema | y | — | — | public/tokenized | — |
+| POST | `/api/public/kiosk/identify` | none-detected | manual | y | — | — | public/tokenized | — |
 | GET | `/api/runtime-info` | none-detected | none | — | — | — | admin-only | — |
+| POST | `/api/stripe/webhook` | provider-signature | none | y | — | — | admin-only | — |
 
 ## Workspace / Queue / Focus Panel
 
@@ -191,7 +237,7 @@ Detailed conventions: [`workspace-api.md`](workspace-api.md).
 | GET POST | `/api/admin/analytics/visualizations` | analytics-gate | schema | y | y | — | admin-only | metric_visualizations |
 | PATCH GET | `/api/admin/analytics/visualizations/[id]` | analytics-gate | schema | y | y | — | admin-only | metric_visualizations |
 | POST | `/api/admin/analytics/visualizations/[id]/copy` | analytics-gate | manual | y | — | — | admin-only | metric_definitions, metric_visualizations |
-| GET | `/api/admin/global-search` | access-scope, admin-context, admin-or-ops, token | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/global-search` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/layout-proof/opportunities` | admin-context | none | y | — | — | internal | contacts, customers, locations, opportunities, status_definitions, verticals |
 | GET | `/api/admin/layout-proof/opportunity-drawer-shadow` | route-gate | none | y | — | — | internal | — |
 | GET | `/api/admin/layout-proof/waitlist-candidates` | admin-context | none | y | — | — | internal | contacts, customers, locations, persons, placement_candidates, placement_overrides |
@@ -202,16 +248,22 @@ Detailed conventions: [`workspace-api.md`](workspace-api.md).
 | GET | `/api/admin/layout-runtime/opportunity-queue-row-shadow` | route-gate | none | y | — | — | internal | — |
 | GET | `/api/admin/layout-runtime/person-drawer-body` | route-gate | manual | y | — | — | admin-only | — |
 | GET PATCH | `/api/admin/metrics/kpi-targets` | admin-context | manual | y | y | — | admin-only | org_settings |
-| GET | `/api/admin/metrics/resolve` | access-scope, admin-context | manual | y | — | — | admin-only | org_settings |
+| GET PATCH | `/api/admin/metrics/oi-config` | admin-context | manual | y | y | — | admin-only | org_settings |
+| GET POST | `/api/admin/metrics/oi-org-calc-measurements` | admin-context | manual | y | — | — | admin-only | — |
+| GET PATCH | `/api/admin/metrics/oi-org-calc-measurements/[id]` | admin-context | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/metrics/oi-org-calc-measurements/[id]/observe` | admin-context | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/metrics/resolve` | analytics-gate | manual | y | — | — | admin-only | org_settings |
 | POST | `/api/admin/metrics/snapshots/write` | access-scope, admin-context, admin-or-ops, cron-token | manual | y | — | — | admin-only | org_settings |
-| GET | `/api/admin/metrics/trends` | access-scope, admin-context | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/metrics/trends` | analytics-gate | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/operational-enrollment/summary` | admin-context | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/queues/[workUnitId]/[queueKey]` | route-gate | manual | y | — | — | admin-only | work_units |
+| POST GET | `/api/admin/queues/stage-membership-ack` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/v2/view-models/drawer/child/[id]` | re-export | none | — | — | — | admin-only | — |
 | GET | `/api/admin/v2/view-models/drawer/opportunity/[id]` | re-export | none | — | — | — | admin-only | — |
 | GET | `/api/admin/v2/view-models/drawer/person/[id]` | re-export | none | — | — | — | admin-only | — |
 | GET | `/api/admin/view-models/drawer/child/[id]` | route-gate | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/view-models/drawer/opportunity/[id]` | route-gate | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/view-models/drawer/opportunity/[id]/stage-work` | route-gate | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/view-models/drawer/person/[id]` | route-gate | manual | y | — | — | admin-only | — |
 | GET POST | `/api/admin/work-units` | route-gate, access-scope, admin-context | manual | y | y | — | admin-only | departments, work_units |
 | GET PATCH DELETE | `/api/admin/work-units/[id]` | access-scope, admin-context | schema | y | y | — | admin-only | work_units |
@@ -219,6 +271,7 @@ Detailed conventions: [`workspace-api.md`](workspace-api.md).
 | GET | `/api/admin/work-units/[id]/operational-bootstrap` | route-gate | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/work-units/[id]/opportunity-attention-queue` | access-scope, admin-context | manual | y | — | — | admin-only | departments, work_units |
 | GET | `/api/admin/work-units/[id]/opportunity-queue` | access-scope, admin-context | manual | y | — | — | admin-only | customers, departments, work_units |
+| GET | `/api/admin/work-units/[id]/provisioning-answer` | none-detected | none | — | — | — | admin-only | — |
 | GET | `/api/admin/work-units/[id]/queues` | access-scope, admin-context | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/work-units/by-slug/[workUnitSlug]` | route-gate | manual | y | — | — | admin-only | — |
 | GET POST PATCH DELETE | `/api/admin/workspace-kpi-placements` | route-gate, admin-context | schema | y | y | — | admin-only | work_units, workspace_kpi_placement |
@@ -248,6 +301,7 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | GET | `/api/admin/customer-member-relationship-types` | admin-context | none | y | — | — | admin-only | customer_member_relationship_types |
 | GET POST | `/api/admin/customer-members` | admin-context, admin-or-ops | manual | y | y | — | admin-only | customer_member_contacts, customer_member_relationship_types, customer_members, customers |
 | GET PATCH DELETE | `/api/admin/customer-members/[id]` | admin-context | manual | y | y | — | admin-only | customer_members, customers |
+| POST | `/api/admin/customer-members/[id]/ensure-person` | admin-context | manual | y | y | — | admin-only | customer_members |
 | GET | `/api/admin/customer-options` | admin-context | none | y | — | — | admin-only | customers |
 | GET POST | `/api/admin/customer-person-role-types` | admin-context | none | y | y | — | admin-only | customer_person_role_types, orgs |
 | PATCH DELETE | `/api/admin/customer-person-role-types/[id]` | admin-context | none | y | y | — | admin-only | customer_person_role_types |
@@ -258,14 +312,22 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | GET | `/api/admin/entity/[type]/[id]` | access-scope, admin-context | none | y | — | — | admin-only | access_methods, assignment_statuses, assignments, cleaning_job_details, contacts, customer_member_contact_roles, +30 |
 | GET POST | `/api/admin/financials/accounts` | admin-context | manual | y | y | — | admin-only | gl_accounts |
 | GET PATCH | `/api/admin/financials/accounts/[id]` | admin-context | manual | y | y | — | admin-only | gl_accounts |
+| GET | `/api/admin/financials/activity` | route-gate | none | y | — | — | admin-only | — |
+| GET | `/api/admin/financials/card` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/financials/collection-state` | admin-context, admin-or-ops | manual | y | — | — | admin-only | payment_collection_attempts |
 | GET | `/api/admin/financials/job/[id]` | access-scope, admin-context | manual | y | — | — | admin-only | gl_account_mappings, gl_journal_entries, gl_journal_lines, jobs, schedules |
 | GET | `/api/admin/financials/journal-entries` | admin-context | none | y | — | — | admin-only | gl_journal_entries, gl_journal_lines |
 | GET | `/api/admin/financials/journal-entries/[id]` | access-scope, admin-context | manual | y | — | — | admin-only | gl_accounts, gl_journal_entries, gl_journal_lines |
 | GET | `/api/admin/financials/ledger` | admin-context | none | y | — | — | admin-only | customers, jobs, ledger_transactions, schedules, vendors |
 | GET | `/api/admin/financials/ledger/[id]` | admin-context | manual | y | — | — | admin-only | customers, gl_accounts, gl_journal_entries, gl_journal_lines, jobs, ledger_transactions, +2 |
+| GET | `/api/admin/financials/overview-metrics` | route-gate | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/financials/payment-flow` | route-gate | none | y | — | — | admin-only | — |
+| GET | `/api/admin/financials/position` | route-gate | none | y | — | — | admin-only | — |
 | GET | `/api/admin/financials/schedule/[id]` | access-scope, admin-context | manual | y | — | — | admin-only | gl_accounts, gl_journal_entries, gl_journal_lines, jobs, org_settings, schedules, +1 |
 | GET | `/api/admin/financials/snapshot` | admin-context | none | y | — | — | admin-only | — |
 | GET | `/api/admin/financials/statements` | admin-context | manual | y | — | — | admin-only | gl_accounts, gl_journal_entries, gl_journal_lines |
+| GET | `/api/admin/financials/tuition-plans` | admin-context | none | y | — | — | admin-only | commercial_revenue_categories, commercial_tuition_rates, location_program_categories, locations, option_set_items, option_sets, +2 |
+| GET | `/api/admin/financials/work-queue` | route-gate | none | y | — | — | admin-only | — |
 | POST | `/api/admin/intake/record-resolution` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET POST | `/api/admin/jobs` | access-scope, admin-context | manual | y | y | — | admin-only | contacts, customers, departments, jobs, locations, persons, +4 |
 | GET PATCH | `/api/admin/jobs/[id]` | access-scope, admin-context | manual | y | y | — | admin-only | contacts, customers, job_statuses, jobs, persons, vendors, +3 |
@@ -280,7 +342,7 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | POST | `/api/admin/jobs/[id]/unarchive` | access-scope, admin-context | manual | y | y | — | admin-only | jobs |
 | GET | `/api/admin/jobs/[id]/vendors-for-assign` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | jobs, vendor_verticals, vendors |
 | GET | `/api/admin/location-options` | admin-context | none | y | — | — | admin-only | locations |
-| GET PATCH POST | `/api/admin/location-program-categories` | admin-context | manual | y | y | — | admin-only | location_program_categories, locations |
+| GET PATCH POST | `/api/admin/location-program-categories` | admin-context | manual | y | y | — | admin-only | location_program_categories |
 | GET | `/api/admin/location-types` | admin-context | none | y | — | — | admin-only | location_types |
 | GET POST | `/api/admin/locations` | admin-context | manual | y | y | — | admin-only | customers, field_definitions, field_values, location_types, locations |
 | PATCH | `/api/admin/locations/[id]` | admin-context | manual | y | y | — | admin-only | location_types, locations |
@@ -288,14 +350,17 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | PATCH | `/api/admin/operational-tasks/[id]` | admin-context, admin-or-ops | schema | y | — | — | admin-only | — |
 | PATCH | `/api/admin/opportunities/[id]` | access-scope, admin-context | schema | y | y | — | admin-only | locations, opportunities, work_units |
 | GET | `/api/admin/opportunities/[id]/activity-signal` | access-scope, admin-context | manual | y | — | y | admin-only | opportunities |
-| GET POST | `/api/admin/opportunities/[id]/decision-split` | admin-context, admin-or-ops | manual | y | — | — | admin-only | departments, opportunities |
 | POST | `/api/admin/opportunities/[id]/delete` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/opportunities/[id]/delete-preview` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/opportunities/[id]/delivery-subjects` | admin-context | none | y | — | — | admin-only | customer_members, opportunity_customer_members |
 | GET | `/api/admin/opportunities/[id]/drawer-operational-bootstrap` | route-gate | schema | y | — | — | admin-only | — |
+| GET | `/api/admin/opportunities/[id]/eligible-enrollment-children` | admin-context, admin-or-ops | none | y | — | — | admin-only | — |
 | POST | `/api/admin/opportunities/[id]/enrollment-packet-launch` | access-scope, admin-context, admin-or-ops | schema | y | — | y | admin-only | communication_messages, communication_provider_bindings, customer_members, customers, form_packet_definitions, opportunities, +2 |
 | GET | `/api/admin/opportunities/[id]/enrollment-packets` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | form_definitions, form_packet_definitions, form_packet_items, form_packet_session_items, form_packet_sessions, form_public_links, +1 |
+| POST | `/api/admin/opportunities/[id]/form-deliver` | admin-context, admin-or-ops | none | y | y | — | admin-only | form_definitions, form_public_links |
 | POST | `/api/admin/opportunities/[id]/form-send` | admin-context | none | y | — | — | admin-only | — |
 | GET | `/api/admin/opportunities/[id]/intake-source` | admin-context, admin-or-ops | manual | y | — | — | admin-only | form_definitions, form_submissions |
+| PATCH | `/api/admin/opportunities/[id]/lead-location` | access-scope, admin-context | manual | y | y | — | admin-only | locations, opportunities |
 | GET | `/api/admin/opportunities/[id]/placement-candidates` | access-scope, admin-context | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/opportunities/[id]/stage-transition-reconciliation/preflight` | admin-context | manual | y | — | — | admin-only | opportunities |
 | POST | `/api/admin/opportunity-customer-members` | admin-context, admin-or-ops | manual | y | y | — | admin-only | customer_members, opportunities, opportunity_customer_members |
@@ -313,16 +378,25 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | PATCH DELETE | `/api/admin/person-relationship-type-settings/[id]` | admin-context | none | y | y | — | admin-only | person_relationship_type_settings |
 | GET POST | `/api/admin/persons` | access-scope, admin-context | manual | y | y | — | admin-only | contacts, customer_members, customer_persons, persons |
 | PATCH | `/api/admin/persons/[id]` | admin-context | manual | y | y | — | admin-only | persons |
+| GET POST DELETE | `/api/admin/persons/[id]/profile-photo` | access-scope, admin-context | manual | y | y | — | admin-only | documents, persons |
 | POST | `/api/admin/placement-candidates/[candidateId]/manual-position` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | placement_candidates |
 | POST | `/api/admin/placement-candidates/[candidateId]/overrides` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | placement_candidates |
 | POST | `/api/admin/placement-candidates/[candidateId]/overrides/[overrideId]/release` | access-scope, admin-context, admin-or-ops | manual | y | — | — | admin-only | placement_candidates |
 | GET | `/api/admin/processing/cases/[caseId]` | admin-context | none | y | — | — | admin-only | — |
-| POST | `/api/admin/processing/cases/[caseId]/approve` | admin-context | none | y | — | — | admin-only | processing_case_sources, processing_cases |
+| POST | `/api/admin/processing/cases/[caseId]/approve` | admin-context | none | y | — | — | admin-only | opportunities, processing_case_sources, processing_cases |
 | POST | `/api/admin/processing/cases/[caseId]/archive` | admin-context | none | y | — | — | admin-only | — |
 | PATCH | `/api/admin/processing/cases/[caseId]/classification` | admin-context | schema | y | — | — | admin-only | processing_cases |
 | POST | `/api/admin/processing/cases/[caseId]/form-draft` | admin-context | none | y | — | — | admin-only | processing_cases |
+| POST | `/api/admin/processing/cases/[caseId]/form-draft/apply-discovery` | admin-context | none | y | y | — | admin-only | processing_cases |
 | POST | `/api/admin/processing/cases/[caseId]/form-draft/create` | admin-context | none | y | y | — | admin-only | processing_cases |
+| GET PUT | `/api/admin/processing/cases/[caseId]/form-draft/discovery-decisions` | admin-context | none | y | — | — | admin-only | processing_cases |
 | POST | `/api/admin/processing/cases/[caseId]/form-draft/save` | admin-context | none | y | — | — | admin-only | documents, processing_case_sources, processing_cases |
+| POST | `/api/admin/processing/cases/[caseId]/identity/approve` | none-detected | none | — | — | — | admin-only | — |
+| POST | `/api/admin/processing/cases/[caseId]/identity/correction` | none-detected | none | — | — | — | admin-only | — |
+| POST | `/api/admin/processing/cases/[caseId]/identity/execute` | none-detected | none | — | — | — | admin-only | — |
+| POST | `/api/admin/processing/cases/[caseId]/identity/plan` | none-detected | none | — | — | — | admin-only | — |
+| POST | `/api/admin/processing/cases/[caseId]/identity/resolution` | none-detected | none | — | — | — | admin-only | — |
+| GET | `/api/admin/processing/cases/[caseId]/identity/review` | none-detected | none | — | — | — | admin-only | — |
 | GET | `/api/admin/processing/cases/[caseId]/recommendation` | admin-context | none | y | — | — | admin-only | processing_case_sources, processing_cases |
 | POST | `/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/commit` | admin-context | none | y | — | — | admin-only | processing_cases |
 | POST | `/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/preview` | admin-context | none | y | — | — | admin-only | processing_cases |
@@ -354,7 +428,6 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | POST | `/api/admin/tours/bookings/[bookingId]/no-show` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/tours/bookings/[bookingId]/reschedule` | admin-context, admin-or-ops | manual | y | — | — | admin-only | locations, opportunities, tour_bookings |
 | GET | `/api/admin/tours/opportunities/[opportunityId]/bookings` | admin-context, admin-or-ops | manual | y | — | — | admin-only | opportunities, tour_bookings |
-| POST | `/api/admin/tours/public-booking-links` | admin-context, admin-or-ops, token | manual | y | y | — | admin-only | locations, tour_public_booking_links |
 | GET | `/api/admin/tours/slots` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/vendor-options` | admin-context | none | y | — | — | admin-only | vendors |
 | GET | `/api/admin/vendors` | admin-context | none | y | — | — | admin-only | vendors |
@@ -362,7 +435,7 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | POST | `/api/admin/vendors/[id]/contacts` | admin-context, admin-or-ops | manual | y | y | — | admin-only | vendor_contacts |
 | DELETE | `/api/admin/vendors/[id]/contacts/[contactId]` | admin-context, admin-or-ops | manual | y | y | — | admin-only | vendor_contacts |
 | GET | `/api/admin/vendors/[id]/contacts/available` | admin-context, admin-or-ops | manual | y | — | — | admin-only | contacts, vendor_contacts |
-| GET | `/api/admin/vendors/[id]/documents/signed-url` | admin-context | manual | y | — | — | admin-only | — |
+| GET | `/api/admin/vendors/[id]/documents/signed-url` | access-scope, admin-context | manual | y | — | — | admin-only | documents |
 | GET | `/api/admin/vendors/[id]/payout` | admin-context | manual | y | — | — | admin-only | org_settings, schedules, vendors |
 | PATCH | `/api/admin/vendors/[id]/payout-policy` | admin-context | manual | y | y | — | admin-only | vendors |
 
@@ -373,11 +446,11 @@ Detailed conventions: [`business-process-api.md`](business-process-api.md).
 | Methods | Path | Auth | Val | SR | W | E | Stability | Tables / RPC |
 |---|---|---|---|---|---|---|---|---|
 | GET PUT POST | `/api/admin/business-process-layout-assignments` | admin-context | schema | y | — | — | admin-only | — |
-| GET PATCH DELETE | `/api/admin/departments/[departmentId]` | access-scope, admin-context | manual | y | y | — | admin-only | departments, work_units |
+| GET PATCH DELETE | `/api/admin/departments/[departmentId]` | access-scope, admin-context | schema | y | y | — | admin-only | departments, work_units |
 | GET PUT | `/api/admin/departments/[departmentId]/lifecycle-actions-matrix` | access-scope, admin-context | manual | y | y | — | admin-only | departments |
 | GET PATCH DELETE | `/api/admin/departments/[departmentId]/lifecycle-activation` | access-scope, admin-context | manual | y | y | — | admin-only | departments |
 | GET | `/api/admin/departments/[departmentId]/lifecycle-activation/validate` | access-scope, admin-context | schema | y | — | — | admin-only | departments |
-| GET PATCH | `/api/admin/departments/[departmentId]/lifecycle-builder` | access-scope, admin-context | manual | y | y | — | admin-only | departments |
+| GET PATCH | `/api/admin/departments/[departmentId]/lifecycle-builder` | access-scope, admin-context | schema | y | — | — | admin-only | departments |
 | GET | `/api/admin/departments/[departmentId]/lifecycle-queue-filter-audit` | access-scope, admin-context | manual | y | — | — | admin-only | departments |
 | GET PATCH | `/api/admin/departments/[departmentId]/lifecycle-requirements` | access-scope, admin-context | manual | y | y | — | admin-only | departments |
 | GET | `/api/admin/departments/[departmentId]/operational-bootstrap` | route-gate | manual | y | — | — | admin-only | — |
@@ -387,8 +460,8 @@ Detailed conventions: [`business-process-api.md`](business-process-api.md).
 | GET | `/api/admin/departments/[departmentId]/pipeline-exact-count` | admin-context | manual | y | — | — | admin-only | work_units |
 | GET | `/api/admin/departments/[departmentId]/work-unit-queue-summaries` | access-scope, admin-context | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/enrollment-process/form-coverage` | access-scope, admin-context | manual | y | — | — | admin-only | departments, form_definition_versions, form_public_links |
-| GET POST | `/api/admin/enrollment-process/stage-actions` | admin-context, admin-or-ops | manual | y | y | — | admin-only | action_placements, departments |
-| POST | `/api/admin/enrollment-process/stage-runtime-config` | access-scope, admin-context, admin-or-ops | schema | y | — | — | admin-only | departments |
+| GET POST | `/api/admin/enrollment-process/stage-actions` | admin-context, admin-or-ops | schema | y | y | — | admin-only | action_placements, departments |
+| POST | `/api/admin/enrollment-process/stage-runtime-config` | access-scope, admin-context, admin-or-ops | schema | y | — | — | admin-only | — |
 | GET POST PATCH DELETE | `/api/admin/enrollment-process/stage-work-unit` | access-scope, admin-context, admin-or-ops | schema | y | y | — | admin-only | departments, opportunities, work_units |
 | GET PATCH | `/api/admin/enrollment-process/status-stages` | access-scope, admin-context | schema | y | y | — | admin-only | departments, status_definitions |
 | POST | `/api/admin/enrollment-status-transition/context` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
@@ -396,6 +469,8 @@ Detailed conventions: [`business-process-api.md`](business-process-api.md).
 | POST | `/api/admin/enrollment-status-transition/preflight` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/job-statuses` | admin-context | none | y | — | — | admin-only | job_statuses |
 | POST | `/api/admin/lifecycle-builder/complete-stage-work` | access-scope, admin-context | manual | y | — | — | admin-only | — |
+| GET POST | `/api/admin/lifecycle-builder/family-close` | access-scope, admin-context, bos-capability | manual | y | — | — | admin-only | — |
+| GET POST | `/api/admin/lifecycle-builder/participant-decisions` | access-scope, admin-context, bos-capability | manual | y | — | — | admin-only | — |
 | GET POST | `/api/admin/lifecycle-builder/process-participation` | access-scope, admin-context | manual | y | — | — | admin-only | departments |
 | GET POST | `/api/admin/lifecycle-builder/process-work-views` | access-scope, admin-context | manual | y | — | — | admin-only | departments |
 | GET | `/api/admin/lifecycle-builder/queue-membership-status-options` | access-scope, admin-context | manual | y | — | — | admin-only | departments |
@@ -403,7 +478,7 @@ Detailed conventions: [`business-process-api.md`](business-process-api.md).
 | GET | `/api/admin/lifecycle-builder/stage-work-outcomes` | access-scope, admin-context | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/lifecycle-catalog/attach-records` | admin-context | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/lifecycle-catalog/cleanup-test` | admin-context | none | y | — | — | internal | — |
-| POST | `/api/admin/lifecycle-catalog/delete` | access-scope, admin-context | manual | y | y | — | admin-only | departments |
+| POST | `/api/admin/lifecycle-catalog/delete` | access-scope, admin-context | manual | y | — | — | admin-only | departments |
 | POST | `/api/admin/lifecycle-catalog/repair` | access-scope, admin-context | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/lifecycle-catalog/repair-work-units` | access-scope, admin-context | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/lifecycle/action-intake-spec` | admin-context, admin-or-ops | manual | y | — | — | admin-only | departments |
@@ -426,10 +501,10 @@ Detailed conventions: [`actions-workflows-api.md`](actions-workflows-api.md).
 | Methods | Path | Auth | Val | SR | W | E | Stability | Tables / RPC |
 |---|---|---|---|---|---|---|---|---|
 | POST | `/api/action-links/consume-accept-job` | public-org, token | manual | y | y | y | public/tokenized | action_links, contacts, customers, jobs, opportunities, vendors, +1 |
-| POST | `/api/action-links/consume-reschedule` | none-detected | manual | y | y | — | public/tokenized | action_links, schedules, workflows |
-| GET | `/api/action-links/resolve` | none-detected | none | y | — | — | public/tokenized | action_links |
+| POST | `/api/action-links/consume-reschedule` | token | manual | y | y | — | public/tokenized | action_links, schedules, workflows |
+| GET | `/api/action-links/resolve` | token | none | y | — | — | public/tokenized | action_links |
 | GET | `/api/action/[token]` | token | manual | y | — | — | public/tokenized | action_links |
-| POST | `/api/action/[token]/consume` | public-org | manual | y | y | — | public/tokenized | action_links, workflows |
+| POST | `/api/action/[token]/consume` | public-org, token | manual | y | — | — | public/tokenized | action_links, workflows |
 | PATCH | `/api/admin/action-definitions/[id]` | admin-context | schema | y | y | y | admin-only | action_definitions |
 | POST | `/api/admin/action-placements` | admin-context | schema | y | y | y | admin-only | action_definitions, action_placements |
 | PATCH DELETE | `/api/admin/action-placements/[id]` | admin-context | schema | y | y | y | admin-only | action_placements |
@@ -466,7 +541,7 @@ Detailed conventions: [`documents-forms-api.md`](documents-forms-api.md).
 | GET POST | `/api/admin/document-field-definitions` | admin-context | manual | y | y | — | admin-only | document_field_definitions |
 | PATCH DELETE | `/api/admin/document-field-definitions/[id]` | admin-context | manual | y | y | — | admin-only | document_field_definitions |
 | PATCH | `/api/admin/documents/[id]` | admin-context | manual | y | y | — | admin-only | documents |
-| GET | `/api/admin/documents/[id]/signed-url` | admin-context | manual | y | — | — | admin-only | documents |
+| GET | `/api/admin/documents/[id]/signed-url` | access-scope, admin-context | none | y | — | — | admin-only | — |
 | GET | `/api/admin/documents/entity-options` | admin-context | manual | y | — | — | admin-only | contacts, customers, jobs, opportunities, persons, schedules, +1 |
 | POST | `/api/admin/documents/upload` | admin-context | manual | y | y | — | admin-only | documents, processing_cases |
 | GET POST | `/api/admin/forms` | admin-context | manual | y | — | — | admin-only | — |
@@ -504,10 +579,21 @@ Detailed conventions: [`documents-forms-api.md`](documents-forms-api.md).
 | PATCH DELETE | `/api/admin/pos/documents/[id]` | admin-context | none | y | y | — | admin-only | documents, processing_case_sources, processing_cases |
 | GET | `/api/admin/pos/documents/[id]/extracted-text` | admin-context | none | y | — | — | admin-only | documents |
 | GET | `/api/admin/pos/packets` | admin-context | none | y | — | — | admin-only | customer_members, form_definitions, form_packet_definitions, form_packet_items, form_packet_sessions, form_public_links, +1 |
+| GET | `/api/admin/pos/packets/[packetDefinitionId]/projection` | admin-context | none | y | — | — | admin-only | — |
 | POST | `/api/admin/pos/packets/compose` | admin-context | manual | y | y | — | admin-only | form_packet_definitions, form_packet_items |
 | POST | `/api/admin/pos/packets/from-template` | admin-context, token | none | y | — | — | admin-only | — |
+| POST | `/api/admin/pos/packets/preview` | admin-context | none | y | — | — | admin-only | — |
+| GET | `/api/admin/pos/packets/requirements` | admin-context | none | y | — | — | admin-only | — |
 | GET | `/api/admin/pos/packets/roster` | admin-context | none | y | — | — | admin-only | — |
-| GET | `/api/public/forms/[token]/resolve` | token | zod | y | — | — | public/tokenized | — |
+| GET | `/api/admin/pos/packets/sessions/[sessionId]/participant-projection` | admin-context | none | y | — | — | admin-only | — |
+| GET | `/api/public/forms/[token]/enrollment-artifact` | token | schema | y | — | — | public/tokenized | — |
+| GET | `/api/public/forms/[token]/enrollment-document` | token | none | y | — | — | public/tokenized | — |
+| POST | `/api/public/forms/[token]/enrollment-edit` | token | schema | y | — | — | public/tokenized | form_packet_items, form_packet_session_items |
+| GET | `/api/public/forms/[token]/enrollment-objective` | token | none | y | — | — | public/tokenized | — |
+| POST | `/api/public/forms/[token]/enrollment-signature-asset` | token | none | y | y | — | public/tokenized | documents, process_instances |
+| POST | `/api/public/forms/[token]/enrollment-turn` | token | none | y | — | — | public/tokenized | — |
+| POST | `/api/public/forms/[token]/enrollment-upload` | token | none | y | y | — | public/tokenized | documents, process_instances |
+| GET | `/api/public/forms/[token]/resolve` | token | none | y | — | — | public/tokenized | — |
 | POST | `/api/public/forms/[token]/submissions` | token | zod | y | y | — | public/tokenized | form_definitions, form_packet_session_items, form_packet_sessions, form_submissions |
 | GET PATCH | `/api/public/forms/[token]/submissions/[submissionId]` | token | zod | y | y | — | public/tokenized | form_definition_versions, form_submissions |
 | POST | `/api/public/forms/[token]/submissions/[submissionId]/submit` | token | zod | y | y | — | public/tokenized | form_definition_versions, form_packet_session_items, form_submissions |
@@ -529,22 +615,24 @@ Detailed conventions: [`communications-api.md`](communications-api.md).
 | POST | `/api/admin/communications/announcements/[id]/schedule` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET PUT | `/api/admin/communications/announcements/[id]/targets` | admin-context, admin-or-ops | schema | y | y | — | admin-only | announcement_targets, announcements |
 | POST | `/api/admin/communications/announcements/recipient-preview` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
-| GET | `/api/admin/communications/bindings` | admin-context-light | none | y | — | — | admin-only | communication_provider_bindings |
-| PATCH | `/api/admin/communications/bindings/[bindingId]` | admin-context, admin-or-ops | manual | y | y | — | admin-only | communication_provider_bindings |
+| GET POST | `/api/admin/communications/bindings` | admin-context, admin-context-light, admin-or-ops | schema | y | y | — | admin-only | communication_provider_accounts, communication_provider_bindings, locations |
+| PATCH | `/api/admin/communications/bindings/[bindingId]` | admin-context, admin-or-ops | schema | y | y | — | admin-only | communication_provider_bindings, locations |
 | GET | `/api/admin/communications/conversations` | admin-context-light | none | y | — | — | admin-only | communication_message_reads, communication_messages, communication_threads |
 | POST | `/api/admin/communications/conversations/[id]/assign` | admin-context, admin-or-ops | manual | y | y | — | admin-only | communication_threads, conversation_assignment_events |
 | POST | `/api/admin/communications/conversations/[id]/triage` | admin-context-light | manual | y | y | — | admin-only | communication_threads |
 | GET | `/api/admin/communications/deliverability` | admin-context-light | none | y | — | — | admin-only | communication_delivery_events |
 | GET | `/api/admin/communications/drawer-recipients` | admin-context-light | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/communications/family-note` | admin-context-light | manual | y | — | — | admin-only | customers |
-| POST | `/api/admin/communications/family-send` | admin-context-light | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/communications/family-send` | admin-context-light | manual | y | — | — | admin-only | communication_messages |
 | GET | `/api/admin/communications/family-workspace` | admin-context-light | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/communications/health` | admin-context-light | manual | y | — | — | admin-only | communication_messages |
 | GET | `/api/admin/communications/identities` | admin-context-light | none | y | — | — | admin-only | — |
+| GET POST | `/api/admin/communications/ingress-routes` | admin-context-light | schema | y | y | — | admin-only | communication_ingress_routes, communication_provider_accounts, communication_provider_bindings |
 | POST | `/api/admin/communications/messages/mark-read` | admin-context, admin-or-ops | manual | y | y | — | admin-only | communication_message_reads, communication_messages |
 | GET | `/api/admin/communications/person-search` | admin-context, admin-or-ops | manual | y | — | — | admin-only | persons |
 | GET PATCH | `/api/admin/communications/preferences` | admin-context-light | manual | y | — | — | admin-only | communication_preferences |
-| POST | `/api/admin/communications/send` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| POST DELETE | `/api/admin/communications/provider-connection` | admin-context, admin-context-light, provider-signature | manual | y | y | — | admin-only | communication_provider_accounts, communication_provider_bindings |
+| POST | `/api/admin/communications/send` | admin-context, admin-or-ops | manual | y | — | — | admin-only | communication_threads |
 | GET | `/api/admin/communications/status-options` | admin-context, admin-or-ops | manual | y | — | — | admin-only | status_definitions |
 | GET POST | `/api/admin/communications/templates` | admin-context, admin-or-ops | schema | y | y | — | admin-only | communication_template_versions, communication_templates |
 | GET PATCH | `/api/admin/communications/templates/[id]` | admin-context, admin-or-ops | schema | y | y | — | admin-only | communication_template_versions, communication_templates |
@@ -552,7 +640,7 @@ Detailed conventions: [`communications-api.md`](communications-api.md).
 | POST | `/api/admin/communications/templates/[id]/preview` | admin-context, admin-or-ops | manual | y | — | — | admin-only | communication_template_versions, communication_templates |
 | GET | `/api/admin/communications/threads` | admin-context-light | schema | y | — | — | admin-only | communication_messages, communication_threads |
 | GET | `/api/admin/communications/threads/[threadId]/messages` | admin-context, admin-or-ops | manual | y | — | — | admin-only | communication_message_reads, communication_messages, communication_threads |
-| GET | `/api/admin/communications/unread-count` | admin-context-light | none | y | — | — | admin-only | communication_message_reads, communication_messages |
+| GET | `/api/admin/communications/unread-count` | admin-context-light | none | y | y | — | admin-only | rpc:communication_unread_count |
 | GET | `/api/admin/inbox/threads` | admin-context-light | none | y | — | — | admin-only | — |
 | PATCH | `/api/admin/inbox/threads/[threadId]` | admin-context-light, admin-or-ops | manual | y | — | — | admin-only | — |
 | POST | `/api/webhooks/resend` | provider-signature | manual | y | — | — | webhook | — |
@@ -597,28 +685,29 @@ Detailed conventions: [`internal-system-api.md`](internal-system-api.md).
 |---|---|---|---|---|---|---|---|---|
 | GET | `/api/admin/access-scope-debug` | route-gate | none | y | — | — | internal | user_access_profiles |
 | GET | `/api/admin/db-relationships` | admin-context | none | y | — | — | internal | customer_person_role_types, customer_persons, customers, person_relationship_type_settings, person_relationships, persons |
+| POST | `/api/admin/debug/certification/inbound-email` | admin-context | manual | y | — | — | internal | — |
 | GET | `/api/admin/debug/context` | admin-context | none | y | — | — | internal | orgs |
+| GET | `/api/admin/debug/inbound-ingress` | admin-context | none | y | — | — | internal | communication_inbound_ingress |
 | POST | `/api/admin/debug/platform-perf-trace` | admin-context | manual | — | — | — | internal | — |
 | POST | `/api/admin/dev/create-org` | admin-context | manual | y | — | — | internal | — |
+| POST | `/api/admin/dev/health-m1` | access-scope, admin-context, admin-or-ops | manual | y | — | — | internal | — |
+| POST | `/api/admin/dev/operational-cards-certification` | access-scope, admin-context, admin-or-ops | manual | y | — | — | internal | — |
 | POST | `/api/admin/send-password-reset` | admin-context | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/tenant-bootstrap` | admin-context | manual | y | — | — | admin-only | — |
 | POST | `/api/admin/vertical-bootstrap` | admin-context | manual | y | — | — | admin-only | — |
-| GET | `/api/book-v2/availability` | public-org | none | y | — | — | public/tokenized | schedules |
-| POST | `/api/book-v2/confirm` | public-org | manual | y | y | y | public/tokenized | cleaning_job_details, customer_persons, customer_subscriptions, customers, discount_redemptions, jobs, +8 |
-| POST | `/api/book-v2/ensure-customer` | public-org | manual | y | — | — | public/tokenized | verticals |
-| POST | `/api/book-v2/opportunity-discount` | none-detected | manual | y | y | — | public/tokenized | opportunities |
-| POST | `/api/book-v2/quote-refine` | none-detected | manual | y | y | — | public/tokenized | locations, opportunities, verticals, rpc:get_quote_pricing |
-| POST | `/api/book-v2/quote-start` | public-org | manual | y | y | — | public/tokenized | locations, opportunities, verticals, workflows, rpc:get_quote_pricing |
-| POST | `/api/book-v2/service-details` | none-detected | manual | y | y | — | public/tokenized | locations, opportunities |
-| POST | `/api/book-v2/specialty-quote-start` | public-org | schema | y | y | — | public/tokenized | documents, locations, opportunities, pipeline_stages, verticals, workflows |
-| POST | `/api/book-v2/validate-promo` | none-detected | schema | y | — | — | public/tokenized | — |
 | POST | `/api/leads/gutters` | public-org | manual | — | — | — | public/tokenized | — |
 | POST | `/api/marketing/demo-request` | none-detected | manual | — | — | — | public/tokenized | — |
 | GET | `/api/public/booking-config` | public-org | none | y | — | — | public/tokenized | — |
 | GET | `/api/public/field-definitions` | public-org | manual | y | — | — | public/tokenized | field_definitions, field_section_definitions |
-| POST | `/api/public/tour-booking/[token]/book` | token | none | y | — | — | public/tokenized | tour_availability_rules |
-| GET | `/api/public/tour-booking/[token]/resolve` | token | none | y | — | — | public/tokenized | — |
-| GET | `/api/public/tour-booking/[token]/slots` | token | none | y | — | — | public/tokenized | — |
+| POST | `/api/public/tour-booking/[token]/book` | token | schema | — | y | — | public/tokenized | tour_availability_rules, tour_bookings, tour_invitations |
+| POST | `/api/public/tour-booking/[token]/cancel` | token | schema | — | — | — | public/tokenized | — |
+| POST | `/api/public/tour-booking/[token]/cancel-intent` | token | none | — | y | — | public/tokenized | tour_public_booking_links |
+| POST | `/api/public/tour-booking/[token]/confirm` | token | none | — | — | — | public/tokenized | — |
+| POST | `/api/public/tour-booking/[token]/confirm-attendance` | token | none | — | — | — | public/tokenized | — |
+| POST | `/api/public/tour-booking/[token]/decline` | token | schema | — | y | — | public/tokenized | tour_invitations |
+| POST | `/api/public/tour-booking/[token]/reschedule` | token | schema | — | — | — | public/tokenized | — |
+| GET | `/api/public/tour-booking/[token]/resolve` | token | schema | — | — | — | public/tokenized | tour_bookings, tour_public_booking_links |
+| GET | `/api/public/tour-booking/[token]/slots` | token | none | — | — | — | public/tokenized | — |
 | POST | `/api/vendor-application` | public-org | manual | y | — | — | public/tokenized | — |
 | GET | `/api/verticals` | none-detected | none | y | — | — | public/tokenized | verticals |
 
