@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-01
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -41,7 +41,7 @@ The frozen [Operational Expectations architecture](../core/operational-expectati
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
 | Operational Facts (authored ledger — observed) | **Complete** | The **observed** operational truth ledger ("what IS"): append-only, effective-dated, corrected-by-reference facts. Realized today by the event→workflow spine (`workflow_events`, `emitEvent`, SELECT-only JWT). | Converged, not rebuilt — see [`operational-expectations-architecture-closeout.md` §3](../milestones/operational-expectations-architecture-closeout.md). Read seam = the correction-carrying Fact Contract |
-| Operational Expectations (authored ledger — intended) | **In Progress** | The **intended** operational truth ledger ("what SHOULD / WILL be"): tuple ⟨Authority · Modality · Subject · Condition · Temporal Frame · [Beneficiary]⟩; closed five-modality set (required/prohibited/intended/committed/predicted). Twin substrate of Facts (bitemporal/lineage/replay). | Architecture **frozen**; implementation sequenced P0–P8 per the [engineering realization](../milestones/operational-expectations-engineering-realization.md). **P0 and P1 are complete and certified** ([P1 certification](../milestones/operational-expectations-p1-certification.md)): the append-only ledger, the one authoring intake (five verbs, modality closure, semantic line, Temporal Frame, footprint), Authority→Standing + ratification, and revision/correction effectivity exist and are held as standing CI gates. The authoring path is **server-side and flag-gated `oe.ledger.author`, OFF by default** (off = Facts-only, exactly as today); there is **no operator-facing authoring surface** — surfaces are P5, configuration is P2. Judgment/Gap (P3, the keystone) onward are not started, so the capability is **not yet operational** — that is M7 |
+| Operational Expectations (authored ledger — intended) | **In Progress** | The **intended** operational truth ledger ("what SHOULD / WILL be"): tuple ⟨Authority · Modality · Subject · Condition · Temporal Frame · [Beneficiary]⟩; closed five-modality set (required/prohibited/intended/committed/predicted). Twin substrate of Facts (bitemporal/lineage/replay). | Architecture **frozen**; implementation sequenced P0–P8 per the [engineering realization](../milestones/operational-expectations-engineering-realization.md). **P0 and P1 are complete and certified** ([P1 certification](../milestones/operational-expectations-p1-certification.md)): the append-only ledger, the one authoring intake (five verbs, modality closure, semantic line, Temporal Frame, footprint), Authority→Standing + ratification, and revision/correction effectivity exist and are held as standing CI gates. The generic intake remains **server-side and flag-gated `oe.ledger.author`, OFF by default**. That is no longer the whole posture: an **activated-purpose seam** (`web/lib/operationalExpectations/intake/activatedAuthoringPurposes.ts`) lets a named purpose author production ledger rows **without** the env flag — `isActivatedAuthoringPurpose(purpose) || isOeLedgerAuthorEnvEnabled()` in `ledgerAuthoringFeatureFlag.ts`. One purpose is activated today, `attendance.service_day_exception`, and it **does** have an operator surface (`web/app/api/admin/childcare-attendance/service-day-exception/route.ts`, reached from `AttendanceWorkspace`). So the ledger is authored in production for that one purpose, while remaining Facts-only everywhere else. Judgment/Gap (P3, the keystone) onward are not started, so the capability is **not yet generally operational** — that is M7. Broad operator surfaces are still P5 and configuration is still P2 |
 
 ---
 
@@ -109,7 +109,7 @@ The frozen [Operational Expectations architecture](../core/operational-expectati
 | Inbox warm on WU entry | **Complete** | Deferred load pattern | |
 | Scheduled sends | **Complete** | Tour reminders, quiet hours | Band A |
 | Legacy messages table | **Complete** | Compatibility | Retirement path documented |
-| Comms V2 architecture | **Planned** | Design freeze in sprint assets | |
+| Comms V2 architecture | **Complete** | Conversation core, delivery events/receipts, preferences/recipients, templates and announcements | Shipped June 2026 (`supabase/migrations/20260619120000_comms_v2_conversation_core.sql` … `20260623140000_*`), plus `20260715120000_communications_identity_platform_foundation.sql`. Inbound email/SMS ingress followed in August 2026 — see [`../modules/communications-platform.md`](../modules/communications-platform.md) |
 
 ## Documents & forms
 
@@ -146,7 +146,7 @@ The frozen [Operational Expectations architecture](../core/operational-expectati
 
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
-| Trust Platform (cognitive / reasoning) | **Planned** | Trusted operational reasoning: Decision Contracts → Trust Runtime → Decision Packages; privacy, knowledge, learning, economics, governance | Entry: [`../trust/trust-platform.md`](../trust/trust-platform.md); corpus index [`../trust/README.md`](../trust/README.md). Not an AI/prompt/model layer — AI is one possible reasoning implementation |
+| Trust Platform (cognitive / reasoning) | **Complete (V1)** | Trusted operational reasoning: Decision Contracts → Trust Runtime → Decision Packages; privacy, knowledge, learning, economics, governance | Entry: [`../trust/trust-platform.md`](../trust/trust-platform.md); corpus index [`../trust/README.md`](../trust/README.md). Not an AI/prompt/model layer — AI is one possible reasoning implementation. Trust Runtime V1 shipped August 2026: `supabase/migrations/20260802090000_trust_runtime_v1_foundation.sql`, `20260803230000_*`, `20260804210000_trust_lifecycle_observation_kinds.sql`, `20260807210000_trust_provider_telemetry.sql`; library at `web/lib/trust/`; certification pack `certification/trust-runtime-v1/` |
 
 ## AI / BOS
 
@@ -185,7 +185,10 @@ The frozen [Operational Expectations architecture](../core/operational-expectati
 
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
-| Stripe integration | **In Progress** | Webhook truth needs verification | See billing supplement |
+| Payments — provider collection (Stripe Connect) | **Complete** | Merchant registration, collection attempts (card + ACH), provider events, refunds, provider-initiated reversal, rail readiness, canonical posting | Shipped September 2026: `supabase/migrations/20260909160000_payment_provider_merchant.sql` … `20260909270000_collection_attempt_action_type.sql`. Webhook handler `web/app/api/stripe/webhook/route.ts` (HMAC-verified, event-id idempotency, tenancy via merchant binding). Not built: autopay, dunning, card chargebacks. Detail: [`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md) |
+| Financials — posting, periods, responsibility, subsidy | **Complete** | Charge templates and correction lineage, financial periods + journal, reduction applications, financial responsibility (incl. split shares), subsidy claims | Shipped September 2026: `20260902130000_financial_spine_actor_and_household_parity.sql`, `20260904180000_financial_periods_and_journal.sql`, `20260908120000_financial_responsibility.sql`, `20260909120000_financial_subsidy.sql` and siblings; certification packs under `certification/financials/` |
+| Attendance | **Complete** | Attendance capture, kiosk producers and person codes, operational consumption of attendance | Shipped September 2026: `20260909220000_attendance_capture_hardening.sql`, `20260909230000_attendance_capability.sql`, `20260910120000_attendance_kiosk_producers.sql`, `20260910130000_kiosk_person_codes.sql`. **Permission-gated** (`attendance.record` / `attendance.read`), not flag-gated. Surfaces: `AttendanceWorkspace`, `web/app/kiosk/`. Doctrine: [`../modules/attendance-system.md`](../modules/attendance-system.md) |
+| Employment / staffing foundation | **Complete** | Employment records, staff assignment eligibility, staff presence facts | Shipped August 2026: `20260811120000_employment_foundation_v1.sql`, `20260811120100_staff_assignment_eligibility_employment_v1.sql`, `20260812090000_staff_presence_facts_v1.sql`; `web/lib/employment/`, `web/lib/staffPresence/`. No shift model exists — staff supply is `schedule_assignments` with `subject_type='staff'` |
 
 ---
 
