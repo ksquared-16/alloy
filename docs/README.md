@@ -248,6 +248,12 @@ CSV source: `docs/supabase/reference/*.csv` (8 files)
 | `audits/archive/` | Closed audits |
 | `archive/` | Superseded docs — not current truth |
 
+**September 2026 documentation truth audit** (historical — findings, not doctrine):
+
+- `audits/active/documentation-truth-audit-2026-09/README.md` — estate map, canonical ownership matrix, duplication/conflict report
+- `audits/active/documentation-truth-audit-2026-09/api-inventory-and-gaps.md` — API documentation inventory + gap register (input to the API thread)
+- `audits/active/documentation-truth-audit-2026-09/decisions-required.md` — open architecture/ownership questions
+
 **July 2026 documentation architecture planning** (historical):
 
 - `audits/archive/2026-07-documentation-rebaseline/documentation-initiative-handoff-2026-07.md`
