@@ -39,16 +39,21 @@ describe("access is granted by the session, not by the journey", () => {
 });
 
 describe("routes decide for themselves whether they need a journey", () => {
-    it("enrollment-edit still requires a journey, and says so itself", () => {
+    it("enrollment-edit converged too — it was the last route demanding a journey", () => {
         /*
-         * The edit path still resolves against Business Process requirements. What changed is only
-         * that it owns the decision instead of inheriting it, so a participant working a
-         * hand-launched packet is no longer denied everything else on its behalf.
+         * This assertion has moved three times as the runtime converged, and it moves once more
+         * here rather than being silenced, because the truth changed underneath it.
+         *
+         * The edit path was the final participant route still requiring a Business Process journey.
+         * A hand-launched packet has none, so a parent correcting a fact on their own paperwork got
+         * NO_ENROLLMENT_JOURNEY, the client reverted the value it had just shown them, and the
+         * correction silently did not happen. Both readers below it already take a nullable process
+         * instance, so the journey now enriches where it exists and is never required.
          */
         const src = read("enrollment-edit");
-        expect(src).toContain("requireEnrollmentJourney");
-        expect(src).toContain("journey.error.code");
-        expect(src).not.toContain("access.value.processInstanceId");
+        expect(src).not.toContain("requireEnrollmentJourney");
+        // Still READ, to resolve canonical context and the objective when a journey exists.
+        expect(src).toContain("access.value.processInstanceId");
     });
 
     it.each(["enrollment-objective", "enrollment-turn"])(
