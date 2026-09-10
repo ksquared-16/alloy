@@ -17,9 +17,12 @@
  *      imports, and only if *that symbol's own declaration* (transitively, through its own
  *      bindings) reaches a principal resolution. Importing one function from a module that also
  *      exports a resolver credits nothing.
- *   3. **One terminal primitive, structurally defined.** The base case is a call to
- *      `.auth.getUser()` / `.auth.getClaims()` / `.auth.getSession()` — the only way this
- *      codebase turns a request into a principal (`lib/admin/cachedAuthSession.ts:17-48`).
+ *   3. **Terminal primitives, structurally defined.** The human base case is a call to
+ *      `.auth.getUser()` / `.auth.getClaims()` / `.auth.getSession()`
+ *      (`lib/admin/cachedAuthSession.ts:17-48`). Since Thread 5 there is a second: a named,
+ *      reviewed NON-HUMAN credential resolver (`NON_HUMAN_PRINCIPAL_RESOLVERS`), because a
+ *      trusted device holds no session and never will, and calling such a route
+ *      "unresolved" would record something untrue.
  *      Wrappers (`getAdminContextCached`, `loadAdminRouteGate`, `requireAnalyticsReadAccess`, …)
  *      are *discovered* by the graph walk, not hand-listed, so the check cannot rot as
  *      wrappers are added or renamed.
@@ -64,6 +67,29 @@ const SERVICE_CLIENT_MODULES = [
 
 /** The terminal principal-resolution primitives. Base case of the walk. */
 const PRINCIPAL_METHODS = new Set(["getUser", "getClaims", "getSession"]);
+
+/**
+ * The SECOND terminal primitive: a principal that is not a human.
+ *
+ * This file used to state that `.auth.getUser()` was "the only way this codebase
+ * turns a request into a principal", and until Thread 5 that was true. A kiosk is
+ * a trusted NON-HUMAN producer: it holds no session and never will, by design, so
+ * it can never satisfy the human terminal — and recording such a route as
+ * "resolves no principal" would put a false statement into a security ledger. The
+ * route does authenticate its sender; it authenticates a device.
+ *
+ * Admission is deliberately by EXPLICIT NAME, not by shape. A resolver earns a
+ * place here only if it authenticates a stored credential and fails closed on
+ * every path, and adding one is a security review, not a refactor. Wrappers around
+ * these are still DISCOVERED by the graph walk, exactly as for the human terminal,
+ * so this cannot rot as callers move.
+ */
+const NON_HUMAN_PRINCIPAL_RESOLVERS = new Set([
+    // Resolves a kiosk device by hashed credential; refuses unknown, revoked and
+    // unreadable, and returns the org/site from the row rather than the request.
+    // web/lib/childcareOperational/attendance/kiosk/kioskDeviceAuthority.ts
+    "resolveKioskDevice",
+]);
 
 const RESOLVE_EXTENSIONS = [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"];
 
@@ -225,10 +251,29 @@ function loadModule(file) {
 
 const symbolMemo = new Map();
 
-/** `x.auth.getUser()` — the base case. */
+/**
+ * TWO MEANINGS, MEASURED SEPARATELY.
+ *
+ * `resolvesPrincipal` answers "does this route authenticate its sender at all",
+ * which is the invariant W-4 exists for. `resolvesSessionPrincipal` answers the
+ * NARROWER shared base case — does it reach `x.auth.*` — and that one must keep
+ * agreeing with W-40's independent walker, because that agreement is how drift
+ * between the two copies is caught over the whole API surface.
+ *
+ * Collapsing them into one boolean broke that cross-check the moment a non-human
+ * terminal existed. Keeping them apart preserves the drift detector AND records
+ * the truth about a device-authenticated route.
+ */
+let includeNonHumanTerminal = true;
+
+/** `x.auth.getUser()` — the human base case. */
 function isPrincipalCall(node) {
     if (!ts.isCallExpression(node)) return false;
     const callee = node.expression;
+    if (ts.isIdentifier(callee)) {
+        // The non-human base case: a named, reviewed credential resolver.
+        return includeNonHumanTerminal && NON_HUMAN_PRINCIPAL_RESOLVERS.has(callee.text);
+    }
     if (!ts.isPropertyAccessExpression(callee)) return false;
     if (!PRINCIPAL_METHODS.has(callee.name.text)) return false;
     const owner = callee.expression;
@@ -468,11 +513,20 @@ export function runServiceClientPrincipalCheck(allowlistOverride) {
         const route = relative(WEB, file);
         const direct = holdsServiceClientDirect(file);
         const { found, trace } = routeResolvesPrincipal(file);
+        // The narrower, shared base case. Memoisation is keyed per symbol, not per
+        // mode, so it must be cleared or the second pass reads the first's answers.
+        includeNonHumanTerminal = false;
+        symbolMemo.clear();
+        const sessionOnly = routeResolvesPrincipal(file).found;
+        includeNonHumanTerminal = true;
+        symbolMemo.clear();
         return {
             route,
             holdsServiceClient: direct,
             reachesServiceClient: direct || reachesServiceClient(file),
             resolvesPrincipal: found,
+            /** Reaches `x.auth.*` — the base case W-40's independent walker also answers. */
+            resolvesSessionPrincipal: sessionOnly,
             evidence: found ? trace : [],
         };
     });

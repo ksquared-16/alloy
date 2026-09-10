@@ -3812,6 +3812,18 @@
         "reason": "Starts a submission against the form the path token names. Token-scoped."
       }
     },
+    "app/api/public/kiosk/attendance/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Public shared-device route. There is no org principal to hold an RBAC capability: the sender is a KIOSK DEVICE, not a person, and it deliberately holds no Alloy session \u2014 Thread 2A's model separates WHAT (capability), WHERE (site scope) and WHO AUTHORED IT (provenance) precisely so a non-human producer can be authorized without being given a human role. Authorization is real and server-side, it is simply not a catalog capability: the header credential is resolved by hashed selector to a row in attendance_kiosk_devices (unknown, revoked and unreadable all refuse), that row mints a NonHumanProducerAuthority, and assertNonHumanCaptureAllowed checks the device's attendance.record capability and its single bound site before anything is authored. Org and site are read from the device row, never from the request. The adult is identified separately by person_kiosk_codes, which confers no authority of its own. Per-child authority is re-resolved server-side on this write rather than carried from the identify call, so a code revoked between the two stops working on the second."
+      }
+    },
+    "app/api/public/kiosk/identify/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Public shared-device route. There is no org principal to hold an RBAC capability: the sender is a KIOSK DEVICE, not a person, and it deliberately holds no Alloy session \u2014 Thread 2A's model separates WHAT (capability), WHERE (site scope) and WHO AUTHORED IT (provenance) precisely so a non-human producer can be authorized without being given a human role. Authorization is real and server-side, it is simply not a catalog capability: the header credential is resolved by hashed selector to a row in attendance_kiosk_devices (unknown, revoked and unreadable all refuse), that row mints a NonHumanProducerAuthority, and assertNonHumanCaptureAllowed checks the device's attendance.record capability and its single bound site before anything is authored. Org and site are read from the device row, never from the request. The adult is identified separately by person_kiosk_codes, which confers no authority of its own. This route authors nothing; it reads the site-scoped eligible-child set."
+      }
+    },
     "app/api/public/tour-booking/[token]/book/route.ts": {
       "POST": {
         "status": "pending"
