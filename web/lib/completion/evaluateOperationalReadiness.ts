@@ -5,10 +5,13 @@
  */
 
 import { evaluateEffectiveRequirements } from "@/lib/completion/evaluateEffectiveRequirements";
+import { projectFieldPolicyReadinessGaps } from "@/lib/fields/fieldPolicyReadinessProjection";
 import type { EffectiveRequirementsContext } from "@/lib/completion/effectiveRequirementsTypes";
 import type { EffectiveRequirementsResult } from "@/lib/completion/effectiveRequirementsTypes";
 import {
     buildReadinessContextFromEvalInput,
+    buildReadinessCountsFromGaps,
+    derivePrimaryStateFromGaps,
     mapEffectiveRequirementsToReadinessResult,
 } from "@/lib/completion/readinessMappers";
 import type { ReadinessEvalInput, ReadinessResult, ReadinessTrigger } from "@/lib/completion/readinessTypes";
@@ -58,7 +61,7 @@ function mapReadinessInputToEffectiveContext(input: ReadinessEvalInput): Effecti
  */
 export function evaluateOperationalReadiness(input: ReadinessEvalInput): ReadinessResult {
     const effective = evaluateEffectiveRequirements(mapReadinessInputToEffectiveContext(input));
-    return mapEffectiveRequirementsToReadinessResult(effective, {
+    const operational = mapEffectiveRequirementsToReadinessResult(effective, {
         trigger: input.trigger,
         subject: input.subject,
         context: buildReadinessContextFromEvalInput(input),
@@ -67,6 +70,49 @@ export function evaluateOperationalReadiness(input: ReadinessEvalInput): Readine
         include_legacy: input.include_legacy,
         evaluated_at: new Date().toISOString(),
     });
+    return withFieldPolicyGaps(operational, input);
+}
+
+/**
+ * Fold configured field-policy requirements into the operational readiness result.
+ *
+ * The two engines stay separate — this only makes the operator's view of them single. Without it
+ * the field-policy engine can block a save that readiness reports as ready, which is the exact
+ * contradiction that sent an operator into a raw 400.
+ */
+function withFieldPolicyGaps(result: ReadinessResult, input: ReadinessEvalInput): ReadinessResult {
+    const fp = input.field_policy;
+    if (!fp || !input.record) return result;
+
+    const projected = projectFieldPolicyReadinessGaps({
+        entityType: fp.entity_type,
+        entityId: input.subject.entity_id,
+        defs: fp.defs,
+        record: input.record,
+        customValuesByFieldKey: fp.custom_values_by_field_key,
+        layoutConfig: (fp.layout_config ?? null) as never,
+    });
+    if (projected.length === 0) return result;
+
+    // An operational requirement already naming the same field wins: it carries the richer
+    // resolution route, and the operator must never see one field listed twice.
+    const known = new Set(result.gaps.map((g) => g.field_key).filter(Boolean));
+    const added = projected.filter((g) => !g.field_key || !known.has(g.field_key));
+    if (added.length === 0) return result;
+
+    const gaps = [...result.gaps, ...added];
+    const counts = buildReadinessCountsFromGaps(gaps, {
+        configured: result.counts.configured + added.length,
+        satisfied: result.counts.satisfied,
+    });
+
+    return {
+        ...result,
+        gaps,
+        counts,
+        primary_state: derivePrimaryStateFromGaps(gaps),
+        ok: !gaps.some((g) => g.blocking),
+    };
 }
 
 /**

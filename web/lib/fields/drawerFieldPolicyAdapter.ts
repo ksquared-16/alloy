@@ -78,6 +78,15 @@ const OPPORTUNITY_ENFORCEABLE_NATIVE = new Set([
     "location_id",
 ]);
 
+/**
+ * The same list as an ordered export, for surfaces that need to know which opportunity fields have
+ * a real 1:1 write path — e.g. routing a missing required field to the canonical field editor.
+ * Derived from the set above so routing can never drift from what enforcement will accept.
+ */
+export const OPPORTUNITY_ENFORCEABLE_NATIVE_FIELD_KEYS: readonly string[] = [
+    ...OPPORTUNITY_ENFORCEABLE_NATIVE,
+];
+
 /** `notes` PATCH body key → `opportunities.metadata.notes` (not a top-level column). */
 const OPPORTUNITY_METADATA_NATIVE: Record<string, { bodyKey: string; path: string }> = {
     notes: { bodyKey: "notes", path: "metadata.notes" },

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { documentActorFromAdminGate } from "@/lib/documents/projectPersonProfilePhotos";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
+import { loadFieldPolicyRequirementInputs } from "@/lib/fields/loadFieldPolicyRequirements";
 import { buildOpportunityDrawerVisiblePayload } from "@/lib/admin/opportunityEntityRecord";
 import type {
     OpportunityDrawerBootstrapRecordLayout,
@@ -107,11 +108,16 @@ export async function loadOpportunityDrawerOperationalBootstrap(
                 .maybeSingle()
         :   Promise.resolve({ data: null, error: null });
 
-    const [entity, layoutRes, wuRes, deptMetaRes] = await Promise.all([
+    // Configured field policies ride along in parallel: the Focus Panel must be able to name a
+    // missing required field, not just fail on save with a field no surface ever showed.
+    const fieldPolicyP = loadFieldPolicyRequirementInputs(supabase, orgId, "opportunity");
+
+    const [entity, layoutRes, wuRes, deptMetaRes, fieldPolicyInputs] = await Promise.all([
         entityP,
         layoutP,
         wuP,
         deptMetaP,
+        fieldPolicyP,
     ]);
     phases.visible_entity_ms = Date.now() - tVis0;
     phases.record_layout_ms = Date.now() - tLayout0;
@@ -163,6 +169,14 @@ export async function loadOpportunityDrawerOperationalBootstrap(
         workUnitId: workUnitId || null,
         departmentMetadata,
         memoScope: readinessMemo,
+        fieldPolicy:
+            fieldPolicyInputs.defs.length > 0
+                ? {
+                      entity_type: "opportunity",
+                      defs: fieldPolicyInputs.defs,
+                      layout_config: fieldPolicyInputs.layoutConfig,
+                  }
+                : undefined,
     });
 
     /** Header actions load client-side after primary reveal — keeps bootstrap off the critical path. */

@@ -143,4 +143,31 @@ export type ReadinessEvalInput = {
     configured_rule_count?: number;
     satisfied_rule_count?: number;
     include_legacy?: boolean;
+    /**
+     * Configured field policies for this record, when the caller has already loaded them.
+     * Additive and optional: readiness evaluation is pure, so the field definitions and layout
+     * config are supplied rather than fetched. Omitting it yields exactly the previous behavior.
+     * @see lib/fields/fieldPolicyReadinessProjection.ts
+     */
+    field_policy?: FieldPolicyReadinessEvalInput;
+};
+
+/**
+ * Field-policy inputs carried into readiness. Structurally typed to keep `lib/completion` free of a
+ * dependency on `lib/fields` — the projection itself lives with the engine that owns it.
+ */
+export type FieldPolicyReadinessEvalInput = {
+    entity_type: "opportunity" | "job";
+    defs: Array<{
+        id: string;
+        field_key: string;
+        field_type?: string;
+        label?: string | null;
+        is_system: boolean;
+        is_required?: boolean;
+        requirement_policy?: unknown;
+        interaction_policy?: unknown;
+    }>;
+    custom_values_by_field_key?: Record<string, unknown>;
+    layout_config?: unknown;
 };
