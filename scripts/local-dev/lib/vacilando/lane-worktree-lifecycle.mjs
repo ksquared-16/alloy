@@ -38,7 +38,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { isManagedSlot, managedSlots } from "./managed-slots.mjs";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -928,13 +928,127 @@ export function slotHoldersSummary({ cfg = null, metadata = null, root = runtime
  *
  *   unowned    a registration NO durable lane owns. Nothing is given up at all.
  *   offline    the lane is closed, retired, or its worktree is gone from disk.
- *   inactive   an open lane with no run in flight, oldest activity first.
- *   active     a run is in flight. Listed so the operator can see the whole
- *              pool, and refused by `reassignSlot` — a lane mid-turn must not
- *              lose its dev server because someone opened a new tab.
+ *   inactive   an open lane with NOTHING WORKING IN IT, oldest activity first.
+ *   active     something is working in it. Listed so the operator can see the
+ *              whole pool, and refused by `reassignSlot` — a lane mid-turn must
+ *              not lose its dev server because someone opened a new tab.
+ *
+ * "Something is working in it" is three independent claims, not one; see
+ * `laneWorkingEvidence`. Keying it on runs alone was measurably wrong.
  *
  * This function DECIDES NOTHING. It ranks, explains, and hands the choice back.
  */
+/**
+ * A lease with no heartbeat for this long is abandoned. `alloy-stack`'s number,
+ * not a second one — if that TTL moves, this reads stale and refuses too much,
+ * which is the harmless direction.
+ */
+const STACK_LEASE_TTL_MS = 12 * 60 * 60 * 1000;
+
+function stackLeaseDir(env = process.env) {
+  const base = norm(env.ALLOY_STACK_STATE_DIR) || join(homedir(), ".local", "state", "alloy", "stack");
+  return join(base, "leases");
+}
+
+/**
+ * Is the lane's agent session still alive?
+ *
+ * NO RECORDED SESSION IS A FACT and reads false. Everything else that is not a
+ * clean "no such session" reads TRUE: a tmux we cannot run, a name we cannot
+ * verify, a spawn that throws. The one exception is a host with no tmux binary
+ * at all: a Vacilando lane IS a tmux session, so "tmux is not installed" answers
+ * the question rather than dodging it and reads false. A tmux that is present
+ * but will not answer has not earned the right to take a slot away.
+ */
+function agentSessionAlive(session) {
+  const name = norm(session);
+  if (!name) return false;
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) return true;
+  try {
+    const r = spawnSync("tmux", ["has-session", "-t", name], { timeout: 3000, stdio: "ignore" });
+    // No tmux BINARY is a fact: no lane session can exist on this host. Any other
+    // failure — a timeout, a server that will not answer — is an unknown, and an
+    // unknown must read busy.
+    if (r.error) return r.error.code !== "ENOENT";
+    return r.status === 0;
+  } catch { return true; }
+}
+
+/**
+ * Does this worktree hold a live lease on the shared local Supabase stack?
+ *
+ * A lease outranks run state on purpose: certification and QA hold the stack
+ * alive across many runs, and their run records are not the claim. An ABSENT
+ * lease directory is a fact and reads false; an unreadable one reads true.
+ */
+function holdsStackLease(worktreePath, { nowMs = Date.now(), env = process.env } = {}) {
+  const want = norm(worktreePath);
+  if (!want) return false;
+  let names;
+  try { names = readdirSync(stackLeaseDir(env)); }
+  catch (e) { return e?.code !== "ENOENT"; }
+  for (const n of names) {
+    if (!n.endsWith(".lease")) continue;
+    let text;
+    try { text = readFileSync(join(stackLeaseDir(env), n), "utf8"); } catch { return true; }
+    const field = (k) => norm((text.match(new RegExp(`^${k}=(.*)$`, "m")) || [])[1]);
+    if (field("WORKTREE") !== want) continue;
+    // The holder process outranks the clock: a live PID is a live lease however old.
+    const pid = Number(field("PID"));
+    if (Number.isInteger(pid) && pid > 0) {
+      try { process.kill(pid, 0); return true; }
+      catch (e) { if (e?.code === "EPERM") return true; }
+    }
+    const created = Date.parse(field("CREATED"));
+    if (Number.isFinite(created) && nowMs - created < STACK_LEASE_TTL_MS) return true;
+  }
+  return false;
+}
+
+/**
+ * WHY IS THIS LANE BUSY? Returns the evidence, or null if nothing is working.
+ *
+ * THE ONE-SIGNAL VERSION SHIPPED AND WAS WRONG ON 11 OF 12 SLOTS.
+ *
+ * `busy` used to mean `hasActiveRun(lane)` alone — a run in a non-terminal state
+ * at this instant. Measured on the live host the morning after it shipped, that
+ * marked ELEVEN of twelve slots reclaimable, including the lane that was running
+ * the measurement (open agent, 22 uncommitted files, its own run merely between
+ * turns) and the lane holding the shared-stack lease with 63 uncommitted files.
+ * Only one slot was protected, because only one happened to have a run mid-flight
+ * in that second. Nothing was lost — reclaim is operator-confirmed and busy lanes
+ * sort last — but the predicate was fail-OPEN, and ordering is not a safety model.
+ *
+ * A run between turns is the NORMAL state of a working lane. So three independent
+ * claims, ANY of which means busy, each failing closed on its own:
+ *
+ *   1. a run is in flight            — the original signal, still first
+ *   2. its agent session is alive    — the lane is open in tmux with someone in it
+ *   3. it holds the shared stack     — certification outlives any single run
+ *
+ * Deliberately NOT here: uncommitted files. A dirty tree is a reason to WARN an
+ * operator, not a claim that work is happening — trees stay dirty for days. The
+ * dirty-tree clause belongs to the reconcile predicate, which releases without
+ * asking; this function only decides what to show someone who is choosing.
+ */
+function laneWorkingEvidence(lane, hasActiveRun, {
+  nowMs = Date.now(), env = process.env, sessionAlive = null, leaseHeld = null,
+} = {}) {
+  // Each probe is wrapped the way the run probe already is: one that THROWS must
+  // mean busy, never propagate and take the whole ranking down with it.
+  const session = sessionAlive || agentSessionAlive;
+  const lease = leaseHeld || ((wp) => holdsStackLease(wp, { nowMs, env }));
+  const ask = (fn, arg) => { try { return Boolean(fn(arg)); } catch { return true; } };
+
+  // Phrasing note: C4/R2 assert on "run in flight". The evidence string carries
+  // that exact phrase so those controls keep certifying the run signal itself
+  // rather than being rewritten to match a new wording.
+  if (hasActiveRun(lane.lane_id)) return "there is a run in flight";
+  if (ask(session, lane.tmux_session)) return `its agent session ${norm(lane.tmux_session)} is still open`;
+  if (ask(lease, lane.worktree_path)) return "it holds a lease on the shared local stack";
+  return null;
+}
+
 export const SLOT_RECLAIM_GROUPS = Object.freeze(["unowned", "offline", "inactive", "active"]);
 
 export async function slotReclaimCandidates({
@@ -943,6 +1057,11 @@ export async function slotReclaimCandidates({
   metadata = null,
   nowMs = Date.now(),
   activeRun = null,
+  // The same seam as `activeRun`, for the same reason: a test must be able to
+  // state what is alive rather than depend on the tmux and lease state of the
+  // machine it happens to run on.
+  sessionAlive = null,
+  leaseHeld = null,
   // The lane asking for a slot must never be offered its own. It has none to
   // give — that is why it is asking — and listing it would invite a choice that
   // resolves to nothing.
@@ -1008,8 +1127,9 @@ export async function slotReclaimCandidates({
     const open = l.lane_open === true;
     const missing = Boolean(l.worktree_path) && !existsSync(l.worktree_path);
     const finished = norm(l.registry?.lifecycle).toLowerCase() === "finished";
-    const busy = open && !missing && !finished ? hasActiveRun(l.lane_id) : false;
-    const group = (!open || finished || missing) ? "offline" : (busy ? "active" : "inactive");
+    const offline = !open || finished || missing;
+    const working = offline ? null : laneWorkingEvidence(l, hasActiveRun, { nowMs, sessionAlive, leaseHeld });
+    const group = offline ? "offline" : (working ? "active" : "inactive");
     out.push({
       slot: heldSlot, port: l.port ?? asPort(l.registry?.port), worktree: l.worktree_name, path: l.worktree_path,
       group, holder_kind: "lane",
@@ -1021,7 +1141,7 @@ export async function slotReclaimCandidates({
           : finished ? `${l.lane_name}'s registration is marked finished.`
             : `${l.lane_name} is closed.`)
         : group === "active"
-          ? `${l.lane_name} has a run in flight — taking its slot would pull the dev server out from under it.`
+          ? `${l.lane_name} is working — ${working}. Taking its slot would pull the dev server out from under it.`
           : `${l.lane_name} is open with nothing running.`,
     });
   }

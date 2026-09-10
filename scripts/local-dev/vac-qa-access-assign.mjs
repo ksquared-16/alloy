@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { resolveCanonicalRepoRoot } from "./lib/vacilando/trusted-host-action-registry.mjs";
+import { managedSlots } from "./lib/vacilando/managed-slots.mjs";
 
 function fail(code, detail) {
     process.stdout.write(`${JSON.stringify({ ok: false, error: code, detail: detail ? String(detail).slice(0, 300) : null })}\n`);
@@ -45,7 +46,14 @@ if (!identity || !envSource || !slot || !role) fail("bad_arguments", "identity, 
 
 // Second, independent check on the identity shape, as in provisioning: this must never be able to
 // grant access to a customer or employee account even if a registry were misconfigured.
-if (!/^qa-slot[1-6]-[a-z0-9-]+@/i.test(identity)) {
+//
+// The BOUND comes from the topology owner, not from a literal here. This read `qa-slot[1-6]` and
+// so did its sibling in provisioning; the guard module had already moved to `managedSlots()` when
+// the host went to twelve slots, and these two children were missed. Two checks is the design;
+// two different answers to "how many slots exist" is the bug. See the long note in
+// vac-qa-identity-provision.mjs — a Director approval was spent proving it.
+const MANAGED_QA_IDENTITY = new RegExp(`^qa-slot(?:${managedSlots().join("|")})-[a-z0-9-]+@`, "i");
+if (!MANAGED_QA_IDENTITY.test(identity)) {
     fail("identity_not_managed_qa_shape", "only registered slot QA identities may be assigned access");
 }
 if (role !== "admin") fail("role_not_permitted", "only the admin role is authorized for this action");

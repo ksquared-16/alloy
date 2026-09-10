@@ -60,6 +60,10 @@ function awayIntent(
         effectiveFrom: "2026-09-18",
         effectiveTo: "2026-09-18",
         standing,
+        // Unratified by default: these fixtures are about interpretation, not governance.
+        effectiveStanding: standing,
+        ratifiedAt: null,
+        ratifiedUnderAuthorityKey: null,
     };
 }
 
@@ -78,6 +82,9 @@ function prohibition(
         effectiveFrom: "2026-09-18",
         effectiveTo: "2026-09-18",
         standing: "proposed",
+        effectiveStanding: "proposed",
+        ratifiedAt: null,
+        ratifiedUnderAuthorityKey: null,
     };
 }
 

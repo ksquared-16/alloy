@@ -20,6 +20,7 @@ import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 
 import { resolveCanonicalRepoRoot } from "./lib/vacilando/trusted-host-action-registry.mjs";
+import { managedSlots } from "./lib/vacilando/managed-slots.mjs";
 
 function fail(code, detail) {
     process.stdout.write(`${JSON.stringify({ ok: false, error: code, detail: detail ? String(detail).slice(0, 300) : null })}\n`);
@@ -49,8 +50,23 @@ if (!identity || !envSource || !slot || !lane) fail("bad_arguments", "identity, 
  *
  * The caller already resolved this from the registry, so this is a second, independent line: a
  * future caller that resolved wrongly still cannot make this process create a customer account.
+ *
+ * THE SLOT RANGE IS NOT THIS FILE'S TO KNOW, AND THAT IS WHAT BROKE.
+ *
+ * This read `qa-slot[1-6]`. The guard module was consolidated onto the topology owner when the
+ * host moved to twelve slots; these two trusted children were missed, so the library said yes and
+ * the child that actually does the work said no. Slot 12's identity was configured, resolved
+ * correctly through `vac browser-auth`, was approved by the Director, and then failed here with
+ * `identity_not_managed_qa_shape` — a spent approval proving the guard disagreed with itself.
+ *
+ * Independence was never the problem: TWO checks is the design. Two DIFFERENT ANSWERS to "how
+ * many slots exist" is the bug. The refusal below is still written here and still independent of
+ * the guard module; only the bound now comes from `managedSlots()`, which is the topology owner
+ * and the reason `managed-slots.mjs` exists. What this refuses is unchanged: anything that is not
+ * a managed `qa-slot<N>-` alias within the host's real range.
  */
-if (!/^qa-slot[1-6]-[a-z0-9-]+@/i.test(identity)) {
+const MANAGED_QA_IDENTITY = new RegExp(`^qa-slot(?:${managedSlots().join("|")})-[a-z0-9-]+@`, "i");
+if (!MANAGED_QA_IDENTITY.test(identity)) {
     fail("identity_not_managed_qa_shape", "only registered slot QA identities may be provisioned");
 }
 

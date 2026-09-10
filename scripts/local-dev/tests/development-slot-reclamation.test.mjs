@@ -403,6 +403,85 @@ await test("U9. a server refusal replaces the list and clears the stale choice",
   assert.match(fn, /st\.selected = null/, "and the stale selection is cleared");
 });
 
+/*
+ * "NOTHING RUNNING" MEANT "NO RUN THIS INSTANT", AND THAT WAS FAIL-OPEN.
+ *
+ * The first version of this ranker decided busy/idle from `hasActiveRun` alone.
+ * MEASURED ON THE LIVE HOST the morning after it shipped: ELEVEN of twelve slots
+ * came back reclaimable — including the lane running the measurement (agent open,
+ * 22 uncommitted files, its run merely between turns) and the lane holding the
+ * shared-stack lease with 63 uncommitted files. Only one slot was protected,
+ * because only one happened to have a run mid-flight in that second. Run the same
+ * code an hour later and a different set is protected: the predicate was not just
+ * wrong, it was UNSTABLE, which is why ordering-by-recency never rescued it.
+ *
+ * Nothing was lost — reclaim is operator-confirmed — but "the operator would
+ * probably not pick the dangerous one" is not a safety model.
+ *
+ * A run between turns is the NORMAL state of a working lane. So three claims,
+ * ANY of which means busy, each failing closed on its own.
+ */
+await test("L1. a live agent session holds the slot even with no run in flight", async () => {
+  seedLane("Working", "wt-working", { slot: 1 });
+  const { candidates } = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: () => true, leaseHeld: () => false,
+  });
+  const c = candidates.find((x) => x.worktree === "wt-working");
+  assert.equal(c.group, "active", "an open agent session is work in progress");
+  assert.equal(c.reclaimable, false);
+  assert.match(c.reason, /agent session/, "the reason names the evidence, not a generic state");
+});
+
+await test("L2. holding the shared stack holds the slot", async () => {
+  // Certification keeps the stack alive across many runs; its run records are
+  // not the claim, which is why a lease outranks run state.
+  seedLane("Certifying", "wt-cert", { slot: 1 });
+  const { candidates } = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: () => false, leaseHeld: () => true,
+  });
+  const c = candidates.find((x) => x.worktree === "wt-cert");
+  assert.equal(c.reclaimable, false);
+  assert.match(c.reason, /shared local stack/);
+});
+
+await test("L3. a probe that cannot answer reads BUSY, and never throws out", async () => {
+  seedLane("Unknown", "wt-unknown", { slot: 1 });
+  const boom = () => { throw new Error("probe exploded"); };
+  const { candidates } = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: boom, leaseHeld: () => false,
+  });
+  const c = candidates.find((x) => x.worktree === "wt-unknown");
+  assert.equal(c.reclaimable, false, "I cannot tell must mean busy");
+  // The whole ranking must still come back — a throwing probe took it all down once.
+  assert.equal(candidates.length, 1, "the ranking survived the failing probe");
+});
+
+await test("L4. with nothing working it is still offered — no over-refusal", async () => {
+  // The other direction matters just as much: a predicate that refuses everything
+  // is exactly as useless as one that offers everything, and much harder to notice.
+  seedLane("Quiet", "wt-quiet", { slot: 1 });
+  const { candidates } = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: () => false, leaseHeld: () => false,
+  });
+  const c = candidates.find((x) => x.worktree === "wt-quiet");
+  assert.equal(c.group, "inactive");
+  assert.equal(c.reclaimable, true);
+});
+
+await test("L5. busy is not decided by the run probe alone", async () => {
+  // Source control, comments STRIPPED — an earlier control in this repo matched
+  // the very comment describing the defect it was meant to catch.
+  const src = readFileSync(new URL("../lib/vacilando/lane-worktree-lifecycle.mjs", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const fn = src.slice(src.indexOf("function laneWorkingEvidence"));
+  const body = fn.slice(0, fn.indexOf("\n}"));
+  assert.match(body, /hasActiveRun/, "the run signal is still first");
+  assert.match(body, /session/, "and is no longer alone");
+  assert.match(body, /lease/, "and the lease is consulted too");
+  assert.ok(!/const busy = .*hasActiveRun\(l\.lane_id\) : false/.test(src),
+    "the single-signal predicate is gone");
+});
+
 try { rmSync(ROOT, { recursive: true, force: true }); } catch { /* */ }
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

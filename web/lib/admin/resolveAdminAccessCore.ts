@@ -2,6 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type DepartmentScopeMode = "all" | "restricted";
 export type SiteScopeMode = "all" | "restricted";
+/**
+ * Which attendance capture scope policy applies to this principal.
+ *
+ * A MODE beside the other two, not a permission. `site` is ordinary site scope;
+ * `assigned` narrows further to the locations the principal's current staff
+ * assignments cover. It never confers `attendance.record` and never widens
+ * anything — a narrowing expressed as a permission would union across roles and
+ * make adding a role reduce authority.
+ */
+export type AttendanceCaptureScopeMode = "site" | "assigned";
 
 export type ResolvedAdminAccessCore = {
     orgId: string;
@@ -11,6 +21,7 @@ export type ResolvedAdminAccessCore = {
     allowedDepartmentIds: string[] | null;
     siteScope: SiteScopeMode;
     allowedSiteLocationIds: string[] | null;
+    attendanceCaptureScope: AttendanceCaptureScopeMode;
     /** True when role_keys for this org include admin or ops (admin shell / legacy PATCH gate). */
     portalEligible: boolean;
 };
@@ -59,11 +70,15 @@ export type AbsentProfileMode = "legacy-all" | "deny";
 
 export const ABSENT_PROFILE_ENFORCEMENT: AbsentProfileMode = "legacy-all";
 
-export type ProfileScopeRow = { department_scope?: unknown; site_scope?: unknown } | null | undefined;
+export type ProfileScopeRow =
+    | { department_scope?: unknown; site_scope?: unknown; attendance_capture_scope?: unknown }
+    | null
+    | undefined;
 
 export type ScopeAnswer = {
     departmentScope: DepartmentScopeMode;
     siteScope: SiteScopeMode;
+    attendanceCaptureScope: AttendanceCaptureScopeMode;
     /**
      * True only for the absent-profile denial. Denial is `restricted` *plus explicitly empty
      * allow-lists* — never `restricted` alone. A membership with no profile row may still hold
@@ -83,16 +98,24 @@ export function resolveScopeAnswerFromProfile(
     if (profileRow) {
         const ds = String(profileRow.department_scope ?? "").trim();
         const ss = String(profileRow.site_scope ?? "").trim();
+        const cs = String(profileRow.attendance_capture_scope ?? "").trim();
         return {
             departmentScope: ds === "restricted" ? "restricted" : "all",
             siteScope: ss === "restricted" ? "restricted" : "all",
+            // Only the explicit word narrows. Anything else — absent column on an
+            // older row, an unrecognised value — reads as the ordinary policy, so
+            // a profile this code cannot fully understand never silently tightens
+            // attendance for a working operator.
+            attendanceCaptureScope: cs === "assigned" ? "assigned" : "site",
             denyAll: false,
         };
     }
     if (mode === "deny") {
-        return { departmentScope: "restricted", siteScope: "restricted", denyAll: true };
+        // Denial already withholds every site; the capture policy is moot, and
+        // `site` keeps it from reading as a second, independent restriction.
+        return { departmentScope: "restricted", siteScope: "restricted", attendanceCaptureScope: "site", denyAll: true };
     }
-    return { departmentScope: "all", siteScope: "all", denyAll: false };
+    return { departmentScope: "all", siteScope: "all", attendanceCaptureScope: "site", denyAll: false };
 }
 
 /**
@@ -345,7 +368,7 @@ export async function resolveAdminAccessCore(
 
     const { data: profileRow, error: profileErr } = await supabase
         .from("user_access_profiles")
-        .select("department_scope, site_scope")
+        .select("department_scope, site_scope, attendance_capture_scope")
         .eq("user_id", userId)
         .eq("org_id", orgId)
         .maybeSingle();
@@ -409,6 +432,7 @@ export async function resolveAdminAccessCore(
         allowedDepartmentIds,
         siteScope,
         allowedSiteLocationIds,
+        attendanceCaptureScope: enforced.attendanceCaptureScope,
         portalEligible,
     };
 }
@@ -459,7 +483,7 @@ export async function resolveAdminAccessDimensionsForOrgMember(
 
     const { data: profileRow, error: profileErr } = await supabase
         .from("user_access_profiles")
-        .select("department_scope, site_scope")
+        .select("department_scope, site_scope, attendance_capture_scope")
         .eq("user_id", userId)
         .eq("org_id", orgId)
         .maybeSingle();

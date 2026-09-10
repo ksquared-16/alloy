@@ -10,7 +10,15 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 export type AdminAccessScopeDimensions = Pick<
     AdminAccessContextSuccess,
     "departmentScope" | "allowedDepartmentIds" | "siteScope" | "allowedSiteLocationIds"
->;
+> & {
+    /**
+     * Which attendance capture scope policy applies. Optional so every existing
+     * constructor of these dimensions keeps compiling and keeps meaning `site` —
+     * the ordinary policy — rather than being forced to opt out of a narrowing
+     * it never asked for.
+     */
+    attendanceCaptureScope?: "site" | "assigned";
+};
 
 /**
  * Stable string for client session cache keys — distinguishes corp vs restricted (site/dept) snapshots for the same principal.
