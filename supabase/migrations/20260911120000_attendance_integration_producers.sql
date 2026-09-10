@@ -323,6 +323,15 @@ CREATE TABLE IF NOT EXISTS public.attendance_integration_events (
      *   unattributed    the producer itself could not be resolved
      *   conflicted      same event id, different meaning
      *   rejected        refused by authorization or validation
+     *
+     * Deliberately the SAME words as `payment_provider_events`: an inbox
+     * disposition means the same thing whoever the provider is, and a second
+     * vocabulary would only make two surfaces that must be learned separately.
+     *
+     * `duplicate` is what a REPLAY is told, not what its row becomes. Identity
+     * here is (producer, provider event id), so a redelivery is the same row —
+     * which stays `applied`, because overwriting it with `duplicate` would erase
+     * the very outcome the caller is being told about.
      */
     disposition text NOT NULL DEFAULT 'received'
         CHECK (disposition IN ('received', 'applied', 'duplicate', 'unmapped', 'unattributed', 'conflicted', 'rejected')),
