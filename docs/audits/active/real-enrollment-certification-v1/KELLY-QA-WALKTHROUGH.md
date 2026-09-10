@@ -68,13 +68,38 @@ Search `Immunization`, open it.
 
 ---
 
-## C. Safe admin preview  *(partial — read the note)*
+## C. Admin preview of a Form
 
-**C1.** With any of the three Forms open, click **▷ Preview**, then **◎ Runtime**.
-*You should see* the published form rendered the way a parent sees it.
-*You should also see* that nothing operational happens: no new session appears in **Session inbox**, and no new item appears in **Processing → Work → Queue → Incoming**.
+Alloy previews a **published Form** for you, against the live configuration, without creating
+anything. Do this for each of the three Forms.
 
-> **Known gap.** There is a preview for one **Form** at a time. There is **no** admin preview of the whole three-step participant *conversation* yet. To see the full parent experience today you must launch a real packet (section D), which does create a real session. Please treat section C as "form preview is safe", not "full experience preview exists".
+**C1.** In **Processing → Studio → Forms**, open **Northwind Enrollment Application**.
+Click **▷ Preview**.
+*You should see* the real paperwork — the recognizable document a parent signs, not a list of field
+names.
+
+**C2.** Click **◎ Runtime**.
+*You should see* the same Form presented the way a parent meets it.
+
+**C3.** Repeat C1–C2 for **Health and Medical Authorization** and **Immunization Record**.
+*You should see* each render its own recognizable paperwork, and each marked **Published** — what
+you are previewing is the live published configuration, not a draft.
+
+**C4. Confirm nothing was created.** Go to **Processing → Studio → Packets → Enrollment Packet —
+Firefly V1 → Session inbox**, and to **Processing → Work → Queue → Incoming**.
+*You should see* no new session and no new item from anything you did in C1–C3. Previewing a Form
+is read-only: it does not start a family's paperwork, does not create work for staff, and does not
+change any record.
+
+> **Known V1 limitation.** Alloy does not yet provide a non-operational preview of the **entire
+> multi-Form Enrollment conversation** — the guided experience that walks a family through all three
+> requirements. Previewing one Form at a time is what exists today.
+>
+> The real Participant Runtime has been certified end to end separately, and **section D below walks
+> you through that actual experience** with the QA family. Building a safe whole-experience preview
+> requires an ephemeral Participant Runtime persistence boundary and is tracked as follow-up
+> platform work — so please do not go looking for a "preview the whole experience" button; there
+> isn't one yet.
 
 ---
 
@@ -166,5 +191,5 @@ Repeat **D2 → D11** with the browser window narrowed to a phone width (≈375p
 
 ## Known gaps (disclosed, not defects to find)
 
-1. **Full-experience admin preview** — section C previews one Form at a time. There is no safe preview of the whole three-step parent conversation yet.
+1. **Full-experience admin preview** — section C previews one Form at a time, safely. A non-operational preview of the whole three-step parent conversation does not exist in V1; it needs an ephemeral Participant Runtime persistence boundary and is recorded as follow-up platform work. Section D is how you test the real thing.
 2. **Packet version rows** — a packet's *step-level* versions are already locked for a family in progress (proven: a session keeps its original Form versions even after new versions are published). The explicit packet-version record is waiting on a database change that this environment has not received yet. Nothing a parent or operator does is affected.
