@@ -271,7 +271,7 @@ Legacy `/admin/settings/kpis` redirects to `?tab=visibility`.
 | Command layout | Queue \| Conversation \| Composer columns | Health bar + summary row + playbook sections |
 | Health signals | Status pills in queue/conversation headers | Health command chips + per-indicator status |
 
-POS workspace is not yet implemented in-repo; O.I. follows the shared **platform workspace modal** pattern (`AdminV2WorkspaceBosModalShell`) used by Communications and Inbox.
+The POS (Digital Mailroom) workspace now exists in-repo (`web/app/adminV2/pos/`, ~60 files — `DigitalMailroomShell`, `PosProcessingWorkspace`, `ProcessingKpiStrip`); O.I. follows the shared **platform workspace modal** pattern (`AdminV2WorkspaceBosModalShell`) used by Communications and Inbox.
 
 ### Phase 3E — premium workspace convergence
 

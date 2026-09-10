@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -98,6 +98,22 @@ Handoff on `approve_enrollment` creates or reuses the agreement and converts the
 - No effective-dated placement history yet.
 
 ---
+
+## Subject scope — this document owns the child branch
+
+`schedule_assignments` is **subject-neutral**: it carries
+`subject_type ∈ {child, staff}` as a CHECK constraint
+(`supabase/migrations/20260725030801_operational_assignment_foundation_v1.sql`). The two grains
+have different shapes — a child assignment names a `customer_members` row and may carry an
+enrollment agreement; a staff assignment names a `persons` row, requires a `site_location_id`,
+forbids an agreement, and must be `committed`.
+
+**This document owns the child branch.** The staff branch — presence, supply and roster
+composition — is owned by [`../modules/attendance-system.md`](../modules/attendance-system.md)
+§ Attendance V1. Neither document owns the assignment commitment *object* itself (lifecycle
+states, `commitment_kind`, supersede-not-patch, the type registry); that gets a canonical owner
+when staff traffic exists — see D6 in
+`docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md`.
 
 ## Future placement runtime
 

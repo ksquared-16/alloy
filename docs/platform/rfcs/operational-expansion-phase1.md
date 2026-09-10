@@ -47,7 +47,7 @@ Classification legend: **Ratified doctrine** · **Implemented runtime** · **Imp
 | Consequence reactors (events → billing/compliance/forecasting) | **Missing** | no subscriber on `workflow_events` for these consequences |
 | Commercial substrate convergence | **Partial** | neutral `evaluate()` vs older `resolveEnrollmentTuitionRate.ts` coexist |
 | Posting (authoritative money write), invoices/AR/payments/GL-posting/subsidy | **Missing (deferred by design)** | `billing-financials-platform.md` "Explicitly deferred" |
-| Staffing **supply** (shift commitment + staff-present facts) | **Missing** | only *required* staff derived (`requiredStaffForChildren`); "staffed capacity … future" |
+| Staffing **supply** (shift commitment + staff-present facts) | ****Split (September 2026):** staff-present facts are **implemented** (`supabase/migrations/20260812090000_staff_presence_facts_v1.sql`, `web/lib/staffPresence/`); shift commitment remains **Missing** — no shift model exists in any migration** | only *required* staff derived (`requiredStaffForChildren`); "staffed capacity … future" |
 | Scheduling **process** definition | **Missing** | `process/definitions/` holds only `enrollment` (child schedule *assignments* + occupancy projection exist) |
 | Forecasting (Planning-plane projections) | **Missing** | no forecast code; OIP metrics/snapshots/trends substrate exists |
 | Process Engine (agnostic participation core + additive domain registry) | **Implemented runtime** | `process/engine/*` grep-proven agnostic; `mutations/domainRegistry.ts` |

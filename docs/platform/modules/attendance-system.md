@@ -555,7 +555,15 @@ Product record: [`../planning/roster-product-v1-stage1.md`](../planning/roster-p
 - **Edit / End employment** have no operator surface yet (Add Staff does, at `/organization/staff`),
   which is why the drawer-era `PersonEmploymentSection` is retained-but-unmounted rather than deleted.
 
-### Where the truth lives
+### Ownership note
+
+This document is the canonical owner of the **staff branch of the operational day** — presence
+facts, staff supply, and roster composition. That ownership is easy to miss because the document
+is named for Attendance; a reader looking for "staffing" belongs here. It does **not** own the
+assignment commitment object — see [`../core/placement-system.md`](../core/placement-system.md)
+§ Subject scope.
+
+## Where the truth lives
 
 | Concern | Owner |
 |---------|-------|
