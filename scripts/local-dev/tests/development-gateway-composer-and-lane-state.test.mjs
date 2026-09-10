@@ -43,14 +43,21 @@ import {
   laneOperatorStatus,
   operatorState,
   operatorStatusLine as opLine,
-  ATTENTION_CAUSE_LABEL,
+  ATTENTION_CAUSE_COPY,
   LANE_LIST_GROUP_ORDER,
   OPERATOR_PRIORITY,
   OPERATOR_STATE_LABEL,
+  attentionCauseCopy,
+  laneActivityMs,
   laneOperatorPriority,
   laneOperatorPriorityRank,
   operatorStatusLine,
+  buildLaneSummaries,
+  laneRowV2,
+  renderLaneHeaderV2,
   renderLaneList,
+  railLaneRow,
+  shouldPollList,
   sortLanesForIndex,
   touchPrimaryInput,
 } from "../apps/vacilando/public/gateway-view.mjs";
@@ -202,7 +209,7 @@ test("O5. THE REGRESSION: the lane row and the lane header say the same thing", 
     laneWith({ lane_id: "l5", label: "Failed lane", execution_run: { state: "FAILED" } }),
   ];
   const html = renderLaneList(lanes, null, {});
-  const rows = [...html.matchAll(/<span class="gw-lane-title">([^<]*)[\s\S]*?<span class="gw-lane-posture[^"]*">([^<]*)<\/span>/g)];
+  const rows = [...html.matchAll(/<span class="gw-lane-title">([^<]*)[\s\S]*?<span class="gw-lane-posture[^"]*">(?:<span[^>]*>[^<]*<\/span>)?([^<]*)<\/span>/g)];
   assert.equal(rows.length, lanes.length, "every lane rendered a row");
   for (const [, title, posture] of rows) {
     const lane = lanes.find((l) => l.label === title.trim());
@@ -213,12 +220,20 @@ test("O5. THE REGRESSION: the lane row and the lane header say the same thing", 
 });
 
 test("O6. the runtime phrase is DEMOTED, not discarded", () => {
-  // "Queued for capacity" is worth showing. It is not the answer to what the
-  // lane is doing, so it rides with the provider and the clock.
-  const lane = laneWith({ label: "Idle lane" });
+  // A finished run reads "Ready" to the operator, and "Complete" is a real
+  // distinction underneath it — not a synonym — so it still rides as secondary.
+  const lane = laneWith({ label: "Done lane", execution_run: { state: "COMPLETE" } });
   const html = renderLaneList([lane], null, {});
-  assert.match(html, /class="gw-lane-posture[^"]*">Ready</, "the projection is the headline");
-  assert.match(html, /class="gw-lane-meta">[^<]*Idle[^<]*</, "and the runtime phrase is still on the row");
+  assert.match(html, /class="gw-lane-posture[^"]*">(?:<span[^>]*>[^<]*<\/span>)?Ready</, "the projection is the headline");
+  assert.match(html, /class="gw-lane-why">Complete</, "and the runtime phrase is still on the row");
+});
+
+test("O6b. a synonym is suppressed rather than dressed up as an exception", () => {
+  // "Ready" over "Idle" says the same thing twice, and the secondary slot
+  // otherwise holds exceptions — so a quiet lane would read as a problem.
+  const html = renderLaneList([laneWith({ label: "Quiet lane" })], null, {});
+  assert.match(html, /class="gw-lane-posture[^"]*">(?:<span[^>]*>[^<]*<\/span>)?Ready</);
+  assert.ok(!/class="gw-lane-why">/.test(html));
 });
 
 test("O7. the headline never repeats itself in the meta line", () => {
@@ -365,8 +380,11 @@ test("R12. a run that finished without a summary is attention, not Ready", () =>
   const unreported = laneWith({ previous_run: { state: "COMPLETE", completed_at: at(now) }, provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" } });
   const work = canonicalLaneWorkState(unreported, { nowMs: now });
   assert.equal(work.group, "attention");
-  // It names WHICH attention: the run is done and the account of it is missing.
-  assert.equal(laneOperatorStatus(unreported, work, { nowMs: now }).label, "Finished · no report");
+  // It names WHICH attention, now split: the operational fact is that the run
+  // finished, and the exception is that its account is missing.
+  const op = laneOperatorStatus(unreported, work, { nowMs: now });
+  assert.equal(op.label, "Finished");
+  assert.match(op.explanation, /report/i);
 });
 
 test("R8. one ordering model, so the rail and the list cannot drift", () => {
@@ -444,45 +462,44 @@ test("E7. every model symbol the view USES is imported, not merely re-exported",
 // A — A STATE NAME MUST SAY WHAT IS TRUE (reported by the operator)
 // ---------------------------------------------------------------------------
 
-test("A1. every operator label names a fact, not a category", () => {
-  // The report, verbatim: "I'm seeing ! Attention on the left side nav for
-  // status and then in the lane I see Attention · Claude... I don't understand
-  // what attention means in this context." Every other label in this vocabulary
-  // names what is true — Working is working, Ready can take work, Offline has no
-  // runtime, Needs you is being asked. "Attention" said only that something was
-  // worth looking at, on the surface whose whole job is to say what.
-  for (const key of Object.keys(ATTENTION_CAUSE_LABEL)) {
-    const label = laneOperatorStatus(laneWith(), { key, group: "attention" }).label;
-    assert.notEqual(label, OPERATOR_STATE_LABEL.attention, `${key} still renders the bucket name`);
-    assert.ok(label.length > 0);
+test("A1. every operator PRIMARY names an operational fact", () => {
+  // The report that started this: "I don't understand what attention means in
+  // this context." The first fix named the cause — "Working · untracked" — and
+  // was still the wrong shape, because the operator's first question is what
+  // the lane is DOING and a composite string answers two questions at once.
+  for (const key of Object.keys(ATTENTION_CAUSE_COPY)) {
+    const st = laneOperatorStatus(laneWith(), { key, group: "attention" });
+    assert.notEqual(st.label, OPERATOR_STATE_LABEL.attention, `${key} still renders the bucket name`);
+    assert.ok(!st.label.includes("·"), `${key} primary is composite: "${st.label}"`);
+    assert.ok(st.explanation && st.explanation.length > 0, `${key} has no secondary`);
   }
 });
 
-test("A2. the two ways into Attention each say which one it is", () => {
-  // Claude is busy in the worktree with no Execution Run open: the work exists
-  // and nothing is tracking it. Both halves are in the label.
-  assert.equal(laneOperatorStatus(laneWith(), { key: "provider_active", group: "attention" }).label,
-    "Working · untracked");
-  // The run finished; what is missing is the account of it.
-  assert.equal(laneOperatorStatus(laneWith(), { key: "completion_unreported", group: "attention" }).label,
-    "Finished · no report");
+test("A2. primary is the operational fact, secondary is the exception", () => {
+  const untracked = laneOperatorStatus(laneWith(), { key: "provider_active", group: "attention" });
+  assert.equal(untracked.label, "Working");
+  assert.match(untracked.explanation, /tracked/i);
+
+  const unreported = laneOperatorStatus(laneWith(), { key: "completion_unreported", group: "attention" });
+  assert.equal(unreported.label, "Finished");
+  assert.match(unreported.explanation, /report/i);
 });
 
-test("A3. the cause reaches the line every surface renders", () => {
+test("A3. the primary line every surface renders carries no exception copy", () => {
   const st = laneOperatorStatus(laneWith(), { key: "provider_active", group: "attention" });
-  assert.equal(opLine(st, "Claude"), "Working · untracked · Claude",
-    "the nav, the lane header and the lane row all read this one line");
+  assert.equal(opLine(st, "Claude"), "Working · Claude",
+    "the exception belongs beneath the line, not inside it");
 });
 
-test("A4. an unrecognised attention cause is still Attention, never Ready", () => {
-  // THE FAIL-OPEN THIS CLOSES. The two causes were matched by key equality, so a
-  // third attention state added to the resolver later missed both and fell
-  // through to READY — the most reassuring answer this function can give,
-  // handed to a lane the resolver had just flagged as worth looking at.
+test("A4. an unrecognised cause keeps the generic primary and routes to Details", () => {
+  // Inventing an operational fact for a state nobody has described would be
+  // worse than admitting the gap.
   const st = laneOperatorStatus(laneWith(), { key: "some_future_cause", group: "attention" });
   assert.equal(st.state, "attention");
-  assert.equal(st.label, OPERATOR_STATE_LABEL.attention,
-    "generic until it earns a plain label — a wording gap, not a wrong answer");
+  assert.equal(st.label, OPERATOR_STATE_LABEL.attention);
+  assert.match(st.explanation, /Details/);
+  assert.deepEqual(attentionCauseCopy("some_future_cause"), attentionCauseCopy(undefined),
+    "one fallback, not a per-caller guess");
 });
 
 test("A5. attention does not outrank being asked, and does not swallow the rest", () => {
@@ -496,12 +513,13 @@ test("A5. attention does not outrank being asked, and does not swallow the rest"
     laneWith({ governed_action: { status: "awaiting_operator" } })), "needs_you");
 });
 
-test("A6. the lane row shows the cause too, since it reads the same projection", () => {
+test("A6. the lane row shows primary and secondary as separate elements", () => {
   const lane = laneWith({ label: "Backend", claude: { presence: "present" }, provider_activity: { activity: "working" } });
   assert.equal(canonicalLaneWorkState(lane).group, "attention", "fixture reproduces the reported state");
   const html = renderLaneList([lane], null, {});
-  assert.match(html, /class="gw-lane-posture[^"]*">Working · untracked</);
-  assert.ok(!/class="gw-lane-posture[^"]*">Attention</.test(html), "the bucket name is gone from the row");
+  assert.match(html, /class="gw-lane-posture[^"]*">(?:<span[^>]*>[^<]*<\/span>)?Working</, "primary is the operational fact");
+  assert.match(html, /class="gw-lane-why">Execution[^<]*tracked</, "secondary is its own element");
+  assert.ok(!/class="gw-lane-posture[^"]*">(?:<span[^>]*>[^<]*<\/span>)?[^<]*·/.test(html), "primary carries no composite");
 });
 
 // ---------------------------------------------------------------------------
@@ -559,7 +577,7 @@ test("P4. EVERY operator state and EVERY attention cause has an explicit rank", 
     const p = laneOperatorPriority(work, laneWith());
     assert.ok(OPERATOR_PRIORITY.includes(p), `operator state ${state} resolved to unranked priority ${p}`);
   }
-  for (const cause of Object.keys(ATTENTION_CAUSE_LABEL)) {
+  for (const cause of Object.keys(ATTENTION_CAUSE_COPY)) {
     const p = laneOperatorPriority({ key: cause, group: "attention" });
     assert.ok(OPERATOR_PRIORITY.includes(p), `attention cause ${cause} has no rank`);
   }
@@ -610,6 +628,201 @@ test("P7. the certified order is unchanged for every state that exists today", (
   assert.deepEqual(sortLanesForIndex(lanes, { nowMs: now }).map((l) => l.lane_id),
     ["work", "needs", "provact", "unrep", "idle", "complete", "failed", "off"],
     "a finished run stays with the terminal lanes, below the merely quiet ones");
+});
+
+// ---------------------------------------------------------------------------
+// H — HIERARCHY, HELD ON EVERY OPERATOR SURFACE
+// ---------------------------------------------------------------------------
+
+const attentionLane = (kind) => (kind === "untracked"
+  ? laneWith({ lane_id: "u", label: "Untracked", claude: { presence: "present" }, provider_activity: { activity: "working" } })
+  : laneWith({ lane_id: "r", label: "Unreported", previous_run: { state: "COMPLETE", completed_at: new Date().toISOString() }, provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" } }));
+
+test("H1. no operator surface prints the internal identity", () => {
+  // provider_active, completion_unreported, canonical band names and
+  // execution-run bookkeeping belong in diagnostics, not on a lane row.
+  const banned = /provider_active|completion_unreported|Provider active|Completed · no summary|canonical|execution_run/;
+  for (const kind of ["untracked", "unreported"]) {
+    const lane = attentionLane(kind);
+    const list = renderLaneList([lane], null, {});
+    assert.ok(!banned.test(list), `lane list leaks internals for ${kind}`);
+    const rail = railLaneRow(lane, null, {}, {});
+    assert.ok(!banned.test(rail), `rail leaks internals for ${kind}`);
+  }
+});
+
+test("H2. the sidebar prints a dot, never an exclamation", () => {
+  // "! Attention" in the nav was punctuation wedged into the status copy where
+  // every other state showed a dot. The warning is carried by the tone class
+  // the same span sets and by the explanation beneath it.
+  const rail = railLaneRow(attentionLane("untracked"), null, {}, {});
+  const attn = rail.match(/<span class="gw-lane-attn[^"]*">([^<]*)/)?.[1] || "";
+  assert.ok(!attn.trim().startsWith("!"), `sidebar still leads with punctuation: "${attn.trim()}"`);
+  assert.match(attn, /^\s*[\u25cf\u25cb]/, "and still leads with the dot convention");
+  assert.match(rail, /is-needs/, "the warning is carried by tone");
+  assert.match(rail, /class="gw-lane-why">/, "and by the explanation");
+});
+
+test("H3. row and header agree on both halves", () => {
+  for (const kind of ["untracked", "unreported"]) {
+    const lane = attentionLane(kind);
+    const work = canonicalLaneWorkState(lane);
+    const op = laneOperatorStatus(lane, work);
+    const list = renderLaneList([lane], null, {});
+    const rowPrimary = list.match(/class="gw-lane-posture[^"]*">(?:<span[^>]*>[^<]*<\/span>)?([^<]*)</)?.[1];
+    const rowWhy = list.match(/class="gw-lane-why">([^<]*)</)?.[1];
+    assert.equal(rowPrimary, op.label, `${kind}: row primary disagrees with the projection`);
+    assert.equal(rowWhy, op.explanation, `${kind}: row secondary disagrees with the projection`);
+    // The header renders the same projection, so agreement is structural.
+    const header = renderLaneHeaderV2(lane, { work });
+    assert.match(header, new RegExp(op.label));
+    assert.match(header, /class="vlane-head-why"/);
+  }
+});
+
+test("H4. Home and the mobile list carry the secondary as its own field", () => {
+  const lane = attentionLane("untracked");
+  const [summary] = buildLaneSummaries({ lanes: [lane], laneState: (l) => canonicalLaneWorkState(l) });
+  assert.equal(summary.state.split(" · ")[0], "Working", "primary only in the state line");
+  assert.ok(!summary.state.includes("tracked"), "the exception is not appended to the state string");
+  assert.equal(summary.explanation, "Execution isn\u2019t being tracked");
+  assert.match(laneRowV2(summary), /class="vlane-why">/);
+});
+
+test("H5. a healthy lane carries NO warning copy anywhere", () => {
+  const working = laneWith({ lane_id: "w", label: "W", execution_run: { state: "EXECUTING" }, provider_activity: { activity: "working" } });
+  const op = laneOperatorStatus(working, canonicalLaneWorkState(working));
+  assert.equal(op.label, "Working");
+  assert.equal(op.explanation, null, "an ordinary working lane has nothing to explain");
+  const list = renderLaneList([working], null, {});
+  assert.ok(!/class="gw-lane-why">/.test(list), "and renders no secondary element");
+  // Nor does a quiet one: "Ready" over "Idle" says the same thing twice and, in
+  // a slot that otherwise holds exceptions, reads like one.
+  const quiet = renderLaneList([laneWith({ lane_id: "q", label: "Q" })], null, {});
+  assert.ok(!/class="gw-lane-why">/.test(quiet), "a synonym is not an explanation");
+});
+
+test("H6. ordering is unchanged from the certified Batch 1C candidate", () => {
+  // Presentation polish only: the same fixture set 1C pinned, asserted here so
+  // a copy change can never quietly move a lane.
+  const now = Date.now();
+  const mk = (id, over) => laneWith({ lane_id: id, label: id, ...over });
+  const lanes = [
+    mk("off", { runtime: "offline" }),
+    mk("failed", { execution_run: { state: "FAILED", updated_at: at(now - 9e3) } }),
+    mk("complete", { execution_run: { state: "COMPLETE", updated_at: at(now - 8500) } }),
+    mk("idle", { last_activity_ms: now - 8e3 }),
+    mk("unrep", { previous_run: { state: "COMPLETE", completed_at: at(now - 7e3) }, provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" } }),
+    mk("provact", { claude: { presence: "present" }, provider_activity: { activity: "working" }, last_activity_ms: now - 6e3 }),
+    mk("needs", { execution_run: { state: "NEEDS_INPUT", updated_at: at(now - 5e3) } }),
+    mk("work", { execution_run: { state: "EXECUTING", updated_at: at(now - 4e3) }, provider_activity: { activity: "working" } }),
+  ];
+  assert.deepEqual(sortLanesForIndex(lanes, { nowMs: now }).map((l) => l.lane_id),
+    ["work", "needs", "provact", "unrep", "idle", "complete", "failed", "off"]);
+});
+
+// ---------------------------------------------------------------------------
+// F — FRESHNESS: THE INDEX MUST NOT NEED NAVIGATION TO BECOME CURRENT
+// ---------------------------------------------------------------------------
+
+test("F1. every surface that shows lane state refreshes the index", () => {
+  // THE DEFECT. This predicate required routeName === "lanes", but `#/home`
+  // parses to "home" and HOME RENDERS THE LANE LIST from the same G.lanes the
+  // rail is painted from. So on Home the interval ran and returned immediately,
+  // fetchLanes() ran once per session behind !G.listReady, and fetchHome()
+  // fetches a different payload that never touches G.lanes. The index was
+  // frozen from first paint until the operator opened a lane.
+  for (const routeName of ["lanes", "home", "activity", "system", "settings"]) {
+    assert.equal(shouldPollList({ hidden: false, routeName }), true,
+      `${routeName} renders lane state and must refresh the index`);
+  }
+});
+
+test("F2. a document nobody can see still does not poll", () => {
+  // Passive refresh of an unobservable surface is the one case worth skipping,
+  // and it is the only reason this predicate says no.
+  for (const routeName of ["lanes", "home", "activity", "system", "settings"]) {
+    assert.equal(shouldPollList({ hidden: true, routeName }), false, routeName);
+  }
+});
+
+test("F3. becoming visible refreshes immediately rather than waiting a tick", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url), "utf8");
+  assert.match(src, /addEventListener\("visibilitychange", refreshLaneIndexOnVisible\)/);
+  const fn = src.slice(src.indexOf("function refreshLaneIndexOnVisible"), src.indexOf("\n}", src.indexOf("function refreshLaneIndexOnVisible")));
+  assert.match(fn, /fetchLanes\(\)/, "it re-reads the authoritative index");
+  assert.match(fn, /shouldPollList/, "through the same predicate, so there is one rule");
+  assert.match(fn, /G\.listInflight/, "and it cannot race the interval");
+});
+
+test("F4. the fix is invalidation, not a faster or heavier poll", async () => {
+  const { readFileSync } = await import("node:fs");
+  const view = readFileSync(new URL("../apps/vacilando/public/gateway-view.mjs", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url), "utf8");
+  // The interval is untouched.
+  assert.match(view, /export const LIST_POLL_MS = 15000;/);
+  // And none of the forbidden shortcuts crept in.
+  assert.ok(!/location\.reload\(/.test(src), "no full page reload");
+  assert.ok(!/last_activity_ms\s*=|last_active_at\s*=/.test(src), "no client-side recency mutation");
+});
+
+test("F5. opening or viewing a lane is NOT activity", () => {
+  // The ordering input must be the authoritative event, never navigation. Two
+  // identical lanes, one of them "opened": the order must not move.
+  const now = Date.now();
+  const a = laneWith({ lane_id: "a", label: "a", last_activity_ms: now - 60e3 });
+  const b = laneWith({ lane_id: "b", label: "b", last_activity_ms: now - 30e3 });
+  const before = sortLanesForIndex([a, b], { nowMs: now }).map((l) => l.lane_id);
+  // renderLaneList takes the selected lane id — "this one is open right now".
+  const openedOrder = [...renderLaneList([a, b], "a", {}).matchAll(/data-gw-lane="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(openedOrder, before, "selecting a lane must not reorder the index");
+  assert.deepEqual(sortLanesForIndex([a, b], { nowMs: now }).map((l) => l.lane_id), before,
+    "and it leaves no trace behind it");
+});
+
+test("F6. a finished lane sorts by its completion, with no navigation involved", () => {
+  // The acceptance scenario, as a pure function of the authoritative record.
+  const now = Date.now();
+  const working = (id, ms) => laneWith({ lane_id: id, label: id, execution_run: { state: "EXECUTING", updated_at: at(ms) }, provider_activity: { activity: "working" } });
+  const A = working("A", now - 120e3);
+  let B = working("B", now - 90e3);
+  const C = laneWith({ lane_id: "C", label: "C", last_activity_ms: now - 3600e3 });
+  // Both are Working, so between them it is recency, and B reported more
+  // recently. Stated exactly rather than assumed: getting this wrong is how a
+  // fixture ends up asserting the behaviour it meant to detect.
+  assert.deepEqual(sortLanesForIndex([A, B, C], { nowMs: now }).map((l) => l.lane_id), ["B", "A", "C"]);
+
+  // B finishes: the run closes and files its report. Nothing else happens — no
+  // click, no navigation, no synthetic timestamp.
+  B = laneWith({
+    lane_id: "B", label: "B",
+    previous_run: { state: "COMPLETE", completed_at: at(now), completion_report: { report_id: "rep_B" } },
+    provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" },
+  });
+  const after = sortLanesForIndex([A, B, C], { nowMs: now }).map((l) => l.lane_id);
+  assert.deepEqual(after, ["A", "B", "C"], "A stays working, B heads its group, C stays below");
+  assert.equal(canonicalLaneWorkState(A, { nowMs: now }).group, "active", "A is still Working");
+  assert.equal(laneOperatorStatus(B, canonicalLaneWorkState(B, { nowMs: now })).label, "Ready",
+    "and B's displayed status updated with it");
+  assert.ok(laneActivityMs(B) > laneActivityMs(C), "recency came from the completion, not from a visit");
+});
+
+test("F7. a failure transition moves the lane the same way", () => {
+  const now = Date.now();
+  const failed = laneWith({ lane_id: "F", label: "F", execution_run: { state: "FAILED", updated_at: at(now) } });
+  const older = laneWith({ lane_id: "O", label: "O", last_activity_ms: now - 3600e3 });
+  assert.equal(laneOperatorStatus(failed, canonicalLaneWorkState(failed, { nowMs: now })).label, "Failed");
+  assert.ok(laneActivityMs(failed) > laneActivityMs(older));
+});
+
+test("F8. passive observation still does not count as activity", () => {
+  // observed_at is stamped on every lane on every poll. Now that the index
+  // polls on more surfaces, this matters more, not less.
+  const now = Date.now();
+  const polled = laneWith({ lane_id: "p", label: "p", observed_at: at(now), last_activity_ms: now - 3600e3 });
+  const real = laneWith({ lane_id: "r", label: "r", observed_at: at(now - 3600e3), last_activity_ms: now - 60e3 });
+  assert.deepEqual(sortLanesForIndex([polled, real], { nowMs: now }).map((l) => l.lane_id), ["r", "p"]);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
