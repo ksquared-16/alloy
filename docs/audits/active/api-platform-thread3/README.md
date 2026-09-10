@@ -84,4 +84,5 @@ read or lead-capture endpoints. **No route mutating authoritative state was foun
 | [`mutation-authority-map.md`](mutation-authority-map.md) | Who owns the canonical mutation in each of 14 domains, what an external client would invoke, and what blocks it. 0 domains reached `PLATFORM_INTERNAL_STABLE`. |
 | [`authorization-tenancy-findings.md`](authorization-tenancy-findings.md) | Enforcement distribution across 613 routes; why RLS is inert for the API surface; the 40 org-blind policies; the 120-second authority cache. |
 | [`contract-readiness-findings.md`](contract-readiness-findings.md) | Idempotency, errors, collections, versioning, OpenAPI coverage. |
+| [`gap-register-and-thread4-packet.md`](gap-register-and-thread4-packet.md) | **The closing synthesis.** Architectural verdict, P0–P3 gap register, Classroom Coach and white-label readiness tests, and 16 decisions for Thread 4. |
 | [`security-defect-register.md`](security-defect-register.md) | Nine defects, SEC-0 … SEC-6. **SEC-0b's blast-radius line was corrected on 2026-09-10** — it is cross-tenant through the run route (SEC-0c). |
