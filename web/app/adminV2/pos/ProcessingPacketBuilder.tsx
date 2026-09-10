@@ -11,6 +11,8 @@ import { countSessionsByPacketDefinition } from "@/lib/forms/packets/packetOrche
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 import PacketDeferredCapabilities, { type PacketDeferredCapability } from "./PacketDeferredCapabilities";
+import RecordLaunchPicker from "./RecordLaunchPicker";
+import type { RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
 
 type PacketItem = {
     id: string;
@@ -52,6 +54,8 @@ export default function ProcessingPacketBuilder({
     const [busy, setBusy] = useState(false);
     const [okBanner, setOkBanner] = useState<string | null>(null);
     const [createdLink, setCreatedLink] = useState<PacketCreatedLinkPayload | null>(null);
+    /** Who the next launch is for. Seeds the session's CRM snapshot, so known info can be reused. */
+    const [launchTarget, setLaunchTarget] = useState<RecordPickerOption | null>(null);
 
     const hasCompletedInitialLoad = useRef(false);
 
@@ -222,6 +226,18 @@ export default function ProcessingPacketBuilder({
                 body: JSON.stringify({
                     packet_definition_id: packetDefId,
                     label: `${defName} link`,
+                    // The same `launch_from_entity` the composer sends. The mint already resolves it
+                    // into the session's CRM snapshot; this path simply never offered it before, so
+                    // every hand-launched packet asked families for information Alloy held.
+                    ...(launchTarget
+                        ? {
+                              launch_from_entity: {
+                                  entity_type: launchTarget.entity_type,
+                                  entity_id: launchTarget.entity_id,
+                                  prefill_enabled: true,
+                              },
+                          }
+                        : {}),
                 }),
             });
             const json = await res.json().catch(() => ({}));
@@ -334,6 +350,13 @@ export default function ProcessingPacketBuilder({
                             onSaveSteps={() => void saveSteps()}
                             onMoveStep={moveStep}
                             onRemoveStep={removeStep}
+                            launchTarget={
+                                <RecordLaunchPicker
+                                    value={launchTarget}
+                                    onChange={setLaunchTarget}
+                                    label="Send to (optional — prefills what Alloy already knows)"
+                                />
+                            }
                             onMintLink={() => void mintLink()}
                             onToggleLink={(link, next) => void toggleLink(link, next)}
                             onOpenWorkQueue={() =>

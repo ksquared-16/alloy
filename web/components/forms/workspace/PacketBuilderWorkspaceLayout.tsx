@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import clsx from "clsx";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import {
@@ -80,6 +81,8 @@ type Props = {
     onMoveStep: (index: number, dir: -1 | 1) => void;
     onRemoveStep: (index: number) => void;
     onMintLink: () => void;
+    /** Recipient control for the next launch — see PacketDistributionLaunchPanel. */
+    launchTarget?: ReactNode;
     onToggleLink: (link: PacketPublicLinkRow, nextActive: boolean) => void;
     /**
      * When provided (Digital Mailroom context), packet sessions live in the Mailroom Work queue,
@@ -117,6 +120,7 @@ export function PacketBuilderWorkspaceLayout({
     onMoveStep,
     onRemoveStep,
     onMintLink,
+    launchTarget,
     onToggleLink,
     onOpenWorkQueue,
 }: Props) {
@@ -298,6 +302,7 @@ export function PacketBuilderWorkspaceLayout({
                             createdLink={createdLink}
                             viewerTz={viewerTz}
                             onMintLink={onMintLink}
+                            launchTarget={launchTarget}
                             onToggleLink={onToggleLink}
                         />
                     </IntakeWorkspaceRegion>
