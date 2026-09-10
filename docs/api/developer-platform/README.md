@@ -104,6 +104,7 @@ Canonical truth
 | [`product/04-api-documentation-architecture.md`](product/04-api-documentation-architecture.md) | Narrative vs generated reference; renderer decision |
 | [`product/05-classroom-coach-discovery.md`](product/05-classroom-coach-discovery.md) | Evidence register, capability classification, generic-platform validation, installation concept |
 | [`product/06-gaps-and-slice-b.md`](product/06-gaps-and-slice-b.md) | Gap classification and the recommended Slice B ordering |
+| [`product/07-slice-b1-trust-foundation.md`](product/07-slice-b1-trust-foundation.md) | **Slice B.1 — implemented.** Security prerequisite reconciliation, threat review, implementation paths, remaining `/api/v1` prerequisites |
 | [`guide/`](guide/README.md) | **The developer documentation starter** — getting started, conventions, attendance example |
 
 ## What V1 deliberately excludes

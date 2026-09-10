@@ -11,6 +11,15 @@ Verified against `origin/staging` at `005c0da228e37c22388bafc14d91857c897feb43`.
 **Repository reality, not documentation.** Every row was checked by inspecting
 the tree, not by reading the specification.
 
+
+> **Updated 2026-09-10 by Slice B.1.** The rows below described the estate when
+> Slice A ran, and six of them have since changed: application, installation,
+> credential, principal, scopes/boundary and audit are now **implemented**. The
+> table is annotated in place rather than rewritten, because the Slice A finding
+> — that Thread 4 shipped a specification and no implementation — is the reason
+> Slice B.1 exists and should stay legible. See
+> [`07-slice-b1-trust-foundation.md`](07-slice-b1-trust-foundation.md).
+
 ## Headline
 
 > **Thread 4 shipped a specification. It shipped no implementation, and that was
@@ -46,12 +55,12 @@ would find a backend to productize.
 
 | Capability | Architecture | Schema | API | Operator UI | Developer UI | Docs | Production-ready | Gap |
 |---|---|---|---|---|---|---|---|---|
-| Developer Application | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | Everything below the spec |
-| Installation | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | Everything below the spec |
-| Credential (inbound) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | Everything below the spec |
-| Application Principal | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | Minter not built |
-| External scopes | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | Catalog + mapping table |
-| Resource/location boundary | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | — |
+| Developer Application | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | No API or UI |
+| Installation | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | No API or UI |
+| Credential (inbound) | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | Issue/rotate/revoke exist server-side; no endpoint, no UI |
+| Application Principal | ✅ | n/a | **✅ B.1** | n/a | n/a | ✅ | ❌ | Resolver built; nothing consumes it yet |
+| External scopes | ✅ | **✅ B.1** | **✅ B.1** | ❌ | ❌ | ✅ | ❌ | Evaluation built; catalog/mapping table still absent |
+| Resource/location boundary | ✅ | **✅ B.1** | **✅ B.1** | ❌ | ❌ | ✅ | ❌ | — |
 | `integration_resource_refs` | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | — |
 | `/api/v1` namespace | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | No routes, no prebuild guard |
 | Canonical resource adapters | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
@@ -62,7 +71,7 @@ would find a backend to productize.
 | Collection/pagination | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
 | Idempotency | ✅ | **partial** | ❌ | n/a | n/a | ✅ | ❌ | Domain layer real (attendance); platform layer absent |
 | Concurrency | ✅ | n/a | ❌ | n/a | n/a | ✅ | ❌ | — |
-| Audit / provenance | ✅ | **❌ critical** | ❌ | ❌ | ❌ | ✅ | ❌ | `logAdminAudit` is still `console.log`; **no table** |
+| Audit / provenance | ✅ | **✅ B.1** | ❌ | ❌ | ❌ | ✅ | ❌ | `app_security_audit` exists for the trust boundary. `logAdminAudit` is still a `console.log` for everything else. |
 | Rate limiting | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | Durable limiter absent |
 | Security prerequisites | ✅ documented | — | — | — | — | ✅ | **❌ unmet** | All three still open |
 
