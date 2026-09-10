@@ -20,6 +20,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PacketSessionRow } from "@/lib/forms/packets/formPacketService";
+import { resolvePacketParticipantProgress } from "@/lib/enrollment/participantProgress/resolvePacketParticipantProgress";
 
 import {
     resolveEnrollmentParticipantProgress,
@@ -48,7 +49,9 @@ import type {
 import type { ParticipantTurn } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 
 export type ParticipantEnrollmentObjective = {
-    readonly process_instance_id: string;
+    /** Null when this participant's work is anchored on the packet session rather than a
+     * Business Process journey. Everything else on this shape is identical either way. */
+    readonly process_instance_id: string | null;
     readonly session_id: string | null;
     readonly business_process_revision_id: string | null;
     readonly stage_key: string | null;
@@ -195,7 +198,14 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
     supabase: SupabaseClient,
     input: {
         orgId: string;
-        processInstanceId: string;
+        /**
+         * The Business Process journey, when there is one.
+         *
+         * `null` means the participant's work is anchored on the packet session itself. Both anchors
+         * produce the same progress shape, so everything below this line is identical — see
+         * `resolvePacketParticipantProgress` for why the seam sits exactly here.
+         */
+        processInstanceId: string | null;
         canonicalValues?: Readonly<Record<string, unknown>>;
         /**
          * The session row the token resolver already read.
@@ -211,14 +221,36 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
 ): Promise<ParticipantEnrollmentObjectiveWithContextResult> {
     const requiresConfirmation = enrollmentConfirmationPolicy();
     let loaded: EnrollmentProgressLoaded | undefined;
-    const progressResult = await resolveEnrollmentParticipantProgress(supabase, {
-        orgId: input.orgId,
-        processInstanceId: input.processInstanceId,
-        preloadedSession: input.preloadedSession ?? null,
-        captureLoaded: (rows) => {
-            loaded = rows;
-        },
-    });
+    const captureLoaded = (rows: EnrollmentProgressLoaded) => {
+        loaded = rows;
+    };
+    /*
+     * Where the requirements come from is the ONLY thing that differs between a journey-backed
+     * participant and one working a packet an operator launched by hand. A process instance supplies
+     * them from its pinned revision's stage; a packet supplies them from its own ordered steps.
+     * Everything after this — needs, evidence, parties, the objective, the conversation — reads the
+     * same shape and never learns which it was.
+     */
+    const progressResult = input.processInstanceId
+        ? await resolveEnrollmentParticipantProgress(supabase, {
+              orgId: input.orgId,
+              processInstanceId: input.processInstanceId,
+              preloadedSession: input.preloadedSession ?? null,
+              captureLoaded,
+          })
+        : input.preloadedSession
+          ? await resolvePacketParticipantProgress(supabase, {
+                orgId: input.orgId,
+                session: input.preloadedSession,
+                captureLoaded,
+            })
+          : ({
+                ok: false,
+                refusal: {
+                    code: "read_failed",
+                    detail: "A packet-anchored objective needs its session.",
+                },
+            } as const);
     let captured: EnrollmentNeedsContext | null = null;
     const needsResult = await resolveEnrollmentInformationNeeds(supabase, {
         orgId: input.orgId,
