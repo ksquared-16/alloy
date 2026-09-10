@@ -7,6 +7,7 @@ import {
     type FieldPlacementBehaviorUpdate,
 } from "@/lib/admin/opportunityWorkflowV1FieldPlacements";
 import { persistOpportunityDrawerLayoutConfig } from "@/lib/admin/recordDrawerLayoutPersist";
+import { unreachableRequiredPlacementIssues } from "@/lib/config/unreachableRequiredPlacementGate";
 
 /**
  * PATCH: opportunity workflow v1 drawer field placement behavior (required / editability).
@@ -88,6 +89,38 @@ export async function PATCH(request: NextRequest) {
     const merged = mergeOpportunityWorkflowV1FieldPlacementUpdates(baseCfg, updates, catalog);
     if (!merged.ok) {
         return NextResponse.json({ error: merged.error }, { status: 400 });
+    }
+
+    /*
+     * Do not publish a requirement the operator cannot reach.
+     *
+     * Marking a field required on a layout it does not render produces a rule nobody can satisfy —
+     * the exact configuration that froze every opportunity in a tenant. `validateLayoutIntegrity`
+     * already detects it; this is the point where detecting it can still prevent it.
+     *
+     * Blocked rather than warned, because the failure mode is silent: the admin sees a saved
+     * setting and the damage appears later, to somebody else, as an unexplained refusal. An admin
+     * who means it can pass `allow_unreachable_required`.
+     */
+    const allowUnreachable = (body as { allow_unreachable_required?: unknown }).allow_unreachable_required === true;
+    if (!allowUnreachable) {
+        const blocking = await unreachableRequiredPlacementIssues(supabase, {
+            orgId: ctx.orgId,
+            entityType: "opportunity",
+            mergedConfig: merged.config,
+            fieldKeys: updates.map((u) => u.field_key),
+        });
+        if (blocking.length > 0) {
+            return NextResponse.json(
+                {
+                    error: "Required field is not reachable on this layout",
+                    issues: blocking,
+                    recommendation:
+                        "Add the field to this layout, or keep it optional here. Pass allow_unreachable_required to publish anyway.",
+                },
+                { status: 400 }
+            );
+        }
     }
 
     const markerKeys = {
