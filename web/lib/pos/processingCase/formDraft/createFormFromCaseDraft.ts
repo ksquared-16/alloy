@@ -23,6 +23,9 @@ import {
 } from "@/lib/admin/forms/formsAdminDb";
 import { parseStoredFormDraftPreview } from "./formDraftPreviewDb";
 import { draftFormToFormSchemaV1 } from "./draftFormToFormSchemaV1";
+import { buildFidelityMappingFromDraft } from "./buildFidelityMappingFromDraft";
+import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
+import { sha256Hex } from "@/lib/forms/pdf/fidelityMappingContract";
 
 export interface FormDraftCreatedLink {
     form_id: string;
@@ -41,7 +44,16 @@ export interface CreateFormDeps {
         versionNumber: number;
         schemaJson: unknown;
         metadata: Record<string, unknown>;
+        /** `fidelity_v1` — the source document this version renders into. Null when it has none. */
+        pdfMappingJson?: unknown | null;
     }): Promise<{ id: string }>;
+    /**
+     * The pinned hash of the source document's bytes, or null when they cannot be read.
+     *
+     * `fidelity_v1` refuses drifted bytes at render time, so the mapping is only worth writing when
+     * the bytes it pins can actually be hashed now.
+     */
+    sourceBytesSha256?(args: { orgId: string; documentId: string }): Promise<string | null>;
     updateCaseMetadata(args: { orgId: string; caseId: string; metadata: Record<string, unknown> }): Promise<void>;
     now(): Date;
 }
@@ -130,12 +142,29 @@ export async function createFormFromCaseDraft(
     });
 
     const versionNumber = (await deps.maxVersionNumber(def.id)) + 1;
+
+    /*
+     * The semantic schema and the presentation mapping are written TOGETHER, from one approved
+     * source interpretation. They describe the same reviewed document, and a version carrying one
+     * without the other is a Form that either cannot be rendered onto its own paperwork or renders
+     * a document whose questions were approved separately.
+     */
+    let pdfMappingJson: unknown | null = null;
+    const sourceDocumentId = preview.source_document_id;
+    if (sourceDocumentId && deps.sourceBytesSha256) {
+        const sourceSha256 = await deps.sourceBytesSha256({ orgId: args.orgId, documentId: sourceDocumentId });
+        if (sourceSha256) {
+            pdfMappingJson = buildFidelityMappingFromDraft(preview, { sourceDocumentId, sourceSha256 });
+        }
+    }
+
     const ver = await deps.insertVersion({
         orgId: args.orgId,
         formDefinitionId: def.id,
         versionNumber,
         schemaJson: parsed.data, // status is "draft" — set by the deps adapter; never published here
         metadata: { source: "document_form_draft", source_case_id: args.caseId },
+        pdfMappingJson,
     });
 
     const createdAt = deps.now().toISOString();
@@ -180,13 +209,18 @@ export function makeCreateFormDepsFromSupabase(supabase: SupabaseClient): Create
         maxVersionNumber(formId) {
             return dbMaxVersionNumber(supabase, formId);
         },
-        async insertVersion({ orgId, formDefinitionId, versionNumber, schemaJson, metadata }) {
+        async sourceBytesSha256({ orgId, documentId }) {
+            const downloaded = await downloadDocumentBytesSafe(supabase, { orgId, documentId });
+            return downloaded?.bytes ? sha256Hex(downloaded.bytes) : null;
+        },
+        async insertVersion({ orgId, formDefinitionId, versionNumber, schemaJson, metadata, pdfMappingJson }) {
             const { data, error } = await dbInsertVersion(supabase, {
                 form_definition_id: formDefinitionId,
                 org_id: orgId,
                 version_number: versionNumber,
                 status: "draft", // never "published"
                 schema_json: schemaJson,
+                pdf_mapping_json: pdfMappingJson ?? null,
                 metadata,
             });
             if (error || !data) throw new Error(error?.message ?? "Failed to create form version");
