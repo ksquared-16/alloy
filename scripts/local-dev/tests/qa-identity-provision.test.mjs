@@ -14,6 +14,7 @@ import { ACTION_TYPES, getActionDefinition, listRegisteredActions } from "../lib
 import {
     FORBIDDEN_PROVISION_INPUTS,
     MANAGED_QA_IDENTITY,
+    isManagedQaIdentity,
     executeProvisionQaIdentitySync,
     safeProvisionFailure,
     validateProvisionQaIdentityInputs,
@@ -128,10 +129,30 @@ test("only a managed QA identity shape may ever be provisioned", () => {
     }
     for (const bad of [
         "kelly@kurzmancapital.com", "admin@northwind.test", "parent@family.example",
-        "qa-slot7-extra@example.com", "support@customer.co", "qa-slot5-refactor",
+        "support@customer.co", "qa-slot5-refactor",
     ]) {
         assert.ok(!MANAGED_QA_IDENTITY.test(bad), `${bad} must be refused`);
     }
+    /*
+     * `qa-slot7-extra@example.com` USED TO SIT IN THAT LIST, beside the customer
+     * and employee addresses, and it does not belong there. It is a managed QA
+     * alias; what was wrong with it was the SLOT — seven did not exist when this
+     * was written. The host has run twelve since ALLOY_MAX_AGENTS moved, and the
+     * pattern kept enforcing six, so `browser-auth status` and `restore` were
+     * blocked for every lane above slot 6.
+     *
+     * The refusal this test exists to protect is unchanged and is asserted
+     * above: a misconfigured registry still cannot make this action create a
+     * customer or employee account. What changed is that the slot ceiling now
+     * comes from the topology owner instead of a literal, so it refuses slots
+     * that do not exist rather than slots that merely did not exist yet.
+     */
+    assert.ok(isManagedQaIdentity("qa-slot7-extra@example.com", { ALLOY_MAX_AGENTS: "12" }),
+        "slot 7 exists on a twelve-slot host and must be provisionable");
+    assert.ok(!isManagedQaIdentity("qa-slot7-extra@example.com", { ALLOY_MAX_AGENTS: "6" }),
+        "and must still be refused on a six-slot host");
+    assert.ok(!isManagedQaIdentity("qa-slot13-extra@example.com", { ALLOY_MAX_AGENTS: "12" }),
+        "a slot above the topology is refused whatever the shape");
 });
 
 test("a registry that resolves a non-QA identity fails closed and creates nothing", () => {
