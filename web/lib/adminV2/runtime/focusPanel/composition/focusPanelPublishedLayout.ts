@@ -453,51 +453,9 @@ function planPublishedRows(layout: FocusPanelPublishedLayout): PublishedLayoutRo
  * wide for SSR) it collapses to a single column in reading order — the only sanctioned
  * override of a published layout.
  */
-/**
- * Column-major lanes derived from an authored V5 grid — a RUNTIME-ONLY presentation flow
- * (the authored grid coordinates remain the source of truth). Buckets areas into vertical
- * columns by `colStart` and flows each column as one continuous lane, so short cards in one
- * column never inherit a tall neighbour's row height (no dead vertical gaps). Returns null
- * when the grid is not cleanly column-partitionable (a full-width spanner or overlapping
- * columns) — the caller then keeps the exact CSS-Grid placement.
- */
-function planLanesFromGrid(grid: FocusPanelGridLayout): PublishedLayoutLanePlan[] | null {
-    if (grid.areas.length === 0) return null;
-    // A card spanning the full width can't live inside a single side-by-side lane.
-    if (grid.areas.some((a) => a.colSpan >= grid.columns)) return null;
-
-    const byColStart = new Map<number, FocusPanelGridArea[]>();
-    for (const a of grid.areas) {
-        const list = byColStart.get(a.colStart);
-        if (list) list.push(a);
-        else byColStart.set(a.colStart, [a]);
-    }
-    const colStarts = [...byColStart.keys()].sort((x, y) => x - y);
-    if (colStarts.length < 2) return null; // single column — nothing to transpose
-
-    // Columns must not overlap: a column's widest card must not cross into the next column.
-    for (let i = 0; i < colStarts.length - 1; i += 1) {
-        const areas = byColStart.get(colStarts[i]!)!;
-        const maxEnd = Math.max(...areas.map((a) => a.colStart + a.colSpan));
-        if (maxEnd > colStarts[i + 1]!) return null;
-    }
-
-    return colStarts.map((cs) => {
-        const areas = byColStart.get(cs)!.slice().sort((a, b) => a.rowStart - b.rowStart);
-        return {
-            widthUnits: Math.max(...areas.map((a) => a.colSpan)),
-            cards: areas.map((a) => ({
-                key: a.card,
-                minHeightPx: a.height ? CELL_HEIGHT_PX[a.height] : undefined,
-            })),
-        };
-    });
-}
-
 export function planPublishedLayout(
     layout: FocusPanelPublishedLayout,
     availableWidthPx: number,
-    opts?: { preferLanesFromGrid?: boolean },
 ): PublishedLayoutPlan {
     const collapsed = availableWidthPx > 0 && availableWidthPx < PUBLISHED_LAYOUT_MIN_PX;
     if (collapsed) {
@@ -517,23 +475,27 @@ export function planPublishedLayout(
     // The literal row plan is always available (back-compat + the row-major fallback).
     const rows = planPublishedRows(layout);
 
-    // Focus Panel Work mode opts into column-major lanes derived from the authored grid so
-    // short cards never inherit a tall neighbour's row height (no dead vertical gaps). This
-    // is a runtime presentation choice only — the authored grid coordinates are unchanged.
-    if (opts?.preferLanesFromGrid && layout.grid) {
-        const lanes = planLanesFromGrid(layout.grid);
-        if (lanes) {
-            return {
-                columnBase: PUBLISHED_LAYOUT_COLUMN_BASE,
-                collapsed: false,
-                strategy: "lanes",
-                gridColumns: PUBLISHED_LAYOUT_COLUMN_BASE,
-                areas: [],
-                lanes,
-                rows,
-            };
-        }
-    }
+    /*
+     * A GRID IS PLANNED AS A GRID. THERE IS NO SECOND READING OF IT.
+     *
+     * This used to be two readings, chosen by a `preferLanesFromGrid` flag: the /surfaces
+     * composer passed nothing and got `grid`; the Work Unit passed `true` and got `lanes`,
+     * which bucketed the authored areas by `colStart` and then gave every card in a bucket
+     * that bucket's widest span. Measured on the running app against ONE published document
+     * - Financials authored `colStart 7, colSpan 2` beside two six-wide cards - the composer
+     * drew it 165px and the Work Unit drew it 554px. One document, two geometries, and the
+     * only one the operator could see while authoring was the one the operator would not get.
+     *
+     * The transposition existed to stop a tall card in one column opening dead space in its
+     * neighbour. `resolveColumnAwareLayout`, which this strategy renders through, already
+     * answers that - and answers it without discarding `colSpan` or `rowStart`, because a
+     * card falls against the cards it overlaps HORIZONTALLY and nothing else. So the lane
+     * reading was never a trade-off worth keeping: it is a strictly weaker reading of the
+     * same coordinates, and holding both is what let the builder and the runtime disagree.
+     *
+     * The rows -> lanes path further down is untouched. A layout carrying no grid carries no
+     * coordinates to honour, and lanes remain the right reading for it.
+     */
 
     // V5 responsive grid is the richest model (vertical/horizontal spans, independent
     // regions). When present it wins — the runtime paints each area with CSS Grid.

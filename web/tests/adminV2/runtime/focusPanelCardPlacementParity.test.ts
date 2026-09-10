@@ -66,12 +66,27 @@ describe("Focus Panel card placement parity", () => {
         expect(children.rowStart).toBeGreaterThanOrEqual(household.rowStart + household.rowSpan);
     });
 
-    it("Summary prefers lanes from published grid so Builder config and /work-unit share flow", () => {
+    it("Builder and /work-unit plan the SAME published grid, because neither may ask for another", () => {
+        // The divergence this file is named for, closed at its source. The body used to write
+        // `preferLanesFromGrid={Boolean(publishedLayout?.grid) || mode === "work"}` while the
+        // /surfaces composer passed nothing, so one document produced two geometries. Neither
+        // consumer may name a strategy now, and `planPublishedLayout` no longer accepts one.
         const modeGrid = readFileSync(
             join(process.cwd(), "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"),
             "utf8",
         );
-        expect(modeGrid).toContain("preferLanesFromGrid={Boolean(publishedLayout?.grid) || mode === \"work\"}");
+        const composer = readFileSync(
+            join(process.cwd(), "components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx"),
+            "utf8",
+        );
+        const skeleton = readFileSync(
+            join(process.cwd(), "components/admin/focusPanel/FocusPanelSummarySkeleton.tsx"),
+            "utf8",
+        );
+        for (const [name, src] of [["modeGrid", modeGrid], ["composer", composer], ["skeleton", skeleton]] as const) {
+            expect(src, name).toContain("<FocusPanelCardGrid");
+            expect(src, name).not.toContain("preferLanesFromGrid");
+        }
 
         const layout = {
             grid: {
@@ -84,11 +99,15 @@ describe("Focus Panel card placement parity", () => {
             },
             rows: [] as never[],
         };
-        const plan = planPublishedLayout(layout as never, 1200, { preferLanesFromGrid: true });
-        expect(plan.strategy).toBe("lanes");
-        expect(plan.lanes.length).toBe(2);
-        const right = plan.lanes.find((lane) => lane.cards.some((c) => c.key === "household"));
-        expect(right?.cards.map((c) => c.key)).toEqual(["household", "children"]);
+        const plan = planPublishedLayout(layout as never, 1200);
+        expect(plan.strategy).toBe("grid");
+        expect(plan.lanes).toEqual([]);
+        // The authored rectangles reach the renderer untouched — column, span and order.
+        expect(plan.areas.map((a) => [a.card, a.colStart, a.colSpan, a.rowStart])).toEqual([
+            ["current_work", 1, 6, 1],
+            ["household", 7, 6, 1],
+            ["children", 7, 6, 5],
+        ]);
     });
 
     it("runtime and composer share the same vertical gap token", () => {

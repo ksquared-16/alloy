@@ -284,6 +284,27 @@ function SidebarNav({
 
     const lifecycleNavExpanded = (
         <>
+            {/*
+             * A QUIET EYEBROW, NOT A DESTINATION.
+             *
+             * Enrollment and its Work Views sat directly under Analytics, so the rail read as one
+             * flat list and the Business Process had no more standing in it than a modal launcher.
+             * This names the section the configured processes belong to. It is a <p>, deliberately:
+             * there is nothing here to click, and the Business Process itself stays the identity
+             * the operator selects.
+             *
+             * "Business Processes", never "Processes" — Processing is its own operating area three
+             * rows above, and the shortened form collides with it.
+             *
+             * Same class as the Organization rail's group headings (`SidebarConfigurationModeNav`),
+             * so the two navigations wear one eyebrow rather than two that drift apart.
+             */}
+            <p
+                className="adminv2-sidebar-section-label mb-1 mt-3 px-2 text-[11px] font-semibold tracking-wide"
+                data-sidebar-group-label="business-processes"
+            >
+                Business Processes
+            </p>
             {lifecycleLoading ? (
                 <p className="adminv2-sidebar-muted px-2 py-2 text-xs" aria-busy="true">
                     Loading processes…
