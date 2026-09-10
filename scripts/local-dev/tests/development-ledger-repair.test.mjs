@@ -315,3 +315,85 @@ await test("LR19 — SQL is never accepted, on any spelling", () => {
     assert.equal(r.code, "arbitrary_sql_rejected", `${key} was accepted`);
   }
 });
+
+await test("LR20 — the approval card says NO SCHEMA CHANGES, and cannot be read as a migration", async () => {
+  /*
+   * The card is the operator's only protection against approving the wrong
+   * thing, and without its own branch this action inherited the DEFAULT one:
+   * "Authorize" over whatever title the filing happened to carry. The single
+   * fact that decides this approval — that nothing is applied — was left to the
+   * requester's prose. Its two production siblings each got their own words for
+   * exactly this reason.
+   */
+  const G = await import("../lib/vacilando/governed-action-request.mjs");
+  const req = {
+    action_key: "database.repair_migration_ledger",
+    target: "alloy_deployed_primary",
+    inputs: {
+      target: "alloy_deployed_primary",
+      migrations: [{ version: "20260910120000" }, { version: "20260910130000" }],
+      expectedLedger: { head: "20260909270000", count: 396, postHead: "20260910130000", postCount: 398 },
+    },
+  };
+  const card = G.presentationForGovernedAction(req);
+  const all = `${card.approve_label} ${card.wait_label} ${card.mission_need} ${card.detail}`;
+  assert.match(all, /NO SCHEMA CHANGES/);
+  assert.match(all, /LEDGER/i);
+  // Both ends of the state the operator is approving, not just the versions.
+  assert.match(all, /20260909270000/);
+  assert.match(all, /396/);
+  assert.match(all, /398/);
+  // And it is not the apply card.
+  const apply = G.presentationForGovernedAction({ ...req, action_key: "database.apply_promoted_migration" });
+  assert.notEqual(card.approve_label, apply.approve_label);
+  assert.notEqual(card.mission_need, apply.mission_need);
+  // It must not have fallen through to the generic default.
+  assert.notEqual(card.approve_label, "Authorize");
+});
+
+await test("LR21 — the physical-state artifact is a default, not a hardcoding", () => {
+  /*
+   * As a fixed filename this capability could only ever be used by the promotion
+   * it was written for. Thread 5's reconciliation — the same defect, the same
+   * recovery — had no way to present a proof about its own migrations, and
+   * refused `physical_state_census_stale` against a census that could never have
+   * covered it anyway. A filename was never what made evidence trustworthy.
+   */
+  assert.equal(L.physicalStateArtifactFor({}).artifact, L.PHYSICAL_STATE_ARTIFACT);
+  assert.equal(L.physicalStateArtifactFor({}).defaulted, true);
+  const named = L.physicalStateArtifactFor({ physicalStateArtifact: "thread5-physical-state-census.sql" });
+  assert.equal(named.ok, true);
+  assert.equal(named.artifact, "thread5-physical-state-census.sql");
+  assert.equal(named.defaulted, false);
+});
+
+await test("LR22 — a request may name a file, never a path", () => {
+  // The lookup matches on suffix, so a path fragment would let a request widen
+  // what counts as its own evidence.
+  for (const bad of ["../secrets.sql", "certification/migrations/x.sql", "x.txt", "x"]) {
+    const r = L.physicalStateArtifactFor({ physicalStateArtifact: bad });
+    assert.equal(r.ok, false, `${bad} was accepted`);
+    assert.equal(r.code, "physical_state_artifact_not_a_name");
+  }
+});
+
+await test("LR23 — a census that never looked is not a census that found nothing", () => {
+  // Absence of a measurement and a measurement of absence are different facts.
+  // Without this the uncovered version reported PHYSICALLY_ABSENT: the right
+  // refusal reached by the wrong reasoning, and a confusing one to debug.
+  const census = { questions: { m250000: { rows: ["a ~ b ~ c ~ true"] } } };
+  const miss = L.assertCensusCoversVersions(census, ["20260910120000", "20260909250000"]);
+  assert.equal(miss.ok, false);
+  assert.equal(miss.code, "physical_state_census_does_not_cover");
+  assert.match(miss.detail, /20260910120000/);
+  assert.ok(!/20260909250000/.test(miss.detail), "a covered version must not be named as uncovered");
+  assert.equal(L.assertCensusCoversVersions(census, ["20260909250000"]).ok, true);
+});
+
+await test("LR24 — coverage is judged per version, and an empty check list does not count", () => {
+  const census = { questions: { m120000: { rows: [] }, m130000: { rows: ["x ~ true"] } } };
+  const r = L.assertCensusCoversVersions(census, ["20260910120000", "20260910130000"]);
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /20260910120000/);
+  assert.ok(!/20260910130000/.test(r.detail));
+});
