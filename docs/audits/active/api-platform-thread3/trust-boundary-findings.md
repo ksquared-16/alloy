@@ -17,6 +17,75 @@ Nothing here was fixed. Discovery deliberately stops at proof — see *Why nothi
 
 ---
 
+## P0-0 · Arbitrary-table raw write, driven by org configuration, reachable unauthenticated
+
+**This is the weakest-authorized write path into authoritative state in the codebase, and an
+external API is irrelevant to it — the path is already externally reachable.**
+
+`web/lib/workflowRun.ts:2130`:
+
+```ts
+const table = ENTITY_TABLES[entityType] ?? entityType;
+```
+
+The `?? entityType` fallback means an unmapped `entity_type` is used **verbatim as a table name**,
+and `entity_type` comes from **org-editable workflow configuration**. The write at `:2222-2228` is
+then a raw `.update(patchToApply).eq("id", entityId).eq("org_id", orgIdResolved)`.
+
+Org scoping *is* retained, so this is not cross-tenant. What is lost is **every domain invariant**:
+no supersede lineage, no effective-dating, no transition validation, no permission grant, no event
+emission. Any table with `id` and `org_id` is writable — `child_enrollment_agreements`,
+`child_placements`, `schedule_assignments`, `opportunities`, `charges`, `tour_bookings`.
+
+**Reachable from three unauthenticated token routes** (each calls `executeWorkflowRun`):
+`/api/action/[token]/consume`, `/api/action-links/consume-reschedule`,
+`/api/action-links/consume-accept-job` — plus indirectly from public form intake and outbound
+messaging via `emitStatusChangedEvent`.
+
+### The related tenancy gap
+
+`web/app/api/action-links/consume-reschedule/route.ts:91-96` updates `schedules` with
+`.eq("id", scheduleId)` and **no `org_id` predicate** — the only production write to an
+authoritative table with no tenant filter. Not cross-tenant in practice, because the single-use
+token binds the row, but tenancy rests entirely on token integrity rather than on a query
+predicate.
+
+## P0-0b · Doctrine compiled into functions that never run
+
+Two guards exist for exactly the rule they are meant to protect:
+
+- `childPlacementService.ts:356` — *"Operational placement changes must use `supersedeChildPlacement`,
+  not update-in-place"*
+- `scheduleAssignmentService.ts:354` — the same for schedule assignments
+
+**Neither has a single caller outside its own file.** Meanwhile
+`applyChildParticipationEdit.ts:177` and `:196` update `child_placements` and
+`schedule_assignments` **in place**, doing precisely what the guards forbid.
+
+The instructive contrast is attendance. `assertNoAttendanceMutation` is *also* never called — and
+attendance does not need it, because the append-only rule is a **Postgres trigger**. **Attendance
+is protected by the database; placement and scheduling are protected by a comment.**
+
+That single difference is why attendance is the only domain in Alloy with a defensible external
+mutation contract.
+
+## P0-0c · Site scope is enforced inconsistently inside one action bus
+
+Same route, same gate, two different answers to "where may you act":
+
+| Action family | `accessScope` references |
+|---|---:|
+| `childAttendanceActions.ts` | **6** — denies outright when scope is null |
+| `assignmentCreateAction.ts` · `assignmentSetPrimaryAction.ts` · `scheduleCreateAction.ts` | **0** |
+
+A site-scoped ops user cannot record attendance outside their site, but **can create, repoint,
+promote, archive or delete a schedule assignment at any site in their org**.
+
+Worse, `web/app/api/admin/scheduling/route.ts:756-771` reaches into the registry and calls a
+registered action's `execute()` **directly** — skipping context checks, eligibility, preview,
+confirmation policy and the audit event — and passes `accessScope: null` explicitly. The capability
+contract is bypassable from inside the application, not merely by a hypothetical external client.
+
 ## P0-1 · Cross-tenant write: request body overrides the session's organization
 
 `web/app/api/admin/analytics/snapshots/run/route.ts:39`
@@ -149,5 +218,20 @@ implementation work with its own certification, not a discovery artifact. Repair
 discovery run, without those tests, would risk breaking the legitimate cross-tenant path while
 appearing to fix a security bug.
 
-These are filed for implementation sequencing, and P0-1 through P0-3 should be sequenced **ahead of
-any external API work**, because they are defects in the product as it stands today.
+These are filed for implementation sequencing, and **P0-0 through P0-3 should be sequenced ahead of
+any external API work**, because they are defects in the product as it stands today. P0-0 in
+particular is not an external-API concern at all — that path is already reachable without
+authentication.
+
+## What is safely externalizable, and why
+
+**`attendance.*` is the only domain that earns an unqualified yes**, and the reason generalizes:
+one ingestion RPC, three known producers, zero table-level bypasses, and an append-only rule
+enforced by a **database trigger** rather than by application code. Even the arbitrary-table write
+in P0-0 fails loudly against attendance, because the trigger refuses the UPDATE.
+
+Everywhere else the rule is a function nobody calls, a docstring naming its own competitors, or a
+ledger that classifies unknown keys as intentional compatibility by default.
+
+The lesson for any future external contract: **put the invariant in the database.** A guard that
+lives only in TypeScript protects the one caller that remembers to invoke it.
