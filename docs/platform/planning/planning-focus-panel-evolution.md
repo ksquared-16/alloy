@@ -94,4 +94,4 @@ This is the answer to *"Determine whether this becomes the universal Focus Panel
 - [`operational-planning-platform.md`](./operational-planning-platform.md) — the runtime.
 - [`scheduling-reference-implementation.md`](./scheduling-reference-implementation.md) — the Scheduling workspace the card zooms to/from.
 - [`../operator/focus-panel-card-library.md`](../operator/focus-panel-card-library.md) — the card contract the planning card fills out.
-- [`../product/reviews/focus-panel-product-model.md`](../product/reviews/focus-panel-product-model.md) — Modes-not-layers, Context Frame, same-grammar-one-level-down.
+- [`../../product/reviews/focus-panel-product-model.md`](../../product/reviews/focus-panel-product-model.md) — Modes-not-layers, Context Frame, same-grammar-one-level-down.

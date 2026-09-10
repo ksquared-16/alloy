@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Alloy API Platform Governance
 
 **Status:** Phase 3 finalized — the internal API Platform is **complete and self-governing**.

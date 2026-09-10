@@ -457,8 +457,17 @@ Rollout is **shadow-first, flag-gated, consumer-by-consumer, reversible.** No co
 before its judgment is proven against a live oracle.
 
 ### 8.1 Feature-flag strategy
-- **`oe.ledger.author`** — gates authoring intake (P1). Off → no expectations authored; the system is
-  Facts-only, exactly as today.
+- **`oe.ledger.author`** — gates the **generic** authoring intake (P1). Off → no expectations
+  authored through that path; the system is Facts-only.
+
+  > **Superseded in part (September 2026).** This is no longer the whole posture. An
+  > **activated-purpose seam** lets a named purpose author production ledger rows without the env
+  > flag: `web/lib/operationalExpectations/intake/ledgerAuthoringFeatureFlag.ts` returns
+  > `isActivatedAuthoringPurpose(purpose) || isOeLedgerAuthorEnvEnabled()`, and
+  > `activatedAuthoringPurposes.ts` activates `attendance.service_day_exception`, which has an
+  > operator surface. With the flag off the system is Facts-only **everywhere except that
+  > purpose**. Whether this seam is a ratified rollout control is an open Director decision —
+  > `docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md` D10.
 - **`oe.engine.shadow`** — runs the generalized engine in shadow alongside live Billing (P3). Off →
   Consumption V1 is sole authority.
 - **`oe.engine.authoritative.billing`** — flips Billing to consume the generalized engine (P3 cutover).

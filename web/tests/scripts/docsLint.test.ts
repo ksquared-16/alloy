@@ -86,8 +86,21 @@ last_reviewed: 2026-07-12
         const baselinePath = path.join(repoRoot, "scripts/docs-lint-baseline.json");
         const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
         expect(baseline.summary["broken-link"]).toBeGreaterThan(100);
-        // Active-tree targets cleared; historical debt only in broken-link / orphan-canonical
-        expect(baseline.summary["canonical-sprint-dependency"] ?? 0).toBe(0);
+        // generated-boundary is genuinely cleared: `generated` is now a declared property of a
+        // document rather than an assumption about its directory, so docs/api's hand-authored
+        // doctrine is no longer flagged as defective generator output.
+        expect(baseline.summary["generated-boundary"] ?? 0).toBe(0);
+        // duplicate-basename is cleared, but by scoping rather than by moving files: every
+        // instance was a pair inside docs/platform/planning/, which is now a declared exception
+        // and is no longer compared as active canonical doctrine.
         expect(baseline.summary["duplicate-basename"] ?? 0).toBe(0);
+        // canonical-sprint-dependency is NOT cleared. Asserting zero here previously made the
+        // test pass by reading a stale baseline file while the repository carried real debt.
+        expect(baseline.summary["canonical-sprint-dependency"] ?? 0).toBeGreaterThan(0);
+        // The planning exception is deliberately visible, not silent: these three rules exist
+        // because of it and must keep reporting.
+        expect(baseline.summary["canonical-in-planning"] ?? 0).toBeGreaterThan(0);
+        expect(baseline.summary["sprint-artifact-in-platform"] ?? 0).toBeGreaterThan(0);
+        expect(baseline.summary["canonical-planning-dependency"] ?? 0).toBeGreaterThan(0);
     });
 });

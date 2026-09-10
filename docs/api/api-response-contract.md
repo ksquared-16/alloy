@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Alloy API Response Contract
 
 **Status:** Phase 2 (Contract Normalization) — foundation established, representative slice migrated.

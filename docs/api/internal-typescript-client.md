@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Internal TypeScript API Client (v0)
 
 Alloy ships a small **internal** TypeScript client generated from the OpenAPI v0 spec

@@ -37,6 +37,25 @@ const GOVERNED_GLOBS = [
   /^docs\/product\//,
 ];
 
+// `docs/platform/planning/` is a named, dated exception to placement rule 3.
+//
+// It holds 242 files of planning, discovery and execution tracking inside the canonical
+// tree. A September 2026 documentation audit examined relocating it and decided against:
+// a live acceptance gate keys on the literal prefix
+// (`ALLOWED_CHANGE_PREFIX` in scripts/local-dev/lib/vacilando/acceptance.mjs), a test reads
+// one of its documents at runtime, two npm scripts write evidence JSON into it, and moving
+// the tree would silence ~363 violations by dropping the files out of GOVERNED_GLOBS rather
+// than resolving them. See docs/audits/active/documentation-truth-audit-2026-09/ (D1).
+//
+// The exception is scoped, not blanket: these files are still governed for frontmatter, and
+// two rules below exist *because* of the exception — a file here may not claim canonical
+// status, and canonical docs elsewhere may not depend on this tree.
+const PLANNING_EXCEPTION_PREFIX = "docs/platform/planning/";
+
+export function isPlanningException(relPath) {
+  return relPath.startsWith(PLANNING_EXCEPTION_PREFIX);
+}
+
 const ACTIVE_CANONICAL_PREFIXES = [
   "docs/README.md",
   "docs/platform/",
@@ -50,10 +69,17 @@ const CANONICAL_LINK_SCOPES = [
   /^docs\/system\//,
 ];
 
-const GENERATED_MARKERS = [
+// Directories whose every file is machine-produced. docs/api/ is deliberately NOT
+// one of them: it holds a single generated index alongside hand-authored doctrine,
+// so membership there says nothing about how a file was produced.
+const GENERATED_DIRS = [
   { dir: "docs/schema/", pattern: /Generated reference|Do not edit by hand/i },
-  { dir: "docs/api/", pattern: /Generated:|Do not edit by hand/i },
 ];
+
+// A document that declares `status: generated` must name its generator, wherever it
+// lives — governance placement rule 6. Accept either phrasing in use: a "Generator:"
+// attribution or a do-not-hand-edit warning naming the regeneration path.
+const GENERATED_MARKER = /Generated:|Generator:|Do not edit by hand|do not hand-edit/i;
 
 const BLOCKING_ON_CHANGED = new Set([
   "broken-link",
@@ -160,9 +186,24 @@ export function parseFrontmatter(text) {
   if (!match) return { raw: null, data: null, error: null };
   const body = match[1];
   const data = {};
+  let lastKey = null;
   for (const line of body.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
+    // YAML block sequence ("  - item") continues the preceding key. Treating it as a
+    // malformed line both failed valid documents and, because parsing then returned
+    // no data, silently skipped every other check on them (status, owner, successor).
+    if (trimmed.startsWith("- ")) {
+      if (lastKey === null) {
+        return { raw: body, data: null, error: `invalid frontmatter line: ${trimmed}` };
+      }
+      const item = trimmed.slice(2).trim();
+      if (!Array.isArray(data[lastKey])) {
+        data[lastKey] = data[lastKey] ? [data[lastKey]] : [];
+      }
+      if (item) data[lastKey].push(item);
+      continue;
+    }
     const idx = trimmed.indexOf(":");
     if (idx === -1) return { raw: body, data: null, error: `invalid frontmatter line: ${trimmed}` };
     const key = trimmed.slice(0, idx).trim();
@@ -177,6 +218,7 @@ export function parseFrontmatter(text) {
       value = value.slice(1, -1);
     }
     data[key] = value;
+    lastKey = key;
   }
   return { raw: body, data, error: null };
 }
@@ -244,10 +286,13 @@ function loadReadmeIndexedPaths(readmeText) {
   return indexed;
 }
 
+function generatedDirFor(relPath) {
+  return GENERATED_DIRS.find((m) => relPath.startsWith(m.dir)) ?? null;
+}
+
 function isGeneratedDoc(relPath, text) {
-  if (!relPath.startsWith("docs/schema/") && !relPath.startsWith("docs/api/")) return false;
-  const marker = GENERATED_MARKERS.find((m) => relPath.startsWith(m.dir));
-  return marker ? marker.pattern.test(text) : false;
+  const dir = generatedDirFor(relPath);
+  return dir ? dir.pattern.test(text) : false;
 }
 
 export function lintDocumentation(options = {}) {
@@ -331,7 +376,12 @@ export function lintDocumentation(options = {}) {
       });
     }
 
-    if (relPath.startsWith("docs/platform/") && relPath.endsWith(".md") && !indexedPaths.has(relPath)) {
+    if (
+      relPath.startsWith("docs/platform/") &&
+      relPath.endsWith(".md") &&
+      !isPlanningException(relPath) &&
+      !indexedPaths.has(relPath)
+    ) {
       violations.push({
         type: "orphan-canonical",
         file: relPath,
@@ -340,11 +390,48 @@ export function lintDocumentation(options = {}) {
       });
     }
 
-    if ((relPath.startsWith("docs/schema/") || relPath.startsWith("docs/api/")) && !isGeneratedDoc(relPath, text)) {
+    // Placement rule 3, finally implemented: execution artifacts do not live in the
+    // canonical tree. The planning exception is carved out explicitly above, so this fires
+    // on everything else — and prevents a second such tree accumulating unnoticed.
+    if (
+      relPath.startsWith("docs/platform/") &&
+      !isPlanningException(relPath) &&
+      fm.data?.status === "sprint"
+    ) {
+      violations.push({
+        type: "sprint-artifact-in-platform",
+        file: relPath,
+        message: "Execution artifact (status: sprint) inside docs/platform/ — placement rule 3",
+        blocking: false,
+      });
+    }
+
+    // Inside the exception, claiming canonical status contradicts the tree's own README
+    // and is how planning material gets mistaken for doctrine.
+    if (isPlanningException(relPath) && fm.data?.status === "canonical") {
+      violations.push({
+        type: "canonical-in-planning",
+        file: relPath,
+        message: "Planning document declares status: canonical — the planning tree is not doctrine",
+        blocking: false,
+      });
+    }
+
+    // Generated status is a property of the document, not of its directory.
+    const declaresGenerated = fm.data?.status === "generated";
+    const inGeneratedDir = generatedDirFor(relPath) !== null;
+    if (inGeneratedDir && !isGeneratedDoc(relPath, text)) {
       violations.push({
         type: "generated-boundary",
         file: relPath,
-        message: "Generated reference doc missing generator marker",
+        message: "Hand-authored file in a generated reference directory",
+        blocking: false,
+      });
+    } else if (declaresGenerated && !GENERATED_MARKER.test(text)) {
+      violations.push({
+        type: "generated-boundary",
+        file: relPath,
+        message: "Doc declares status: generated but does not name its generator",
         blocking: false,
       });
     }
@@ -360,6 +447,20 @@ export function lintDocumentation(options = {}) {
           file: relPath,
           message: `Broken link '${link.target}' → ${resolved.resolved}`,
           blocking: isCanonicalLinkScope(relPath),
+        });
+      }
+      // Governance rule 5, applied to the planning exception: canonical doctrine may not
+      // delegate current truth into a tree whose own README says not to cite it.
+      if (
+        fm.data?.status === "canonical" &&
+        !isPlanningException(relPath) &&
+        (link.target.includes("platform/planning/") || resolved.resolved?.startsWith("docs/platform/planning/"))
+      ) {
+        violations.push({
+          type: "canonical-planning-dependency",
+          file: relPath,
+          message: `Canonical doc depends on the planning exception: '${link.target}'`,
+          blocking: false,
         });
       }
       if (
@@ -378,7 +479,9 @@ export function lintDocumentation(options = {}) {
 
   for (const [base, paths] of basenameIndex.entries()) {
     if (paths.length <= 1 || base === "README.md") continue;
-    const activePaths = paths.filter((p) => ACTIVE_CANONICAL_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix)));
+    const activePaths = paths.filter(
+      (p) => !isPlanningException(p) && ACTIVE_CANONICAL_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix)),
+    );
     if (activePaths.length < 2) continue;
     violations.push({
       type: "duplicate-basename",

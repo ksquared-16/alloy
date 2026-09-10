@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Alloy API documentation
 
 **Status:** ✅ **Internal API Platform foundation complete** (Phase 3 closeout). Future API work is

@@ -42,4 +42,7 @@ supersedes: []
 
 `ANALYTICS_V2_METRIC_PLATFORM_ENABLED` / `NEXT_PUBLIC_ANALYTICS_V2_METRIC_PLATFORM_ENABLED`
 
-Default: **off**. V1 unchanged when disabled.
+Default: **on** since 2026-06-24 (`web/lib/metrics/platform/featureFlag.ts` reads each
+var with a `true` default and is commented "active development default ON"). Set either
+var to `0` to opt out locally. V1 is unchanged only when a reader has explicitly
+disabled it — not by default.

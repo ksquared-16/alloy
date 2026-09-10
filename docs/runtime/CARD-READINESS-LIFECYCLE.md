@@ -1,6 +1,6 @@
 # Card Readiness — Design Capture (decision-first, pre-implementation)
 
-**Status:** DESIGN / EXPLORATION. No code. **Date:** 2026-07-28. **Owner doc:** `RUNTIME-V1-CERTIFICATION-SPRINT.md`.
+**Status:** Captured as design 2026-07-28; **implementation now cites it.** `web/lib/adminV2/runtime/focusPanel/focusPanelCardProviders.ts:16` and `web/tests/adminV2/runtime/focusPanelCardProviderAvailability.test.ts` reference this document as their rationale, so "No code" — the original status — is no longer true. The five-stage lifecycle below is still **not** frozen; read the decisions, not the draft lifecycle, as the binding part. **Date:** 2026-07-28. **Owner doc:** `RUNTIME-V1-CERTIFICATION-SPRINT.md`.
 
 Captured **before** implementation, and revised to be **decision-first**: the earlier draft proposed a
 five-stage lifecycle (`unknown→honest→operational→enriched→idle`) — the first thing that was *conceptual

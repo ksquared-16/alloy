@@ -61,7 +61,7 @@ Responsive card grid inside the Focus Panel body:
 | Inline strip | Micro KPI tiles |
 | Collapsible section | Reference / History groups |
 
-Grid: up to **4 columns** at wide panel (≥1040px); **16px** gaps; min card **240px** (160px micro). Collapses to 2-col, then single column by **tier priority** (not raw config order).
+Grid: up to **4 columns** at wide panel (≥1040px); min card **240px** (160px micro). The live composer grid gap is **10px** (`COMPOSER_GRID_GAP_PX`, `web/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps.ts`). `FOCUS_PANEL_GRID_GAP_PX = 16` still exists in `focusPanelCardGrid.ts` but has no consumer outside that file, so 16px is not what renders. Collapses to 2-col, then single column by **tier priority** (not raw config order).
 
 ---
 

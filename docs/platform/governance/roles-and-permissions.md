@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-10
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -20,12 +20,24 @@ Capability (permission keys) vs visibility (department/site scope).
 
 ## Model — four layers
 
+The canonical enumeration lives in code at `web/lib/admin/authorityLayers.ts` (W-62 / AD-25),
+with a test that proves the mapping from physical store to conceptual layer is total in both
+directions. The four layers are **Membership → Role → Capability → Scope**.
+
 | Layer | Mechanism | As-built |
 |-------|-----------|----------|
-| **1. Membership / admission** | `user_roles` → `role_definitions.role_key`; portal shell requires `admin` or `ops` among the resolved role keys | Admission is a **role literal test**, not a capability. `W-13` makes it `portal.access`; it needs a product decision |
-| **2. Capabilities** | `role_permission_grants` unioned into `permissionKeys` | Populated and correct. **Most admin routes never consult it** — see *Enforcement* |
-| **3. Organizational / location / department scope** | `user_access_profiles` + `user_department_access` / `user_site_access` | Resolved on every request; enforced only on routes that opt in |
-| **4. Contextual / relationship authority** | per-record checks at the route (e.g. document access decisions) | Present on some routes; not a platform-wide layer |
+| **1. Membership / admission** | `user_roles` row existence — this user is admitted to this org | The row's existence is the membership fact; one physical store backs layers 1 and 2 |
+| **2. Role** | `user_roles.role` → `role_definitions.role_key` | Portal shell requires `admin` or `ops` among the resolved role keys |
+| **3. Capability** | `role_permission_grants` unioned into `permissionKeys` | Populated and correct. **Many admin routes never consult it** — see *Enforcement* |
+| **4. Scope** | `user_access_profiles` + `user_department_access` / `user_site_access` | Resolved on every request; enforced only on routes that opt in. AD-25 is explicit that several physical scope tables do not make several conceptual layers |
+
+Per-record contextual checks (for example document access decisions) exist on some routes.
+AD-25 deliberately does **not** treat them as a fifth authority layer.
+
+`W-13` shipped and resolved the admission question the opposite way from the open item this
+document used to record: there is **no** `portal.access` key. The fifth-layer portal-eligible
+grants were collapsed (`supabase/migrations/20260818170000_w13_collapse_portal_eligible_fifth_layer_grants.sql`)
+and the gates converted to `settings.users_roles`.
 
 **Rule:** Role ≠ visibility. Check `permissionKeys` for capabilities; check the access profile for
 data scope.

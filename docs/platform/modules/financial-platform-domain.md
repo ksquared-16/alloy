@@ -24,6 +24,18 @@ supersedes: []
 3. **Charge is the lifecycle spine.** Charge Template, Charge Event, draft charge, posted charge, and invoice line are **not** separate entities — they are the configuration, trigger, and lifecycle stages around one **Charge**.
 4. **Charge Event is a trigger fact.** It is the operational occurrence that instantiates a Charge ("Registration Approved", "Field Trip Scheduled", "Late Pickup recorded"). **Reuse `workflow_events` first**; only introduce a dedicated table if a single event must fan out to many charges.
 5. **Third-Party Payer generalizes subsidy.** "Subsidy / Agency / Authorization / Claim" is the childcare instance of the universal **Third-Party Payer → Coverage → Claim → Settlement** pattern (insurance, employer benefit, marketplace, grant).
+
+   > **Implementation departed from this law in September 2026, deliberately.** Subsidy
+   > shipped as childcare-specific tables — `financial_funding_agencies`,
+   > `financial_subsidy_programs`, `financial_subsidy_authorizations`,
+   > `financial_subsidy_claims` and siblings
+   > (`supabase/migrations/20260909120000_financial_subsidy.sql`) — not as a first-class
+   > Third-Party Payer. [`billing-financials-platform.md`](./billing-financials-platform.md)
+   > states the reasoning: an agency needs "the narrowest thing that works", and "not a
+   > platform party redesign subsidy does not justify". Both positions are coherent and
+   > this document has **not** been amended. Do not build on determination 5 as though the
+   > generalization exists in the schema. Whether the freeze stands or is amended is an open
+   > Director decision — `docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md` D7.
 6. **Financial Policies are scoped and effective-dated** — never an org-only blob. They resolve through the same most-specific-wins hierarchy as every other configuration.
 7. **Posting is the only authoritative money write.** Every other financial computation is recomputable.
 8. **Resolution remains recomputable.** Rate Resolution → Charge Resolution → Financial Resolution write nothing authoritative; they can be discarded and rebuilt at any time.

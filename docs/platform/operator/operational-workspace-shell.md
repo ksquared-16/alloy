@@ -88,12 +88,17 @@ Mode is the **primary** navigation layer. Child sections belong to exactly one m
 |--------|---------------|-----------------|
 | Processing (Digital Mailroom) | Overview · Queue | Forms · Packets · Fields · Branding |
 | Communications | Overview · Inbox · Announcements · Scheduled | Templates · Channels · Rules |
-| Work Items | Process rail (Business Process → interim Stage; Work View is the target lens) → queue | — (no design-time assets) |
+| Work Items | **Folders · Views · Sources** rail → queue (`web/components/workItems/FoldersViewsSourcesRail.tsx`) | — (no design-time assets) |
 | Operational Intelligence | Overview *(future: Planning · Financials · Utilization)* | Playbooks · Configure *(future: Metrics · Targets · Display)* |
 
 **Configure belongs to Studio.** When a module has Work/Studio, configuration is a Studio entry — never a duplicated header action or a free-floating button repeated across views. Operational Intelligence exposes exactly one Configure, in Studio.
 
-Work Items has no design-time assets, so it omits the Work/Studio switch; its primary axis is the **process rail** (below).
+Work Items has no design-time assets, so it omits the Work/Studio switch. Its shipped primary
+axis is **Folders · Views · Sources** (`WORK_ITEM_FOLDER_DEFS` / `WORK_ITEM_VIEW_DEFS` /
+`WORK_ITEM_SOURCE_DEFS` in `web/lib/workItems/workItemQueueScope.ts`), not the process rail
+described below. The process-first model in the next section is the **approved direction**;
+the rail that ships today is the folders/views/sources scope. The canonical description of
+the Work Items queue is [`queue-system.md`](./queue-system.md) §Work Items queue.
 
 ---
 

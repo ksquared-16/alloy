@@ -1,3 +1,9 @@
+---
+owner: platform
+status: proposed
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # Alloy API — Data Access, Freshness & Performance Doctrine
 
 **Status:** Doctrine (June 2026). This extends [`api-architecture.md`](api-architecture.md)

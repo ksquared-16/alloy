@@ -1,3 +1,10 @@
+---
+owner: platform
+status: frozen
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Business Process Platform V1 — Certification Matrix
 
 **Status: BUSINESS PROCESS PLATFORM V1 COMPLETE.**

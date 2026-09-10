@@ -1,18 +1,25 @@
+---
+owner: platform
+status: generated
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Schema — tables and views
 
 **Status:** Generated reference (staging export). **Do not edit by hand.**
 
 **Regenerate:** `npm run export:supabase-schema` then `node scripts/generate-schema-docs.mjs`
 
-**Generated:** 2026-07-17
+**Generated:** 2026-09-10 by `scripts/generate-schema-docs.mjs` from the `docs/supabase/reference/*.csv` export (the export's state, not necessarily the live database)
 
 ## Summary
 
 | Kind | Count |
 |------|------:|
-| Base tables (`public`) | 244 |
+| Base tables (`public`) | 245 |
 | Views (`public`) | 2 |
-| Tables with RLS enabled | 244 |
+| Tables with RLS enabled | 245 |
 
 ## Base tables
 
@@ -165,6 +172,7 @@
 | `operational_expectation_ratifications` | true | false | 2 |
 | `operational_expectations` | true | false | 2 |
 | `operational_tasks` | true | false | 4 |
+| `operator_stage_membership_acks` | true | false | 0 |
 | `opportunities` | true | false | 5 |
 | `opportunity_customer_members` | true | false | 5 |
 | `opportunity_persons` | true | false | 5 |

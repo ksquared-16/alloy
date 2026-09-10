@@ -1,11 +1,43 @@
 ---
 owner: platform
-status: proposed
-last_reviewed: 2026-07-21
+status: sprint
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
-# Scheduling — Product Definition (frozen) & the Decision Architecture
+# Planning — execution and discovery material, not doctrine
+
+> **Authority: this tree is not canonical doctrine.** It sits under `docs/platform/`
+> for historical reasons, but everything in it is planning, discovery, execution
+> tracking, or open decisions. `docs/platform/governance/documentation-governance.md`
+> placement rule 3 reserves `docs/platform/` for current truth and puts execution
+> history under `docs/sprints/`; this tree predates that being enforced and is the
+> known exception. Do not cite a document here as current platform truth, and do not
+> treat a `status: canonical` line inside it as authority over the owning doctrine
+> document.
+>
+> **Current truth lives in** `docs/platform/foundation/`, `core/`, `operator/`,
+> `runtime/`, `modules/`, `governance/`, and `docs/system/`. Start at
+> [`../../README.md`](../../README.md).
+>
+> **What is actually in here** (242 files, still being written — most recent change
+> 2026-09-10):
+>
+> | Subtree | Files | Program |
+> |---|---:|---|
+> | `vacilando-os/` | 130 | Vacilando operational tooling: QA missions, certifications, findings |
+> | `conversation-platform-v1/` | 41 | Conversation Platform V1 discovery and phase records |
+> | *(root)* | 55 | Scheduling product definition and the Assignment Platform trail — indexed below |
+> | `access-identity-v2/` | 8 | Access / Identity V2 model and sequence |
+> | `trust-adoption/`, `trust-runtime/` | 8 | Trust Platform adoption assessment and runtime notes |
+>
+> Relocating this tree to `docs/sprints/` is recorded as a decision for the
+> Documentation + Developer Platform master thread: it is 242 files with commits
+> landing daily and inbound links from live code, so it is not a safe unattended move.
+
+---
+
+## Scheduling — Product Definition (frozen) & the Decision Architecture
 
 **Alloy turns operational pressure into operational truth — one decision at a time.**
 

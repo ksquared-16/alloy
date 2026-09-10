@@ -77,7 +77,15 @@ Every card supports the same lifecycle and never invents new states: Loading, Co
 
 ## Density System
 
-Cards adapt by density and never change identity: Micro (queue) · Compact (summary) · Standard (work) · Expanded (focused) · Immersive (embedded workspace). One card, multiple densities.
+Cards adapt by density and never change identity: **Micro** (queue) · **Compact** (summary) ·
+**Standard** (work) · **Expanded**. One card, four densities — the runtime enum
+`FocusPanelCardDensity`, owned by [`universal-card-system.md`](./universal-card-system.md).
+
+*Immersive* is not a fifth density: it is the Embedded Workspace interaction model in
+[`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md), and
+`card-composition-system.md` calls the same move `takeover_surface`. A layout document
+persisting "immersive" as a density is discarded by
+`web/lib/adminV2/runtime/focusPanel/focusPanelLayoutDocModel.ts`.
 
 ---
 
@@ -137,15 +145,15 @@ Editing is always **contextual** — the operator never leaves the operational c
 
 Color communicates **operational meaning, not module identity.** Cards remain visually calm; operational state creates color.
 
-| Color | Meaning |
-|-------|---------|
-| Neutral / Slate | Context, identity |
-| Blue | Financial |
-| Green | Healthy / complete |
-| Amber | Requires attention |
-| Red | Blocked / urgent |
-| Purple | Intelligence |
-| Gray | History |
+The **tokens and their meanings are owned by**
+[`operational-surface-design-system.md`](./operational-surface-design-system.md) §6 (System 5),
+which is what `web/app/globals.css` implements. This document previously carried a second table
+that disagreed with it on two colours — Blue as "Financial" (System 5: metrics/informational) and
+Green as "Healthy / complete" (System 5: active work / primary action). That table is removed
+rather than restated, so there is one palette.
+
+What this document owns is the *principle*, not the values: colour tracks operational state, and
+a calm card earns its colour from what is true of the subject.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-11
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -10,6 +10,95 @@ supersedes: []
 **Status:** Canonical platform milestones (July 2026 stabilization rebaseline). **Not** a commit or sprint task log.
 
 > **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** This history predates the operational truth-flow backend. Recorded here for completeness: the **L1–L4 operational spine** (config rules; effective-dated agreements/placements/schedule assignments; immutable attendance facts; expected/actual occupancy & staffing read models) and the **L4→L5 Operational Consumption runtime** (Consumption Events → Resolved Obligations → draft Charges, Slices 1–4) shipped as flag-gated/simulator backend across June–July 2026. The frozen architecture governing their productization is [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md); its first delivery step is defined in `../../sprints/archive/06_2026/operational-expansion/wave1-implementation-spec.md` (historical: `../../sprints/archive/06_2026/operational-expansion/wave1-implementation-spec.md`).
+
+---
+
+## 2026 H2 — Operational domains
+
+> Recorded 2026-09-10 by a documentation truth audit. This history had stopped at PR #404
+> (August 2026) while HEAD stood at PR #798 — roughly 2,000 commits and 181 migrations later.
+> The entries below are reconstructed from migrations, certification packs and closeout
+> documents, and each names its evidence. The update rule at the foot of this document keys off
+> `platform-capabilities.md`, which had itself stopped being maintained on 2026-08-01, so
+> neither half of the mechanism could fire. Treat this section as a catch-up pass, not as a
+> complete PR-by-PR record.
+
+### September 2026 — Payments, financial responsibility and subsidy
+
+**Provider collection on Stripe Connect.** Merchant registration, collection attempts (card and
+ACH), provider events, refunds, provider-initiated reversal, rail readiness and canonical
+posting. Migrations `20260909160000_payment_provider_merchant.sql` through
+`20260909270000_collection_attempt_action_type.sql`; webhook handler
+`web/app/api/stripe/webhook/route.ts`; certification under `certification/financials/`.
+Not built: autopay, dunning, card chargebacks.
+
+**Financial responsibility and subsidy.** Financial responsibility including split shares
+(`20260908120000_financial_responsibility.sql`) and subsidy claims
+(`20260909120000_financial_subsidy.sql`, `20260909140000_subsidy_variance_single_identity.sql`),
+on top of financial periods and the journal
+(`20260904180000_financial_periods_and_journal.sql`) and charge correction lineage
+(`20260902140000_charge_correction_lineage.sql`).
+
+Note for the domain doc: subsidy shipped as childcare-specific tables rather than the
+generalized Third-Party Payer that [`../modules/financial-platform-domain.md`](../modules/financial-platform-domain.md)
+freezes as determination #5. That divergence is deliberate and is recorded in
+[`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md), but
+the two canonical docs have not been reconciled.
+
+### September 2026 — Attendance and location topology
+
+**Attendance capture.** Capture hardening, the `attendance.record` / `attendance.read`
+capability, kiosk producers and kiosk person codes
+(`20260909220000` … `20260910130000`). Operator surface `AttendanceWorkspace`; device surface
+`web/app/kiosk/`. Permission-gated, not flag-gated. Doctrine:
+[`../modules/attendance-system.md`](../modules/attendance-system.md).
+
+**Location topology V1** (`20260909210000_location_topology_v1.sql`).
+
+This wave is also the Operational Expectations ledger's first production consumer: an
+activated-purpose seam authors `attendance.service_day_exception` rows without the
+`oe.ledger.author` env flag. See the Operational Expectations row in
+[`platform-capabilities.md`](platform-capabilities.md).
+
+### August 2026 — Communications inbound ingress
+
+Inbound email binding and threading, retrieval receipts, inbound SMS, ingress routes,
+classification, eligibility observation and unread-count authority — fifteen migrations from
+`20260813110000_communication_inbound_ingress.sql` to
+`20260819200000_ingress_ineligible_disposition.sql`. Live-certified
+(`certification/playwright/communications-inbound-email.cert.spec.ts`). Closeout:
+`../communications/COMMUNICATIONS-V1-CLOSEOUT.md`. The ingress eligibility gate is
+**observe-only** by design, not enforcement.
+
+### August 2026 — Access / Identity V2
+
+RBAC catalog and role-definition integrity, default enumerated grants, the collapse of the
+fifth-layer portal-eligible grants, role-key foreign keys, and the grants RPC replacement —
+`20260807170000_w12_*`, `20260818170000_w13_*`, `20260818180000_w61_*`, `20260818190000_w16_*`,
+`20260818240000_w60_*`, `20260820130000_w28_*`, `20260820140000_w58_*`. The canonical authority
+enumeration now lives in code at `web/lib/admin/authorityLayers.ts` (Membership → Role →
+Capability → Scope) with a test proving the store-to-layer mapping is total.
+
+### August 2026 — Modal record product deleted; Focus Panel is the only record surface
+
+`2b21b222e` deleted `AdminEntityDrawer` and both ViewModel runtimes it mounted. There is no
+drawer router and no record overlay; absence is asserted by
+`web/tests/operator/drawerProductEradication.test.ts` and certified by
+`certification/playwright/drawer-eradication.cert.spec.ts`. The drawer ViewModel compose layer
+survives as infrastructure feeding the Focus Panel.
+
+### August 2026 — Employment and staff presence foundation
+
+Employment records, staff assignment eligibility and staff presence facts
+(`20260811120000`, `20260811120100`, `20260812090000`); `web/lib/employment/`,
+`web/lib/staffPresence/`. No shift model exists — staff supply is `schedule_assignments` with
+`subject_type='staff'`.
+
+### August 2026 — Trust Runtime V1
+
+Trust runtime foundation, privilege correction, lifecycle observation kinds and provider
+telemetry (`20260802090000` … `20260807210000`); library `web/lib/trust/`; certification pack
+`certification/trust-runtime-v1/`. Corpus: [`../trust/trust-platform.md`](../trust/trust-platform.md).
 
 ---
 
@@ -48,9 +137,12 @@ supersedes: []
 
 **Deferred follow-ups** (recorded, not implemented) — see [`../../audits/active/operational-expansion-architecture-audit-2026-07.md`](../../audits/active/operational-expansion-architecture-audit-2026-07.md) §4: **F4/G10** consumption lineage uniqueness; **F5/G11** superseded obligation review-queue visibility.
 
-### July 2026 — Processing Identity Resolution V1 (promotion candidate)
+### July 2026 — Processing Identity Resolution V1
 
-**Reconciled onto latest `origin/staging` and locally re-certified; awaiting PR merge to staging; not deployed.**
+**Merged to `origin/staging`.** The migrations are reachable from `origin/staging`
+(`supabase/migrations/20260716120000_processing_identity_b0_tenant_security.sql` onward,
+merged 2026-07-12/07-24). This entry previously read "awaiting PR merge to staging; not
+deployed", which stopped being true shortly after it was written.
 
 - Canonical identity normalization, org-scoped candidate generation, confidence bands, evidence signals, and conflict detection
 - Durable Processing facts and resolution generations
@@ -193,3 +285,5 @@ Local certification: 24 registry/runtime/family conformance tests; existing rati
 Each milestone represents **shipped platform capability**, not individual PRs. For implementation detail, follow sprint closeouts in `docs/sprints/**` — treat month folders as historical execution records; canonical platform state lives in `docs/platform/**`.
 
 **Update rule:** Add a milestone when a capability moves to **Complete** in `platform-capabilities.md` with operator-visible or platform-significant impact.
+
+This rule failed silently between August 2026 and September 2026 because it depends on a register that had itself stopped being updated. If `platform-capabilities.md` has not changed in a month while migrations are landing, that is the signal to run a catch-up pass here rather than to conclude nothing shipped.

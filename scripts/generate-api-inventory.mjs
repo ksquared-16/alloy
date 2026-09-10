@@ -295,6 +295,11 @@ function tablesCell(r) {
 
 const now = new Date().toISOString().slice(0, 10);
 let out = "";
+// Governed metadata contract (docs/platform/governance/documentation-governance.md):
+// this is the one generated document in docs/api/, and it says so in its own frontmatter.
+out += "---\nowner: platform\nstatus: generated\n";
+out += `last_reviewed: ${now}\n`;
+out += "supersedes: []\n---\n\n";
 out += "# API index (generated)\n\n";
 out += `**Generated:** ${now} by \`scripts/generate-api-inventory.mjs\`. Do not edit by hand — re-run the script.\n\n`;
 out += `**Routes:** ${rows.length} \`route.ts\` handlers under \`web/app/api/**\`.\n\n`;

@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: closed
+status: historical
 capability: director-deliverable-feedback-loop
 closed_at: 2026-08-04
 closed_commit: fbe918247
@@ -103,4 +103,4 @@ Director input. Shared context is not discarded.
 ## Follow-up
 
 Auth exposure policy for non-loopback binds: see
-[`../BACKLOG.md`](../BACKLOG.md) item **CP-AUTH-NON-LOOPBACK**.
+[`../../BACKLOG.md`](../../BACKLOG.md) item **CP-AUTH-NON-LOOPBACK**.
