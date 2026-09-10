@@ -70,11 +70,12 @@ describe("the identification budget binds the GUESSER, not the guess", () => {
 });
 
 describe("issued secrets are the shape they claim to be", () => {
-    it("draws person codes from an alphabet with no lookalike characters", () => {
-        // These are read aloud at a desk and typed on glass; O/0 and I/1 turn a
-        // rotation into a support call.
+    it("issues person codes a keypad can enter", () => {
+        // Digits, because the surface is a lobby tablet. The entropy that makes
+        // eight digits safe comes from the device-keyed limiter, not the alphabet
+        // — which is why the two may never be loosened independently.
         for (let i = 0; i < 40; i += 1) {
-            expect(generateKioskPersonCode()).toMatch(/^[ABCDEFGHJKLMNPQRTUVWXY2346789]{8}$/);
+            expect(generateKioskPersonCode()).toMatch(/^[0-9]{8}$/);
         }
     });
 
@@ -105,10 +106,11 @@ describe("rotation changes the answer, which is the whole point", () => {
         );
     });
 
-    it("treats a person code case-insensitively but a device credential exactly", () => {
-        // A parent typing "abc123" at a tablet means the same code. A device
-        // credential is machine-held, so case is signal, not noise.
-        expect(hashKioskPersonCode("abc123")).toBe(hashKioskPersonCode("ABC123"));
+    it("normalises a typed code but treats a device credential exactly", () => {
+        // Codes are digits now, but the upper-casing normalisation stays: it costs
+        // nothing and it keeps older issued codes working. A device credential is
+        // machine-held, so case is signal, not noise.
+        expect(hashKioskPersonCode(" 12345678 ")).toBe(hashKioskPersonCode("12345678"));
         expect(hashKioskCredential("aBc")).not.toBe(hashKioskCredential("AbC"));
     });
 });

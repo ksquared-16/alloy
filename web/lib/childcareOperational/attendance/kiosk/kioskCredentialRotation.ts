@@ -29,10 +29,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { hashKioskCredential } from "@/lib/childcareOperational/attendance/kiosk/kioskDeviceAuthority";
 import { hashKioskPersonCode } from "@/lib/childcareOperational/attendance/kiosk/kioskSessionGateway";
 
-/** Unambiguous alphabet: no O/0, I/1, S/5 — these are read aloud and typed on glass. */
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRTUVWXY2346789";
+/**
+ * DIGITS, and the reason is the tablet.
+ *
+ * The first draft used an unambiguous alphanumeric alphabet, which is the right
+ * answer for a code somebody types on a keyboard and the wrong one for a lobby
+ * appliance: 29 symbols means an on-screen keyboard, and an on-screen keyboard at
+ * a front desk with a toddler on one hip is a worse product than four more digits.
+ *
+ * Eight digits is ~26 bits. On its own that would be thin; behind a limiter keyed
+ * to the DEVICE at ten attempts a minute it is roughly nineteen years of guessing
+ * for one code, and the limiter — not the alphabet — is what makes that true. The
+ * two are designed together, which is why neither may be loosened alone.
+ */
+const CODE_ALPHABET = "0123456789";
 
-/** A person's kiosk code. Short enough to type on a tablet, long enough to resist a bounded guesser. */
+/** A person's kiosk code: long enough to resist a bounded guesser, typed on a keypad. */
 export function generateKioskPersonCode(length = 8): string {
     const bytes = randomBytes(length);
     let out = "";
