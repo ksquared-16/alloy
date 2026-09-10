@@ -30,6 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!form) return jsonError("Not found", 404);
 
     let schemaSource: unknown = body.schema_json;
+    let clonedPdfMapping: unknown = null;
     const cloneFrom = body.clone_from_version_id;
     if (schemaSource === undefined && typeof cloneFrom === "string" && cloneFrom.trim()) {
         const cloneId = parseUuidParam(cloneFrom.trim(), "clone_from_version_id");
@@ -41,6 +42,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return jsonError("clone_from_version_id does not belong to this form", 400);
         }
         schemaSource = (src as { schema_json: unknown }).schema_json;
+        /*
+         * A clone inherits the source document too.
+         *
+         * The mapping describes where the SAME schema's answers print on the SAME paperwork, so a
+         * clone that carries the schema and drops the mapping produces a revision that can no longer
+         * render the document it was generated from. Publishing a Form imported from a school's
+         * paperwork and then editing it once was enough to lose that silently, because the next
+         * draft is made by cloning. An explicit `pdf_mapping_json` in the body still wins, including
+         * an explicit null to detach the source.
+         */
+        clonedPdfMapping = (src as { pdf_mapping_json?: unknown }).pdf_mapping_json ?? null;
     }
 
     if (!schemaSource || typeof schemaSource !== "object") {
@@ -63,7 +75,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const pdf_mapping_json =
-        body.pdf_mapping_json === undefined ? null : (body.pdf_mapping_json as unknown);
+        body.pdf_mapping_json === undefined ? clonedPdfMapping : (body.pdf_mapping_json as unknown);
     const metadata =
         body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
             ? (body.metadata as Record<string, unknown>)

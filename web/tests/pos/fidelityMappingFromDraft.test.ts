@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -106,5 +107,27 @@ describe("a document with nothing to fill backs no mapping", () => {
         // A flat or scanned source has no widgets, so there is no original to render into. That is a
         // perfectly good Form; it simply is not a fidelity one.
         expect(buildFidelityMappingFromDraft(draft, SOURCE)).toBeNull();
+    });
+});
+
+describe("a version is its schema AND its document", () => {
+    it("continues a published version by cloning it, so the mapping travels", () => {
+        /*
+         * The builder made the next draft by re-posting the published schema, and the versions route
+         * defaults `pdf_mapping_json` to null when the body omits it. So publishing an imported Form
+         * and opening it once produced a draft that could no longer render its own paperwork —
+         * silently, because the questions were all still there.
+         */
+        const api = readFileSync(join(process.cwd(), "app", "adminV2", "pos", "useProcessingFormApi.ts"), "utf8");
+        expect(api).toContain("clone_from_version_id: latest.id");
+        expect(api).not.toContain("JSON.stringify({ schema_json: parsed.data })");
+
+        const route = readFileSync(
+            join(process.cwd(), "app", "api", "admin", "forms", "[formId]", "versions", "route.ts"),
+            "utf8",
+        );
+        // The clone carries the source document forward; an explicit body value still wins.
+        expect(route).toContain("clonedPdfMapping = (src as { pdf_mapping_json?: unknown }).pdf_mapping_json ?? null");
+        expect(route).toContain("body.pdf_mapping_json === undefined ? clonedPdfMapping");
     });
 });

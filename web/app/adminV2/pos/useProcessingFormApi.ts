@@ -112,11 +112,20 @@ export function useProcessingFormApi() {
                     return { schema: parsed.data, editVersionId: latest.id, state: "ready", formRow: enrichedFormRow };
                 }
 
+                /*
+                 * Continue from the published version by CLONING it, not by re-posting its schema.
+                 *
+                 * A version is its schema AND the mapping onto the document that schema was
+                 * generated from. Sending the schema alone made the next draft a version that could
+                 * no longer render its own paperwork: publishing an imported Form and then opening
+                 * it once was enough to lose the source document silently. Cloning states the real
+                 * intent — this draft continues that version — and the route carries both forward.
+                 */
                 const draftRes = await fetch(`/api/admin/forms/${formId}/versions`, {
                     method: "POST",
                     credentials: "same-origin",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ schema_json: parsed.data }),
+                    body: JSON.stringify({ clone_from_version_id: latest.id }),
                 });
                 if (!draftRes.ok) {
                     return { schema: parsed.data, editVersionId: null, state: "ready", formRow: enrichedFormRow };
