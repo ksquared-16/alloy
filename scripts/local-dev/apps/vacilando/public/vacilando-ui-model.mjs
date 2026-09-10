@@ -1427,6 +1427,7 @@ export const OPERATOR_STATE = Object.freeze({
   // being asked anything — which is exactly what separates it from NEEDS_YOU.
   COMPLETED_UNREAD: "completed_unread",
   READY: "ready",
+  OFFLINE: "offline",
   FAILED: "failed",
 });
 
@@ -1437,6 +1438,7 @@ export const OPERATOR_STATE_LABEL = Object.freeze({
   attention: "Attention",
   completed_unread: "New",
   ready: "Ready",
+  offline: "Offline",
   failed: "Failed",
 });
 
@@ -1448,6 +1450,7 @@ export const OPERATOR_STATE_TONE = Object.freeze({
   attention: "needs",
   completed_unread: "complete",
   ready: "",
+  offline: "",
   failed: "failed",
 });
 
@@ -1516,6 +1519,17 @@ export function operatorState(work, lane = null) {
   // A completed run that filed no account is not Ready — Ready would say the
   // turn is finished AND accounted for, and only the first half is true.
   if (key === "completion_unreported") return OPERATOR_STATE.ATTENTION;
+
+  // MATCH THE BAND, NOT ONLY THE KEYS IN IT.
+  //
+  // The two lines above are key equalities, so a THIRD attention state added to
+  // the resolver later would miss both and fall all the way through to READY —
+  // the most reassuring answer this function can give, handed to a lane the
+  // resolver had just flagged as worth looking at. Fail-open, and silent.
+  // Matching the group categorises a new cause correctly the moment it exists;
+  // it renders as the generic "Attention" until it earns a plain label in
+  // ATTENTION_CAUSE_LABEL, which is a wording gap rather than a wrong answer.
+  if (group === "attention") return OPERATOR_STATE.ATTENTION;
   // Unread completion is attention without obligation, so it is answered here
   // rather than folding into NEEDS_YOU above.
   if (key === "completed_unread") return OPERATOR_STATE.COMPLETED_UNREAD;
@@ -1525,9 +1539,119 @@ export function operatorState(work, lane = null) {
   // resource, refreshing context. The operator does not act on any of them.
   if (work?.live === true || group === "active") return OPERATOR_STATE.WORKING;
 
-  // Everything else — idle, complete, offline, a released provider, a stale
-  // capacity claim — is a lane that can take work.
+  // OFFLINE IS NOT READY, AND CALLING IT READY IS A PROMISE THE LANE CANNOT KEEP.
+  //
+  // This projection collapsed offline into READY, on the reasoning that it is
+  // "a lane that can take work". It is not: there is no runtime to take it.
+  // Measured on the live Gateway, five of twelve lanes disagreed with their own
+  // lane rows because of this — Troubleshooting and Work Items rendered
+  // "Offline" in the list and "Ready" in navigation and the lane header, which
+  // is the same two-answers defect this projection exists to remove, sitting
+  // inside the projection itself.
+  //
+  // It ranks BELOW working and needs-you deliberately: an offline lane that is
+  // holding an actionable governed action is still Needs you, because being
+  // asked outranks whether a process is resident. It ranks ABOVE ready because
+  // between "can take work" and "cannot", the operator needs the second.
+  if (key === "offline" || group === "offline") return OPERATOR_STATE.OFFLINE;
+
+  // Everything else — idle, complete, a released provider, a stale capacity
+  // claim — is a lane that can take work.
   return OPERATOR_STATE.READY;
+}
+
+/* ---------------------------------------------------------------------------
+ * COMPOSER KEY SEMANTICS — one rule, stated once, testable without a browser.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * WHAT DOES ENTER DO IN THE INSTRUCTION COMPOSER?
+ *
+ * THE DEFECT. There was one answer for every device: Enter without Shift sends.
+ * On a phone there IS no Shift key, so the software Return key — the only way
+ * to start a new line — sent the instruction instead. Multiline instructions
+ * were not awkward from a phone, they were impossible, and every attempt at one
+ * dispatched a half-written prompt to a live agent.
+ *
+ * THE RULE DEPENDS ON THE INPUT DEVICE, NOT THE SCREEN SIZE. A narrow desktop
+ * window still has a hardware keyboard and a Shift key; an iPad in landscape is
+ * a wide screen with none. So the discriminator is the pointer: a coarse
+ * primary pointer with no hover is a touch keyboard, where Return must be a
+ * newline and the visible Send control is the only way to dispatch.
+ *
+ * DESKTOP SEMANTICS ARE PRESERVED AS FOUND, and the audit is the product's own
+ * words: the composer renders the hint "Enter to send · Shift+Enter for a new
+ * line". That is an explicit, shipped promise to the operator, so Enter-to-send
+ * is intent rather than accident and is left exactly as it is. The same hint is
+ * hidden wherever this returns "newline", so the affordance and the behaviour
+ * can never disagree.
+ *
+ * IME COMPOSITION IS NOT A SEND. `isComposing` covers browsers that set it;
+ * `keyCode === 229` covers the ones that do not — Android IMEs in particular
+ * report a composing Enter with `isComposing` false, and treating that as a
+ * send dispatches a prompt in the middle of choosing a character. Both are
+ * checked because neither is reliable alone.
+ *
+ * A MODIFIED ENTER IS NEVER A NEWLINE-BY-DEFAULT: Shift+Enter is the documented
+ * newline, and Meta/Ctrl/Alt+Enter are left to the platform rather than being
+ * silently re-bound here.
+ */
+export function composerKeyAction(event, { touchPrimary = false } = {}) {
+  if (!event || event.key !== "Enter") return "ignore";
+  if (event.isComposing === true || event.keyCode === 229) return "ignore";
+  if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return "ignore";
+  return touchPrimary ? "newline" : "send";
+}
+
+/**
+ * Does this environment type on glass?
+ *
+ * `(hover: none) and (pointer: coarse)` is the media query for a primary input
+ * that cannot hover and is finger-sized — every phone and tablet, and no mouse
+ * or trackpad. Width is deliberately not consulted: a phone in landscape and a
+ * tablet are both wide and both have no Shift key, and a narrow desktop window
+ * has one. Absence of matchMedia resolves to false, which keeps the documented
+ * desktop behaviour rather than silently disabling send.
+ */
+/**
+ * IS THERE ANYTHING TO SEND?
+ *
+ * THE DEFECT, found by tapping Send on an empty composer during the mounted
+ * proof: nothing anywhere refused it. The client had no emptiness check at all,
+ * and the Send control was disabled only while a send was in flight — so an
+ * empty tap dispatched an empty instruction to a live agent, and Enter on a
+ * desktop did the same.
+ *
+ * ATTACHMENTS COUNT AS CONTENT. A prompt that is images with no words is a real
+ * prompt, so "empty" means no text AND nothing attached — not "the textarea is
+ * blank". Whitespace alone is not content.
+ *
+ * An upload still in flight is NOT ready: sending then would silently drop the
+ * image out of the prompt, which is the case the existing in-flight check was
+ * written for. This states the same rule where the CONTROL can read it, so the
+ * button is disabled rather than the tap being refused after the fact.
+ */
+export function composerCanSend({
+  text = "",
+  attachments = [],
+  uploading = 0,
+  sending = false,
+  disabled = false,
+} = {}) {
+  if (disabled || sending) return false;
+  if (Number(uploading) > 0) return false;
+  const hasText = String(text ?? "").trim().length > 0;
+  const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+  return hasText || hasAttachments;
+}
+
+export function touchPrimaryInput(win = (typeof window !== "undefined" ? window : null)) {
+  try {
+    if (!win || typeof win.matchMedia !== "function") return false;
+    return win.matchMedia("(hover: none) and (pointer: coarse)").matches === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1558,6 +1682,41 @@ export function finishClaimIsMeaningful(run) {
   return FINISH_CLAIM_STATES.includes(String(run?.state || "").toUpperCase());
 }
 
+/**
+ * "ATTENTION" NAMES A CATEGORY, NOT A FACT — SO IT MUST CARRY ITS CAUSE.
+ *
+ * THE DEFECT, reported by the operator looking at their own fleet: "I'm seeing
+ * ! Attention on the left side nav for status and then in the lane I see
+ * Attention · Claude... I don't understand what attention means in this
+ * context." They were right, and the test is the rest of the vocabulary: every
+ * other operator state NAMES what is true. Working is working. Ready can take
+ * work. Offline has no runtime. Needs you is being asked. Failed failed.
+ * "Attention" says only that something is worth looking at, and then stops —
+ * on the one surface whose whole job is to answer "what is this lane doing".
+ *
+ * There are exactly two ways into it, and each has a plain answer:
+ *
+ *   provider_active       Claude is busy in the lane's worktree with NO
+ *                         Execution Run open, so the work exists and nothing is
+ *                         tracking it. That is "Working · untracked", which
+ *                         says both halves.
+ *
+ *   completion_unreported The run finished and no account of the turn survived
+ *                         (no completion_report.report_id). The work is done;
+ *                         what is missing is the report. "Finished · no report".
+ *
+ * This is NOT the runtime phrase leaking back into the headline. The rule that
+ * removed it — a lane must not be described by a subsystem condition that
+ * CONFLICTS with its execution state — is untouched: these two do not conflict
+ * with the execution state, they ARE it, and "Attention" was erasing them. One
+ * projection still owns the answer, and every surface still reads this one
+ * function; it just no longer answers with the name of a bucket.
+ */
+export const ATTENTION_CAUSE_LABEL = Object.freeze({
+  provider_active: "Working · untracked",
+  completion_unreported: "Finished · no report",
+});
+
 export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
   const state = operatorState(work, lane);
   const progress = laneProgress(lane?.execution_run, { nowMs });
@@ -1565,7 +1724,9 @@ export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
     && finishClaimIsMeaningful(lane?.execution_run);
   return {
     state,
-    label: OPERATOR_STATE_LABEL[state],
+    // The category name is the fallback, never the answer when a cause is known.
+    label: (state === OPERATOR_STATE.ATTENTION && ATTENTION_CAUSE_LABEL[work?.key])
+      || OPERATOR_STATE_LABEL[state],
     tone: OPERATOR_STATE_TONE[state],
     live: state === OPERATOR_STATE.WORKING,
     // Progress rides with identity, not in a card of its own. Only a FRESH

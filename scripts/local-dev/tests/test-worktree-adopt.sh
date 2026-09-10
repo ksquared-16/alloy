@@ -116,6 +116,49 @@ git -C "$WTROOT/wt6-other" checkout -q --detach
 assert_fail "refuses a detached HEAD" adopt 6 wt6-other
 assert_err_contains "names the detached HEAD" "detached"
 
+echo "== --no-slot: registration is identity, a slot is a resource =="
+# THE DEFECT THIS COVERS. With every slot held, lane creation could not register
+# a worktree at all, so a lane came into existence with a branch, a tmux session
+# and a live agent that no instruction could reach. Running out of PORTS is not
+# a reason to stop knowing whose worktree that is.
+git -C "$CANON" worktree add -q -b agent/access-identity "$WTROOT/access-identity" staging
+NOSLOT_META="$RUNTIME/metadata/access-identity.env"
+assert_ok "adopts a worktree with no slot" adopt --no-slot access-identity
+assert_file_contains "records the name" 'ALLOY_WORKTREE_NAME="access-identity"' "$NOSLOT_META"
+assert_file_contains "records the path" "$WTROOT/access-identity" "$NOSLOT_META"
+assert_file_contains "records the branch Git reports" 'ALLOY_WORKTREE_BRANCH="agent/access-identity"' "$NOSLOT_META"
+assert_file_contains "is live, not archived" 'ALLOY_WORKER_LIFECYCLE="active"' "$NOSLOT_META"
+assert_file_contains "says why it has no slot" 'ALLOY_WORKTREE_UNSLOTTED="1"' "$NOSLOT_META"
+# ABSENT, not empty-and-present: every reader resolves a slot by comparing
+# against a validated 1..N, and an empty value that is present is one bad
+# comparison away from matching something.
+if grep -q '^ALLOY_WORKTREE_SLOT=' "$NOSLOT_META"; then
+  fail "no slot key is written at all"
+else
+  pass "no slot key is written at all"
+fi
+if grep -q '^PORT=' "$NOSLOT_META"; then
+  fail "no port key is written at all"
+else
+  pass "no port key is written at all"
+fi
+
+echo "== --no-slot fails closed on the same things =="
+assert_fail "still refuses to silently rewrite existing metadata" adopt --no-slot access-identity
+assert_err_contains "still names --force" "--force to rewrite"
+assert_fail "refuses --no-slot together with a slot argument" adopt --no-slot 4 access-identity
+assert_err_contains "says why" "takes no slot argument"
+mkdir -p "$WTROOT/not-a-worktree"
+assert_fail "still refuses a directory Git does not track" adopt --no-slot not-a-worktree
+assert_err_contains "still says it is not a registered worktree" "not a registered worktree"
+git -C "$CANON" worktree add -q -b agent/detached-noslot "$WTROOT/detached-noslot" staging
+git -C "$WTROOT/detached-noslot" checkout -q --detach
+assert_fail "still refuses a detached HEAD" adopt --no-slot detached-noslot
+assert_err_contains "still names the detached HEAD" "detached"
+
+echo "== a slotless registration takes nobody's slot =="
+assert_file_contains "the slotted registration is untouched" 'ALLOY_WORKTREE_SLOT="5"' "$META"
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 [[ "$FAIL" -eq 0 ]]
