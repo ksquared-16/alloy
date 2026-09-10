@@ -153,10 +153,23 @@ test.describe("Thread 3 · core Attendance operator experience", () => {
         await shot(page, "00-overview");
 
         const m = await metrics(page);
-        // The four questions Thread 3 committed to answering.
-        for (const label of ["Expected", "Here now", "Not arrived", "Checked out"]) {
+        // The three questions Thread 3 committed to answering unconditionally.
+        for (const label of ["Expected", "Here now", "Not arrived"]) {
             expect(Object.keys(m), `overview is missing "${label}"`).toContain(label);
         }
+        /*
+         * The fourth tile is DELIBERATELY adaptive since Thread 4: it shows "Away"
+         * when anybody is known away and "Checked out" otherwise, because a zero
+         * "Away" on a holiday week is the least informative number on the screen.
+         * Asserting "Checked out" unconditionally was correct when written and
+         * became over-specified — it failed the moment a tenant had a child on
+         * authored vacation, which is a supported state and not a defect.
+         */
+        expect(
+            Object.keys(m).some((label) => label === "Checked out" || label === "Away"),
+            'the overview shows neither "Checked out" nor "Away" as its fourth answer',
+        ).toBe(true);
+        expect(Object.keys(m)).toHaveLength(4);
         // The fixture puts children on today's roster; a zero here means the
         // fixture did not load and every scenario below would be vacuous.
         expect(m["Expected"], "no expected children — attendance fixture not loaded").toBeGreaterThan(0);

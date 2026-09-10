@@ -412,7 +412,10 @@ test.describe("Thread 4 · absence, vacation and closures", () => {
             ),
         );
         expect(states.length).toBeGreaterThan(0);
-        expect(states.every((s) => s === "closed")).toBe(true);
+        // A child who ARRIVED on a closed day reads `attended_despite_plan`, and
+        // that is correct for her — the day is still shut. Both are closure
+        // readings; what must not appear is an ordinary expected child.
+        expect(states.every((s) => s === "closed" || s === "attended_despite_plan")).toBe(true);
         await backToRooms(page);
 
         /*

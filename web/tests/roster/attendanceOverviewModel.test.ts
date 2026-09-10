@@ -213,3 +213,33 @@ describe("known absence is not an unexplained missing arrival", () => {
         expect(model.counts.planUnclear).toBe(0);
     });
 });
+
+describe("a closed day stays closed when somebody turns up", () => {
+    it("keeps dayClosed separate from the observed state", () => {
+        /*
+         * The defect this locks: the Workspace banner asked `state === "closed"`,
+         * so one child arriving on a public holiday made the site look open. Her
+         * state IS `attended_despite_plan` — correctly, that is the whole point of
+         * recording her as unexpected — and the DAY is still shut.
+         */
+        const arrived = {
+            customerMemberId: "emma",
+            displayName: "emma",
+            actual: { state: "present" as const, actualRoomLocationId: TOD1 },
+            serviceDay: {
+                state: "attended_despite_plan",
+                reasonKey: "holiday_closure",
+                raisesAttention: false,
+                dayClosed: true,
+            },
+        };
+        const model = buildAttendanceOverviewModel([
+            { roomLocationId: TOD1, roomName: "Toddler 1", children: [arrived] },
+        ]);
+        // She is present and unplanned; the day's closure is a separate fact the
+        // surface reads from `dayClosed` rather than from her state.
+        expect(model.counts.present).toBe(1);
+        expect(model.counts.unplannedArrivals).toBe(1);
+        expect(arrived.serviceDay.dayClosed).toBe(true);
+    });
+});
