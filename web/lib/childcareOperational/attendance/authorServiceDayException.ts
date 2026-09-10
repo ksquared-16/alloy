@@ -1,7 +1,7 @@
 /**
  * The server entry for authoring a service-day exception.
  *
- * ── WHY THIS EXISTS RATHER THAN `authorOperationalExpectationServer` ──
+ * ── WHY THIS EXISTS RATHER THAN THE GENERIC SERVER ENTRY POINT ──
  *
  * That entry point governs the GENERIC intake: any modality, any subject, any
  * vocabulary. It requires `operational_expectations.author`, a capability seeded

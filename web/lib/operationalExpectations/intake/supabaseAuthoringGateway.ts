@@ -8,12 +8,17 @@
  * transaction, never this fan-out.
  *
  * Server-only (service role). Not a product-facing authoring surface.
+ *
+ * The canonical SERVER ENTRY POINT lives next door in
+ * `authorOperationalExpectationServer.ts`, deliberately. This file must stay
+ * importable from a module the action registry can reach, and the entry point
+ * imports the authenticated-session cache — which reaches `supabaseServer` and
+ * fails the production build the moment anything in a client bundle can see it.
+ * A gateway FACTORY has no business depending on the auth cache anyway.
  */
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { isOeLedgerAuthorEnabledForOrg } from "@/lib/operationalExpectations/intake/ledgerAuthoringFeatureFlag";
-import { resolveAuthoringContext } from "@/lib/operationalExpectations/intake/authoringServerContext";
 import type {
     AuthoringActRecord,
     AuthoringGateway,
@@ -24,13 +29,6 @@ import type {
     ExpectationTransitionType,
     OperationalModality,
 } from "@/lib/operationalExpectations/expectationLedgerContract";
-import {
-    authorOperationalExpectation,
-} from "@/lib/operationalExpectations/intake/authorOperationalExpectation";
-import type {
-    AuthoringInput,
-    AuthoringResult,
-} from "@/lib/operationalExpectations/intake/authoringTypes";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -136,19 +134,4 @@ export function createSupabaseAuthoringGateway(
             };
         },
     };
-}
-
-/**
- * The canonical server entry point. Supported callers pass ONLY `input`; the org,
- * actor, and authoring capability are resolved server-side from the canonical admin
- * access context — a caller can never supply org identity, actor identity, or
- * permission grants. API routes / server actions / imports / future AI proposals
- * all delegate here — no duplicate write path, no manufacturable context.
- */
-export async function authorOperationalExpectationServer(
-    input: AuthoringInput,
-): Promise<AuthoringResult> {
-    const resolved = resolveAuthoringContext(await getAdminAccessContextCached());
-    if (!resolved.ok) return resolved.result;
-    return authorOperationalExpectation(input, resolved.context, createSupabaseAuthoringGateway());
 }

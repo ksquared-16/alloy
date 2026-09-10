@@ -105,6 +105,38 @@ async function backToRooms(page: Page) {
     await expect(page.locator(OVERVIEW)).toBeVisible({ timeout: SETTLE });
 }
 
+/**
+ * A room that actually contains child rows.
+ *
+ * The first room at this campus is empty, and a scenario that inspects a LIST
+ * passes with nothing examined when handed it — green, and proving nothing. The
+ * caller asserts a room was found, so an empty campus fails loudly instead.
+ */
+async function openPopulatedRoom(page: Page): Promise<string> {
+    for (const r of await roomNames(page)) {
+        await openRoom(page, r);
+        if (await page.locator("[data-attendance-child]").count()) return r;
+        await backToRooms(page);
+    }
+    return "";
+}
+
+/**
+ * Leave the day open before a scenario that depends on it.
+ *
+ * A previous run that failed between closing and reopening would otherwise leave
+ * this tenant shut for good, and every scenario after it would fail for a reason
+ * that looks like a product defect and is not.
+ */
+async function ensureDayOpen(page: Page) {
+    const reopen = page.locator('[data-attendance-reopen-site="true"]');
+    if (await reopen.count()) {
+        await reopen.click();
+        await page.waitForTimeout(COMMAND);
+        await expect(page.locator('[data-attendance-closed="true"]')).toHaveCount(0, { timeout: SETTLE });
+    }
+}
+
 /** How the day reads for one child, straight off the rendered chip. */
 async function dayState(page: Page, childId: string): Promise<string> {
     return page.evaluate((id) => {
@@ -129,14 +161,25 @@ async function chipText(page: Page, childId: string): Promise<string> {
 async function findUnexplainedChild(page: Page): Promise<{ room: string; childId: string }> {
     for (const room of await roomNames(page)) {
         await openRoom(page, room);
+        /*
+         * "Unexplained" is `not_arrived`, NOT a missing day attribute.
+         *
+         * Every scheduled child now carries a reading — an ordinary child reads
+         * `not_arrived` — so filtering for an absent attribute matched nobody and
+         * reported an empty site against a fully seeded one. An empty attribute is
+         * accepted too, for a row rendered before the projection answered.
+         */
         const ids = await page.evaluate(() =>
             Array.from(document.querySelectorAll("[data-attendance-child]"))
-                .filter(
-                    (row) =>
-                        row.querySelector("[data-attendance-child-checkin]") &&
-                        row.querySelector("[data-attendance-child-absent]") &&
-                        !(row.querySelector("[data-attendance-child-day]")?.getAttribute("data-attendance-child-day") ?? ""),
-                )
+                .filter((row) => {
+                    const day =
+                        row.querySelector("[data-attendance-child-day]")?.getAttribute("data-attendance-child-day") ?? "";
+                    return (
+                        !!row.querySelector("[data-attendance-child-checkin]") &&
+                        !!row.querySelector("[data-attendance-child-absent]") &&
+                        (day === "" || day === "not_arrived")
+                    );
+                })
                 .map((row) => row.getAttribute("data-attendance-child") ?? ""),
         );
         if (ids.length) return { room, childId: ids[0] };
@@ -156,6 +199,7 @@ test.describe.configure({ mode: "serial" });
 test.describe("Thread 4 · absence, vacation and closures", () => {
     test("T4-0 · the day is populated, so nothing below is vacuous", async ({ page }) => {
         await openAttendance(page);
+        await ensureDayOpen(page);
         await shot(page, "00-overview");
 
         const m = await metrics(page);
@@ -171,6 +215,16 @@ test.describe("Thread 4 · absence, vacation and closures", () => {
         const before = await metrics(page);
         const { room, childId } = await findUnexplainedChild(page);
         expect(childId).not.toBe("");
+        void room;
+        const childName = await page.evaluate(
+            (id) =>
+                document
+                    .querySelector(`[data-attendance-child="${id}"]`)
+                    ?.querySelector("button, span")
+                    ?.textContent?.trim() ?? "",
+            childId,
+        );
+        expect(childName, "the child row rendered no name").not.toBe("");
         await shot(page, "A1-before-absence");
 
         await markAway(page, childId, "illness");
@@ -189,9 +243,9 @@ test.describe("Thread 4 · absence, vacation and closures", () => {
         expect(after["Away"] ?? 0).toBeGreaterThan(0);
         expect(after["Expected"]).toBe(before["Expected"]);
 
-        // And she is no longer on the list of children to chase.
-        const exceptions = await page.evaluate(() => document.body.innerText);
-        expect(exceptions).not.toContain("has not arrived\n");
+        // And SHE is no longer on the list of children to chase. Named, because
+        // other children may legitimately still be missing.
+        expect(await page.evaluate(() => document.body.innerText)).not.toContain(`${childName} has not arrived`);
     });
 
     test("T4-B · the plan survives a reload — it was authored, not remembered", async ({ page }) => {
@@ -328,6 +382,7 @@ test.describe("Thread 4 · absence, vacation and closures", () => {
 
     test("T4-E · one closure closes the day, and the day can be reopened", async ({ page }) => {
         await openAttendance(page);
+        await ensureDayOpen(page);
         const before = await metrics(page);
         expect(before["Expected"]).toBeGreaterThan(0);
         await shot(page, "E1-before-closure");
@@ -349,8 +404,8 @@ test.describe("Thread 4 · absence, vacation and closures", () => {
         expect(closed["Away"]).toBe(closed["Expected"]);
 
         // Every child, from one authored statement — not one row per child.
-        const anyRoom = (await roomNames(page))[0];
-        await openRoom(page, anyRoom);
+        const room = await openPopulatedRoom(page);
+        expect(room, "no room at this campus has any children — the assertion below would be vacuous").not.toBe("");
         const states = await page.evaluate(() =>
             Array.from(document.querySelectorAll("[data-attendance-child-day]")).map((c) =>
                 c.getAttribute("data-attendance-child-day"),
