@@ -112,7 +112,7 @@ The next era of Alloy focuses on:
 | **Automation** | Action catalog completion, workflow RBAC alignment, waitlist mutator |
 | **Intelligence** | BOS assist depth, operational intelligence surfaces |
 | **Domain productization** | Scheduling, Attendance, Billing, Payments, Commercial surfaces atop truth-flow backend |
-| **Partner APIs** | External API expansion on internal platform foundation |
+| **Partner APIs** | External Developer Platform *construction* on the internal platform foundation — no external API exists today; see [`../../api/developer-platform/README.md`](../../api/developer-platform/README.md) |
 
 We do **not** build: additional foundational runtimes, legacy drawer restoration, dept-first navigation, or autonomous agent catalogs (paused).
 
