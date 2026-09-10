@@ -1,3 +1,7 @@
+import {
+    participantValidationCopy,
+    safeParticipantSchema,
+} from "@/lib/public/forms/formatPublicValidationErrors";
 import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
@@ -274,7 +278,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         optionValuesByFieldId,
     });
     if (!validated.ok) {
-        return publicErr("Invalid submission payload", 400, { validation_errors: validated.errors });
+        /*
+         * The parent reads `error`; operators and logs read `validation_errors`. Returning the
+         * validator's own sentence here put a schema path and an internal field id in front of
+         * somebody enrolling their child. The detail is kept, it just stops being the copy.
+         */
+        return publicErr(
+            participantValidationCopy(validated.errors, safeParticipantSchema(ctx.schemaJson)).summary,
+            400,
+            { validation_errors: validated.errors },
+        );
     }
 
     const ipHash = hashClientIp(request);
