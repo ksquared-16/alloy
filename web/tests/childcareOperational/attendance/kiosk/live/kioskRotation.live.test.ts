@@ -24,6 +24,7 @@ import {
 } from "@/lib/childcareOperational/attendance/kiosk/kioskCredentialRotation";
 import { hashKioskCredential } from "@/lib/childcareOperational/attendance/kiosk/kioskDeviceAuthority";
 import { hashKioskPersonCode } from "@/lib/childcareOperational/attendance/kiosk/kioskSessionGateway";
+import { recordAttendanceEvent } from "@/lib/childcareOperational/attendance/attendanceService";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     const fromProcess = { url: process.env.CERT_SUPABASE_URL ?? "", serviceKey: process.env.CERT_SERVICE_ROLE_KEY ?? "" };
@@ -43,6 +44,18 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const APP = process.env.CERT_APP_URL ?? "http://localhost:3011";
 const describeLive = env ? describe : describe.skip;
+if (env) {
+    /*
+     * The attendance writer and its event emitter build their OWN clients from
+     * the environment rather than taking this suite's. Reading the certification
+     * file into a local variable is therefore not enough — it has to be
+     * published, or arranging a fact through the production writer fails inside
+     * the emitter with no client to emit through.
+     */
+    process.env.SUPABASE_URL ||= env.url;
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||= env.url;
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||= env.serviceKey;
+}
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const RIVERSIDE_DEVICE = "00000000-0000-4000-8000-000070000010";
@@ -51,6 +64,7 @@ const RIVERSIDE_PRODUCER = "kiosk:cert:riverside-front-desk";
 const PRIYA = "00000000-0000-4000-8000-000070000021";
 const PRIYA_CODE = "10000002";
 const IVY = "00000000-0000-4000-8000-000070000052";
+const ROOM_A = "00000000-0000-4000-8000-000000000013";
 
 async function identify(credential: string, code: string) {
     return fetch(`${APP}/api/public/kiosk/identify`, {
@@ -97,7 +111,56 @@ describeLive("kiosk credential rotation and revocation — live", () => {
             .eq("id", FIXTURE_CODE_ROW);
     });
 
+    /**
+     * A fact this device authored BEFORE the rotation.
+     *
+     * Arranged here rather than assumed. Step 6 below asks whether rotating a
+     * secret orphans the provenance of earlier facts, and that question needs an
+     * earlier fact to exist — depending on one another suite happened to leave
+     * behind made this scenario silently order-dependent, and it began failing
+     * the moment a shared certification stack was cleaned between runs. A test
+     * that needs a precondition should create it.
+     */
+    async function ensureEarlierKioskFact(): Promise<void> {
+        const { data: existing } = await supabase
+            .from("child_attendance_events")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("source_key", RIVERSIDE_PRODUCER)
+            .limit(1);
+        if ((existing ?? []).length > 0) return;
+
+        const { data: agreement } = await supabase
+            .from("child_enrollment_agreements")
+            .select("id")
+            .eq("org_id", ORG)
+            .eq("customer_member_id", IVY)
+            .limit(1)
+            .maybeSingle();
+        const agreementId = (agreement as { id: string } | null)?.id;
+        if (!agreementId) throw new Error("kiosk fixture: Ivy has no enrolment to attach a prior fact to");
+
+        const today = new Date().toISOString().slice(0, 10);
+        await recordAttendanceEvent(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: agreementId,
+            eventKind: "check_in",
+            eventAt: `${today}T07:30:00.000Z`,
+            serviceDate: today,
+            roomLocationId: ROOM_A,
+            idempotencyKey: `cert-kiosk-prior-fact-${today}`,
+            actor: {
+                actorType: "system",
+                actorLabel: "Riverside front desk",
+                sourceType: "kiosk",
+                sourceKey: RIVERSIDE_PRODUCER,
+            },
+        } as Parameters<typeof recordAttendanceEvent>[1]);
+    }
+
     it("L-device — rotation replaces the secret rather than adding one", async () => {
+        await ensureEarlierKioskFact();
+
         // 1. the old credential works
         expect((await identify(RIVERSIDE_SECRET, PRIYA_CODE)).status, "the fixture credential should work first").toBe(200);
 
