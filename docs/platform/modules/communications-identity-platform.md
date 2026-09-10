@@ -68,7 +68,12 @@ On resolution failure: enqueues with `metadata.sender_resolution_deferred` + Pyt
 
 - Canonical identity FK on inbound SMS inserts
 - Ambiguity metadata when multi-location bindings unresolved
-- Inbound email: **not implemented**
+- Inbound email: **implemented** (August 2026) — binding + threading, retrieval receipt and
+  ingress routes (`supabase/migrations/20260813150000_inbound_email_binding_and_threading.sql`,
+  `20260813160000_inbound_email_retrieval_receipt.sql`, `20260817170000_communication_ingress_routes.sql`);
+  code at `web/lib/communications/email/`, `web/lib/communications/ingress/`;
+  live-certified by `certification/playwright/communications-inbound-email.cert.spec.ts`.
+  Note the ingress eligibility gate is **observe-only** by design, not enforcement.
 
 ### Discovery API
 

@@ -23,13 +23,13 @@ Traced against staging `287aa2372`. Firefly was read, never written.
 
 | Question | Answer |
 | --- | --- |
-| Operator entry point | Records → Children section, "Start enrollment" — [RecordsChildrenSection.tsx:363](web/components/adminV2/records/RecordsChildrenSection.tsx:363), gated by `childNextActions` |
-| Registered action | `enrollment.start` — [enrollmentActions.ts:58](web/lib/adminV2/actions/definitions/enrollmentActions.ts:58) |
-| Service handler | [startEnrollment](web/lib/records/startEnrollmentService.ts:56) — **the sole owner. No competing production owner exists.** |
+| Operator entry point | Records → Children section, "Start enrollment" — `web/components/adminV2/records/RecordsChildrenSection.tsx:363`, gated by `childNextActions` |
+| Registered action | `enrollment.start` — `web/lib/adminV2/actions/definitions/enrollmentActions.ts:58` |
+| Service handler | `web/lib/records/startEnrollmentService.ts:56` — **the sole owner. No competing production owner exists.** |
 | When the process instance is created / resumed | `createEnrollmentProcessInstance`, already idempotent: `reused: true` when an open journey exists. D-96 revision pin rides the creating INSERT |
 | D-98 department selection | Inherited, not re-decided — `resolveEnrollmentBusinessProcessRevision` uses context work unit, else the sole Enrollment department, else refuses to pin |
-| How a packet definition is selected today | **Only by an operator picking one in a modal.** `send_enrollment_packet` dispatches `adminv2:open-enrollment-packet` ([applyRegistryResolvedActionClient.ts:655](web/lib/admin/actions/applyRegistryResolvedActionClient.ts:655)) into the Opportunity drawer's modal runtime. Nothing derives a packet from the Enrollment process |
-| How public participant links are composed | [`mintPacketPublicLinkForAdmin`](web/lib/forms/packets/mintPacketPublicLinkForAdmin.ts) — reusable as-is; takes `supabase` + `orgId` + body, returns `plaintext_token` and `embed_path` |
+| How a packet definition is selected today | **Only by an operator picking one in a modal.** `send_enrollment_packet` dispatches `adminv2:open-enrollment-packet` (`web/lib/admin/actions/applyRegistryResolvedActionClient.ts:655`) into the Opportunity drawer's modal runtime. Nothing derives a packet from the Enrollment process |
+| How public participant links are composed | `web/lib/forms/packets/mintPacketPublicLinkForAdmin.ts` — reusable as-is; takes `supabase` + `orgId` + body, returns `plaintext_token` and `embed_path` |
 | Communications delivery | Not involved. The Packet Composer route returns `shares[].url` and delivers nothing. **This slice should create and return the link only** |
 
 Two other creators of Enrollment process instances exist — Create Lead child persistence and the
@@ -68,7 +68,7 @@ this slice should return the existing link's identity and leave regeneration to 
 
 The one canonical thing the governing revision says about forms is its stage requirements:
 `RequirementRefV1` admits `{kind: "form", form_definition_id}`, and
-[`effectiveFormRequirements`](web/lib/lifecycle/effectiveStageRequirements.ts:260) is its canonical
+`web/lib/lifecycle/effectiveStageRequirements.ts:260` is its canonical
 projection — already written and tested, with no production consumer. Deriving a packet from that
 would introduce no new authority. Two facts stop it:
 

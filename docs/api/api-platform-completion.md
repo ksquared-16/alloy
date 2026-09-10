@@ -1,3 +1,9 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # API Platform — Foundation Completion (Closeout)
 
 **Status:** ✅ **Internal API Platform foundation complete.** This is the final closeout record for

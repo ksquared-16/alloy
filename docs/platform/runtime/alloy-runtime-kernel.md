@@ -201,7 +201,12 @@ something in the runtime can finally say *"this is over."*
    round-trip (Art 4.3 §2).
 3. Key, share, and supersede: one destination prepared twice is one preparation; a superseded
    preparation can never win.
-4. **Terminate**: resolve exactly once to `operational` · `empty` · `error`.
+4. **Terminate**: resolve exactly once to `operational` · `empty` · `error` · `contextual`.
+   The enumeration widened by one after this document was written — see §K2 below and
+   `web/lib/runtime/kernel/provisioning.ts`, which records why: the rule being protected is
+   *no non-outcome* (every preparation reaches exactly one terminal), and `contextual`
+   — the operator named a record and chose no cohort — is a terminal like any other. Three
+   outcomes could not express that state without borrowing a lens.
 5. Own **the deadline** — single, runtime-owned; **its only product is `error`** (Art 4.5).
 6. **Settle**: after commit, fulfil the **Settlement Contract**, never gating, discarding by key.
 
@@ -377,7 +382,7 @@ The kernel has **five events**. Two axes, and no more.
 | # | Event | Axis | Emitted by | Caused by |
 |---|---|---|---|---|
 | **E1** | `attention.moved(target, scope, id)` | attention | **K1** | the operator — the kernel's only external cause |
-| **E2** | `preparation.terminal(key, operational \| empty \| error, snapshot)` | attention | **K2** | truth arriving, or the deadline concluding |
+| **E2** | `preparation.terminal(key, operational \| empty \| error \| contextual, snapshot)` | attention | **K2** | truth arriving, or the deadline concluding |
 | **E3** | `focus.committed(scope, target)` | attention | **K3** | E2 — *focus catches up to attention* |
 | **E4** | `focus.settled(scope)` | attention | **K3** | settlement resolving |
 | **E5** | `focus.recovered(reason)` | attention | **K3** | a runtime that cannot terminate |

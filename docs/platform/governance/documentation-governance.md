@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -55,7 +55,13 @@ Optional fields (`concept`, `layer`) may be added when the lint system enforces 
 proposed → canonical / frozen → superseded → historical / archive
 ```
 
-Generated references (`docs/schema/`, `docs/api/`) use `status: generated` and must name their generator in the document body.
+Generated references use `status: generated` and must name their generator in the
+document body. `generated` is a property of the **document**, not of its directory:
+
+- `docs/schema/` is wholly machine-produced; a hand-authored file there is a violation.
+- `docs/api/` is **mixed** — `api-index.md` is generated; every other file is authored
+  doctrine, reference, or a point-in-time record, and each declares its own status.
+  Do not assume a file is generated because of where it lives.
 
 ---
 
@@ -70,13 +76,60 @@ Generated references (`docs/schema/`, `docs/api/`) use `status: generated` and m
 7. **Doctrine-changing product PRs must update the owning canonical document** in the same PR.
 8. **Sprint closeout documents do not become doctrine by declaration alone** — summarize into `release-history.md` and archive sprint detail.
 
-### Governed paths (Wave 1)
+### The `docs/platform/planning/` exception
+
+Placement rule 3 has one **named, dated exception**: `docs/platform/planning/` (242 files).
+
+A September 2026 audit examined relocating it and decided against, on evidence:
+
+- A live acceptance gate keys on the literal prefix — `ALLOWED_CHANGE_PREFIX` in
+  `scripts/local-dev/lib/vacilando/acceptance.mjs`.
+- `web/tests/enrollment/assignmentCommitmentAuthority.test.ts` reads a document from the tree
+  **at runtime**, and two `web/package.json` scripts write evidence JSON into it.
+- Roughly 46 hardcoded code paths and 186 depth-sensitive relative links would break.
+- About 38 of the files are genuine doctrine. `docs/sprints/` is not a legal home for doctrine —
+  this document says sprint material is *never* primary current truth — so a wholesale move would
+  strand them worse than leaving them.
+- `GOVERNED_GLOBS` does not cover `docs/sprints/**`, so moving the tree would **hide** its debt
+  rather than resolve it.
+
+The exception is scoped, not blanket. Files there stay governed for frontmatter, and three rules
+exist **because** of the exception:
+
+| Rule | Meaning |
+|------|---------|
+| `canonical-in-planning` | A document inside the exception may not declare `status: canonical`. The tree's own README says it is not doctrine; a canonical status line inside it contradicts that and is how planning material gets mistaken for truth. |
+| `canonical-planning-dependency` | A `status: canonical` document elsewhere may not take a planning document as its source of truth (governance rule 5, applied to this tree). |
+| `sprint-artifact-in-platform` | Placement rule 3 itself, now enforced everywhere **outside** the exception — so a second such tree cannot accumulate unnoticed. |
+
+All three are report-only. They are deliberately visible rather than suppressed: the point of the
+exception is that it is legible, not that it is silent.
+
+**Known limit:** these rules read markdown links. A path written in backticks is invisible to
+them, which is how a canonical document came to delegate `commitment_kind` truth into the tree
+without the linter noticing.
+
+---
+
+### Governed paths
+
+These are the paths `scripts/docs-lint.mjs` enforces frontmatter on
+(`GOVERNED_GLOBS`), and this list is kept in step with it:
 
 - `docs/README.md`
 - `docs/platform/**`
-- `docs/sprints/active/documentation-rebaseline-v2/**`
+- `docs/system/**`
+- `docs/product/**`
 
 Remaining repository docs are **baselined** for metadata adoption in later waves.
+
+Two limits are worth knowing before relying on this:
+
+- The lint scans `docs/**` and the root `README.md` only. Markdown elsewhere in the
+  repository — including execution artifacts left at the repository root — is invisible to it.
+- Broken links **block** only within `docs/README.md`, `docs/platform/**` and `docs/system/**`
+  (`CANONICAL_LINK_SCOPES`). `docs/product/**` is governed for frontmatter but its broken
+  links are reported, not blocked.
 
 ---
 
@@ -91,6 +144,12 @@ Remaining repository docs are **baselined** for metadata adoption in later waves
 | **Audits** | `docs/audits/` | Point-in-time investigations and planning artifacts |
 | **Archive** | `docs/archive/` | Superseded material — not current truth |
 | **Export packs** | `docs/archive/2026-06-handoff-packs/` | Portable handoff bundles (scheduled for retirement) |
+| **API** | `docs/api/` | API doctrine, per-domain reference, and one generated route index — see the mixed-directory note below |
+| **Product** | `docs/product/` | Vertical/reference-implementation material (childcare); governed for frontmatter |
+| **Runtime execution** | `docs/runtime/` | Mostly Runtime V1 freeze and certification execution history. **Not wholly non-doctrinal:** roughly ten files there state durable runtime authority with no equivalent under `docs/platform/`, and **20 `web/` source and test sites cite them** (`GRAIN-AUTHORITY-MAP.md`, `DURABLE-RECORD-ATTENTION.md`, `DEEPLINK-COMPOSE-OWNERSHIP.md`, `CARD-READINESS-LIFECYCLE.md`, `CARD-PLACEMENT-OWNERSHIP.md`, `SUBJECT-AUTHORITY.md`, `REFUSAL-HONEST-NOT-FATAL.md`, `BUSINESS-PROCESS-ENTRY-STAGE.md` and others). Promoting that subset into `docs/platform/runtime/` must rewrite those citations in the same change, or the doc-to-code binding breaks silently — open decision D9. The canonical runtime corpus is `docs/platform/runtime/`. |
+| **Handoffs** | `docs/handoffs/` | Session/sprint handoff artifacts — execution history |
+| **Marketing** | `docs/marketing/` | Positioning and messaging material |
+| **Schema source** | `docs/supabase/reference/` | The CSV export `docs/schema/` is generated from (no markdown) |
 
 Navigation hub: `docs/README.md`
 

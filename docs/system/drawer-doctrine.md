@@ -1,11 +1,23 @@
 ---
 owner: runtime
 status: frozen
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
 # Drawer doctrine
+
+> **Product status (August 2026): the modal record product is deleted.** Operators work in
+> the **Focus Panel**; there is no drawer router and no record overlay. `AdminEntityDrawer`,
+> `OpportunityDrawerVmRuntime` and `PersonsDrawerVmRuntime` no longer exist — their absence is
+> asserted by `web/tests/operator/drawerProductEradication.test.ts` and certified by
+> `certification/playwright/drawer-eradication.cert.spec.ts`.
+>
+> What survives is **infrastructure**: the drawer ViewModel compose/payload layer, which now
+> feeds the Focus Panel (`web/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm.ts`).
+> Read this document for that layer only. For the operator model see
+> [`../platform/operator/drawer-system.md`](../platform/operator/drawer-system.md) and
+> [`../platform/operator/focus-panel-architecture-vocabulary.md`](../platform/operator/focus-panel-architecture-vocabulary.md).
 
 **Path:** `docs/system/drawer-doctrine.md`  
 **Status:** **Canonical index** (June 2026 freeze). Entry point for drawer architecture; detailed contracts live in linked docs below.  

@@ -1,8 +1,15 @@
+---
+owner: platform
+status: generated
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Schema — columns
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-17 · **Column count:** 3276
+**Generated:** 2026-09-10 by `scripts/generate-schema-docs.mjs` from the `docs/supabase/reference/*.csv` export (the export's state, not necessarily the live database) · **Column count:** 3288
 
 Columns for `public` schema tables, grouped alphabetically by table.
 
@@ -2844,6 +2851,21 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
 
+## `operator_stage_membership_acks`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `user_id` | uuid | NO | — |
+| `subject_type` | text | NO | — |
+| `subject_id` | uuid | NO | — |
+| `stage_key` | text | NO | — |
+| `stage_entered_at` | timestamp with time zone | NO | — |
+| `occurrence_key` | text | NO | — |
+| `seen_at` | timestamp with time zone | NO | now() |
+| `created_at` | timestamp with time zone | NO | now() |
+
 ## `opportunities`
 
 | Column | Type | Nullable | Default |
@@ -2890,6 +2912,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `work_unit_id` | uuid | YES | — |
 | `stage_key` | text | YES | — |
 | `close_reason_key` | text | YES | — |
+| `stage_entered_at` | timestamp with time zone | YES | — |
 
 ## `opportunity_customer_members`
 
@@ -3451,6 +3474,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
+| `stage_entered_at` | timestamp with time zone | YES | — |
 
 ## `processing_approvals`
 

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Root cause: Firefly `work_views_v1` silently overwritten
 
 Sprint: `bp-config-integrity` (slot 6). Phase A — precondition investigation.

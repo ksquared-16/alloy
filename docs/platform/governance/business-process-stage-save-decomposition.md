@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Stage Configuration save — decomposition
 
 Law 4 completion, editor slice 1. Companion to

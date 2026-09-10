@@ -1,3 +1,10 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Programs publication — `base_revision_id` is provenance, not a guard
 
 **Status:** discovered during the `bp-config-integrity` sprint. **Not changed.** Programs is out of

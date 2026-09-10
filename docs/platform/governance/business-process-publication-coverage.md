@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Business Process Publication Coverage
 
 **Status:** Configuration Integrity V1 — coverage complete

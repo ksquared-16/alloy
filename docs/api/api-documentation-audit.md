@@ -1,3 +1,9 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-09-10
+supersedes: []
+---
 # API documentation audit
 
 **Date:** June 2026. **Scope:** All 456 `route.ts` handlers under `web/app/api/**`.

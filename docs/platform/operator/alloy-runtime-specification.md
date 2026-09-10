@@ -7,6 +7,11 @@ supersedes: []
 
 # Alloy Runtime Specification — First Edition
 
+> **Runtime substrate:** the K1–K4 kernel and the runtime's constitutional authority live in
+> [`../runtime/runtime-realization-architecture.md`](../runtime/runtime-realization-architecture.md)
+> and [`../runtime/alloy-runtime-kernel.md`](../runtime/alloy-runtime-kernel.md). This document is the
+> operator-facing synthesis: it owns how the model is *expressed*, not the substrate beneath it.
+
 **Status:** Canonical synthesis (June 2026). **Implementation-ready runtime specification.**
 
 This is **not** another doctrine document. It is the **synthesis** that converts approved doctrine into one specification used **before implementing any operational domain**. It freezes *behavior*; mockups express it; implementation expresses the mockups.

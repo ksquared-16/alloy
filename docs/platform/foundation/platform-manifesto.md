@@ -17,6 +17,8 @@ This document states what Alloy **is** today and how we build from here. It is *
 
 Alloy has completed its foundational runtime construction phase. Presentation, Surface Host, Focus Panel, VM, Business Process, Processing, Communications, Configuration, Current Work, Queue, Motion, and Navigation runtimes are **shipped and canonical**.
 
+> **Twelve and nine are one register at two granularities.** The three beyond the nine in `foundation/architecture.md` are *contained* sub-runtimes, which `milestones/freeze-july-2026.md` already annotates as such: **Navigation** "(within Surface Host)", **Queue** "(within Presentation)". **Motion** is a two-file token table assigned to Presentation by `../runtime/runtime-implementation-authorization.md`. Nothing exists in one list and not the other.
+
 Future engineering improves **experience, performance, automation, and intelligence** — not parallel platform layers.
 
 ---

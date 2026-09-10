@@ -1,8 +1,15 @@
+---
+owner: platform
+status: generated
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Schema — indexes
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-17 · **Index count:** 1051
+**Generated:** 2026-09-10 by `scripts/generate-schema-docs.mjs` from the `docs/supabase/reference/*.csv` export (the export's state, not necessarily the live database) · **Index count:** 1051
 
 | Table | Index | Unique | Definition |
 |-------|-------|--------|------------|

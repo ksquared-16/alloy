@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Access & Identity V2 — Planning
 
 Canonical product-source location for Access & Identity V2 planning artifacts.
@@ -9,6 +16,21 @@ here for product planning; the originals remain under
 
 **Do not treat this folder as an active Vacilando mission.** The operator will create
 the real Access & Identity V2 mission through Mission Brief after Runtime V1 closeout.
+
+> **These copies are a point-in-time snapshot, and one of them has since diverged.**
+> Copies here were taken 2026-08-10. The originals under
+> `docs/platform/planning/vacilando-os/qa/access-identity-v2/` kept moving:
+> `03-implementation-qa-sequence.md` — the document this README calls the plan of record —
+> received eight further execution updates there through **2026-09-06** (W-0 run 4, W-5 third
+> issuance, Wave 1 seventh and eighth issuance). The copy in this folder does **not** carry them.
+>
+> So: read this folder for the accepted product framing, but for the current state of the
+> implementation and QA sequence read the original. Reconciling the two copies is outstanding —
+> recorded in `docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md`.
+>
+> `authority-path-inventory.md` is byte-identical between the two locations.
+> `01` and `02` differ because this folder's versions were expanded after the copy; the
+> originals are the shorter 2026-07-30 drafts.
 
 | Document | Role |
 |---|---|

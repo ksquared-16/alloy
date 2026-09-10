@@ -1,3 +1,10 @@
+---
+owner: platform
+status: proposed
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Alloy Configuration Integrity Laws
 
 Sprint: `bp-config-integrity` (slot 6), Phase C. **Design only — no implementation.**

@@ -150,7 +150,7 @@ Every new operational capability supplies artifacts at each layer rather than a 
 | **Capacity / Ratios** | ratio + capacity rules | placement | expected ratio / fill | capacity-change facts | compliance status |
 | **Billing** | rate rules | agreement terms | expected tuition / revenue | (consumes attendance facts) | charges / ledger / GL |
 | **Subsidy** | subsidy rules | subsidy commitment | expected subsidy | subsidy claim facts | subsidy revenue |
-| **Staffing** | staffing rules | shift assignment | expected staffing demand | shift / coverage facts | labor cost |
+| **Staffing** | staffing rules | staff `schedule_assignments` (`subject_type='staff'`) | expected staffing demand | staff presence facts | labor cost |
 
 ---
 

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Draft validation scope — what a save may block on
 
 **Status:** active

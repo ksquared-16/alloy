@@ -24,7 +24,8 @@ Analytics V2 introduces a **configurable metric platform** where operators defin
 9. **No raw SQL builder** for users.
 10. **No arbitrary unvalidated JSON** — all config uses versioned Zod schemas (`version: 1`).
 11. All config writes go through versioned, server-validated admin APIs under `/api/admin/analytics/`.
-12. Feature flag **`ANALYTICS_V2_METRIC_PLATFORM_ENABLED`** keeps V1 OIP safe.
+12. Feature flag **`ANALYTICS_V2_METRIC_PLATFORM_ENABLED`** is the opt-out for V1 OIP.
+    It defaults **on**, so V1 safety is not the default posture — see Feature flag below.
 
 ## Source adapter rules
 
@@ -37,14 +38,18 @@ Analytics V2 introduces a **configurable metric platform** where operators defin
 
 - OIP V1 uses code-owned registry (`web/lib/metrics/registry.ts`) and `metric_snapshots` (key-based).
 - V2 uses DB-backed definitions and `metric_platform_snapshots` (definition-id-based).
-- When the feature flag is **off**, all V1 surfaces and APIs behave unchanged.
+- When the feature flag is **explicitly set off**, all V1 surfaces and APIs behave
+  unchanged. The flag defaults on, so this is an opt-out, not the resting state.
 
 ## Feature flag
 
 | Env var | Default | Effect |
 |---------|---------|--------|
-| `ANALYTICS_V2_METRIC_PLATFORM_ENABLED` | `false` | Server APIs + evaluation |
-| `NEXT_PUBLIC_ANALYTICS_V2_METRIC_PLATFORM_ENABLED` | `false` | Client OI V2 rendering + builder tabs |
+| `ANALYTICS_V2_METRIC_PLATFORM_ENABLED` | **`true`** | Server APIs + evaluation |
+| `NEXT_PUBLIC_ANALYTICS_V2_METRIC_PLATFORM_ENABLED` | **`true`** | Client OI V2 rendering + builder tabs |
+
+Both defaults flipped to on in 2026-06-24 (`web/lib/metrics/platform/featureFlag.ts`).
+Set a var to `0` to opt out.
 
 ## QA instructions
 

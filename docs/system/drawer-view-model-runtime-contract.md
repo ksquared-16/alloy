@@ -1,11 +1,23 @@
 ---
 owner: runtime
 status: frozen
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
 # Drawer View Model runtime contract
+
+> **Product status (August 2026): the modal record product is deleted.** Operators work in
+> the **Focus Panel**; there is no drawer router and no record overlay. `AdminEntityDrawer`,
+> `OpportunityDrawerVmRuntime` and `PersonsDrawerVmRuntime` no longer exist — their absence is
+> asserted by `web/tests/operator/drawerProductEradication.test.ts` and certified by
+> `certification/playwright/drawer-eradication.cert.spec.ts`.
+>
+> What survives is **infrastructure**: the drawer ViewModel compose/payload layer, which now
+> feeds the Focus Panel (`web/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm.ts`).
+> Read this document for that layer only. For the operator model see
+> [`../platform/operator/drawer-system.md`](../platform/operator/drawer-system.md) and
+> [`../platform/operator/focus-panel-architecture-vocabulary.md`](../platform/operator/focus-panel-architecture-vocabulary.md).
 
 **Status:** Active — Opportunity validated on staging; Person/Child extend the same pattern.  
 **Canonical index:** **`drawer-doctrine.md`** — ownership and navigation; this doc is VM compose detail.
@@ -18,14 +30,22 @@ This doc defines the **reusable runtime contract**. Entity-specific first-viewpo
 
 ## Feature flags (per entity)
 
+The cutover is **permanent and unconditional**. There are no live rollback flags:
+deployment rollback replaced kill-switch rollback.
+
 | Entity | Control | When VM runs |
 |--------|---------|--------------|
-| Opportunity | **Default on** in code (`opportunityDrawerHardCutoverGate.ts`) | AdminV2 opportunity drawer uses VM unless kill switch |
-| Opportunity rollback | `NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH=1` or `FORCE_LEGACY_OPPORTUNITY_DRAWER = true` | Legacy opportunity drawer |
-| Person (parent/generic) | `NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM` | VM open + hard cutover (default off) |
-| Child (person child chrome) | `NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM` | VM open + hard cutover (default off) |
+| Opportunity | `opportunityDrawerHardCutoverEnabled()` returns `true` | Always |
+| Person (parent/generic) | `personDrawerHardCutoverEnabled()` returns `true` | Always |
+| Child (person child chrome) | Same person gate | Always |
 
-`NEXT_PUBLIC_ADMINV2_DRAWER_VM` is **not** used for opportunity routing (deprecated for that path). Person/child flags default off.
+Both kill-switch predicates (`opportunityDrawerVmKillSwitchActive()`,
+`personDrawerVmKillSwitchActive()`) are hardcoded `false`.
+`FORCE_LEGACY_OPPORTUNITY_DRAWER` appears in **no** source file.
+`NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH`, `NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM` and
+`NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM` survive only as diagnostic log labels
+(`web/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelCutover.ts`) and no longer gate
+anything. Gates: `web/lib/adminV2/viewModel/drawer/{opportunity,person}/*DrawerHardCutoverGate.ts`.
 
 ## Hard cutover behavior
 

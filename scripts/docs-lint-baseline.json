@@ -1,9 +1,14 @@
 {
-  "generatedAt": "2026-07-14T04:01:20.077Z",
+  "generatedAt": "2026-09-10T20:52:20.267Z",
   "summary": {
-    "generated-boundary": 21,
-    "broken-link": 634,
-    "orphan-canonical": 74
+    "broken-link": 640,
+    "orphan-canonical": 139,
+    "sprint-artifact-in-platform": 7,
+    "canonical-sprint-dependency": 6,
+    "frontmatter-malformed": 23,
+    "canonical-planning-dependency": 2,
+    "frontmatter-missing": 93,
+    "canonical-in-planning": 16
   },
   "note": "Pre-existing documentation debt baseline for report-only CI enforcement"
 }

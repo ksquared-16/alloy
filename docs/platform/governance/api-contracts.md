@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -40,8 +40,9 @@ Admin, public, webhook, and worker boundaries for the platform.
 
 | Surface | Examples |
 |---------|----------|
-| Booking | `/api/book-v2/*` |
-| Form public links | `/api/public/forms/*` |
+| Booking | `/api/public/tour-booking/[token]/*`, `/api/public/booking-config` |
+| Form public links | `/api/public/forms/[token]/*` |
+| Attendance kiosk | `/api/public/kiosk/attendance`, `/api/public/kiosk/identify` |
 | Action links | `/api/action/[token]/consume` |
 
 ---
@@ -51,6 +52,7 @@ Admin, public, webhook, and worker boundaries for the platform.
 | Surface | Examples |
 |---------|----------|
 | Twilio / Resend | `/api/webhooks/*` |
+| Stripe | `/api/stripe/webhook` |
 | Message worker | Python `POST /internal/messages/process` |
 | Scheduled sends | `/api/admin/communication-scheduled-sends/process-due` |
 
@@ -66,7 +68,7 @@ Admin, public, webhook, and worker boundaries for the platform.
 
 ## Expanded reference
 
-- **`../../../api/README.md`** — first-class API documentation: per-domain references, generated full route inventory (`../../../api/api-index.md`, all 456 `web/app/api/**` handlers), and the API documentation audit. Start here for the complete surface.
+- **`../../api/README.md`** — first-class API documentation: per-domain references, generated full route inventory (`../../api/api-index.md`, all 613 `web/app/api/**` handlers), and the API documentation audit. Start here for the complete surface.
 - `../../system/api-contracts.md` — transitional detailed route table.
 
 ---

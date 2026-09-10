@@ -69,7 +69,20 @@ function ensureDir(p) {
 }
 
 function write(name, body) {
-  fs.writeFileSync(path.join(OUT, name), body, "utf8");
+  // Generated references carry the governed metadata contract
+  // (docs/platform/governance/documentation-governance.md): status `generated`,
+  // and the body names its generator and source below.
+  const frontmatter = [
+    "---",
+    "owner: platform",
+    "status: generated",
+    `last_reviewed: ${generatedAt}`,
+    "supersedes: []",
+    "---",
+    "",
+    "",
+  ].join("\n");
+  fs.writeFileSync(path.join(OUT, name), frontmatter + body, "utf8");
   console.log("wrote", name);
 }
 
@@ -100,7 +113,7 @@ let tablesMd = `# Schema — tables and views
 
 **Regenerate:** \`npm run export:supabase-schema\` then \`node scripts/generate-schema-docs.mjs\`
 
-**Generated:** ${generatedAt}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database)
 
 ## Summary
 
@@ -156,7 +169,7 @@ let colsMd = `# Schema — columns
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Column count:** ${columns.filter((c) => c.table_schema === "public").length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Column count:** ${columns.filter((c) => c.table_schema === "public").length}
 
 Columns for \`public\` schema tables, grouped alphabetically by table.
 
@@ -176,7 +189,7 @@ let conMd = `# Schema — constraints
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Constraint count:** ${constraints.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Constraint count:** ${constraints.length}
 
 | Table | Name | Type | Definition |
 |-------|------|------|------------|
@@ -192,7 +205,7 @@ let idxMd = `# Schema — indexes
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Index count:** ${indexes.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Index count:** ${indexes.length}
 
 | Table | Index | Unique | Definition |
 |-------|-------|--------|------------|
@@ -208,7 +221,7 @@ let fnMd = `# Schema — functions
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Function count:** ${functions.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Function count:** ${functions.length}
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|
@@ -224,7 +237,7 @@ let trMd = `# Schema — triggers
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **Trigger count:** ${triggers.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **Trigger count:** ${triggers.length}
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|
@@ -240,7 +253,7 @@ let polMd = `# Schema — policies and security
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** ${generatedAt} · **RLS policy count:** ${policies.length}
+**Generated:** ${generatedAt} by \`scripts/generate-schema-docs.mjs\` from the \`docs/supabase/reference/*.csv\` export (the export's state, not necessarily the live database) · **RLS policy count:** ${policies.length}
 
 ## Posture
 

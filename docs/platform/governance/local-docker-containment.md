@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-03
+supersedes: []
+---
+
 # Local Docker containment — one shared stack
 
 **Status:** active governance · **Applies to:** every Alloy session (Claude, Cursor, human), managed or not.
