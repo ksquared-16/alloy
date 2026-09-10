@@ -3,16 +3,29 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { recommendationFromFormSubmission } from "@/lib/pos/processingCase/recommendation/recommendationFromSubmission";
+import { listCaseFormSubmissionSources } from "@/lib/pos/processingCase/sources/listCaseFormSubmissionSources";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/admin/processing/cases/[caseId]/recommendation — POS-FP8a (READ-ONLY).
  *
- * Returns the match-first recommendation (link / create / route) for a case's
- * primary form-submission source, computed from the bound person fields via the
- * non-mutating identity resolver. Writes nothing; promotion happens later at
- * approval (FP8c). Other source kinds return a clear unsupported response.
+ * Returns the match-first recommendation (link / create / route) for everything the case rests on,
+ * computed from the bound person fields via the non-mutating identity resolver. Writes nothing;
+ * promotion happens later at approval (FP8c).
+ *
+ * ## A packet is several forms, and is answered as several forms
+ *
+ * This used to refuse any source that was not a bare `form_submission`, which meant a packet case —
+ * the shape enrolment actually produces — got "not supported yet" where its recommendation should
+ * be. It now enumerates the packet's ordered steps and asks the SAME question of each submission
+ * independently, reusing `recommendationFromFormSubmission` unchanged.
+ *
+ * The steps are NOT merged before matching. Merging would mean resolving identity from a blend of
+ * three forms and reporting one answer with no way to see which form supplied which fact; when two
+ * steps disagree about who this is, that disagreement is the finding. `recommendation` stays the
+ * first step that produced one — the application, in authored order — so existing callers keep the
+ * field they read, and `steps` carries the rest with the form and step named.
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
@@ -34,33 +47,52 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         if (caseErr) throw new Error(caseErr.message);
         if (!caseRow) return jsonError("Not found", 404);
 
-        const { data: src, error: srcErr } = await supabase
-            .from("processing_case_sources")
-            .select("source_kind, source_id")
-            .eq("org_id", ctx.orgId)
-            .eq("processing_case_id", caseId)
-            .eq("role", "primary")
-            .maybeSingle();
-        if (srcErr) throw new Error(srcErr.message);
-        const source = (src as { source_kind: string; source_id: string } | null) ?? null;
+        const submissions = await listCaseFormSubmissionSources(supabase, ctx.orgId, caseId);
 
-        if (!source) {
-            return jsonData({ supported: false, reason: "Case has no primary source." });
-        }
-        if (source.source_kind !== "form_submission") {
+        if (submissions.length === 0) {
+            const { data: any_, error: anyErr } = await supabase
+                .from("processing_case_sources")
+                .select("source_kind")
+                .eq("org_id", ctx.orgId)
+                .eq("processing_case_id", caseId)
+                .limit(1)
+                .maybeSingle();
+            if (anyErr) throw new Error(anyErr.message);
+            const kind = (any_ as { source_kind?: string } | null)?.source_kind ?? null;
+            if (!kind) return jsonData({ supported: false, reason: "Case has no primary source." });
             return jsonData({
                 supported: false,
-                sourceKind: source.source_kind,
-                reason: `Recommendations support form submissions; ${source.source_kind} is not supported yet.`,
+                sourceKind: kind,
+                reason: `Recommendations are computed from form submissions; ${kind} carries none yet.`,
             });
         }
 
-        // Shared FP8a computation (same logic the queue enrichment uses) — the per-case view also
-        // enriches match candidates with identifying detail for the expand-in-place card (§3).
-        const result = await recommendationFromFormSubmission(supabase, ctx.orgId, source.source_id, {
-            enrichCandidates: true,
-        });
-        return jsonData(result);
+        // Each step answered on its own terms, in the order the family filled them.
+        const steps = [];
+        for (const entry of submissions) {
+            const result = await recommendationFromFormSubmission(supabase, ctx.orgId, entry.submissionId, {
+                enrichCandidates: true,
+            });
+            steps.push({
+                submissionId: entry.submissionId,
+                packetSessionId: entry.packetSessionId,
+                stepIndex: entry.stepIndex,
+                formName: entry.formName,
+                formDefinitionVersionId: entry.formDefinitionVersionId,
+                result,
+            });
+        }
+
+        const primary = steps.find((s) => s.result.supported);
+        if (!primary) {
+            return jsonData({
+                supported: false,
+                reason: steps[0]?.result.supported === false ? steps[0].result.reason : "No step produced a recommendation.",
+                steps,
+            });
+        }
+
+        return jsonData({ ...primary.result, primaryStep: { submissionId: primary.submissionId, stepIndex: primary.stepIndex, formName: primary.formName }, steps });
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to build recommendation" },

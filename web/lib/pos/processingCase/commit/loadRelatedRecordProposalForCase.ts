@@ -3,37 +3,62 @@ import { safeParseFormSchema } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
+import { listCaseFormSubmissionSources } from "@/lib/pos/processingCase/sources/listCaseFormSubmissionSources";
 import type { RelatedRecordInstanceProposal } from "@/lib/intake/proposals/types";
 
 export type RelatedRecordProposalCaseContext = {
     proposal: RelatedRecordInstanceProposal;
     expectedCustomerId: string | null;
     source: { source_kind: string; source_id: string };
+    /** Which packet step and form the proposal came from, when it came from a packet. */
+    provenance: {
+        formSubmissionId: string;
+        formDefinitionVersionId: string | null;
+        packetSessionId: string | null;
+        packetStepIndex: number | null;
+        formName: string | null;
+    };
 };
 
+/**
+ * Find one proposal by id among everything the case rests on.
+ *
+ * ## Why this stopped skipping packets
+ *
+ * The loop used to read the case's sources and `continue` past anything that was not a bare
+ * `form_submission`. A packet case's source is a `form_packet_session`, so every proposal a packet
+ * produced was visible in the evidence panel and unreachable from the commit route — the operator
+ * could see a decision they could never make. Enumeration now goes through
+ * `listCaseFormSubmissionSources`, which expands a packet into the ordered submissions it always
+ * was, so the SAME adapter and the SAME executors serve both shapes. Nothing packet-specific
+ * happens below this line.
+ *
+ * Each submission is adapted on its own. Proposal ids are derived from the submission, so a fact
+ * two forms both ask for yields two proposals — which is the disagreement an operator is meant to
+ * resolve, not one this loader may quietly resolve for them.
+ */
 export async function loadRelatedRecordProposalForCase(args: {
     supabase: SupabaseClient;
     orgId: string;
     caseId: string;
     proposalId: string;
 }): Promise<RelatedRecordProposalCaseContext | null> {
-    const { data: sources, error: sourceError } = await args.supabase
-        .from("processing_case_sources")
-        .select("source_kind, source_id")
-        .eq("org_id", args.orgId)
-        .eq("processing_case_id", args.caseId);
-    if (sourceError) throw new Error(sourceError.message);
+    const submissions = await listCaseFormSubmissionSources(args.supabase, args.orgId, args.caseId);
 
-    for (const source of (sources ?? []) as { source_kind: string; source_id: string }[]) {
-        if (source.source_kind !== "form_submission") continue;
+    for (const entry of submissions) {
         const { data: sub, error: subError } = await args.supabase
             .from("form_submissions")
             .select("id, payload, form_definition_version_id, customer_id")
             .eq("org_id", args.orgId)
-            .eq("id", source.source_id)
+            .eq("id", entry.submissionId)
             .maybeSingle();
         if (subError) throw new Error(subError.message);
-        const subRow = sub as { id: string; payload: Record<string, unknown> | null; form_definition_version_id: string | null; customer_id: string | null } | null;
+        const subRow = sub as {
+            id: string;
+            payload: Record<string, unknown> | null;
+            form_definition_version_id: string | null;
+            customer_id: string | null;
+        } | null;
         if (!subRow) continue;
 
         let schemaJson: unknown = null;
@@ -60,12 +85,28 @@ export async function loadRelatedRecordProposalForCase(args: {
             },
             {
                 formDefinitionVersionId: subRow.form_definition_version_id,
+                packetSessionId: entry.packetSessionId,
+                packetStepIndex: entry.stepIndex,
+                formName: entry.formName,
                 accessibleExistingItemIds: accessibleIds,
             },
         );
         for (const collection of bundle.collections) {
             const proposal = collection.instances.find((inst) => inst.proposal_id === args.proposalId);
-            if (proposal) return { proposal, expectedCustomerId: subRow.customer_id, source };
+            if (proposal) {
+                return {
+                    proposal,
+                    expectedCustomerId: subRow.customer_id,
+                    source: entry.caseSource,
+                    provenance: {
+                        formSubmissionId: subRow.id,
+                        formDefinitionVersionId: subRow.form_definition_version_id,
+                        packetSessionId: entry.packetSessionId,
+                        packetStepIndex: entry.stepIndex,
+                        formName: entry.formName,
+                    },
+                };
+            }
         }
     }
     return null;

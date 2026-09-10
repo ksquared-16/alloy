@@ -14,6 +14,9 @@ export type AdaptSourceToProposalsContext = {
     accessibleExistingItemIds?: ReadonlySet<string>;
     formDefinitionVersionId?: string | null;
     packetSessionId?: string | null;
+    /** Packet step and form name, carried onto the proposal's lineage. */
+    packetStepIndex?: number | null;
+    formName?: string | null;
 };
 
 export type AdaptFormSubmissionSourceInput = {
@@ -39,6 +42,8 @@ export function adaptSourceToRelatedRecordProposals(
             formSubmissionId: input.sourceRecordId,
             formDefinitionVersionId: ctx.formDefinitionVersionId ?? null,
             packetSessionId: ctx.packetSessionId ?? null,
+            packetStepIndex: ctx.packetStepIndex ?? null,
+            formName: ctx.formName ?? null,
             accessibleExistingItemIds: ctx.accessibleExistingItemIds,
         });
     }

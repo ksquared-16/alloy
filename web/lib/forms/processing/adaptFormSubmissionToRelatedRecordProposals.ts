@@ -34,6 +34,17 @@ export type AdaptFormSubmissionProposalsContext = {
     formSubmissionId: string;
     formDefinitionVersionId: string | null;
     packetSessionId?: string | null;
+    /**
+     * Which packet step this submission was, and what the form is called.
+     *
+     * A packet case carries several submissions that ask for many of the same facts. Once a
+     * proposal leaves the loader, the submission id is the only thing distinguishing them — and no
+     * operator, audit row or review screen can read a uuid as "step 3, Immunization Record". This
+     * travels WITH the proposal rather than being re-derived beside it, so the decision and the
+     * audit record name the same form the family filled.
+     */
+    packetStepIndex?: number | null;
+    formName?: string | null;
     /** Pre-verified existing item ids in org (optional read-time security). */
     accessibleExistingItemIds?: ReadonlySet<string>;
 };
@@ -184,6 +195,10 @@ function buildInstanceProposal(args: {
                 schema_group_id: groupId,
                 form_definition_version_id: ctx.formDefinitionVersionId ?? "",
                 ...(ctx.packetSessionId ? { packet_session_id: ctx.packetSessionId } : {}),
+                ...(ctx.packetStepIndex === null || ctx.packetStepIndex === undefined
+                    ? {}
+                    : { packet_step_index: String(ctx.packetStepIndex) }),
+                ...(ctx.formName ? { form_name: ctx.formName } : {}),
             },
         },
         diagnostics,
