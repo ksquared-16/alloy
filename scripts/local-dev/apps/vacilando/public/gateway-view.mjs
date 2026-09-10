@@ -31,6 +31,7 @@ import {
   buildHomeViewModel,
   buildLaneThread,
   buildSystemViewModel,
+  composerCanSend,
   governedActionLabel,
   isActionableGovernedAction,
   laneOperatorStatus,
@@ -3187,15 +3188,46 @@ export function agentSessionLine(telemetry, nowMs = Date.now()) {
   return bits.length ? bits.join(" · ") : null;
 }
 
-function laneListStatus(lane, attention) {
-  const work = canonicalLaneWorkState(lane);
+/**
+ * WHAT THE LANE ROW SAYS, AND WHY IT IS NOT THE RUNTIME PHRASE.
+ *
+ * THE DEFECT. This returned `canonicalLaneWorkState().label` — the RUNTIME
+ * phrase — as the row's primary status, so the lane list answered a different
+ * question from the lane it opens. The operator's report: the list said the
+ * provider was active while the lane itself showed CLAUDE · WORKING with live
+ * streamed output. Both readings were computed from the same lane; only one of
+ * them answered "what is this lane doing right now".
+ *
+ * The lane header and the desktop rail were already fixed. The rail carries the
+ * reasoning verbatim — "ONE OPERATOR STATE. The rail used to print the runtime
+ * phrase — including 'Needs input · suspended', which told the operator that a
+ * provider process is not resident. That is scheduler machinery; it is in
+ * Details." The LIST, which is the whole of the phone experience, never got it.
+ *
+ * So the row now renders the same `laneOperatorStatus` projection every other
+ * surface renders. The runtime phrase is NOT discarded — it rides subordinate
+ * as `detail`, which is exactly the layering the platform asks for: one
+ * authoritative runtime state, projected consistently, with the subsystem
+ * condition available as diagnostics rather than competing for the headline.
+ *
+ * `New output` still wins, because it is an operator-facing fact about what is
+ * waiting for them rather than a subsystem condition.
+ */
+function laneListStatus(lane, attention, { nowMs = Date.now(), work = null } = {}) {
+  const runtime = work || canonicalLaneWorkState(lane, { nowMs });
+  const op = laneOperatorStatus(lane, runtime, { nowMs });
   if (attention?.listHint === "New output") {
-    return { label: "New output", mark: work.mark, tone: "needs" };
+    return { label: "New output", mark: runtime.mark, tone: "needs", detail: runtime.label, operator_state: op.state };
   }
   return {
-    label: work.label,
-    mark: work.mark,
-    tone: work.tone,
+    label: op.label,
+    mark: runtime.mark,
+    tone: op.tone,
+    // The runtime phrase, kept and demoted. "Queued for capacity" or
+    // "Refreshing Claude context" is worth showing; it is not the answer to
+    // what the lane is doing.
+    detail: runtime.label !== op.label ? runtime.label : null,
+    operator_state: op.state,
   };
 }
 
@@ -3221,11 +3253,11 @@ export function laneRowSummary(lane, work, who) {
   return "";
 }
 
-function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
+function laneRow(lane, selectedId, attentionByLane, telemetryByLane, { nowMs = Date.now() } = {}) {
   const id = lane.lane_id;
   const active = laneMatchesId(lane, selectedId) ? " is-active" : "";
-  const work = canonicalLaneWorkState(lane);
-  const st = laneListStatus(lane, attentionByLane?.[id]);
+  const work = canonicalLaneWorkState(lane, { nowMs });
+  const st = laneListStatus(lane, attentionByLane?.[id], { nowMs, work });
   const git = gitListState(lane);
   const who = agentLabel(lane);
   const summary = laneRowSummary(lane, work, who);
@@ -3234,7 +3266,10 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   // One canonical status and one readable summary. Agent, elapsed time and git
   // state used to each get their own line, so a row was five stacked strings
   // and none of them was the answer to "what is this lane doing".
-  const metaBits = [who, when, git].filter(Boolean).join(" · ");
+  //
+  // The runtime phrase joins the meta line rather than the headline: it is the
+  // subsystem's answer, and it belongs beside the provider and the clock.
+  const metaBits = [who, st.detail, when, git].filter(Boolean).join(" · ");
   const extra = summary && summary !== st.label
     ? `<span class="gw-lane-summary">${esc(summary)}</span>`
     : "";
@@ -4240,6 +4275,9 @@ export function renderComposer({
   const cursorTitle = cursorSendAvailable
     ? "Send this instruction with Cursor"
     : "Connect Cursor in Settings to send with Cursor";
+  const canSend = composerCanSend({
+    text: draft, attachments, uploading: attachmentsUploading, disabled,
+  });
   return `<form class="gw-composer" data-gw-composer>
     <label class="gw-composer-h" for="gw-instruction">Instruction</label>
     <div class="gw-composer-box">
@@ -4259,7 +4297,14 @@ export function renderComposer({
         <input type="hidden" id="gw-composer-provider" name="provider" value="${esc(current)}" data-gw-provider>
         <span class="gw-count" data-gw-count></span>
         <span class="gw-enter-hint">Enter to send · Shift+Enter for a new line</span>
-        <button class="btn primary gw-send" type="submit" data-gw-send aria-label="${esc(sendLabel)}" ${disabled || attachmentsUploading ? "disabled" : ""}>${esc(sendLabel)}</button>
+        ${/*
+          NOTHING TO SEND IS A DISABLED CONTROL, not a refusal after the tap.
+          Tapping Send on an empty composer used to dispatch an empty
+          instruction to a live agent — measured on the mounted phone. The state
+          of the control now answers the question before the tap happens, and
+          the controller keeps it in step on every keystroke.
+        */ ""}
+        <button class="btn primary gw-send" type="submit" data-gw-send aria-label="${esc(sendLabel)}" ${canSend ? "" : "disabled"}>${esc(sendLabel)}</button>
       </div>
     </div>
     ${n}

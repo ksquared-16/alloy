@@ -19,6 +19,13 @@
  * These assert that lane creation registers what it creates, calls the canonical
  * writer rather than inventing a second one, and refuses to call a lane
  * provisioned when it is not usable.
+ *
+ * TOPOLOGY IS PINNED HERE ON PURPOSE. This file read the host's ALLOY_MAX_AGENTS
+ * and asserted six slots, so it began failing the moment the host moved to
+ * twelve — and it failed in the direction that matters: with twelve slots and
+ * six registered, "no free slot" could not be provoked at all, so the control
+ * for the exhausted-pool case was silently testing the opposite case. A test
+ * whose outcome depends on the machine it runs on is not a control.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -29,6 +36,8 @@ const ROOT = mkdtempSync(join(tmpdir(), "vac-provision-"));
 process.env.ALLOY_RUNTIME_ROOT = ROOT;
 process.env.ALLOY_WORKTREE_ROOT = join(ROOT, "worktrees");
 process.env.VACILANDO_DURABLE_LANES = "1";
+// Six, stated, not inherited: every slot assertion below counts on it.
+process.env.ALLOY_MAX_AGENTS = "6";
 mkdirSync(join(ROOT, "vacilando"), { recursive: true });
 mkdirSync(join(ROOT, "metadata"), { recursive: true });
 
@@ -87,16 +96,43 @@ await test("an explicit slot is honoured", async () => {
   assert.equal(calls[0][0], "5");
 });
 
-await test("no free slot is REPORTED, not silently skipped", async () => {
+await test("no free slot registers the worktree ANYWAY, without a slot", async () => {
+  // THE CONTRACT THIS REPLACES, AND WHY. It used to assert that an exhausted
+  // pool registered NOTHING. That is what left the Access & Identity lane with
+  // a worktree, a branch, a tmux session and a live Claude that no instruction
+  // could reach: the host was out of PORTS, and the answer was to stop knowing
+  // whose worktree that was. Registration is identity and a slot is a resource;
+  // running out of the second is no reason to give up the first.
   clearRegistry();
   for (const s of [1, 2, 3, 4, 5, 6]) register(`w${s}`, s);
-  let called = false;
-  L.setRegisterImplForTests(() => { called = true; return { status: 0, stdout: "" }; });
+  const calls = [];
+  L.setRegisterImplForTests((cmd, args) => { calls.push({ cmd, args }); return { status: 0, stdout: "" }; });
   const out = await L.registerCreatedWorktree({ worktreeName: "seventh" });
-  assert.equal(out.ok, false);
-  assert.equal(out.error, "no_free_slot");
-  assert.match(out.detail, /free one before creating another lane/);
-  assert.equal(called, false, "nothing is registered when there is nowhere to put it");
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.slot, null, "no slot was invented");
+  assert.equal(out.port, null, "and therefore no port");
+  assert.equal(out.slotless, true);
+  assert.equal(out.reason, "no_free_slot");
+  assert.equal(calls.length, 1, "still exactly one registration call");
+  assert.match(calls[0].cmd, /alloy-worktree-adopt$/, "still the canonical writer");
+  assert.deepEqual(calls[0].args, ["--no-slot", "seventh", "--provider", "claude"]);
+  // And it says what the lane does NOT have, so nobody reads this as a port.
+  assert.match(out.detail, /no port, no dev server/);
+});
+
+await test("an exhausted pool names who is holding the slots", async () => {
+  // "All slots are taken" is not actionable. Which ones, and is any of them a
+  // leftover? On the live host slot 10 was held by a registration no durable
+  // lane owned, and it looked exactly like the eleven that were in use.
+  clearRegistry();
+  for (const s of [1, 2, 3, 4, 5, 6]) register(`w${s}`, s);
+  L.setRegisterImplForTests(() => ({ status: 0, stdout: "" }));
+  const out = await L.registerCreatedWorktree({ worktreeName: "seventh" });
+  assert.match(out.detail, /Slots: 1=w1/, "each holder is named with its slot");
+  // None of these have an owning lane in this fixture, so all six are called out
+  // as reclaimable rather than presented as immovable.
+  assert.match(out.detail, /no owning lane/);
+  assert.match(out.detail, /alloy-sprint-finish/, "and the operator is told how to free one");
 });
 
 await test("a failing registration surfaces the failure", async () => {

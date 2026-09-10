@@ -944,7 +944,15 @@ await test("lane list shows resource wait and queue position; ready-to-resume is
   assert.match(html, /Waiting for Browser certification/);
   assert.match(html, /#1 in queue/);
   assert.match(html, /Waiting for Exclusive machine timing/);
-  assert.match(html, /gw-lane-posture is-ready/);
+  // THE PILL NOW CARRIES THE OPERATOR STATE, NOT THE RUNTIME PHRASE. All three
+  // of these lanes are the machine getting on with it, so all three read
+  // "Working" — and the thing that distinguishes them, which is what this test
+  // is actually about, rides as the runtime detail on the same row. This used
+  // to assert `is-ready`, the runtime tone, which was the lane list answering a
+  // different question from the lane it opens.
+  assert.match(html, /class="gw-lane-posture is-run">Working</);
+  assert.equal((html.match(/class="gw-lane-posture[^"]*">Working</g) || []).length, 3);
+  assert.match(html, /class="gw-lane-meta">[^<]*Ready to resume/, "and the distinction survives, demoted");
   assert.equal(html.includes("% complete"), false);
   assert.equal(executionRunListHint(records.execution_run), "Ready to resume");
 });
@@ -1453,11 +1461,18 @@ await test("offline bound lane shows Start Session without failing work", () => 
     replaced: true,
   });
   assert.match(replaced.text, /Instruction updated/);
-  const composer = renderComposer({ queueUntilSession: true });
+  // WHAT THIS IS ABOUT: an offline lane must still let the operator queue an
+  // instruction. It is written with a draft because emptiness is a DIFFERENT
+  // axis — an empty composer has nothing to send whatever the lane's runtime is
+  // doing — and testing it with a blank field conflated the two.
+  const composer = renderComposer({ queueUntilSession: true, draft: "queue this for when the session starts" });
   assert.match(composer, /queue until a session starts/);
-  assert.doesNotMatch(composer, /data-gw-send[^>]*disabled/);
+  assert.doesNotMatch(composer, /data-gw-send[^>]*disabled/, "being offline must not disable send");
   assert.doesNotMatch(composer, /<textarea[^>]*disabled/);
   assert.match(composer, /data-gw-provider-opt="cursor"[^>]*disabled/);
+  // And the other axis, on the same offline lane.
+  assert.match(renderComposer({ queueUntilSession: true }), /data-gw-send[^>]*disabled/,
+    "with nothing written there is nothing to queue");
 });
 
 await test("online lane still shows Orienting Claude while VERIFYING", () => {
@@ -1923,7 +1938,12 @@ await test("lane detail pins composer; green output pane owns scroll", () => {
   assert.match(css, /max-height:min\(28vh, 220px\)/);
   assert.match(html, /Enter to send/);
   assert.match(gwSrc, /t\.id !== "gw-instruction"/);
-  assert.match(gwSrc, /e\.key !== "Enter"/);
+  // The Enter rule moved into the model so it can be stated once and tested
+  // without a browser; the controller supplies only the input modality. It must
+  // NOT go back to deciding on `!shiftKey`, which is what made Return send on a
+  // phone that has no Shift key.
+  assert.match(gwSrc, /View\.composerKeyAction\(e, \{ touchPrimary: View\.touchPrimaryInput\(window\) \}\)/);
+  assert.ok(!/e\.key !== "Enter" \|\| e\.shiftKey/.test(gwSrc), "the device-blind rule is gone");
   assert.match(gwSrc, /mergeListedLane\(G\.lane, listed\)/);
   assert.match(gwSrc, /upsertLaneInList\(G\.lanes, G\.lane\)/);
   assert.match(gwSrc, /liveRun/);

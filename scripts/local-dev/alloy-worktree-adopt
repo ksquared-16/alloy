@@ -14,6 +14,25 @@
 # tmux session, no server, and no Development Lane. The branch is read from Git,
 # never guessed: metadata that disagrees with HEAD is what makes a lane
 # unstartable (startPersistentAgentSession refuses branch_mismatch).
+#
+# --no-slot: REGISTRATION IS IDENTITY, A SLOT IS A RESOURCE.
+#
+# Being registered is what makes a worktree the fleet's — it is how a lane's
+# worktree is found, how ownership is proven, and what dispatch requires before
+# an instruction may enter it. A SLOT is something else entirely: a port and a
+# managed QA environment, which only the environment commands need.
+#
+# Binding the two cost a lane its whole existence. With every slot held, the
+# Access & Identity lane was created with a worktree, a branch, a tmux session
+# and a live Claude, and could not be registered at all — so every message was
+# refused `lane_worktree_unregistered` while the agent sat there running. The
+# host was out of PORTS; it was not out of the ability to know whose worktree
+# that was.
+#
+# So a slotless registration is a real registration: named, pathed, branch read
+# from Git, owned and dispatchable, with no port and no dev server until a slot
+# frees up. It carries no ALLOY_WORKTREE_SLOT and no PORT, which is what keeps
+# the environment commands fail-closed on it rather than inventing a port.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,6 +44,7 @@ source "${SCRIPT_DIR}/lib/sprint-ops.sh"
 usage() {
   cat <<'EOF'
 Usage: alloy-worktree-adopt <slot> <worktree-name> [--provider cursor|claude] [--force]
+       alloy-worktree-adopt --no-slot <worktree-name> [--provider cursor|claude] [--force]
 
 Registers an existing worktree into the slot registry so the managed commands
 (alloy-agent-prepare, alloy-dev-start, alloy-agent-login, alloy-worker-status)
@@ -32,6 +52,9 @@ can operate on it. Reads the branch from Git. Mutates no Git state.
 
   --provider cursor|claude   default: ALLOY_SLOT_<n>_DEFAULT_AGENT
   --force                    rewrite an existing metadata record for this name
+  --no-slot                  register identity only: no slot, no port, no dev
+                             server. Use when every slot is held but the
+                             worktree still has to be known and dispatchable.
 
 Refuses when: the slot is already assigned, the port is occupied, the path is
 outside ALLOY_WORKTREE_ROOT, the path is not a worktree of ALLOY_REPO, or HEAD
@@ -39,6 +62,7 @@ is detached (a lane cannot be bound to a branch that does not exist).
 
 Example:
   alloy-worktree-adopt 5 wt5-vacilando --provider claude
+  alloy-worktree-adopt --no-slot access-identity --provider claude
 EOF
 }
 
@@ -48,15 +72,28 @@ main() {
     exit 0
   fi
 
-  local slot="" name="" provider="" force=0
+  local slot="" name="" provider="" force=0 no_slot=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --provider) [[ $# -ge 2 ]] || alloy_die "--provider requires cursor|claude"; provider="$2"; shift 2 ;;
       --force) force=1; shift ;;
+      --no-slot) no_slot=1; shift ;;
       -h|--help) usage; exit 0 ;;
       --*) alloy_die "unknown option: $1" ;;
       *)
-        if [[ -z "$slot" ]]; then slot="$1"
+        # With --no-slot there is no slot argument, so the first positional IS
+        # the name. Reading it as a slot would produce "invalid slot
+        # 'access-identity'" and hide what was actually asked for.
+        if [[ "$no_slot" -eq 1 ]]; then
+          # A bare number here is someone passing a slot anyway. Taking it as the
+          # worktree name and failing on the NEXT argument would report
+          # "unexpected argument: access-identity", which points at the wrong
+          # word entirely.
+          if [[ "$1" =~ ^[0-9]+$ ]]; then alloy_die "--no-slot takes no slot argument (got '$1')"
+          elif [[ -z "$name" ]]; then name="$1"
+          else alloy_die "unexpected argument: $1"
+          fi
+        elif [[ -z "$slot" ]]; then slot="$1"
         elif [[ -z "$name" ]]; then name="$1"
         else alloy_die "unexpected argument: $1"
         fi
@@ -64,25 +101,34 @@ main() {
         ;;
     esac
   done
-  [[ -n "$slot" && -n "$name" ]] || { usage >&2; exit 2; }
+  if [[ "$no_slot" -eq 1 ]]; then
+    [[ -z "$slot" ]] || alloy_die "--no-slot takes no slot argument"
+    [[ -n "$name" ]] || { usage >&2; exit 2; }
+  else
+    [[ -n "$slot" && -n "$name" ]] || { usage >&2; exit 2; }
+  fi
 
   alloy_load_config
   alloy_ensure_runtime_dirs
   alloy_require_cmd git
 
-  alloy_validate_slot "$slot"
+  [[ "$no_slot" -eq 1 ]] || alloy_validate_slot "$slot"
   [[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || alloy_die "invalid worktree name '$name'"
   alloy_verify_canonical_repo
 
   if [[ -z "$provider" ]]; then
-    local default_var="ALLOY_SLOT_${slot}_DEFAULT_AGENT"
-    provider="${!default_var:-claude}"
+    if [[ "$no_slot" -eq 1 ]]; then
+      provider="claude"
+    else
+      local default_var="ALLOY_SLOT_${slot}_DEFAULT_AGENT"
+      provider="${!default_var:-claude}"
+    fi
   fi
   alloy_validate_agent "$provider"
 
-  local path port
+  local path port=""
   path="${ALLOY_WORKTREE_ROOT}/${name}"
-  port="$(alloy_slot_to_port "$slot")"
+  [[ "$no_slot" -eq 1 ]] || port="$(alloy_slot_to_port "$slot")"
 
   [[ -d "$path" ]] || alloy_die "worktree path does not exist: $path (this command adopts, it never creates)"
   alloy_validate_worktree_boundary "$path"
@@ -108,36 +154,80 @@ main() {
   if [[ -f "$meta_path" && "$force" -ne 1 ]]; then
     alloy_die "metadata already exists for ${name} (${meta_path}) — pass --force to rewrite"
   fi
-  if existing="$(alloy_find_metadata_by_slot "$slot" 2>/dev/null)"; then
-    [[ "$existing" == "$name" ]] \
-      || alloy_die "slot $slot is already assigned to ${existing}"
+  # Neither check has anything to say about a registration that claims no slot
+  # and no port: there is no slot to collide with and no port to occupy.
+  if [[ "$no_slot" -ne 1 ]]; then
+    if existing="$(alloy_find_metadata_by_slot "$slot" 2>/dev/null)"; then
+      [[ "$existing" == "$name" ]] \
+        || alloy_die "slot $slot is already assigned to ${existing}"
+    fi
+    # A listening port with no managed owner is the same fail-closed condition
+    # alloy-worktree-create refuses on.
+    if [[ ! -f "$meta_path" ]]; then
+      alloy_refuse_occupied_port "$port" "adopt"
+    fi
   fi
-  # A listening port with no managed owner is the same fail-closed condition
-  # alloy-worktree-create refuses on.
-  if [[ ! -f "$meta_path" ]]; then
-    alloy_refuse_occupied_port "$port" "adopt"
+
+  local role_var role=""
+  if [[ "$no_slot" -ne 1 ]]; then
+    role_var="ALLOY_SLOT_${slot}_ROLE"
+    role="${!role_var:-}"
   fi
 
-  local role_var role
-  role_var="ALLOY_SLOT_${slot}_ROLE"
-  role="${!role_var:-}"
+  if [[ "$no_slot" -eq 1 ]]; then
+    # ALLOY_WORKTREE_SLOT and PORT are ABSENT, not empty-and-present. Every
+    # reader of this file resolves a slot by comparing against a validated
+    # 1..ALLOY_MAX_AGENTS, so an absent key matches nothing and the
+    # environment commands refuse rather than deriving a port from a blank.
+    alloy_write_kv_file "$meta_path" \
+      "ALLOY_WORKTREE_NAME=\"$name\"" \
+      "ALLOY_WORKTREE_PATH=\"$resolved\"" \
+      "ALLOY_WORKTREE_BRANCH=\"$branch\"" \
+      "ALLOY_AGENT=\"$provider\"" \
+      "ALLOY_CREATED_AT=\"$(alloy_iso_now)\"" \
+      "ALLOY_AGENT_STATUS=\"active\"" \
+      "ALLOY_WORKER_LIFECYCLE=\"active\"" \
+      "ALLOY_WORKTREE_UNSLOTTED=\"1\"" \
+      "ALLOY_ADOPTED_AT=\"$(alloy_iso_now)\"" \
+      "ALLOY_ADOPTED_REASON=\"identity registered without a slot: no free slot, no port, no dev server\""
+  else
+    alloy_write_kv_file "$meta_path" \
+      "ALLOY_WORKTREE_NAME=\"$name\"" \
+      "ALLOY_WORKTREE_SLOT=\"$slot\"" \
+      "ALLOY_WORKTREE_PATH=\"$resolved\"" \
+      "ALLOY_WORKTREE_BRANCH=\"$branch\"" \
+      "ALLOY_AGENT=\"$provider\"" \
+      "PORT=\"$port\"" \
+      "NEXT_PUBLIC_APP_URL=\"http://localhost:${port}\"" \
+      "ALLOY_CREATED_AT=\"$(alloy_iso_now)\"" \
+      "ALLOY_AGENT_ROLE=\"$role\"" \
+      "ALLOY_AGENT_STATUS=\"active\"" \
+      "ALLOY_WORKER_LIFECYCLE=\"active\"" \
+      "ALLOY_ADOPTED_AT=\"$(alloy_iso_now)\"" \
+      "ALLOY_ADOPTED_REASON=\"existing worktree registered without creating Git state\""
+  fi
 
-  alloy_write_kv_file "$meta_path" \
-    "ALLOY_WORKTREE_NAME=\"$name\"" \
-    "ALLOY_WORKTREE_SLOT=\"$slot\"" \
-    "ALLOY_WORKTREE_PATH=\"$resolved\"" \
-    "ALLOY_WORKTREE_BRANCH=\"$branch\"" \
-    "ALLOY_AGENT=\"$provider\"" \
-    "PORT=\"$port\"" \
-    "NEXT_PUBLIC_APP_URL=\"http://localhost:${port}\"" \
-    "ALLOY_CREATED_AT=\"$(alloy_iso_now)\"" \
-    "ALLOY_AGENT_ROLE=\"$role\"" \
-    "ALLOY_AGENT_STATUS=\"active\"" \
-    "ALLOY_WORKER_LIFECYCLE=\"active\"" \
-    "ALLOY_ADOPTED_AT=\"$(alloy_iso_now)\"" \
-    "ALLOY_ADOPTED_REASON=\"existing worktree registered without creating Git state\""
+  if [[ "$no_slot" -eq 1 ]]; then
+    cat <<EOF
 
-  cat <<EOF
+Adopted existing worktree into the registry WITHOUT a slot:
+  name:      ${name}
+  slot:      (none — every managed slot is held)
+  provider:  ${provider}
+  branch:    ${branch}   (read from Git)
+  path:      ${resolved}
+  port:      (none)
+  metadata:  ${meta_path}
+
+The worktree is registered, owned and dispatchable: instructions may be
+delivered into it. It has NO port and NO dev server, so alloy-dev-start and the
+managed QA environment commands will refuse until a slot is free. Free one with
+alloy-sprint-finish <slot>, then re-adopt with that slot to give it a port.
+
+No Git state was created or modified. No server or provider was started.
+EOF
+  else
+    cat <<EOF
 
 Adopted existing worktree into the slot registry:
   name:      ${name}
@@ -154,6 +244,7 @@ Next (only what the work actually needs):
   alloy-agent-prepare ${name}       # web/.env.local.agent from the canonical source
   alloy-dev-start ${name}           # only when a task needs localhost
 EOF
+  fi
 }
 
 main "$@"
