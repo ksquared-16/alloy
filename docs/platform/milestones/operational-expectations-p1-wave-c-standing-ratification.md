@@ -178,6 +178,50 @@ recommendation is made here; each is a design decision, not an implementation ch
 (binding is produced only by an explicit ratification act), and **ratifier authority sufficiency is NOT
 enforced** (capability-only). Therefore **G-Standing authoring half is NOT GREEN.**
 
+### 7.2 Open governance follow-up — which roles hold authority (raised by Attendance Thread 4, 2026-09-09)
+
+The held-authority *machinery* is settled (§7). What is **not** settled is the
+**policy**: which organisation roles, if any, should hold governed operational
+authority for particular expectation classes —
+
+- site and operational-group **closures**;
+- **schedule exceptions** (a child not expected on a committed day);
+- **staffing constraints** (required ratio, minimum qualified presence);
+- other cross-domain operational intent as it arrives.
+
+**Owner:** Operational Expectations + Access & Roles. **Not** a consuming domain.
+
+**Why it is raised here.** Attendance Thread 4 authors absence and closure
+expectations under `authority_key = user:<id>`, which names an individual and
+resolves to no catalog entry — so `resolve_held_operational_authority` correctly
+returns nothing and every such act lands `proposed`. Thread 4 deliberately did
+**not** create a `site_director` authority to make its own closures bind: doing so
+would have made a consuming domain the author of platform governance policy —
+organisation-role design, delegation semantics and cross-domain ratification —
+as an implementation convenience.
+
+**What the deciding party should know.**
+
+- Nothing is blocked today. Attendance consumes effective expectation semantics
+  independent of standing, so a `proposed` closure is already operationally
+  effective for its service-day projection. See
+  [`../modules/attendance-system.md`](../modules/attendance-system.md) §
+  *Absence, vacation and closures*.
+- The decision is therefore about **binding force across other consumers** —
+  billing, compliance, parent-facing commitments — not about whether the roster
+  works.
+- When a role is granted governed authority for one of these classes, the **same
+  authoring path** begins producing stronger standing through the existing
+  resolver. No Thread 4 schema or product rewrite should be required, and that
+  compatibility is locked by
+  `web/tests/childcareOperational/attendance/serviceDayStandingContract.test.ts`,
+  which asserts the projection behaves identically at every standing the ledger
+  can express.
+- A consumer that has hard-coded a standing value in either direction — "these are
+  always proposed", or "ignore anything not binding" — will change behaviour
+  silently on that day. `serviceDayDownstreamContract.ts` states the ownership
+  rule and deliberately carries no standing value to copy.
+
 ## 8. G-Standing (authoring half) — verdict
 
 Question: *Can an expectation become effectively binding unless (1) its authority is governed, (2) a

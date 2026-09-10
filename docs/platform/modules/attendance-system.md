@@ -36,7 +36,7 @@ Fact kinds in scope:
 - **Presence facts** — present / absent / excused for a service day or session.
 - **Check-in / check-out events** — timestamped arrival/departure.
 - **Room transfers** — intraday movement between rooms (distinct from a placement supersede, which is a committed change to the child's standing room).
-- **Schedule overrides** — a one-off deviation from the committed schedule pattern for a specific date.
+- ~~**Schedule overrides** — a one-off deviation from the committed schedule pattern for a specific date.~~ **Dead vocabulary.** A one-off deviation is an authored **Operational Expectation**, not an attendance fact — see [Absence, vacation and closures](#absence-vacation-and-closures-v1-2026-09-09). Nothing implements `schedule_override`; carried as convergence debt so the words stop being reached for.
 - **Corrections** — restatements of any of the above.
 
 ---
@@ -219,6 +219,177 @@ Attendance Facts (L4) are compared against Expected Attendance (L3), which is **
 
 ---
 
+## Absence, vacation and closures (V1, 2026-09-09)
+
+"She's off sick", "he's on holiday next week" and "we're shut on the 25th" are
+statements about **what is expected**, not observations of what happened. They are
+authored as **Operational Expectations** against the existing ledger.
+
+There is no absence table, no closure table, no schedule mutation, and no
+synthetic per-child absence fact. The committed schedule underneath stays true —
+which is the only reason a child who turns up during her own holiday can read as
+*present and unexpected* rather than quietly becoming ordinary.
+
+### The three truths, kept apart
+
+| Layer | Question | Where it lives |
+|---|---|---|
+| Committed schedule | what normally happens | `schedule_assignments` (L3 projection) |
+| Operational Expectations | what is known to differ | `operational_expectations` (authored) |
+| Attendance facts | what physically happened | `child_attendance_events` (L4) |
+
+`interpretServiceDay` composes the first two; `applyObservedPresence` folds in the
+third, and **observed facts win**. Financial consequence stays downstream (L5).
+
+### The tuples Attendance authors
+
+| Operator intent | Verb | Modality | Predicate | Subject |
+|---|---|---|---|---|
+| Mark absent / on holiday | `create` | `intended` | `child_away` | child |
+| Change the dates or reason | `revise` | `intended` | `child_away` | child |
+| "In after all" | `revise` | `intended` | `child_expected_present` | child |
+| Wrong child / never held | `correct` | `intended` | `child_expected_present` | child |
+| Close a site or room | `create` | `prohibited` | `operating_grain_closed` | site · operational_group |
+| "Opening after all" | `revise` | `intended` | `operating_grain_open` | site · operational_group |
+
+**Absence is `intended`, not `prohibited`.** Nobody forbids a child from
+attending. Under a deontic modality, a child arriving while marked away would
+record a *violation* — the ledger asserting that a child broke a rule by coming to
+nursery. A closure genuinely is deontic: a site MUST NOT operate on a holiday.
+
+**Withdrawal is a revision, never a `cancellation`.** The platform's `cancel` verb
+types a `cancellation`, which the resolver fails closed on — so "cancel that
+holiday" would make the child's day *undeterminable* rather than ordinary. The
+intent was validly held right up until it changed, so it is revised. A
+`correction` remains the different act: the expectation was never validly held.
+
+**A closure is authored ONCE, at the grain that is not operating.** No fan-out.
+The projection applies the single statement to whoever the schedule expected, so
+moving or withdrawing a closure is one act rather than a hundred.
+
+### Standing — the contract
+
+> Attendance consumes **effective expectation semantics independent of ledger
+> standing**. Standing remains ledger-owned and may evolve through governed
+> authority without changing the Attendance model.
+
+Standing is binding force across every platform consumer. This projection answers
+a narrower question: *given the effective authored expectations for this child and
+service day, how should today be interpreted?* An operator saying Emma is sick has
+changed what the centre expects whether or not anyone is thereby obliged.
+
+**A site or operational-group closure authored through the authorized Attendance
+closure command is operationally effective for the service-day projection even
+when its current standing is `proposed`.** Scheduled children read as `closed`,
+not as unexplained missing arrivals. This is intentional.
+
+Attendance therefore does **not**:
+
+- gate on standing (`if (standing !== "binding") ignore` would make every
+  operator-authored absence and closure silently disappear);
+- self-ratify, mutate, or reinterpret standing;
+- special-case standing inside a command;
+- assert anywhere that these expectations "are always proposed".
+
+Locked by `web/tests/childcareOperational/attendance/serviceDayStandingContract.test.ts`.
+
+Standing is resolved server-side by `author_operational_expectation` from
+`resolve_held_operational_authority`: a holder of a **governed** authority
+self-ratifies to `binding`. Attendance authors under `user:<id>` — an individual,
+not a governed authority — so nothing self-ratifies today. That is a governance
+configuration fact, not a rule, and no consumer may encode it.
+
+### The eligibility contract
+
+An authored expectation is operationally relevant to a service day when:
+
+```
+correct org
++ authorized purpose
++ supported subject
++ effective temporal window
++ supported modality
++ matching predicate
++ valid lineage resolution
+```
+
+Org, temporal window and lineage are decided by the query seam and the ratified
+resolver, and are deliberately not re-implemented here. Purpose, subject, modality
+and predicate are Attendance's own — `serviceDayExpectationRelevance()`. Standing
+is deliberately absent from the list.
+
+Only the attendance purpose is interpreted. A `prohibited` expectation on a site
+authored by another domain could mean a maintenance embargo or a licensing hold;
+reading it as "the nursery is shut" would suppress the missing-arrival signal for
+every child there on someone else's say-so.
+
+### Partial-day closure — classification
+
+| Aspect | Status |
+|---|---|
+| Storage / model capability | **SUPPORTED** |
+| Effective temporal contract | **SUPPORTED** |
+| Thread 4 projection | **WHOLE-DAY ONLY** |
+| Operator authoring UI | **WHOLE-DAY ONLY** |
+| Partial-day operator product | **NOT IMPLEMENTED** |
+
+Partial-day closure is **not** complete and is carried as an explicit future
+increment. The `operating_hours` temporal-frame kind exists in the grammar;
+nothing authors it and the projection reads a service day whole.
+
+### Downstream contract
+
+`serviceDayDownstreamContract.ts` states what Threads 6, 7 and 9 may rely on. Two
+traps are named there because each is a one-line mistake with a real consequence:
+
+- `attended_despite_plan` is a **present** child. She counts for occupancy,
+  ratios and evacuation. A consumer matching on "there was an absence plan" would
+  leave a real child out of a real ratio.
+- `unknown` is **not** "no expectation" and is never billable as an ordinary day.
+  It is the one state where the correct behaviour is to stop and ask.
+
+Nothing in Thread 4 creates, voids or credits a charge, and the contract carries
+no field a consumer could mistake for chargeability.
+
+### Two silent defects, and the certification doctrine they changed
+
+Both were invisible to unit tests because the fixtures shared the reader's wrong
+assumption:
+
+1. **Stored subject shape.** The intake stores the tuple's subject **array**
+   (`[{kind, ref}]`) in `subject_ref`. A consumer reading `subject_ref.id` — the
+   shape the column name suggests — matches nothing, every time, and answers "no
+   expectations apply", which is indistinguishable from an ordinary day.
+2. **Reason path.** The frozen grammar puts author-supplied values in
+   `condition.params`, so `condition.reason_key` was never going to be there.
+
+**Certification must therefore follow the real round trip:**
+
+```
+operator command → ledger authoring → physical stored tuple → query seam
+→ effective resolver → Attendance adapter → service-day projection → mounted product
+```
+
+Any test that manually constructs the DTO the reader expects is **supplementary
+only**. The browser certification
+(`certification/playwright/attendance-absence-closures.cert.spec.ts`) is the
+primary evidence, and it restores the tenant through the operator's own controls
+rather than the database.
+
+### Convergence debt
+
+| Debt | Consequence today |
+|---|---|
+| **Governed-authority policy for operational expectations** — which organisation roles, if any, should hold governed authority for expectation classes such as site closures, schedule exceptions and staffing constraints. Owned by Operational Expectations / Access & Roles, **not** Attendance. | Closures land `proposed`. When the policy exists, the same authoring path produces stronger standing through the ledger's existing machinery — no Thread 4 schema or product rewrite. |
+| **Location subject in the Operational Command Runtime** — the runtime's entity vocabulary has no site/room subject. | Closure authoring uses a dedicated server route instead of the action bus. Both call the identical authorization primitive, so they cannot disagree about who may write. |
+| **Partial-day closure operator product** | See classification above. |
+| **Hosted Supabase migration verification / deployment governance** | Hosted migration state is not verified by CI. |
+| **`schedule_override` dead vocabulary** | Named in doctrine, implemented nowhere; superseded by authored expectations. |
+| **`attendance.plan` capability** — stating what is EXPECTED is a different act from witnessing what HAPPENED. | Planning uses `attendance.record` + site scope. The boundary that protects a child (may this person affect this child's day at this site) is enforced; the name is imprecise. |
+
+
+---
+
 ## What not to do
 
 - Do not model attendance as a mutable status field or edit facts in place.
@@ -227,6 +398,9 @@ Attendance Facts (L4) are compared against Expected Attendance (L3), which is **
 - Do not store "expected attendance" as authoritative rows — it is derived (L3).
 - Do not let billing or compliance read mutable attendance state directly; they derive from attendance facts/events.
 - Do not conflate intraday room transfers with committed placement changes.
+- Do not record a planned absence as an observed absence fact, or author a closure as one absence per child.
+- Do not gate the service-day projection on expectation standing, or restate a standing Attendance did not author.
+- Do not use the platform `cancel` verb to withdraw a future plan — it fails closed and makes the day undeterminable.
 
 ---
 
@@ -414,3 +588,6 @@ Product record: [`../planning/roster-product-v1-stage1.md`](../planning/roster-p
 - The staff presence vocabulary changes, or staff facts acquire any payroll/timekeeping meaning.
 - The planned-vs-actual separation changes, or a new sufficiency verdict is introduced.
 - Roster / Attendance change workspace again, or the "Daily Operations" naming question is settled.
+- The absence / closure tuple grammar changes, or a new operator intent is added to it.
+- Governed authority is granted for any expectation class Attendance authors — record the resulting standing, and confirm no model change was needed.
+- Partial-day closure moves from model capability to operator product.

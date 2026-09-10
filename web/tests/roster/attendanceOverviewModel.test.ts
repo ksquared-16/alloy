@@ -120,3 +120,96 @@ describe("the four counts", () => {
         expect(m.hereNowByRoom.size).toBe(0);
     });
 });
+
+/**
+ * ── THE NUMBER A DIRECTOR ACTS ON ──
+ *
+ * "Not arrived" is the count that starts phone calls. A holiday week that pushes
+ * it to fourteen does not make fourteen calls happen — it makes the number stop
+ * being looked at, which costs the one morning it actually mattered.
+ */
+function away(id: string, state: string, reasonKey: string | null = null, raisesAttention = false) {
+    return {
+        customerMemberId: id,
+        displayName: id,
+        actual: { state: "no_record" as const, actualRoomLocationId: null },
+        serviceDay: { state, reasonKey, raisesAttention },
+    };
+}
+
+describe("known absence is not an unexplained missing arrival", () => {
+    it("keeps a child whose parent rang out of the not-arrived count", () => {
+        const model = buildAttendanceOverviewModel([
+            {
+                roomLocationId: TOD1,
+                roomName: "Toddler 1",
+                children: [away("emma", "known_away", "illness"), child("finn", "no_record")],
+            },
+        ]);
+        expect(model.counts.notArrived).toBe(1);
+        expect(model.counts.knownAway).toBe(1);
+        expect(model.counts.expected).toBe(2);
+    });
+
+    it("counts a closed day as away rather than as a roomful of no-shows", () => {
+        const model = buildAttendanceOverviewModel([
+            {
+                roomLocationId: TOD1,
+                roomName: "Toddler 1",
+                children: [away("emma", "closed", "holiday_closure"), away("finn", "closed", "holiday_closure")],
+            },
+        ]);
+        expect(model.counts.notArrived).toBe(0);
+        expect(model.counts.knownAway).toBe(2);
+    });
+
+    it("still counts a child the projection says IS missing", () => {
+        // The projection's own answer decides, so the header and the exception
+        // list cannot disagree about who is actually missing.
+        const model = buildAttendanceOverviewModel([
+            {
+                roomLocationId: TOD1,
+                roomName: "Toddler 1",
+                children: [away("emma", "not_arrived", null, true)],
+            },
+        ]);
+        expect(model.counts.notArrived).toBe(1);
+        expect(model.counts.knownAway).toBe(0);
+    });
+
+    it("counts an unresolvable plan separately, and never as normal", () => {
+        const model = buildAttendanceOverviewModel([
+            { roomLocationId: TOD1, roomName: "Toddler 1", children: [away("emma", "unknown", null, false)] },
+        ]);
+        expect(model.counts.planUnclear).toBe(1);
+        expect(model.counts.notArrived).toBe(0);
+    });
+
+    it("counts a child who came in anyway as present AND unplanned", () => {
+        const model = buildAttendanceOverviewModel([
+            {
+                roomLocationId: TOD1,
+                roomName: "Toddler 1",
+                children: [
+                    {
+                        customerMemberId: "emma",
+                        displayName: "emma",
+                        actual: { state: "present" as const, actualRoomLocationId: TOD1 },
+                        serviceDay: { state: "attended_despite_plan", reasonKey: "vacation", raisesAttention: false },
+                    },
+                ],
+            },
+        ]);
+        expect(model.counts.present).toBe(1);
+        expect(model.counts.unplannedArrivals).toBe(1);
+        // She is here, so she is not away — whatever the plan said.
+        expect(model.counts.knownAway).toBe(0);
+    });
+
+    it("leaves a day nobody commented on exactly as it was", () => {
+        const model = buildAttendanceOverviewModel(CELLS);
+        expect(model.counts.notArrived).toBe(1);
+        expect(model.counts.knownAway).toBe(0);
+        expect(model.counts.planUnclear).toBe(0);
+    });
+});

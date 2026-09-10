@@ -30,6 +30,15 @@ export type OverviewChild = {
         state: "present" | "checked_out" | "absent" | "no_record";
         actualRoomLocationId: string | null;
     };
+    /**
+     * How the day reads once known intent is applied. Absent on a child nobody
+     * said anything about, which is the ordinary case.
+     */
+    serviceDay?: {
+        state: string;
+        reasonKey: string | null;
+        raisesAttention: boolean;
+    } | null;
 };
 
 /** The subset of a roster cell (room·date) this model reads. */
@@ -57,9 +66,22 @@ export type AttendanceOverviewModel = {
     counts: {
         expected: number;
         present: number;
+        /**
+         * UNEXPLAINED missing arrivals only.
+         *
+         * This is the number a director acts on, so a child whose parent rang at
+         * seven must not be in it. Counting known absences here is how a holiday
+         * week reads as a crisis and the number stops being looked at.
+         */
         notArrived: number;
         checkedOut: number;
         absent: number;
+        /** Children nobody expected today — off sick, on holiday, room closed. */
+        knownAway: number;
+        /** Here, and not expected. Safe, and worth knowing about. */
+        unplannedArrivals: number;
+        /** Children whose plan could not be determined. Never counted as normal. */
+        planUnclear: number;
     };
 };
 
@@ -70,11 +92,30 @@ export function buildAttendanceOverviewModel(
 
     const hereNowByRoom = new Map<string, number>();
     const awayFromPlacement: AwayFromPlacement[] = [];
-    const counts = { expected: 0, present: 0, notArrived: 0, checkedOut: 0, absent: 0 };
+    const counts = {
+        expected: 0,
+        present: 0,
+        notArrived: 0,
+        checkedOut: 0,
+        absent: 0,
+        knownAway: 0,
+        unplannedArrivals: 0,
+        planUnclear: 0,
+    };
 
     for (const cell of cells) {
         for (const child of cell.children) {
             counts.expected += 1;
+
+            /*
+             * The interpreted reading, when there is one, decides how SILENCE is
+             * counted. Observed presence still decides everything physical: a
+             * child who is here is here, whatever anyone planned.
+             */
+            const interpreted = child.serviceDay?.state ?? null;
+            if (interpreted === "known_away" || interpreted === "closed") counts.knownAway += 1;
+            if (interpreted === "attended_despite_plan") counts.unplannedArrivals += 1;
+            if (interpreted === "unknown") counts.planUnclear += 1;
 
             switch (child.actual.state) {
                 case "present":
@@ -87,6 +128,10 @@ export function buildAttendanceOverviewModel(
                     counts.absent += 1;
                     break;
                 default:
+                    // `raisesAttention` is the projection's own answer, so the
+                    // header count and the exception list cannot disagree about
+                    // which children are actually missing.
+                    if (child.serviceDay && !child.serviceDay.raisesAttention) break;
                     counts.notArrived += 1;
             }
 

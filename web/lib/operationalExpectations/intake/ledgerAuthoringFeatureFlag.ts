@@ -15,6 +15,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isActivatedAuthoringPurpose } from "@/lib/operationalExpectations/intake/activatedAuthoringPurposes";
 
 /** The org_settings.metadata.feature_flags key for the ledger authoring path. */
 export const OE_LEDGER_AUTHOR_FLAG = "oe.ledger.author";
@@ -53,12 +54,22 @@ export function isOeLedgerAuthorEnabledForOrgMetadata(
  * Resolve the flag for an org (server-side). Reads `org_settings.metadata`. On any
  * read error, fails CLOSED (returns false) — a flag read failure never authorizes
  * authoring.
+ *
+ * `purpose` is the SCOPED activation seam. The env flag governs the GENERIC
+ * intake — any caller, any modality, any subject — and stays OFF by default. A
+ * activated purpose is a narrow reviewed use that does not wait on that rollout,
+ * because enabling it enables exactly one thing rather than everything.
+ *
+ * The org opt-out still applies to a purpose: a tenant that switched the ledger
+ * off switched it off, and a purpose is a narrower door, not a way around the
+ * lock.
  */
 export async function isOeLedgerAuthorEnabledForOrg(
     supabase: SupabaseClient,
     orgId: string,
+    purpose?: string | null,
 ): Promise<boolean> {
-    if (!isOeLedgerAuthorEnvEnabled()) return false;
+    if (!isOeLedgerAuthorEnvEnabled() && !isActivatedAuthoringPurpose(purpose)) return false;
     const { data, error } = await supabase
         .from("org_settings")
         .select("metadata")
@@ -69,5 +80,17 @@ export async function isOeLedgerAuthorEnabledForOrg(
         return false;
     }
     const metadata = (data as { metadata?: Record<string, unknown> } | null)?.metadata;
-    return isOeLedgerAuthorEnabledForOrgMetadata(metadata);
+    if (orgHasOptedOut(metadata)) return false;
+    // An activated purpose needs no env flag; generic authoring still does.
+    return isActivatedAuthoringPurpose(purpose) || isOeLedgerAuthorEnvEnabled();
+}
+
+/** True when the org explicitly switched the ledger off. */
+function orgHasOptedOut(metadata: Record<string, unknown> | null | undefined): boolean {
+    const flags = metadata?.feature_flags;
+    if (flags != null && typeof flags === "object" && !Array.isArray(flags)) {
+        const entry = (flags as Record<string, unknown>)[OE_LEDGER_AUTHOR_FLAG];
+        return entry === false || entry === "false" || entry === 0 || entry === "0";
+    }
+    return false;
 }
