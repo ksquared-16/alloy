@@ -104,5 +104,71 @@ test("T7. the exported pattern still matches the live check", () => {
   }
 });
 
+/*
+ * THE FIFTH AND SIXTH COPIES, AND THEY COST A DIRECTOR APPROVAL.
+ *
+ * The tests above certify the GUARD MODULE. They cannot see the trusted children
+ * — `vac-qa-identity-provision.mjs` and `vac-qa-access-assign.mjs` — which are
+ * separate files, spawned as separate processes, each carrying its own copy of
+ * the identity check by design. Two checks is the design. Two DIFFERENT ANSWERS
+ * to "how many slots exist" is the bug, and that is exactly what shipped: the
+ * module said `managedSlots()` while both children still said `[1-6]`.
+ *
+ * How it surfaced: slot 12's identity was configured, `vac browser-auth status`
+ * resolved it correctly, the Director APPROVED `environment.provision_qa_identity`
+ * — and execution failed `identity_not_managed_qa_shape` inside the child. A
+ * spent approval was the only thing that could have caught it, because no test
+ * of the library module ever loads these files.
+ */
+const CHILDREN = [
+  ["vac-qa-identity-provision.mjs", "provisioned"],
+  ["vac-qa-access-assign.mjs", "assigned access"],
+];
+
+/** Source with comments stripped — a control must never match its own rationale. */
+function codeOf(file) {
+  const src = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
+
+test("T8. no trusted child hardcodes a slot range", () => {
+  for (const [file] of CHILDREN) {
+    const code = codeOf(file);
+    assert.ok(!/qa-slot\[[0-9]/.test(code), `${file} still carries a slot-range literal`);
+    assert.match(code, /managedSlots\(\)/, `${file} must take its bound from the topology owner`);
+  }
+});
+
+test("T9. every child still refuses a non-managed identity", () => {
+  for (const [file] of CHILDREN) {
+    const code = codeOf(file);
+    assert.match(code, /identity_not_managed_qa_shape/, `${file} dropped the refusal entirely`);
+  }
+});
+
+test("T10. the child's own pattern tracks the topology, both directions", () => {
+  // The REAL expression, lifted from the REAL file and evaluated against a stub
+  // topology. Asserting on the source text alone would pass on a pattern that
+  // never matches anything.
+  for (const [file] of CHILDREN) {
+    const line = codeOf(file).split("\n").find((l) => l.includes("new RegExp("));
+    assert.ok(line, `${file}: no constructed pattern found`);
+    const build = (slots) => {
+      const managedSlots = () => slots;
+      // eslint-disable-next-line no-eval
+      return eval(line.replace(/^\s*const\s+\w+\s*=\s*/, "").replace(/;\s*$/, ""));
+    };
+    const twelve = build([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    assert.ok(twelve.test("qa-slot12-work-items@example.com"), `${file}: slot 12 refused at a 12-slot host`);
+    assert.ok(twelve.test("qa-slot1-product@example.com"), `${file}: slot 1 refused`);
+    assert.ok(!twelve.test("customer@acme.com"), `${file}: a customer account was accepted`);
+    assert.ok(!twelve.test("qa-slot99-x@example.com"), `${file}: a slot the host lacks was accepted`);
+    // And it must genuinely narrow when the host is smaller — proving the bound
+    // is read, not merely widened to a new literal.
+    assert.ok(!build([1, 2, 3, 4, 5, 6]).test("qa-slot12-work-items@example.com"),
+      `${file}: slot 12 accepted on a 6-slot host`);
+  }
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
