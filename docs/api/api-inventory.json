@@ -1549,7 +1549,7 @@
     "rpcs": [],
     "domain": "Admin / Configuration",
     "stability": "admin-only",
-    "lines": 262
+    "lines": 265
   },
   {
     "apiPath": "/api/admin/childcare-attendance/service-day-exception",
@@ -13176,7 +13176,7 @@
     ],
     "domain": "Admin / Configuration",
     "stability": "admin-only",
-    "lines": 210
+    "lines": 227
   },
   {
     "apiPath": "/api/v1/oauth/token",

@@ -76,3 +76,31 @@ export function buildPage<T>(rows: T[], limit: number, cursorOf: (row: T) => Cur
         next_cursor: hasMore && last ? encodeCursor(cursorOf(last)) : null,
     };
 }
+
+export type WatermarkResult = { ok: true; since: string | null } | { ok: false; reason: string };
+
+/**
+ * Parse an `updated_since` watermark.
+ *
+ * Requires an explicit offset or `Z`. A bare `2026-01-01T00:00:00` is ambiguous
+ * — it means a different instant depending on who reads it — and silently
+ * choosing UTC for a partner in another timezone would skip or re-deliver rows
+ * near every boundary. Refusing is the only answer that cannot be quietly wrong.
+ *
+ * A FUTURE timestamp is accepted and simply matches nothing. It is not an error:
+ * a partner whose clock runs fast is not making a malformed request, and the
+ * honest response is an empty page they can act on.
+ */
+export function resolveUpdatedSince(raw: string | null | undefined): WatermarkResult {
+    const value = (raw ?? "").trim();
+    if (!value) return { ok: true, since: null };
+
+    if (!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+        return { ok: false, reason: "updated_since must include a timezone offset or Z" };
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return { ok: false, reason: "updated_since must be an ISO-8601 timestamp" };
+    }
+    return { ok: true, since: parsed.toISOString() };
+}

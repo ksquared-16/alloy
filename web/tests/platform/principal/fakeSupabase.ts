@@ -108,6 +108,7 @@ export function createFakeSupabase(tables: Tables) {
         const types = (a.p_types as string[] | null) ?? null;
         const parentId = (a.p_parent_id as string | null) ?? null;
         const locationIds = (a.p_location_ids as string[] | null) ?? null;
+        const updatedSince = (a.p_updated_since as string | null) ?? null;
         const cursorSort = (a.p_cursor_sort as string | null) ?? null;
         const cursorId = (a.p_cursor_id as string | null) ?? null;
         const limit = Math.max(1, Math.min(Number(a.p_limit ?? 50), 200));
@@ -123,6 +124,7 @@ export function createFakeSupabase(tables: Tables) {
             if (types && !types.includes(String(r.location_type))) return false;
             if (parentId && r.parent_location_id !== parentId) return false;
             if (locationIds && !locationIds.includes(String(r.id))) return false;
+            if (updatedSince && String(r.updated_at ?? r.created_at) <= updatedSince) return false;
             return true;
         });
 

@@ -30,7 +30,12 @@ import {
 import { identityHeaders, resolveRequestIdentity } from "@/lib/platform/external/requestContext";
 import { requireExternalPrincipal } from "@/lib/platform/external/externalRequest";
 import { requireOperationScope } from "@/lib/platform/external/scopeCatalog";
-import { buildPage, decodeCursor, resolveLimit } from "@/lib/platform/external/collection";
+import {
+    buildPage,
+    decodeCursor,
+    resolveLimit,
+    resolveUpdatedSince,
+} from "@/lib/platform/external/collection";
 import {
     toPublicLocation,
     type CanonicalLocationRow,
@@ -143,6 +148,17 @@ export async function GET(request: NextRequest) {
         );
     }
 
+    const watermark = resolveUpdatedSince(params.get("updated_since"));
+    if (!watermark.ok) {
+        return finish(
+            apiError({
+                code: "invalid_updated_since", type: "invalid_request", message: watermark.reason,
+                requestId: identity.requestId, headers: identityHeaders(identity),
+            }),
+            { ...activityIds, errorCode: "invalid_updated_since" },
+        );
+    }
+
     // Filters narrow. They are validated for SHAPE here and applied inside the
     // function alongside the boundary — never before it, and never instead of it.
     const typeParam = params.get("type");
@@ -184,6 +200,7 @@ export async function GET(request: NextRequest) {
         p_types: typeParam ? [typeParam] : null,
         p_parent_id: parentId,
         p_location_ids: locationId ? [locationId] : null,
+        p_updated_since: watermark.since,
     });
 
     if (error) {

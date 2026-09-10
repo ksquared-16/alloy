@@ -152,7 +152,7 @@
           "Locations"
         ],
         "summary": "List organizational locations",
-        "description": "Returns sites and units within the installation's organization AND its resource boundary. Requires the `locations.read` scope.\n\nCustomer and vendor premises (`location_type = address`) are never returned at any scope — they describe private addresses rather than organizational locations.\n\nFilters narrow the already-authorized set and can never widen it: naming a location outside the boundary returns nothing rather than granting it.",
+        "description": "Returns sites and units within the installation's organization AND its resource boundary. Requires the `locations.read` scope.\n\nCustomer and vendor premises (`location_type = address`) are never returned at any scope — they describe private addresses rather than organizational locations.\n\nFilters narrow the already-authorized set and can never widen it: naming a location outside the boundary returns nothing rather than granting it.\n\nIncremental sync: page the collection once, remember the newest `updated_at` you saw, then pass it as `updated_since`. Rewind your checkpoint slightly — `updated_at` is wall-clock and not transactionally ordered.",
         "security": [
           {
             "bearerAuth": []
@@ -210,6 +210,16 @@
               "type": "string"
             },
             "description": "Return only this location, if it is within the boundary. Use this for a single-resource read."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only locations whose `updated_at` is STRICTLY AFTER this instant. Must carry a timezone offset or `Z` — a bare local time is ambiguous and is refused rather than guessed. A future timestamp is valid and matches nothing.\n\nDoes NOT detect deletion: a removed location simply stops appearing. Reconcile disappearances with a full bootstrap."
           }
         ],
         "responses": {

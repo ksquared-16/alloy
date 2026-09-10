@@ -121,6 +121,43 @@ see.
 Cursors are positions, not permissions. Replaying one from a different context
 cannot widen what you receive.
 
+## Keeping in sync
+
+Bootstrap once, then ask only for changes.
+
+```bash
+# 1. Bootstrap — page the whole authorized collection, remembering the newest updated_at
+curl "https://<alloy-host>/api/v1/locations?limit=200" -H "Authorization: Bearer $TOKEN"
+
+# 2. Incremental — everything that changed after your checkpoint
+curl "https://<alloy-host>/api/v1/locations?updated_since=2026-01-01T00:00:00Z" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+`updated_since` is **strictly after** the instant you pass, and it composes with
+`cursor` and every filter.
+
+**It must carry a timezone** — `Z` or an explicit offset. A bare
+`2026-01-01T00:00:00` is refused with `400 invalid_updated_since` rather than
+guessed, because the same string means a different instant depending on who reads
+it, and guessing would skip or re-deliver rows at every boundary.
+
+**Rewind your checkpoint slightly.** `updated_at` is wall-clock and not
+transactionally ordered, so two rows written in one operation can land either
+side of an exact watermark. Re-request from a few minutes before your last value
+and treat results as upserts keyed by `id`.
+
+A future timestamp is valid and simply matches nothing.
+
+### It does not detect deletion
+
+> **`updated_since` cannot tell you a location was removed.** A deleted row stops
+> appearing; nothing announces its absence, and no watermark can.
+
+If you need to reconcile disappearances, run a **full bootstrap** periodically and
+treat locations missing from the complete authorized set as gone. Deactivation is
+different and *is* visible: `active` becomes `false` and the row still arrives.
+
 ## Identifiers
 
 `id` is **Alloy's canonical identity** for the location. It is an opaque string —
