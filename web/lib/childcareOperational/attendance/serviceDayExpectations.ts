@@ -168,20 +168,90 @@ const CLOSURE_MODALITY = "prohibited";
  *     `resolve_held_operational_authority`, so a holder of a governed authority
  *     binds and everyone else lands `proposed`. Attendance authors under
  *     `user:<id>`, which names an individual rather than a governed authority, so
- *     nothing self-ratifies today. Whether "site director" should be a governed
- *     authority — so that a closure genuinely binds — is a configuration question
- *     for the expectations owner, and NOT one Attendance should answer by
- *     inventing an authority key.
+ *     nothing self-ratifies today.
+ *
+ * Which organisation roles should hold governed operational authority — for site
+ * closures, schedule exceptions, staffing constraints and other cross-domain
+ * intent — is a GOVERNANCE decision owned by Operational Expectations and Access
+ * & Roles. Attendance must not answer it by inventing an authority key, and must
+ * not need rewriting when it is answered: the day such a role exists, this same
+ * command path starts producing stronger standing through the ledger's existing
+ * authority machinery, and nothing below changes.
  *
  * `expectationStandingIsConsumable` is the single place that decision lives, and
  * its tests fail if someone narrows it silently — so a future standing change
  * cannot quietly stop closures working.
  */
+/**
+ * The standings this projection consumes — published so that narrowing it is a
+ * visible, reviewable act rather than an edit inside a predicate.
+ */
+export const EXPECTATION_STANDINGS_CONSUMED: readonly string[] = ["proposed", "binding", "model"];
+
 export function expectationStandingIsConsumable(standing: string): boolean {
     // Every standing the ledger can express is consumable for INTERPRETATION.
     // Deliberately total: a new standing must be considered here explicitly
     // rather than defaulting to "ignored", which would silently drop truth.
-    return standing === "proposed" || standing === "binding" || standing === "model";
+    return EXPECTATION_STANDINGS_CONSUMED.includes(standing);
+}
+
+/**
+ * ── THE ELIGIBILITY CONTRACT ──
+ *
+ * What makes an authored expectation operationally relevant to a service day:
+ *
+ *   correct org              — the query seam's tenancy filter, twice over
+ *   valid lineage resolution — the ratified resolver; unresolved never means absent
+ *   effective temporal window— the resolver, against the service-day coordinate
+ *   authorized purpose       ┐
+ *   supported subject        │ this function — the part Attendance owns, because
+ *   supported modality       │ it is the part that turns ledger meaning into
+ *   matching predicate       ┘ roster meaning
+ *
+ * Standing is deliberately NOT in that list. It is ledger-owned metadata about
+ * binding force across every platform consumer; this projection answers the
+ * narrower question of how today reads for this child. Gating on it would make
+ * every operator-authored absence and closure silently disappear from the roster
+ * — see the standing contract above.
+ *
+ * The three seam-owned conditions are named here rather than re-implemented:
+ * duplicating tenancy or lineage semantics is how two consumers end up
+ * disagreeing about which expectation is effective.
+ */
+export type ExpectationRelevance =
+    | { relevant: true; kind: "child_away" | "grain_closed" }
+    | { relevant: false; reason: "unconsumable_standing" | "foreign_purpose" | "unsupported_semantics" };
+
+export function serviceDayExpectationRelevance(e: {
+    subjectKind: string;
+    modality: string;
+    condition: Record<string, unknown>;
+    standing: string;
+}): ExpectationRelevance {
+    // Checked first and answered explicitly, so a reader can see that standing is
+    // considered and deliberately not used to exclude anything the ledger can say.
+    if (!expectationStandingIsConsumable(e.standing)) {
+        return { relevant: false, reason: "unconsumable_standing" };
+    }
+    if (!isInterpretablePurpose(e.condition)) return { relevant: false, reason: "foreign_purpose" };
+
+    const predicate = predicateOf(e.condition);
+    if (
+        e.modality === CLOSURE_MODALITY &&
+        predicate === SERVICE_DAY_PREDICATES.grainClosed &&
+        (e.subjectKind === ATTENDANCE_SUBJECT_KINDS.site ||
+            e.subjectKind === ATTENDANCE_SUBJECT_KINDS.operationalGroup)
+    ) {
+        return { relevant: true, kind: "grain_closed" };
+    }
+    if (
+        e.modality === CHILD_AWAY_MODALITY &&
+        predicate === SERVICE_DAY_PREDICATES.childAway &&
+        e.subjectKind === ATTENDANCE_SUBJECT_KINDS.child
+    ) {
+        return { relevant: true, kind: "child_away" };
+    }
+    return { relevant: false, reason: "unsupported_semantics" };
 }
 
 /**
@@ -229,23 +299,22 @@ export function interpretServiceDay(input: {
     effective: readonly EffectiveExpectationForSubject[];
     unresolved?: readonly UnresolvedExpectationLineage[];
 }): ChildServiceDayExpectation[] {
-    const consumable = input.effective.filter(
-        (e) => expectationStandingIsConsumable(e.standing) && isInterpretablePurpose(e.condition),
-    );
-
     /*
+     * ONE eligibility decision per expectation, taken in one place.
+     *
      * Both the modality AND the predicate must match. The modality alone would
      * read a withdrawal — an `intended` expectation saying the child IS coming —
      * as another absence, so cancelling a holiday would leave the child marked
      * away forever. Matching the predicate is what makes a lineage able to say
      * the opposite of what it first said.
      */
-    const closures = consumable.filter(
-        (e) => e.modality === CLOSURE_MODALITY && predicateOf(e.condition) === SERVICE_DAY_PREDICATES.grainClosed,
-    );
-    const awayIntents = consumable.filter(
-        (e) => e.modality === CHILD_AWAY_MODALITY && predicateOf(e.condition) === SERVICE_DAY_PREDICATES.childAway,
-    );
+    const closures: EffectiveExpectationForSubject[] = [];
+    const awayIntents: EffectiveExpectationForSubject[] = [];
+    for (const e of input.effective) {
+        const relevance = serviceDayExpectationRelevance(e);
+        if (!relevance.relevant) continue;
+        (relevance.kind === "grain_closed" ? closures : awayIntents).push(e);
+    }
 
     const siteClosure = closures.find(
         (e) => e.subjectKind === ATTENDANCE_SUBJECT_KINDS.site && e.subjectId === input.siteLocationId,

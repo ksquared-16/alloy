@@ -91,7 +91,22 @@ describe("standing is stated, so no consumer has to guess", () => {
         // hard-codes "these are always proposed" breaks the day an operator is
         // granted a governed authority.
         expect(SERVICE_DAY_STANDING_CONTRACT.standingResolvedByLedger).toBe(true);
-        expect(SERVICE_DAY_STANDING_CONTRACT.standingWithoutGovernedAuthority).toBe("proposed");
+        expect(SERVICE_DAY_STANDING_CONTRACT.standingMayChangeWithGovernance).toBe(true);
+    });
+});
+
+describe("the contract states no standing VALUE a consumer could encode", () => {
+    it("names no standing at all", () => {
+        /*
+         * Both directions are wrong and both are tempting. "These are always
+         * proposed" invites a consumer to special-case them; "ignore anything not
+         * binding" makes every operator-authored absence vanish. The contract is
+         * about OWNERSHIP, so it carries no value to copy.
+         */
+        const values = Object.values(SERVICE_DAY_STANDING_CONTRACT).map(String);
+        for (const standing of ["proposed", "binding", "model"]) {
+            expect(values, `the contract hard-codes "${standing}"`).not.toContain(standing);
+        }
     });
 });
 

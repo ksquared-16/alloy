@@ -21,12 +21,16 @@ import type { ServiceDayState } from "@/lib/childcareOperational/attendance/serv
  *
  * Standing is not something this product chooses. The authoring RPC resolves it
  * from GOVERNED authority — a holder self-ratifies to `binding`, everyone else
- * lands `proposed` — so it is a property of who authored an act, not of what the
- * act said. Attendance authors under `user:<id>`, which names an individual and
- * not a governed authority, so in practice today everything it writes is
- * `proposed`. A consumer must not encode that as a rule: the day an operator is
- * granted a governed authority, the same command starts producing `binding` acts
- * without a line of this code changing.
+ * does not — so it is a property of WHO authored an act, not of what the act
+ * said, and it is owned by the Operational Expectations ledger.
+ *
+ * A consumer must therefore not encode a standing VALUE as a rule, in either
+ * direction: neither "attendance expectations are always proposed" nor "ignore
+ * anything that is not binding". Both are statements about today's governance
+ * configuration, and the day an organisation role is granted governed authority
+ * for closures they become false without a line of code changing.
+ *
+ * What a consumer may rely on is stated positively below.
  *
  * Standing is binding FORCE — whether someone is obliged. The roster asks a
  * different question ("is this child expected today?"), and an operator's sick
@@ -47,12 +51,19 @@ import type { ServiceDayState } from "@/lib/childcareOperational/attendance/serv
  */
 export const SERVICE_DAY_STANDING_CONTRACT = {
     /**
-     * What an act lands at when its author holds no governed authority — which is
-     * every act Attendance writes today. NOT a guarantee: the database decides.
+     * Standing is resolved by the ledger's authoring RPC from governed authority.
+     * This product neither chooses it nor rewrites it.
      */
-    standingWithoutGovernedAuthority: "proposed",
-    /** Standing comes from the authoring RPC, never from this product. */
     standingResolvedByLedger: true,
+    /**
+     * And it MAY CHANGE as governance evolves. This is the field that exists to
+     * stop a consumer writing `standing === "proposed"` into its own logic: the
+     * day an organisation role is granted governed authority for closures, the
+     * same command path starts producing stronger standing and nothing here
+     * changes. A consumer that encoded today's value would silently start
+     * behaving differently.
+     */
+    standingMayChangeWithGovernance: true,
     /** Consumers may read the interpretation at any standing. */
     interpretationIgnoresStanding: true,
     /** No consumer may treat a reading as proof that anyone was obliged. */
