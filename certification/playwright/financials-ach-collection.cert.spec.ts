@@ -261,10 +261,19 @@ async function seedCharge(page: Page, amountCents?: number): Promise<string> {
 
 /** Ask for a bank collection through the canonical action, exactly as the panel does. */
 async function collectByBank(page: Page, chargeId: string, cents: number) {
+    /*
+     * Never ask for more than the obligation still carries. The scenarios pick a distinct amount per
+     * run so their Stripe idempotency keys differ, and on a subject whose charge a previous scenario
+     * has partly settled that amount can exceed what is left — at which point the collection is
+     * refused for over-collecting, which is the product being right and the certification being
+     * careless. Clamping keeps the amount distinct where it can be and correct always.
+     */
+    const outstanding = outstandingOf(chargeId);
+    const amount = Math.max(1, Math.min(cents, outstanding));
     return await execute(page, {
         action_key: "payment.collect_card", entity_type: "child", entity_id: CERT_MEMBER,
         mode: "execute", confirmation: { confirmed: true },
-        payload: { charge_id: chargeId, amount_cents: cents, rail: "ach", charge_label: "8C" },
+        payload: { charge_id: chargeId, amount_cents: amount, rail: "ach", charge_label: "8C" },
     });
 }
 
@@ -706,7 +715,9 @@ test.describe("Thread 8C — bank collection in the mounted product", () => {
         const chargeId = await seedCharge(page);
 
         // A CARD that demands a challenge.
-        const cardAmount = nextAmount();
+        // Clamped like the bank leg: the shared obligation may already be part settled, and a
+        // request for more than is owed is refused for over-collecting — correctly.
+        const cardAmount = Math.max(1, Math.min(nextAmount(), outstandingOf(chargeId)));
         const card = await execute(page, {
             action_key: "payment.collect_card", entity_type: "child", entity_id: CERT_MEMBER,
             mode: "execute", confirmation: { confirmed: true },
