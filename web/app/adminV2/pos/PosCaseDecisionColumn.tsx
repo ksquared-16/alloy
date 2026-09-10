@@ -78,7 +78,13 @@ export default function PosCaseDecisionColumn({ state }: { state: PosCaseState }
     const submitted = evidence.flatMap((e) => e.proposedValues).map((v) => ({ label: v.label, value: v.value ?? null }));
     const matchedCards =
         rec?.supported && rec.recommendation
-            ? buildMatchedRecords({ recommendation: rec.recommendation, intent: rec.intent ?? null, submitted })
+            ? buildMatchedRecords({
+                  recommendation: rec.recommendation,
+                  intent: rec.intent ?? null,
+                  submitted,
+                  // Without this the rail told the operator approval would create a second child.
+                  authoritativeSubject: rec.authoritativeSubject ?? null,
+              })
             : [];
     const planLines = matchedCards.length ? buildCommitPlanLines(matchedCards) : [];
 

@@ -32,6 +32,18 @@ export interface RecommendationView {
     intent?: OperationalIntentKey | null;
     /** Identifying detail per existing-match candidate (§3), keyed by candidate id. */
     candidateDetails?: CandidateDetail[];
+    /**
+     * The child this paperwork was sent for, when the session was launched against one.
+     *
+     * Present only for a targeted existing-record return. Its absence is what tells the surface it
+     * is looking at an untargeted intake, where creation really is the right proposal.
+     */
+    authoritativeSubject?: {
+        customerMemberId: string;
+        customerId: string | null;
+        displayName: string | null;
+        dob: string | null;
+    } | null;
     source?: { kind: string; hasEmailBinding: boolean; mappedPersonValues: number };
 }
 

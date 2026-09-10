@@ -48,7 +48,7 @@ export async function loadRelatedRecordProposalForCase(args: {
     for (const entry of submissions) {
         const { data: sub, error: subError } = await args.supabase
             .from("form_submissions")
-            .select("id, payload, form_definition_version_id, customer_id")
+            .select("id, payload, form_definition_version_id, customer_id, customer_member_id")
             .eq("org_id", args.orgId)
             .eq("id", entry.submissionId)
             .maybeSingle();
@@ -58,6 +58,7 @@ export async function loadRelatedRecordProposalForCase(args: {
             payload: Record<string, unknown> | null;
             form_definition_version_id: string | null;
             customer_id: string | null;
+            customer_member_id: string | null;
         } | null;
         if (!subRow) continue;
 
@@ -88,6 +89,14 @@ export async function loadRelatedRecordProposalForCase(args: {
                 packetSessionId: entry.packetSessionId,
                 packetStepIndex: entry.stepIndex,
                 formName: entry.formName,
+                /*
+                 * The submission's own subject is the authoritative one. It is stamped at submit
+                 * time from the session that was launched against that child, so it is stronger
+                 * evidence than anything re-inferred here.
+                 */
+                subject: subRow.customer_member_id
+                    ? { customerMemberId: subRow.customer_member_id, customerId: subRow.customer_id }
+                    : null,
                 accessibleExistingItemIds: accessibleIds,
             },
         );

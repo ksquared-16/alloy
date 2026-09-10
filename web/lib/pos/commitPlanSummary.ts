@@ -24,7 +24,17 @@ export function buildCommitPlanLines(cards: MatchedRecordCard[]): CommitPlanLine
             else if (c.basisTone === "review") lines.push({ text: "Resolve the parent match before linking", tone: "review" });
             else lines.push({ text: `Create ${c.name ?? "a new parent"}`, tone: "create" });
         } else if (c.role === "child") {
-            lines.push({ text: `Create ${c.name ?? "the child"} as a new child`, tone: "create" });
+            /*
+             * A matched child is the child this paperwork was sent for. Saying "create" about them
+             * describes a duplicate the operator did not ask for and would not want.
+             */
+            if (c.basisTone === "match") {
+                lines.push({ text: `Update ${c.name ?? "the existing child"}`, tone: "link" });
+            } else if (c.basisTone === "review") {
+                lines.push({ text: "Resolve the child match before continuing", tone: "review" });
+            } else {
+                lines.push({ text: `Create ${c.name ?? "the child"} as a new child`, tone: "create" });
+            }
         } else {
             const noun = c.title.toLowerCase();
             if (c.basisTone === "review") lines.push({ text: `Hold the ${noun} for review — nothing is created yet`, tone: "review" });

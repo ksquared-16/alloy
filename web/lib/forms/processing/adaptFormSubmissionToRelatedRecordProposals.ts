@@ -29,6 +29,10 @@ import {
     stableRelatedRecordProposalId,
     worstRelatedRecordProposalStatus,
 } from "@/lib/intake/proposals/normalize";
+import {
+    adaptTopLevelFieldsToRelatedRecordProposals,
+    type AuthoritativeSubject,
+} from "@/lib/forms/processing/adaptTopLevelFieldsToRelatedRecordProposals";
 
 export type AdaptFormSubmissionProposalsContext = {
     formSubmissionId: string;
@@ -45,6 +49,13 @@ export type AdaptFormSubmissionProposalsContext = {
      */
     packetStepIndex?: number | null;
     formName?: string | null;
+    /**
+     * The record this session was deliberately launched against, when it was.
+     *
+     * Present for a targeted existing-record return (a packet or a single Form launched at a known
+     * child); absent for public intake, where there is no existing record to propose against.
+     */
+    subject?: AuthoritativeSubject | null;
     /** Pre-verified existing item ids in org (optional read-time security). */
     accessibleExistingItemIds?: ReadonlySet<string>;
 };
@@ -206,6 +217,12 @@ function buildInstanceProposal(args: {
     };
 }
 
+/** Top-level answers as authored, independent of the collection envelope. */
+function valuesFromPayload(payload: FormPayload | null | undefined): Record<string, unknown> {
+    const raw = (payload as { values?: unknown } | null | undefined)?.values;
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+}
+
 export function adaptFormSubmissionToRelatedRecordProposals(
     schema: FormSchemaV1 | null,
     payload: FormPayload | null | undefined,
@@ -219,11 +236,24 @@ export function adaptFormSubmissionToRelatedRecordProposals(
         return { collections: [], diagnostics };
     }
 
+    /*
+     * TOP-LEVEL CANONICAL ANSWERS, FOR THE SUBJECT THE SESSION NAMES.
+     *
+     * Computed before the group walk and independently of it: a Form with no collection group at
+     * all still returns canonical facts about a known child, and that is the shape the real
+     * enrolment Forms actually use. Without this the whole bundle came back empty for them.
+     */
+    const topLevel = adaptTopLevelFieldsToRelatedRecordProposals(schema, valuesFromPayload(payload), {
+        formSubmissionId: ctx.formSubmissionId,
+        subject: ctx.subject ?? null,
+    });
+    diagnostics.push(...topLevel.diagnostics);
+
     if (envelope.source === "none") {
-        return { collections: [], diagnostics };
+        return { collections: topLevel.collection ? [topLevel.collection] : [], diagnostics };
     }
 
-    const collections: RelatedRecordCollectionProposal[] = [];
+    const collections: RelatedRecordCollectionProposal[] = topLevel.collection ? [topLevel.collection] : [];
 
     for (const field of schema.fields) {
         if (field.type !== "group" || !groupFieldHasCollectionBinding(field)) continue;
