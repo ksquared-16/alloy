@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolvePublishedPacketVersion } from "@/lib/forms/packets/versioning/resolvePublishedPacketVersion";
 import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { carryForwardSharedValues } from "@/lib/forms/packets/carryForwardSharedValues";
@@ -404,6 +405,39 @@ export async function ensurePacketSessionForPublicLink(
             };
         }
         resolvedVersionByItemId.set(di.id, envelope.formDefinitionVersionId);
+    }
+
+    /*
+     * PIN THE PACKET VERSION THIS SESSION STARTED ON.
+     *
+     * The per-step Form versions above are already immutable for this session (D-94). This records
+     * the packet-level snapshot they add up to, so an operator can say WHICH packet version a family
+     * is on, and so a later derivation that differs is visibly a new version rather than an
+     * unexplained change.
+     *
+     * Deliberately non-fatal: before the migration reaches an environment this resolves to null and
+     * the session is created exactly as it is today, unpinned. A packet must not stop working
+     * because a versioning table has not arrived yet.
+     */
+    const packetVersion = await resolvePublishedPacketVersion(supabase, {
+        orgId,
+        packetDefinitionId,
+        steps: defItems.map((di) => ({
+            sequence_index: di.sequence_index,
+            form_definition_id: di.form_definition_id,
+            form_definition_version_id: resolvedVersionByItemId.get(di.id) ?? null,
+        })),
+    });
+    if (packetVersion) {
+        const { error: pinErr } = await supabase
+            .from("form_packet_sessions")
+            .update({ packet_definition_version_id: packetVersion.id })
+            .eq("id", sess.id)
+            .eq("org_id", orgId);
+        // A failed pin is not worth losing the session over; the step pins still govern execution.
+        if (pinErr && !/does not exist|schema cache/i.test(pinErr.message)) {
+            console.warn(`[packet] could not pin packet version for session ${sess.id}: ${pinErr.message}`);
+        }
     }
 
     const sessionItemsPayload = defItems.map((di, idx) => ({

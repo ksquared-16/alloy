@@ -31,7 +31,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const { data: items, error: iErr } = await supabase
         .from("form_packet_session_items")
-        .select("id, sequence_index, status, submitted_at, form_submission_id, packet_item_id, skip_reason")
+        .select(
+            "id, sequence_index, status, submitted_at, form_submission_id, packet_item_id, skip_reason, resolved_form_definition_version_id",
+        )
         .eq("packet_session_id", packetSessionId)
         .eq("org_id", ctx.orgId)
         .order("sequence_index", { ascending: true });
@@ -68,15 +70,48 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         }
     }
 
+    /*
+     * WHICH VERSION THIS PARTICIPANT IS ACTUALLY ON.
+     *
+     * The step already pins `resolved_form_definition_version_id` at session realization and keeps
+     * it for the session's whole life — but nothing showed it, so an operator looking at a live
+     * session could not tell which version of the paperwork the family is filling, and had no way
+     * to know that publishing a new Form version would leave them untouched. That is the question
+     * this panel exists to answer, so the version NUMBER travels with each step.
+     */
+    const resolvedVersionIds = [
+        ...new Set(
+            (items ?? [])
+                .map((r) => (r as { resolved_form_definition_version_id?: string | null }).resolved_form_definition_version_id)
+                .filter((x): x is string => Boolean(x)),
+        ),
+    ];
+    const versionNumbers: Record<string, number> = {};
+    if (resolvedVersionIds.length > 0) {
+        const { data: vers, error: vErr } = await supabase
+            .from("form_definition_versions")
+            .select("id, version_number")
+            .in("id", resolvedVersionIds)
+            .eq("org_id", ctx.orgId);
+        if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
+        for (const row of vers ?? []) {
+            const r = row as { id: string; version_number: number };
+            versionNumbers[r.id] = r.version_number;
+        }
+    }
+
     const enriched = (items ?? []).map((it: Record<string, unknown>) => {
         const pid = it.packet_item_id as string;
         const fdid = defItems[pid]?.form_definition_id;
         const fname = fdid ? formNames[fdid] : undefined;
+        const vid = (it.resolved_form_definition_version_id as string | null) ?? null;
         return {
             ...it,
             form_definition_id: fdid ?? null,
             form_name: fname?.name ?? null,
             form_key: fname?.key ?? null,
+            // Operator-facing: "Version 5 of this form", not a uuid.
+            form_version_number: vid ? (versionNumbers[vid] ?? null) : null,
         };
     });
 
