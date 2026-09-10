@@ -15,6 +15,7 @@
  * That ordering is the point: Enrollment completion must never depend on model uptime.
  */
 
+import { answerParticipantQuestion } from "@/lib/enrollment/participantRuntime/answerParticipantQuestion";
 import { participantSubjectFromSession } from "@/lib/public/forms/participantSubjectFromSession";
 import { NextRequest } from "next/server";
 
@@ -319,6 +320,47 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // value, and vanishes on any outcome that actually moved the objective.
         ...(clarificationPrompt && (applied.disposition.action === "no_change" || applied.disposition.action === "refused")
             ? { clarification: clarificationPrompt }
+            : {}),
+        /*
+         * THE PARENT ASKED SOMETHING.
+         *
+         * Answered from the objective this turn already resolved — the same numbers driving the
+         * screen — and carried on the existing presentation channel, so the answer appears as
+         * Alloy's next line while the SAME deterministic turn and controls stand. Nothing was
+         * written; see the write boundary in applyParticipantTurnResponse.
+         */
+        ...(applied.disposition.action === "answer_question"
+            ? {
+                  clarification: answerParticipantQuestion({
+                      question: applied.disposition.question,
+                      objective: applied.objective,
+                      subjectDisplayName: canonical.subjectDisplayName,
+                      /*
+                       * What Alloy actually holds, named the way the parent will recognise it.
+                       *
+                       * Derived from the objective's own settled needs rather than a second lookup,
+                       * so "what do you already have" and the ticks on screen cannot disagree. Live
+                       * QA caught the alternative: with nothing passed, the answer claimed nothing
+                       * was on file for a child whose name and date of birth were already prefilled.
+                       */
+                      knownLabels: (applied.objective.needs?.needs ?? [])
+                          /*
+                           * The three states that mean Alloy HOLDS this fact: it came off the
+                           * record (`known`), it came off the record and wants checking
+                           * (`known_requires_confirmation`), or the parent has since confirmed it
+                           * (`confirmed`). `missing` is what we are asking for and `declined` is a
+                           * settled blank — neither is something we have.
+                           */
+                          .filter(
+                              (n) =>
+                                  n.state === "known"
+                                  || n.state === "known_requires_confirmation"
+                                  || n.state === "confirmed",
+                          )
+                          .map((n) => (n.occurrences?.[0]?.label ?? "").trim())
+                          .filter(Boolean),
+                  }).text,
+              }
             : {}),
         /**
          * The platform's OWN clarification — deterministic, and never the provider's.

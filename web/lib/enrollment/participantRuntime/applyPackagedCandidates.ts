@@ -169,6 +169,13 @@ export async function applyPackagedCandidates(
             case "decline_value":
                 outcomes.push({ need_key: answer.need_key, result: "settled" });
                 break;
+            /*
+             * One of a batch of answers turned out to be a question. It settles nothing and writes
+             * nothing — the need stays open and the parent is answered on the conversational path.
+             */
+            case "answer_question":
+                outcomes.push({ need_key: answer.need_key, result: "no_change", detail: "question" });
+                break;
             default:
                 outcomes.push({ need_key: answer.need_key, result: "no_change", detail: d.reason });
         }

@@ -111,6 +111,15 @@ export const STRUCTURED_CANDIDATE_KINDS = [
     "clarification_needed",
     /** The participant used the optional way out. There is no value, and that is the answer. */
     "declined",
+    /**
+     * THE WORDS WERE A QUESTION, NOT AN ANSWER.
+     *
+     * Free text on a collect turn is normally taken whole — "a plain answer to a plain question is
+     * the answer". A parent asking "What do I still need to do?" had that written as their child's
+     * emergency contact first name. This kind exists so the runtime can tell the difference and
+     * write NOTHING; the participant is answered and asked again.
+     */
+    "question",
 ] as const;
 
 export type StructuredCandidateKind = (typeof STRUCTURED_CANDIDATE_KINDS)[number];
@@ -158,6 +167,15 @@ export type CandidateDisposition =
           /** The value already on file, when this is a disagreement rather than a typo. */
           readonly existing?: unknown;
       }
+    /**
+     * THE PARENT ASKED SOMETHING — answer them, and write nothing.
+     *
+     * Distinct from every other action here in one respect that matters: it is the only outcome the
+     * runtime reaches while the participant's words are still on screen and the active need is
+     * untouched. No candidate, no pending value, nothing to confirm later. The same turn is offered
+     * again afterwards, because they still have to answer it.
+     */
+    | { readonly action: "answer_question"; readonly question: string }
     | { readonly action: "refused"; readonly reason: string };
 
 /** Parse anything claiming to be a provider candidate. Unrecognized shapes become `unresolved`. */
