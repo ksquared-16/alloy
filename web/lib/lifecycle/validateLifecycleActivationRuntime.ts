@@ -149,6 +149,17 @@ export type LifecycleActivationCheckId =
     | "dept_no_legacy_pipeline_lanes"
     | "drawer_actions"
     | "lifecycle_visibility_ui_parity"
+    /*
+     * Participant-facing readiness. The rest of this union asks whether the process is ready for
+     * STAFF; these ask whether a family can complete what a stage requires. Same surface, different
+     * question — and the surface reported HEALTHY for a stage requiring four forms without ever
+     * asking the second one. @see participantPaperworkReadiness
+     */
+    | "participant_work_exists"
+    | "participant_forms_resolve"
+    | "participant_forms_published"
+    | "participant_uploads_classified"
+    | "participant_signature_placement"
     | "needs_attention_optional";
 
 export type LifecycleActivationCheckResult = {

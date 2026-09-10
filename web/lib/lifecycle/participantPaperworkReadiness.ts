@@ -174,3 +174,24 @@ export function participantPaperworkHeadline(checks: readonly ParticipantReadine
     const failing = checks.filter((c) => !c.pass).length;
     return failing === 0 ? "READY TO USE" : `NEEDS SETUP — ${failing} ITEM${failing === 1 ? "" : "S"}`;
 }
+
+/**
+ * How each participant row is named on the shared activation checklist.
+ *
+ * Two vocabularies meet here — this module's own ids and the activation check union — so the
+ * mapping is stated once rather than spelled out at the call site.
+ */
+export const PARTICIPANT_CHECK_ID_BY_READINESS_ID: Record<
+    ParticipantReadinessCheckId,
+    | "participant_work_exists"
+    | "participant_forms_resolve"
+    | "participant_forms_published"
+    | "participant_uploads_classified"
+    | "participant_signature_placement"
+> = {
+    participant_work_exists: "participant_work_exists",
+    required_forms_resolve: "participant_forms_resolve",
+    required_forms_published: "participant_forms_published",
+    upload_requests_classified: "participant_uploads_classified",
+    signature_can_be_placed: "participant_signature_placement",
+};
