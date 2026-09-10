@@ -42,13 +42,47 @@ The chain, verified line by line:
 **What an anonymous caller obtains:** confirmation that a given email address exists as a contact
 in *some* tenant; mutation of that contact's type, fields and metadata; and its real UUID.
 
-**Why it was not repaired here.** The missing predicate is in `web/lib/supabase.ts`, a shared
-helper with other callers. Adding an `org_id` filter changes every one of them, and doing that
-without tests that establish each caller's legitimate scope risks breaking working paths while
-appearing to fix a security bug. That is implementation work with its own certification — it is
-exactly the boundary the mission's stop condition draws.
+### Triage result — the repair IS bounded (correcting this document's first assessment)
 
-**This should be triaged before anything else in this document, and independently of Thread 3.**
+This document initially said the predicate lived in "a shared helper with other callers", and that
+adding an `org_id` filter would ripple. **That was inferred rather than checked, and it is wrong.**
+
+Repo-wide, the four org-blind helpers have **exactly one caller**:
+
+| Helper | Call sites outside `web/lib/supabase.ts` |
+|---|---|
+| `findContactByEmail` | `leads/gutters/route.ts:63` — only |
+| `findContactByPhone` | `leads/gutters/route.ts:71` — only |
+| `updateContact` | `leads/gutters/route.ts:109` — only |
+| `createContact` | `leads/gutters/route.ts:114` — only |
+| `findContactByEmailOrPhone` | **none — dead code** |
+
+(`updateContactArray` and `createContactBlock` are unrelated functions that match a naive grep.)
+
+**And the create path is already broken.** `contacts.org_id` is `NOT NULL` with **no default**
+(confirmed in the migration and in the generated schema reference), and `createContact` never
+supplies it — so an insert throws. The only path that currently *succeeds* is the update path,
+which is the cross-tenant one.
+
+Supporting context: the route was last touched **2026-05-02**, belongs to the *gutters* vertical
+rather than childcare, and archived documentation describes it as legacy compatibility. No test
+covers it.
+
+### Two bounded repairs, and the choice is a product decision
+
+**Option A — scope it.** Resolve the org at the top of the route (it already reads
+`ALLOY_PUBLIC_ORG_ID`, but only at `:169`, *after* the write) and pass it into all four helpers as
+a filter. Closes the hole, keeps the route alive, reversible. Also requires adding `org_id` to
+`createContact`, which would incidentally fix the broken create path.
+
+**Option B — retire the route.** It is the sole caller of all four helpers, so retiring it removes
+five functions and the vulnerability outright rather than narrowing it. But
+`web/components/gutters/GutterLeadForm.tsx:104` still POSTs to it, so this needs someone to
+confirm the gutters vertical is no longer a live product.
+
+**Recommendation: Option A now, Option B as a follow-up if gutters is dead.** A is safe,
+reversible, and does not require a product judgement; B is cleaner but cannot be decided from the
+repository alone.
 
 ## P0-0 · Arbitrary-table raw write, driven by org configuration, reachable unauthenticated
 
