@@ -19,9 +19,21 @@ self.addEventListener("push", (event) => {
   const path = String(data.path || (laneId ? `/#/lanes/${encodeURIComponent(laneId)}` : "/#/lanes"));
   event.waitUntil(self.registration.showNotification(title, {
     body,
+    // TAG ON THE DURABLE SUBJECT, NOT THE LANE.
+    //
+    // A lane tag collapses every event for that lane onto one notification, so
+    // a question and a completion for the same lane replace each other and the
+    // operator only ever sees the last one to land. The subject key is the
+    // durable identity of ONE event, so a repeat of the same event replaces
+    // itself — which is what dedupe should mean — while two genuinely
+    // different obligations coexist. Because the identity comes from the
+    // record rather than from memory in this worker, it still holds after a
+    // service-worker restart, a reconnect or a reload.
     tag: data.type === "vacilando.test"
       ? "vacilando-test"
-      : (laneId ? `lane:${laneId}` : "vacilando-lane"),
+      : (data.subject_key
+        ? `subject:${data.subject_key}`
+        : (laneId ? `lane:${laneId}` : "vacilando-lane")),
     data: { path, lane_id: laneId || null },
   }));
 });

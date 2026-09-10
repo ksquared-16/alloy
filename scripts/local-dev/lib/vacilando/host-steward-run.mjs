@@ -491,6 +491,11 @@ export async function runResidentRecoveryStage({
     return { ok: false, error: "observation_failed", detail: String(e?.message || e) };
   }
 
+  // An episode is closed by EVIDENCE that the condition is gone, whoever
+  // removed it. Without this, only a Steward-performed repair could ever end
+  // one, so a drift fixed by a governed install stayed "active" indefinitely.
+  try { R.reconcileEpisodeAgainstObservation(observation, { root, nowMs }); } catch { /* posture is not worth failing a cycle for */ }
+
   const plan = R.planRecovery(observation, { root, nowMs });
   const base = {
     ok: true,

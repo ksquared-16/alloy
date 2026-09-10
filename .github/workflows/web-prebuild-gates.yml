@@ -20,12 +20,24 @@
 # It does not replace or weaken the protected-ref build, which still runs this
 # same chain before `next build`. This is an earlier copy of that verdict, not a
 # substitute for it.
+#
+# NO `paths:` FILTER, DELIBERATELY. This is a REQUIRED status check, and GitHub
+# holds a pull request at "Expected — waiting for status to be reported" when a
+# required check never reports. A path-filtered required check therefore blocks
+# every pull request that does not touch those paths, permanently: docs-only
+# changes, certification/ work, and every scripts/local-dev toolkit promotion.
+# Vacilando cannot even explain the stall — `summarizeCheckRollup` classifies
+# only checks that actually reported, so a never-reported required check counts
+# 2 of 3 and appears in neither `failing` nor `pending`.
+#
+# The two required checks that came before this one, `Trust Adoption
+# certification` and `Trust DB certification`, both use a bare
+# `on: pull_request` for exactly this reason. This follows them. Running the
+# chain on every pull request costs about a minute; Trust DB provisions a
+# Postgres on every pull request, so the proportion is already settled.
 name: Web prebuild gates
 on:
   pull_request:
-    paths:
-      - "web/**"
-      - ".github/workflows/web-prebuild-gates.yml"
 
 defaults:
   run:

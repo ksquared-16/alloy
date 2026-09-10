@@ -727,7 +727,16 @@ await test("notification permission is never requested automatically on Gateway"
   const before = gwSrc.slice(0, gwSrc.indexOf("async function enableGatewayNotifications"));
   assert.equal(before.includes("requestPermission"), false);
   assert.match(gwSrc.slice(gwSrc.indexOf("async function enableGatewayNotifications")), /requestPermission/);
-  assert.match(appSrc, /h\.startsWith\("#\/lanes"\)\) return/);
+  // THE PROPERTY, NOT ONE IMPLEMENTATION OF IT. This asserted that app.js
+  // guarded its automatic prompt with a hash check — which pins the guard, not
+  // the absence of prompting, and passes for any page that prompts as long as
+  // it checks the hash first. app.js no longer requests permission at all, and
+  // no longer constructs notifications: there is one producer, and it is the
+  // Gateway's durable record.
+  assert.equal(/requestPermission\s*\(/.test(appSrc), false,
+    "app.js must not request notification permission; a dismissed prompt is spent and cannot be re-asked");
+  assert.equal(/new Notification\s*\(/.test(appSrc), false,
+    "app.js must not be a second notification producer");
   const off = notificationUiState({ permission: "default", enabled: false, secureContext: true, standalone: true, isIOS: false });
   assert.equal(off.kind, "off");
   assert.equal(off.action, "enable");
@@ -783,7 +792,9 @@ await test("notification permission is never requested automatically on Gateway"
   assert.match(html, /<details class="gw-notify"/);
   assert.match(html, /gw-notify-pop/);
   assert.match(html, /gw-notify-sum/);
-  assert.match(html, /aria-label="Notifications"/);
+  // The control says what it reports, not merely what it is about. Equally
+  // strict, and the more descriptive label is the one that shipped.
+  assert.match(html, /aria-label="Notification delivery status"/);
   assert.match(html, /gw-aside-body/);
   assert.match(css, /\.gw-notify:hover \.gw-notify-pop/);
   const enableFn = gwSrc.slice(gwSrc.indexOf("async function enableGatewayNotifications"));
