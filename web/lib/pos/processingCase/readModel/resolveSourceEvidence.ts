@@ -54,6 +54,27 @@ export interface ProposedValue {
     canonicalCurrentValue?: string | null;
     classification?: ReturnedValueClassification;
     refusalReason?: string | null;
+    /**
+     * WHETHER THE FAMILY ACTUALLY FINISHED THIS STEP, AND WHAT THEY SIGNED.
+     *
+     * Read from `form_packet_session_items.status` — the authoritative record of the step — never
+     * inferred from whether values happen to be present. A half-finished step can carry values, and
+     * a finished one can carry almost none; guessing from the values would tell an operator a step
+     * was done when it was abandoned.
+     *
+     * `sourceDocumentId` is the artifact that step produced, so the operator can open the paperwork
+     * rather than read a uuid.
+     */
+    sourceStepStatus?: string | null;
+    sourceDocumentId?: string | null;
+    sourceDocumentName?: string | null;
+    /**
+     * The document an upload answer points at.
+     *
+     * Set instead of `value` for a `file_ref` field, because the stored answer is a document id and
+     * printing it hands the operator a uuid where the artifact should be.
+     */
+    attachedDocumentId?: string | null;
 }
 
 /** Raw evidence a per-kind loader returns for one source id. */

@@ -13,6 +13,7 @@ import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
 import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
+import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/forms/formsAdminDb";
 import type { ProcessingCollectionGroupEvidence } from "@/lib/pos/processingCase/collection/types";
 import { classifyReturnedValue } from "@/lib/pos/processingCase/returnClassification/classifyReturnedValue";
 import {
@@ -45,11 +46,22 @@ function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unkn
     for (const field of parsed.data.fields) {
         if (field.type === "group") continue;
         if (!Object.prototype.hasOwnProperty.call(values, field.id)) continue;
+        /*
+         * AN UPLOAD'S VALUE IS A DOCUMENT, NOT A STRING.
+         *
+         * A `file_ref` answer stores the document's id, and printing it put a bare uuid in front of
+         * the operator as the value of "Immunization or vaccination record" — the raw id as the
+         * primary interaction, which is exactly what an operator cannot act on. Carrying it as a
+         * document reference instead lets the review surface offer the artifact by name.
+         */
+        const isUpload = field.type === "file_ref";
+        const raw = stringifyValue(values[field.id]);
         out.push({
             label: field.label,
-            value: stringifyValue(values[field.id]),
+            value: isUpload ? null : raw,
             entityType: field.field_source?.entity_type ?? null,
             fieldKey: field.field_source?.field_key ?? null,
+            ...(isUpload && raw ? { attachedDocumentId: raw } : {}),
         });
     }
     return out;
@@ -171,7 +183,7 @@ function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): Sour
 
         const { data: items } = await supabase
             .from("form_packet_session_items")
-            .select("packet_session_id, form_submission_id, sequence_index")
+            .select("packet_session_id, form_submission_id, sequence_index, status")
             .eq("org_id", orgId)
             .in("packet_session_id", sessionIds)
             .order("sequence_index", { ascending: true });
@@ -179,6 +191,7 @@ function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): Sour
             packet_session_id: string;
             form_submission_id: string | null;
             sequence_index: number | null;
+            status: string | null;
         }[];
 
         const submissionIds = [
@@ -221,6 +234,24 @@ function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): Sour
             }
         }
 
+        /*
+         * The artifact each step produced.
+         *
+         * An operator reviewing a returned packet needs to open the paperwork the family signed, and
+         * the signed PDF is linked to the submission rather than to the session. Loading it here means
+         * the grouped view can offer "View signed document" instead of a document id the operator
+         * would have to look up.
+         */
+        const docBySubmission = new Map<string, { id: string; name: string | null }>();
+        if (submissionIds.length > 0) {
+            const linked = await dbListSubmissionLinkedDocumentsForSubmissionIds(supabase, orgId, submissionIds);
+            for (const [sid, docs] of Object.entries(linked.data ?? {})) {
+                // The generated, signed rendering is the one an operator means by "the paperwork".
+                const signed = docs.find((d) => d.role === "generated_pdf") ?? docs[0];
+                if (signed) docBySubmission.set(sid, { id: signed.document.id, name: signed.document.name });
+            }
+        }
+
         for (const item of itemRows) {
             if (!item.form_submission_id) continue;
             const ev = submissionEvidence.get(item.form_submission_id);
@@ -236,11 +267,16 @@ function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): Sour
             ];
             // Each value keeps the form, step and submission it came from, so a coordinator's
             // merged list can still be read as the several forms it actually is.
+            const doc = docBySubmission.get(item.form_submission_id);
             const stamped = ev.proposedValues.map((v) => ({
                 ...v,
                 sourceFormName: formNameBySubmission.get(item.form_submission_id as string) ?? null,
                 sourceStepIndex: item.sequence_index ?? null,
                 sourceSubmissionId: item.form_submission_id,
+                // The step's OWN status, not a guess from whether values are present.
+                sourceStepStatus: item.status ?? null,
+                sourceDocumentId: doc?.id ?? null,
+                sourceDocumentName: doc?.name ?? null,
             }));
             out.set(item.packet_session_id, {
                 proposedValues: [...current.proposedValues, ...stamped],

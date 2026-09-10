@@ -38,6 +38,49 @@ function displaySubmittedValue(value: string | null): string {
     return ISO_DATE_RE.test(v) ? formatDisplayDate(v) : v;
 }
 
+/**
+ * The step's own status, said the way a coordinator says it.
+ *
+ * These come from `form_packet_session_items.status` — what the step actually recorded — rather
+ * than from whether any values happen to be present. A family who abandons a step halfway still
+ * leaves values behind, and calling that "Completed" would be a lie an operator acts on.
+ */
+const PACKET_STEP_STATUS_LABELS: Record<string, string> = {
+    submitted: "Completed",
+    completed: "Completed",
+    in_progress: "In progress",
+    pending: "Not started",
+    skipped: "Skipped",
+};
+
+/**
+ * How a returned form reads to the person reviewing it.
+ *
+ * The order is the order of attention: what needs a decision first, what is merely on file last.
+ * "Confirmed" exists so the operator can SEE that the family checked those facts without being
+ * asked to approve a change that is not one.
+ */
+const RETURN_SECTIONS: { key: string; title: string; match: (c: string | undefined) => boolean }[] = [
+    { key: "changes", title: "Changes to review", match: (c) => c === "changed" },
+    { key: "new", title: "New information", match: (c) => c === "new" },
+    { key: "refused", title: "Needs resolution", match: (c) => c === "refused" },
+    { key: "confirmed", title: "Confirmed — already on file", match: (c) => c === "unchanged" },
+    { key: "form_only", title: "On the form only", match: (c) => c === "form_only" },
+    // Anything unclassified (a source whose owner could not be read) still renders.
+    { key: "other", title: "Submitted values", match: (c) => c === undefined },
+];
+
+/** Open a step's paperwork through the existing signed-url path. No blob is copied anywhere. */
+async function openStepDocument(documentId: string): Promise<void> {
+    try {
+        const res = await fetch(`/api/admin/documents/${documentId}/signed-url`, { credentials: "same-origin" });
+        const body = (await res.json()) as { signedUrl?: string };
+        if (body.signedUrl) window.open(body.signedUrl, "_blank", "noopener");
+    } catch {
+        /* The link simply does not open; the review screen stays usable. */
+    }
+}
+
 export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
     const { detail, evidence, rec, recLoading, loading, error, reload } = state;
 
@@ -75,7 +118,15 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
     const submittedGroups = (() => {
         const byKey = new Map<
             string,
-            { key: string; formName: string | null; stepIndex: number | null; values: typeof submitted }
+            {
+                key: string;
+                formName: string | null;
+                stepIndex: number | null;
+                stepStatus: string | null;
+                documentId: string | null;
+                documentName: string | null;
+                values: typeof submitted;
+            }
         >();
         for (const v of submitted) {
             const key = v.sourceSubmissionId ?? v.sourceFormName ?? "__single__";
@@ -86,6 +137,9 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                     key,
                     formName: v.sourceFormName ?? null,
                     stepIndex: v.sourceStepIndex ?? null,
+                    stepStatus: v.sourceStepStatus ?? null,
+                    documentId: v.sourceDocumentId ?? null,
+                    documentName: v.sourceDocumentName ?? null,
                     values: [v],
                 });
         }
@@ -140,10 +194,10 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                           * provenance and renders exactly as before.
                           */}
                         {submittedGroups.map((group) => (
-                            <div key={group.key} className="mb-2 last:mb-0">
+                            <div key={group.key} className="mb-3 last:mb-0">
                                 {group.formName ? (
                                     <div
-                                        className="mb-1 flex items-baseline gap-2 text-[11.5px] font-semibold text-alloy-midnight"
+                                        className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[11.5px] font-semibold text-alloy-midnight"
                                         data-submitted-form-group={group.formName}
                                     >
                                         <span>{group.formName}</span>
@@ -152,18 +206,74 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                                                 Step {group.stepIndex + 1}
                                             </span>
                                         ) : null}
+                                        {group.stepStatus ? (
+                                            <span
+                                                className="rounded-full bg-alloy-bend-pine/10 px-1.5 py-0.5 text-[10px] font-medium text-alloy-bend-pine"
+                                                data-step-status={group.stepStatus}
+                                            >
+                                                {PACKET_STEP_STATUS_LABELS[group.stepStatus] ?? group.stepStatus}
+                                            </span>
+                                        ) : null}
+                                        {group.documentId ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => void openStepDocument(group.documentId!)}
+                                                className="text-[10.5px] font-medium text-alloy-juniper underline underline-offset-2"
+                                                data-step-document={group.documentId}
+                                            >
+                                                {/* The paperwork by name, never the id it is stored under. */}
+                                                View {group.documentName ?? "signed document"}
+                                            </button>
+                                        ) : null}
                                     </div>
                                 ) : null}
-                                <dl className="space-y-1.5">
-                                    {group.values.map((v, i) => (
-                                        <div key={`${v.label}:${i}`} className="flex gap-2 text-[12.5px]">
-                                            <dt className="w-40 shrink-0 text-stone-500">{v.label}</dt>
-                                            <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">
-                                                {displaySubmittedValue(v.value)}
-                                            </dd>
+                                {RETURN_SECTIONS.map((section) => {
+                                    const rows = group.values.filter((v) => section.match(v.classification));
+                                    if (rows.length === 0) return null;
+                                    return (
+                                        <div key={section.key} className="mb-1.5 last:mb-0" data-return-section={section.key}>
+                                            <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                                                {section.title}
+                                            </div>
+                                            <dl className="space-y-1.5">
+                                                {rows.map((v, i) => (
+                                                    <div key={`${v.label}:${i}`} className="flex gap-2 text-[12.5px]">
+                                                        <dt className="w-40 shrink-0 text-stone-500">{v.label}</dt>
+                                                        <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">
+                                                            {v.attachedDocumentId ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => void openStepDocument(v.attachedDocumentId!)}
+                                                                    className="font-medium text-alloy-juniper underline underline-offset-2"
+                                                                    data-attached-document={v.attachedDocumentId}
+                                                                >
+                                                                    View attached document
+                                                                </button>
+                                                            ) : (
+                                                                displaySubmittedValue(v.value)
+                                                            )}
+                                                            {/*
+                                                              * A change is only legible next to what it replaces, so the
+                                                              * value we hold travels with it. An unchanged value needs no
+                                                              * such annotation: it is already what we have.
+                                                              */}
+                                                            {v.classification === "changed" && v.canonicalCurrentValue ? (
+                                                                <span className="ml-1.5 text-[11px] font-normal text-stone-400">
+                                                                    was {v.canonicalCurrentValue}
+                                                                </span>
+                                                            ) : null}
+                                                            {v.classification === "refused" && v.refusalReason ? (
+                                                                <span className="ml-1.5 text-[11px] font-normal text-alloy-ember">
+                                                                    {v.refusalReason}
+                                                                </span>
+                                                            ) : null}
+                                                        </dd>
+                                                    </div>
+                                                ))}
+                                            </dl>
                                         </div>
-                                    ))}
-                                </dl>
+                                    );
+                                })}
                             </div>
                         ))}
                     </>
