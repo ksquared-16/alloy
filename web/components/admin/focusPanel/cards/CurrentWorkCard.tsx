@@ -819,7 +819,8 @@ function SummaryBody({
     // ONE shared derivation so the summary and the focused "View details" surface show the SAME
     // buttons — a dominant command (or outcome when outcome-led), configured helpful actions, and
     // Record outcome as a subordinate button when a command leads.
-    const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
+    const { dominant, helpful, alternatePaths, subordinateOutcome, dominantIsOutcome } =
+        resolveCurrentWorkActionButtons(surface);
 
     /*
      * THE STAGE'S OTHER OPEN WORK, ON THE CARD THE OPERATOR IS LOOKING AT.
@@ -965,6 +966,24 @@ function SummaryBody({
                         </ul>
                     </div>
             :   null}
+            {/* Process-owned other transitions — the other ways this work can end.
+                Distinct from helpful actions: "Schedule tour" arranges a tour,
+                "Move to Tour" advances the journey. */}
+            {alternatePaths.length > 0 ? (
+                <div className="alloy-os-currentwork__helpful-row" data-work-alternate-paths-row="true">
+                    {alternatePaths.map((action) => (
+                        <button
+                            key={action.key}
+                            type="button"
+                            className="alloy-os-currentwork__record-outcome-link"
+                            data-work-alternate-path={action.key}
+                            onClick={() => onAction(action)}
+                        >
+                            {action.label}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
             <div className="alloy-os-currentwork__still-activity-row" data-work-still-activity-row="true">
                 <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
                 {showRecentActivity ?
