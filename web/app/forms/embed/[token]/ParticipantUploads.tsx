@@ -23,10 +23,13 @@ type Attached = { document_id: string; filename: string };
 export function ParticipantUploads({
     requests,
     attached,
+    token,
     onAttached,
     onUpload,
 }: {
     requests: readonly ParticipantUploadRequest[];
+    /** The participant's own link token — how a row offers to show back what it holds. */
+    token?: string;
     /** What is already on file, by field id — the payload's own `file_ref` values. */
     attached: Readonly<Record<string, Attached | undefined>>;
     onAttached: (fieldId: string, doc: Attached) => void;
@@ -45,6 +48,7 @@ export function ParticipantUploads({
                         key={request.field_id}
                         request={request}
                         attached={attached[request.field_id]}
+                        token={token}
                         onAttached={onAttached}
                         onUpload={onUpload}
                     />
@@ -56,11 +60,13 @@ export function ParticipantUploads({
 
 function UploadRow({
     request,
+    token,
     attached,
     onAttached,
     onUpload,
 }: {
     request: ParticipantUploadRequest;
+    token?: string;
     attached: Attached | undefined;
     onAttached: (fieldId: string, doc: Attached) => void;
     onUpload: (fieldId: string, file: File) => Promise<Attached | { error: string }>;
@@ -95,6 +101,25 @@ function UploadRow({
                 {attached ? (
                     <div className="pt-1 text-[13px] text-alloy-bend-pine" data-upload-attached={request.field_id}>
                         Attached — {attached.filename}
+                        {token ? (
+                            <>
+                                {" · "}
+                                {/*
+                                 * "Replace" without "look" asks a parent to correct a mistake they
+                                 * cannot see. Opens the file they attached, from the session-scoped
+                                 * route, so they can check it is the right photo before committing.
+                                 */}
+                                <a
+                                    href={`/api/public/forms/${encodeURIComponent(token)}/enrollment-upload?document_id=${encodeURIComponent(attached.document_id)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline underline-offset-2"
+                                    data-upload-view={request.field_id}
+                                >
+                                    View
+                                </a>
+                            </>
+                        ) : null}
                     </div>
                 ) : null}
                 {error ? <div className="pt-1 text-[13px] text-red-700">{error}</div> : null}
