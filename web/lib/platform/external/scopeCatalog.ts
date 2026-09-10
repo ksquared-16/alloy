@@ -43,6 +43,16 @@ export type PublicScopeDefinition = {
      * scope is not simply a label.
      */
     alloyAuthority: string;
+    /**
+     * The internal permission keys this scope maps to, if any.
+     *
+     * This is the ONE declared bridge between the two vocabularies. It is a
+     * mapping, never an equality: renaming an internal key changes this line and
+     * nothing a partner sees, which is the entire reason the indirection exists.
+     * A read scope maps to nothing here — reads are authorized by the boundary
+     * and the query, not by an internal permission grant.
+     */
+    internalPermissionKeys?: readonly string[];
 };
 
 /** The complete V1 external scope catalog. Small on purpose: it can grow compatibly, it cannot shrink. */
@@ -58,6 +68,16 @@ export const PUBLIC_SCOPES = {
         access: "read",
         summary: "Read organizational locations (sites and units) within the installation boundary.",
         alloyAuthority: "public.list_external_locations, boundary-enforced in SQL",
+    },
+    "attendance.write": {
+        scope: "attendance.write",
+        access: "write",
+        summary: "Submit attendance events for children at authorized locations.",
+        alloyAuthority: "record_child_attendance_event, via the Attendance authority adapter",
+        // The external scope a partner is granted; the internal permission the
+        // attendance gate actually checks. Two names, deliberately, so the
+        // internal one can be renamed without breaking a partner.
+        internalPermissionKeys: ["attendance.record"],
     },
 } as const satisfies Record<string, PublicScopeDefinition>;
 
@@ -112,4 +132,20 @@ export function requireOperationScope(
 /** Every scope a developer could be granted. Used by documentation and tests. */
 export function allPublicScopes(): PublicScopeDefinition[] {
     return Object.values(PUBLIC_SCOPES);
+}
+
+/**
+ * Map granted PUBLIC scopes to the internal permission keys they imply.
+ *
+ * Unknown scopes contribute nothing — a scope the catalog does not define cannot
+ * grant internal authority, which is what keeps a stray string in an
+ * installation row from becoming a permission.
+ */
+export function internalPermissionsForScopes(scopes: readonly string[]): string[] {
+    const out = new Set<string>();
+    for (const scope of scopes) {
+        const definition = (PUBLIC_SCOPES as Record<string, PublicScopeDefinition>)[scope];
+        for (const key of definition?.internalPermissionKeys ?? []) out.add(key);
+    }
+    return [...out];
 }

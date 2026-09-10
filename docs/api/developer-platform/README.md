@@ -108,6 +108,7 @@ Canonical truth
 | [`product/08-slice-b2-external-boundary.md`](product/08-slice-b2-external-boundary.md) | **Slice B.2 — implemented.** Token exchange, `/api/v1/context`, rate limiting, errors, correlation, API activity, public OpenAPI + drift guard, threat review |
 | [`product/09-slice-b3-first-resource.md`](product/09-slice-b3-first-resource.md) | **Slice B.3 — implemented.** Canonical Location authority, scope catalog, `GET /api/v1/locations`, hierarchy decision, collection contract |
 | [`product/10-slice-b4-sync-and-admin-foundations.md`](product/10-slice-b4-sync-and-admin-foundations.md) | **Slice B.4 — PARTIAL.** `updated_since`, administrative audit hardening, internal operator authorization, health model, scope presentation. UI deferred: browser certification needs a slotted lane |
+| [`product/11-slice-b5-convergence.md`](product/11-slice-b5-convergence.md) | **Slice B.5 Gate 1 — PARTIAL.** Attendance producer audit, ownership classification, `integration_resource_refs`, principal→attendance authority adapter, legacy disposition |
 | [`guide/`](guide/README.md) | **The developer documentation starter** — getting started, conventions, attendance example |
 
 ## What V1 deliberately excludes

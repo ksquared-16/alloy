@@ -46,6 +46,10 @@ const PRESENTATION: Record<string, { title: string; detail: string }> = {
         title: "Locations",
         detail: "View your sites and the rooms within them. No addresses or access codes are shared.",
     },
+    "attendance.write": {
+        title: "Attendance",
+        detail: "Record children arriving, leaving and moving between rooms at the locations you allow.",
+    },
 };
 
 export function presentScope(scope: string): ScopePresentation {

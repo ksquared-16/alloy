@@ -34,6 +34,7 @@ export function createFakeSupabase(tables: Tables) {
         let working = [...db[table]];
         let pendingInsert: Row | null = null;
         let pendingUpdate: Row | null = null;
+        let limitN: number | null = null;
 
         const api: Record<string, unknown> = {};
 
@@ -44,6 +45,10 @@ export function createFakeSupabase(tables: Tables) {
         };
         api.or = (expr: string) => {
             working = working.filter((r) => matchesOr(r, expr));
+            return api;
+        };
+        api.limit = (n: number) => {
+            limitN = n;
             return api;
         };
         api.insert = (payload: Row) => {
@@ -71,7 +76,8 @@ export function createFakeSupabase(tables: Tables) {
             if (pendingUpdate) {
                 for (const r of working) Object.assign(r, pendingUpdate);
             }
-            return Promise.resolve({ data: working, error: null }).then(resolve);
+            const out = limitN === null ? working : working.slice(0, limitN);
+            return Promise.resolve({ data: out, error: null }).then(resolve);
         };
 
         return api;
