@@ -415,7 +415,19 @@ function laneDisplayLabel(candidate, laneId, root) {
   return "Development Lane";
 }
 
-export function outcomePushPayload({ lane_id, title, state, reason, root = runtimeRoot() } = {}) {
+/**
+ * `subject_key` is the DURABLE collapse identity, and it is carried into the
+ * payload so the service worker can tag on it.
+ *
+ * Tagging by lane collapses every event for that lane onto one notification, so
+ * a question and a completion for the same lane replace each other and the
+ * operator sees whichever landed last. Tagging by the subject key collapses a
+ * repeat of the SAME durable event — which is what dedupe should mean — and
+ * lets two genuinely different obligations coexist. It survives a
+ * service-worker restart because the identity lives in the record, not in the
+ * worker.
+ */
+export function outcomePushPayload({ lane_id, title, state, reason, subject_key = null, root = runtimeRoot() } = {}) {
   const id = String(lane_id || "").trim();
   const label = laneDisplayLabel(title, id, root);
   const st = String(state || "").toUpperCase();
@@ -438,6 +450,7 @@ export function outcomePushPayload({ lane_id, title, state, reason, root = runti
     body,
     state: st,
     path: id ? `/#/lanes/${encodeURIComponent(id)}` : "/#/lanes",
+    subject_key: subject_key || null,
   };
 }
 
@@ -479,6 +492,7 @@ export async function pushRunOutcome(run, {
   const payload = outcomePushPayload({
     lane_id: run.lane_id,
     title: label || run.lane_id,
+    subject_key: noted.record.subject_key || null,
     state,
     root,
     reason: ["NEEDS_INPUT", "ABANDONED"].includes(state)
@@ -738,6 +752,7 @@ export async function pushGovernedNotification(record, {
     body: `needs your approval. ${String(record.summary || "").slice(0, 140)}`.trim(),
     state: "NEEDS_INPUT",
     path: record.path || "/#/lanes",
+    subject_key: record.subject_key || null,
   };
   let out;
   try {

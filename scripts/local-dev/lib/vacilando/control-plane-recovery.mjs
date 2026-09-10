@@ -560,6 +560,52 @@ export function recordVerification(episode, { ok, detail = null, nowMs = Date.no
   return ep;
 }
 
+/**
+ * CLOSE AN EPISODE THE WORLD HAS ALREADY FIXED.
+ *
+ * `recordVerification` is reachable from exactly one place: the Steward's own
+ * repair path. So an episode only ever closed if the Steward was the one that
+ * fixed it. Every other route out of a failure — a Director-authorised
+ * `host.install_toolkit`, a hand restart, a machine reboot — left the record
+ * open forever, and `recoveryPosture` reads that record alone.
+ *
+ * MEASURED, NOT HYPOTHETICAL. Episode cpr_tkzz0n opened 2026-09-07 for
+ * TOOLKIT_DRIFT, took two attempts, neither verified, and was still open days
+ * later reporting `director_action_required: true` on the operating scoreboard
+ * while the live classification was HEALTHY and staging, installed and running
+ * were the same sha. Because `director_action_required` is computed as
+ * `attempts >= ceiling`, exhausting the attempts made the false alarm
+ * PERMANENT — and a standing alarm that is always on is one the Director learns
+ * to scroll past, which costs more than never having raised it.
+ *
+ * Only HEALTHY closes an episode. A different unhealthy class is a different
+ * problem, not evidence that this one is over, and it must be allowed to open
+ * or continue its own episode rather than being quietly absorbed by this one.
+ */
+export function reconcileEpisodeAgainstObservation(observation, { root = runtimeRoot(), nowMs = Date.now() } = {}) {
+  const read = readEpisode(root);
+  if (!read.ok) return { ok: false, error: read.error };
+  const ep = read.episode;
+  if (!ep || ep.resolved_at) return { ok: true, changed: false, reason: "no open episode" };
+
+  const verdict = classifyControlPlane({ ...(observation || {}), now_ms: observation?.now_ms ?? nowMs });
+  if (verdict.failure_class !== "HEALTHY") {
+    return { ok: true, changed: false, reason: `still ${verdict.failure_class}`, failure_class: verdict.failure_class };
+  }
+
+  const resolved = {
+    ...ep,
+    resolved_at: new Date(nowMs).toISOString(),
+    last_known_good: new Date(nowMs).toISOString(),
+    // Named so a later reader can tell "the Steward fixed it" from "it was
+    // fixed and the Steward noticed".
+    resolved_by: "observation",
+    resolved_detail: verdict.why,
+  };
+  writeEpisode(resolved, root);
+  return { ok: true, changed: true, episode: resolved, reason: verdict.why };
+}
+
 /** The scoreboard: one place that answers whether anyone needs to do anything. */
 export function controlPlaneScoreboard(observation, { root = runtimeRoot(), nowMs = Date.now() } = {}) {
   const plan = planRecovery(observation, { root, nowMs });

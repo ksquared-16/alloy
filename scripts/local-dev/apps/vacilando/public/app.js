@@ -2292,11 +2292,27 @@ setInterval(fetchResources, 60000);
 // ---- Operator notifications: Needs You + legacy Director conversations.
 // Fires a native desktop notification when something newly needs the operator
 // (decision, kickoff, exhausted silent recovery, etc.) and updates the dock badge.
-const NOTIFY_ACTIONS = { Answer: "has a question for you", Review: "prepared work to review", Accept: "finished work — ready for your acceptance", Continue: "is blocked and needs you" };
-const _notifySeen = new Map(); // conversation_id -> last action (only notify on transitions, never on first load)
-const _needsNotifySeen = new Set(); // item keys seen; first poll seeds silently
-let _needsNotifyPrimed = false;
-
+/**
+ * NOTIFICATION DELIVERY IS THE GATEWAY'S, NOT THIS PAGE'S.
+ *
+ * Removed from here: an auto permission prompt that fired on load and on every
+ * window focus, and a second client-side notifier polling every 15 seconds and
+ * deduping in a Map. Both were live while gateway.js carried a comment saying
+ * the client notifier had already been removed — it had not, it had moved file.
+ *
+ * A Map dies with the page, so it answers "have I already told them?" wrongly
+ * after every reload, reconnect and tab reopen. Only the durable notification
+ * record can answer that, and the Gateway owns it: it tracks delivery and seen
+ * state per notification_id, which survives all three.
+ *
+ * The prompt was worse than noisy. A permission dialog the Director never asked
+ * for gets dismissed, and a dismissed prompt is spent — script cannot re-ask —
+ * so the deliberate opt-in in System could no longer work. The opt-in is
+ * enableGatewayNotifications(); nothing in this file prompts.
+ *
+ * The dock badge stays. A count is idempotent, so recomputing it cannot
+ * double-notify anyone.
+ */
 function setNativeDockBadge(count) {
   try {
     const n = Math.max(0, Number(count) || 0);
@@ -2304,95 +2320,40 @@ function setNativeDockBadge(count) {
   } catch { /* ignore */ }
 }
 
-function ensureNotifyPermission() {
-  const h = String(location.hash || "");
-  if (!h || h === "#" || h === "#/" || h.startsWith("#/lanes")) return;
-  if (typeof Notification === "undefined") return;
-  if (Notification.permission === "default") {
-    try { Notification.requestPermission().catch(() => {}); } catch { /* */ }
-  }
-}
-
-function notifyOperator(convos) {
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  for (const c of (convos || [])) {
-    const action = (c.state && c.state.action) || "";
-    const id = c.conversation_id;
-    const prev = _notifySeen.has(id) ? _notifySeen.get(id) : null;
-    _notifySeen.set(id, action);
-    if (prev === null || prev === action) continue;         // first sight or unchanged → no notification
-    if (!NOTIFY_ACTIONS[action]) continue;                   // only the states that need a human
-    try {
-      const n = new Notification(`Vacilando · ${c.title || "Director"}`, { body: `Director ${NOTIFY_ACTIONS[action]}.`, tag: id, requireInteraction: action === "Accept" || action === "Continue" });
-      n.onclick = () => { try { window.focus(); location.hash = "#/director"; state._openConvo = id; render(true); } catch {} };
-    } catch { /* notifications unavailable */ }
-  }
-}
-
-function needsYouKey(item) {
-  return [item.type, item.missionId || "", item.decisionId || item.id || item.title || ""].join(":");
-}
-
-function notifyNeedsYou(items) {
-  const list = Array.isArray(items) ? items : [];
-  setNativeDockBadge(list.length);
-  const keys = new Set(list.map(needsYouKey));
-  if (!_needsNotifyPrimed) {
-    for (const k of keys) _needsNotifySeen.add(k);
-    _needsNotifyPrimed = true;
-    return;
-  }
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") {
-    for (const k of keys) _needsNotifySeen.add(k);
-    return;
-  }
-  for (const item of list) {
-    const key = needsYouKey(item);
-    if (_needsNotifySeen.has(key)) continue;
-    _needsNotifySeen.add(key);
-    const title = item.title || "Needs you";
-    const body = item.urgency || item.recommendation || item.body || "Director needs your attention.";
-    try {
-      const n = new Notification(`Vacilando · ${title}`, {
-        body: String(body).slice(0, 180),
-        tag: key,
-        requireInteraction: item.type === "decision" || item.type === "completion" || item.type === "worker_silent",
-      });
-      n.onclick = () => {
-        try {
-          window.focus();
-          const href = item.action?.href || (item.missionId ? `missions/${item.missionId}` : "needs-you");
-          location.hash = `#/${href.replace(/^#\/?/, "")}`;
-        } catch { /* */ }
-      };
-    } catch { /* notifications unavailable */ }
-  }
-  // Drop keys that cleared so a recurrence can notify again
-  for (const k of [..._needsNotifySeen]) {
-    if (!keys.has(k)) _needsNotifySeen.delete(k);
-  }
-}
-
+/**
+ * THERE IS ONE PRODUCER OF NOTIFICATIONS, AND IT IS NOT THIS FILE.
+ *
+ * gateway.js already records why its own client-side notifier was removed: it
+ * fired from the poll loop, deduped only by an in-memory map, so every
+ * refresh, reconnect or tab reopen re-announced work the operator had already
+ * seen and raced the server's push for the same event. That notifier was not
+ * removed — it was still here, running unconditionally on a 15s interval with
+ * exactly the same in-memory dedupe (`_notifySeen`, `_needsNotifySeen`), which
+ * is why the defect it described never actually went away.
+ *
+ * Deduplication cannot work in this process. A Map dies with the page, so
+ * "have I already told them?" is answered wrongly after every reload; the only
+ * store that can answer it is the durable notification record, which the
+ * Gateway owns and which already tracks delivery and seen state per
+ * notification_id.
+ *
+ * What is kept is the badge, because a count is idempotent — recomputing it
+ * cannot double-notify anybody — and it now comes from the same attention model
+ * the tab title and the Needs You panel use.
+ */
 async function notifyPoll() {
-  try {
-    const r = await fetch("/api/director/conversations");
-    notifyOperator((await r.json()).conversations || []);
-  } catch { /* keep last */ }
   try {
     const r = await fetch("/api/v2/views/needs-you");
     const j = await r.json();
-    notifyNeedsYou(j.items || []);
+    setNativeDockBadge((j.items || []).length);
   } catch { /* keep last */ }
 }
-ensureNotifyPermission();
 if (isWorkspaceRoute()) {
   setTimeout(() => notifyPoll(), 6000);
 } else {
   notifyPoll();
 }
 setInterval(notifyPoll, 15000);
-// Also re-check permission when the window gains focus (macOS often prompts then).
-window.addEventListener("focus", () => { ensureNotifyPermission(); });
 // Poll the selected worker's Director requests while any is still running, so
 // status advances live and the elapsed timer ticks. Server store is authoritative.
 setInterval(() => { const slot = state.sel; if (slot == null || document.hidden) return; const rs = state.requests[slot]; if (rs && rs.some((r) => !REQ_TERMINAL.has(r.status))) fetchRequests(slot); }, 2500);
