@@ -12,7 +12,7 @@
  */
 import { redactAuthText } from "./browser-auth.mjs";
 import { getDurableLane } from "./development-lane.mjs";
-import { MANAGED_QA_IDENTITY } from "./qa-identity-provision-action.mjs";
+import { isManagedQaIdentity } from "./qa-identity-provision-action.mjs";
 import { resolveRestoreTarget } from "./qa-session-restore-action.mjs";
 import { runQaAccessAssignSync } from "./qa-access-assign-runner.mjs";
 import { assertManagedLaneEnvironment } from "./lane-worktree-lifecycle.mjs";
@@ -86,7 +86,7 @@ export function executeAssignQaAccessSync({
     if (!resolved.ok) return safeAssignFailure({ code: resolved.error, detail: resolved.detail });
     const validated = resolved.validated;
 
-    if (!MANAGED_QA_IDENTITY.test(String(validated.expected_identity || ""))) {
+    if (!isManagedQaIdentity(validated.expected_identity)) {
         return safeAssignFailure({
             code: "identity_not_managed_qa_shape", lane: validated.lane_id, slot: validated.slot,
         });
