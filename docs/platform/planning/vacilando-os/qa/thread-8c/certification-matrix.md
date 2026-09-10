@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Thread 8C — ACH collection and provider-initiated reversals: certification matrix
 
 Candidate `1636ff239` · staging baseline `a01a0280f` · lane `lane_a5ce60877b5f`
