@@ -14,7 +14,6 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import {
-    requireEnrollmentJourney,
     resolveParticipantEnrollmentFromToken,
 } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import {
@@ -56,8 +55,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
      * remains against it — so it needs a journey and says so itself. Same refusal as before; the
      * difference is that a session without one is no longer refused ACCESS, only this answer.
      */
-    const journey = requireEnrollmentJourney(access.value);
-    if (!journey.ok) return publicErr(journey.error.message, 409, { code: journey.error.code });
+    /*
+     * THE SESSION IS THE ANCHOR HERE TOO.
+     *
+     * This was the last participant route still demanding a Business Process journey. A packet
+     * launched by hand has none, so a parent correcting a fact on their own paperwork got
+     * NO_ENROLLMENT_JOURNEY, the client reverted the value it had just shown them, and the
+     * correction silently did not happen — the panel returned to the document with the old date
+     * still printed on it.
+     *
+     * Both readers below already take a nullable process instance: canonical context resolves the
+     * child from the session's CRM snapshot when there is no instance, and the objective converged
+     * on the packet anchor long ago. So the journey is read where it exists and enriches, exactly
+     * as it does on `enrollment-objective` and `enrollment-turn`, and is no longer required.
+     */
+    const processInstanceId = access.value.processInstanceId;
 
     let body: { field_id?: unknown; value?: unknown } = {};
     try {
@@ -113,7 +125,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const canonical = await resolveParticipantCanonicalContext(supabase, {
         orgId: access.value.orgId,
-        processInstanceId: journey.processInstanceId,
+        processInstanceId,
     });
 
     /**
@@ -125,7 +137,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
      */
     const before = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
         orgId: access.value.orgId,
-        processInstanceId: journey.processInstanceId,
+        processInstanceId,
         canonicalValues: canonical.values,
         // The session row the access check already read — one fewer serial round trip.
         preloadedSession: access.value.session,
