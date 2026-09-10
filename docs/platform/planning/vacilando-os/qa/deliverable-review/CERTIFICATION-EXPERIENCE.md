@@ -65,4 +65,4 @@ Request changes, Re-check, visible Conversation) is **closed** at commit
 → [`FEEDBACK-LOOP-CERTIFICATION.md`](FEEDBACK-LOOP-CERTIFICATION.md)
 
 Do not extend that capability’s product behavior on the closeout branch. Auth
-exposure follow-up only: [`../BACKLOG.md`](../BACKLOG.md) **CP-AUTH-NON-LOOPBACK**.
+exposure follow-up only: [`../../BACKLOG.md`](../../BACKLOG.md) **CP-AUTH-NON-LOOPBACK**.

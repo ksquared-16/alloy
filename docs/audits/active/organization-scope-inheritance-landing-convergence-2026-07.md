@@ -102,7 +102,7 @@ Access is framed as permission / visibility / assignment — **not** inheritance
 
 - Tuition shared chips/badges (`ConfigScopeSelector`, `OwnershipBadge`) aligned to **Organization default** (same vocabulary as `configScopeLabel`).
 - Location LPC PATCH now also invalidates the Programs collection so availability/source projections do not linger stale.
-- [Inspect Program scope authority](32036f38-c4e7-4268-9069-811fe5513ec4) inventory predated in-context Add Program; that gap is closed.
+- Inspect Program scope authority (`32036f38-c4e7-4268-9069-811fe5513ec4`) — inventory predated in-context Add Program; that gap is closed.
 - Broader `ScopePicker` / operational-rules “Org default” labels left unchanged (different authoring surface; not Tuition cell chrome).
 
 ## Operator QA checklist
