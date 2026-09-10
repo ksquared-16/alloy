@@ -11,12 +11,13 @@ supersedes: []
 >
 > **Implemented and callable:** the application, installation and credential
 > model; token exchange at `POST /api/v1/oauth/token`; bearer authentication;
-> `GET /api/v1/context`; the error envelope; rate limiting; request correlation.
+> `GET /api/v1/context`; **`GET /api/v1/locations`** — the first canonical
+> resource; the error envelope; rate limiting; request correlation.
 > These are described by the governed contract at
 > [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json), whose
 > coverage is enforced by a drift guard in both directions.
 >
-> **Contract only, NOT callable:** every domain resource (children, locations,
+> **Contract only, NOT callable:** the remaining domain resources (children,
 > people, enrollment, schedules), every governed operation, attendance
 > ingestion, webhooks, and anything Classroom Coach. The sections below that
 > describe them state the intended contract so you can design against it — they
@@ -126,4 +127,5 @@ Rules that will surprise you if you skip them:
 
 - [Conventions](conventions.md) — resources vs operations, collections,
   idempotency, concurrency, errors, external IDs
-- [Attendance example](attendance-example.md) — a full integration
+- [Locations](locations.md) — the first canonical resource, **live**
+- [Attendance example](attendance-example.md) — a full integration, contract only

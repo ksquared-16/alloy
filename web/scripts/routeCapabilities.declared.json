@@ -3961,6 +3961,12 @@
         "status": "none",
         "reason": "External read of the caller's own installation context, admitted by a bearer access token resolved through resolveAccessTokenPrincipal. Same reasoning as the token route: the principal is a non-human application, not an org member, so no catalog capability applies. It returns only the caller's own application, installation, organization id, granted scopes and resource boundary — no domain data, so no domain capability is implicated."
       }
+    },
+    "app/api/v1/locations/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope locations.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies — external scopes are a separate compatibility contract by design (see docs/api/developer-platform/03-authorization-scopes-boundaries.md). Tenancy and the installation location boundary are enforced inside public.list_external_locations."
+      }
     }
   }
 }

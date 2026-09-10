@@ -29,6 +29,10 @@
     {
       "name": "Context",
       "description": "The caller's own installation context."
+    },
+    {
+      "name": "Locations",
+      "description": "Organizational locations — sites and the units within them."
     }
   ],
   "paths": {
@@ -39,7 +43,7 @@
           "Authentication"
         ],
         "summary": "Exchange an installation credential for an access token",
-        "description": "Client-credentials grant. The returned token is opaque, expires in 15 minutes, and carries no authority of its own \u2014 scopes and resource boundary are re-read from the installation on every request, so a revocation takes effect on the next call.",
+        "description": "Client-credentials grant. The returned token is opaque, expires in 15 minutes, and carries no authority of its own — scopes and resource boundary are re-read from the installation on every request, so a revocation takes effect on the next call.",
         "security": [],
         "requestBody": {
           "required": true,
@@ -140,6 +144,116 @@
           }
         }
       }
+    },
+    "/api/v1/locations": {
+      "get": {
+        "operationId": "listLocations",
+        "tags": [
+          "Locations"
+        ],
+        "summary": "List organizational locations",
+        "description": "Returns sites and units within the installation's organization AND its resource boundary. Requires the `locations.read` scope.\n\nCustomer and vendor premises (`location_type = address`) are never returned at any scope — they describe private addresses rather than organizational locations.\n\nFilters narrow the already-authorized set and can never widen it: naming a location outside the boundary returns nothing rather than granting it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "locations.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "site",
+                "unit"
+              ]
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only direct children of this location."
+          },
+          {
+            "name": "location_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only this location, if it is within the boundary. Use this for a single-resource read."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of locations.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "RateLimit-Limit": {
+                "$ref": "#/components/headers/RateLimitLimit"
+              },
+              "RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "RateLimit-Reset": {
+                "$ref": "#/components/headers/RateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidCredential"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -225,7 +339,7 @@
           },
           "scope": {
             "type": "string",
-            "description": "Space-delimited scopes the installation currently grants. Informational \u2014 authority is re-read from the installation on every request, not carried by the token."
+            "description": "Space-delimited scopes the installation currently grants. Informational — authority is re-read from the installation on every request, not carried by the token."
           }
         }
       },
@@ -373,6 +487,101 @@
             }
           }
         }
+      },
+      "Location": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "name",
+          "parent_id",
+          "site_id",
+          "active",
+          "updated_at"
+        ],
+        "description": "A canonical Alloy location. `id` is Alloy's canonical identity; correlate your own identifiers separately rather than expecting Alloy to carry them.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Canonical Alloy identifier. Opaque — do not parse."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "site",
+              "unit"
+            ]
+          },
+          "unit_role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "physical_space",
+              "operational_group",
+              "shared_space",
+              null
+            ],
+            "description": "Topology role, units only. Null means unknown — it was never back-filled to a guess."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Structural parent."
+          },
+          "site_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The site this location sits under, resolved by Alloy's site-resolution authority. Null for an orphan."
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Resync watermark. Re-request from slightly BEFORE your last value and upsert — it is wall-clock and not transactionally ordered."
+          }
+        }
+      },
+      "LocationPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "next_cursor"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor`. Null means the last page — you never need a request to discover there is nothing left."
+          }
+        }
       }
     },
     "responses": {
@@ -387,7 +596,7 @@
         }
       },
       "InvalidCredential": {
-        "description": "Authentication failed. Deliberately identical for unknown, wrong, revoked and expired credentials \u2014 distinguishing them would tell a prober which half of a guess was right.",
+        "description": "Authentication failed. Deliberately identical for unknown, wrong, revoked and expired credentials — distinguishing them would tell a prober which half of a guess was right.",
         "content": {
           "application/json": {
             "schema": {
@@ -416,6 +625,16 @@
       },
       "InternalError": {
         "description": "An unexpected failure. Carries a request_id and nothing else.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "ForbiddenScope": {
+        "description": "The installation has not been granted the scope this operation requires.",
         "content": {
           "application/json": {
             "schema": {

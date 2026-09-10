@@ -125,9 +125,32 @@ describe("public OpenAPI drift guard", () => {
         expect(new Set(ids).size).toBe(ids.length);
     });
 
-    it("currently describes exactly the two endpoints B.2 implemented", () => {
+    it("currently describes exactly the three endpoints implemented through B.3", () => {
         // A deliberate tripwire. Adding a public endpoint must be a decision that
-        // updates this expectation, not something that happens quietly.
-        expect(Object.keys(spec.paths).sort()).toEqual(["/api/v1/context", "/api/v1/oauth/token"]);
+        // updates this expectation, not something that happens quietly. B.3 added
+        // /api/v1/locations and this line was changed on purpose, not relaxed.
+        expect(Object.keys(spec.paths).sort()).toEqual([
+            "/api/v1/context",
+            "/api/v1/locations",
+            "/api/v1/oauth/token",
+        ]);
+    });
+
+    it("declares a required scope for every operation that reads domain data", () => {
+        // /context and the token exchange legitimately require none. Anything that
+        // returns canonical Alloy data must name the scope that governs it, so the
+        // contract and the scope catalog cannot drift apart.
+        const domainOperations = Object.entries(spec.paths).filter(
+            ([p]) => p !== "/api/v1/context" && p !== "/api/v1/oauth/token",
+        );
+        expect(domainOperations.length).toBeGreaterThan(0);
+        for (const [docPath, operations] of domainOperations) {
+            for (const [method, op] of Object.entries(operations)) {
+                expect(
+                    (op as { "x-required-scope"?: string })["x-required-scope"],
+                    `${method.toUpperCase()} ${docPath} documents no required scope`,
+                ).toBeTruthy();
+            }
+        }
     });
 });

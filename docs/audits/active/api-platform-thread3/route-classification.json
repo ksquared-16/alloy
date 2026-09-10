@@ -19248,6 +19248,37 @@
   }
  },
  {
+  "apiPath": "/api/v1/locations",
+  "file": "web/app/api/v1/locations/route.ts",
+  "methods": [
+   "GET"
+  ],
+  "domain": "Admin / Configuration",
+  "stability": "admin-only",
+  "auth": [
+   "application-principal"
+  ],
+  "validation": "none",
+  "serviceRole": true,
+  "writes": true,
+  "events": false,
+  "tables": [],
+  "rpcs": [
+   "list_external_locations"
+  ],
+  "classification": "EXTERNAL_PUBLIC_V1",
+  "classificationBasis": "public contract, application principal, org from installation",
+  "inOpenApi": false,
+  "externalReady": false,
+  "externalReadyChecks": {
+   "nonSession": true,
+   "orgFromCredential": false,
+   "validated": false,
+   "inSpec": false,
+   "idempotentIfMutating": false
+  }
+ },
+ {
   "apiPath": "/api/v1/oauth/token",
   "file": "web/app/api/v1/oauth/token/route.ts",
   "methods": [

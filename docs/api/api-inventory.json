@@ -13158,6 +13158,27 @@
     "lines": 144
   },
   {
+    "apiPath": "/api/v1/locations",
+    "file": "web/app/api/v1/locations/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "application-principal"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [],
+    "rpcs": [
+      "list_external_locations"
+    ],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 210
+  },
+  {
     "apiPath": "/api/v1/oauth/token",
     "file": "web/app/api/v1/oauth/token/route.ts",
     "methods": [

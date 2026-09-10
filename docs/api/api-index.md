@@ -9,7 +9,7 @@ supersedes: []
 
 **Generated:** 2026-09-10 by `scripts/generate-api-inventory.mjs`. Do not edit by hand — re-run the script.
 
-**Routes:** 615 `route.ts` handlers under `web/app/api/**`.
+**Routes:** 616 `route.ts` handlers under `web/app/api/**`.
 
 This is a static, heuristic inventory. Columns are extracted from source text:
 
@@ -23,7 +23,7 @@ This is a static, heuristic inventory. Columns are extracted from source text:
 
 | Domain | Routes |
 |---|---|
-| [Admin / Configuration](admin-configuration-api.md) | 173 |
+| [Admin / Configuration](admin-configuration-api.md) | 174 |
 | [Workspace / Queue / Focus Panel](workspace-api.md) | 57 |
 | [Entity / Record / Resolver](entity-record-api.md) | 155 |
 | [Business Process / Status / Lifecycle](business-process-api.md) | 48 |
@@ -32,11 +32,11 @@ This is a static, heuristic inventory. Columns are extracted from source text:
 | [Communications](communications-api.md) | 42 |
 | [AI / BOS](ai-bos-api.md) | 23 |
 | [Internal / System / Diagnostics](internal-system-api.md) | 27 |
-| **Total** | **615** |
+| **Total** | **616** |
 
 | Stability | Routes |
 |---|---|
-| admin-only | 552 |
+| admin-only | 553 |
 | experimental | 8 |
 | internal | 19 |
 | public/tokenized | 33 |
@@ -220,6 +220,7 @@ Detailed conventions: [`admin-configuration-api.md`](admin-configuration-api.md)
 | GET | `/api/runtime-info` | none-detected | none | — | — | — | admin-only | — |
 | POST | `/api/stripe/webhook` | provider-signature | none | y | — | — | admin-only | — |
 | GET | `/api/v1/context` | application-principal | none | y | — | — | admin-only | — |
+| GET | `/api/v1/locations` | application-principal | none | y | y | — | admin-only | rpc:list_external_locations |
 | POST | `/api/v1/oauth/token` | application-principal | none | y | — | — | admin-only | — |
 
 ## Workspace / Queue / Focus Panel
