@@ -60,6 +60,13 @@ export const OPERATOR_ONLY_ENVIRONMENTS = Object.freeze([
  */
 export const OPERATOR_OWNED_ACTION_KEYS = Object.freeze([
   "database.apply_migration",
+  // MUTATING THE PRODUCTION DEPLOYED PRIMARY IS THE SINGLE HUMAN DECISION in
+  // the migration governance loop. Listed here so no delegated policy — present
+  // or added later — can pick it up: `alloy_deployed_primary` is also an
+  // operator-only ENVIRONMENT, and this is the same refusal stated on the
+  // action, so neither one is the only thing standing between a delegate and a
+  // production write.
+  "database.apply_promoted_migration",
   "environment.provision_qa_identity",
   "environment.assign_qa_identity_access",
   "environment.restore_qa_session",
