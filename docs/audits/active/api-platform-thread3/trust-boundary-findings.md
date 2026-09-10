@@ -17,6 +17,39 @@ Nothing here was fixed. Discovery deliberately stops at proof — see *Why nothi
 
 ---
 
+## 🔴 P0-CRITICAL · Unauthenticated cross-tenant write and disclosure on `contacts`
+
+**Severity: highest in this investigation. Reachable by anyone on the internet, with no
+credential of any kind, and it crosses the tenant boundary.**
+
+`web/app/api/leads/gutters/route.ts:26` — `export async function POST` parses the request body
+with **no session, no token, no signature, no org pin and no rate limit**. The `ALLOY_PUBLIC_ORG_ID`
+pin further down governs only the trailing `emitEvent`; the contact write happens ~60 lines earlier.
+
+The chain, verified line by line:
+
+1. `findContactByEmail(email)` — `web/lib/supabase.ts:50-59` issues
+   `GET /contacts?select=…&email=ilike.<caller input>&limit=1` using `getPostgrestHeaders()`
+   (**service-role key**) with **no `org_id` filter**. It matches a contact in *any* tenant.
+2. `updateContact(existingContact.id, updateData)` — `web/lib/supabase.ts:195-198` issues
+   `PATCH /contacts?id=eq.<id>`, again with **no `org_id` filter**.
+3. `updateData` unconditionally sets `contact_type: "lead"`, backfills any blank name/email/phone,
+   and overwrites `metadata` wholesale when the caller supplies any.
+4. The route returns `contactId` — **the victim tenant's contact UUID**.
+
+`findContactByPhone` has the same shape.
+
+**What an anonymous caller obtains:** confirmation that a given email address exists as a contact
+in *some* tenant; mutation of that contact's type, fields and metadata; and its real UUID.
+
+**Why it was not repaired here.** The missing predicate is in `web/lib/supabase.ts`, a shared
+helper with other callers. Adding an `org_id` filter changes every one of them, and doing that
+without tests that establish each caller's legitimate scope risks breaking working paths while
+appearing to fix a security bug. That is implementation work with its own certification — it is
+exactly the boundary the mission's stop condition draws.
+
+**This should be triaged before anything else in this document, and independently of Thread 3.**
+
 ## P0-0 · Arbitrary-table raw write, driven by org configuration, reachable unauthenticated
 
 **This is the weakest-authorized write path into authoritative state in the codebase, and an
