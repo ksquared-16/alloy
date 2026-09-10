@@ -80,7 +80,7 @@ Then: **`platform/foundation/system-overview.md`**
 6. `platform/core/business-process-system.md` — **operator model: Business Process → Stage → Record**
 7. `platform/core/entity-model.md`
 8. `platform/core/placement-system.md` — **School → Program → Room; lead vs child authority**
-9. `platform/core/navigation-and-workspace-doctrine.md` — **Alloy Operational Workspace Doctrine V2** (frozen July 2026; reference: Processing; certified: Communications, Work Items; barrel: `web/components/workspace/doctrine.ts`)
+9. `platform/core/navigation-and-workspace-doctrine.md` — **Alloy Operational Workspace Doctrine V3** (supersedes V2; reference: Processing; certified: Communications, Work Items; barrel: `web/components/workspace/doctrine.ts`)
 10. `platform/core/record-system.md`
 11. `platform/core/status-and-state-system.md`
 11a. `platform/core/data/README.md` — **canonical data-contract layer** (data system, field catalog, status architecture)
@@ -97,14 +97,13 @@ Then: **`platform/foundation/system-overview.md`**
 17. `platform/operator/alloy-os-runtime-completion.md` — **Runtime Completion & Freeze** (✅ runtime complete; ownership matrix, config handoff, final verdict — start here for runtime status)
 16a. `platform/operator/operational-grammar.md` — **Alloy Operational Grammar** (foundation: operators answer operational questions; cards are answers; platform hierarchy)
 16b. `platform/operator/card-language.md` — **Alloy Card Language** (how every card behaves: anatomy, evidence hierarchy, density, interaction, color)
-16c. `platform/operator/universal-card-archetypes.md` — **Alloy Card Archetypes** (reusable operational patterns; Identity = Household reference card)
 16d. `platform/operator/operational-context-boundary.md` — **Operational Context Boundary** (runtime spine: Queue → Operational Context → Focus Panel → Cards; replaces "drawer" as the conceptual boundary)
 16e. `platform/operator/household-reference-card.md` — **Household Reference Card** (Identity archetype **design freeze**: all states/densities, interaction + performance models, visual hierarchy, mock challenges)
 16f. `platform/operator/focus-panel-runtime-cutover-report.md` — **Focus Panel Runtime Cutover** (migration report: one Focus Panel; drawer dependency ledger classified internal-compat vs needs-migration; staged removal D0→G)
 16g. `platform/operator/card-composition-system.md` — **Card Composition System** (the layer between cards and Experience Builder: operational weight Heavy/Medium/Light, preferred partners, surface-owned composition, the balancing layout engine, side-by-side/stacked/full-width rules)
 17. `platform/operator/universal-card-system.md` — **Universal Card System** (System 4 design freeze)
 18. `platform/operator/operational-surface-design-system.md` — **Operational Surface Design System** (System 5 — **approved/frozen** June 2026)
-19. `platform/operator/universal-card-archetypes.md` — **Universal Card Archetypes** (System 5A — implemented)
+19. `platform/operator/universal-card-archetypes.md` — **Universal Card Archetypes** (System 5A — implemented; reusable operational patterns, Identity = Household reference card)
 20. `platform/operator/card-interaction-expansion-doctrine.md` — **Card Interaction & Expansion** (System 5B — doctrine; expansion not fully built)
 21. `platform/operator/card-content-template-field-inclusion-doctrine.md` — **Content Templates & Field Inclusion** (System 5C — doctrine; templates not fully built)
 22. `platform/operator/focus-panel-edit-information-doctrine.md` — **Focus Panel** edit law + **implementation freeze**
@@ -127,7 +126,7 @@ Then: **`platform/foundation/system-overview.md`**
 30b. `platform/operator/current-work-surface.md` — **Current Work Surface** (Summary/Focus operational progression; V1 merged staging)
 30c. `platform/operator/actions-current-work-alignment.md` — **Actions ↔ Current Work Alignment** (surface roles, V1/P2 plan)
 31. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
-32. `platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` — **Presentation Runtime** (unifying umbrella: Design Surfaces, Experience Builder, renderer-first model, three axes — composition/Perspective/Viewpoint, Analytics-as-Dashboard, ownership + lifecycle; design stage)
+32. `archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` — **Presentation Runtime** (unifying umbrella: Design Surfaces, Experience Builder, renderer-first model, three axes — composition/Perspective/Viewpoint, Analytics-as-Dashboard, ownership + lifecycle; design stage)
 33. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
 
 ### 4. Platform modules (load when touching area)
@@ -186,7 +185,7 @@ DATABASE_URL=... npm run export:supabase-schema
 node scripts/generate-schema-docs.mjs
 ```
 
-CSV source: `supabase/reference/*.csv` (8 files)
+CSV source: `docs/supabase/reference/*.csv` (8 files)
 
 ---
 
@@ -251,9 +250,9 @@ CSV source: `supabase/reference/*.csv` (8 files)
 
 **July 2026 documentation architecture planning** (historical):
 
-- `audits/documentation-initiative-handoff-2026-07.md`
-- `audits/documentation-architecture-audit-2026-07.md`
-- `audits/documentation-migration-blueprint-2026-07.md`
+- `audits/archive/2026-07-documentation-rebaseline/documentation-initiative-handoff-2026-07.md`
+- `audits/archive/2026-07-documentation-rebaseline/documentation-architecture-audit-2026-07.md`
+- `audits/archive/2026-07-documentation-rebaseline/documentation-migration-blueprint-2026-07.md`
 
 **June 2026 rebaseline audit (prior art):** `audits/archive/2026-06-doc-rebaseline/`
 

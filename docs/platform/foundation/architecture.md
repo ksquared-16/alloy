@@ -164,8 +164,8 @@ See `../governance/deployment-and-environments.md`.
 - `os-runtime-map.md` (**OS Runtime Map** — the nine runtime layers, the three flows, the client/server seam, the Effects/Integration service, and the Architecture Evolution & Known Gaps appendix)
 - `system-overview.md`
 - `../core/business-process-system.md`
-- `../../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
-- `../../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
+- `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
+- `../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
 - `.../foundation/platform-capabilities.md` (capability model — new operational modules are designed API-first)
 - `platform-manifesto.md` (constitutional doctrine)
 - `milestones/certification-july-2026.md` (July 2026 certification)
