@@ -3336,6 +3336,26 @@ export function processGovernedAction(requestId, {
     const wait = checkWaitDecision(rec, { nowMs });
     if (wait.wait) return enterCheckWait(rec, { nowMs, root, detail: wait.detail });
     rec.status = "awaiting_operator";
+    // THE RECORD MUST AGREE WITH ITSELF ABOUT WHO IS BEING ASKED.
+    //
+    // `publicGovernedAction` exposes `operator_approval_required`, and this —
+    // the ordinary path into awaiting_operator — never set it, while the
+    // `authorization_required` retry path did. So the canonical record showed a
+    // request genuinely waiting on a person with the field reading false.
+    //
+    // That is not cosmetic. It is exactly the field a reader would reach for to
+    // answer "does this need the Director", and reading it that way is wrong in
+    // BOTH directions: false on requests that are truly waiting, and false
+    // again after approval, because approveGovernedAction clears it. An earlier
+    // analysis in this lane concluded from that single field that 29 approvals
+    // had never required a Director at all; the audit trail says every one of
+    // them reached `operator_approved` after a median of 102 seconds of real
+    // operator latency. The field was unreliable, not the approvals.
+    //
+    // Setting it here changes no behaviour today — `laneAwaitingOperatorApproval`
+    // matches on `status` first — it makes the exposed field true so the next
+    // reader is not misled the same way.
+    rec.operator_approval_required = true;
     rec.updated_at = iso(nowMs);
     openApprovalDecision(rec, { nowMs, root });
     saveRequest(rec, root);

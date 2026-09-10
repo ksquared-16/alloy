@@ -462,6 +462,14 @@ await test("a merge attempt under the test runner refuses instead of merging", (
       mergeCalled = true;
       return { status: 0, stdout: "", stderr: "" };
     }
+    // The migration parity gate reads the promoted revision's migration set.
+    // It answers here so that the LIVE-MERGE GUARD remains the reason nothing is
+    // merged — which is the property this test exists to defend. Leaving it
+    // unanswered would still refuse, but for the wrong reason, and the guard
+    // would stop being what the test proves.
+    if (args[0] === "api" && args.some((a) => String(a).includes("supabase/migrations"))) {
+      return { status: 0, stdout: "[]", stderr: "" };
+    }
     if (args[0] === "api") return { status: 1, stdout: "", stderr: "no graphql in tests" };
     return {
       status: 0,
@@ -987,3 +995,61 @@ await test("a mission grant is pinned to its proposal, not reusable mission-wide
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 if (fail) process.exit(1);
+
+/**
+ * THE RECORD MUST AGREE WITH ITSELF ABOUT WHO IS BEING ASKED.
+ *
+ * `publicGovernedAction` exposes `operator_approval_required`. The ordinary path
+ * into `awaiting_operator` never set it, while the `authorization_required`
+ * retry path did, so a request genuinely waiting on a person exposed the field
+ * as false.
+ *
+ * That inconsistency is not cosmetic: it is the field a reader reaches for to
+ * answer "does this need the Director". An earlier analysis in this lane read it
+ * that way and concluded that 29 approval notifications had never required a
+ * Director at all. The audit trail says every one of those 29 reached
+ * `operator_approved`, after a median of 102 seconds of real operator latency —
+ * the field was unreliable, not the approvals. This control exists so the next
+ * reader cannot be misled the same way.
+ *
+ * Structural on purpose: the invariant is about every transition into that
+ * status, including ones added later, which is a property of the source rather
+ * than of any single request this test could construct.
+ */
+test("every transition into awaiting_operator also marks the record as needing the operator", () => {
+  const src = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "lib", "vacilando", "governed-action-request.mjs"),
+    "utf8",
+  );
+  const lines = src.split("\n");
+  const offenders = [];
+  lines.forEach((line, i) => {
+    if (!/rec\.status\s*=\s*"awaiting_operator"/.test(line)) return;
+    // The assignment may reasonably sit a few lines from the flag, with a
+    // comment between them; look at the surrounding window rather than
+    // demanding adjacency.
+    const window = lines.slice(Math.max(0, i - 6), i + 25).join("\n");
+    if (!/rec\.operator_approval_required\s*=\s*true/.test(window)) {
+      offenders.push(i + 1);
+    }
+  });
+  assert.deepEqual(
+    offenders,
+    [],
+    `awaiting_operator is set without operator_approval_required=true at line(s): ${offenders.join(", ")}`,
+  );
+});
+
+test("the control would catch the regression it was written for", () => {
+  // Positive control: the same scan over a source that sets the status and not
+  // the flag must fail, or the test above proves nothing.
+  const bad = ['  rec.status = "awaiting_operator";', "  rec.updated_at = iso(nowMs);"].join("\n");
+  const lines = bad.split("\n");
+  let flagged = 0;
+  lines.forEach((line, i) => {
+    if (!/rec\.status\s*=\s*"awaiting_operator"/.test(line)) return;
+    const window = lines.slice(Math.max(0, i - 6), i + 25).join("\n");
+    if (!/rec\.operator_approval_required\s*=\s*true/.test(window)) flagged += 1;
+  });
+  assert.equal(flagged, 1, "the scan must flag a status set without the flag");
+});
