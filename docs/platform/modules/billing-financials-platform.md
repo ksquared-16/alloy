@@ -7,7 +7,11 @@ supersedes: []
 
 # Billing and financials platform
 
-**Status:** Canonical module doctrine (June 2026). Defines how **Operational Consequences (L5)** — charges, invoices, payments, ledger, GL — derive from operational facts, and locks the decision to **generalize billing before building childcare billing**. **The five P3.1 implementation gates are ratified and built, P3.2 rate configuration + Rate Resolution is built, and P3.3 draft Charge Resolution + a minimum responsibility shape + a read-only preview API (P3.3.1) are built (June 2026)** — see "P3.3 as-built", "P3.2 as-built", "Ratified P3.1 implementation gates", and "P3.1 as-built" below. Charge posting and **payment application** are built (September 2026) — see "Household parity + actor attribution as-built", "Correction lineage" and "Payment application" below. **Financial responsibility (including split shares) and subsidy are built (September 2026)** — `supabase/migrations/20260908120000_financial_responsibility.sql` and `20260909120000_financial_subsidy.sql`; see "Responsibility" and "Subsidy" below. **Financial periods and the journal are built** (`20260904180000_financial_periods_and_journal.sql`). Invoices/statements, AR, cadence/proration, autopay and dunning remain deferred.
+**Status:** Canonical module doctrine (June 2026). Defines how **Operational Consequences (L5)** — charges, invoices, payments, ledger, GL — derive from operational facts, and locks the decision to **generalize billing before building childcare billing**. **The five P3.1 implementation gates are ratified and built, P3.2 rate configuration + Rate Resolution is built, and P3.3 draft Charge Resolution + a minimum responsibility shape + a read-only preview API (P3.3.1) are built (June 2026)** — see "P3.3 as-built", "P3.2 as-built", "Ratified P3.1 implementation gates", and "P3.1 as-built" below. Charge posting and **payment application** are built (September 2026) — see "Household parity + actor attribution as-built", "Correction lineage" and "Payment application" below. **Financial responsibility (including split shares) and subsidy are built (September 2026)** — `supabase/migrations/20260908120000_financial_responsibility.sql` and `20260909120000_financial_subsidy.sql`; see "Responsibility" and "Subsidy" below. **Financial periods and the journal are built** (`20260904180000_financial_periods_and_journal.sql`). **Tuition generation from accepted pricing terms, discounts/credits/adjustments, the Financials workspace, and card + ACH collection through a connected Stripe merchant are also built (September 2026).** 
+
+> **Authority is ahead of product, and that is the single most important thing to know about September Financials.** Responsibility, reductions and the whole subsidy lifecycle ship as registered, permissioned, certified commands with **no operator surface**: seventeen financial action keys across `financialSubsidyActions.ts` (9), `financialResponsibilityActions.ts` (5) and `financialReductionActions.ts` (3) have **no caller anywhere in `web/app` or `web/components`** — only the action registry and tests import them. Reading a bare "Complete" against these domains would badly mislead: the authority is real and certified, and an operator cannot reach it.
+
+Invoices, family statements, AR aging, cadence/proration, autopay, dunning and GL export remain deferred and unbuilt.
 
 > **Layer:** Billing is **L5 Operational Consequences** in [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md). It derives from **L4 Operational Facts** (attendance, delivered service), targets **L3 Projections** (expected tuition/revenue) for variance, and reads **L1 Configuration** (rate rules). It never derives directly from enrollment/intent.
 
@@ -719,37 +723,18 @@ point of the decision.
   misrepresents a complete arrangement. Anything else left over is unassigned. A fixed share larger
   than the net is REFUSED rather than clamped: shrinking it would tell an operator the family is
   covered when the arrangement cannot be honoured.
-- **Responsibility ≠ funding.** Expected funding attaches to a responsible party's SHARE. An
-  employer, scholarship or subsidy agency does not become responsible by funding something; making
-  an external party responsible takes an arrangement share like anyone else. Expected funding is not
-  a payment, reduces nothing owed, creates no receipt, and never appears in a total.
-- **The funding ENGINE stays Commercial Execution's.** `toFundingPlan` adapts persisted expected
-  funding into the `FundingPlan` that `fundingAttribute.ts` already takes, with the RESPONSIBLE
-  PARTY as the plan's `primary` — so the residual is what that party still expects to pay
-  themselves, and an unfunded gap never reads as somebody else's. Thread 6 supplies the consumer
-  input Commercial's doctrine always said a consumer would supply; it reimplements no arithmetic.
-  The responsibility split itself is Thread 6's own, because the engine's residual-to-primary rule
-  presumes someone is always there to absorb what is left — exactly the assumption the Director
-  removed.
-- **Responsibility ≠ payment.** `payments.payer_entity_type/id` existed with a paired CHECK and no
-  writer at all; the canonical payment path now records who ACTUALLY paid. Whose share that
-  satisfied is a separate, EXPLICIT attribution — never guessed from the payer, because a
-  grandparent settling a bill does not become responsible for it. An attribution moves no balance
-  and may not exceed what its application applied.
-- **Draft re-resolves; posted is chosen.** Before posting, re-resolving simply follows the
-  arrangement now in force and supersedes the prior division with lineage. On a POSTED charge a
-  different answer means one real person now owes what another owed, so the background path returns
-  `reallocation_required` and only `billing.reallocate_responsibility` — permissioned, reasoned,
-  previewed — moves it. Superseded allocations stay readable; nothing is rewritten.
-- **`fin.responsibility` is a third authority.** `fin.write` bills what was authored;
-  `fin.adjust` forgives what is owed; neither describes moving contractual position between two real
-  people, where the total does not change and the answer to "who owes it" does.
-- **Privacy is a non-decision, and stays one.** Separated/co-parent visibility policy is deliberately
-  undecided. Responsibility configuration and inspection are OPERATOR work under existing financial
-  authorization; no parent-facing visibility was added, and nothing grants one parent sight of
-  another's position merely because both are guardians. `arrangements.visibility_policy_key` exists
-  as a place for a future decision to land without a migration that moves money — nothing reads it
-  and nothing branches on it. **It claims no semantics.**
+- **Responsibility ≠ funding.** Expected funding attaches to a responsible party's SHARE. An employer, scholarship or subsidy agency does not become responsible by funding something.
+  **A responsible party is a canonical `persons` row and nothing else** — both
+  `financial_responsibility_shares.responsible_party_type` and
+  `financial_responsibility_allocations.responsible_party_type` are
+  `check (… in ('person'))` against `public.persons`
+  (`supabase/migrations/20260908120000_financial_responsibility.sql:115,161`). Making a
+  non-person party responsible is **not possible today**; it would require widening those
+  constraints. The frozen domain model's `Party (household | employer | Third-Party Payer)`
+  is not what shipped. An external funder's involvement is expressed as expected funding
+  against a person's share, never as a share of its own. Whether a non-person party may ever
+  hold responsibility is an open question — see D7 in
+  `docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md`.
 
 **The Thread 2 seam is now truthful.** That thread shipped `payers[]` with `share: null` for
 everyone and wrote down why — a payer contact ROLE existed and no allocation store did, so a split
@@ -854,6 +839,15 @@ BY THE SERVER with `fin.subsidy` revoked.
 operative decision); enrollment, renewal and appeal workflows; government integration; OCR; Stripe;
 the Financials workspace; collections and dunning; GL export; and any parent-facing subsidy
 visibility, which stays undecided.
+
+> **What subsidy still lacks is an operator surface.** All nine `subsidy.*` commands
+> (`web/lib/adminV2/actions/definitions/financialSubsidyActions.ts`) are registered,
+> permissioned under `fin.subsidy` and certified, and **none has a caller in `web/app` or
+> `web/components`**. `web/app/adminV2/financials/sections/FinancialsSubsidy.tsx` reads the
+> collectible position and offers no action; the Overview's "Review subsidy" call to action
+> lands on it, and its empty state points at Studio → Funding, which is a documented
+> **boundary** tile, not an authoring surface. Subsidy is **COMPLETE_FOUNDATION, not a usable
+> product**.
 
 ---
 
@@ -1196,6 +1190,18 @@ lineage readable years later.
 
 Autopay, Financial Connections, an operator-facing microdeposit verification product, and card
 chargebacks. Card disputes share the dispute plumbing but are deliberately out of scope.
+
+**Two gaps decide whether any of this is reachable, and both sit outside the rail itself.**
+
+- **There is no way to onboard a merchant through the product.** `payment_provider_merchants`
+  has no writer anywhere in `web/` outside tests and certification specs;
+  `web/lib/financials/payments/providerMerchant.ts` only reads it. There is no Stripe Connect
+  onboarding route, no `account_links` call and no `account.updated` handler, so `readiness`
+  and `ach_readiness` are **manually seeded facts that never refresh**. An organisation cannot
+  become able to collect without a direct database write.
+- **There is no family-facing way to pay.** Collection is staff-present only, from inside the
+  admin Financials focus panel. There is no parent portal, no hosted checkout and no public
+  payment link. A parent paying means an operator typing an amount and handing over a device.
 
 ---
 

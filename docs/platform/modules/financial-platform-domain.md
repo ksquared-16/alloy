@@ -1,7 +1,7 @@
 ---
 owner: modules
-status: canonical
-last_reviewed: 2026-07-13
+status: frozen
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 

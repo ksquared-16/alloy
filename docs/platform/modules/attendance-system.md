@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -57,8 +57,8 @@ Fact kinds in scope:
 
 ## Capture substrate (V1, 2026-09-09)
 
-Every attendance producer — operator today; kiosk, parent, integration and door
-access later — converges on one server-authoritative ingestion path. Channels
+Every attendance producer — operator and kiosk today; parent, integration and
+door access later — converges on one server-authoritative ingestion path. Channels
 differ in what trusted context they supply; they do not get their own attendance
 truth.
 
@@ -91,7 +91,10 @@ the trusted channel. `CLIENT_ASSERTABLE_CHANNELS` is empty and must stay empty.
 
 `source_type` admits `kiosk`, `integration_api`, `door_access` and `mobile_app`
 so those producers need no schema change. **Representable is not implemented** —
-a channel becomes real only when it has a trusted-context resolver here. A
+a channel becomes real only when it has a trusted-context resolver here. `kiosk` is now
+implemented (`kiosk/kioskDeviceAuthority.ts`). `integration_api`, `door_access` and
+`mobile_app` remain representable only: no route mints them, and a request body carrying
+one is mapped to the operator channel by `operatorChannelForSurface`. A
 non-human channel must supply a `producerKey` identifying the device or
 integration; an anonymous `system` write is refused.
 
