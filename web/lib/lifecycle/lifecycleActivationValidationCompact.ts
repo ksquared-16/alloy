@@ -14,7 +14,12 @@ export type LifecycleActivationCompactCheckId =
     | "work_units_visible"
     | "queue_filters"
     | "records_query_ready"
-    | "actions_configured";
+    | "actions_configured"
+    | "participant_work_exists"
+    | "participant_forms_resolve"
+    | "participant_forms_published"
+    | "participant_uploads_classified"
+    | "participant_signature_placement";
 
 export type LifecycleActivationCompactCheck = {
     id: LifecycleActivationCompactCheckId;
@@ -33,7 +38,21 @@ const COMPACT_ORDER: LifecycleActivationCompactCheckId[] = [
     "queue_filters",
     "records_query_ready",
     "actions_configured",
+    // Participant rows last: the staff question is answered first, then the family question.
+    "participant_work_exists",
+    "participant_forms_resolve",
+    "participant_forms_published",
+    "participant_uploads_classified",
+    "participant_signature_placement",
 ];
+
+const PARTICIPANT_COMPACT_IDS = [
+    "participant_work_exists",
+    "participant_forms_resolve",
+    "participant_forms_published",
+    "participant_uploads_classified",
+    "participant_signature_placement",
+] as const satisfies readonly LifecycleActivationCompactCheckId[];
 
 function byId(checks: LifecycleActivationCheckResult[]): Map<string, LifecycleActivationCheckResult> {
     return new Map(checks.map((c) => [c.id, c]));
@@ -153,7 +172,29 @@ export function buildLifecycleActivationCompactChecks(
         },
     ];
 
-    return COMPACT_ORDER.map((id) => rows.find((r) => r.id === id)!);
+    /*
+     * The participant rows arrive already decided — `participantPaperworkReadiness` judged them
+     * from authoritative facts server-side — so they are carried through verbatim rather than
+     * re-derived here. A deployment that has not sent them simply shows the staff rows, which is
+     * what this surface has always shown.
+     */
+    for (const id of PARTICIPANT_COMPACT_IDS) {
+        const check = map.get(id);
+        if (!check) continue;
+        rows.push({
+            id,
+            label: check.label,
+            pass: check.pass,
+            summary: check.detail,
+            href: check.href,
+            repairable: false,
+            informational: check.pass && id === "participant_work_exists",
+        });
+    }
+
+    return COMPACT_ORDER.map((id) => rows.find((r) => r.id === id)).filter(
+        (r): r is LifecycleActivationCompactCheck => !!r,
+    );
 }
 
 export function lifecycleActivationCompactAllPass(compact: LifecycleActivationCompactCheck[]): boolean {
