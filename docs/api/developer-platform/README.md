@@ -72,7 +72,7 @@ Installation  (application × organization)
         ↓
   granted scopes  ∩  resource boundary
         ↓
-Public API Runtime   /api/public/v1/*
+Public API Runtime   /api/v1/*
         ├── Canonical Resource APIs   (read)
         ├── Governed Command APIs     (write)
         └── Public Events / Webhooks  (deferred to V1.1)
@@ -93,6 +93,18 @@ Canonical truth
 | 05 | [Mutation, commands, provenance](05-mutation-commands-provenance.md) | M, N, O |
 | 06 | [Request contract](06-request-contract.md) | P, Q, R, S, T |
 | 07 | [Implementation sequence](07-implementation-sequence.md) | first slice |
+
+## Slice A — productization and discovery
+
+| Document | Covers |
+|---|---|
+| [`product/01-implementation-inventory.md`](product/01-implementation-inventory.md) | What of Thread 4 actually exists on staging. **Answer: the specification, and nothing below it.** |
+| [`product/02-product-model-ia-journey.md`](product/02-product-model-ia-journey.md) | Product model, IA reconciled to frozen Configuration doctrine, developer journey, Developer Platform vs Integrations boundary |
+| [`product/03-surface-contracts.md`](product/03-surface-contracts.md) | Installation collection and runtime, credentials, activity/health contracts |
+| [`product/04-api-documentation-architecture.md`](product/04-api-documentation-architecture.md) | Narrative vs generated reference; renderer decision |
+| [`product/05-classroom-coach-discovery.md`](product/05-classroom-coach-discovery.md) | Evidence register, capability classification, generic-platform validation, installation concept |
+| [`product/06-gaps-and-slice-b.md`](product/06-gaps-and-slice-b.md) | Gap classification and the recommended Slice B ordering |
+| [`guide/`](guide/README.md) | **The developer documentation starter** — getting started, conventions, attendance example |
 
 ## What V1 deliberately excludes
 
