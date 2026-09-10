@@ -71,7 +71,7 @@ export function buildFidelityMappingFromDraft(
     draft: StoredFormDraftPreview,
     source: FidelitySourceIdentity,
 ): FidelityPdfMapping | null {
-    const acro_fields: FidelityPdfMapping["acro_fields"] = {};
+    const acro_fields: Record<string, { field_id: string; compose_with?: string[] }> = {};
     const signature_placements: FidelityPdfMapping["signature_placements"] = [];
 
     for (const field of draft.fields) {
@@ -85,6 +85,24 @@ export function buildFidelityMappingFromDraft(
         }
         const widget = (field.pdf_field_name ?? "").trim();
         if (!widget) continue;
+        const existing = acro_fields[widget];
+        if (existing) {
+            /*
+             * A second question claiming the same printed box is not a conflict — it is a box that
+             * holds more than one fact.
+             *
+             * Review splits a source's single "Emergency Contact Name" into a first name and a last
+             * name, because that is what a name is to a record. Both halves keep the provenance of
+             * the one widget they came from, so they arrive here together and the destination
+             * composes them. Draft order is document order, so the parts join in the order the form
+             * asks for them.
+             *
+             * This is generic on purpose: any question the reviewer splits out of one box composes
+             * back into it, and an administrator configures nothing for an ordinary import.
+             */
+            existing.compose_with = [...(existing.compose_with ?? []), field.id];
+            continue;
+        }
         // Date formatting at the destination is left to the contract's default (mm/dd/yyyy), which
         // is what paperwork prints. A destination needing the machine form declares it deliberately.
         acro_fields[widget] = { field_id: field.id };

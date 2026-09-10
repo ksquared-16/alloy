@@ -78,6 +78,27 @@ export const fidelityPdfMappingSchema = z
                 .object({
                     field_id: z.string().min(1),
                     /**
+                     * The remaining semantic fields this ONE printed box shows, after `field_id`.
+                     *
+                     * Paper asks for "Emergency Contact Name" in a single box; the record keeps a
+                     * first name and a last name, because that is what a name IS to a record. Mapping
+                     * one widget to one field printed "Dana" and silently dropped "Reyes".
+                     *
+                     * The fix belongs HERE and not in the record: inventing an
+                     * `emergency_contact_full_name` fact would let a document's stationery decide the
+                     * shape of business truth, and the canonical registry deliberately holds no
+                     * person-level full_name for exactly that reason. So the destination composes
+                     * what it needs from the fields that already exist, which is the same thing
+                     * `date_format` beside it does — presentation wiring, declared at the
+                     * destination, reading truth it does not own.
+                     *
+                     * Closed and code-owned: an ordered list of field ids joined by a separator. No
+                     * expressions, no operator-authored formulas, nothing evaluated at render time.
+                     */
+                    compose_with: z.array(z.string().min(1)).min(1).optional(),
+                    /** What separates composed parts. Absent means a single space. */
+                    compose_separator: z.string().max(8).optional(),
+                    /**
                      * How a DATE prints AT THIS DESTINATION — presentation wiring, never storage.
                      *
                      * Absent means the platform default (`mm/dd/yyyy`), deliberately NOT the ISO
@@ -197,6 +218,33 @@ export async function resolveFidelitySourceBytes(
     return { ok: true, bytes, sourceRef };
 }
 
+/**
+ * The value ONE destination shows, composed when the box holds more than one field.
+ *
+ * Parts that are missing are skipped rather than printed as gaps, so a contact with no surname on
+ * file prints "Dana" and not "Dana " — the box shows what is known, which is what a paper form
+ * filled by hand would show. A composition whose parts are all empty yields nothing and the
+ * destination stays blank, exactly as a direct binding would.
+ *
+ * Only the primary `field_id` carries `date_format`; composed parts are names and words, and a
+ * destination that needs a formatted date is a direct binding to that date.
+ */
+function composedDestinationValue(
+    target: { field_id: string; compose_with?: readonly string[]; compose_separator?: string },
+    values: Readonly<Record<string, unknown>>,
+): unknown {
+    const primary = values[target.field_id];
+    if (!target.compose_with || target.compose_with.length === 0) return primary;
+    const parts: string[] = [];
+    for (const id of [target.field_id, ...target.compose_with]) {
+        const raw = values[id];
+        const text = typeof raw === "string" ? raw.trim() : usableFieldValue(raw) ? String(raw) : "";
+        if (text) parts.push(text);
+    }
+    if (parts.length === 0) return undefined;
+    return parts.join(target.compose_separator ?? " ");
+}
+
 function usableFieldValue(value: unknown): value is FieldValue {
     if (typeof value === "boolean" || typeof value === "number") return true;
     return typeof value === "string" && value.trim().length > 0;
@@ -225,7 +273,7 @@ export function fidelityFieldValues(
     const out: Record<string, FieldValue> = {};
     for (const [pdfField, target] of Object.entries(mapping.acro_fields)) {
         if (applies && !applies(target.field_id)) continue;
-        const value = values[target.field_id];
+        const value = composedDestinationValue(target, values);
         if (!usableFieldValue(value)) continue;
         /**
          * The DESTINATION decides how a date prints.
