@@ -65,12 +65,24 @@ export type ServiceDayDateRange = {
 
 type CommonAuthoring = {
     idempotencyKey: string;
-    /** The authenticated actor, resolved server-side. */
+    /** The authenticated actor, resolved server-side. Blank only when `authority` is supplied. */
     actorUserId: string;
     /** Operator-chosen reason. Free text belongs in `note`, not here. */
     reasonKey: string;
     /** Optional operator note carried with the authored intent. */
     note?: string | null;
+    /**
+     * An explicit Authority facet, for authors who are not staff users.
+     *
+     * A family submitting through a bounded link is not an org user and has no
+     * `actorUserId` to name, but the thing they author is the SAME service-day
+     * vocabulary — so they come through these same builders rather than a
+     * parallel set that could drift from this one. Only the authority differs,
+     * because only the authority IS different.
+     *
+     * Omitted, the actor is named as the authority exactly as before.
+     */
+    authority?: AuthoringInput["authority"];
 };
 
 /** The inclusive day range expressed as one half-open valid-time window. */
@@ -84,6 +96,24 @@ function windowFor(range: ServiceDayDateRange): { validFrom: string; validTo: st
     // a 24h window and Mon–Fri runs to Saturday morning. Ending at the last day's
     // START would silently exclude the final day of every holiday.
     return { validFrom: from.validFrom, validTo: to.validTo };
+}
+
+/**
+ * Who is asserting this.
+ *
+ * A blank actor with no explicit authority would produce the authority key
+ * `user:`, which names nobody while looking like it names someone — an
+ * unattributable row in a ledger whose entire purpose is attribution. These
+ * builders are pure and already throw on an impossible date range; this is the
+ * same class of caller mistake.
+ */
+function authorityFor(common: CommonAuthoring): AuthoringInput["authority"] {
+    if (common.authority) return common.authority;
+    const actor = String(common.actorUserId ?? "").trim();
+    if (!actor) {
+        throw new Error("an authoring actor or an explicit authority is required");
+    }
+    return { authorityKey: `user:${actor}`, authorClass: "human" };
 }
 
 function conditionFor(predicateShape: string, common: CommonAuthoring): AuthoringInput["condition"] {
@@ -111,7 +141,10 @@ function tuple(args: {
         // rather than a governed authority key, so the authoring RPC resolves no
         // held authority and the act lands `proposed` — Attendance does not get to
         // grant itself binding force by choosing a grander-sounding key.
-        authority: { authorityKey: `user:${args.common.actorUserId}`, authorClass: "human" },
+        //
+        // The same reasoning covers a supplied authority: it names WHO asserted
+        // this, never how much force the assertion carries.
+        authority: authorityFor(args.common),
         modality: args.modality,
         subjects: [{ kind: args.subjectKind, ref: args.subjectId }],
         condition: conditionFor(args.predicateShape, args.common),
