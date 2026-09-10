@@ -193,7 +193,15 @@ export default function AttendanceCard({ model, context, receded = false, coordi
                             undefined
                         :   {
                                 checkIn: () => void run("attendance.check_in"),
-                                markAbsent: () => void run("attendance.mark_absent"),
+                                /*
+                                 * States what is EXPECTED rather than witnessing an
+                                 * absence nobody witnessed — the same command the
+                                 * Workspace runs, so the two surfaces cannot mean
+                                 * different things by the same word. This card has
+                                 * nowhere to ask WHY, so it does not pretend to
+                                 * know; the Workspace offers the reasons.
+                                 */
+                                markAbsent: () => void run("attendance.plan_absence"),
                                 checkOut: () => void run("attendance.check_out"),
                                 running,
                             }

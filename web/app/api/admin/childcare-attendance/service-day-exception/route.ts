@@ -119,8 +119,9 @@ export async function POST(request: NextRequest) {
     if (toDate && toDate < fromDate) return bad("The end date must be on or after the start date.");
     const range: ServiceDayDateRange = { fromDate, toDate };
 
-    const reasonKey = String(body.reason_key ?? "").trim();
-    if (!reasonKey) return bad("A reason is required.");
+    // Defaulted, not demanded — the same rule the registered actions apply, so
+    // the two entry points for one command cannot disagree about what is required.
+    const reasonKey = String(body.reason_key ?? "").trim() || "unspecified";
     const note = body.note != null ? String(body.note) : null;
 
     const predecessorId = String(body.predecessor_id ?? "").trim() || null;
