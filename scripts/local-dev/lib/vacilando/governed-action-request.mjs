@@ -420,6 +420,33 @@ export function presentationForGovernedAction(req = {}) {
       detail: `Restore the browser session for ${identity}${slot ? ` on Slot ${slot}` : ""} · lane ${lane} · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
     };
   }
+  if (key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
+    /*
+     * PRODUCTION MUST NOT BE APPROVABLE BY HABIT.
+     *
+     * Without this branch the production migration inherited the DEFAULT card —
+     * "Authorize — <title>" — while the staging sibling below has words an
+     * operator has read many times. The single human decision in this whole
+     * loop was being asked in the vocabulary of the routine one, or in no
+     * vocabulary at all.
+     *
+     * So the environment leads every string, the target is named in full, and
+     * the word STAGING appears nowhere.
+     */
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
+    const target = inputs.target || inputs.environment || req.target || "alloy_deployed_primary";
+    const sha = String(inputs.expectedSha || inputs.expected_sha || "");
+    return {
+      approve_label: "Authorize PRODUCTION migration",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — PRODUCTION database migration",
+      mission_need: `Needs approval — PRODUCTION DATABASE MIGRATION on ${target}`,
+      detail: `PRODUCTION DATABASE MIGRATION · Target: ${target} (deployed primary) · Candidate ${sha || "—"}`
+        + ` · Applies ${versions.length ? versions.join(", ") : "the approved batch"}`
+        + " · This mutates the live database and cannot be undone by Vacilando.",
+    };
+  }
   if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
     const n = list.length || (inputs.expected_version ? 1 : 0);
@@ -562,9 +589,62 @@ function openPrProposal(req) {
   };
 }
 
+const PRODUCTION_MIGRATION_CONSEQUENCES = Object.freeze([
+  "Schema changes are applied to the LIVE production database that serves real tenants.",
+  "The migrations run in ascending version order and stop on the first failure.",
+  "Vacilando cannot undo this. Reversing a migration is a separate, human decision.",
+  "A migration that has partially executed is never retried automatically.",
+]);
+
+/**
+ * The facts a Director weighs before authorizing a PRODUCTION schema mutation.
+ *
+ * The card has to answer four questions the staging card never has to: which
+ * database, which exact revision, which exact migrations, and what gap this is
+ * closing. The last is why both heads are rows — "apply two migrations" is
+ * enough to identify the action and not enough to decide it.
+ *
+ * Where a value was not measured, the row SAYS so. An omitted row reads as
+ * "fine"; "not measured at proposal time" reads as what it is — and the
+ * executor re-measures it regardless, because a proposal-time reading is not
+ * execution authority on this path.
+ */
+function productionMigrationProposal(req) {
+  const i = req.inputs || {};
+  const snap = req.proposal_snapshot || null;
+  const list = Array.isArray(i.migrations) ? i.migrations : [];
+  const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
+  const files = list.map((m) => (typeof m === "string" ? m : (m?.path || m?.migration_path || m?.version || ""))).filter(Boolean);
+  const target = i.target || i.environment || req.target || "alloy_deployed_primary";
+  const sha = String(i.expectedSha || i.expected_sha || "");
+  const facts = [
+    factRow("Environment", "PRODUCTION — deployed primary"),
+    factRow("Database target", target),
+    factRow("Repository", i.repository || i.repo || null),
+    factRow("Candidate commit", sha || null),
+    factRow("Migrations", files.length ? files.join("\n") : null),
+    factRow("Identities", versions.length ? versions.join(", ") : null),
+    factRow("Hosted head now", snap?.hosted_head || "not measured at proposal time — re-measured before execution"),
+    factRow("Required head", snap?.required_head || (versions.length ? versions[versions.length - 1] : null)),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+  return {
+    kind: "database_apply_promoted_migration",
+    headline: `PRODUCTION DATABASE MIGRATION — apply ${versions.length || "the approved"} migration${versions.length === 1 ? "" : "s"} to ${target}`,
+    url: null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...PRODUCTION_MIGRATION_CONSEQUENCES],
+    authorization_note: `Approving creates a single-use authorization pinned to candidate ${sha.slice(0, 12) || "—"} and to exactly these migrations, valid for ${GRANT_TTL_MINUTES} minutes. Every production precondition is checked again at execution against a fresh reading of the hosted database; if anything has moved, it refuses and has to be decided again.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_available: Boolean(snap),
+  };
+}
+
 export function governedProposalFor(req = {}) {
   if (req.action_key === ACTION_TYPES.REPOSITORY_PUSH) return pushProposal(req);
   if (req.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) return openPrProposal(req);
+  if (req.action_key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) return productionMigrationProposal(req);
   if (req.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
   const i = req.inputs || {};
   const snap = req.proposal_snapshot || null;
@@ -2691,6 +2771,39 @@ function ensureRepositoryGrant(rec, { actor, nowMs, root } = {}) {
   return { ok: true, grant: minted.grant, reminted: true };
 }
 
+/**
+ * The approval a production migration executes under, read from the record.
+ *
+ * An OPERATOR approval is the real thing. A policy or delegated decision is
+ * carried through as what it IS rather than dropped, because proof 5 must be
+ * able to REFUSE it — silently omitting a delegated approval would make the
+ * request look unapproved instead of improperly approved, and those are
+ * different faults with different fixes.
+ */
+export function productionApprovalFromRecord(rec = {}) {
+  const operator = rec.operator_approval || null;
+  const director = rec.director_approval || null;
+  const source = operator || director;
+  if (!source) return null;
+  const delegated = !operator && Boolean(director);
+  const versions = Array.isArray(rec.inputs?.migrations)
+    ? rec.inputs.migrations.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean)
+    : [];
+  return {
+    decision: source.decision || null,
+    actor: source.actor || null,
+    decision_actor: delegated ? "policy" : (source.actor || null),
+    at: source.at || null,
+    delegated,
+    content_fingerprint: source.content_fingerprint || governedContentFingerprint(rec),
+    approved_versions: versions,
+    // Recorded at approval time when the card carried it. A null means the
+    // executor has no approved head to compare against and says so, rather
+    // than inventing one from the reading it is about to take.
+    hosted_head_at_approval: rec.proposal_snapshot?.hosted_head || null,
+  };
+}
+
 function defaultExecute(rec, { nowMs, actor, root } = {}) {
   const scope = authorityScopeFor(rec);
   // Execution authority for THIS exact request, whoever derived it.
@@ -2889,6 +3002,10 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       grant,
       authorizationId,
       exactContext,
+      // THE APPROVAL TRAVELS. Proof 5 of assertProductionApplyPreconditions
+      // refuses without it, and the trusted host cannot re-derive it from
+      // inputs — it is the one fact that lives only on this record.
+      approval: productionApprovalFromRecord(rec),
     });
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
