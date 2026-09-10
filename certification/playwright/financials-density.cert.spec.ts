@@ -586,14 +586,16 @@ test.describe("financials 4B — the workspace has a financial day in it", () =>
             expect(
                 text,
                 `the ${chapter} card does not declare what kind of destination it is`,
-            ).toMatch(/Configuration|Utility|Owned elsewhere/);
+                // Case-insensitive: the posture chip is CSS-uppercased, so `innerText` returns
+                // "CONFIGURATION" for the label the model calls "Configuration".
+            ).toMatch(/Configuration|Utility|Owned elsewhere/i);
         }
 
         // Funding is the case the disclosure exists for: Processing owns who-pays, not Financials.
         expect(
             (await page.locator('[data-financials-studio-tile="funding"]').innerText()),
             "the funding card must say it is owned elsewhere rather than imply Financials configures it",
-        ).toContain("Owned elsewhere");
+        ).toMatch(/Owned elsewhere/i);
 
         for (let i = 0; i < count; i += 1) {
             const tile = tiles.nth(i);
