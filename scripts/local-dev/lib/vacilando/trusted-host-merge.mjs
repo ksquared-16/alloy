@@ -354,14 +354,36 @@ export function summarizeCheckRollup(rollup = [], { requiredNames = [] } = {}) {
   });
   const required = classified.filter((row) => row.required === true);
   const scoped = required;
+  // A REQUIRED CONTEXT THAT NEVER REPORTED IS NOT AN ABSENCE OF PROBLEMS.
+  //
+  // Everything below classifies checks that EXIST in the rollup. A context
+  // branch protection requires but which no workflow ever created has no row at
+  // all, so it landed in none of failing, pending or unknown, and `required`
+  // counted the ones that showed up — 2 of 3 reads as "two required checks, both
+  // green". GitHub meanwhile holds the pull request at "Expected — waiting for
+  // status to be reported" and refuses the merge. The gate saw nothing wrong and
+  // could not say why, which is the worst shape a refusal can have.
+  //
+  // This is not hypothetical: a path-filtered workflow was made a required check
+  // and silently blocked every pull request that did not touch its paths.
+  const presentNames = new Set(classified.map((row) => row.name));
+  const missingRequired = [...requiredSet].filter((name) => !presentNames.has(name));
   return {
     total: classified.length,
-    required: scoped.length,
+    // The number of required contexts ACCOUNTED FOR, present or not, so this
+    // never reads as fewer requirements than protection actually imposes.
+    required: scoped.length + missingRequired.length,
+    reported: scoped.length,
     requirednessKnown: classified.some((row) => row.required === true || row.required === false) || requiredSet.size > 0,
     passing: scoped.filter((row) => row.state === "success" || row.state === "neutral").length,
     failing: scoped.filter((row) => row.state === "failure").map((row) => row.name),
     pending: scoped.filter((row) => row.state === "pending").map((row) => row.name),
     unknown: scoped.filter((row) => row.state === "unknown").map((row) => row.name),
+    // Named separately from `pending` on purpose. "Running, wait for it" and
+    // "no workflow will ever create this" need different operator actions: the
+    // first resolves itself, the second needs the workflow trigger or the
+    // protection rule changed.
+    missingRequired,
     unscopedPending: classified.filter((row) => row.required !== true && row.state === "pending").map((row) => row.name),
     unscopedUnknown: classified.filter((row) => row.required !== true && row.state === "unknown").map((row) => row.name),
     items: classified,
@@ -672,6 +694,20 @@ export function evaluateMergeReadiness(inspected) {
       ok: false,
       code: "required_checks_failed",
       detail: `Required checks failed: ${pr.checks.failing.join(", ")}`,
+      evidence,
+      pr,
+      normalized: n,
+    };
+  }
+  if (pr.checks.missingRequired?.length) {
+    return {
+      ok: false,
+      code: "required_checks_never_reported",
+      detail: `Required check(s) never reported: ${pr.checks.missingRequired.join(", ")}. `
+        + "Branch protection requires them and no workflow created them, so GitHub will hold this "
+        + "pull request at \"Expected — waiting for status to be reported\". This does not resolve on "
+        + "its own: either the workflow does not trigger for these changes, or the protection rule "
+        + "names a check that no longer exists.",
       evidence,
       pr,
       normalized: n,
