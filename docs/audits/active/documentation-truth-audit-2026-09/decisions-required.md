@@ -99,16 +99,25 @@ What is unsettled is which document may say so.
 **Recommendation: (b).** A freeze is a record of a moment; it should not be edited, and it should
 not be read in the present tense two months and a shipped kernel later.
 
-### D6 — Who owns Scheduling / staffing documentation?
+### D6 — Who owns Scheduling / staffing documentation? · **RESOLVED (Thread 2)**
 
-**Class C.** Employment foundation, staff assignment eligibility and staff presence facts shipped
-August 2026 and `web/app/adminV2/scheduling/` exists, but no canonical module doc owns the domain.
-Writing one means defining the domain model — product work, not documentation maintenance,
-particularly since two core doctrine docs described staffing in terms of a **shift model that does
-not exist** (corrected in this pass to `schedule_assignments` with `subject_type='staff'`).
+**Thread 1 overstated this.** Two canonical owners existed and were missed:
+`rfcs/operational-expansion-phase1.md` (canonical, frozen) states outright that it *"Governs
+Scheduling, Attendance, Capacity, Staffing, Billing, Forecasting, Recommendations, and Actions"*,
+and `modules/attendance-system.md` already owns the staff branch of the operational day in
+detail — presence facts, staff supply, roster composition, and the workspace split. It is simply
+named for Attendance, so a reader looking for "staffing" never finds it.
 
-Recorded as an owner gap in `product-roadmap.md` and the audit README. Someone must decide whether
-Scheduling gets a module doc now or after the domain settles.
+Exactly one thing genuinely lacks an owner: the `schedule_assignments` /
+`operational_assignment_types` **commitment object** as a subject-neutral domain — its lifecycle
+states, `commitment_kind`, supersede-not-patch rule and type registry. `placement-system.md` owns
+its child branch; `attendance-system.md` owns everything downstream; neither owns the object.
+
+**Resolved with four bounded edits, not a new module doc.** A Scheduling module doc would have to
+define a domain model for a capability with **zero staff assignment rows**, a **child-only write
+path**, **no shift model in any of the 398 migrations**, and **all four scheduling capability keys
+inert**. That is doctrine ahead of product. The commitment object gets a canonical owner on a
+legible trigger: when `subject_type='staff'` traffic exists and the write path has a staff branch.
 
 ### D7 — Does the frozen Third-Party Payer law stand?
 
@@ -124,22 +133,59 @@ entity. This pass added a warning to the frozen doc so nobody builds on determin
 the generalization exists in the schema. **No recommendation** — this is a financial domain model
 question, and the cost of the third option is not visible from documentation.
 
-### D8 — Reconcile the diverged Access/Identity copies
 
-**Class C (bounded).** Not the "two forked copies" the audit first reported: both directories
-declare their relationship — `planning/access-identity-v2/` is the product-source copy,
-`vacilando-os/qa/access-identity-v2/` is runtime certification evidence, and each names the other.
-Ownership was never ambiguous.
+**Thread 2 packet — the cost is now visible.** Thread 1 gave no recommendation because "the cost
+of the third option is not visible from documentation". It is four divergences, not one, of very
+different cost:
 
-The defect is divergence, and it is **bidirectional**: `01` and `02` are richer in the
-product-source copy, while `03-implementation-qa-sequence.md` — the document the copy calls "the
-plan of record" — is newer in the evidence copy (2026-09-06 vs 2026-08-10, eight execution
-updates). Code citations split roughly 40/44, and for `03` specifically about 30 code sites cite
-the stale copy against 11 citing the current one.
+| # | Law requires | Shipped | Cost to close |
+|---|---|---|---|
+| 1 | A payer-agnostic **Third-Party Payer** reference entity | `financial_funding_agencies` — **already payer-agnostic**; nothing in it names childcare, and its program vocabulary already spans government / employer / scholarship / corporate | **Naming only.** A rename plus a `payer_kind` column |
+| 2 | **Coverage** attached to an Agreement | `financial_subsidy_authorizations` is hard-bound to a child (`customer_id` and `customer_member_id` both NOT NULL) — it cannot express employer coverage of a household or a grant covering a cohort | **Moderate**, and cheap only while there is one payer kind |
+| 3 | Responsibility takes a `Party (household \| employer \| Third-Party Payer)` | `responsible_party_type check (in ('person'))` — a Third-Party Payer can **never** be a responsible party | **Expensive, and it is a doctrine change** |
+| 4 | A **Settlement Run** spanning payers | Per-payer remittances + variances | **Low** — an additive parent table |
 
-Recorded in the copy's README so nobody reads a month-stale plan as current. Merging 5,000-line
-documents is content work for the owning team, not a documentation-maintenance act. Note a live
-session is working this area.
+**Recommendation: split it.** Amend the freeze for #1 and #2 — the shipped payer entity satisfies
+the law's purpose (keep the schema payer-agnostic) even though it fails its vocabulary, and #2
+should be fixed while it is still cheap. Do **not** fold #3 into this decision: whether a
+non-person party can owe money in Alloy is its own question, and the Director's existing
+explicit-named-party decision was reasoned about people. Re-generalizing subsidy now would spend
+migration and re-certification budget on zero behavioural change, in a module that **has no
+operator surface at all** — optimizing the wrong end.
+
+### D8 — Reconcile the diverged Access/Identity copies · **RESOLVED (Thread 2)**
+
+**Ownership is provable from code and did not need escalation.** Set A
+(`planning/access-identity-v2/`) owns the **plan**; Set B (`vacilando-os/qa/access-identity-v2/`)
+owns the **evidence**. That is what both READMEs already say; what was missing was proof.
+
+The proof is citation resolution, not recency:
+
+- Every section a Set-B citation names (§5, §7) **exists identically in both copies** — not one
+  Set-B citation resolves uniquely to B.
+- Roughly two dozen Set-A citations name sections (§18, §21, §45–§48) that **do not exist in B at
+  all**.
+
+So repointing Set-B citations at Set A would lose nothing; repointing Set-A citations at Set B
+would break two dozen. Set B is nonetheless **immovable**: a test reads
+`w11-catalog-reconciliation.json` from it at runtime, and the acceptance gate's
+`ALLOWED_CHANGE_PREFIX` is that folder.
+
+**Correction to the Thread 1 record.** This register previously said "about 30 code sites cite the
+stale copy against 11 citing the current one". The counts were right; **the labels were inverted in
+effect.** Set A is "stale" only along the execution-log axis. Along the plan-structure axis Set B
+is missing most of the plan, and it is the citations into A's later sections that are load-bearing.
+A reader acting on the earlier sentence would have repointed code the wrong way.
+
+**Disposition:** ratify the existing split; repoint the handful of `B/03` citations at `A/03`
+(they name sections identical in both, so it is mechanical and lossless); banner `B/03` as the
+execution ledger rather than a plan. Do **not** merge the two files — the execution log is
+evidence, and editing it into a plan destroys the provenance `PRODUCT-SOURCE.md` exists to protect.
+Whether Set A also receives copies of `00`/`04`/`05`/`06`/`07` is a separate, smaller decision.
+
+**Coordination note:** a live `agent/access-identity` branch is changing catalog and ratchet
+figures in this area daily. Thread 2 therefore documented access **method and source file** rather
+than frozen counts, so the governance doc survives that merge.
 
 ### D9 — Promote the normative subset of `docs/runtime/`?
 
@@ -165,3 +211,36 @@ It needs an owning document and, if it is a durable architectural control, a Pla
 entry. Note the flag module's own docblock still says "OFF (default) → no Operational Expectation
 authoring", two functions above the code that contradicts it — application source, left alone by
 this documentation pass.
+
+**Thread 2 packet.**
+
+*Has the line been crossed?* Both readings are honest. **Yes:** the P1 certification says flatly
+there is no operator-facing authoring surface and the intake is flag-gated off; both are now false
+for one purpose. **No:** every such sentence is scoped, in the frozen source's own bolded word, to
+the *generic* intake — which the seam does not touch. The seam changed no semantic law: rows land
+`proposed` and stay there, because Attendance authors under an individual and holds no governed
+authority. What it changed was *procedural*: the corpus assumed the first production write would be
+gated by an operator setting an env var, and the seam made it gated by a merge instead. Both are
+legitimate rollout controls; they differ in who holds the lever and how visible pulling it is.
+
+*What ratification would change.* **Code: nothing** — it runs today. **Docs: substantial** — the
+seam has no owning document. **The gate for adding a second purpose: everything.** There is no CI
+check, no lint, and no CODEOWNERS entry constraining the activated-purpose set. The nearest thing
+to a gate is a test asserting the set has exactly one member — load-bearing by accident, and a
+purpose-adding PR would simply update it.
+
+*One live consequence nobody has decided.* The ratification gateway passes **no purpose**, so an
+activated purpose can author `proposed` rows in production that **nothing in production can
+ratify** while the env flag is off. That is either a deliberate safety posture or an oversight;
+right now it is undocumented either way.
+
+**Recommendation: ratify, with three conditions** — give the seam an owning document and a Platform
+Decisions entry; name the gate for adding a purpose (at minimum CODEOWNERS, better a test that
+enumerates the set by name so a new purpose fails CI naming a reviewer); and decide the
+ratification asymmetry explicitly.
+
+**Do not remove the seam.** That is the option with the largest blast radius despite sounding
+conservative: absence, vacation and closure authoring stops, its certification loses its input, the
+kiosk's closed-day guard loses its source, and tenants land where old closures apply and no new one
+can be authored. Restoring it would require either the global flag — opening every domain — or the
+privilege escalation the seam exists to avoid.
