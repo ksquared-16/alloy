@@ -19,6 +19,15 @@ Settings / Developer Platform
   → API Documentation → API Activity → Webhooks
 ```
 
+> **Corrected 2026-09-11 (B.6), on operator instruction.** The entry point is
+> **Organization**, not "Settings". `/adminV2/settings/*` is the route path and
+> the shell; the word an operator actually reads is **Organization** — it is the
+> sidebar title and `aria-label` (`web/app/adminV2/components/Sidebar.tsx:269`)
+> and the breadcrumb root (`SettingsHierarchyBreadcrumb.tsx:26`). Doctrine agrees:
+> *"Organization is the sole canonical Catalog Runtime."* Naming the product
+> surface after its URL was my error, repeated across Slice A and B.4, and it is
+> corrected throughout below.
+
 **Alloy's frozen Configuration doctrine does not permit that shape.**
 `docs/platform/operator/configuration-workspace-platform-doctrine.md` fixes the
 hierarchy —
@@ -122,16 +131,17 @@ forbids. Building them as one *undifferentiated* surface would confront an
 operator with Application Principals to connect a curriculum tool, which Part 10
 forbids.
 
-**Whether they are one Settings entry or two is a presentation decision**, and
-V1 ratifies: **one domain entry named "Integrations"**, with the developer lens
-reached from an installation for users holding `integrations.manage`. Operators
-meet the word they understand; developers reach the depth they need one click in,
-and never through a different product.
+**Whether they are one catalog entry or two is a presentation decision**, and
+V1 ratifies: **one configuration domain named "Integrations", reached from the
+Organization catalog**, with the developer lens reached from an installation for
+users holding `integrations.manage`. Operators meet the word they understand;
+developers reach the depth they need one click in, and never through a different
+product.
 
 ## Part 3 — the developer journey
 
 ```text
-1  Operator opens Settings → Integrations
+1  Operator opens Organization → Integrations
 2  Collection Runtime: existing installations + their health.  Empty state explains the model.
 3  "Connect an integration" → choose a published application, or create a tenant-private one
 4  Installation is created:  application × this organization

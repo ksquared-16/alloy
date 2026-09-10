@@ -109,6 +109,7 @@ Canonical truth
 | [`product/09-slice-b3-first-resource.md`](product/09-slice-b3-first-resource.md) | **Slice B.3 — implemented.** Canonical Location authority, scope catalog, `GET /api/v1/locations`, hierarchy decision, collection contract |
 | [`product/10-slice-b4-sync-and-admin-foundations.md`](product/10-slice-b4-sync-and-admin-foundations.md) | **Slice B.4 — PARTIAL.** `updated_since`, administrative audit hardening, internal operator authorization, health model, scope presentation. UI deferred: browser certification needs a slotted lane |
 | [`product/11-slice-b5-convergence.md`](product/11-slice-b5-convergence.md) | **Slice B.5 Gate 1 — PARTIAL.** Attendance producer audit, ownership classification, `integration_resource_refs`, principal→attendance authority adapter, legacy disposition |
+| [`product/12-slice-b6-blocked.md`](product/12-slice-b6-blocked.md) | **Slice B.6 — BLOCKED** on the required slotted/live environment. Contains the Organization-not-Settings correction and the legacy-consumer analysis for the slotted run |
 | [`guide/`](guide/README.md) | **The developer documentation starter** — getting started, conventions, attendance example |
 
 ## What V1 deliberately excludes
