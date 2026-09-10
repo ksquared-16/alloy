@@ -24,7 +24,7 @@
  * Narrow by design: PDF, PNG and JPEG, magic-bytes verified, 10MB cap.
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
@@ -166,4 +166,69 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     return publicOk({ document_id: (docRow as { id: string }).id, filename, byte_size: bytes.length });
+}
+
+/**
+ * GET ?document_id=… — hand a participant back the file they just attached.
+ *
+ * A parent could attach an immunization record, see only its filename, and have no way to check
+ * they had picked the right photo before committing to it. "Replace" without "look" asks them to
+ * correct a mistake they cannot see.
+ *
+ * Ownership is proved from the DOCUMENT, not from the request: the file must carry this session's
+ * id in the metadata the upload wrote. A token grants sight of that session's own attachments and
+ * nothing else — not another session's, not another family's, not an arbitrary org document whose
+ * id someone guessed.
+ */
+export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return publicErr("Server misconfiguration", 500);
+
+    const { token: rawToken } = await params;
+    const documentId = request.nextUrl.searchParams.get("document_id")?.trim() ?? "";
+    if (!documentId) return publicErr("document_id is required", 400);
+
+    const supabase = createServiceRoleClient();
+    const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
+    if (!access.ok) {
+        return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : 409, {
+            code: access.error.code,
+        });
+    }
+
+    const { data: doc } = await supabase
+        .from("documents")
+        .select("id, org_id, bucket, storage_path, mime_type, original_filename, metadata")
+        .eq("id", documentId)
+        .eq("org_id", access.value.orgId)
+        .maybeSingle();
+    const row = doc as {
+        bucket?: string | null;
+        storage_path?: string | null;
+        mime_type?: string | null;
+        original_filename?: string | null;
+        metadata?: { packet_session_id?: string } | null;
+    } | null;
+
+    // The document must belong to THIS session. Anything else is not this participant's to see.
+    if (!row || String(row.metadata?.packet_session_id ?? "") !== access.value.sessionId) {
+        return publicErr("That attachment is not part of this packet.", 404, { code: "NOT_FOUND" });
+    }
+
+    const bucket = row.bucket?.trim() || process.env.ADMIN_DOCUMENTS_BUCKET?.trim() || "org_documents";
+    const path = row.storage_path?.trim() ?? "";
+    if (!path) return publicErr("That attachment is no longer available.", 404, { code: "NOT_FOUND" });
+
+    const { data: blob, error } = await supabase.storage.from(bucket).download(path);
+    if (error || !blob) return publicErr("That attachment is no longer available.", 404, { code: "NOT_FOUND" });
+
+    const bytes = Buffer.from(await blob.arrayBuffer());
+    return new NextResponse(bytes, {
+        status: 200,
+        headers: {
+            "Content-Type": row.mime_type?.trim() || "application/octet-stream",
+            // Inline so it opens in a viewer rather than downloading — the parent is CHECKING it.
+            "Content-Disposition": `inline; filename="${(row.original_filename ?? "attachment").replace(/"/g, "")}"`,
+            "Cache-Control": "private, no-store",
+        },
+    });
 }

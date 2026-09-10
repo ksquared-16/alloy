@@ -1630,6 +1630,7 @@ export function FormEmbedClient({
                                     <ParticipantUploads
                                         requests={uploadRequests}
                                         attached={attachedUploads}
+                                        token={token}
                                         onAttached={recordAttachment}
                                         onUpload={uploadParticipantDocument}
                                     />
