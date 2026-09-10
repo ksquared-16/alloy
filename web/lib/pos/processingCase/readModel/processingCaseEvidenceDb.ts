@@ -120,15 +120,55 @@ function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): Sour
 
         const { data: items } = await supabase
             .from("form_packet_session_items")
-            .select("packet_session_id, form_submission_id")
+            .select("packet_session_id, form_submission_id, sequence_index")
             .eq("org_id", orgId)
-            .in("packet_session_id", sessionIds);
-        const itemRows = (items ?? []) as { packet_session_id: string; form_submission_id: string | null }[];
+            .in("packet_session_id", sessionIds)
+            .order("sequence_index", { ascending: true });
+        const itemRows = (items ?? []) as {
+            packet_session_id: string;
+            form_submission_id: string | null;
+            sequence_index: number | null;
+        }[];
 
         const submissionIds = [
             ...new Set(itemRows.map((i) => i.form_submission_id).filter((x): x is string => Boolean(x))),
         ];
         const submissionEvidence = await submissionLoader(submissionIds);
+
+        /*
+         * WHICH FORM EACH ANSWER CAME FROM.
+         *
+         * The merge below flattens several submissions into one list. Without a name against each
+         * value the operator panel showed the same three child fields three times over with no way
+         * to tell which form each belonged to — and no way to see that one of them was bound wrong.
+         */
+        const formNameBySubmission = new Map<string, string>();
+        if (submissionIds.length > 0) {
+            const { data: subs } = await supabase
+                .from("form_submissions")
+                .select("id, form_definition_id")
+                .eq("org_id", orgId)
+                .in("id", submissionIds);
+            const subRows = (subs ?? []) as { id: string; form_definition_id: string | null }[];
+            const defIds = [
+                ...new Set(subRows.map((r) => r.form_definition_id).filter((x): x is string => Boolean(x))),
+            ];
+            const nameByDef = new Map<string, string>();
+            if (defIds.length > 0) {
+                const { data: defs } = await supabase
+                    .from("form_definitions")
+                    .select("id, name")
+                    .eq("org_id", orgId)
+                    .in("id", defIds);
+                for (const d of (defs ?? []) as { id: string; name: string | null }[]) {
+                    if (d.name) nameByDef.set(d.id, d.name);
+                }
+            }
+            for (const r of subRows) {
+                const name = r.form_definition_id ? nameByDef.get(r.form_definition_id) : undefined;
+                if (name) formNameBySubmission.set(r.id, name);
+            }
+        }
 
         for (const item of itemRows) {
             if (!item.form_submission_id) continue;
@@ -143,8 +183,16 @@ function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): Sour
                 ...(current.collectionEvidence?.diagnostics ?? []),
                 ...(ev.collectionEvidence?.diagnostics ?? []),
             ];
+            // Each value keeps the form, step and submission it came from, so a coordinator's
+            // merged list can still be read as the several forms it actually is.
+            const stamped = ev.proposedValues.map((v) => ({
+                ...v,
+                sourceFormName: formNameBySubmission.get(item.form_submission_id as string) ?? null,
+                sourceStepIndex: item.sequence_index ?? null,
+                sourceSubmissionId: item.form_submission_id,
+            }));
             out.set(item.packet_session_id, {
-                proposedValues: [...current.proposedValues, ...ev.proposedValues],
+                proposedValues: [...current.proposedValues, ...stamped],
                 documentId: null,
                 collectionEvidence:
                     mergedGroups.length > 0 || mergedDiagnostics.length > 0

@@ -68,6 +68,29 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
 
     const primary = detail.sources.find((s) => s.role === "primary") ?? detail.sources[0] ?? null;
     const submitted = evidence.flatMap((e) => e.proposedValues);
+    /*
+     * One group per source form, in packet step order; a single-form case yields one unnamed group
+     * and renders as it always did.
+     */
+    const submittedGroups = (() => {
+        const byKey = new Map<
+            string,
+            { key: string; formName: string | null; stepIndex: number | null; values: typeof submitted }
+        >();
+        for (const v of submitted) {
+            const key = v.sourceSubmissionId ?? v.sourceFormName ?? "__single__";
+            const existing = byKey.get(key);
+            if (existing) existing.values.push(v);
+            else
+                byKey.set(key, {
+                    key,
+                    formName: v.sourceFormName ?? null,
+                    stepIndex: v.sourceStepIndex ?? null,
+                    values: [v],
+                });
+        }
+        return [...byKey.values()].sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0));
+    })();
     const collectionGroups = evidence.flatMap((e) => e.collectionEvidence?.groups ?? []);
     const collectionDiagnostics = evidence.flatMap((e) => e.collectionEvidence?.diagnostics ?? []);
     const matchedRecords =
@@ -107,14 +130,42 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                 {submitted.length > 0 ? (
                     <>
                         <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-400">Submitted values</div>
-                        <dl className="space-y-1.5">
-                            {submitted.map((v, i) => (
-                                <div key={`${v.label}:${i}`} className="flex gap-2 text-[12.5px]">
-                                    <dt className="w-40 shrink-0 text-stone-500">{v.label}</dt>
-                                    <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">{displaySubmittedValue(v.value)}</dd>
-                                </div>
-                            ))}
-                        </dl>
+                        {/*
+                          * GROUPED BY THE FORM THEY CAME FROM.
+                          *
+                          * A packet returns several forms at once, and merging them into one list
+                          * showed the same three child fields three times over with no way to tell
+                          * which form each belonged to — or, as live QA found, that one of them was
+                          * bound to the wrong canonical field. A single-form case carries no
+                          * provenance and renders exactly as before.
+                          */}
+                        {submittedGroups.map((group) => (
+                            <div key={group.key} className="mb-2 last:mb-0">
+                                {group.formName ? (
+                                    <div
+                                        className="mb-1 flex items-baseline gap-2 text-[11.5px] font-semibold text-alloy-midnight"
+                                        data-submitted-form-group={group.formName}
+                                    >
+                                        <span>{group.formName}</span>
+                                        {group.stepIndex != null ? (
+                                            <span className="text-[10.5px] font-normal text-stone-400">
+                                                Step {group.stepIndex + 1}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                                <dl className="space-y-1.5">
+                                    {group.values.map((v, i) => (
+                                        <div key={`${v.label}:${i}`} className="flex gap-2 text-[12.5px]">
+                                            <dt className="w-40 shrink-0 text-stone-500">{v.label}</dt>
+                                            <dd className="min-w-0 flex-1 font-medium text-alloy-midnight">
+                                                {displaySubmittedValue(v.value)}
+                                            </dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </div>
+                        ))}
                     </>
                 ) : (
                     <div className="text-[12.5px] text-stone-400">No submitted values on this source — see evidence below.</div>
