@@ -150,6 +150,23 @@ function classify(
      * be forty-one boxes all labelled the same thing. It belongs to the artifact, where the school's
      * own sentence sits beside it, and the same rule already keeps it out of the conversation.
      */
+    /*
+     * A CANONICAL FACT IS STILL A FACT WHEN THE PDF NAMED THE BOX.
+     *
+     * The rule below is right about PRINTING: a label that is the source widget's own name carries
+     * no authored meaning and Alloy must not caption a control with it. But it ran before the
+     * binding check, so on a source-fidelity Form — every real enrolment Form — every control
+     * became `display_content`, `resolved` came back empty, and "Make a change" offered a parent
+     * nothing to correct beside a document that clearly printed their child's name.
+     *
+     * A control that is canonically bound AND has a value is a semantic fact whatever the PDF
+     * called the box, and Alloy has words for it from the binding rather than from the document:
+     * `captionFor` already reads `naturalFieldLabel(participant_label, shared_key)`. So the
+     * provenance rule keeps doing its job — `participant_label` stays null and nothing prints the
+     * widget name — while the fact itself remains correctable.
+     */
+    if (sharedKey != null && hasValue(value)) return "resolved_shared_value";
+
     if (participantLabel == null) return "display_content";
 
     /*

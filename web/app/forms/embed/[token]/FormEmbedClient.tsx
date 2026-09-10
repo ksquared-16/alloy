@@ -769,6 +769,45 @@ export function FormEmbedClient({
          */
     }, [token, submissionId]);
 
+    /*
+     * KEEP THE REVIEW FACT LIST IN STEP WITH THE DOCUMENT IT DESCRIBES.
+     *
+     * `resolvedValues` was read once, inside the schema-load effect. During shared collection the
+     * renderer has resolved nothing yet, so that read returned `{}` — which is truthy, so it was
+     * stored, the `?? payload.values` fallback never fired again, and nothing re-fetched when the
+     * conversation later settled the values.
+     *
+     * The consequence was the "Make a change" panel: the document regenerates on `documentRev` and
+     * printed Pathb, Certopp and the date of birth, while the fact list beside it compiled from an
+     * empty map and offered the parent nothing to correct. Both surfaces are meant to describe ONE
+     * artifact, so the values are re-read whenever that artifact is regenerated or the participant
+     * reaches review.
+     *
+     * This sits ABOVE the loading/error early returns on purpose: a hook after a conditional return
+     * runs on some renders and not others, which white-screened this app once already.
+     */
+    const reviewPhaseForFacts = enrollmentObjective ? (enrollmentPhase ?? enrollmentObjective.phase) : null;
+    useEffect(() => {
+        if (reviewPhaseForFacts !== "artifact_review") return;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch(`/api/public/forms/${encToken}/enrollment-artifact`);
+                const body = (await res.json()) as { ok?: boolean; data?: { resolvedValues?: Record<string, unknown> } };
+                if (cancelled) return;
+                // Only a non-empty answer replaces what we hold: an empty map is "not resolved yet",
+                // not "this document has no facts", and storing it is what caused the blank panel.
+                const next = body?.ok ? body.data?.resolvedValues : null;
+                if (next && Object.keys(next).length > 0) setResolvedArtifactValues(next);
+            } catch {
+                /* The document still renders; the list simply keeps what it had. */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [reviewPhaseForFacts, documentRev, encToken]);
+
     if (phase === "loading") {
         return (
             <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
