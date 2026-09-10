@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -57,8 +57,8 @@ Fact kinds in scope:
 
 ## Capture substrate (V1, 2026-09-09)
 
-Every attendance producer — operator today; kiosk, parent, integration and door
-access later — converges on one server-authoritative ingestion path. Channels
+Every attendance producer — operator and kiosk today; parent, integration and
+door access later — converges on one server-authoritative ingestion path. Channels
 differ in what trusted context they supply; they do not get their own attendance
 truth.
 
@@ -91,7 +91,10 @@ the trusted channel. `CLIENT_ASSERTABLE_CHANNELS` is empty and must stay empty.
 
 `source_type` admits `kiosk`, `integration_api`, `door_access` and `mobile_app`
 so those producers need no schema change. **Representable is not implemented** —
-a channel becomes real only when it has a trusted-context resolver here. A
+a channel becomes real only when it has a trusted-context resolver here. `kiosk` is now
+implemented (`kiosk/kioskDeviceAuthority.ts`). `integration_api`, `door_access` and
+`mobile_app` remain representable only: no route mints them, and a request body carrying
+one is mapped to the operator channel by `operatorChannelForSurface`. A
 non-human channel must supply a `producerKey` identifying the device or
 integration; an anonymous `system` write is refused.
 
@@ -552,7 +555,15 @@ Product record: [`../planning/roster-product-v1-stage1.md`](../planning/roster-p
 - **Edit / End employment** have no operator surface yet (Add Staff does, at `/organization/staff`),
   which is why the drawer-era `PersonEmploymentSection` is retained-but-unmounted rather than deleted.
 
-### Where the truth lives
+### Ownership note
+
+This document is the canonical owner of the **staff branch of the operational day** — presence
+facts, staff supply, and roster composition. That ownership is easy to miss because the document
+is named for Attendance; a reader looking for "staffing" belongs here. It does **not** own the
+assignment commitment object — see [`../core/placement-system.md`](../core/placement-system.md)
+§ Subject scope.
+
+## Where the truth lives
 
 | Concern | Owner |
 |---------|-------|

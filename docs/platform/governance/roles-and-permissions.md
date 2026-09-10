@@ -31,6 +31,47 @@ directions. The four layers are **Membership → Role → Capability → Scope**
 | **3. Capability** | `role_permission_grants` unioned into `permissionKeys` | Populated and correct. **Many admin routes never consult it** — see *Enforcement* |
 | **4. Scope** | `user_access_profiles` + `user_department_access` / `user_site_access` | Resolved on every request; enforced only on routes that opt in. AD-25 is explicit that several physical scope tables do not make several conceptual layers |
 
+> **A granted key is not necessarily an enforced key.** Roughly half the catalog is **inert** —
+> keys no product source names on an executable line. They are listed in
+> `web/lib/admin/unenforcedPermissionKeys.json`, and `web/lib/admin/permissionGrid.ts` renders
+> **no control at all** for an inert row, so an organization cannot grant or withhold something
+> the server never consults. Both directions are locked by
+> `web/tests/access/permissionEnforcementTruth.test.ts`.
+>
+> **How much of the platform is actually capability-gated** is measured, not estimated:
+> `web/scripts/routeCapabilities.declared.json` records every handler method as `declared`,
+> `none` (reasoned — public token-scoped, signed webhook, stub) or `pending`, against a
+> `max_pending` ratchet. The great majority are still `pending`. The ratchet is tight by test —
+> the suite fails if it could be lowered without producing a violation — so every conversion
+> must lower it and none can be banked. Enforced in `prebuild` by
+> `web/scripts/checkRouteCapabilities.mjs` and locked, non-vacuously, by
+> `web/tests/access/routeCapabilityDeclaration.test.ts`.
+>
+> Read the current figures from that file's own `reviewed` date rather than from prose here:
+> capability keys are being added most weeks, and the counts move with them.
+
+> **A membership is a set, but the write is still a replacement.** `permissionKeys` is the union
+> of every role a person holds. `PATCH /api/admin/users/[userId]/role` nonetheless replaces every
+> role row for the `(user, org)` pair with the one submitted, so changing a visible role destroys
+> the rest of the union. `web/lib/access/memberRoleAssignment.ts` restores the union to the
+> surface and names the roles a submission would discard; an additive write (W-17) is still open.
+
+> **Four system roles are defined; only two were seeded with grants.** W-12 enumerated default
+> grants for `admin` and `ops`. `school_director` and `regional_lead` carried an empty permission
+> set across every domain until
+> `supabase/migrations/20260909240000_financials_read_for_director_roles.sql` began repairing it —
+> Financials was where the gap became visible, not where it started. Do not reason about those two
+> roles from the four-layer model alone.
+
+> **Surface visibility is a projection of capability, and now a checked one.** A surface declares
+> the capability it presents (`web/lib/access/surfaceCapabilities.ts`), and the build fails if it
+> gates on a capability its own routes do not declare
+> (`web/tests/access/surfaceCapabilityDeclaration.test.ts`).
+
+> **There is a second grant-resolution path.** `getAdminAccessContextCached` is server-only, so
+> registered actions reachable from client components resolve grants through
+> `web/lib/access/actorPermissionGrants.ts`. It reads the same tables and fails closed.
+
 Per-record contextual checks (for example document access decisions) exist on some routes.
 AD-25 deliberately does **not** treat them as a fifth authority layer.
 

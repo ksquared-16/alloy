@@ -165,7 +165,14 @@ built, not claimed, and out of P1's frozen scope:
 - **No clock, recurrence, scheduling, replay, or typed-transition fan-out** — P4.
 - **No configuration storage or UI, no measurable bindings** — P2.
 - **No effector invocation, no Communications un-say** — P7.
-- **No operator-facing authoring surface** — P5. The intake is server-side and flag-gated OFF.
+- **No _general_ operator-facing authoring surface** — P5. The generic intake is server-side
+  and flag-gated OFF. **This is no longer the whole posture:** since September 2026 an
+  activated-purpose seam (`web/lib/operationalExpectations/intake/activatedAuthoringPurposes.ts`)
+  lets `attendance.service_day_exception` author production rows without the env flag,
+  reached from `AttendanceWorkspace` through
+  `POST /api/admin/childcare-attendance/service-day-exception`. Whether that seam is a
+  ratified rollout control is an open Director decision — D10 in
+  `docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md`.
 - **No AI authoring** — P8.
 - **The Effective Expectation Resolver is internal P1 implementation freedom** — it realizes P1's frozen
   `Provides` (the ledger read/query surface). It is **not** a Stable Public Interface and **not** a
