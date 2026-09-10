@@ -22,6 +22,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assertAttendanceCaptureAllowed } from "@/lib/childcareOperational/attendance/attendancePermissions";
 import { resolveLinkedPersonId } from "@/lib/access/linkedPersonIdentity";
 import { resolveAssignedCaptureScope } from "@/lib/childcareOperational/attendance/assignedScopeCapture";
+import { listAttendanceEvents, recordAttendanceEvent } from "@/lib/childcareOperational/attendance/attendanceService";
+import { whereaboutsAt } from "@/lib/childcareOperational/attendance/attendanceWhereabouts";
 
 function certEnv(): { url: string; serviceKey: string } | null {
     const fromProcess = { url: process.env.CERT_SUPABASE_URL ?? "", serviceKey: process.env.CERT_SERVICE_ROLE_KEY ?? "" };
@@ -41,6 +43,18 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+/*
+ * The canonical writer builds its own service-role client from the environment
+ * rather than taking one — correct for production, where the caller must not be
+ * able to hand it a client pointed somewhere else. So the certification
+ * environment is published here, from the same file this suite already reads.
+ */
+if (env) {
+    process.env.SUPABASE_URL ||= env.url;
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||= env.url;
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||= env.serviceKey;
+}
+
 const ORG = "00000000-0000-4000-8000-000000000001";
 const OTHER_ORG = "aaaa1111-0000-4000-8000-000000000001";
 const RIVERSIDE = "00000000-0000-4000-8000-000000000010";
@@ -48,6 +62,9 @@ const LAKESIDE = "00000000-0000-4000-8000-000000000011";
 const ROOM_A = "00000000-0000-4000-8000-000000000013"; // Toddler Room A, Riverside
 const ROOM_B = "00000000-0000-4000-8000-000000000014"; // Preschool Room A, Riverside
 const PATTERN = "00000000-0000-4000-8000-000050000069";
+/** A real Riverside enrollment and the child it governs. */
+const AGREEMENT = "00000000-0000-4000-8000-000070000060";
+const CHILD = "00000000-0000-4000-8000-000070000050";
 const EMPLOYMENT_A = "00000000-0000-4000-8000-000060000011";
 const EMPLOYMENT_B = "00000000-0000-4000-8000-000060000012";
 
@@ -79,6 +96,7 @@ describeLive("assignment-scoped teacher authority — live", () => {
 
     const assignmentIds: string[] = [];
     const createdUserIds: string[] = [];
+    const writtenEventIds: string[] = [];
     let teacherUserId = "";
 
     async function addAssignment(params: {
@@ -179,6 +197,9 @@ describeLive("assignment-scoped teacher authority — live", () => {
         }
         await supabase.from("user_person_links").delete().eq("org_id", ORG).in("person_id", [TEACHER_PERSON, OTHER_PERSON]);
         await supabase.from("employments").delete().in("id", [EMPLOYMENT_A, EMPLOYMENT_B]);
+        if (writtenEventIds.length) {
+            await supabase.from("child_attendance_events").delete().in("id", writtenEventIds);
+        }
         for (const id of createdUserIds) {
             await supabase.auth.admin.deleteUser(id).catch(() => undefined);
         }
@@ -400,6 +421,149 @@ describeLive("assignment-scoped teacher authority — live", () => {
         });
         expect(verdict.ok).toBe(false);
         if (!verdict.ok) expect(verdict.code).toBe("permission_denied");
+    });
+
+    // ── the end-to-end proof: authority all the way to a persisted fact ──────
+
+    it("T1 end-to-end — an assigned teacher's capture reaches the canonical writer, the ledger and the projection", async () => {
+        /*
+         * The whole chain, unstubbed. Everything up to here proved the gate
+         * ANSWERS correctly; this proves the answer is load-bearing — that a
+         * permitted capture becomes a durable fact the readers agree about.
+         *
+         * The actor is authorised out of band for capability (this fixture user
+         * holds no role, and granting one would reach outside Attendance), so
+         * the assignment layer is asserted directly and the writer is then
+         * exercised with the provenance that layer produced.
+         */
+        const scope = await resolveAssignedCaptureScope({
+            supabase, orgId: ORG, personId: TEACHER_PERSON, serviceDate: TODAY,
+        });
+        expect(scope.roomLocationIds).toContain(ROOM_A);
+
+        const eventAt = `${TODAY}T09:05:00.000Z`;
+        const written = await recordAttendanceEvent(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: AGREEMENT,
+            eventKind: "check_in",
+            eventAt,
+            serviceDate: TODAY,
+            roomLocationId: ROOM_A,
+            idempotencyKey: `t6-live-checkin-${TODAY}`,
+            actor: {
+                actorType: "staff",
+                actorPersonId: TEACHER_PERSON,
+                actorLabel: "T6 Teacher",
+                sourceType: "staff_workspace",
+            },
+        } as Parameters<typeof recordAttendanceEvent>[1]);
+        writtenEventIds.push(written.id);
+
+        // Persisted, and stamped with the person the session resolved to — the
+        // reason the identity bridge exists at all.
+        expect(written.id).toBeTruthy();
+        expect(written.actor_person_id).toBe(TEACHER_PERSON);
+        expect(written.service_date).toBe(TODAY);
+
+        // The reader sees it, and the projection agrees the child is in Room A.
+        const events = await listAttendanceEvents(supabase, ORG, { enrollmentAgreementId: AGREEMENT });
+        expect(events.some((e) => e.id === written.id)).toBe(true);
+        const where = whereaboutsAt(events, `${TODAY}T09:30:00.000Z`);
+        expect(where?.locationId).toBe(ROOM_A);
+        expect(where?.state).toBe("present");
+    });
+
+    it("T1 end-to-end — a replay converges on the one fact rather than authoring a second", async () => {
+        // Same idempotency key, same meaning. Thread 2's substrate owns this;
+        // the integration path in Slice 2 will lean on exactly this property.
+        const eventAt = `${TODAY}T09:05:00.000Z`;
+        const again = await recordAttendanceEvent(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: AGREEMENT,
+            eventKind: "check_in",
+            eventAt,
+            serviceDate: TODAY,
+            roomLocationId: ROOM_A,
+            idempotencyKey: `t6-live-checkin-${TODAY}`,
+            actor: {
+                actorType: "staff",
+                actorPersonId: TEACHER_PERSON,
+                actorLabel: "T6 Teacher",
+                sourceType: "staff_workspace",
+            },
+        } as Parameters<typeof recordAttendanceEvent>[1]);
+        expect(again.id).toBe(writtenEventIds[0]);
+    });
+
+    it("T4 — movement writes a canonical fact, whereabouts changes, placement does not", async () => {
+        // Coverage of Room B is live today (added by the T5 case above), so the
+        // destination is inside the teacher's reach.
+        const scope = await resolveAssignedCaptureScope({
+            supabase, orgId: ORG, personId: TEACHER_PERSON, serviceDate: TODAY,
+        });
+        expect(scope.roomLocationIds).toEqual(expect.arrayContaining([ROOM_A, ROOM_B]));
+
+        const placementBefore = await supabase
+            .from("child_placements")
+            .select("room_location_id")
+            .eq("org_id", ORG)
+            .eq("enrollment_agreement_id", AGREEMENT);
+
+        const moved = await recordAttendanceEvent(supabase, {
+            orgId: ORG,
+            enrollmentAgreementId: AGREEMENT,
+            eventKind: "room_transfer",
+            eventAt: `${TODAY}T10:15:00.000Z`,
+            serviceDate: TODAY,
+            fromRoomLocationId: ROOM_A,
+            toRoomLocationId: ROOM_B,
+            idempotencyKey: `t6-live-move-${TODAY}`,
+            actor: {
+                actorType: "staff",
+                actorPersonId: TEACHER_PERSON,
+                actorLabel: "T6 Teacher",
+                sourceType: "staff_workspace",
+            },
+        } as Parameters<typeof recordAttendanceEvent>[1]);
+        writtenEventIds.push(moved.id);
+
+        const events = await listAttendanceEvents(supabase, ORG, { enrollmentAgreementId: AGREEMENT });
+        const after = whereaboutsAt(events, `${TODAY}T11:00:00.000Z`);
+        // Whereabouts moved...
+        expect(after?.locationId).toBe(ROOM_B);
+        expect(after?.state).toBe("present");
+
+        // ...and the committed placement did not. Placement is where the child
+        // BELONGS; whereabouts is where they ARE, and Thread 1 is emphatic that
+        // one must never quietly become the other.
+        const placementAfter = await supabase
+            .from("child_placements")
+            .select("room_location_id")
+            .eq("org_id", ORG)
+            .eq("enrollment_agreement_id", AGREEMENT);
+        expect(placementAfter.data).toEqual(placementBefore.data);
+    });
+
+    it("T4 — a permitted source does not carry an unauthorized destination", async () => {
+        // The escape the brief names explicitly: naming a room you hold and one
+        // you do not. EVERY referenced location must satisfy the contract, so
+        // the gate is asked about both.
+        const scope = await resolveAssignedCaptureScope({
+            supabase, orgId: ORG, personId: TEACHER_PERSON, serviceDate: TODAY,
+        });
+        const LAKESIDE_ROOM = "00000000-0000-4000-8000-000000000016";
+        expect(scope.roomLocationIds).not.toContain(LAKESIDE_ROOM);
+
+        const verdict = await assertAttendanceCaptureAllowed({
+            supabase,
+            orgId: ORG,
+            userId: teacherUserId,
+            dim: siteScoped("assigned"),
+            siteLocationId: RIVERSIDE,
+            roomLocationIds: [ROOM_A, LAKESIDE_ROOM],
+            serviceDate: TODAY,
+        });
+        expect(verdict.ok).toBe(false);
     });
 
     it("site scope still binds under the narrowed policy — an assignment is not a passport", async () => {
