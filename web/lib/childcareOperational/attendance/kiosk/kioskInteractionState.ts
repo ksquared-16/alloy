@@ -39,6 +39,12 @@ export type KioskInteraction = {
     notice: string | null;
     /** Retry identity for the confirm, so a double tap converges on one fact. */
     operationToken: string | null;
+    /**
+     * The instant the adult confirmed, resent with every retry. Part of the retry
+     * identity: the server fingerprints the payload, so a moving timestamp turns a
+     * replay into a conflict.
+     */
+    operationEventAt: string | null;
 };
 
 export const IDLE_INTERACTION: KioskInteraction = {
@@ -50,6 +56,7 @@ export const IDLE_INTERACTION: KioskInteraction = {
     results: [],
     notice: null,
     operationToken: null,
+    operationEventAt: null,
 };
 
 /**
@@ -82,6 +89,7 @@ export function holdsFamilyState(state: KioskInteraction): boolean {
         state.results.length > 0 ||
         state.operation !== null ||
         state.operationToken !== null ||
+        state.operationEventAt !== null ||
         state.notice !== null
     );
 }

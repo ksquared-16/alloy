@@ -122,16 +122,23 @@ export default function KioskPage() {
     }
 
     async function confirm() {
-        // Minted once per confirm and reused on retry, so a double tap and a
-        // network retry carry the same identity and converge on one fact per child.
+        /*
+         * Minted once per confirm and reused on retry, so a double tap and a
+         * network retry carry the same identity and converge on one fact per
+         * child. The INSTANT travels with it for the same reason: the server
+         * fingerprints the payload, so a retry whose timestamp had moved would be
+         * a different payload under the same key — a conflict, not a replay.
+         */
         const token = state.operationToken ?? crypto.randomUUID();
-        setState((s) => ({ ...s, step: "working", operationToken: token }));
+        const eventAt = state.operationEventAt ?? new Date().toISOString();
+        setState((s) => ({ ...s, step: "working", operationToken: token, operationEventAt: eventAt }));
         try {
             const res = await post("attendance", {
                 operation: state.operation,
                 code: state.code,
                 child_ids: state.selected,
                 operation_token: token,
+                event_at: eventAt,
             });
             if (!res.ok) {
                 setState({ ...resetInteraction(), notice: "Please see a member of staff." });

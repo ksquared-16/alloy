@@ -124,7 +124,8 @@ FROM public.orgs o,
         ('00000000-0000-4000-8000-000070000032', 'Ivy', 'Raman'),
         ('00000000-0000-4000-8000-000070000033', 'Theo', 'Hale'),
         ('00000000-0000-4000-8000-000070000034', 'Nils', 'Okafor'),
-        ('00000000-0000-4000-8000-000070000035', 'Zara', 'Okafor')
+        ('00000000-0000-4000-8000-000070000035', 'Zara', 'Okafor'),
+        ('00000000-0000-4000-8000-000070000036', 'Otto', 'Okafor')
      ) AS v(id, first, last)
 WHERE o.slug = 'northwind-early-learning'
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
@@ -141,7 +142,8 @@ FROM public.orgs o,
         ('52', '00000000-0000-4000-8000-000070000032', 'Ivy', 'Raman'),
         ('53', '00000000-0000-4000-8000-000070000033', 'Theo', 'Hale'),
         ('54', '00000000-0000-4000-8000-000070000034', 'Nils', 'Okafor'),
-        ('55', '00000000-0000-4000-8000-000070000035', 'Zara', 'Okafor')
+        ('55', '00000000-0000-4000-8000-000070000035', 'Zara', 'Okafor'),
+        ('56', '00000000-0000-4000-8000-000070000036', 'Otto', 'Okafor')
      ) AS v(suffix, person, first, last)
 WHERE o.slug = 'northwind-early-learning'
 ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, person_id = EXCLUDED.person_id;
@@ -161,7 +163,8 @@ FROM public.orgs o,
         ('62', '52', '00000000-0000-4000-8000-000070000032', '00000000-0000-4000-8000-000000000010'),
         ('63', '53', '00000000-0000-4000-8000-000070000033', '00000000-0000-4000-8000-000000000010'),
         ('64', '54', '00000000-0000-4000-8000-000070000034', '00000000-0000-4000-8000-000000000010'),
-        ('65', '55', '00000000-0000-4000-8000-000070000035', '00000000-0000-4000-8000-000000000011')
+        ('65', '55', '00000000-0000-4000-8000-000070000035', '00000000-0000-4000-8000-000000000011'),
+        ('66', '56', '00000000-0000-4000-8000-000070000036', '00000000-0000-4000-8000-000000000010')
      ) AS v(suffix, member, person, site)
 WHERE o.slug = 'northwind-early-learning'
 ON CONFLICT (id) DO UPDATE SET status = 'active', site_location_id = EXCLUDED.site_location_id;
@@ -180,7 +183,8 @@ FROM public.orgs o,
         ('72', '62', '52', '00000000-0000-4000-8000-000000000010', '00000000-0000-4000-8000-000000000013'),
         ('73', '63', '53', '00000000-0000-4000-8000-000000000010', '00000000-0000-4000-8000-000000000013'),
         ('74', '64', '54', '00000000-0000-4000-8000-000000000010', '00000000-0000-4000-8000-000000000013'),
-        ('75', '65', '55', '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000070000001')
+        ('75', '65', '55', '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000070000001'),
+        ('76', '66', '56', '00000000-0000-4000-8000-000000000010', '00000000-0000-4000-8000-000000000013')
      ) AS v(suffix, agreement, member, site, room)
 WHERE o.slug = 'northwind-early-learning'
 ON CONFLICT (id) DO UPDATE SET status = 'active', room_location_id = EXCLUDED.room_location_id;
@@ -228,7 +232,8 @@ FROM public.orgs o,
         ('92', '52', '00000000-0000-4000-8000-000070000021'),
         ('93', '53', '00000000-0000-4000-8000-000070000022'),
         ('94', '54', '00000000-0000-4000-8000-000070000020'),
-        ('95', '55', '00000000-0000-4000-8000-000070000020')
+        ('95', '55', '00000000-0000-4000-8000-000070000020'),
+        ('96', '56', '00000000-0000-4000-8000-000070000020')
      ) AS v(suffix, member, person)
 WHERE o.slug = 'northwind-early-learning'
 ON CONFLICT (id) DO UPDATE SET status = 'active';
@@ -245,7 +250,8 @@ FROM public.orgs o,
         ('103', '92', 'parent'), ('104', '92', 'authorized_pickup'),
         ('105', '93', 'parent'), ('106', '93', 'authorized_pickup'),
         ('107', '94', 'parent'), ('108', '94', 'authorized_pickup'),
-        ('109', '95', 'parent'), ('110', '95', 'authorized_pickup')
+        ('109', '95', 'parent'), ('110', '95', 'authorized_pickup'),
+        ('111', '96', 'parent'), ('112', '96', 'authorized_pickup')
      ) AS v(suffix, rel, role)
 WHERE o.slug = 'northwind-early-learning'
 ON CONFLICT (id) DO UPDATE SET is_active = true;
@@ -260,7 +266,7 @@ SELECT ('00000000-0000-4000-8000-000070000' || v.suffix)::uuid, o.id,
        ('00000000-0000-4000-8000-0000700000' || v.member)::uuid,
        now() - interval '30 days', 'enrollment_form', 'kiosk_cert_fixture'
 FROM public.orgs o,
-     (VALUES ('120', '50'), ('121', '51'), ('123', '53'), ('124', '54'), ('125', '55')) AS v(suffix, member)
+     (VALUES ('120', '50'), ('121', '51'), ('123', '53'), ('124', '54'), ('125', '55'), ('126', '56')) AS v(suffix, member)
 WHERE o.slug = 'northwind-early-learning'
 ON CONFLICT (id) DO UPDATE SET screened_at = EXCLUDED.screened_at;
 
@@ -280,51 +286,83 @@ SELECT '00000000-0000-4000-8000-000070000130', o.id,
 FROM public.orgs o WHERE o.slug = 'northwind-early-learning'
 ON CONFLICT (id) DO UPDATE SET status = 'active', review_state = 'approved';
 
+-- Otto (…56) is SCREENED and his mother holds the full pickup role — and a
+-- restriction is in force on him naming NOBODY ("there is a custody
+-- arrangement"). That cannot establish that a particular adult is barred, so the
+-- resolver answers `unknown` rather than `restricted` or `authorized`. It is the
+-- D2 case, and it is distinct from D3: the question WAS asked here.
+INSERT INTO public.child_safeguarding_restrictions
+    (id, org_id, customer_member_id, affected_person_id, affected_party_description, restriction_kind,
+     operational_effect, status, effective_from, evidence_basis, source, review_state, reviewed_at)
+SELECT '00000000-0000-4000-8000-000070000131', o.id,
+       '00000000-0000-4000-8000-000070000056', NULL, 'A custody arrangement is on file',
+       'custody_restriction', 'may_not_pick_up', 'active',
+       CURRENT_DATE - 5, 'operator_entry', 'operator', 'approved', now()
+FROM public.orgs o WHERE o.slug = 'northwind-early-learning'
+ON CONFLICT (id) DO UPDATE SET status = 'active', review_state = 'approved';
+
 COMMIT;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Service-day expectations, rebuilt each run because they are dated to TODAY.
+-- Service-day expectations.
+--
+-- ── WHY THESE ARE INSERTED ONCE AND NEVER REWRITTEN ──
+--
+-- The first draft deleted yesterday's fixture rows so the window could be dated
+-- to today. The ledger refused: `operational_expectations` is append-only, and
+-- the trigger said so. It was right, and the fixture was wrong — a certification
+-- fixture does not get to mutate the substrate it is certifying, and the
+-- attendance fixture's trigger-disabling day-reset is a precedent for FACTS, not
+-- a licence to edit authored intent.
+--
+-- So each row is written once under a deterministic id with ON CONFLICT DO
+-- NOTHING, and its valid window is deliberately wide enough to contain whatever
+-- day certification runs on. A year-long vacation is not what a real family would
+-- author; it is what makes a fixture stable without touching a single existing
+-- row, which matters more here.
 -- ─────────────────────────────────────────────────────────────────────────────
 BEGIN;
 
--- Remove yesterday's fixture-authored expectations so the window is always today.
-DELETE FROM public.operational_expectations
-WHERE authority_key = 'kiosk_cert_fixture';
-
 -- Nils (…54) is on authored vacation and will be brought in anyway — scenario G.
 INSERT INTO public.operational_expectations
-    (org_id, authority_key, author_class, modality, subject_kind, subject_ref, condition,
-     temporal_frame, verb, transition_type, standing, footprint, valid_from, valid_to)
-SELECT o.id, 'kiosk_cert_fixture', 'human', 'intended', 'child',
+    (id, lineage_root_id, org_id, authority_key, author_class, modality, subject_kind, subject_ref,
+     condition, temporal_frame, verb, transition_type, standing, footprint, valid_from, valid_to)
+SELECT '00000000-0000-4000-8000-000070000200', '00000000-0000-4000-8000-000070000200',
+       o.id, 'kiosk_cert_fixture', 'human', 'intended', 'child',
        jsonb_build_array(jsonb_build_object('kind', 'child', 'ref', '00000000-0000-4000-8000-000070000054')),
        jsonb_build_object('typeKey', 'attendance.service_day_exception',
                           'predicateShape', 'child_away',
                           'params', jsonb_build_object('reason_key', 'vacation')),
        jsonb_build_object('kind', 'window',
-                          'validFrom', date_trunc('day', now() at time zone 'UTC')::text,
-                          'validTo', (date_trunc('day', now() at time zone 'UTC') + interval '1 day')::text),
-       'create', NULL, 'proposed', jsonb_build_object('factTypes', jsonb_build_array('child_attendance_event')),
-       date_trunc('day', now() at time zone 'UTC'),
-       date_trunc('day', now() at time zone 'UTC') + interval '1 day'
-FROM public.orgs o WHERE o.slug = 'northwind-early-learning';
+                          'validFrom', (date_trunc('day', now()) - interval '365 days')::text,
+                          'validTo', (date_trunc('day', now()) + interval '365 days')::text),
+       'create', NULL, 'proposed',
+       jsonb_build_object('factTypes', jsonb_build_array('child_attendance_event')),
+       date_trunc('day', now()) - interval '365 days',
+       date_trunc('day', now()) + interval '365 days'
+FROM public.orgs o WHERE o.slug = 'northwind-early-learning'
+ON CONFLICT (id) DO NOTHING;
 
--- Lakeside is CLOSED today — scenario J. Riverside is untouched, so every other
--- scenario keeps running on an ordinary open day.
+-- Lakeside is CLOSED — scenario J. Riverside is untouched, so every other
+-- scenario keeps running on an ordinary open day at the other campus.
 INSERT INTO public.operational_expectations
-    (org_id, authority_key, author_class, modality, subject_kind, subject_ref, condition,
-     temporal_frame, verb, transition_type, standing, footprint, valid_from, valid_to)
-SELECT o.id, 'kiosk_cert_fixture', 'human', 'prohibited', 'site',
+    (id, lineage_root_id, org_id, authority_key, author_class, modality, subject_kind, subject_ref,
+     condition, temporal_frame, verb, transition_type, standing, footprint, valid_from, valid_to)
+SELECT '00000000-0000-4000-8000-000070000201', '00000000-0000-4000-8000-000070000201',
+       o.id, 'kiosk_cert_fixture', 'human', 'prohibited', 'site',
        jsonb_build_array(jsonb_build_object('kind', 'site', 'ref', '00000000-0000-4000-8000-000000000011')),
        jsonb_build_object('typeKey', 'attendance.service_day_exception',
                           'predicateShape', 'operating_grain_closed',
                           'params', jsonb_build_object('reason_key', 'holiday_closure')),
        jsonb_build_object('kind', 'window',
-                          'validFrom', date_trunc('day', now() at time zone 'UTC')::text,
-                          'validTo', (date_trunc('day', now() at time zone 'UTC') + interval '1 day')::text),
-       'create', NULL, 'proposed', jsonb_build_object('factTypes', jsonb_build_array('child_attendance_event')),
-       date_trunc('day', now() at time zone 'UTC'),
-       date_trunc('day', now() at time zone 'UTC') + interval '1 day'
-FROM public.orgs o WHERE o.slug = 'northwind-early-learning';
+                          'validFrom', (date_trunc('day', now()) - interval '365 days')::text,
+                          'validTo', (date_trunc('day', now()) + interval '365 days')::text),
+       'create', NULL, 'proposed',
+       jsonb_build_object('factTypes', jsonb_build_array('child_attendance_event')),
+       date_trunc('day', now()) - interval '365 days',
+       date_trunc('day', now()) + interval '365 days'
+FROM public.orgs o WHERE o.slug = 'northwind-early-learning'
+ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
 
@@ -346,18 +384,25 @@ BEGIN
     SELECT count(*) INTO v_screen FROM public.child_safeguarding_screenings
         WHERE id::text LIKE '00000000-0000-4000-8000-000070000%';
     SELECT count(*) INTO v_restrict FROM public.child_safeguarding_restrictions
-        WHERE id = '00000000-0000-4000-8000-000070000130' AND status = 'active';
-    SELECT count(*) INTO v_expect FROM public.operational_expectations WHERE authority_key = 'kiosk_cert_fixture';
+        WHERE id IN ('00000000-0000-4000-8000-000070000130', '00000000-0000-4000-8000-000070000131')
+          AND status = 'active';
+    -- BY ID, not by count. The ledger is append-only, so a stack that once held an
+    -- earlier draft of this fixture still holds it and always will; asserting a
+    -- total would fail on every such stack while the rows that matter are present.
+    SELECT count(*) INTO v_expect FROM public.operational_expectations
+     WHERE id IN ('00000000-0000-4000-8000-000070000200', '00000000-0000-4000-8000-000070000201');
 
     IF v_devices <> 4 THEN RAISE EXCEPTION 'kiosk fixture: expected 4 devices, found %', v_devices; END IF;
     IF v_codes <> 3 THEN RAISE EXCEPTION 'kiosk fixture: expected 3 person codes, found %', v_codes; END IF;
-    IF v_children <> 6 THEN RAISE EXCEPTION 'kiosk fixture: expected 6 enrolments, found %', v_children; END IF;
-    IF v_roles <> 11 THEN RAISE EXCEPTION 'kiosk fixture: expected 11 relationship roles, found %', v_roles; END IF;
-    -- FIVE, not six: Ivy has no screening and that absence is the scenario.
-    IF v_screen <> 5 THEN RAISE EXCEPTION 'kiosk fixture: expected 5 screenings, found %', v_screen; END IF;
-    IF v_restrict <> 1 THEN RAISE EXCEPTION 'kiosk fixture: expected the active restriction, found %', v_restrict; END IF;
-    IF v_expect <> 2 THEN RAISE EXCEPTION 'kiosk fixture: expected 2 service-day expectations, found %', v_expect; END IF;
+    IF v_children <> 7 THEN RAISE EXCEPTION 'kiosk fixture: expected 7 enrolments, found %', v_children; END IF;
+    IF v_roles <> 13 THEN RAISE EXCEPTION 'kiosk fixture: expected 13 relationship roles, found %', v_roles; END IF;
+    -- SIX, not seven: Ivy has no screening and that absence is the scenario.
+    IF v_screen <> 6 THEN RAISE EXCEPTION 'kiosk fixture: expected 6 screenings, found %', v_screen; END IF;
+    IF v_restrict <> 2 THEN RAISE EXCEPTION 'kiosk fixture: expected both restrictions, found %', v_restrict; END IF;
+    IF v_expect <> 2 THEN RAISE EXCEPTION 'kiosk fixture: both service-day expectations must exist, found %', v_expect; END IF;
 
-    RAISE NOTICE 'Kiosk certification fixtures verified: % devices, % codes, % children, % roles, % screenings, 1 restriction, % expectations',
-        v_devices, v_codes, v_children, v_roles, v_screen, v_expect;
+    -- Every number here comes from a variable. A literal in a verification notice
+    -- is a number that stops tracking what it claims to describe.
+    RAISE NOTICE 'Kiosk certification fixtures verified: % devices, % codes, % children, % roles, % screenings, % restrictions, % expectations',
+        v_devices, v_codes, v_children, v_roles, v_screen, v_restrict, v_expect;
 END $$;

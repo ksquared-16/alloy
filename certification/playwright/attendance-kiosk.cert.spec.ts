@@ -46,6 +46,7 @@ const IVY = "00000000-0000-4000-8000-000070000052";
 const THEO = "00000000-0000-4000-8000-000070000053";
 const NILS = "00000000-0000-4000-8000-000070000054";
 const ZARA = "00000000-0000-4000-8000-000070000055";
+const OTTO = "00000000-0000-4000-8000-000070000056";
 
 /** Words a shared lobby screen must never contain. */
 const SENSITIVE = ["restriction", "safeguarding", "court", "order", "custody", "screen", "authorized_pickup", "person_id"];
@@ -269,6 +270,9 @@ test.describe("Thread 5 · kiosk", () => {
         ["D1-restricted", MARCUS, THEO, "an active may_not_pick_up restriction names this adult"],
         ["D3-unscreened", PRIYA, IVY, "no safeguarding screening evidence exists for this child"],
         ["D5-parent-not-pickup", NADIA, MIA, "parent relationship without the authorized_pickup role"],
+        // D2 is NOT D3: the question WAS asked here. A restriction is in force
+        // naming nobody, so no adult can be shown clear and the resolver says so.
+        ["D2-resolver-unknown", NADIA, OTTO, "an in-force restriction names no party, so nobody is provably clear"],
     ] as const) {
         test(`K5-${name} · checkout denied, zero facts, nothing disclosed`, async ({ request }) => {
             const before = await countFacts(request, child, "check_out");
@@ -318,7 +322,13 @@ test.describe("Thread 5 · kiosk", () => {
     test("K5-F · one logical operation converges to one fact under replay", async ({ request }) => {
         const before = await countFacts(request, LEO, "check_in");
         const token = `cert-replay-${Date.now()}`;
-        const body = { operation: "check_in", code: NADIA, child_ids: [LEO], operation_token: token };
+        const body = {
+            operation: "check_in",
+            code: NADIA,
+            child_ids: [LEO],
+            operation_token: token,
+            event_at: new Date().toISOString(),
+        };
 
         // Rapid concurrent submission, then a later replay of the same identity —
         // a double tap and a network retry, which are the same thing to the server.
@@ -330,6 +340,13 @@ test.describe("Thread 5 · kiosk", () => {
         await kioskPost(request, "attendance", RIVERSIDE, body);
 
         expect(await countFacts(request, LEO, "check_in"), "replay duplicated a fact").toBe(before + 1);
+
+        // And the replay REPORTS the truth. Counting facts alone hid a real
+        // defect here: the retry was answering "see a member of staff" about a
+        // child who was already checked in.
+        const replay = await kioskPost(request, "attendance", RIVERSIDE, body);
+        const json = (await replay.json()) as { results: { recorded: boolean }[] };
+        expect(json.results[0]?.recorded, "a replay denied an operation that had succeeded").toBe(true);
     });
 
     test("K5-F2 · a DIFFERENT logical operation is not swallowed by idempotency", async ({ request }) => {
@@ -395,17 +412,41 @@ test.describe("Thread 5 · kiosk", () => {
         expect(text, "Family A crossed into Family B's interaction").not.toContain("leo");
     });
 
-    test("K5-N · no Alloy human session is ever minted at the kiosk", async ({ page }) => {
-        await openKiosk(page);
-        await identifyInBrowser(page, "check_in", NADIA);
-        await expect(page.locator(`[data-kiosk-child="${LEO}"]`)).toBeVisible({ timeout: SETTLE });
+    test("K5-N · no Alloy human session is ever minted at the kiosk", async ({ browser }) => {
+        /*
+         * A CLEAN CONTEXT, and that is the whole test.
+         *
+         * The first version of this ran on the shared `certify` context, which is
+         * pre-loaded with the seeded operator's storage state — so it found auth
+         * cookies and reported that the kiosk had minted a session. It had not:
+         * the HARNESS brought them. Measuring session-creation inside a context
+         * that already has a session cannot answer the question, and a real kiosk
+         * is a tablet nobody has ever logged into.
+         */
+        const context = await browser.newContext({ storageState: { cookies: [], origins: [] }, viewport: TABLET });
+        const page = await context.newPage();
+        try {
+            await page.addInitScript((cred) => {
+                try {
+                    window.localStorage.setItem("alloy.kiosk.credential", cred as string);
+                } catch {
+                    /* ignore */
+                }
+            }, RIVERSIDE);
+            await page.goto("/kiosk");
+            await expect(page.locator('[data-kiosk="true"]')).toBeVisible({ timeout: SETTLE });
 
-        // The device credential is the ONLY durable thing the browser holds.
-        const cookies = await page.context().cookies();
-        const authCookies = cookies.filter((c) => /sb-|supabase|auth-token/i.test(c.name));
-        expect(authCookies, "the kiosk minted a human auth session").toEqual([]);
-        const stored = await page.evaluate(() => Object.keys(window.localStorage));
-        expect(stored).toEqual(["alloy.kiosk.credential"]);
+            // A full identification, on a browser that has never authenticated.
+            await identifyInBrowser(page, "check_in", NADIA);
+            await expect(page.locator(`[data-kiosk-child="${LEO}"]`)).toBeVisible({ timeout: SETTLE });
+
+            const authCookies = (await context.cookies()).filter((c) => /sb-|supabase|auth-token/i.test(c.name));
+            expect(authCookies, "the kiosk minted a human auth session").toEqual([]);
+            // The device credential is the ONLY durable thing the browser holds.
+            expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual(["alloy.kiosk.credential"]);
+        } finally {
+            await context.close();
+        }
     });
 
     // ── I ───────────────────────────────────────────────────────────────────
@@ -459,6 +500,61 @@ test.describe("Thread 5 · kiosk", () => {
         expect(json.results[0]?.recorded, "a closed site accepted an arrival").toBe(false);
         expect(json.results[0]?.message).toBe("Please see a member of staff.");
         expect(await countFacts(request, ZARA)).toBe(before);
+    });
+
+    // ── K ───────────────────────────────────────────────────────────────────
+    test("K5-K · an unreachable server never becomes a false success", async ({ page, request }) => {
+        const before = await countFacts(request, LEO, "check_in");
+
+        await openKiosk(page);
+        await identifyInBrowser(page, "check_in", NADIA);
+        await expect(page.locator(`[data-kiosk-child="${LEO}"]`)).toBeVisible({ timeout: SETTLE });
+        await page.locator(`[data-kiosk-child="${LEO}"]`).click();
+
+        // The network goes away at the moment of confirm.
+        await page.route("**/api/public/kiosk/attendance", (route) => route.abort("failed"));
+        await page.locator('[data-kiosk-confirm="true"]').click();
+
+        // NOT a success screen, and not a silent spinner either: an ending the
+        // adult can act on, and the device is back to a safe idle.
+        await expect(page.locator('[data-kiosk-idle="true"]')).toBeVisible({ timeout: SETTLE });
+        await expect(page.locator('[data-kiosk-notice="true"]')).toBeVisible();
+        const notice = (await page.locator('[data-kiosk-notice="true"]').innerText()).toLowerCase();
+        expect(notice).toContain("could not reach");
+        await shot(page, "K1-offline");
+
+        // And nothing was authored — no browser-local "attendance" pretending to
+        // be truth, and nothing queued to appear later.
+        expect(await countFacts(request, LEO, "check_in"), "an unreachable server still produced a fact").toBe(before);
+        expect(await bodyText(page)).not.toContain("leo");
+    });
+
+    test("K5-K2 · an uncertain outcome converges on retry rather than duplicating", async ({ request }) => {
+        /*
+         * The dangerous case: the server COMMITTED and the response was lost, so
+         * the adult taps again. The retry carries the same operation identity, so
+         * the second call converges on the first fact instead of adding one.
+         */
+        const before = await countFacts(request, MIA, "check_in");
+        const token = `cert-uncertain-${Date.now()}`;
+        // A real retry resends the ORIGINAL instant with the original token: the
+        // payload is fingerprinted, so a moving timestamp is a different payload.
+        const body = {
+            operation: "check_in",
+            code: NADIA,
+            child_ids: [MIA],
+            operation_token: token,
+            event_at: new Date().toISOString(),
+        };
+
+        const first = await kioskPost(request, "attendance", RIVERSIDE, body);
+        expect(first.status()).toBe(200); // committed; imagine this response never arrived
+        const retry = await kioskPost(request, "attendance", RIVERSIDE, body);
+        expect(retry.status()).toBe(200);
+        const json = (await retry.json()) as { results: { recorded: boolean }[] };
+        // The retry reports success — the operation DID happen — without a second fact.
+        expect(json.results[0]?.recorded).toBe(true);
+        expect(await countFacts(request, MIA, "check_in")).toBe(before + 1);
     });
 
     // ── M ───────────────────────────────────────────────────────────────────

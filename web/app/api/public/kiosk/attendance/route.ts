@@ -93,6 +93,32 @@ export async function POST(request: NextRequest) {
     const operationToken = String(body.operation_token ?? "").trim() || randomUUID();
     const correlationId = randomUUID();
 
+    /*
+     * THE EVENT TIME IS PART OF THE OPERATION, NOT OF THE REQUEST.
+     *
+     * Thread 2 fingerprints the payload, so the same idempotency key carrying
+     * different content is a CONFLICT — correctly. Minting `event_at` per request
+     * made every retry differ from the original by a few milliseconds, so a
+     * genuine replay was reported as a conflict and the adult was told to see a
+     * member of staff about a child who was already checked in. The key was
+     * stable and the payload was not, which is a dedupe that only works when
+     * nobody retries.
+     *
+     * So the instant is minted once with the operation token, at the moment the
+     * adult confirms, and resent with it. That is also the more accurate time: it
+     * is when the person acted, not when the server got round to it.
+     *
+     * Bounded, because a trusted device is still a device: anything outside a few
+     * minutes of now is ignored in favour of the server clock, so a kiosk cannot
+     * author attendance for last Tuesday.
+     */
+    const MAX_SKEW_MS = 5 * 60_000;
+    const claimed = Date.parse(String(body.event_at ?? ""));
+    const eventAt =
+        Number.isFinite(claimed) && Math.abs(Date.now() - claimed) <= MAX_SKEW_MS
+            ? new Date(claimed).toISOString()
+            : new Date().toISOString();
+
     const serviceDate = await resolveAttendanceServiceDate(supabase, device.device.orgId);
     const session = await resolveKioskInteraction({
         request,
@@ -156,7 +182,7 @@ export async function POST(request: NextRequest) {
                 orgId: device.device.orgId,
                 enrollmentAgreementId: subject.subject.enrollmentAgreementId,
                 eventKind: operation === "check_in" ? "check_in" : "check_out",
-                eventAt: new Date().toISOString(),
+                eventAt,
                 serviceDate,
                 roomLocationId: operation === "check_in" ? subject.subject.placementRoomLocationId : null,
                 actor: {
