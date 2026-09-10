@@ -39,14 +39,13 @@ describe("access is granted by the session, not by the journey", () => {
 });
 
 describe("routes decide for themselves whether they need a journey", () => {
-    it.each(["enrollment-objective", "enrollment-turn", "enrollment-edit"])(
-        "%s keeps the exact refusal it had before",
+    it.each(["enrollment-turn", "enrollment-edit"])(
+        "%s still requires a journey, and says so itself",
         (route) => {
             /*
-             * These derive their answer from Business Process requirements — what a stage requires,
-             * what remains against it. They genuinely need a journey. What changed is only that they
-             * own the decision instead of inheriting it, so the same participant is no longer denied
-             * everything else on their behalf.
+             * These two still derive their answer from Business Process requirements. What changed
+             * is only that they own the decision instead of inheriting it, so a participant working
+             * a hand-launched packet is no longer denied everything else on their behalf.
              */
             const src = read(route);
             expect(src).toContain("requireEnrollmentJourney");
@@ -54,6 +53,22 @@ describe("routes decide for themselves whether they need a journey", () => {
             expect(src).not.toContain("access.value.processInstanceId");
         },
     );
+
+    it("enrollment-objective no longer requires a journey at all", () => {
+        /*
+         * The objective converged: `resolvePacketParticipantProgress` supplies requirements from a
+         * packet's own steps where a process instance would have supplied them from its stage, and
+         * everything below that seam is identical. So the objective — and therefore the
+         * conversation it drives — now resolves for both launch modes from one runtime.
+         *
+         * Proven live on a hand-launched three-form packet: progress {total 3, satisfied 0,
+         * remaining 3}, stage_key null, and a real conversational next_turn.
+         */
+        const src = read("enrollment-objective");
+        expect(src).not.toContain("requireEnrollmentJourney");
+        // The journey is still READ, to enrich canonical prefill when one exists.
+        expect(src).toContain("access.value.processInstanceId");
+    });
 
     it.each(["enrollment-artifact", "enrollment-document"])(
         "%s needs only the session, and no longer asks about a journey",

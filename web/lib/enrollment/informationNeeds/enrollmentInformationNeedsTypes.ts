@@ -131,7 +131,9 @@ export type EnrollmentInformationNeed = {
 };
 
 export type EnrollmentInformationNeeds = {
-    readonly process_instance_id: string;
+    /** Null when this participant's work is anchored on the packet session rather than a
+     * Business Process journey. Everything else on this shape is identical either way. */
+    readonly process_instance_id: string | null;
     readonly session_id: string | null;
     readonly business_process_revision_id: string | null;
     readonly stage_key: string | null;

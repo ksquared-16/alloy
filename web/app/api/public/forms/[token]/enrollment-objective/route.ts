@@ -12,10 +12,7 @@ import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
-import {
-    requireEnrollmentJourney,
-    resolveParticipantEnrollmentFromToken,
-} from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import {
     recomputeParticipantObjectiveFromContext,
     resolveParticipantEnrollmentObjectiveWithContext,
@@ -34,6 +31,7 @@ function plaintextToken(raw: string): string {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    try {
     const timing = startParticipantTiming();
     const tokenStart = timing.now();
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -51,13 +49,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         });
     }
 
-    /*
-     * This route's answer is defined by Business Process requirements — what the stage requires, what
-     * remains against it — so it needs a journey and says so itself. Same refusal as before; the
-     * difference is that a session without one is no longer refused ACCESS, only this answer.
-     */
-    const journey = requireEnrollmentJourney(access.value);
-    if (!journey.ok) return publicErr(journey.error.message, 409, { code: journey.error.code });
 
     // What the organization already holds about this child. Without it every known fact arrives as
     // `missing`, and the participant is asked for information that is on file — which is exactly
@@ -67,13 +58,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // queries) once both are in hand.
     const parallelStart = timing.now();
     const [canonical, resolved] = await Promise.all([
-        resolveParticipantCanonicalContext(supabase, {
-            orgId: access.value.orgId,
-            processInstanceId: journey.processInstanceId,
-        }),
+        // Canonical prefill is resolved from the journey's subject. A packet-anchored session
+        // carries its child in the session's CRM snapshot instead, and the participant runtime
+        // already applies that at the form layer — so there is nothing to look up here.
+        access.value.processInstanceId
+            ? resolveParticipantCanonicalContext(supabase, {
+                  orgId: access.value.orgId,
+                  processInstanceId: access.value.processInstanceId,
+              })
+            : Promise.resolve({ values: {}, subjectDisplayName: null }),
         resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
-            processInstanceId: journey.processInstanceId,
+            processInstanceId: access.value.processInstanceId,
             // The session row the access check already read — one fewer serial round trip.
             preloadedSession: access.value.session,
         }),
@@ -103,4 +99,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
     response.headers.set("Server-Timing", timing.header());
     return response;
+    } catch (e) {
+        /*
+         * An unhandled throw here used to reach the participant as a 500 with an EMPTY body, which
+         * tells them nothing and tells us nothing either. The detail goes to the server log; the
+         * parent gets a sentence they can act on.
+         */
+        console.error("[enrollment-objective]", e);
+        return publicErr("We could not load your progress just now. Please refresh to try again.", 500);
+    }
 }

@@ -137,7 +137,14 @@ export async function resolveEnrollmentInformationNeeds(
     supabase: SupabaseClient,
     input: {
         orgId: string;
-        processInstanceId: string;
+        /**
+         * The journey, when there is one. Null for a packet-anchored participant.
+         *
+         * This resolver only ever used it to compute progress for callers that did not supply one —
+         * everything else it needs comes from `progress` and `preloaded`. So a null anchor is fine
+         * exactly as long as those are provided, which the objective resolver always does.
+         */
+        processInstanceId: string | null;
         /**
          * Canonical keys this objective requires the participant to CONFIRM rather than silently
          * accept. Explicit and narrow: no repository-wide assurance framework exists, and the caller
@@ -176,11 +183,19 @@ export async function resolveEnrollmentInformationNeeds(
     },
 ): Promise<EnrollmentInformationNeedsResult> {
     const progress =
-        input.progress ??
-        (await resolveEnrollmentParticipantProgress(supabase, {
-            orgId: input.orgId,
-            processInstanceId: input.processInstanceId,
-        }));
+        input.progress
+        ?? (input.processInstanceId
+            ? await resolveEnrollmentParticipantProgress(supabase, {
+                  orgId: input.orgId,
+                  processInstanceId: input.processInstanceId,
+              })
+            : ({
+                  ok: false,
+                  refusal: {
+                      code: "read_failed",
+                      detail: "Needs requires a progress projection when there is no journey to derive one from.",
+                  },
+              } as const));
     if (!progress.ok) return { ok: false, refusal: progress.refusal };
 
     const { value: prog } = progress;
@@ -205,12 +220,17 @@ export async function resolveEnrollmentInformationNeeds(
                 .eq("id", prog.session_id)
                 .eq("org_id", input.orgId)
                 .maybeSingle(),
-            supabase
-                .from("process_instances")
-                .select("subject_id")
-                .eq("id", prog.process_instance_id)
-                .eq("org_id", input.orgId)
-                .maybeSingle(),
+            // Only a journey names its subject here. A packet-anchored session carries the child in
+            // its own CRM snapshot and always arrives with `preloaded`, so this branch is never its
+            // path — guarded rather than assumed, because a null id would match an arbitrary row.
+            prog.process_instance_id
+                ? supabase
+                      .from("process_instances")
+                      .select("subject_id")
+                      .eq("id", prog.process_instance_id)
+                      .eq("org_id", input.orgId)
+                      .maybeSingle()
+                : Promise.resolve({ data: null, error: null }),
         ]);
         if (sessionError) {
             return { ok: false, refusal: { code: "read_failed", detail: sessionError.message } };

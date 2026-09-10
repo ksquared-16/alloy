@@ -104,7 +104,12 @@ export type EnrollmentRequirementProgress = {
 };
 
 export type EnrollmentParticipantProgress = {
-    readonly process_instance_id: string;
+    /**
+     * The Business Process journey this progress belongs to, or null when the participant's work is
+     * anchored on the packet session itself (a packet launched by hand, with no process behind it).
+     * The requirement projection below is identical either way — only its SOURCE differs.
+     */
+    readonly process_instance_id: string | null;
     /** Null when no participant objective has been launched yet. Requirements still project. */
     readonly session_id: string | null;
     /** Null for a historical unpinned instance running on the live compatibility projection. */

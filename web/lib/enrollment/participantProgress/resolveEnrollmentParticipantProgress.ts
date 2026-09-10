@@ -82,7 +82,7 @@ export type EnrollmentParticipantProgressResult =
  * the session item's own `status` column — is what keeps Forms the satisfaction authority. The
  * packet step's status is a useful index for a review rollup and is deliberately not read.
  */
-async function loadRealizedFormItems(
+export async function loadRealizedFormItems(
     supabase: SupabaseClient,
     orgId: string,
     items: readonly SessionItemRow[],
