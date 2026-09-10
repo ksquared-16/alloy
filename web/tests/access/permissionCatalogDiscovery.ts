@@ -48,6 +48,31 @@ const CATALOG_WRITE =
 /** A permission key: lowercase dotted segments. Excludes labels (spaces) and bare group keys (no dot). */
 export const PERMISSION_KEY_GRAMMAR = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/;
 
+/**
+ * A SCHEMA-QUALIFIED RELATION NAME IS NOT A PERMISSION KEY, and it satisfies the grammar exactly.
+ *
+ * Discovery is deliberately by region and not by tuple shape, so it takes *every* key-shaped literal
+ * inside a region that can write a catalog row. `20260909230000_attendance_capability.sql` guards its
+ * seed with `IF to_regclass('public.permissions') IS NOT NULL THEN …`, and those three literals sit
+ * inside the seeding `DO` block. `public.permissions` parses as a two-segment lowercase dotted key, so
+ * the catalog acquired three members no organization can ever hold and no code can ever consult — and
+ * the W-50 lock then demanded they be recorded as inert capabilities.
+ *
+ * The exclusion is by SCHEMA, not by table name, because the failure is the schema qualifier: a
+ * catalog key's first segment is a capability domain (`fin`, `crm`, `settings`), never a Postgres
+ * schema. Naming the tables instead would leave the next `to_regclass('public.role_definitions')` to
+ * be discovered the same way. Nothing legitimate is lost — `permission_definitions.key` holds no key
+ * whose first segment is a schema in this database, and {@link discoverCatalog} asserts its own
+ * non-vacuity so an over-broad filter cannot pass by emptying the set.
+ */
+const SQL_SCHEMA_QUALIFIER =
+    /^(?:public|auth|storage|graphql|graphql_public|realtime|vault|extensions|pg_catalog|information_schema|supabase_migrations|supabase_functions|net|cron|pgbouncer)\./;
+
+/** True when a key-shaped literal is really a relation name a seeding region happens to mention. */
+export function isSchemaQualifiedRelation(key: string): boolean {
+    return SQL_SCHEMA_QUALIFIER.test(key);
+}
+
 const SQL_STRING = /'((?:[^']|'')*)'/g;
 
 function stripSqlComments(sql: string): string {
@@ -88,6 +113,7 @@ export function discoverCatalog(): Map<string, CatalogKey> {
             for (const literal of region.matchAll(SQL_STRING)) {
                 const key = literal[1]!.replace(/''/g, "'");
                 if (!PERMISSION_KEY_GRAMMAR.test(key)) continue;
+                if (isSchemaQualifiedRelation(key)) continue;
                 const prior = byKey.get(key);
                 byKey.set(key, { key, seededBy: [...new Set([...(prior?.seededBy ?? []), file])] });
             }
@@ -118,6 +144,7 @@ function discoverLabelledEntries(): Map<string, { key: string; group_key?: strin
             for (const tuple of region.matchAll(TUPLE)) {
                 const key = tuple[1]!;
                 if (!PERMISSION_KEY_GRAMMAR.test(key)) continue;
+                if (isSchemaQualifiedRelation(key)) continue;
                 const second = tuple[2]!.replace(/''/g, "'");
                 const third = tuple[3]!.replace(/''/g, "'");
                 // Column order is not fixed across the tree: the canonical seeds write
