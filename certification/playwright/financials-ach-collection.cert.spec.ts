@@ -21,10 +21,33 @@ import { expect, test, type Page } from "@playwright/test";
 const WORK_VIEW = "/workspace/work-unit/new-leads";
 const BOS_PRESENTATION_STATE_KEY = "alloy:v1:admV2:shell:bosPresentationState";
 
-/** The certification subject: enrolment-backed AND paged by the Work View. Both are required. */
-const CERT_OPPORTUNITY = "00000000-0000-4000-8000-40000000099b";
-const CERT_CUSTOMER = "00000000-0000-4000-8000-10000000003b";
-const CERT_MEMBER = "00000000-0000-4000-8000-30000000003b";
+/*
+ * THE SUBJECT THIS THREAD OWNS.
+ *
+ * Seeded by `certification/fixtures/thread-8c-collection-subject.sql` under an id prefix nothing
+ * else uses and stamped `source_key = 'thread-8c-certification'`. It replaced a household shared
+ * with every other Financials live suite, where two things had made the proof impossible: posted
+ * childcare money is immutable, so each settled scenario permanently consumed a day of billing
+ * history until nothing collectible was left; and a predecessor suite's cleanup deleted the
+ * subject's enrollment agreement while clearing "this child at this site", after which every charge
+ * billed the household directly and the provider collection refused it — correctly.
+ *
+ * The old subject's posted charges, receipts and journal entries are real financial history and were
+ * left exactly where they are.
+ */
+const CERT_ORG = "00000000-0000-4000-8000-000000000001";
+const CERT_OPPORTUNITY = "8c000000-0000-4000-8000-00000000e001";
+const CERT_CUSTOMER = "8c000000-0000-4000-8000-00000000c001";
+const CERT_MEMBER = "8c000000-0000-4000-8000-00000000c002";
+/*
+ * The ENROLMENT-BACKED template, and only that one.
+ *
+ * The other fixture templates bill the household directly, and a provider collection refuses a
+ * charge whose billable source is not an enrolment agreement — correctly, since that is the
+ * obligation the collection resolves its allocatable net against. Rotating across all three to widen
+ * the day space produced "that obligation could not be resolved for this organization", which is the
+ * product being right about a subject this certification had no business collecting from.
+ */
 const TEMPLATE = "fc500000-0000-4000-8000-0000000d0001";
 
 function trusted(key: string): string {
@@ -89,7 +112,11 @@ async function execute(page: Page, body: Record<string, unknown>) {
 
 /** Canonical Thread 8/2/4 truth, read the way the card reads it. */
 async function canonical(page: Page) {
-    const res = await page.request.get(`/api/admin/financials/card?customer_id=${CERT_CUSTOMER}`);
+    // Bounded. An unbounded read here inherited the project default and quietly spent the whole test
+    // budget when the surface was slow, reporting the timeout from whatever line ran next.
+    const res = await page.request.get(`/api/admin/financials/card?customer_id=${CERT_CUSTOMER}`, {
+        timeout: 60_000,
+    });
     const vm = ((await res.json()) as any).vm ?? {};
     return {
         balance: vm.reconciliation?.balanceCents ?? null,
@@ -104,8 +131,14 @@ async function openSubject(page: Page) {
         ([k, v]) => { try { sessionStorage.setItem(k, v); } catch { /* private mode */ } },
         [BOS_PRESENTATION_STATE_KEY, "closed"],
     );
-    await page.goto(`${WORK_VIEW}?subject_id=${CERT_OPPORTUNITY}`);
-    await page.waitForLoadState("domcontentloaded");
+    /*
+     * Bounded on purpose. Left at the project default a slow Work View simply consumed the whole
+     * test budget and reported "target page closed" from whatever line happened to be running when
+     * the clock ran out — which says nothing about what was slow. Two minutes is far longer than a
+     * healthy load and short enough that the failure names itself.
+     */
+    await page.goto(`${WORK_VIEW}?subject_id=${CERT_OPPORTUNITY}`, { timeout: 120_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 120_000 });
     await expect
         .poll(async () => await page.locator('[data-financials-card="true"]').count(), { timeout: 90_000 })
         .toBeGreaterThan(0);
@@ -114,19 +147,38 @@ async function openSubject(page: Page) {
 /** A posted, enrolment-backed obligation — the only kind ACH can collect against. */
 async function seedCharge(page: Page, amountCents?: number): Promise<string> {
     /*
-     * A charge that is actually collectible, which is harder than creating one.
+     * AN OBLIGATION THIS SUBJECT CAN ACTUALLY BE COLLECTED FOR.
      *
-     * `charge.add` is idempotent per child, template and day — correct, since adding a day's fee
-     * twice should not bill it twice — so a scenario cannot get a fresh obligation just by asking
-     * again. It also cannot simply pick "yesterday": a previous run of this certification already
-     * created that charge AND paid it to zero, and a paid charge is not something to collect against.
+     * Two things make this harder than creating a charge. `charge.add` is idempotent per child,
+     * template and day — correct, since a day's fee should not be billed twice — so asking again
+     * returns nothing new for a day that already has one. And posted childcare money is immutable,
+     * so a day this certification has already paid to zero never comes back.
      *
-     * So walk the days of the current accounting period until one yields an obligation with
-     * something still owed. Staying inside the period matters as much as the day being free — the
-     * Financials read model scopes to the period in view, and a charge outside it is correctly
-     * invisible on the card this certification is reading.
+     * Walking days to find a free one was tried and does not survive contact with a long-lived
+     * tenant: this subject now carries hundreds of spent days, and the walk cost minutes per
+     * scenario before failing. So ask the database the question directly — is there an enrolment
+     * backed obligation with something still owed — and only create one when there is not.
+     *
+     * The enrolment backing is not incidental. A provider collection resolves its allocatable net
+     * against the enrolment agreement, and refuses a charge billed straight to the household. When
+     * the live suites deleted this subject's agreement, every charge created here became
+     * household-billed and the collection refused it, which is the product being right.
      */
-    for (let back = seedNth + 1; back <= 28; back += 1) {
+    const existing = sql(`select c.id from charges c
+        where c.org_id = '${CERT_ORG}'
+          and c.billable_source_type = 'enrollment_agreement'
+          and c.status = 'posted'
+          and c.charge_template_id = '${TEMPLATE}'
+          and c.amount_cents - coalesce((
+                select sum(a.allocated_amount_cents) from payment_allocations a
+                where a.target_entity_type = 'charge' and a.target_entity_id = c.id
+                  and a.status = 'active'), 0) > 0
+        order by c.created_at desc limit 1`);
+    if (existing) return existing;
+
+    let lastAddResponse = "(no attempt made)";
+    for (let step = 0; step < 12; step += 1) {
+        const back = 1 + ((RUN + step * 37) % 900);
         const day = new Date(Date.now() - back * 86_400_000).toISOString().slice(0, 10);
         const added = await execute(page, {
             action_key: "charge.add", entity_type: "child", entity_id: CERT_MEMBER, mode: "execute",
@@ -138,17 +190,17 @@ async function seedCharge(page: Page, amountCents?: number): Promise<string> {
             },
         });
         const id = added.json.data?.execution_result?.affected_id ?? added.json.data?.affected_id;
-        if (!id) continue;
+        if (!id) { lastAddResponse = JSON.stringify(added.json).slice(0, 400); continue; }
         await execute(page, {
             action_key: "charge.post", entity_type: "child", entity_id: CERT_MEMBER, mode: "execute",
             confirmation: { confirmed: true }, payload: { charge_id: id },
         });
-        seedNth = back;
-        if (outstandingOf(String(id)) > 0) return String(id);
+        const source = sql(`select billable_source_type from charges where id = '${id}'`);
+        if (source === "enrollment_agreement" && outstandingOf(String(id)) > 0) return String(id);
     }
     throw new Error(
-        "every day in the current accounting period already carries a fully paid certification charge — "
-        + "posted childcare money is immutable, so the period has to roll or the subject has to change",
+        "could not seed a collectible enrolment-backed obligation for the certification subject — "
+        + `check that the subject still holds an active enrolment agreement. Last charge.add said: ${lastAddResponse}`,
     );
 }
 
@@ -178,7 +230,7 @@ async function mountedCollectionState(page: Page, attemptId: string) {
 }
 
 /** Wait for the provider's own verdict on an intent, however long the rail takes. */
-async function awaitIntentStatus(pi: string, account: string, want: string[], ms = 300_000) {
+async function awaitIntentStatus(pi: string, account: string, want: string[], ms = 600_000) {
     await expect
         .poll(async () => (await stripe(`payment_intents/${pi}`, undefined, account)).body.status, {
             timeout: ms, intervals: [3_000],
@@ -206,7 +258,9 @@ async function mountedPaymentRow(page: Page, paymentId: string) {
      * an operator can see what arrived without opening a deeper layer. Reading it from inside Details
      * found nothing and looked like a missing receipt.
      */
+    const t0 = Date.now();
     await openSubject(page);
+    const tNav = Date.now();
     /*
      * The read model first, then the browser. Separating them is what tells a missing receipt from a
      * receipt the surface declines to draw — two different defects that look identical from a failing
@@ -224,12 +278,46 @@ async function mountedPaymentRow(page: Page, paymentId: string) {
      */
     const row = page.locator(`[data-financials-payments="true"] [data-financials-payment-id="${paymentId}"]`);
     if (await row.count() === 0) {
-        const payNow = page.getByRole("button", { name: /Take payment/ });
-        await expect(payNow, "a compact card still offers the payment representation")
-            .toBeVisible({ timeout: 60_000 });
-        await payNow.click();
+        /*
+         * DETAILS, not `Take payment →`.
+         *
+         * The band is dropped by the card's compact density, and the payment representation that
+         * also hosts it correctly stops being offered once there is nothing left to collect — which
+         * is exactly the state a fully settled account is in. Certification found the receipt
+         * unreachable there and the band now renders in Details too, which is where an operator
+         * works the ledger and the only place with room for it.
+         */
+        /*
+         * DISMISS THE DEPTH SCRIM FIRST — the operator's own gesture, not a way around one.
+         *
+         * The Focus Panel arms a scrim over a card that is not the one in front. While it is armed
+         * the whole Financials subtree computes `pointer-events: none` — the button up through the
+         * grid cell — and a sibling `.alloy-os-fp-depth-scrim` sits over it taking the click. A probe
+         * measured exactly that: `Details` present, enabled, visible, correctly positioned, and
+         * `elementFromPoint` at its centre returning the scrim instead. Playwright then waited for an
+         * element that could never receive events until the test budget ran out.
+         *
+         * Clicking the scrim is what an operator does to bring the card forward, and afterwards
+         * `Details` takes a real click. Forcing the click instead would have proved nothing: a
+         * force-click passing is evidence the product is unreachable, which is the lesson Slice H
+         * already paid for.
+         */
+        const scrim = page.locator(".alloy-os-fp-depth-scrim").first();
+        if (await scrim.count() > 0) {
+            await scrim.click({ timeout: 30_000 }).catch(() => { /* already in front */ });
+            await page.waitForTimeout(500);
+        }
+        const details = page.locator('[data-financials-card="true"]').first()
+            .getByRole("button", { name: /Details/ });
+        await expect(details, "a settled account still opens its ledger").toBeVisible({ timeout: 60_000 });
+        await details.click({ timeout: 30_000 });
     }
     await expect(row, "and the surface draws it").toBeVisible({ timeout: 90_000 });
+    test.info().annotations.push({
+        type: "timing",
+        description: `nav ${((tNav - t0) / 1000).toFixed(1)}s · read+draw ${((Date.now() - tNav) / 1000).toFixed(1)}s`,
+    });
+    console.log(`[cert] payment row: nav ${((tNav - t0) / 1000).toFixed(1)}s, read+draw ${((Date.now() - tNav) / 1000).toFixed(1)}s`);
     return {
         kind: await row.getAttribute("data-financials-payment-kind"),
         origin: await row.locator("[data-financials-payment-origin]").first()

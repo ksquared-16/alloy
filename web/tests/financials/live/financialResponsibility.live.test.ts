@@ -188,19 +188,27 @@ describeLive("responsibility and funding, live", () => {
             }
             const agreementId = `${R}00000000a00${index + 1}`;
             /*
-             * Retire whatever agreement this child already holds at this site, not only one carrying
-             * the id this suite uses. One operational agreement per child per site is a real
-             * constraint, so an agreement another suite left behind silently defeated the insert
-             * below and the suite then worked against a subject that did not exist.
+             * Clear an incumbent agreement that a LIVE CERTIFICATION SUITE created, and nothing else.
+             *
+             * One operational agreement per child per site is a real constraint, and these suites
+             * work on whichever customer members the tenant happens to have, so they contend for the
+             * same children. Deleting only this suite's own ids left them blocking each other;
+             * deleting whatever the child held reached the mounted certification's OWN subject and
+             * left it with no enrolment at all, after which every seeded charge billed the household
+             * directly and the provider collection refused it — correctly.
+             *
+             * Provenance is the discriminator. Suites stamp `source_key` on what they create and
+             * clear only that, so a fixture belonging to anything else is never in range.
              */
             await supabase.from("enrollment_pricing_terms").delete()
                 .eq("org_id", ORG).eq("customer_member_id", member.id);
             await supabase.from("child_enrollment_agreements").delete()
-                .eq("org_id", ORG).eq("customer_member_id", member.id).eq("site_location_id", siteLocationId);
+                .eq("org_id", ORG).eq("customer_member_id", member.id)
+                .eq("source_key", "live-certification");
             await supabase.from("child_enrollment_agreements").insert({
                 id: agreementId, org_id: ORG, customer_member_id: member.id, customer_id: customerId,
                 site_location_id: siteLocationId, opportunity_customer_member_id: ocmId,
-                status: "active", start_date: "2026-01-01",
+                status: "active", start_date: "2026-01-01", source_key: "live-certification",
             });
             await supabase.from("enrollment_pricing_terms").insert({
                 id: `${R}00000000b00${index + 1}`, org_id: ORG, opportunity_customer_member_id: ocmId,

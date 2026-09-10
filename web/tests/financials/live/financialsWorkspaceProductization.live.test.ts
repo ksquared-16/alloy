@@ -148,19 +148,26 @@ describeLive("financials workspace productization — live", () => {
             const agreementId = `${W}${runHex()}a00${index + 1}`;
             const siteId = index === 0 ? siteA : siteB;
             /*
-             * Clear whatever agreement this member already has at this site, not just one with the
-             * id this run happens to choose. A child may hold only one operational agreement per
-             * site — a real constraint — so a run that authors a fresh subject has to retire the
-             * previous run's first. The agreement is test-owned mutable fixture state; the money
-             * posted against it is not, and is left exactly where it is.
+             * Clear an incumbent agreement that a LIVE CERTIFICATION SUITE created, and nothing else.
+             *
+             * One operational agreement per child per site is a real constraint, and these suites
+             * work on whichever customer members the tenant happens to have, so they contend for the
+             * same children. Deleting only this suite's own ids left them blocking each other;
+             * deleting whatever the child held reached the mounted certification's OWN subject and
+             * left it with no enrolment at all, after which every seeded charge billed the household
+             * directly and the provider collection refused it — correctly.
+             *
+             * Provenance is the discriminator. Suites stamp `source_key` on what they create and
+             * clear only that, so a fixture belonging to anything else is never in range.
              */
             await supabase.from("enrollment_pricing_terms").delete()
                 .eq("org_id", ORG).eq("customer_member_id", member.id);
             await supabase.from("child_enrollment_agreements").delete()
-                .eq("org_id", ORG).eq("customer_member_id", member.id).eq("site_location_id", siteId);
+                .eq("org_id", ORG).eq("customer_member_id", member.id)
+                .eq("source_key", "live-certification");
             const { error: agreementError } = await supabase.from("child_enrollment_agreements").insert({
                 id: agreementId, org_id: ORG, customer_member_id: member.id, customer_id: customerId,
-                site_location_id: siteId, opportunity_customer_member_id: ocmId, status: "active", start_date: "2026-01-01",
+                site_location_id: siteId, opportunity_customer_member_id: ocmId, status: "active", start_date: "2026-01-01", source_key: "live-certification",
             });
             expect(agreementError, agreementError?.message).toBeNull();
             const { error: termError } = await supabase.from("enrollment_pricing_terms").insert({

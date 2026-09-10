@@ -1505,6 +1505,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     onPayment={openSettle}
                     onAddCharge={() => setOverlay("add_charge")}
                 />
+                {/*
+                    WHAT ARRIVED, WHERE AN OPERATOR CAN STILL SEE IT.
+
+                    The payment band otherwise renders in exactly two places: the summary's side
+                    column, which a COMPACT card drops entirely, and the payment representation,
+                    which correctly stops being offered once an account has nothing left to collect.
+                    Certification found the consequence — on a compact card for a family who had just
+                    paid in full, there was no way to reach the receipt that settled it. The record
+                    of money arriving disappeared exactly when the account became healthy, which is
+                    the same reachability defect Slice H opened this band to fix.
+
+                    Details is where an operator works the ledger, and a ledger that cannot show what
+                    was received is only half of one.
+                */}
+                {paymentBand}
             </div>
         );
     }
