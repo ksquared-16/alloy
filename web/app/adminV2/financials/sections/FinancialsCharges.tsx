@@ -26,6 +26,7 @@ import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
+import FinancialsChargeDetail from "@/app/adminV2/financials/FinancialsChargeDetail";
 import FinancialsBulkCharge from "@/app/adminV2/financials/sections/FinancialsBulkCharge";
 import { moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialWorkQueueState } from "@/app/adminV2/financials/useFinancialWorkQueue";
@@ -184,6 +185,17 @@ export default function FinancialsCharges({
                             </p>
                         ) : null}
                         <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                            {/*
+                             * THE OBLIGATION FIRST, THEN THE ACCOUNT IT BELONGS TO.
+                             *
+                             * The pane has always shown how the household is doing. It never said
+                             * what the selected charge actually was, so an operator could read an
+                             * amount and a family name and still not know what the money was for,
+                             * who owed it, or what had been applied. This resolves the charge by id
+                             * through its own canonical read — the queue row supplies identity and
+                             * nothing else, because a row is a preview and not authority.
+                             */}
+                            <FinancialsChargeDetail key={selected.chargeId} chargeId={selected.chargeId} />
                             {/* THREAD 2, UNFORKED. Its own read model, its own numbers. */}
                             <FinancialsAccountDetail
                                 key={`${selected.customerId ?? selected.customerMemberId}-${cardNonce}`}
