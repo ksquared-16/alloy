@@ -5,121 +5,163 @@ last_reviewed: 2026-09-10
 supersedes: []
 ---
 
-# Decisions required — documentation truth audit, September 2026
+# Decisions — documentation truth audit, September 2026
 
-These are **not** documentation cleanup. Each is a real architecture, product or ownership
-question that documentation alone cannot settle, surfaced because two canonical documents
-disagree or because current truth has no owner. They are routed to the Documentation +
-Developer Platform master thread.
+The audit opened eleven items. A continuation pass triaged each against implementation and
+governance. **Five were resolved**, one dissolved as a mis-comparison, and **five remain genuine
+decisions** that documentation cannot settle.
 
-Evidence-supported documentation decisions made without escalation are recorded in the audit
-[`README.md`](./README.md) and in the commits themselves.
+Triage classes: **A** — implementation and doctrine already determine the answer. **B** — a
+documentation lifecycle/ownership question that governance answers. **C** — different plausible
+documentation outcomes imply different platform behaviour, so it is not documentation's call.
 
 ---
 
-## D1 — Relocate `docs/platform/planning/`?
+## Resolved
 
-242 files of planning and execution material inside the canonical doctrine tree — half of
-`docs/platform/` — in direct conflict with governance placement rule 3. It is the source of
-nearly every remaining lint violation.
+### D1 — Relocate `docs/platform/planning/`? · **B · resolved: do not relocate**
 
-Not moved by this audit: commits land in it daily, it holds five unrelated programs, and code
-links into it. A bulk move would disrupt in-flight work and break inbound references.
+Investigated on evidence rather than aesthetics. The tree is load-bearing infrastructure:
+`scripts/local-dev/lib/vacilando/acceptance.mjs` keys a live acceptance gate on the literal
+prefix; `web/tests/enrollment/assignmentCommitmentAuthority.test.ts` reads a document from it at
+runtime; two `web/package.json` scripts write evidence JSON into it. A move breaks ~46 hardcoded
+code paths and 186 depth-sensitive links.
 
-**Options:** move to `docs/sprints/active/` per doctrine · split by program and move each when
-its program closes · formally exempt it and add a lint rule pinning the exception so no
-*other* execution tree accumulates in `docs/platform/`.
+More decisively: ~38 of the 242 files are genuine doctrine, and governance forbids doctrine living
+in `docs/sprints/`. And because `GOVERNED_GLOBS` does not cover `docs/sprints/**`, relocating
+would have *hidden* ~363 violations rather than fixed them. Meanwhile the confusion risk is
+already near zero at the routing layer — `docs/README.md`, `.cursor/rules/` and `CLAUDE.md`
+contain no references into the tree.
 
-## D2 — Which document owns the runtime register?
+Resolved by making the exception explicit in `scripts/docs-lint.mjs` and
+`governance/documentation-governance.md`, with three new rules that keep it visible.
 
-Four canonical documents give three different answers, and none lists Trust Runtime or the
-Runtime V1 kernel:
+### D3 — Are the two runtime corpora complementary, and where is that written? · **A · resolved**
 
-- `foundation/architecture.md` — nine foundational runtimes
-- `foundation/platform-manifesto.md` — twelve
-- `milestones/freeze-july-2026.md` — twelve
-- `platform/runtime/alloy-runtime-kernel.md` — K1 Attention · K2 Provisioning · K3 Focus · K4 Instrumentation
+The deferral was real but lived only in `docs/README.md` — an authority rule in a navigation file.
+It is now written into the Constitution itself (Article 7.6, where it already defers to Product),
+naming `canonical-interaction-model.md` as the owner of Record of Truth / Record of Attention /
+Context Frame, with a reciprocal pointer back from `alloy-runtime-specification.md`.
 
-All three of the first set also assert "we do not build additional foundational runtimes", while
-two runtimes were ratified and shipped after that freeze. Resolving ownership fixes five stale
-statements at once.
+### D4 — Which document owns the card primitive? · **A · dissolved**
 
-## D3 — Are the two runtime corpora complementary, and if so where is that written?
+Not a collision. One chain at seven altitudes in which every document that could claim the
+primitive explicitly disclaims it. The real defect was two documents putting *behaviour* values on
+the *sizing* axis: `operational-grammar.md` listed six densities and `card-language.md` five,
+against a runtime enum of four. "Focused" is a perspective; "Immersive" is System 5B's Embedded
+Workspace — and `immersive` appears nowhere in `web/`. Corrected to point at the owner. Colour
+Language, genuinely defined twice with conflicting meanings, is de-duplicated to System 5, which
+is what `globals.css` implements.
 
-`platform/runtime/runtime-realization-architecture.md` calls itself the Alloy Operating System
-Constitution and claims total authority. `platform/operator/alloy-runtime-specification.md`
-claims the same ground as the implementation bridge. `docs/README.md` asserts they are
-complementary — the Constitution governing runtime, the operator corpus owning product
-semantics — but **neither document contains that deferral**, and there are zero cross-references
-between the corpora. The Constitution mentions "Record of Attention", "Context Frame", "Focus
-Panel" and "Perspective" zero times each.
+### D5 — Work Items has no canonical owner · **A · resolved**
 
-Either write the deferral into the Constitution, or reconcile the corpora. A README-level
-assertion is not an authority rule.
+It did have one. `queue-system.md` §Work Items queue was already accurate (Folders · Views ·
+Sources) and is now named as the owner. `operational-workspace-shell.md`'s stale process-rail
+description is corrected. There is no `work_item*` table — Work Items is a presentation layer over
+`operational_tasks` plus two virtual projections, so the concept split from Work Unit is correct.
 
-## D4 — Which document owns the card primitive?
+### D11 — Should docs-lint enforce placement rule 3? · **B · resolved: yes**
 
-Two parallel taxonomies both carry `status: canonical`: the numbered System 4 → 5 → 5A → 5B → 5C
-chain, and the Grammar → Language → Composition stack. Anatomy is defined in three documents,
-Colour Language in two under the same heading.
+Implemented as `sprint-artifact-in-platform`, scoped to everything outside the D1 exception. Seven
+existing violations, report-only. Governance's most consequential placement rule had never been
+implemented.
 
-Code adjudicates the density ladder: `focusPanelCardGrid.ts` has **four** steps. `universal-card-system.md`
-says four, `card-language.md` five, `operational-grammar.md` six. Recommend `universal-card-system.md`
-as owner — it is the only one matching code — but that retires a taxonomy and needs a decision.
+---
 
-## D5 — Work Items has no canonical owner
+## Genuine decisions remaining
 
-Work Items and Work Unit are genuinely different things (no `work_item*` table exists; Work
-Items is a presentation layer over `operational_tasks` plus two virtual projections). The concept
-split is correct, but no `work-items*.md` exists anywhere, and the two documents describing it
-disagree: `operator/operational-workspace-shell.md` says the primary axis is a process rail;
-`operator/queue-system.md` says Folders · Views · Sources. Code says the latter.
+### D2 — May an August canonical document supersede a frozen July milestone?
 
-## D6 — Scheduling / staffing has no canonical owner
+**Class C.** Most of the reported "runtime register conflict" was mis-comparison and is now
+reconciled: the two "nines" are different lists (nine *runtimes* in `architecture.md`, nine
+*layers* in `os-runtime-map.md`); twelve is the nine plus three contained sub-runtimes, which the
+freeze doc already annotates as contained; the K1–K4 kernel is explicitly "not a new foundational
+runtime"; and Trust is a foundational *platform*, a separate register.
 
-Employment foundation, staff assignment eligibility, staff presence facts, operational
-assignment and roster all shipped between July and September 2026, ungated and certified. No
-canonical module document owns them. Separately, `core/operational-ux-doctrine.md` and
-`core/operational-truth-flow-doctrine.md` both describe staffing in terms of **shifts** — no
-shift model exists; staff supply is `schedule_assignments` with `subject_type='staff'`.
+What does not dissolve: `alloy-runtime-kernel.md` (canonical, 2026-08-14) issues **dispositions**
+on five of the twelve runtimes still listed as canonical owners by `freeze-july-2026.md` and
+`platform-manifesto.md`, both `status: frozen` — "Navigation Runtime — **DELETE**, the concept
+dissolves"; Queue "it is not a runtime; it never was"; VM "as an independent runtime it is
+deleted"; Current Work "**MOVE** → Business Processes"; Focus Panel "it is **not** a separate
+runtime".
 
-## D7 — Did subsidy deliberately override a frozen law?
+**Code says the kernel won.** `SurfaceHostContext.tsx` records the realized cutover
+("BEFORE: pathname → … / NOW: K1 → K2 → K3 committed Focus"), and `AdminV2WorkspaceClientProviders.tsx`
+mounts the Surface Host inside the kernel provider. The architecture is settled in implementation.
+What is unsettled is which document may say so.
 
-`modules/financial-platform-domain.md` freezes determination #5, "Third-Party Payer generalizes
-subsidy", and requires a first-class Third-Party Payer entity. Shipped subsidy is
-childcare-specific (`financial_funding_agencies`, `financial_subsidy_programs`,
-`financial_subsidy_claims`). `modules/billing-financials-platform.md` consciously overrides the
-frozen law — "not a platform party redesign subsidy does not justify" — with no `supersedes`
-link between them. Either the freeze is amended or the implementation is a recorded exception.
+| Option | Consequence |
+|---|---|
+| **(a) Kernel supersedes** — foundation docs stop naming runtimes and point to the kernel | One register; but amends two `status: frozen` milestones, which a freeze does not obviously permit |
+| **(b) Freeze is historical** — milestone docs get a superseded-by banner, text unchanged; five foundation docs stop asserting the list in present tense | Preserves the frozen record intact; five edits; reader follows a pointer |
+| **(c) Both stand, explicitly labelled** | Nothing retracted, but the corpus permanently holds "Navigation Runtime owns URL projection" and "Navigation Runtime — DELETE" as concurrent canon |
 
-## D8 — Two forked copies of the access-identity corpus
+**Recommendation: (b).** A freeze is a record of a moment; it should not be edited, and it should
+not be read in the present tense two months and a shipped kernel later.
 
-The same eight documents exist under `docs/platform/planning/access-identity-v2/` and
-`docs/platform/planning/vacilando-os/qa/access-identity-v2/`, with code citing the two copies
-inconsistently. The repository already records this as an open Director decision (`OD-4` / `X-2`).
-Compounding it, `w45-w51-truthful-access-execution.json` is the only place in `docs/` recording
-the approved canonical access model and defining `OD-8`.
+### D6 — Who owns Scheduling / staffing documentation?
 
-## D9 — Promote the normative half of `docs/runtime/`?
+**Class C.** Employment foundation, staff assignment eligibility and staff presence facts shipped
+August 2026 and `web/app/adminV2/scheduling/` exists, but no canonical module doc owns the domain.
+Writing one means defining the domain model — product work, not documentation maintenance,
+particularly since two core doctrine docs described staffing in terms of a **shift model that does
+not exist** (corrected in this pass to `schedule_assignments` with `subject_type='staff'`).
 
-About ten of its 52 files are normative with no equivalent under `docs/platform/`, and **20
-`web/` source and test sites cite them**, including a live route. Promotion must rewrite those
-`@see` paths in the same commit. Two `OPEN-DECISION-*.md` files must be routed somewhere live
-first — archiving an open question is how it gets lost. The three repository-root execution
-artifacts belong to this corpus.
+Recorded as an owner gap in `product-roadmap.md` and the audit README. Someone must decide whether
+Scheduling gets a module doc now or after the domain settles.
 
-## D10 — Is the Operational Expectations activation seam an approved rollout control?
+### D7 — Does the frozen Third-Party Payer law stand?
 
-`ACTIVATED_AUTHORING_PURPOSES` lets a named purpose author production ledger rows without the
-`oe.ledger.author` flag. This audit corrected the documents that denied it, but the seam itself
-is described **nowhere** in `docs/`, and it changes what three canonical and milestone documents
-assert about the ledger's safety posture. It needs an owning document and, if it is a durable
-architectural control, a Platform Decisions entry. The flag module's own docblock still says
-"OFF (default) → no Operational Expectation authoring", two functions above the code that
-contradicts it.
+**Class C.** `financial-platform-domain.md` freezes "Third-Party Payer generalizes subsidy" and
+requires that entity first-class. Subsidy shipped childcare-specific
+(`financial_funding_agencies`, `financial_subsidy_*`), and `billing-financials-platform.md` gives a
+reasoned override — an agency needs "the narrowest thing that works", and "not a platform party
+redesign subsidy does not justify". Both positions are coherent; there is no `supersedes` link.
 
-## D11 — Should docs-lint enforce placement rule 3?
+Options: amend the freeze to match what shipped · keep the freeze and treat the implementation as
+a recorded exception to be generalized later · re-generalize subsidy onto a Third-Party Payer
+entity. This pass added a warning to the frozen doc so nobody builds on determination 5 as though
+the generalization exists in the schema. **No recommendation** — this is a financial domain model
+question, and the cost of the third option is not visible from documentation.
 
-Governance's most consequential placement rule — no sprint artifacts inside `docs/platform/` —
-has no implementation. A `status: sprint` document there passes silently; there are 54 of them.
-Adding the rule is easy; deciding what it does about D1's 242-file exception is not.
+### D8 — Reconcile the diverged Access/Identity copies
+
+**Class C (bounded).** Not the "two forked copies" the audit first reported: both directories
+declare their relationship — `planning/access-identity-v2/` is the product-source copy,
+`vacilando-os/qa/access-identity-v2/` is runtime certification evidence, and each names the other.
+Ownership was never ambiguous.
+
+The defect is divergence, and it is **bidirectional**: `01` and `02` are richer in the
+product-source copy, while `03-implementation-qa-sequence.md` — the document the copy calls "the
+plan of record" — is newer in the evidence copy (2026-09-06 vs 2026-08-10, eight execution
+updates). Code citations split roughly 40/44, and for `03` specifically about 30 code sites cite
+the stale copy against 11 citing the current one.
+
+Recorded in the copy's README so nobody reads a month-stale plan as current. Merging 5,000-line
+documents is content work for the owning team, not a documentation-maintenance act. Note a live
+session is working this area.
+
+### D9 — Promote the normative subset of `docs/runtime/`?
+
+**Class B (blocked on cost, not on judgment).** About ten of its 52 files state durable runtime
+authority with no equivalent under `docs/platform/`, and **20 `web/` source and test sites cite
+them**, including a live route. Governance now says this plainly rather than calling the whole
+directory execution history.
+
+Promotion must rewrite those 20 citations in the same commit or the doc-to-code binding breaks
+silently, and the two `OPEN-DECISION-*.md` files must be routed somewhere live first — archiving
+an open question is how it gets lost. That is a bounded refactor someone should schedule, not an
+unattended documentation edit.
+
+### D10 — Is the Operational Expectations activation seam a ratified rollout control?
+
+**Class C.** `ACTIVATED_AUTHORING_PURPOSES` lets a named purpose author production ledger rows
+without the `oe.ledger.author` flag. Every document that denied this is corrected, and the
+engineering-realization milestone is marked superseded in part. But the seam itself is described
+nowhere in `docs/` as a design, and it changes what the frozen OE corpus asserts about the
+ledger's safety posture.
+
+It needs an owning document and, if it is a durable architectural control, a Platform Decisions
+entry. Note the flag module's own docblock still says "OFF (default) → no Operational Expectation
+authoring", two functions above the code that contradicts it — application source, left alone by
+this documentation pass.

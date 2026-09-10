@@ -155,10 +155,46 @@ Recorded, not resolved — each needs an owner decision, not a documentation edi
 
 ## 7. Verification
 
-| Check | Result |
-|---|---|
-| `npm run docs:lint` | Runs clean; `generated-boundary` 21 → **0**, `frontmatter-missing` 108 → **95**, `frontmatter-malformed` 25 → **24** |
-| `node scripts/generate-schema-docs.mjs` | Regenerates; diff limited to real drift |
-| `node scripts/generate-api-inventory.mjs` | Regenerates; 524 → 613 routes |
-| `web/tests/scripts/docsLint.test.ts` | All 9 assertions re-executed in plain node + 1 new; 10 passed. **vitest could not run** — no `node_modules` in this worktree and the validation broker refuses an unslotted lane (`metadata missing ALLOY_WORKTREE_SLOT`) |
-| Link validation | Only via docs-lint. Backticked path references — the form most of the corrected navigation bugs took — are **not** checked by any tool |
+A continuation pass on 2026-09-10 obtained a working test environment (npm's arborist crashes on
+this machine resolving vitest's peer set; `--legacy-peer-deps` works around it), so the
+repository's intended checks ran rather than substitutes.
+
+| Check | Command | Result |
+|---|---|---|
+| Documentation lint | `npm run docs:lint` | Runs clean. `generated-boundary` 21 → **0**; `duplicate-basename` 10 → **0**; `orphan-canonical` 381 → **139** (the remainder is the genuine signal); `frontmatter-missing` 108 → **95** |
+| Documentation lint, CI mode | `npm run docs:lint:ci --base origin/staging` | **No blocking failures in changed governed files** |
+| docs-lint test suite | `vitest run tests/scripts/docsLint.test.ts` | **9/9 passed** under the repository's own vitest config |
+| Link validation | via docs-lint | **Zero broken links in every governed path** — `docs/README.md`, `docs/platform/**`, `docs/system/**`, `docs/product/**`. The 640 remaining are all in `docs/sprints/` (379) and `docs/archive/` (261), trees doctrine already declares not current truth |
+| API platform gate | `node scripts/api-platform-check.mjs` | **All 6 green** — OpenAPI validation, generated-types freshness, generation determinism, contract tests, envelope contract tests, typed-client tests |
+| OpenAPI spec | `node scripts/validate-openapi.mjs` | **OK** — 3.1.0, 14 paths, 20 ops, 22 schemas, 35 refs all resolve |
+| OpenAPI contract tests | `vitest run tests/api/openapiContract.test.ts` | **150/150 passed** |
+| Schema reference | `node scripts/generate-schema-docs.mjs` | Regenerates deterministically; clean tree on re-run |
+| API reference | `node scripts/generate-api-inventory.mjs` | Regenerates deterministically; 524 → 613 routes |
+
+**Known limits.** No tool checks backticked path references, which is the form most corrected
+navigation defects took — and the form that let a canonical document delegate `commitment_kind`
+truth into the planning tree unnoticed. `docs/schema/` is only as current as the 2026-07-30 CSV
+export; refreshing needs a live `DATABASE_URL` this lane does not hold. Playwright certification
+was not run: it needs a dev server and a slot, and `documentation-api` is registered without one.
+None of these limits blocks a documentation conclusion — each invariant they would test is either
+proven another way above or explicitly recorded as debt.
+
+## 8. Continuation pass — what changed after the first handoff
+
+The first pass returned `PARTIAL` with three blockers. All three were investigated to evidence:
+
+- **`docs/platform/planning/`** — resolved: do not relocate. The tree is load-bearing (a live
+  acceptance gate, a runtime test read, evidence-writing npm scripts), ~38 of its files are
+  doctrine that `docs/sprints/` may not legally hold, and moving it would have hidden ~363
+  violations rather than fixed them. The exception is now declared in the linter and in governance,
+  with three rules that keep it visible.
+- **Runtime register** — mostly mis-comparison, now reconciled. The audit's own "9 layers" was a
+  mis-citation of a different list. What remains is a real question about whether a frozen
+  milestone may be superseded (D2).
+- **Card taxonomy** — dissolved. One chain at seven altitudes, not two taxonomies; the defect was
+  two documents putting behaviour values on the sizing axis.
+
+Also corrected in the continuation: the roadmap's "future" framing for four shipped domains, the
+configuration plane (`/admin` → `/organization/*`), staffing's non-existent shift model, Work
+Items' rail, every broken link in governed scope, and seven `@see` comments pointing at a document
+path that has never existed.
