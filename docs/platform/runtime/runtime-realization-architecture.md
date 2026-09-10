@@ -985,6 +985,16 @@ recovery — not a parallel runtime.
 
 Product decisions. Not engineering's to make; the runtime cannot be built without them.
 
+> **Where product semantics are written.** This Constitution governs the runtime; it does not own
+> the operator's conceptual vocabulary. **Record of Truth · Record of Attention · Context Frame**
+> are defined in [`../operator/canonical-interaction-model.md`](../operator/canonical-interaction-model.md),
+> with the laws in [`../operator/interaction-grammar.md`](../operator/interaction-grammar.md) and
+> the operator-facing synthesis in
+> [`../operator/alloy-runtime-specification.md`](../operator/alloy-runtime-specification.md).
+> The runtime *expresses* those terms; it does not define them. This deferral was previously
+> asserted only in `docs/README.md`, which is not where an authority rule belongs — it is stated
+> here because this is the document that claims total authority.
+
 | # | Decision | Recommendation |
 |---|---|---|
 | **D-1** | **What is the Work Unit's Operational Contract?** *(It sizes everything.)* | The work is visible; the subject is committed; action is reachable. Card bodies, counts, and metrics settle. Evidence: the record layer already commits identity first and hydrates after — the fastest, best-liked interaction in the product. |

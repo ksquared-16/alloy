@@ -69,7 +69,7 @@ planning tree. 242 of the 381 are that tree.
 | Architecture | `foundation/architecture.md` | Stale (routes, runtime register); link depth fixed |
 | System overview | `foundation/system-overview.md` | Stale (`/admin` config plane, "record drawer") |
 | Decision register | `foundation/platform-decisions.md` | Stale — last entry 2026-08; ≥6 decisions unregistered |
-| Runtime register | **conflicted** — `architecture.md` (9 layers), `platform-manifesto.md` (12), `freeze-july-2026.md` (12), `platform/runtime/alloy-runtime-kernel.md` (K1–K4) | **Unresolved** — see decisions required |
+| Runtime register | `foundation/architecture.md` (9 runtimes) · `platform-manifesto.md` and `freeze-july-2026.md` (12 = the 9 plus 3 contained sub-runtimes) · `platform/runtime/alloy-runtime-kernel.md` (K1–K4 kernel, a different altitude) | **Mostly reconciled** in the continuation pass. The audit's original "9 layers" was a mis-citation: the nine *layers* are `os-runtime-map.md`, a different list from the nine *runtimes*. What remains is a real ownership question — D2 |
 | Interaction spine | `operator/canonical-interaction-model.md` + grammar + story | Current; two competing *synthesis* docs |
 | Card primitive | `operator/universal-card-system.md` | **Collision** — density ladder stated 3 ways; only this one matches code |
 | Workspace / navigation | `core/navigation-and-workspace-doctrine.md` (V3) | Stale on the `/workspace` landing; competes with `operator/operational-workspace-shell.md` |

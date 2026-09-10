@@ -127,7 +127,17 @@ Instead of listing fields (Phone, Email, Contact, Children), the Household card 
 
 ## Density
 
-Cards do not change identity — they change **density**: Micro (queue) → Compact (summary) → Standard (work) → Expanded → Focused → Immersive (embedded workspace). A Household card remains the Household card regardless of density; only presentation changes.
+Cards do not change identity — they change **density**. A Household card remains the Household
+card regardless of density; only presentation changes.
+
+The density ladder itself is a runtime enum and is owned by
+[`universal-card-system.md`](./universal-card-system.md) §Density
+(`FocusPanelCardDensity` in `web/lib/adminV2/runtime/focusPanel/focusPanelCardGrid.ts`).
+This document does not restate it. It previously listed six steps, adding *Focused* and
+*Immersive* — neither is a density: **Focused** is a perspective/depth
+(`Perspective`, `activeDepth.level`) and **Immersive** is System 5B's Embedded Workspace
+interaction model. Putting a behaviour on the sizing axis is what made the ladder disagree
+with the runtime.
 
 ---
 

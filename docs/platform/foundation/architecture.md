@@ -9,7 +9,7 @@ supersedes: []
 
 **Status:** Canonical (July 2026 stabilization). Describes **current** platform architecture — not sprint history.
 
-> **Platform stabilization (July 2026).** Alloy's operator plane consists of **nine foundational runtimes** — Presentation Runtime, Surface Host, Focus Panel Runtime, VM Runtime, Business Process Runtime, Processing Runtime, Communications Runtime, Configuration Runtime, and Current Work Runtime. There is **no legacy entity drawer runtime**. The composed drawer payload stack is **reveal/payload infrastructure behind the Focus Panel** — not a competing product surface. Canonical: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md), [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md), [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md).
+> **Platform stabilization (July 2026).** Alloy's operator plane consists of **nine foundational runtimes** — Presentation Runtime, Surface Host, Focus Panel Runtime, VM Runtime, Business Process Runtime, Processing Runtime, Communications Runtime, Configuration Runtime, and Current Work Runtime. The **K1–K4 runtime kernel** (`../runtime/alloy-runtime-kernel.md`) is not a tenth entry in this register: `../runtime/runtime-implementation-authorization.md` states it directly — "**Not** a new foundational runtime — K1–K4 is the kernel; no fifth system." The kernel is the substrate beneath these subsystems, not one of them. Note also that the kernel doc reclassifies several of the runtimes named here; see `docs/audits/active/documentation-truth-audit-2026-09/decisions-required.md` D2. There is **no legacy entity drawer runtime**. The composed drawer payload stack is **reveal/payload infrastructure behind the Focus Panel** — not a competing product surface. Canonical: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md), [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md), [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md).
 
 ---
 
@@ -162,6 +162,7 @@ See `../governance/deployment-and-environments.md`.
 ## Related docs
 
 - `os-runtime-map.md` (**OS Runtime Map** — the nine runtime layers, the three flows, the client/server seam, the Effects/Integration service, and the Architecture Evolution & Known Gaps appendix)
+  **These are a different nine.** The nine *layers* (Kernel · Intent · Navigation · Experience · Surface · Card · Record · Entity · Operational/BOS) are a decomposition of the stack; the nine *foundational runtimes* named at the top of this document are operator-plane subsystems. The two lists are not versions of each other, and matching counts is a coincidence.
 - `system-overview.md`
 - `../core/business-process-system.md`
 - `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)

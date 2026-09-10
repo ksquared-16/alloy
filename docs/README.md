@@ -47,6 +47,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Operational Intelligence Platform V1 (frozen, July 2026):** Questions → Measurements → Definitions → Answers. Consumers present **Answers** (not Measurements). Freeze: **`platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`**. Product closeout: **`sprints/07_2026/operational-intelligence-expansion/OPERATIONAL-INTELLIGENCE-PLATFORM-V1-COMPLETE.md`**. Phase 2 consumption: **`sprints/07_2026/operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md`**. Module: **`platform/modules/operational-intelligence-platform.md`**.
 
+**Two registers, not one list:** Alloy names foundational **runtimes** (operator-plane subsystems — `platform/foundation/architecture.md`) and foundational **platforms** (`platform/trust/trust-platform.md`). Trust is a platform, not a runtime, which is why it does not appear in the runtime register. The **K1–K4 kernel** (`platform/runtime/alloy-runtime-kernel.md`) is a third thing again — the substrate beneath the runtimes, explicitly "not a new foundational runtime".
+
 **Trust Platform (publication in progress, August 2026):** Alloy’s cognitive platform for **trusted operational reasoning** — not an AI/prompt/model layer. Entry: **`platform/trust/trust-platform.md`**. Corpus index: **`platform/trust/README.md`**.
 
 ---

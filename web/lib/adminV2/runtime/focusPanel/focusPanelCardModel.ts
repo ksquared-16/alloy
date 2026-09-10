@@ -1,7 +1,7 @@
 /**
  * Universal Card presentation model — business question first, not layout sections.
  * @see docs/platform/operator/operational-surface-design-system.md (System 5)
- * @see docs/platform/operator/universal-universal-card-archetypes.md (System 5A)
+ * @see docs/platform/operator/universal-card-archetypes.md (System 5A)
  * @see docs/sprints/archive/06_2026/alloy_os_system_4_universal_card_system.md
  */
 
