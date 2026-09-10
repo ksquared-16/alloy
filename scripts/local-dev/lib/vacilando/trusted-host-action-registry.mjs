@@ -7,11 +7,12 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
+import { validateLedgerReconcileInputs } from "./trusted-host-ledger-reconcile.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateProductionMigrationInputs } from "./trusted-host-production-migrate.mjs";
-import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
+import { validateMigrationInputs, readMigrationContent } from "./trusted-host-migrate.mjs";
 import { validateRestoreDeployedQaSessionInputs } from "./deployed-qa-session-restore-action.mjs";
 import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
 import { validateProvisionQaIdentityInputs } from "./qa-identity-provision-action.mjs";
@@ -33,6 +34,7 @@ export const ACTION_TYPES = Object.freeze({
   PROMOTION_OPEN_PR: "promotion.open_pr",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
   DATABASE_APPLY_PROMOTED_MIGRATION: "database.apply_promoted_migration",
+  DATABASE_RECONCILE_MIGRATION_LEDGER: "database.reconcile_migration_ledger",
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
   ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION: "environment.restore_deployed_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
@@ -604,6 +606,54 @@ function defineDatabaseApplyPromotedMigration() {
   };
 }
 
+/**
+ * Record that a migration WAS applied, when its ledger write was lost.
+ *
+ * A separate registration from every migration action, because it is a different
+ * decision: this changes no schema at all. It writes the row the migration system
+ * would have written, for SQL that provably already ran, and it is refused unless
+ * the physical schema the row would claim is independently proven present.
+ *
+ * The request may not carry SQL. Content is derived from the committed migration
+ * file at a named revision — a caller that could supply the statements could
+ * record a history that never happened, which is the one thing this must be
+ * unable to do.
+ */
+function defineDatabaseReconcileMigrationLedger() {
+  return {
+    actionType: ACTION_TYPES.DATABASE_RECONCILE_MIGRATION_LEDGER,
+    version: 1,
+    title: "Reconcile the production migration ledger",
+    requiredCapability: "trusted_host.database.migrate_production",
+    riskClass: "privileged_write",
+    operatorApprovalRequired: true,
+    delegable: false,
+    timeoutMs: 120_000,
+    // One attempt. The write is idempotent by construction, but a retry policy
+    // that cannot see the outcome must not decide to repeat a production write.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: { required: ["target", "expectedSha", "migrations"] },
+    outputSchema: { target: "string", written: "array", verified: "boolean" },
+    evidenceSchema: [
+      "expected_sha", "ledger_rows", "schema_equivalence", "ledger_before",
+      "ledger_after", "director_approval", "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      const repoRoot = inputs.worktreePath || inputs.worktree_path || inputs.artifactRoot;
+      return validateLedgerReconcileInputs(inputs, {
+        readMigrationFile: ({ sha, relative }) => readMigrationContent({
+          environment: "alloy_deployed_primary",
+          root: repoRoot,
+          sha,
+          relative,
+          gitCwd: repoRoot,
+          preMergeCandidate: true,
+        }),
+      });
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -753,6 +803,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
   [ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION, defineDatabaseApplyPromotedMigration()],
+  [ACTION_TYPES.DATABASE_RECONCILE_MIGRATION_LEDGER, defineDatabaseReconcileMigrationLedger()],
   [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
   [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
   [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, defineLaneDispatchMeasurementInstruction()],

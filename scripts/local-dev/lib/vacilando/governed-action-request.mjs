@@ -61,6 +61,7 @@ import {
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
   fulfillPromotedMigrationForMission,
+  fulfillLedgerReconcileForMission,
   fulfillSetProviderCeilingForMission,
   fulfillInstallToolkitForMission,
   fulfillLaneDispatchForMission,
@@ -418,6 +419,28 @@ export function presentationForGovernedAction(req = {}) {
       wait_label: "Waiting on Director — QA session restore",
       mission_need: `Needs approval — Restore QA session${slot ? ` on Slot ${slot}` : ""}`,
       detail: `Restore the browser session for ${identity}${slot ? ` on Slot ${slot}` : ""} · lane ${lane} · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
+    };
+  }
+  if (key === ACTION_TYPES.DATABASE_RECONCILE_MIGRATION_LEDGER) {
+    /*
+     * IT MUST NOT READ LIKE A MIGRATION, because it is not one.
+     *
+     * No schema changes. What changes is the RECORD of a schema change that
+     * already happened — and an operator who approved this thinking it applied
+     * migrations would have approved the wrong thing in the safer direction,
+     * which still means the card lied.
+     */
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    const versions = list.map((m) => String(typeof m === "string" ? m : (m?.version || ""))).filter(Boolean);
+    const target = inputs.target || inputs.environment || req.target || "alloy_deployed_primary";
+    return {
+      approve_label: "Authorize ledger reconciliation",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — PRODUCTION migration ledger reconciliation",
+      mission_need: `Needs approval — RECORD ${versions.length || "the"} already-applied migration${versions.length === 1 ? "" : "s"} on ${target}`,
+      detail: `PRODUCTION MIGRATION LEDGER — records ${versions.length ? versions.join(", ") : "the named migrations"} as applied on ${target}.`
+        + " NO SCHEMA CHANGES: the SQL already ran and its ledger write was lost."
+        + " Refused unless the physical schema is proven present by a governed census.",
     };
   }
   if (key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
@@ -1673,6 +1696,11 @@ function defaultModeForAction(actionKey, requested) {
   // in validateAgainstRegistry, and the refusal reads as the operator forbidding
   // the action rather than nobody having assigned it a mode.
   if (actionKey === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) return "migration_apply";
+  // Same governed mode, for the same reason its sibling needs one: a
+  // privileged_write with no default mode meets the read_only default in
+  // validateAgainstRegistry and is refused as `policy_denied`, which reads as
+  // the operator forbidding it rather than nobody having assigned it a mode.
+  if (actionKey === ACTION_TYPES.DATABASE_RECONCILE_MIGRATION_LEDGER) return "migration_apply";
   /*
    * A privileged_write action must not inherit the read_only default. `validateAgainstRegistry`
    * refuses any non-read risk class in read_only mode, so an action added to the registry without
@@ -2988,6 +3016,26 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
    * because the migration artifacts are resolved out of the approved worktree's
    * git object store rather than any working copy.
    */
+  if (rec.action_key === ACTION_TYPES.DATABASE_RECONCILE_MIGRATION_LEDGER) {
+    return fulfillLedgerReconcileForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+      approval: productionApprovalFromRecord(rec),
+      // The equivalence claim travels as filed. The trusted host re-verifies it
+      // against its own governed store rather than believing this record.
+      schemaEquivalence: rec.inputs?.schemaEquivalence || rec.inputs?.schema_equivalence || null,
+    });
+  }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
     return fulfillPromotedMigrationForMission(scope, {
       assignmentId: rec.run_id || null,

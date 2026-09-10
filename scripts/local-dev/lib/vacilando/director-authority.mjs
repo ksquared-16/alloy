@@ -67,6 +67,11 @@ export const OPERATOR_OWNED_ACTION_KEYS = Object.freeze([
   // action, so neither one is the only thing standing between a delegate and a
   // production write.
   "database.apply_promoted_migration",
+  // Writes a row asserting that a migration ran against the production
+  // database. It changes no schema, and it is still operator-owned: a record
+  // that something happened is exactly as load-bearing as the thing happening,
+  // because every downstream gate believes the record.
+  "database.reconcile_migration_ledger",
   "environment.provision_qa_identity",
   "environment.assign_qa_identity_access",
   "environment.restore_qa_session",

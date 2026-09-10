@@ -108,7 +108,7 @@ function runners(over = {}) {
     revalidate: () => { calls.revalidate += 1; return { ok: true, normalized: normalized() }; },
     resolveExecutorIdentity: () => {
       calls.identity += 1;
-      return { ok: true, dbProjectRef: "abcdefghijklmnop", apiProjectRef: "abcdefghijklmnop" };
+      return { ok: true, dbHostKind: "direct", dbProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF, apiProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF };
     },
     readHostedVersions: () => {
       calls.hosted += 1;
@@ -385,7 +385,7 @@ test("X10 — an unresolvable production credential fails closed with no attempt
 
 test("X10b — a credential that resolves to a different project is refused", () => {
   const { out, calls } = run({
-    resolveExecutorIdentity: () => ({ ok: true, dbProjectRef: "aaaaaaaaaaaaaaaa", apiProjectRef: "bbbbbbbbbbbbbbbb" }),
+    resolveExecutorIdentity: () => ({ ok: true, dbHostKind: "direct", dbProjectRef: "aaaaaaaaaaaaaaaa", apiProjectRef: "bbbbbbbbbbbbbbbb" }),
   });
   assert.equal(out.ok, false);
   assert.equal(out.code, EX.PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_MISMATCH);
@@ -393,7 +393,10 @@ test("X10b — a credential that resolves to a different project is refused", ()
 });
 
 test("X10c — an unnameable project is UNKNOWN, and UNKNOWN refuses", () => {
-  for (const identity of [{ dbProjectRef: "", apiProjectRef: "x".repeat(16) }, { dbProjectRef: "x".repeat(16), apiProjectRef: "" }]) {
+  for (const identity of [
+    { dbHostKind: "direct", dbProjectRef: "", apiProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF },
+    { dbHostKind: "direct", dbProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF, apiProjectRef: "" },
+  ]) {
     const { out, calls } = run({ resolveExecutorIdentity: () => ({ ok: true, ...identity }) });
     assert.equal(out.ok, false);
     assert.equal(out.code, EX.PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED);
@@ -555,7 +558,10 @@ test("X14c — the identity probe prints only public refs and never the connecti
   assert.match(script, /unset DATABASE_URL/);
   // The only two things it is allowed to print.
   const printed = [...script.matchAll(/printf '([A-Z_]+)=%s\\n'/g)].map((m) => m[1]);
-  assert.deepEqual(printed.sort(), ["API_PROJECT_REF", "DB_PROJECT_REF"]);
+  assert.deepEqual(printed.sort(), ["API_PROJECT_REF", "DB_HOST_KIND", "DB_PROJECT_REF"]);
+  // The pooler ref lives in the USERNAME. The probe must never reach for it.
+  assert.ok(!/\$\{?DATABASE_URL.*@/.test(script.split("unset DATABASE_URL")[1] || ""),
+    "the probe touches the credential after discarding it");
 });
 
 // ── X15 — WHAT REMAINS UNTESTED ─────────────────────────────────────────────
@@ -572,7 +578,7 @@ test("X15 — the untested remainder is named rather than implied", () => {
   // Both live behind the two adapters this suite substitutes, and nothing else
   // is substituted. The audit records which of them ran.
   assert.equal(EX.PRODUCTION_CREDENTIAL_BINDING.resolver.startsWith("alloy_load_trusted_server_env_exports"), true);
-  assert.equal(EX.REGISTERED_PRODUCTION_PROJECT_REF, null);
+  assert.match(EX.REGISTERED_PRODUCTION_PROJECT_REF, /^[a-z0-9]{16,32}$/);
 });
 
 test("X15b — the audit can answer who, what, where, which and when", () => {
@@ -603,7 +609,7 @@ test("X16 — a runner this executor would ignore is refused, not silently dropp
   // And the two runners that open a connection are honoured here now.
   let ledger = 0; let apply = 0;
   TH.setTrustedHostProductionRunnersForTests({
-    resolveExecutorIdentity: () => ({ ok: true, dbProjectRef: "r".repeat(16), apiProjectRef: "r".repeat(16) }),
+    resolveExecutorIdentity: () => ({ ok: true, dbHostKind: "direct", dbProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF, apiProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF }),
     readHostedVersions: () => hostedBefore(),
     readRequiredVersions: () => [...REQUIRED],
     revalidate: () => ({ ok: true, normalized: normalized() }),
@@ -616,6 +622,155 @@ test("X16 — a runner this executor would ignore is refused, not silently dropp
   TH.setTrustedHostProductionRunnersForTests(null);
   assert.ok(ledger > 0, "the production bag's inspectLedger was ignored — it would have hit psql");
   assert.ok(apply > 0, "the production bag's applyFile was ignored — it would have hit psql");
+});
+
+// ── X17 — THE HARD NEGATIVE: PRODUCTION RUNNERS ARE UNREACHABLE FROM A HARNESS ─
+//
+// Not "a mock was called". These assert that the real psql runners CANNOT be
+// arrived at, by every route the incident took and by the routes it did not.
+
+test("X17 — an un-isolated harness is refused, never defaulted to the real runners", () => {
+  // The incident exactly: the caller supplied neither database runner, because
+  // the ones it supplied went into a bag this executor does not read. Before the
+  // repair that fell through to psql. It must now refuse, and refuse having
+  // touched nothing.
+  const actionId = seedAction();
+  TH.setTrustedHostProductionRunnersForTests({
+    revalidate: () => ({ ok: true, normalized: normalized() }),
+    resolveExecutorIdentity: () => ({ ok: true, dbHostKind: "direct", dbProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF, apiProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF }),
+    readHostedVersions: () => hostedBefore(),
+    readRequiredVersions: () => [...REQUIRED],
+  });
+  const out = TH.executeTrustedHostAction(actionId, { actor: "director", nowMs: Date.now(), grant: { grant_id: "g1" } });
+  TH.setTrustedHostProductionRunnersForTests(null);
+
+  assert.equal(out.ok, false);
+  assert.equal(out.action.result.code, EX.PRODUCTION_APPLY_FAILURES.APPLY_FAILED);
+  assert.match(String(out.action.result.detail), /test process may not reach the production database runners/i);
+  // Classified as a refusal that never reached a database, so it can never be
+  // escalated as a possible partial migration.
+  assert.equal(out.action.result.migration_attempted, false);
+});
+
+test("X17b — half an isolation is refused rather than completed from the real runners", () => {
+  const actionId = seedAction();
+  TH.setTrustedHostProductionRunnersForTests({
+    revalidate: () => ({ ok: true, normalized: normalized() }),
+    resolveExecutorIdentity: () => ({ ok: true, dbHostKind: "direct", dbProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF, apiProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF }),
+    readHostedVersions: () => hostedBefore(),
+    readRequiredVersions: () => [...REQUIRED],
+    // One stubbed, one forgotten — the incident's mistake at a smaller scale.
+    inspectLedger: () => ({ applied: false }),
+  });
+  const out = TH.executeTrustedHostAction(actionId, { actor: "director", nowMs: Date.now(), grant: { grant_id: "g1" } });
+  TH.setTrustedHostProductionRunnersForTests(null);
+  assert.equal(out.ok, false);
+  assert.match(String(out.action.result.detail), /must be supplied together/i);
+  assert.equal(out.action.result.migration_attempted, false);
+});
+
+test("X17c — a test process cannot arm production execution, even deliberately", () => {
+  // Defence in depth. Arming is what a real Gateway does at startup; a suite
+  // that decided arming was harmless would re-open the exact hole.
+  assert.ok(process.env.NODE_TEST_CONTEXT, "this assertion is only meaningful inside node --test");
+  const armed = TH.armProductionDatabaseExecution({ reason: "a test trying to arm production" });
+  assert.equal(armed.ok, false);
+  assert.equal(armed.code, "production_runners_refused_in_test_context");
+  assert.equal(TH.productionDatabaseExecutionArmed(), null);
+});
+
+test("X17d — the real psql runner has exactly one reachable reference on the production path", () => {
+  // STRUCTURAL, because behaviour alone cannot prove a route nobody wrote a test
+  // for. `defaultApplyMigrationFile` is the only thing that spawns the migration
+  // child; if the production path can name it anywhere except inside the
+  // composition root, a future edit can reach it without passing the gate.
+  const src = readFileSync(new URL("../lib/vacilando/trusted-host-actions.mjs", import.meta.url), "utf8");
+  const lines = src.split("\n");
+  const refs = lines
+    .map((line, i) => ({ line, n: i + 1 }))
+    .filter(({ line }) => /\bdefaultApplyMigrationFile\b/.test(line));
+  // Its definition, the STAGING executor (which refuses production by design),
+  // and the composition root. Nothing else.
+  assert.equal(refs.length, 3, `unexpected references to defaultApplyMigrationFile:\n${refs.map((r) => `${r.n}: ${r.line.trim()}`).join("\n")}`);
+  assert.match(refs[0].line, /^function defaultApplyMigrationFile/);
+  assert.match(refs[1].line, /runners\.applyFile \|\| defaultApplyMigrationFile/);
+  const compositionStart = src.indexOf("function composeProductionDatabaseRunners");
+  const compositionEnd = src.indexOf("/** The identities the candidate revision requires");
+  const thirdIndex = src.indexOf("defaultApplyMigrationFile", src.indexOf("defaultApplyMigrationFile", src.indexOf("defaultApplyMigrationFile") + 1) + 1);
+  assert.ok(thirdIndex > compositionStart && thirdIndex < compositionEnd,
+    "the production path reaches the real apply runner outside composeProductionDatabaseRunners");
+});
+
+test("X17e — the production composition root is the Gateway server, and only it", () => {
+  // The arming call must exist exactly once, in the process that executes
+  // governed actions. A second caller would be a second way to become
+  // production-capable.
+  const server = readFileSync(new URL("../lib/vacilando-server.mjs", import.meta.url), "utf8");
+  assert.equal((server.match(/armProductionDatabaseExecution\(/g) || []).length, 1);
+  const host = readFileSync(new URL("../lib/vacilando-gateway-host.mjs", import.meta.url), "utf8");
+  assert.equal(/armProductionDatabaseExecution/.test(host), false, "the supervisor does not execute governed actions and must not arm");
+});
+
+// ── X18 — POOLER IDENTITY ───────────────────────────────────────────────────
+
+test("X18 — a shared pooler hostname is not accepted as target identity", () => {
+  const REF = EX.REGISTERED_PRODUCTION_PROJECT_REF;
+  // What the live host actually returns today.
+  const pooled = EX.judgeProductionExecutorIdentity({
+    target: TARGET, dbHostKind: "shared_pooler", dbProjectRef: "",
+    apiProjectRef: REF, connectionEstablished: true,
+  });
+  assert.equal(pooled.ok, true, "a pooler connection to the registered project must be establishable");
+  // ...but the audit says the basis is weaker than a direct host.
+  assert.equal(pooled.identity_proof, "registered_ref_with_pooler_connection");
+
+  // The old behaviour — the hostname standing in for a project ref — is gone.
+  const asIdentity = EX.judgeProductionExecutorIdentity({
+    target: TARGET, dbHostKind: "shared_pooler", dbProjectRef: "aws-0-us-west-2.pooler.supabase.com",
+    apiProjectRef: REF, connectionEstablished: true,
+  });
+  assert.equal(asIdentity.ok, true);
+  assert.equal(asIdentity.project_ref, REF, "identity must come from the registered ref, never from the hostname");
+});
+
+test("X18b — configuration alone never establishes the target; a live read is required", () => {
+  const REF = EX.REGISTERED_PRODUCTION_PROJECT_REF;
+  const noRead = EX.judgeProductionExecutorIdentity({
+    target: TARGET, dbHostKind: "shared_pooler", dbProjectRef: "", apiProjectRef: REF,
+    connectionEstablished: false,
+  });
+  assert.equal(noRead.ok, false);
+  assert.equal(noRead.code, EX.PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED);
+  assert.match(String(noRead.detail), /live read/i);
+});
+
+test("X18c — a trusted env pointed at another project is refused", () => {
+  const r = EX.judgeProductionExecutorIdentity({
+    target: TARGET, dbHostKind: "direct", dbProjectRef: "zzzzzzzzzzzzzzzz",
+    apiProjectRef: "zzzzzzzzzzzzzzzz", connectionEstablished: true,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, EX.PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_MISMATCH);
+  assert.match(String(r.detail), /registered production/i);
+});
+
+test("X18d — with no registered project there is nothing to check against, so it refuses", () => {
+  const r = EX.judgeProductionExecutorIdentity({
+    target: TARGET, dbHostKind: "direct", dbProjectRef: "aaaaaaaaaaaaaaaa",
+    apiProjectRef: "aaaaaaaaaaaaaaaa", connectionEstablished: true,
+    registeredProjectRef: null,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, EX.PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_UNREGISTERED);
+});
+
+test("X18e — an unreviewed connection topology is UNKNOWN, and UNKNOWN refuses", () => {
+  const r = EX.judgeProductionExecutorIdentity({
+    target: TARGET, dbHostKind: "unrecognised", dbProjectRef: "",
+    apiProjectRef: EX.REGISTERED_PRODUCTION_PROJECT_REF, connectionEstablished: true,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, EX.PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED);
 });
 
 // ── fixtures ────────────────────────────────────────────────────────────────

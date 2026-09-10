@@ -565,6 +565,13 @@ export function classifyApplyFailure({ applyResult = null } = {}) {
     "migration_not_in_promoted_revision", "artifact_hash_mismatch", "apply_runner_missing",
     "source_sha_unavailable", "migration_not_in_measured_gap", "director_approval_required",
     "executor_not_sanctioned", "nondeterministic_migration_order", "preflight_failed",
+    // A refusal to COMPOSE the database runners happens before any connection
+    // is opened. Leaving these out of the set would have them classified as
+    // ambiguous — reported as "the statement may have run" for a path that
+    // provably never reached a database, which is the opposite of the truth and
+    // would escalate a safe refusal as a suspected partial migration.
+    "production_runners_not_composed", "production_runners_partially_injected",
+    "production_runners_refused_in_test_context",
   ]);
   if (PRE_EXECUTION.has(code)) {
     return {

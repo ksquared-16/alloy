@@ -93,22 +93,19 @@ export const PRODUCTION_CREDENTIAL_BINDING = Object.freeze({
 });
 
 /**
- * THE RESIDUAL GAP, RECORDED RATHER THAN PAPERED OVER.
+ * THE REGISTERED PRODUCTION PROJECT, REVIEWED IN THIS REPOSITORY.
  *
- * Proof 6 wants the executor's credentials to resolve to the requested target.
- * What can be established here is a CONSISTENCY proof: the project the database
- * connection reaches is the project the deployment's public API URL names. Those
- * are two independently written values, so a mismatch is real evidence — but
- * both are read from the same trusted env file, which is weaker than an identity
- * registered somewhere the credential's owner does not control.
+ * A Supabase project ref is public — the browser sends it on every API call —
+ * so recording it here discloses nothing. What it buys is the thing proof 6
+ * previously could not have: an identity the credential's own environment does
+ * not get to assert. Before this it was null, the check degraded to "the two
+ * values in the trusted env agree with each other", and a mis-pointed env would
+ * have agreed with itself perfectly.
  *
- * The stronger binding is one reviewed line: a production project ref recorded
- * in this repository. It is left NULL rather than invented, because guessing a
- * production identity and then checking against the guess is worse than saying
- * plainly that the check is a consistency check. When it is recorded, it is
- * enforced — there is no path that skips it once it is non-null.
+ * Changing this line changes which database Alloy will migrate. That is the
+ * point of it being a line.
  */
-export const REGISTERED_PRODUCTION_PROJECT_REF = null;
+export const REGISTERED_PRODUCTION_PROJECT_REF = "ikaxilmwmrmbagoidedu";
 
 /** Failure codes. Named separately so none of them can collapse into `action_unavailable`. */
 export const PRODUCTION_APPLY_FAILURES = Object.freeze({
@@ -117,6 +114,7 @@ export const PRODUCTION_APPLY_FAILURES = Object.freeze({
   CREDENTIAL_UNAVAILABLE: "trusted_credential_unavailable",
   EXECUTOR_NOT_SANCTIONED: "executor_not_sanctioned",
   EXECUTOR_TARGET_MISMATCH: "executor_target_mismatch",
+  EXECUTOR_TARGET_UNREGISTERED: "executor_target_unregistered",
   HOSTED_READ_FAILED: "hosted_state_unreadable",
   HOSTED_DRIFT: "hosted_state_drifted_since_approval",
   REQUIRED_SET_UNREADABLE: "candidate_required_set_unreadable",
@@ -171,42 +169,97 @@ export function containsCredentialMaterial(value) {
  */
 export function judgeProductionExecutorIdentity({
   target = null,
+  /** direct | shared_pooler | unrecognised — how much the hostname can establish. */
+  dbHostKind = null,
   dbProjectRef = null,
   apiProjectRef = null,
+  /** Proven by a successful live read over the resolved credential. */
+  connectionEstablished = false,
   registeredProjectRef = REGISTERED_PRODUCTION_PROJECT_REF,
 } = {}) {
   const t = norm(target);
   if (!PRODUCTION_APPLY_TARGETS.includes(t)) {
     return { ok: false, code: PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_MISMATCH, detail: `${t || "(none)"} is not a registered production target.` };
   }
-  const db = norm(dbProjectRef);
+
+  // 1 — A TRUSTED CONFIGURED IDENTITY MUST EXIST. Without one there is nothing
+  // for the environment to be checked against, and the whole check collapses
+  // into the environment agreeing with itself.
+  const registered = norm(registeredProjectRef);
+  if (!registered) {
+    return {
+      ok: false,
+      code: PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_UNREGISTERED,
+      detail: "No production project is registered in the repository, so the resolved credential cannot be checked against anything.",
+    };
+  }
+
+  // 2 — THE DEPLOYMENT'S OWN PROJECT MUST BE THE REGISTERED ONE.
   const api = norm(apiProjectRef);
-  if (!db) {
-    return { ok: false, code: PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED, detail: "The trusted host could not name the database its credential reaches. UNKNOWN refuses." };
-  }
   if (!api) {
-    return { ok: false, code: PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED, detail: "The trusted host could not name the deployment's own project. An unmeasured match is not a match." };
+    return { ok: false, code: PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED, detail: "The trusted host could not name the deployment's project. An unmeasured match is not a match." };
   }
-  if (db !== api) {
+  if (api !== registered) {
     return {
       ok: false,
       code: PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_MISMATCH,
-      detail: "The database this credential reaches is not the project the deployment is configured against.",
+      detail: "The trusted environment is configured for a different Supabase project than the registered production one.",
     };
   }
-  if (registeredProjectRef && norm(registeredProjectRef) !== db) {
+
+  // 3 — THE HOSTNAME ESTABLISHES IDENTITY ONLY WHEN IT NAMES ONE PROJECT.
+  //
+  // `db.<ref>.supabase.co` does. A pooler host does not: it is shared
+  // infrastructure serving many projects, and accepting it as identity would be
+  // accepting "somewhere in this fleet" as "this database". The ref does live in
+  // a pooler URL's username, and that is credential material this refuses to
+  // read — the target is not worth reaching into the secret to prove.
+  const kind = norm(dbHostKind);
+  const db = norm(dbProjectRef);
+  if (kind === "direct") {
+    if (!db) {
+      return { ok: false, code: PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED, detail: "A direct database host named no project. UNKNOWN refuses." };
+    }
+    if (db !== registered) {
+      return {
+        ok: false,
+        code: PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_MISMATCH,
+        detail: "The database this credential reaches is not the registered production project.",
+      };
+    }
+  } else if (kind !== "shared_pooler") {
+    // An unrecognised host shape is UNKNOWN, and UNKNOWN refuses. A new
+    // connection topology should be reviewed rather than assumed benign.
     return {
       ok: false,
-      code: PRODUCTION_APPLY_FAILURES.EXECUTOR_TARGET_MISMATCH,
-      detail: "The resolved project is not the production project registered in the repository.",
+      code: PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED,
+      detail: `Unrecognised database host shape (${kind || "none"}); a connection topology this check has not been reviewed against cannot establish the target.`,
     };
   }
+
+  // 4 — LIVE EVIDENCE. Configuration says which project is intended; only a
+  // completed read proves the credential actually reaches a working database.
+  // Required for every host kind, and the only identity evidence a shared
+  // pooler has beyond configuration.
+  if (connectionEstablished !== true) {
+    return {
+      ok: false,
+      code: PRODUCTION_APPLY_FAILURES.EXECUTOR_NOT_SANCTIONED,
+      detail: "No live read has established that the resolved credential reaches the target database.",
+    };
+  }
+
   return {
     ok: true,
     sanctioned: true,
     target: t,
-    project_ref: db,
-    identity_proof: registeredProjectRef ? "registered_project_ref" : "trusted_env_consistency",
+    project_ref: registered,
+    host_kind: kind,
+    // Named so the audit records HOW the target was established, not merely
+    // that it was. The pooler basis is weaker than the direct one and says so.
+    identity_proof: kind === "direct"
+      ? "registered_ref_and_direct_host"
+      : "registered_ref_with_pooler_connection",
   };
 }
 
@@ -289,17 +342,12 @@ export function executeProductionMigrationApply({
       { migration_attempted: false },
     ));
   }
-  const judged = judgeProductionExecutorIdentity({
-    target: normalized.target,
-    dbProjectRef: identity.dbProjectRef ?? identity.db_project_ref,
-    apiProjectRef: identity.apiProjectRef ?? identity.api_project_ref,
-  });
-  if (!judged.ok) return done({ ...judged, migration_attempted: false, ok: false });
+  // The probe answers WHO the credential is for. It cannot yet answer whether
+  // that credential reaches a working database — only a completed read does
+  // that — so the judgement waits for the live reading below.
   audit.executor = {
-    sanctioned: true,
-    target: judged.target,
-    project_ref: judged.project_ref,
-    identity_proof: judged.identity_proof,
+    resolved: true,
+    host_kind: identity.dbHostKind ?? identity.db_host_kind ?? null,
     credential_ref: PRODUCTION_CREDENTIAL_BINDING.audit_ref,
   };
 
@@ -318,6 +366,24 @@ export function executeProductionMigrationApply({
   const measured = (hosted.versions || []).map(String);
   const headBefore = hosted.head || headOf(measured);
   audit.hosted_head_before = headBefore;
+
+  // ── 2b. NOW the target can be judged: configuration plus a completed read.
+  const judged = judgeProductionExecutorIdentity({
+    target: normalized.target,
+    dbHostKind: identity.dbHostKind ?? identity.db_host_kind,
+    dbProjectRef: identity.dbProjectRef ?? identity.db_project_ref,
+    apiProjectRef: identity.apiProjectRef ?? identity.api_project_ref,
+    connectionEstablished: true,
+  });
+  if (!judged.ok) return done({ ...judged, migration_attempted: false, ok: false });
+  audit.executor = {
+    sanctioned: true,
+    target: judged.target,
+    project_ref: judged.project_ref,
+    host_kind: judged.host_kind,
+    identity_proof: judged.identity_proof,
+    credential_ref: PRODUCTION_CREDENTIAL_BINDING.audit_ref,
+  };
 
   // A head that moved since the approval means the operator approved against a
   // database that no longer exists in that state. That is not a retry.
