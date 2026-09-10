@@ -42,13 +42,65 @@ vertical, and archived docs call it legacy compatibility.
 | **Exploit precondition** | Reachable from **three unauthenticated token routes** (`/api/action/[token]/consume`, `/api/action-links/consume-reschedule`, `/api/action-links/consume-accept-job`), plus indirectly from public form intake via `emitStatusChangedEvent`. |
 | **Impact** | Raw `UPDATE` against **any table with `id` and `org_id`** — enrollment agreements, placements, schedule assignments, opportunities, charges, bookings — bypassing every domain invariant: supersede lineage, effective-dating, transition validation, permission grants, event emission. |
 | **Proof** | The `?? entityType` fallback uses an unmapped `entity_type` verbatim as a table name, and `entity_type` comes from org-editable workflow configuration. |
-| **Blast radius** | Org scoping **is** retained (`.eq("org_id", orgIdResolved)`), so this is not cross-tenant. It is a total loss of domain invariants within a tenant. |
+| **Blast radius** | **Cross-tenant via one entry point — corrected 2026-09-10.** The write does carry `.eq("org_id", orgIdResolved)`, but `orgIdResolved` is `payload?.org_id ?? run?.org_id` (`:2137`) and the payload org is client-supplied. See SEC-0c. Through every *other* entry point the org is trustworthy and the damage is a total loss of domain invariants within a tenant. |
 | **Convergence** | Remove the `?? entityType` fallback so only mapped entity types resolve; route writes through the owning domain service. |
 | **Severity** | **P0.** |
 
 Related: `web/app/api/action-links/consume-reschedule/route.ts:91-96` updates `schedules` with
 **no `org_id` predicate** — the only production write to an authoritative table without a tenant
 filter. Tenancy rests entirely on token integrity.
+
+---
+
+## SEC-0c · `POST /api/admin/workflows/[id]/run` takes tenancy from the request body — **CRITICAL**
+
+| | |
+|---|---|
+| **Affected** | `web/app/api/admin/workflows/[id]/run/route.ts:30` → `web/lib/workflowRun.ts:1499` → `:2137` → `:2130` → `:2223` |
+| **Chain** | The route calls `executeWorkflowRun(supabase, workflowId, eventPayload)` with **no org argument**, `eventPayload` verbatim from the body. The engine reads `org_id: (eventPayload.org_id as string) ?? null` (`:1499`), and `update_entity` resolves `payload?.org_id ?? run?.org_id` (`:2137`) — client payload wins. Combined with SEC-0b's `ENTITY_TABLES[entityType] ?? entityType`, the caller chooses **both the table and the tenant**. |
+| **Why the existing check does not help** | `assertRowOrg(supabase, "workflows", workflowId, ctx.orgId)` at `:27` validates that *the workflow* belongs to the caller. It never examines the payload. |
+| **Exploit precondition** | An org admin authors the step via `PUT /api/admin/workflows/[id]/actions` (arbitrary `action_type` and `payload`); any portal-eligible user then runs it naming any `org_id`. No role is required to run. |
+| **Nearby correct pattern** | `web/lib/admin/actions/executeAdminAction.ts:1238` spreads the client payload **first**, then overwrites `org_id: ctx.orgId`. `web/app/api/agent/v0/queue-definition/route.ts:82` rejects a mismatching body org outright. |
+| **Also in the same engine** | `create_assignment` (`:2295`) and `apply_job_vendor_to_upcoming` (`:2358`) update `assignments` with **no `org_id` predicate at all** — no payload trick needed. |
+| **Convergence** | Pass `ctx.orgId` into `executeWorkflowRun` and let it override any payload org, as `executeAdminAction` already does. |
+| **Severity** | **P0-CRITICAL.** With SEC-0b, this is arbitrary-table write against an arbitrary tenant. |
+
+---
+
+## SEC-4 · The authorization domain writes no audit — **P0**
+
+| | |
+|---|---|
+| **Affected** | `web/app/api/admin/users/**`, `web/app/api/admin/rbac/**` |
+| **Proof** | Grep for `logAdminAudit|emitEvent|audit` across both trees returns **zero hits**, verified independently twice. |
+| **Impact** | Granting a permission, replacing a member's role set, removing a membership and widening department or site scope produce no durable record. `logAdminAudit` (`web/lib/admin/adminAuditLog.ts:5`) is a `console.log` with 57 call sites and no table behind it. |
+| **Compounding** | No non-human principal model exists — grep for `api_tokens|service_account|api_keys|personal_access|x-api-key` across `web/app` and `web/lib` returns zero. |
+| **Severity** | **P0 for external exposure**, P1 internally. An external client granting permissions with no durable record is not defensible. |
+
+---
+
+## SEC-5 · 40 tables carry an org-blind RLS policy — **P1, latent**
+
+| | |
+|---|---|
+| **Affected** | `supabase/migrations/20260329165048_remote_schema.sql:6915` and 39 sibling policies |
+| **Proof** | 40 `admin_ops_full_access` policies test `app_users.role IN ('admin','ops')` and **none** carries an `org_id` term. Includes `customers`, `contacts`, `jobs`, `opportunities`, `messages`, `payments`, `schedules`, `quotes`, `vendors`. |
+| **Why it is not exploitable today** | **0 of 613 routes construct an RLS-bound (user-JWT) client**; 577 use service-role, which bypasses RLS entirely. Verified by count. |
+| **Why it is still P1** | It is a trap laid for the first user-JWT client anyone introduces — by a change that will look correct in review. The org-scoping helper `user_belongs_to_org(org_id)` already exists and is used by other policies in the same file (`:8208`). |
+| **Note** | Thread 2 reported 2 such tables. The verified figure is 40; Thread 2's number was a sample, not a count. |
+| **Severity** | **P1.** Latent, not live. |
+
+---
+
+## SEC-6 · Authority changes take up to 120 seconds to bite — **P1**
+
+| | |
+|---|---|
+| **Affected** | `web/lib/adminV2/adminShellContextCache.ts:13` — `ADMIN_SHELL_CONTEXT_CACHE_TTL_MS = 120_000`, process-wide by design (`:22`) |
+| **Proof** | `invalidateAdminShellContextCache` is defined at `:93`. Repo-wide references are its own doc comment at `:6` and a test. **Zero production call sites.** |
+| **Impact** | Revoking a permission, removing a membership or switching org leaves prior authority live for up to two minutes. |
+| **Convergence** | Call the invalidator on logout, org switch, role change and grant replacement — the doc comment at `:6` already names the obligation. |
+| **Severity** | **P1.** |
 
 ---
 
@@ -98,7 +150,7 @@ which makes that charge **owed** — requires nothing.
 
 ---
 
-## The pattern underneath all five
+## The pattern underneath them all
 
 Two guards exist forbidding update-in-place on placements and schedule assignments
 (`childPlacementService.ts:356`, `scheduleAssignmentService.ts:354`). **Neither has a single
@@ -122,5 +174,14 @@ POSTs to it and the gutters vertical's status cannot be determined from the repo
 SEC-0b, SEC-1 and SEC-2 are each small edits with a nearby correct pattern. SEC-3 is architectural:
 it needs the runtime's authorization seam opened, which is Thread 4 work.
 
-All five want tests that lock the legitimate callers — including the cron branch that crosses
+All of them want tests that lock the legitimate callers — including the cron branch that crosses
 tenants **by design** — before any edit lands.
+
+**SEC-0c is the sharpest of the nine** and has the smallest edit: pass `ctx.orgId` into
+`executeWorkflowRun` and let it win over any payload org. The pattern is twelve lines away in a
+file the same request already traverses. It was not repaired here only because Thread 3's mandate
+is discovery and the stop condition reserves exploitable-defect repair for an authorized lane.
+
+SEC-4, SEC-5 and SEC-6 are new in the deep dive and change the readiness picture: SEC-4 is a hard
+blocker for any external credential (there is nothing to audit *with*, and nothing to grant *to*),
+while SEC-5 and SEC-6 are latent rather than live and should not be described as breaches.

@@ -76,3 +76,12 @@ So `UNCLASSIFIED_NO_AUTH` is an upper bound on *unknown*, not a count of unauthe
 the 12: six delegate auth to a helper, two use token or context auth, and four
 (`/build-info`, `/runtime-info`, `/verticals`, `/marketing/demo-request`) are legitimately public
 read or lead-capture endpoints. **No route mutating authoritative state was found unauthenticated.**
+
+## Deep-dive artifacts (added 2026-09-10)
+
+| Document | What it settles |
+|---|---|
+| [`mutation-authority-map.md`](mutation-authority-map.md) | Who owns the canonical mutation in each of 14 domains, what an external client would invoke, and what blocks it. 0 domains reached `PLATFORM_INTERNAL_STABLE`. |
+| [`authorization-tenancy-findings.md`](authorization-tenancy-findings.md) | Enforcement distribution across 613 routes; why RLS is inert for the API surface; the 40 org-blind policies; the 120-second authority cache. |
+| [`contract-readiness-findings.md`](contract-readiness-findings.md) | Idempotency, errors, collections, versioning, OpenAPI coverage. |
+| [`security-defect-register.md`](security-defect-register.md) | Nine defects, SEC-0 … SEC-6. **SEC-0b's blast-radius line was corrected on 2026-09-10** — it is cross-tenant through the run route (SEC-0c). |
