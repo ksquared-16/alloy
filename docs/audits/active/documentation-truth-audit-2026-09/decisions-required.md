@@ -99,6 +99,37 @@ What is unsettled is which document may say so.
 **Recommendation: (b).** A freeze is a record of a moment; it should not be edited, and it should
 not be read in the present tense two months and a shipped kernel later.
 
+
+**Thread 2 packet — the code is not ambiguous; the governance rule is.**
+
+*Abstraction levels.* The three documents are not speaking at the same level, and that is most of
+the apparent conflict. `freeze-july-2026.md` **records a moment** — it is a declaration that
+construction stopped, not a live subsystem inventory. `platform-manifesto.md` **states intent**.
+`alloy-runtime-kernel.md` **inventories subsystems and dispositions them**. A milestone that records
+a moment cannot be "wrong" later; it can only be read wrongly, in the present tense.
+
+*Code sides with the kernel, unambiguously.* `AdminV2WorkspaceClientProviders.tsx` mounts
+`SurfaceHostProvider` **inside** `RuntimeKernelProvider` — exactly the kernel's "Surface Host KEEP →
+becomes K3 Focus" disposition, with the Host surviving as a renderer driven by K3.
+`SurfaceHostContext.tsx` records the realized cutover in its own comment. The architecture is
+settled in implementation; only the documentation authority is not.
+
+*So the question is narrower than it looked.* It is not "which runtime register is true" — it is
+**"may a later canonical document restate a frozen milestone in the present tense, and if not, who
+carries the correction?"**
+
+**Recommendation stands: (b), treat the freeze as historical.** A freeze is a record of a moment. It
+should not be edited — that destroys the record — and it should not be read as present tense two
+months and a shipped kernel later. The correction belongs in the *reading*, not the *record*:
+banner the milestone documents as historical, and stop the foundation documents asserting the July
+list in the present tense.
+
+**The general rule worth adopting**, because this will recur: *a `frozen` document is evidence of a
+decision at a date and is never silently superseded; a later `canonical` document may state current
+truth that departs from it, and must say so at the point of departure. The frozen document is
+bannered, not edited.* Thread 2 applied exactly this pattern to the subsidy freeze (D7) without
+amending the law, which is the same shape.
+
 ### D6 — Who owns Scheduling / staffing documentation? · **RESOLVED (Thread 2)**
 
 **Thread 1 overstated this.** Two canonical owners existed and were missed:

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-10
 supersedes: []
 ---
 
@@ -37,7 +37,7 @@ Organization
 | `/workspace/work-unit/:slug?work_view=:id` | Work Unit with predefined Work View (deep link) |
 | `…/:recordId` | Record drawer (same route, no remount) |
 
-**Internal compat:** `/adminV2/workspace/dept/:id/...` — tests and legacy only.
+**Removed:** the `/adminV2/workspace/dept/:id/…` compatibility tree was deleted on 2026-07-01. No dept route survives; `web/app/adminV2/workspace/` holds only `record/[subjectType]/[subjectId]`, `work-unit/[workUnitSlug]` and the root files.
 
 **Rewrites:** `/workspace/**` → `app/adminV2/workspace/**`
 
@@ -183,6 +183,8 @@ Metrics are:
 - **Not workspace-wide** — the same band changes as the operator changes sections.
 - **Not interactive cards** — operational sections use a flat **Operational Health strip** in the nav band; overview sections use compact non-interactive **`SurfaceHeaderKpiCard`** tiles in the landing body.
 
+> ⚠ **`SurfaceHeaderKpiCard` is not exported by `@/components/workspace/doctrine`.** Following the import instruction above produces an error. It lives in the Presentation Runtime tree — import from `@/components/presentation/workspace/WorkspaceHeader`. `CompactKpiStrip` is likewise absent from the barrel.
+
 **Metrics belong to the active section.** When the section changes, the metric set changes. One shell, many contextual health bands.
 
 **Overview vs operational placement (required):**
@@ -252,10 +254,10 @@ Processing-specific presentation adapters (not duplicated by future modules):
 | Rule | Implementation |
 |------|----------------|
 | **Compact header band** | `WorkspaceHeader` — single compact row: icon + title (Midnight Forge) + Slate subtitle + actions + Close |
-| **Control band** | Header + `WorkspaceModeNav` + optional `WorkspaceOperationalHealth` (operational sections only) wrapped in `WS_CONTROL_BAND_DIVIDER` (`border-b border-alloy-stone/30`) — full inner width |
+| **Control band** | Header + `WorkspaceModeNav` + optional `WorkspaceOperationalHealth` (operational sections only) wrapped in `WS_CONTROL_BAND_DIVIDER` (`border-b border-alloy-midnight/25`) — full inner width |
 | **Overview activity band** | **Today's activity** eyebrow + compact `SurfaceHeaderKpiCard` grid below primary action cards, above information zones — not in header |
 | **Operational metric band attachment** | Eyebrow stacked **above** health metrics; metrics vertically aligned with Work navigation stack — not a floating card row |
-| **Queue → detail divider** | `WS_QUEUE_RAIL` (`border-r border-alloy-stone/30`, white background) — full height below control band |
+| **Queue → detail divider** | `WS_QUEUE_RAIL` (`border-r border-alloy-midnight/25`, white background) — full height below control band |
 | **Artifact viewport** | `ProcessingSourceDocumentViewport` + `WorkspaceArtifactZoomControls` — bounded scroll, dual-axis fit-page, manual zoom on content wrapper |
 | **Queue typography** | `PROCESSING_QUEUE_ROW_TITLE` (11px) + `PROCESSING_QUEUE_METADATA` — compact row density |
 | **Inspector** | Spacing + hierarchy over heavy borders; Bend Pine for active/selection only |
@@ -465,7 +467,7 @@ Eyebrow labels stack **above** the metric row — never beside metrics in a hori
 ### Containment doctrine
 
 - **Spacing over boxes** — major regions separated by rhythm, not extra borders.
-- **Visible stone hairlines** — `WS_NAV_CONTENT_DIVIDER`, `WS_DIVIDER_FILL`, `WS_QUEUE_RAIL` must read in browser; never black or heavy dividers.
+**Visible stone hairlines** — `WS_DIVIDER_FILL` and `WS_QUEUE_RAIL` must read in the browser. ⚠ `WS_NAV_CONTENT_DIVIDER` is currently the **empty string** (`web/components/workspace/workspaceTokens.ts`) and draws nothing: either give it a value or stop requiring it here. A doctrine that mandates a hairline the token cannot draw is unfalsifiable in review.
 - **Soft elevation** on white surfaces (`WorkspaceCard`, zone panels).
 - **No double stone tint** — `WorkspaceShell` owns Layer 2; module bodies use white surfaces on the field (`WorkspaceSurface` tone `stone` inherits shell; queue views use `canvas` when zone panels carry chrome).
 
@@ -623,7 +625,7 @@ Operational refresh: `dispatchOperationalWorkRefresh` — see `web/lib/workItems
 - `../operator/canonical-interaction-model.md` — full interaction spine (Workspace → … → Field)
 - `../operator/interaction-grammar.md` — drawer preserves workspace/perspective/queue context
 - `../operator/queue-system.md`
-- `../../system/navigation-doctrine.md` (expanded reference — prefer this file)
+- `../../archive/2026-06-superseded-system/navigation-doctrine.md` (historical — superseded expanded reference; **this file is the canonical one**)
 
 ## Financials (September 2026) — the newest module to compose the doctrine unchanged
 
