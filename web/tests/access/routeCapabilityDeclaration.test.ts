@@ -265,6 +265,30 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations).toEqual([]);
     });
 
+    it("join 2 — accepts a verdict tested by an exhaustive switch, not only by an if", () => {
+        // A helper returning a discriminated result is branched on with `switch (verdict.status)`,
+        // a case per outcome. Reading only `if` reported that STRICTER test as no test at all —
+        // which is how the Thread 4 service-day-exception route reached staging undeclared: the
+        // only way to satisfy the rule was to rewrite working code into an if-chain.
+        const p = write(
+            "switched",
+            `${IMPORT}export async function POST() {\n  const auth = await requireUsersRolesManageAuth();\n  switch (auth.status) {\n    case "denied": return Response.json({ error: true }, { status: 403 });\n    default: return Response.json({ ok: true });\n  }\n}\n`
+        );
+        expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations).toEqual([]);
+    });
+
+    it("join 2 — still convicts a switch that branches on something other than the verdict", () => {
+        // The widening must not become "a switch anywhere clears the gate". The bound identifier
+        // has to be the thing being switched on, or the verdict is still discarded.
+        const p = write(
+            "switched-elsewhere",
+            `${IMPORT}export async function POST(request: Request) {\n  const auth = await requireUsersRolesManageAuth();\n  const kind = new URL(request.url).searchParams.get("kind");\n  switch (kind) {\n    default: return Response.json({ ok: true });\n  }\n}\n`
+        );
+        expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations.map((v) => v.kind)).toContain(
+            "untested-verdict"
+        );
+    });
+
     it("join 3 — convicts a capability the named helper's module does not enforce", () => {
         const p = write(
             "wrongkey",

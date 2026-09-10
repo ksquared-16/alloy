@@ -40,12 +40,29 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
-import { assertAttendanceCaptureAllowed } from "@/lib/childcareOperational/attendance/attendancePermissions";
+import {
+    ATTENDANCE_RECORD_PERMISSION_KEY,
+    assertAttendanceCaptureAllowed,
+} from "@/lib/childcareOperational/attendance/attendancePermissions";
 import { ATTENDANCE_EXPECTATION_PURPOSE } from "@/lib/childcareOperational/attendance/serviceDayExpectations";
 import { authorOperationalExpectation } from "@/lib/operationalExpectations/intake/authorOperationalExpectation";
 import { createSupabaseAuthoringGateway } from "@/lib/operationalExpectations/intake/supabaseAuthoringGateway";
 import type { AuthoringGateway } from "@/lib/operationalExpectations/intake/authoringGateway";
 import type { AuthoringInput, AuthoringResult } from "@/lib/operationalExpectations/intake/authoringTypes";
+
+/**
+ * The capability every caller of this command must hold, named here so the route
+ * capability table can bind a declaration to the module that enforces it.
+ *
+ * This is a TYPED PIN, not a label: the annotation is the literal type of
+ * `ATTENDANCE_RECORD_PERMISSION_KEY`, so if the permission this command actually
+ * requires is ever renamed, this line stops compiling rather than quietly
+ * describing a capability the code no longer checks. A declaration in the route
+ * table is a claim about enforcement, and a claim that cannot go stale is worth
+ * more than one that merely reads correctly today.
+ */
+export const SERVICE_DAY_EXCEPTION_CAPABILITY: typeof ATTENDANCE_RECORD_PERMISSION_KEY =
+    "attendance.record";
 
 /** Denied before anything was written, with the reason the route should report. */
 export type ServiceDayExceptionDenial = {
