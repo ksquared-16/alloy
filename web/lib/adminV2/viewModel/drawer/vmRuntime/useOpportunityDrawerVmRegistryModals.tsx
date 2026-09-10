@@ -20,9 +20,18 @@ const OpportunityEnrollmentPacketModal = dynamic(
     () => import("@/components/admin/opportunity/OpportunityEnrollmentPacketModal"),
     { ssr: false },
 );
+// Same rule: only rendered after the operator chooses to resolve a missing required field.
+const RequiredOpportunityFieldsModal = dynamic(
+    () => import("@/components/admin/opportunity/actions/RequiredOpportunityFieldsModal"),
+    { ssr: false },
+);
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import { OpportunityPacketReviewModal } from "@/components/admin/opportunity/OpportunityPacketReviewModal";
 import { ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW } from "@/lib/admin/actions/enrollmentActionClient";
+import {
+    ADMINV2_OPEN_REQUIRED_FIELDS_MODAL,
+    type OpenRequiredFieldsModalDetail,
+} from "@/lib/admin/actions/requiredFieldsActionClient";
 import {
     fetchPacketReviewSessions,
     resolvePendingPacketReviewSession,
@@ -218,6 +227,7 @@ export function useOpportunityDrawerVmRegistryModals({
         initialScope?: Partial<EnrollmentStatusTransitionScope>;
     } | null>(null);
     const [changeLeadLocationOpen, setChangeLeadLocationOpen] = useState(false);
+    const [requiredFieldKeys, setRequiredFieldKeys] = useState<string[] | null>(null);
     /**
      * PACKET REVIEW — the action existed, the modal existed, the listener did not.
      *
@@ -498,7 +508,17 @@ export function useOpportunityDrawerVmRegistryModals({
         window.addEventListener(ADMINV2_OPEN_RELATIONSHIP_ACTION_MODAL, onOpenRelationshipAction as EventListener);
         window.addEventListener(ADMINV2_OPEN_ENROLLMENT_STATUS_MODAL, onOpenEnrollmentStatus as EventListener);
         window.addEventListener(ADMINV2_OPEN_CHANGE_LEAD_LOCATION_MODAL, onOpenChangeLeadLocation as EventListener);
+        const onOpenRequiredFields = (ev: Event) => {
+            const detail = (ev as CustomEvent<OpenRequiredFieldsModalDetail>).detail;
+            const id = typeof detail?.opportunity_id === "string" ? detail.opportunity_id.trim() : "";
+            if (!id || !matchesDrawer(id)) return;
+            const keys = Array.isArray(detail?.field_keys) ? detail.field_keys.filter(Boolean) : [];
+            if (keys.length === 0) return;
+            setRequiredFieldKeys(keys);
+        };
+
         window.addEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenPacketReview as EventListener);
+        window.addEventListener(ADMINV2_OPEN_REQUIRED_FIELDS_MODAL, onOpenRequiredFields as EventListener);
 
         return () => {
             window.removeEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
@@ -512,6 +532,7 @@ export function useOpportunityDrawerVmRegistryModals({
             window.removeEventListener(ADMINV2_OPEN_ENROLLMENT_STATUS_MODAL, onOpenEnrollmentStatus as EventListener);
             window.removeEventListener(ADMINV2_OPEN_CHANGE_LEAD_LOCATION_MODAL, onOpenChangeLeadLocation as EventListener);
             window.removeEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenPacketReview as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_REQUIRED_FIELDS_MODAL, onOpenRequiredFields as EventListener);
         };
     }, [oid, openAddInquiryChild, openAddPerson, openCreateWorkFromEvent, openRelationshipAction, openEnrollmentStatus, openChangeLeadLocation, openPacketReview]);
 
@@ -596,6 +617,17 @@ export function useOpportunityDrawerVmRegistryModals({
 
         return (
             <>
+                {requiredFieldKeys && requiredFieldKeys.length > 0 ?
+                    <RequiredOpportunityFieldsModal
+                        open
+                        opportunityId={oid}
+                        fieldKeys={requiredFieldKeys}
+                        onClose={() => setRequiredFieldKeys(null)}
+                        onSaved={() => {
+                            dispatchOpportunityDrawerOperationalTasksRefresh(oid);
+                        }}
+                    />
+                :   null}
                 {createWorkOpen ?
                     <OpportunityRecordCreateWorkModal
                         open={createWorkOpen}

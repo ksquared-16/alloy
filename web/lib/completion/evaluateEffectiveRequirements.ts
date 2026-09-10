@@ -3,6 +3,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { loadFieldPolicyRequirementViolations } from "@/lib/fields/loadFieldPolicyRequirements";
 import {
     autoPopulateForLifecycleAction,
     evaluateLifecycleActionRequirements,
@@ -336,20 +338,64 @@ export async function evaluateOpportunityActionPreflight(
     }
 
     const statusFrom = record.status_key != null ? String(record.status_key) : null;
-    return evaluateEffectiveRequirementsAsync(supabase, {
-        org_id: input.orgId,
-        entity_type: "opportunity",
-        entity_id: input.opportunityId,
-        status: statusFrom,
-        status_from: statusFrom,
-        status_to: input.statusTo ?? undefined,
-        action_key: input.actionKey,
-        trigger: "action_execute",
-        department_id: input.departmentId,
-        work_unit_id: input.workUnitId,
-        record,
-        payload: input.payload,
-    });
+    const [operational, fieldPolicy] = await Promise.all([
+        evaluateEffectiveRequirementsAsync(supabase, {
+            org_id: input.orgId,
+            entity_type: "opportunity",
+            entity_id: input.opportunityId,
+            status: statusFrom,
+            status_from: statusFrom,
+            status_to: input.statusTo ?? undefined,
+            action_key: input.actionKey,
+            trigger: "action_execute",
+            department_id: input.departmentId,
+            work_unit_id: input.workUnitId,
+            record,
+            payload: input.payload,
+        }),
+        loadFieldPolicyRequirementViolations(supabase, {
+            orgId: input.orgId,
+            entityType: "opportunity",
+            entityId: input.opportunityId,
+            record,
+        }),
+    ]);
+    return withFieldPolicyViolations(operational, fieldPolicy);
+}
+
+/**
+ * Fold configured field-policy requirements into an action's preflight result.
+ *
+ * Without this the two required-information engines contradict each other in front of the operator:
+ * preflight reports the action as ready, the save is then refused by a policy preflight never
+ * evaluated, and the only explanation is a raw 400 naming a field no surface mentioned. Same list,
+ * same panel, one explanation.
+ */
+function withFieldPolicyViolations(
+    result: EffectiveRequirementsResult,
+    fieldPolicy: EffectiveRequirementViolation[]
+): EffectiveRequirementsResult {
+    if (fieldPolicy.length === 0) return result;
+
+    // An operational rule already covering the field wins — it carries the richer resolution route,
+    // and one missing field must never be listed twice.
+    const known = new Set([
+        ...result.blocking.map((v) => v.field_key),
+        ...result.recommended.map((v) => v.field_key),
+    ]);
+    const added = fieldPolicy.filter((v) => !known.has(v.field_key));
+    if (added.length === 0) return result;
+
+    const blocking = [...result.blocking, ...added];
+    return {
+        ...result,
+        ok: blocking.length === 0,
+        blocking,
+        sourceSummary: {
+            ...result.sourceSummary,
+            layoutRules: result.sourceSummary.layoutRules + added.length,
+        },
+    };
 }
 
 export { buildOpportunityCompletionContextFromDb };

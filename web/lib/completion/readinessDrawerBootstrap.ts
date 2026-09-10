@@ -4,7 +4,7 @@
  */
 
 import { evaluateOperationalReadinessMemoized, type ReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
-import type { ReadinessResult } from "@/lib/completion/readinessTypes";
+import type { FieldPolicyReadinessEvalInput, ReadinessResult } from "@/lib/completion/readinessTypes";
 import { canonicalOperatorStageForStatusKey } from "@/lib/lifecycle/enrollmentOperatorStage";
 
 export function tryEvaluateDrawerRecordReadiness(input: {
@@ -15,6 +15,8 @@ export function tryEvaluateDrawerRecordReadiness(input: {
     workUnitId?: string | null;
     departmentMetadata?: Record<string, unknown> | null;
     memoScope?: ReadinessMemoScope;
+    /** Configured field policies, so the operator sees one list rather than two engines. */
+    fieldPolicy?: FieldPolicyReadinessEvalInput;
 }): ReadinessResult | undefined {
     try {
         const opportunityId = input.opportunityId.trim();
@@ -44,6 +46,7 @@ export function tryEvaluateDrawerRecordReadiness(input: {
                 status: statusKey,
                 record,
                 include_legacy: true,
+                field_policy: input.fieldPolicy,
             },
             input.memoScope
         );
