@@ -340,8 +340,69 @@ export function validateLedgerRepairInputs(inputs = {}, {
   };
 }
 
-/** The census artifact whose rows carry physical state AND ledger truth together. */
+/**
+ * The census artifact whose rows carry physical state AND ledger truth together.
+ *
+ * Kept as the DEFAULT rather than the only answer. As a hardcoded filename this
+ * capability could only ever be used by the promotion it was written for: the
+ * evidence lookup demanded a census named for Thread 8C, and Thread 5's
+ * reconciliation — the same defect, the same recovery — had no way to present a
+ * proof about its own migrations. It refused, correctly and unusably.
+ *
+ * A filename was never what made the evidence trustworthy anyway. What makes it
+ * trustworthy is that it is a COMPLETED GOVERNED CENSUS of the target, recent,
+ * and carrying a physical check for every version being registered. Those are
+ * now the conditions, and `physicalStateArtifact` lets a request name its own
+ * proof — which is strictly stronger than a name that merely implied coverage.
+ */
 export const PHYSICAL_STATE_ARTIFACT = "thread8c-physical-state-census.sql";
+
+/**
+ * Which artifact carries the physical proof for THIS request.
+ *
+ * A bare filename, never a path: the lookup matches on suffix, so accepting a
+ * caller-supplied path fragment would let a request widen what counts as its own
+ * evidence.
+ */
+export function physicalStateArtifactFor(inputs = {}) {
+  const named = String(inputs.physicalStateArtifact || inputs.physical_state_artifact || "").trim();
+  if (!named) return { ok: true, artifact: PHYSICAL_STATE_ARTIFACT, defaulted: true };
+  if (named.includes("/") || named.includes("..")) {
+    return {
+      ok: false,
+      code: "physical_state_artifact_not_a_name",
+      detail: "Name the artifact file, not a path; a path would let a request widen what counts as its own evidence.",
+    };
+  }
+  if (!/^[A-Za-z0-9._-]+\.sql$/.test(named)) {
+    return { ok: false, code: "physical_state_artifact_not_a_name", detail: `${named} is not a census artifact filename.` };
+  }
+  return { ok: true, artifact: named, defaulted: false };
+}
+
+/**
+ * Does this census actually SAY something about every version being registered?
+ *
+ * Without this, a census that simply does not mention a version yields
+ * "PHYSICALLY_ABSENT" for it — the right refusal reached by the wrong reasoning,
+ * and a confusing one to debug: the schema is present, the census just never
+ * looked. Absence of a measurement and a measurement of absence are different
+ * facts and get different codes.
+ */
+export function assertCensusCoversVersions(census, versions = []) {
+  const questions = census?.questions || {};
+  const uncovered = versions
+    .map(String)
+    .filter((v) => !(questions[`m${v.slice(-6)}`]?.rows || []).length);
+  if (uncovered.length) {
+    return {
+      ok: false,
+      code: "physical_state_census_does_not_cover",
+      detail: `The physical-state census carries no check for ${uncovered.join(", ")}; it measured a different set of migrations.`,
+    };
+  }
+  return { ok: true };
+}
 
 /**
  * Read the evidence this repair depends on out of governed census records.

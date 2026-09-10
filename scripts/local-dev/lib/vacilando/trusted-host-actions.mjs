@@ -87,6 +87,8 @@ import {
   buildLedgerRepairSql,
   ledgerRepairEvidenceFromCensus,
   PHYSICAL_STATE_ARTIFACT,
+  physicalStateArtifactFor,
+  assertCensusCoversVersions,
 } from "./trusted-host-ledger-repair.mjs";
 
 import { appendTimelineEvent } from "./timeline.mjs";
@@ -1639,255 +1641,6 @@ function defaultReadRequiredVersions({ sha, worktreePath = null, gitCwd = null }
   return requiredVersionsFromFilenames(listMigrationsAtSha({ root, sha, gitCwd }));
 }
 
-// ── MIGRATION LEDGER RECONCILIATION: THE TRUSTED-HOST ADAPTERS ──────────────
-
-/**
- * The governed-action records, read from this host's own store.
- *
- * Resolved locally rather than imported from `governed-action-request.mjs`,
- * which imports the action registry, which imports this file — closing that
- * cycle makes `ACTION_TYPES` unreachable before initialisation.
- * `trusted-host-production-migrate` resolves the same path the same way, for the
- * same reason.
- */
-function readGovernedActionRecordsForHost() {
-  try {
-    const store = join(runtimeRoot(), "vacilando", "governed-actions", "requests.json");
-    if (!existsSync(store)) return [];
-    const parsed = JSON.parse(readFileSync(store, "utf8"));
-    return Array.isArray(parsed) ? parsed : (parsed?.requests || []);
-  } catch {
-    // Unreadable proof is NO proof, never assumed proof.
-    return [];
-  }
-}
-
-/** Read the ledger rows for the named identities, plus head and total. */
-function defaultReadLedgerRows({ versions = [] }) {
-  const wanted = versions.map((v) => String(v)).filter((v) => /^\d{14}$/.test(v));
-  if (!wanted.length) {
-    return { ok: false, code: LEDGER_RECONCILE_FAILURES.READ_FAILED, detail: "No identities to read." };
-  }
-  const list = wanted.map((v) => `'${v}'`).join(", ");
-  const tmpDir = join(storeDir(), "tmp");
-  mkdirSync(tmpDir, { recursive: true });
-  const sqlFile = join(tmpDir, "ledger-reconcile-read.sql");
-  const outFile = join(tmpDir, "ledger-reconcile-read.out");
-  const errFile = join(tmpDir, "ledger-reconcile-read.err");
-  writeFileSync(sqlFile, [
-    "select 'row'::text as k, m.version::text, coalesce(m.name, '')",
-    `from supabase_migrations.schema_migrations m where m.version in (${list})`,
-    "union all select 'total'::text, (select count(*)::text from supabase_migrations.schema_migrations), ''",
-    "union all select 'head'::text, (select coalesce(max(version), 'none') from supabase_migrations.schema_migrations), ''",
-  ].join("\n"));
-  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
-    env: {
-      ...process.env,
-      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
-      ALLOY_REPO: resolveCanonicalRepoRoot(),
-      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
-      VACILANDO_CHECKOUT: findRepoRoot(),
-      ALLOY_WORKTREE: findRepoRoot(),
-      ALLOY_BLOCK_REMOTE_SUPABASE: "",
-    },
-    timeout: 60_000,
-    encoding: "utf8",
-  });
-  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
-  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
-  try { unlinkSync(sqlFile); } catch { /* */ }
-  if (child.status !== 0) {
-    return { ok: false, code: LEDGER_RECONCILE_FAILURES.READ_FAILED, detail: errText.slice(0, 300) || "Ledger read failed." };
-  }
-  const rows = [];
-  let total = null;
-  let head = null;
-  for (const line of String(outText).split("\n")) {
-    const t = line.trim();
-    if (!t || t === "BEGIN" || t === "COMMIT") continue;
-    const [k, a, b] = t.split("|");
-    if (k === "row") rows.push({ version: a, name: b ?? "" });
-    else if (k === "total") total = Number(a);
-    else if (k === "head") head = a;
-  }
-  // A total that did not come back means the read did not really answer. The
-  // reconciliation refuses on UNKNOWN rather than proceeding on partial evidence.
-  if (!Number.isFinite(total)) {
-    return { ok: false, code: LEDGER_RECONCILE_FAILURES.READ_FAILED, detail: "The ledger read returned no total. UNKNOWN refuses." };
-  }
-  return { ok: true, rows, total, head };
-}
-
-/**
- * Write the ledger rows.
- *
- * Dollar-quoted with a tag proven absent from every statement, so no migration's
- * own SQL can terminate the literal that contains it. ON CONFLICT DO NOTHING, so
- * a replay is a no-op rather than a second row or an overwrite.
- *
- * `created_by`, `idempotency_key` and `rollback` are left to their defaults. That
- * is not an omission: a census of all 393 hosted rows found every one of them
- * null, so null IS the shape this migration system writes.
- */
-function defaultWriteLedgerRows({ rows = [] }) {
-  if (!rows.length) return { ok: true, written: [] };
-  let tag = "alloyledger";
-  const all = rows.flatMap((r) => r.statements).join("\n");
-  while (all.includes(`$${tag}$`)) tag += "x";
-  const q = (text) => `$${tag}$${text}$${tag}$`;
-  const values = rows
-    .map((r) => `(${q(r.version)}, ${q(r.name)}, ARRAY[${r.statements.map(q).join(", ")}]::text[])`)
-    .join(",\n  ");
-  const sql = [
-    "INSERT INTO supabase_migrations.schema_migrations (version, name, statements)",
-    "VALUES",
-    `  ${values}`,
-    "ON CONFLICT (version) DO NOTHING;",
-    "",
-  ].join("\n");
-
-  const tmpDir = join(storeDir(), "tmp");
-  mkdirSync(tmpDir, { recursive: true });
-  const sqlFile = join(tmpDir, "ledger-reconcile-write.sql");
-  const outFile = join(tmpDir, "ledger-reconcile-write.out");
-  const errFile = join(tmpDir, "ledger-reconcile-write.err");
-  writeFileSync(sqlFile, sql);
-  try { chmodSync(LEDGER_WRITE_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [LEDGER_WRITE_SH, sqlFile, outFile, errFile], {
-    env: {
-      ...process.env,
-      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
-      ALLOY_REPO: resolveCanonicalRepoRoot(),
-      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
-      VACILANDO_CHECKOUT: findRepoRoot(),
-      ALLOY_WORKTREE: findRepoRoot(),
-      ALLOY_BLOCK_REMOTE_SUPABASE: "",
-    },
-    timeout: 120_000,
-    encoding: "utf8",
-  });
-  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
-  try { unlinkSync(sqlFile); } catch { /* */ }
-  if (child.status !== 0) {
-    return { ok: false, code: LEDGER_RECONCILE_FAILURES.WRITE_FAILED, detail: errText.slice(0, 400) || "Ledger write failed." };
-  }
-  return { ok: true, written: rows.map((r) => r.version) };
-}
-
-/**
- * Compose the ledger adapters.
- *
- * The same inversion as the migration runners, for the same reason: nothing
- * defaults to a production connection, and a process that has not declared
- * itself production-capable cannot reach one.
- */
-function composeLedgerRunners(explicit = {}) {
-  const hasRead = typeof explicit.readLedgerRows === "function";
-  const hasWrite = typeof explicit.writeLedgerRows === "function";
-  if (hasRead && hasWrite) return { ok: true, source: "injected", runners: explicit };
-  if (hasRead || hasWrite) {
-    return {
-      ok: false,
-      code: LEDGER_RECONCILE_FAILURES.RUNNERS_NOT_COMPOSED,
-      detail: "Both readLedgerRows and writeLedgerRows must be supplied together.",
-    };
-  }
-  if (process.env.NODE_TEST_CONTEXT) {
-    return {
-      ok: false,
-      code: LEDGER_RECONCILE_FAILURES.RUNNERS_NOT_COMPOSED,
-      detail: "A test process may not reach the production ledger. Inject readLedgerRows and writeLedgerRows.",
-    };
-  }
-  if (!productionExecutionArmed) {
-    return {
-      ok: false,
-      code: LEDGER_RECONCILE_FAILURES.RUNNERS_NOT_COMPOSED,
-      detail: "This process has not declared itself a production-capable trusted host.",
-    };
-  }
-  return {
-    ok: true,
-    source: "trusted_host",
-    runners: { readLedgerRows: defaultReadLedgerRows, writeLedgerRows: defaultWriteLedgerRows },
-  };
-}
-
-/**
- * RECONCILE THE PRODUCTION MIGRATION LEDGER.
- *
- * Writes the row the migration system would have written, for SQL that provably
- * already ran. It refuses unless the physical schema the row would claim is
- * independently proven present — that proof is what separates reconciliation
- * from fabrication, and it is supplied as evidence rather than assumed.
- */
-export function executeLedgerReconcileTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
-  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
-  if (!authz.ok) return authz;
-  action = authz.action;
-  action.state = "executing";
-  action.executionState = "executing";
-  action.started_at = action.started_at || iso(nowMs);
-  action.updated_at = iso(nowMs);
-  writeAction(action);
-
-  const inputs = action.requestedInputs || action.inputs || {};
-  const repoRoot = inputs.worktreePath || inputs.worktree_path || findRepoRoot();
-  // Revalidated at execution: ledger content is re-derived from the committed
-  // files now, never carried from the filing.
-  const revalidated = validateLedgerReconcileInputs(inputs, {
-    readMigrationFile: ({ sha, relative }) => readMigrationContent({
-      environment: "alloy_deployed_primary",
-      root: repoRoot,
-      sha,
-      relative,
-      gitCwd: repoRoot,
-      preMergeCandidate: true,
-    }),
-  });
-  if (!revalidated.ok) return failTrustedAction(action, revalidated.code, revalidated.detail, { nowMs });
-
-  // THE EQUIVALENCE CLAIM IS TRACED, NOT TRUSTED. It must name a completed
-  // governed census of the production target that ran the reviewed artifact.
-  const claim = action.schemaEquivalence || inputs.schemaEquivalence || inputs.schema_equivalence || null;
-  const evidence = verifySchemaEquivalenceEvidence({
-    evidence: claim,
-    records: readGovernedActionRecordsForHost(),
-    expectedQueryHash: claim?.census_query_hash || null,
-    target: revalidated.normalized.target,
-  });
-  if (!evidence.ok) return failTrustedAction(action, evidence.code, evidence.detail, { nowMs });
-
-  const composed = composeLedgerRunners(ledgerRunnersForTests || {});
-  if (!composed.ok) return failTrustedAction(action, composed.code, composed.detail, { nowMs });
-
-  const out = executeLedgerReconciliation({
-    normalized: revalidated.normalized,
-    schemaEquivalence: { ...claim, verified_by: evidence },
-    approval: action.productionApproval || null,
-    readLedgerRows: composed.runners.readLedgerRows,
-    writeLedgerRows: composed.runners.writeLedgerRows,
-    nowMs,
-  });
-
-  const publicResult = publicLedgerReconcileResult(out);
-  if (containsCredentialMaterial(publicResult)) {
-    return failTrustedAction(action, "result_contained_secrets", "Reconciliation result contained secrets and was discarded.", { nowMs });
-  }
-  if (!out?.ok) {
-    const failed = failTrustedAction(action, out?.code || "ledger_write_failed", out?.detail || "Ledger reconciliation refused.", { nowMs });
-    if (failed.action) {
-      failed.action.result = { ...publicResult, ok: false };
-      failed.action.audit = buildAudit(failed.action, { success: false, failureCode: out?.code || "ledger_write_failed" });
-      writeAction(failed.action);
-    }
-    return failed;
-  }
-  action.audit = buildAudit(action, { success: true });
-  return completeTrustedAction(action, publicResult, { nowMs });
-}
-
 /**
  * EXECUTE A PRODUCTION DATABASE MIGRATION.
  *
@@ -2937,17 +2690,23 @@ function defaultLedgerRepairEvidence({ inputs = {}, nowMs = Date.now() } = {}) {
     return { ok: false, code: "evidence_store_unreadable", detail: "The governed action store could not be read." };
   }
   const target = String(inputs.target || inputs.environment || "");
+  // WHICH proof this request offers. Defaulted, not hardcoded: a filename fixed
+  // to one promotion made this capability unusable by any other, which is how
+  // Thread 5's reconciliation ended up with no way to present evidence about its
+  // own migrations.
+  const named = physicalStateArtifactFor(inputs);
+  if (!named.ok) return named;
   const candidates = records.filter((r) => r.action_key === "database.read_census"
     && r.status === "complete"
     && String(r.inputs?.databaseTarget || "") === target
-    && String(r.inputs?.queryArtifactPath || "").endsWith(PHYSICAL_STATE_ARTIFACT)
+    && String(r.inputs?.queryArtifactPath || "").endsWith(named.artifact)
     && r.result?.census);
   const latest = candidates[candidates.length - 1] || null;
   if (!latest) {
     return {
       ok: false,
       code: "physical_state_census_missing",
-      detail: `No completed ${PHYSICAL_STATE_ARTIFACT} census against ${target}; this repair may not proceed on inference.`,
+      detail: `No completed ${named.artifact} census against ${target}; this repair may not proceed on inference.`,
     };
   }
   const at = Date.parse(latest.execution_ended_at || latest.updated_at || 0);
@@ -2959,8 +2718,15 @@ function defaultLedgerRepairEvidence({ inputs = {}, nowMs = Date.now() } = {}) {
     };
   }
   const versions = (inputs.migrations || []).map((m) => String(m.version));
+  // A census that never looked at a version is not a census that found it
+  // absent. Refusing here names the real problem instead of reporting the schema
+  // as missing when it is the measurement that is missing.
+  const covers = assertCensusCoversVersions(latest.result.census, versions);
+  if (!covers.ok) return covers;
   const derived = ledgerRepairEvidenceFromCensus(latest.result.census, { versions });
-  return derived.ok ? { ...derived, census_request_id: latest.request_id } : derived;
+  return derived.ok
+    ? { ...derived, census_request_id: latest.request_id, physical_state_artifact: named.artifact }
+    : derived;
 }
 
 function defaultRunLedgerRepairSql({ sql }) {

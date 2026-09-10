@@ -350,3 +350,50 @@ await test("LR20 — the approval card says NO SCHEMA CHANGES, and cannot be rea
   // It must not have fallen through to the generic default.
   assert.notEqual(card.approve_label, "Authorize");
 });
+
+await test("LR21 — the physical-state artifact is a default, not a hardcoding", () => {
+  /*
+   * As a fixed filename this capability could only ever be used by the promotion
+   * it was written for. Thread 5's reconciliation — the same defect, the same
+   * recovery — had no way to present a proof about its own migrations, and
+   * refused `physical_state_census_stale` against a census that could never have
+   * covered it anyway. A filename was never what made evidence trustworthy.
+   */
+  assert.equal(L.physicalStateArtifactFor({}).artifact, L.PHYSICAL_STATE_ARTIFACT);
+  assert.equal(L.physicalStateArtifactFor({}).defaulted, true);
+  const named = L.physicalStateArtifactFor({ physicalStateArtifact: "thread5-physical-state-census.sql" });
+  assert.equal(named.ok, true);
+  assert.equal(named.artifact, "thread5-physical-state-census.sql");
+  assert.equal(named.defaulted, false);
+});
+
+await test("LR22 — a request may name a file, never a path", () => {
+  // The lookup matches on suffix, so a path fragment would let a request widen
+  // what counts as its own evidence.
+  for (const bad of ["../secrets.sql", "certification/migrations/x.sql", "x.txt", "x"]) {
+    const r = L.physicalStateArtifactFor({ physicalStateArtifact: bad });
+    assert.equal(r.ok, false, `${bad} was accepted`);
+    assert.equal(r.code, "physical_state_artifact_not_a_name");
+  }
+});
+
+await test("LR23 — a census that never looked is not a census that found nothing", () => {
+  // Absence of a measurement and a measurement of absence are different facts.
+  // Without this the uncovered version reported PHYSICALLY_ABSENT: the right
+  // refusal reached by the wrong reasoning, and a confusing one to debug.
+  const census = { questions: { m250000: { rows: ["a ~ b ~ c ~ true"] } } };
+  const miss = L.assertCensusCoversVersions(census, ["20260910120000", "20260909250000"]);
+  assert.equal(miss.ok, false);
+  assert.equal(miss.code, "physical_state_census_does_not_cover");
+  assert.match(miss.detail, /20260910120000/);
+  assert.ok(!/20260909250000/.test(miss.detail), "a covered version must not be named as uncovered");
+  assert.equal(L.assertCensusCoversVersions(census, ["20260909250000"]).ok, true);
+});
+
+await test("LR24 — coverage is judged per version, and an empty check list does not count", () => {
+  const census = { questions: { m120000: { rows: [] }, m130000: { rows: ["x ~ true"] } } };
+  const r = L.assertCensusCoversVersions(census, ["20260910120000", "20260910130000"]);
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /20260910120000/);
+  assert.ok(!/20260910130000/.test(r.detail));
+});
