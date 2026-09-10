@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 /**
  * GET /api/admin/financials/card?customer_id=…&customer_member_id=…&date=…
@@ -22,6 +23,18 @@ export async function GET(request: NextRequest) {
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const allowedRead = await assertFinancialsReadAllowed({
+        supabase: createAdminClient(),
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
 
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get("customer_id")?.trim() || null;

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 /**
  * GET /api/admin/financials/collection-state?attempt_id=…
@@ -29,6 +30,18 @@ export async function GET(request: NextRequest) {
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const allowedRead = await assertFinancialsReadAllowed({
+        supabase: createAdminClient(),
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
 
     const attemptId = new URL(request.url).searchParams.get("attempt_id")?.trim();
     if (!attemptId) {

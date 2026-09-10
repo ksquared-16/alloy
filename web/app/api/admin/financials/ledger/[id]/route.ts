@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,13 @@ export async function GET(
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const supabase = createAdminClient();
+    const allowedRead = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
     const orgId = ctx.orgId;
 
     const { data: txn, error: txnErr } = await supabase

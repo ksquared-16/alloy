@@ -9,6 +9,7 @@ import {
     type OrgSettingsRow,
     type VendorRow,
 } from "@/lib/admin/vendorPayoutPolicy";
+import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,13 @@ export async function GET(
     if (!scheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });
 
     const supabase = createAdminClient();
+    const allowedRead = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
+        );
+    }
     const orgId = ctx.orgId;
 
     const { data: schedule, error: sErr } = await supabase

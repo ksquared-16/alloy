@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
 import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
+import { assertFinancialsReadAllowed, assertFinancialsWriteAllowed } from "@/lib/financials/financialsPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,18 @@ export async function GET(
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
             { status: ctx.status }
+        );
+    }
+
+    const allowedRead = await assertFinancialsReadAllowed({
+        supabase: createAdminClient(),
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+    if (!allowedRead.ok) {
+        return NextResponse.json(
+            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+            { status: 403 },
         );
     }
     const { id } = await context.params;
@@ -46,6 +59,18 @@ export async function PATCH(
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
             { status: ctx.status }
+        );
+    }
+
+    const allowedWrite = await assertFinancialsWriteAllowed({
+        supabase: createAdminClient(),
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+    if (!allowedWrite.ok) {
+        return NextResponse.json(
+            { error: allowedWrite.message, required_permission: allowedWrite.requiredPermission },
+            { status: 403 },
         );
     }
     if (ctx.role !== "admin") {
