@@ -103,7 +103,7 @@ export default function FoldersViewsSourcesRail({
             </section>
 
             <section data-work-items-fvs-section="folders">
-                <GroupHeading>Folders</GroupHeading>
+                <GroupHeading>Processes</GroupHeading>
                 <div className="space-y-0.5">
                     {WORK_ITEM_FOLDER_DEFS.map((def) => {
                         const active = scope.folder === def.key;

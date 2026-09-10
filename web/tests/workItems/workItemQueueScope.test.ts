@@ -44,19 +44,36 @@ describe("workItemQueueScope", () => {
 
     it("applies folder + view + source filters", () => {
         const scope: WorkItemQueueScope = {
-            folder: "inbox",
-            view: "due_soon",
+            folder: "all_work",
+            view: "mine",
             source: "manual",
             sort: "title",
         };
 
+        // u1 + manual + not the BOS row and not the unassigned one.
         const rows = applyWorkItemQueueScope(tasks, scope, groups, "u1");
-        expect(rows.map((r) => r.id)).toEqual(["mine-manual"]);
+        expect(rows.map((r) => r.id).sort()).toEqual(["done", "mine-manual"]);
     });
 
-    it("returns deterministic counts for folders, views, and sources", () => {
-        expect(countTasksForFolder(tasks, "inbox", groups, "u1")).toBe(2);
-        expect(countTasksForFolder(tasks, "all_work", groups, "u1")).toBe(4);
+    /**
+     * The process lens is a real axis: narrowing to Enrollment must drop work that carries no
+     * Business Process dimensions, not merely reorder it.
+     */
+    it("the process lens narrows to that process's work", () => {
+        const scope: WorkItemQueueScope = {
+            folder: "enrollment",
+            view: "completed",
+            source: "all",
+            sort: "title",
+        };
+        const rows = applyWorkItemQueueScope(tasks, scope, groups, "u1");
+        expect(rows.map((r) => r.id)).not.toContain("mine-manual");
+    });
+
+    it("returns deterministic counts for process lenses, views, and sources", () => {
+        // "inbox" is gone: it was the "Assigned to me" view under a second name, and "projects"
+        // matched no process and returned an empty list on every render.
+        expect(countTasksForFolder(tasks, "all_work", groups)).toBe(4);
 
         expect(countTasksForView(tasks, "due_soon")).toBeGreaterThanOrEqual(1);
         expect(countTasksForView(tasks, "completed")).toBe(1);

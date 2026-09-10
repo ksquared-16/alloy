@@ -411,7 +411,7 @@ export default function MyTasksPanel({
             Object.fromEntries(
                 WORK_ITEM_FOLDER_DEFS.map((def) => [
                     def.key,
-                    countTasksForFolder(mergedTasks, def.key, processGroups, userId?.trim() || null),
+                    countTasksForFolder(mergedTasks, def.key, processGroups),
                 ]),
             ),
         [mergedTasks, processGroups, userId],
