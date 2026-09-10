@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-04
+supersedes: []
+---
+
 # Director Certification Experience V1 (W-4)
 
 ## Principle

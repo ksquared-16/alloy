@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Access & Identity V2 — Planning
 
 Canonical product-source location for Access & Identity V2 planning artifacts.

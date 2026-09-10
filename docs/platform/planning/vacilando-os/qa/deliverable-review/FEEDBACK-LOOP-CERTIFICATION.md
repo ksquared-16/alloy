@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: closed
+status: historical
 capability: director-deliverable-feedback-loop
 closed_at: 2026-08-04
 closed_commit: fbe918247
