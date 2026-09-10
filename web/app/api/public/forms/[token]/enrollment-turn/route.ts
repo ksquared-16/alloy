@@ -15,6 +15,7 @@
  * That ordering is the point: Enrollment completion must never depend on model uptime.
  */
 
+import { participantSubjectFromSession } from "@/lib/public/forms/participantSubjectFromSession";
 import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
@@ -89,12 +90,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const [canonical, resolved] = await Promise.all([
         // Journey-shaped prefill. A packet-anchored session carries its child in the session's own
         // CRM snapshot, which the form layer already applies.
-        access.value.processInstanceId
-            ? resolveParticipantCanonicalContext(supabase, {
-                  orgId: access.value.orgId,
-                  processInstanceId: access.value.processInstanceId,
-              })
-            : Promise.resolve({ values: {}, subjectDisplayName: null }),
+        resolveParticipantCanonicalContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+            // A packet launched at a family names its child here; the journey names it on the
+            // instance. Either way the parent is greeted by their child's name.
+            customerMemberId: participantSubjectFromSession(access.value.session),
+        }),
         resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
             processInstanceId: access.value.processInstanceId,
