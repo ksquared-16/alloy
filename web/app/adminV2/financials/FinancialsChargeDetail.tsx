@@ -156,6 +156,17 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
         : detail.customerId ? { text: "Household", state: "household" }
         : { text: "Original attribution unavailable", state: "unresolved" };
 
+    /* Ordered oldest-first: an account of the obligation reads forwards. */
+    const history: { key: string; label: string; when: string | null }[] = [
+        ...(detail.serviceDate ? [{ key: "service", label: "Charge is for", when: day(detail.serviceDate) }] : []),
+        ...(detail.postedAt ? [{ key: "posted", label: "Posted", when: day(detail.postedAt) }] : []),
+        ...detail.applications.map((a, i) => ({
+            key: `applied-${a.paymentId}-${i}`,
+            label: `${money(a.allocatedAmountCents, detail.currencyCode)} applied${a.method ? ` · ${a.method}` : ""}`,
+            when: day(a.receivedAt),
+        })),
+    ];
+
     const dates = [
         detail.serviceDate ? `Service ${day(detail.serviceDate)}` : null,
         detail.postedAt ? `Posted ${day(detail.postedAt)}` : null,
@@ -250,6 +261,29 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                             muted
                             testId="application"
                         />
+                    ))}
+                </>
+            ) : null}
+
+            {/*
+             * WHAT HAPPENED TO IT, from facts this composition already carries.
+             *
+             * Deliberately not a new event store. The charge knows when it was for and when it was
+             * posted, and each application knows when its money arrived — that is a real, ordered
+             * account of the obligation without inventing a second ledger or deriving events by
+             * diffing present state against itself.
+             *
+             * THE LIMIT, STATED RATHER THAN PAPERED OVER: reductions, responsibility changes and
+             * reversals are not listed here. They are recorded in the financial journal, whose feed
+             * is org-wide and keyed by source rather than by charge, so scoping it to one
+             * obligation is its own read and its own certification. The Activity section remains
+             * the canonical place to see them until then.
+             */}
+            {history.length > 0 ? (
+                <>
+                    <Group>History</Group>
+                    {history.map((h) => (
+                        <Row key={h.key} label={h.label} value={h.when ?? ""} muted testId="history" />
                     ))}
                 </>
             ) : null}
