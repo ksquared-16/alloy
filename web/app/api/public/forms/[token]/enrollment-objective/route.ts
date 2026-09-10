@@ -8,6 +8,7 @@
  * Read only. Opening this never launches a session or writes participant state.
  */
 
+import { participantSubjectFromSession } from "@/lib/public/forms/participantSubjectFromSession";
 import { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
@@ -61,12 +62,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Canonical prefill is resolved from the journey's subject. A packet-anchored session
         // carries its child in the session's CRM snapshot instead, and the participant runtime
         // already applies that at the form layer — so there is nothing to look up here.
-        access.value.processInstanceId
-            ? resolveParticipantCanonicalContext(supabase, {
-                  orgId: access.value.orgId,
-                  processInstanceId: access.value.processInstanceId,
-              })
-            : Promise.resolve({ values: {}, subjectDisplayName: null }),
+        resolveParticipantCanonicalContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+            // A packet launched at a family names its child here; the journey names it on the
+            // instance. Either way the parent is greeted by their child's name.
+            customerMemberId: participantSubjectFromSession(access.value.session),
+        }),
         resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
             processInstanceId: access.value.processInstanceId,

@@ -92,16 +92,34 @@ export type ParticipantCanonicalContext = {
  */
 export async function resolveParticipantCanonicalContext(
     supabase: SupabaseClient,
-    input: { readonly orgId: string; readonly processInstanceId: string },
+    input: {
+        readonly orgId: string;
+        /** The journey whose subject to resolve. Null for a packet-anchored participant. */
+        readonly processInstanceId: string | null;
+        /**
+         * The child directly, when the caller already knows them.
+         *
+         * A journey names its subject on the process instance; a packet launched at a family names
+         * the same child in the session's CRM snapshot. Given one, the instance read is skipped —
+         * which is what lets a packet-anchored participant get prefill and, just as importantly, be
+         * called by their child's name instead of "null".
+         */
+        readonly customerMemberId?: string | null;
+    },
 ): Promise<ParticipantCanonicalContext> {
     try {
-        const { data: instance } = await supabase
-            .from("process_instances")
-            .select("subject_id")
-            .eq("org_id", input.orgId)
-            .eq("id", input.processInstanceId)
-            .maybeSingle();
-        const subjectId = String((instance as { subject_id?: string } | null)?.subject_id ?? "").trim();
+        const direct = String(input.customerMemberId ?? "").trim();
+        let subjectId = direct;
+        if (!subjectId) {
+            if (!input.processInstanceId) return { values: {}, subjectDisplayName: null };
+            const { data: instance } = await supabase
+                .from("process_instances")
+                .select("subject_id")
+                .eq("org_id", input.orgId)
+                .eq("id", input.processInstanceId)
+                .maybeSingle();
+            subjectId = String((instance as { subject_id?: string } | null)?.subject_id ?? "").trim();
+        }
         if (!subjectId) return { values: {}, subjectDisplayName: null };
 
         const { data: child } = await supabase
@@ -243,7 +261,11 @@ async function mergeHouseholdValues(
 /** Values only, for callers that do not render copy. */
 export async function resolveParticipantCanonicalValues(
     supabase: SupabaseClient,
-    input: { readonly orgId: string; readonly processInstanceId: string },
+    input: {
+        readonly orgId: string;
+        readonly processInstanceId: string | null;
+        readonly customerMemberId?: string | null;
+    },
 ): Promise<ParticipantCanonicalValues> {
     return (await resolveParticipantCanonicalContext(supabase, input)).values;
 }
