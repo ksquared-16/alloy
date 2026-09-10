@@ -104,6 +104,14 @@ export async function authorServiceDayException(params: {
         dim: params.dim,
         siteLocationId: params.siteLocationId,
         roomLocationIds: params.grainLocationIds,
+        /*
+         * The day the exception is ABOUT, taken from the temporal frame the
+         * caller already had to supply — not today, and not a new parameter.
+         * An assignment-scoped author is judged against the rooms they held on
+         * that day; an author whose frame names no start cannot be judged at
+         * all and is denied by the narrowed policy, which is the safe direction.
+         */
+        serviceDate: (params.input?.temporalFrame?.validFrom ?? "").slice(0, 10) || null,
     });
     if (!authorized.ok) {
         return {

@@ -1,6 +1,7 @@
 /**
  * Production ratification gateway (P1 · Wave C · C2) — wires the pure ratification
- * orchestration to infrastructure: the `oe.ledger.author` (P1) flag, a tenant-
+ * orchestration to infrastructure: the `oe.ledger.author` (P1) flag or an
+ * activated purpose, a tenant-
  * checked expectation read, and the atomic `ratify_operational_expectation` RPC,
  * all through the service-role admin client. The authoritative Ratification Act is
  * the outbox row written inside the RPC transaction (no separate event bus).
@@ -27,10 +28,30 @@ import type {
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-export function createSupabaseRatificationGateway(admin: Admin = createAdminClient()): RatificationGateway {
+/**
+ * `purpose` is the SAME scoped-activation seam the authoring gateway already
+ * takes, and it is here for symmetry rather than convenience.
+ *
+ * Authoring an activated purpose needs no global env flag; ratifying the very
+ * same vocabulary did, because this gateway passed no purpose. The consequence
+ * was not theoretical: a family could submit a known-away intent through an
+ * activated purpose, and nobody could ratify it, because promotion still waited
+ * on a rollout control over the GENERIC intake. A door that opens one way is not
+ * a workflow.
+ *
+ * Omitted, behaviour is exactly as before — the env flag decides. Supplied, the
+ * caller names a purpose that has already been reviewed and activated for
+ * production, which is the same bar authoring clears. It widens nothing: an
+ * unactivated purpose still falls back to the env flag, and a tenant's opt-out
+ * still wins either way.
+ */
+export function createSupabaseRatificationGateway(
+    admin: Admin = createAdminClient(),
+    purpose?: string | null,
+): RatificationGateway {
     return {
         async isRatificationEnabled(orgId: string): Promise<boolean> {
-            return isOeLedgerAuthorEnabledForOrg(admin, orgId);
+            return isOeLedgerAuthorEnabledForOrg(admin, orgId, purpose);
         },
 
         async loadExpectation(expectationId: string): Promise<RatificationTargetRow | null> {

@@ -67,7 +67,22 @@ export type EffectiveExpectationsQuery = {
     asOf: AsOfCoordinate;
 };
 
-/** One effective expectation, flattened to what a consumer needs to interpret it. */
+/**
+ * One effective expectation, flattened to what a consumer needs to interpret it.
+ *
+ * ── TWO STANDINGS, BOTH TRUE ──
+ *
+ * `standing` is what was AUTHORED. `effectiveStanding` is what is GOVERNED now.
+ * They differ exactly when a proposal has been ratified, and both are returned
+ * because both are real: the authored fact never changes (this ledger is
+ * append-only and ratification deliberately does not mutate the row), while the
+ * governed answer is what an operator is entitled to rely on today.
+ *
+ * A consumer asking "may I rely on this?" must read `effectiveStanding`. A
+ * consumer asking "what did the author claim?" reads `standing`. Collapsing them
+ * into one field is what made a ratified expectation indistinguishable from an
+ * unratified one for every reader in the system.
+ */
 export type EffectiveExpectationForSubject = {
     subjectKind: string;
     subjectId: string;
@@ -77,7 +92,14 @@ export type EffectiveExpectationForSubject = {
     condition: Record<string, unknown>;
     effectiveFrom: string;
     effectiveTo: string | null;
+    /** As AUTHORED. Never promoted, never mutated. */
     standing: string;
+    /** As GOVERNED now: authored standing, promoted by valid ratification evidence. */
+    effectiveStanding: string;
+    /** When it was ratified, when it was. The evidence behind `effectiveStanding`. */
+    ratifiedAt: string | null;
+    /** The authority the ratification was made under. */
+    ratifiedUnderAuthorityKey: string | null;
 };
 
 /** A lineage whose effective state could not be determined. Never silently dropped. */
@@ -93,6 +115,13 @@ export type EffectiveExpectationsResult = {
     unresolved: UnresolvedExpectationLineage[];
 };
 
+/** One expectation's ratification evidence, as stored. */
+export type ExpectationRatificationEvidence = {
+    expectationId: string;
+    ratifiedAt: string;
+    ratifierAuthorityKey: string;
+};
+
 /** The storage port. Implemented against Supabase; substituted in tests. */
 export type ExpectationQueryGateway = {
     /**
@@ -102,6 +131,18 @@ export type ExpectationQueryGateway = {
      * belongs here and never in a caller.
      */
     loadRowsForSubjects(query: EffectiveExpectationsQuery): Promise<ExpectationQueryRow[]>;
+    /**
+     * Ratification evidence for these expectations, in the caller's org.
+     *
+     * REQUIRED, not optional. An optional loader would mean a gateway that
+     * forgot to implement it silently reported every ratified expectation as
+     * unratified — the failure this method exists to end, arriving quietly
+     * through a different door.
+     */
+    loadRatifications(
+        orgId: string,
+        expectationIds: readonly string[],
+    ): Promise<readonly ExpectationRatificationEvidence[]>;
 };
 
 export async function effectiveExpectationsForWindow(
@@ -128,6 +169,21 @@ export async function effectiveExpectationsForWindow(
     const effective: EffectiveExpectationForSubject[] = [];
     const unresolved: UnresolvedExpectationLineage[] = [];
 
+    /*
+     * RATIFICATION EVIDENCE, FOR THE ROWS THAT ACTUALLY WON.
+     *
+     * Loaded for every candidate row rather than only the effective ones,
+     * because a lineage's effective row is decided below and asking twice would
+     * mean two round trips to answer one question. A ratification belongs to the
+     * expectation it names, so a superseding revision does NOT inherit its
+     * predecessor's ratification — a revised plan is a new proposal, and it
+     * stands proposed until somebody ratifies THAT.
+     */
+    const ratifications = new Map<string, ExpectationRatificationEvidence>();
+    for (const r of await gateway.loadRatifications(query.orgId, [...byId.keys()])) {
+        ratifications.set(r.expectationId, r);
+    }
+
     for (const [lineageRootId, resolution] of resolutions) {
         if (resolution.kind === "none") continue;
 
@@ -144,6 +200,15 @@ export async function effectiveExpectationsForWindow(
 
         const e = resolution.effective;
         const row = byId.get(e.effectiveExpectationId);
+        const ratified = ratifications.get(e.effectiveExpectationId) ?? null;
+        /*
+         * A ratification promotes a PROPOSAL. It cannot demote, and it has
+         * nothing to say about `model` — a `predicted` expectation imposes no
+         * obligation and is not ratifiable, so a stray ratification row against
+         * one must not silently make it binding.
+         */
+        const authoredStanding = e.effectiveStanding;
+        const governed = ratified && authoredStanding === "proposed" ? "binding" : authoredStanding;
         effective.push({
             subjectKind: e.subjectKind,
             subjectId: row ? primaryExpectationSubjectId(row.subject_ref) : "",
@@ -153,7 +218,10 @@ export async function effectiveExpectationsForWindow(
             condition: row?.condition ?? {},
             effectiveFrom: e.effectiveFrom,
             effectiveTo: e.effectiveTo,
-            standing: e.effectiveStanding,
+            standing: authoredStanding,
+            effectiveStanding: governed,
+            ratifiedAt: ratified?.ratifiedAt ?? null,
+            ratifiedUnderAuthorityKey: ratified?.ratifierAuthorityKey ?? null,
         });
     }
 

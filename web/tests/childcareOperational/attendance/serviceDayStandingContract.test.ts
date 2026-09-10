@@ -42,6 +42,11 @@ const LEDGER_STANDINGS = ["proposed", "binding", "model"] as const;
 
 function expectation(over: Partial<EffectiveExpectationForSubject> & { standing: string }): EffectiveExpectationForSubject {
     return {
+        // Governance defaults to whatever was authored; the ratified cases below
+        // set `effectiveStanding` explicitly.
+        effectiveStanding: over.standing,
+        ratifiedAt: null,
+        ratifiedUnderAuthorityKey: null,
         subjectKind: "child",
         subjectId: EMMA,
         expectationId: "exp-1",

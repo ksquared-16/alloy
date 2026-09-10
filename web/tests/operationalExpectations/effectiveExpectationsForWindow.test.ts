@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
     effectiveExpectationsForWindow,
     type ExpectationQueryGateway,
+    type ExpectationRatificationEvidence,
     type ExpectationQueryRow,
 } from "@/lib/operationalExpectations/query/effectiveExpectationsForWindow";
 
@@ -47,8 +48,14 @@ function row(over: Partial<ExpectationQueryRow>): ExpectationQueryRow {
     } as ExpectationQueryRow;
 }
 
-function gatewayOf(rows: ExpectationQueryRow[]): ExpectationQueryGateway {
-    return { loadRowsForSubjects: vi.fn(async () => rows) };
+function gatewayOf(
+    rows: ExpectationQueryRow[],
+    ratifications: ExpectationRatificationEvidence[] = [],
+): ExpectationQueryGateway {
+    return {
+        loadRowsForSubjects: vi.fn(async () => rows),
+        loadRatifications: vi.fn(async () => ratifications),
+    };
 }
 
 const query = {
