@@ -262,6 +262,93 @@ await test("R6. explicit slotless is not the same as 'pick one for me'", async (
   assert.equal(out.reason, "slotless_requested", "and it is not reported as an exhausted pool");
 });
 
+// ---------------------------------------------------------------------------
+// U — THE OFFER: what the operator is actually shown.
+// ---------------------------------------------------------------------------
+
+const V = await import("../apps/vacilando/public/gateway-view.mjs");
+const sample = [
+  { worktree: "wt-orphan", slot: 10, port: 3020, group: "unowned", reclaimable: true, reason: "No Development Lane owns wt-orphan.", lane_name: null },
+  { worktree: "wt-closed", slot: 9, port: 3019, group: "offline", reclaimable: true, reason: "Old Lane is closed and still holds slot 9.", lane_name: "Old Lane" },
+  { worktree: "payments", slot: 7, port: 3017, group: "inactive", reclaimable: true, reason: "Payments is open with nothing running.", lane_name: "Payments" },
+  { worktree: "wt5", slot: 5, port: 3015, group: "active", reclaimable: false, reason: "Backend has a run in flight.", lane_name: "Backend" },
+];
+const CONSEQUENCE = { loses: "its localhost address and QA browser session", keeps: "its branch, worktree, messages and work", summary: "Nothing else changes." };
+
+await test("U1. the offer names the slot, the holder, the ranking reason and the cost", () => {
+  const html = V.renderSlotReclaimSheet({ laneLabel: "Access & Identity", candidates: sample, consequence: CONSEQUENCE });
+  assert.match(html, /Slot 7/, "which slot");
+  assert.match(html, /Payments/, "who holds it");
+  assert.match(html, /open with nothing running/, "why it is ranked there");
+  assert.match(html, /localhost address and QA browser session/, "what the donor loses");
+  assert.match(html, /branch, worktree, messages/, "what the donor keeps");
+});
+
+await test("U2. groups appear in the operator's order, unowned first", () => {
+  const html = V.renderSlotReclaimSheet({ candidates: sample, consequence: CONSEQUENCE });
+  const order = [...html.matchAll(/data-gw-reclaim-group="([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(order, ["unowned", "offline", "inactive", "active"]);
+});
+
+await test("U3. an active candidate is VISIBLE and disabled, never hidden", () => {
+  // Seeing the whole pool is how the operator understands why the offered ones
+  // are the offered ones.
+  const html = V.renderSlotReclaimSheet({ candidates: sample, consequence: CONSEQUENCE });
+  assert.match(html, /Backend/, "the busy lane is shown");
+  assert.match(html, /data-gw-reclaim-pick="wt5"[^>]*disabled/, "and its control is disabled");
+  assert.match(html, /Cannot be taken/);
+});
+
+await test("U4. nothing is preselected, and confirm is inert until a choice is made", () => {
+  // Taking a port from another lane is a deliberate act; a pre-ticked radio is
+  // how a deliberate act becomes an accidental one.
+  const html = V.renderSlotReclaimSheet({ candidates: sample, consequence: CONSEQUENCE });
+  assert.ok(!/checked/.test(html), "no candidate is preselected, not even the unowned one");
+  assert.match(html, /data-gw-reclaim-confirm disabled/);
+});
+
+await test("U5. choosing shows the consequence before confirming", () => {
+  const html = V.renderSlotReclaimSheet({ candidates: sample, consequence: CONSEQUENCE, selected: "payments", laneLabel: "Access & Identity" });
+  assert.match(html, /data-gw-reclaim-preview/);
+  assert.match(html, /Payments<\/strong> loses/);
+  assert.match(html, /Access &amp; Identity<\/strong> takes slot 7/);
+  assert.ok(!/data-gw-reclaim-confirm disabled/.test(html), "and confirm becomes available");
+});
+
+await test("U6. declining is a real answer, not a dead end", () => {
+  const html = V.renderSlotReclaimSheet({ candidates: sample, consequence: CONSEQUENCE });
+  assert.match(html, /data-gw-reclaim-cancel[^>]*>Leave it without a slot/);
+});
+
+await test("U7. the API delegates; it does not re-implement ranking or mutation", async () => {
+  const src = readFileSync(new URL("../lib/vacilando-server.mjs", import.meta.url), "utf8");
+  const i = src.indexOf('path === "/api/lanes/slots/reclaim-candidates"');
+  const j = src.indexOf('path === "/api/lanes/create"');
+  const routes = src.slice(i, j);
+  assert.match(routes, /slotReclaimCandidates\(/, "ranking comes from the owner");
+  assert.match(routes, /reassignSlot\(/, "mutation comes from the owner");
+  assert.ok(!/SLOT_RECLAIM_GROUPS|writeFileSync|adopt/.test(routes), "no second copy of the rules");
+  // A refusal must hand back the CURRENT ranking, not the stale one.
+  assert.match(routes, /409/, "a refused reclaim is a conflict, not a 500");
+  assert.match(routes.slice(routes.indexOf("if (!out.ok)")), /slotReclaimCandidates\(/, "and re-ranks for the next choice");
+});
+
+await test("U8. the flow is reachable ONLY from a slotless creation", async () => {
+  const src = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url), "utf8");
+  assert.match(src, /j\.workspace\?\.slotless === true/, "opened by the creation result");
+  assert.ok(!/#\/slots|route.*reclaim/.test(src), "there is no route to it");
+  // Cancelling must not mutate anything.
+  const close = src.slice(src.indexOf("function closeSlotReclaim"), src.indexOf("async function confirmSlotReclaim"));
+  assert.ok(!/fetch|gwFetch|reclaim/.test(close), "cancel changes nothing at all");
+});
+
+await test("U9. a server refusal replaces the list and clears the stale choice", async () => {
+  const src = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("async function confirmSlotReclaim"), src.indexOf("async function fetchCandidates"));
+  assert.match(fn, /st\.candidates = j\.candidates/, "the current ranking replaces the stale one");
+  assert.match(fn, /st\.selected = null/, "and the stale selection is cleared");
+});
+
 try { rmSync(ROOT, { recursive: true, force: true }); } catch { /* */ }
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

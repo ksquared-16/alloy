@@ -943,7 +943,12 @@ export async function slotReclaimCandidates({
   metadata = null,
   nowMs = Date.now(),
   activeRun = null,
+  // The lane asking for a slot must never be offered its own. It has none to
+  // give — that is why it is asking — and listing it would invite a choice that
+  // resolves to nothing.
+  excludeWorktree = null,
 } = {}) {
+  const excluded = norm(excludeWorktree);
   const conf = cfg || resolveRuntimeConfig();
   const meta = metadata || readAllMetadata(conf);
   const audit = auditLaneWorktrees({ root, cfg: conf, metadata: meta });
@@ -1021,8 +1026,9 @@ export async function slotReclaimCandidates({
     });
   }
 
+  const ranked = excluded ? out.filter((c) => norm(c.worktree) !== excluded) : out;
   const rank = (c) => SLOT_RECLAIM_GROUPS.indexOf(c.group);
-  out.sort((a, b) => {
+  ranked.sort((a, b) => {
     const g = rank(a) - rank(b);
     if (g !== 0) return g;
     // Within a group: least recently active first — the least disruptive to take.
@@ -1031,7 +1037,7 @@ export async function slotReclaimCandidates({
     if (aa !== bb) return aa - bb;
     return a.slot - b.slot;
   });
-  return { ok: true, candidates: out, free: freeSlots({ cfg: conf, metadata: meta }) };
+  return { ok: true, candidates: ranked, free: freeSlots({ cfg: conf, metadata: meta }) };
 }
 
 /** Most recent meaningful timestamp for a lane, for ordering only. */
@@ -1086,7 +1092,10 @@ export async function reassignSlot({
     return { ok: false, error: "recipient_already_slotted", detail: `${recipient} already holds slot ${asSlot(recipientReg.slot)}.` };
   }
 
-  const ranked = await slotReclaimCandidates({ root, cfg: conf, metadata: meta, nowMs, activeRun });
+  // RE-EVALUATED HERE, AT MUTATION TIME. The operator chose from a list that
+  // was true when it was rendered; a lane can start a turn between the render
+  // and the click, and the stale answer must never be the one that decides.
+  const ranked = await slotReclaimCandidates({ root, cfg: conf, metadata: meta, nowMs, activeRun, excludeWorktree: recipient });
   const chosen = ranked.candidates.find((c) => norm(c.worktree) === donor);
   if (chosen && !chosen.reclaimable && !acknowledgeActive) {
     return { ok: false, error: "donor_active", detail: chosen.reason, candidate: chosen };

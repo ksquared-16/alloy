@@ -57,6 +57,9 @@ const G = {
   repositories: [],
   repositorySheet: null,
   laneWizard: null,
+  // Only ever set at one moment: a lane was created, it needs a slot, and every
+  // slot is held. There is no route to this and no way to open it deliberately.
+  slotReclaim: null,
   cancelPending: false,
   blockingScreen: null,
   screenPending: null,
@@ -1414,6 +1417,7 @@ function paint() {
     repositories: G.repositories,
     repositorySheet: G.repositorySheet,
     laneWizard: G.laneWizard,
+    slotReclaim: G.slotReclaim,
     cancelPending: G.cancelPending,
     blockingScreen: G.blockingScreen,
     screenPending: G.screenPending,
@@ -1909,12 +1913,105 @@ async function submitCreate() {
     G.connect.name = "";
     G.connect.error = null;
     try { await fetchLanes(); } catch { /* */ }
+    /*
+     * THE LANE EXISTS AND WORKS; WHAT IT LACKS IS A PORT.
+     *
+     * A slotless creation is a success, not a failure — the lane is registered
+     * and can be sent instructions. So the operator is not blocked here; they
+     * are OFFERED a slot, and "leave it without one" is a real answer that
+     * takes them straight to the lane.
+     */
+    if (j.workspace?.slotless === true && j.workspace?.worktree_path) {
+      const opened = await openSlotReclaim({
+        laneId: id,
+        laneLabel: j.lane?.label || j.lane?.name || "The new lane",
+        worktree: String(j.workspace.worktree_path).split("/").filter(Boolean).pop(),
+      });
+      if (opened) { paint(); return; }
+    }
     if (id) location.hash = View.laneDetailHash(id);
   } catch {
     G.connect.submitting = false;
     G.connect.error = "Could not reach the Gateway.";
     paint();
   }
+}
+
+/**
+ * OPEN THE SLOT CHOICE, or decline to.
+ *
+ * Returns false when there is nothing worth asking about — no reclaimable
+ * candidate — because putting a dialog in front of someone whose only options
+ * are all disabled is worse than saying nothing.
+ */
+async function openSlotReclaim({ laneId, laneLabel, worktree }) {
+  try {
+    const r = await gwFetch(`/api/lanes/slots/reclaim-candidates?for=${encodeURIComponent(worktree)}`);
+    const j = await r.json();
+    const candidates = Array.isArray(j.candidates) ? j.candidates : [];
+    if (!candidates.some((c) => c.reclaimable)) return false;
+    G.slotReclaim = {
+      laneId, laneLabel, worktree, candidates,
+      consequence: j.consequence || null,
+      // NOTHING IS PRESELECTED, not even the unowned slot. Taking a port from
+      // another lane is a deliberate act, and a pre-ticked radio is how a
+      // deliberate act becomes an accidental one.
+      selected: null, busy: false, error: null,
+    };
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function closeSlotReclaim() {
+  const laneId = G.slotReclaim?.laneId || null;
+  G.slotReclaim = null;
+  paint();
+  if (laneId) location.hash = View.laneDetailHash(laneId);
+}
+
+async function confirmSlotReclaim() {
+  const st = G.slotReclaim;
+  if (!st || !st.selected || st.busy) return;
+  st.busy = true;
+  st.error = null;
+  paint();
+  let j = null;
+  try {
+    const r = await gwFetch("/api/lanes/slots/reclaim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ from_worktree: st.selected, to_worktree: st.worktree }),
+    });
+    j = await r.json();
+  } catch {
+    st.busy = false;
+    st.error = "Could not reach the Gateway. Nothing was changed.";
+    paint();
+    return;
+  }
+  st.busy = false;
+  if (!j?.ok) {
+    /*
+     * A REFUSAL IS NOT A DEAD END. The server re-ranks at mutation time, so a
+     * lane that started working between the render and the click is refused —
+     * and hands back the CURRENT list, which is what the operator now chooses
+     * from. Their stale selection is cleared rather than left ticked against a
+     * row that is no longer takeable.
+     */
+    if (Array.isArray(j?.candidates)) st.candidates = j.candidates;
+    if (j?.consequence) st.consequence = j.consequence;
+    st.selected = null;
+    st.error = j?.detail || View.slotReclaimErrorText?.(j?.error) || "That slot could not be taken. Here is what is available now.";
+    paint();
+    return;
+  }
+  const laneId = st.laneId;
+  G.slotReclaim = null;
+  try { await fetchLanes(); } catch { /* */ }
+  paint();
+  if (laneId) location.hash = View.laneDetailHash(laneId);
 }
 
 async function fetchCandidates() {
@@ -2427,6 +2524,25 @@ document.addEventListener("paste", (e) => {
   const btn = document.querySelector("[data-gw-login-submit]");
   if (btn) btn.disabled = false;
 });
+
+document.addEventListener("click", (e) => {
+  const pick = e.target?.closest?.("[data-gw-reclaim-pick]");
+  if (pick && G.slotReclaim && !pick.disabled) {
+    G.slotReclaim.selected = pick.getAttribute("data-gw-reclaim-pick");
+    G.slotReclaim.error = null;
+    paint();
+    return;
+  }
+  if (e.target?.closest?.("[data-gw-reclaim-cancel]")) {
+    // Cancelling changes nothing at all: the lane keeps the slotless
+    // registration it was already created with.
+    closeSlotReclaim();
+    return;
+  }
+  if (e.target?.closest?.("[data-gw-reclaim-confirm]")) {
+    confirmSlotReclaim();
+  }
+}, true);
 
 document.addEventListener("submit", (e) => {
   const login = e.target?.closest?.("[data-gw-login]");
