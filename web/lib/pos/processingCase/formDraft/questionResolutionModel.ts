@@ -532,6 +532,10 @@ export function expandQuestionsForDraftSave(
                 section: question.section,
                 required: question.required,
                 ...(isOtherAdult ? {} : { field_source: registrySource("guardian", "guardian_last_name", "guardian_last_name") }),
+                // Both halves came from ONE printed box, so both carry that box's provenance — as the
+                // child split already did. Without it the surname had no destination on the source
+                // document and the paperwork printed a first name where a full name belonged.
+                ...pdfProvenance,
             });
             continue;
         }
