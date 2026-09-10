@@ -70,6 +70,8 @@ import {
   migrationPostconditionSql,
   migrationPostconditionDescription,
 } from "./trusted-host-migrate.mjs";
+import { PRODUCTION_APPLY_TARGETS } from "./trusted-host-production-migrate.mjs";
+
 import { appendTimelineEvent } from "./timeline.mjs";
 import { attachEvidence } from "./evidence.mjs";
 
@@ -625,6 +627,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return executeMigrationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION) {
+    return executePromotedMigrationTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH) {
     return executePushTrustedHostAction(action, { actor, nowMs, grant });
@@ -1324,6 +1329,111 @@ export function executeMigrationTrustedHostAction(action, { actor = "director", 
     return failedAction;
   }
   const result = { ...publicMigrationResult(out), ok: true };
+  action.result = result;
+  return completeTrustedAction(action, result, { nowMs });
+}
+
+/**
+ * Apply promoted migrations to the PRODUCTION deployed primary.
+ *
+ * ── WHY IT IS A SEPARATE EXECUTOR AND NOT A FLAG ──
+ *
+ * The batch machinery is shared with the staging path deliberately — artifact
+ * resolution out of the git object store, per-file hash verification, ordered
+ * execution, stop-on-first-failure and ledger inspection are the properties
+ * that matter most, and a second implementation of them would drift. What is
+ * NOT shared is the decision about which database may be touched.
+ *
+ * ── THE TARGET IS ASSERTED HERE, NOT ASSUMED ──
+ *
+ * `trusted-host-apply-migration.sh` takes no target argument: it applies to the
+ * single DATABASE_URL the trusted server env carries. So "which database did
+ * that write to" is answered by host configuration, not by the request — and
+ * that is exactly the kind of coincidence that is true until it is not. The
+ * request already pinned the target to a registered production target; this
+ * asserts it again at the moment of execution, so a normalized input that
+ * somehow reached here naming anything else refuses instead of writing to
+ * whatever happens to be configured.
+ */
+export function executePromotedMigrationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const inputs = action.inputs || {};
+  const target = String(inputs.target || inputs.environment || "").trim().toLowerCase();
+  if (!PRODUCTION_APPLY_TARGETS.includes(target)) {
+    return failTrustedAction(
+      action,
+      "target_not_registered_production",
+      `Refusing to apply: ${target || "(no target)"} is not a registered production target.`,
+      { nowMs },
+    );
+  }
+  const migrations = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+  if (!migrations.length) {
+    return failTrustedAction(action, "no_migrations_requested",
+      "A production apply must name the migrations it applies.", { nowMs });
+  }
+  // Ordered, and PROVEN ordered rather than assumed: applying out of order is a
+  // schema corruption that reports success.
+  const versions = migrations.map((m) => String(m.version || ""));
+  if (versions.join(",") !== [...versions].sort().join(",")) {
+    return failTrustedAction(action, "nondeterministic_migration_order",
+      "Migrations must be applied in ascending version order.", { nowMs });
+  }
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  const runners = migrationRunnersForTests || {};
+  const out = applyMigrationBatch(inputs, {
+    inspectLedger: runners.inspectLedger || defaultInspectLedger,
+    applyFile: runners.applyFile || defaultApplyMigrationFile,
+    readContent: runners.readContent || readMigrationContent,
+    nowMs,
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets",
+      "Migration result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    const failed = out?.results?.find((r) => !r.ok);
+    const publicResult = publicMigrationResult(out);
+    const failedAction = failTrustedAction(
+      action,
+      failed?.code || "apply_failed",
+      failed?.detail || "Migration batch stopped on failure.",
+      { nowMs },
+    );
+    if (failedAction.action) {
+      // The partial record is preserved: which migrations ran, which did not,
+      // and where it stopped. A production apply that fails halfway is exactly
+      // the case where "what actually happened" must survive.
+      failedAction.action.result = {
+        ...publicResult,
+        ok: false,
+        target,
+        code: failed?.code || "apply_failed",
+        detail: failed?.detail || "Migration batch stopped on failure.",
+      };
+      writeAction(failedAction.action);
+    }
+    return failedAction;
+  }
+  // POST-APPLY PARITY IS NOT ASSERTED HERE, and that is deliberate. A successful
+  // exit proves migrations ran, never that the deployed primary now satisfies
+  // the revision — only a governed census establishes that. The result says so
+  // explicitly so no reader mistakes execution for proof.
+  const result = {
+    ...publicMigrationResult(out),
+    ok: true,
+    target,
+    recensus_required: true,
+  };
   action.result = result;
   return completeTrustedAction(action, result, { nowMs });
 }
@@ -2091,6 +2201,40 @@ export function fulfillDatabaseMigrationForMission(missionId, {
       error: "authorization_required",
       action: auth.action,
     };
+  }
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * The production sibling of fulfillDatabaseMigrationForMission. Same
+ * request -> authorize -> execute shape, different action type, so an approval
+ * minted for a staging apply can never be spent here.
+ */
+export function fulfillPromotedMigrationForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+  authorizationId = null,
+  exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION,
+    inputs,
+    nowMs,
+    authorizationContext: exactContext,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) {
+    return { ok: false, error: "authorization_required", action: auth.action };
   }
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
