@@ -512,22 +512,43 @@ function normalizeMigrationList(inputs, ctx) {
   return { ok: true, list };
 }
 
-export function validateMigrationInputs(inputs = {}, {
+/**
+ * NO SQL AUTHORED BY A CALLER, EVER, ON ANY TARGET.
+ *
+ * Shared by every migration entry point rather than re-typed per action: a
+ * second copy is a second place to forget a field name, and this is the check
+ * whose absence would make every other control decorative.
+ */
+export function assertNoArbitrarySql(inputs = {}) {
+  if (inputs.sql || inputs.statement || inputs.body || inputs.database_url || inputs.databaseUrl) {
+    return { ok: false, code: "arbitrary_sql_rejected", detail: "Arbitrary SQL is not a registered trusted-host action." };
+  }
+  return { ok: true };
+}
+
+/**
+ * Everything a migration request must prove REGARDLESS of target.
+ *
+ * ── WHY THIS IS FACTORED OUT RATHER THAN COPIED ──
+ *
+ * Production needs the identical artifact discipline this function already
+ * enforces: a real commit, promoted lineage, canonical paths, no duplicate
+ * versions, content read from the git object store rather than a working copy.
+ * Copying it to gain one extra environment would mean two implementations of
+ * the rules that matter most, drifting apart exactly where review is hardest.
+ *
+ * So the ENVIRONMENT DECISION stays with the caller and everything else is
+ * shared. `validateMigrationInputs` still refuses production itself, in its own
+ * body, unchanged — this factoring gives production nothing.
+ */
+export function validateMigrationRequestCore(inputs = {}, {
+  environment,
+  actionType = "database.apply_migration",
   repoRoot = null,
   git = defaultGit,
   fetchIfMissing = true,
   stagingRef = "origin/staging",
 } = {}) {
-  if (inputs.sql || inputs.statement || inputs.body || inputs.database_url || inputs.databaseUrl) {
-    return { ok: false, code: "arbitrary_sql_rejected", detail: "Arbitrary SQL is not a registered trusted-host action." };
-  }
-  const environment = envName(inputs.environment || inputs.target || "staging");
-  if (BLOCKED_ENVIRONMENTS.includes(environment) || environment === "production") {
-    return { ok: false, code: "production_database_rejected", detail: "Production database targets are not registered." };
-  }
-  if (!ALLOWED_ENVIRONMENTS.includes(environment)) {
-    return { ok: false, code: "environment_not_allowed", detail: `environment must be one of: ${ALLOWED_ENVIRONMENTS.join(", ")}` };
-  }
   const expectedSha = String(inputs.expected_sha || inputs.expectedSha || "").trim().toLowerCase();
   if (!/^[a-f0-9]{7,40}$/.test(expectedSha)) {
     return { ok: false, code: "missing_expected_sha", detail: "expected_sha is required" };
@@ -582,7 +603,7 @@ export function validateMigrationInputs(inputs = {}, {
   return {
     ok: true,
     normalized: {
-      actionType: "database.apply_migration",
+      actionType,
       environment,
       repository: String(inputs.repository || inputs.repo || "").trim() || null,
       expectedSha: reach.fullSha || expectedSha,
@@ -595,6 +616,40 @@ export function validateMigrationInputs(inputs = {}, {
       dedupeKey: `migrate:${environment}:${expectedSha.slice(0, 12)}:${migrations.list.map((m) => m.version).join(",")}`,
     },
   };
+}
+
+/**
+ * The NON-PRODUCTION migration entry point. Its refusal of production is here,
+ * in its own body, and is not reachable around: a production target is rejected
+ * before any other work, and this action's normalized output always carries
+ * actionType "database.apply_migration".
+ *
+ * Production application is a DIFFERENT action with a different key, different
+ * required authority and its own preconditions — see
+ * `trusted-host-production-migrate.mjs`. That separation is deliberate: an
+ * operator reading an approval card must be able to tell the two apart, and an
+ * approval minted for a staging apply must never be spendable on production.
+ */
+export function validateMigrationInputs(inputs = {}, {
+  repoRoot = null,
+  git = defaultGit,
+  fetchIfMissing = true,
+  stagingRef = "origin/staging",
+} = {}) {
+  const noSql = assertNoArbitrarySql(inputs);
+  if (!noSql.ok) return noSql;
+  const environment = envName(inputs.environment || inputs.target || "staging");
+  if (BLOCKED_ENVIRONMENTS.includes(environment) || environment === "production") {
+    return { ok: false, code: "production_database_rejected", detail: "Production database targets are not registered." };
+  }
+  if (!ALLOWED_ENVIRONMENTS.includes(environment)) {
+    return { ok: false, code: "environment_not_allowed", detail: `environment must be one of: ${ALLOWED_ENVIRONMENTS.join(", ")}` };
+  }
+  return validateMigrationRequestCore(inputs, {
+    environment,
+    actionType: "database.apply_migration",
+    repoRoot, git, fetchIfMissing, stagingRef,
+  });
 }
 
 /**

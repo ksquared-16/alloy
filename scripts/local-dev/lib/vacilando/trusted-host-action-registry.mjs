@@ -10,6 +10,7 @@ import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
+import { validateProductionMigrationInputs } from "./trusted-host-production-migrate.mjs";
 import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
 import { validateRestoreDeployedQaSessionInputs } from "./deployed-qa-session-restore-action.mjs";
 import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
@@ -31,6 +32,7 @@ export const ACTION_TYPES = Object.freeze({
   REPOSITORY_PUSH: "repository.push",
   PROMOTION_OPEN_PR: "promotion.open_pr",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
+  DATABASE_APPLY_PROMOTED_MIGRATION: "database.apply_promoted_migration",
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
   ENVIRONMENT_RESTORE_DEPLOYED_QA_SESSION: "environment.restore_deployed_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
@@ -559,6 +561,49 @@ function defineLaneDispatchMeasurementInstruction() {
   };
 }
 
+/**
+ * Apply a promoted migration to the PRODUCTION deployed primary.
+ *
+ * A SEPARATE REGISTRATION, not a flag on the staging one. Two actions cannot be
+ * confused by an operator reading an approval card, and an approval minted for
+ * a staging apply can never be spent on the production database — which is
+ * exactly the substitution this boundary exists to refuse. The staging action
+ * keeps refusing production in its own body; nothing here loosens it.
+ *
+ * `alloy_deployed_primary` stays production-classed. This does not make it less
+ * protected; it gives the protection an authorized operator.
+ */
+function defineDatabaseApplyPromotedMigration() {
+  return {
+    actionType: ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION,
+    version: 1,
+    title: "Apply a promoted migration to the deployed primary",
+    requiredCapability: "trusted_host.database.migrate_production",
+    riskClass: "privileged_write",
+    // Production mutation is never delegable and never satisfied by a policy
+    // gate. The single human decision in this whole loop is this one.
+    operatorApprovalRequired: true,
+    delegable: false,
+    timeoutMs: 600_000,
+    // ONE ATTEMPT. A migration that may have partially executed must not be
+    // replayed by a retry policy that cannot know whether it ran.
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["target", "expectedSha", "migrations"],
+    },
+    outputSchema: { target: "string", migrations: "array", recensus_required: "boolean" },
+    evidenceSchema: [
+      "migration_path", "expected_sha", "ledger", "execution_audit",
+      "parity_before", "parity_gap", "director_approval", "post_apply_census_required",
+    ],
+    validateInputs(inputs = {}) {
+      return validateProductionMigrationInputs(inputs, {
+        repoRoot: inputs.worktreePath || inputs.worktree_path || inputs.artifactRoot,
+      });
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -707,6 +752,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
   [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE, defineRetireWorktree()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
+  [ACTION_TYPES.DATABASE_APPLY_PROMOTED_MIGRATION, defineDatabaseApplyPromotedMigration()],
   [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING, defineCapacitySetProviderCeiling()],
   [ACTION_TYPES.HOST_INSTALL_TOOLKIT, defineHostInstallToolkit()],
   [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION, defineLaneDispatchMeasurementInstruction()],
