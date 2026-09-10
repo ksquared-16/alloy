@@ -86,8 +86,15 @@ last_reviewed: 2026-07-12
         const baselinePath = path.join(repoRoot, "scripts/docs-lint-baseline.json");
         const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
         expect(baseline.summary["broken-link"]).toBeGreaterThan(100);
-        // Active-tree targets cleared; historical debt only in broken-link / orphan-canonical
-        expect(baseline.summary["canonical-sprint-dependency"] ?? 0).toBe(0);
-        expect(baseline.summary["duplicate-basename"] ?? 0).toBe(0);
+        // generated-boundary is genuinely cleared: `generated` is now a declared property of a
+        // document rather than an assumption about its directory, so docs/api's hand-authored
+        // doctrine is no longer flagged as defective generator output.
+        expect(baseline.summary["generated-boundary"] ?? 0).toBe(0);
+        // These two are NOT cleared. Both are concentrated in docs/platform/planning/, the
+        // execution tree that still sits inside the canonical doctrine directory; relocating it
+        // is an open decision. Asserting zero here previously made the test pass by reading a
+        // stale baseline file while the repository carried 6 and 10 respectively.
+        expect(baseline.summary["canonical-sprint-dependency"] ?? 0).toBeGreaterThan(0);
+        expect(baseline.summary["duplicate-basename"] ?? 0).toBeGreaterThan(0);
     });
 });
