@@ -1519,6 +1519,17 @@ export function operatorState(work, lane = null) {
   // A completed run that filed no account is not Ready — Ready would say the
   // turn is finished AND accounted for, and only the first half is true.
   if (key === "completion_unreported") return OPERATOR_STATE.ATTENTION;
+
+  // MATCH THE BAND, NOT ONLY THE KEYS IN IT.
+  //
+  // The two lines above are key equalities, so a THIRD attention state added to
+  // the resolver later would miss both and fall all the way through to READY —
+  // the most reassuring answer this function can give, handed to a lane the
+  // resolver had just flagged as worth looking at. Fail-open, and silent.
+  // Matching the group categorises a new cause correctly the moment it exists;
+  // it renders as the generic "Attention" until it earns a plain label in
+  // ATTENTION_CAUSE_LABEL, which is a wording gap rather than a wrong answer.
+  if (group === "attention") return OPERATOR_STATE.ATTENTION;
   // Unread completion is attention without obligation, so it is answered here
   // rather than folding into NEEDS_YOU above.
   if (key === "completed_unread") return OPERATOR_STATE.COMPLETED_UNREAD;
@@ -1671,6 +1682,41 @@ export function finishClaimIsMeaningful(run) {
   return FINISH_CLAIM_STATES.includes(String(run?.state || "").toUpperCase());
 }
 
+/**
+ * "ATTENTION" NAMES A CATEGORY, NOT A FACT — SO IT MUST CARRY ITS CAUSE.
+ *
+ * THE DEFECT, reported by the operator looking at their own fleet: "I'm seeing
+ * ! Attention on the left side nav for status and then in the lane I see
+ * Attention · Claude... I don't understand what attention means in this
+ * context." They were right, and the test is the rest of the vocabulary: every
+ * other operator state NAMES what is true. Working is working. Ready can take
+ * work. Offline has no runtime. Needs you is being asked. Failed failed.
+ * "Attention" says only that something is worth looking at, and then stops —
+ * on the one surface whose whole job is to answer "what is this lane doing".
+ *
+ * There are exactly two ways into it, and each has a plain answer:
+ *
+ *   provider_active       Claude is busy in the lane's worktree with NO
+ *                         Execution Run open, so the work exists and nothing is
+ *                         tracking it. That is "Working · untracked", which
+ *                         says both halves.
+ *
+ *   completion_unreported The run finished and no account of the turn survived
+ *                         (no completion_report.report_id). The work is done;
+ *                         what is missing is the report. "Finished · no report".
+ *
+ * This is NOT the runtime phrase leaking back into the headline. The rule that
+ * removed it — a lane must not be described by a subsystem condition that
+ * CONFLICTS with its execution state — is untouched: these two do not conflict
+ * with the execution state, they ARE it, and "Attention" was erasing them. One
+ * projection still owns the answer, and every surface still reads this one
+ * function; it just no longer answers with the name of a bucket.
+ */
+export const ATTENTION_CAUSE_LABEL = Object.freeze({
+  provider_active: "Working · untracked",
+  completion_unreported: "Finished · no report",
+});
+
 export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
   const state = operatorState(work, lane);
   const progress = laneProgress(lane?.execution_run, { nowMs });
@@ -1678,7 +1724,9 @@ export function laneOperatorStatus(lane, work, { nowMs = Date.now() } = {}) {
     && finishClaimIsMeaningful(lane?.execution_run);
   return {
     state,
-    label: OPERATOR_STATE_LABEL[state],
+    // The category name is the fallback, never the answer when a cause is known.
+    label: (state === OPERATOR_STATE.ATTENTION && ATTENTION_CAUSE_LABEL[work?.key])
+      || OPERATOR_STATE_LABEL[state],
     tone: OPERATOR_STATE_TONE[state],
     live: state === OPERATOR_STATE.WORKING,
     // Progress rides with identity, not in a card of its own. Only a FRESH

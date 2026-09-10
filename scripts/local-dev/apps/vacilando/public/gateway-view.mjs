@@ -66,7 +66,33 @@ export const LIST_POLL_MS = 15000;
 export const TELEMETRY_POLL_MS = 15000;
 export const DESKTOP_MIN_PX = 861;
 export const STALE_WORK_MS = 120_000;
-export const LANE_LIST_GROUP_ORDER = Object.freeze(["active", "needs_input", "idle", "completed", "offline"]);
+/**
+ * WHERE EACH STATE GROUP SITS IN THE LIST, TOP TO BOTTOM.
+ *
+ * `attention` WAS MISSING, AND MISSING MEANT LAST. `canonicalLaneWorkState`
+ * returns six groups; this table listed five. `sortLanesForIndex` ranks an
+ * unlisted group at `LANE_LIST_GROUP_ORDER.length` — BELOW offline — so every
+ * lane in the attention band sank to the very bottom of the list, silently.
+ *
+ * That is the operator's report, with a mechanism: the Payments lane reading
+ * "Provider active" (key `provider_active`, group `attention`) is a lane whose
+ * provider is busy with no Execution Run open, which is exactly the case worth
+ * looking at — and it was rendered dead last, under lanes that had been idle
+ * for days and under offline ones. "Actively working lanes move toward the
+ * bottom" was not a sorting preference; it was a group with no rank.
+ *
+ * ORDER: running work first, because it is what the fleet is doing. Then the
+ * two bands that want a person — a direct question (`needs_input`) ahead of a
+ * nudge (`attention`), because being asked outranks being warned. Then lanes
+ * that can take work, then terminal, then offline.
+ *
+ * A GROUP ADDED LATER MUST NOT REPEAT THIS. The failure was silent in both
+ * directions: nothing threw, and the list merely looked wrong. A control now
+ * asserts that every group literal `canonicalLaneWorkState` can return appears
+ * here, so the next group added to that resolver cannot sink without failing a
+ * test first.
+ */
+export const LANE_LIST_GROUP_ORDER = Object.freeze(["active", "needs_input", "attention", "idle", "completed", "offline"]);
 
 export function outputIsOlder(next, current) {
   if (!next || !current) return false;

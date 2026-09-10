@@ -32,6 +32,7 @@
  * the work.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   OPERATOR_STATE,
@@ -41,6 +42,10 @@ import {
   renderComposer,
   laneOperatorStatus,
   operatorState,
+  operatorStatusLine as opLine,
+  ATTENTION_CAUSE_LABEL,
+  LANE_LIST_GROUP_ORDER,
+  OPERATOR_STATE_LABEL,
   operatorStatusLine,
   renderLaneList,
   sortLanesForIndex,
@@ -296,11 +301,69 @@ test("R7. Working -> Ready when execution ends, and the lane stays where recency
   const now = Date.now();
   const working = laneWith({ lane_id: "l", label: "l", execution_run: { state: "EXECUTING", updated_at: at(now) }, provider_activity: { activity: "working" } });
   assert.equal(laneOperatorStatus(working, canonicalLaneWorkState(working)).label, "Working");
-  const done = laneWith({ lane_id: "l", label: "l", previous_run: { state: "COMPLETE", completed_at: at(now) }, provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" } });
-  assert.equal(laneOperatorStatus(done, canonicalLaneWorkState(done)).label, "Ready");
+  // A run that ENDED CLEANLY and has been read. Written this way deliberately:
+  // the first version of this control used a bare COMPLETE previous_run, which
+  // resolves to `completion_unreported` — a run that finished without a summary
+  // — and that is an attention state, not Ready. See R11.
+  const done = laneWith({
+    lane_id: "l", label: "l",
+    // report_id is the resolver's exact predicate for "an account of this turn
+    // survives" — measured on this host across 104 terminal runs, present for
+    // exactly the 82 that carry a durable agent report and absent for the 22
+    // that do not. A summary string is not the predicate.
+    previous_run: { state: "COMPLETE", completed_at: at(now), completion_report: { report_id: "rep_1", summary: "done" } },
+    provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" },
+    unseen_notifications: 0,
+  });
+  assert.equal(laneOperatorStatus(done, canonicalLaneWorkState(done)).label, "Ready",
+    `runtime resolved to ${canonicalLaneWorkState(done).key}`);
   // And it is the most recently active lane, so it heads the non-working band.
   const others = [laneWith({ lane_id: "old", label: "old", last_activity_ms: now - 3600e3 })];
   assert.deepEqual(sortLanesForIndex([...others, done], { nowMs: now }).map((l) => l.lane_id), ["l", "old"]);
+});
+
+test("R10. EVERY group the runtime can return has a rank", () => {
+  // THE DEFECT THIS CLOSES, measured on staging: canonicalLaneWorkState returns
+  // six groups and LANE_LIST_GROUP_ORDER listed five. sortLanesForIndex ranks an
+  // unlisted group at LANE_LIST_GROUP_ORDER.length — BELOW offline — so every
+  // lane in the `attention` band sank to the bottom of the list, silently.
+  // Nothing threw; the list merely looked wrong.
+  const src = readFileSync(new URL("../apps/vacilando/public/gateway-view.mjs", import.meta.url), "utf8");
+  const resolver = src.slice(src.indexOf("export function canonicalLaneWorkState"));
+  const body = resolver.slice(0, resolver.indexOf("\nexport function ", 1));
+  const groups = [...new Set([...body.matchAll(/group: "([a-z_]+)"/g)].map((m) => m[1]))];
+  assert.ok(groups.length >= 6, `expected the resolver to name several groups, found ${groups.join(", ")}`);
+  for (const g of groups) {
+    assert.ok(LANE_LIST_GROUP_ORDER.includes(g),
+      `group "${g}" is produced by canonicalLaneWorkState but has no rank, so every lane in it sorts below offline`);
+  }
+});
+
+test("R11. a lane wanting attention is near the top, not under the offline ones", () => {
+  const now = Date.now();
+  // The reported case: the provider is busy with no Execution Run open, which
+  // renders "Provider active". It is fifteen minutes stale and still outranks a
+  // lane touched seconds ago, because attention is a state and not a timestamp.
+  const attn = laneWith({ lane_id: "attn", label: "attn", claude: { presence: "present" }, provider_activity: { activity: "working" }, last_activity_ms: now - 9e5 });
+  assert.equal(canonicalLaneWorkState(attn, { nowMs: now }).group, "attention");
+  const lanes = [
+    laneWith({ lane_id: "off", label: "off", runtime: "offline" }),
+    laneWith({ lane_id: "idle", label: "idle", last_activity_ms: now - 1e3 }),
+    attn,
+    laneWith({ lane_id: "work", label: "work", execution_run: { state: "EXECUTING", updated_at: at(now - 5e3) }, provider_activity: { activity: "working" } }),
+  ];
+  assert.deepEqual(sortLanesForIndex(lanes, { nowMs: now }).map((l) => l.lane_id), ["work", "attn", "idle", "off"]);
+});
+
+test("R12. a run that finished without a summary is attention, not Ready", () => {
+  // The other half of R7: "the run closed" and "the work was reported" are
+  // different facts, and only the second one means the lane needs nobody.
+  const now = Date.now();
+  const unreported = laneWith({ previous_run: { state: "COMPLETE", completed_at: at(now) }, provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" } });
+  const work = canonicalLaneWorkState(unreported, { nowMs: now });
+  assert.equal(work.group, "attention");
+  // It names WHICH attention: the run is done and the account of it is missing.
+  assert.equal(laneOperatorStatus(unreported, work, { nowMs: now }).label, "Finished · no report");
 });
 
 test("R8. one ordering model, so the rail and the list cannot drift", () => {
@@ -372,6 +435,70 @@ test("E7. every model symbol the view USES is imported, not merely re-exported",
   // tests import through the same re-export. Rendering is the check.
   assert.doesNotThrow(() => renderComposer({ draft: "x" }));
   assert.doesNotThrow(() => renderLaneList([{ lane_id: "l", label: "L" }], null, {}));
+});
+
+// ---------------------------------------------------------------------------
+// A — A STATE NAME MUST SAY WHAT IS TRUE (reported by the operator)
+// ---------------------------------------------------------------------------
+
+test("A1. every operator label names a fact, not a category", () => {
+  // The report, verbatim: "I'm seeing ! Attention on the left side nav for
+  // status and then in the lane I see Attention · Claude... I don't understand
+  // what attention means in this context." Every other label in this vocabulary
+  // names what is true — Working is working, Ready can take work, Offline has no
+  // runtime, Needs you is being asked. "Attention" said only that something was
+  // worth looking at, on the surface whose whole job is to say what.
+  for (const key of Object.keys(ATTENTION_CAUSE_LABEL)) {
+    const label = laneOperatorStatus(laneWith(), { key, group: "attention" }).label;
+    assert.notEqual(label, OPERATOR_STATE_LABEL.attention, `${key} still renders the bucket name`);
+    assert.ok(label.length > 0);
+  }
+});
+
+test("A2. the two ways into Attention each say which one it is", () => {
+  // Claude is busy in the worktree with no Execution Run open: the work exists
+  // and nothing is tracking it. Both halves are in the label.
+  assert.equal(laneOperatorStatus(laneWith(), { key: "provider_active", group: "attention" }).label,
+    "Working · untracked");
+  // The run finished; what is missing is the account of it.
+  assert.equal(laneOperatorStatus(laneWith(), { key: "completion_unreported", group: "attention" }).label,
+    "Finished · no report");
+});
+
+test("A3. the cause reaches the line every surface renders", () => {
+  const st = laneOperatorStatus(laneWith(), { key: "provider_active", group: "attention" });
+  assert.equal(opLine(st, "Claude"), "Working · untracked · Claude",
+    "the nav, the lane header and the lane row all read this one line");
+});
+
+test("A4. an unrecognised attention cause is still Attention, never Ready", () => {
+  // THE FAIL-OPEN THIS CLOSES. The two causes were matched by key equality, so a
+  // third attention state added to the resolver later missed both and fell
+  // through to READY — the most reassuring answer this function can give,
+  // handed to a lane the resolver had just flagged as worth looking at.
+  const st = laneOperatorStatus(laneWith(), { key: "some_future_cause", group: "attention" });
+  assert.equal(st.state, "attention");
+  assert.equal(st.label, OPERATOR_STATE_LABEL.attention,
+    "generic until it earns a plain label — a wording gap, not a wrong answer");
+});
+
+test("A5. attention does not outrank being asked, and does not swallow the rest", () => {
+  assert.equal(operatorState({ key: "needs_input", group: "needs_input" }, laneWith()), "needs_you");
+  assert.equal(operatorState({ key: "working", group: "active", live: true }, laneWith()), "working");
+  assert.equal(operatorState({ key: "offline", group: "offline" }, laneWith()), "offline");
+  assert.equal(operatorState({ key: "idle", group: "idle" }, laneWith()), "ready");
+  // An attention lane the Director is being asked about is still Needs you:
+  // being asked outranks being warned.
+  assert.equal(operatorState({ key: "provider_active", group: "attention" },
+    laneWith({ governed_action: { status: "awaiting_operator" } })), "needs_you");
+});
+
+test("A6. the lane row shows the cause too, since it reads the same projection", () => {
+  const lane = laneWith({ label: "Backend", claude: { presence: "present" }, provider_activity: { activity: "working" } });
+  assert.equal(canonicalLaneWorkState(lane).group, "attention", "fixture reproduces the reported state");
+  const html = renderLaneList([lane], null, {});
+  assert.match(html, /class="gw-lane-posture[^"]*">Working · untracked</);
+  assert.ok(!/class="gw-lane-posture[^"]*">Attention</.test(html), "the bucket name is gone from the row");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
