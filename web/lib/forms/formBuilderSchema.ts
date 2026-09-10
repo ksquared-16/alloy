@@ -164,7 +164,20 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
         if (patch.options !== undefined && (next.type === "select" || next.type === "multiselect")) {
             (next as { static_options?: Array<{ value: string; label: string }> }).static_options = patch.options.filter((o) => o.value && o.label);
         }
-        if (patch.field_source !== undefined) {
+        /*
+         * UNBINDING IS SAYING `undefined`, SO `undefined` CANNOT MEAN "NOT MENTIONED".
+         *
+         * Every other key here uses `patch.x !== undefined` to mean "the caller did not mention
+         * this", which is right for keys cleared by passing an empty string. `field_source` has no
+         * empty form: the only way to say "this question no longer writes anywhere" is to pass
+         * undefined — the exact value that guard skipped. So choosing "Form field only" in the
+         * inspector silently did nothing, the binding survived, and a question that an
+         * administrator had deliberately unbound went on writing to a canonical field.
+         *
+         * Presence in the patch is the signal now, so an absent key still means "leave it alone"
+         * while a present-but-undefined key clears the binding.
+         */
+        if (Object.prototype.hasOwnProperty.call(patch, "field_source")) {
             const fs = patch.field_source;
             if (fs && fs.entity_type && fs.field_key) (next as { field_source?: unknown }).field_source = { entity_type: fs.entity_type, field_key: fs.field_key, ...(fs.shared_value_key ? { shared_value_key: fs.shared_value_key } : {}) };
             else delete (next as { field_source?: unknown }).field_source;
