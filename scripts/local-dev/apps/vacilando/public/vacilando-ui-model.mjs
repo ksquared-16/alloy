@@ -1416,6 +1416,7 @@ export const OPERATOR_STATE = Object.freeze({
   WORKING: "working",
   NEEDS_YOU: "needs_you",
   READY: "ready",
+  OFFLINE: "offline",
   FAILED: "failed",
 });
 
@@ -1423,6 +1424,7 @@ export const OPERATOR_STATE_LABEL = Object.freeze({
   working: "Working",
   needs_you: "Needs you",
   ready: "Ready",
+  offline: "Offline",
   failed: "Failed",
 });
 
@@ -1431,6 +1433,7 @@ export const OPERATOR_STATE_TONE = Object.freeze({
   working: "run",
   needs_you: "needs",
   ready: "",
+  offline: "",
   failed: "failed",
 });
 
@@ -1491,9 +1494,119 @@ export function operatorState(work, lane = null) {
   // resource, refreshing context. The operator does not act on any of them.
   if (work?.live === true || group === "active") return OPERATOR_STATE.WORKING;
 
-  // Everything else — idle, complete, offline, a released provider, a stale
-  // capacity claim — is a lane that can take work.
+  // OFFLINE IS NOT READY, AND CALLING IT READY IS A PROMISE THE LANE CANNOT KEEP.
+  //
+  // This projection collapsed offline into READY, on the reasoning that it is
+  // "a lane that can take work". It is not: there is no runtime to take it.
+  // Measured on the live Gateway, five of twelve lanes disagreed with their own
+  // lane rows because of this — Troubleshooting and Work Items rendered
+  // "Offline" in the list and "Ready" in navigation and the lane header, which
+  // is the same two-answers defect this projection exists to remove, sitting
+  // inside the projection itself.
+  //
+  // It ranks BELOW working and needs-you deliberately: an offline lane that is
+  // holding an actionable governed action is still Needs you, because being
+  // asked outranks whether a process is resident. It ranks ABOVE ready because
+  // between "can take work" and "cannot", the operator needs the second.
+  if (key === "offline" || group === "offline") return OPERATOR_STATE.OFFLINE;
+
+  // Everything else — idle, complete, a released provider, a stale capacity
+  // claim — is a lane that can take work.
   return OPERATOR_STATE.READY;
+}
+
+/* ---------------------------------------------------------------------------
+ * COMPOSER KEY SEMANTICS — one rule, stated once, testable without a browser.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * WHAT DOES ENTER DO IN THE INSTRUCTION COMPOSER?
+ *
+ * THE DEFECT. There was one answer for every device: Enter without Shift sends.
+ * On a phone there IS no Shift key, so the software Return key — the only way
+ * to start a new line — sent the instruction instead. Multiline instructions
+ * were not awkward from a phone, they were impossible, and every attempt at one
+ * dispatched a half-written prompt to a live agent.
+ *
+ * THE RULE DEPENDS ON THE INPUT DEVICE, NOT THE SCREEN SIZE. A narrow desktop
+ * window still has a hardware keyboard and a Shift key; an iPad in landscape is
+ * a wide screen with none. So the discriminator is the pointer: a coarse
+ * primary pointer with no hover is a touch keyboard, where Return must be a
+ * newline and the visible Send control is the only way to dispatch.
+ *
+ * DESKTOP SEMANTICS ARE PRESERVED AS FOUND, and the audit is the product's own
+ * words: the composer renders the hint "Enter to send · Shift+Enter for a new
+ * line". That is an explicit, shipped promise to the operator, so Enter-to-send
+ * is intent rather than accident and is left exactly as it is. The same hint is
+ * hidden wherever this returns "newline", so the affordance and the behaviour
+ * can never disagree.
+ *
+ * IME COMPOSITION IS NOT A SEND. `isComposing` covers browsers that set it;
+ * `keyCode === 229` covers the ones that do not — Android IMEs in particular
+ * report a composing Enter with `isComposing` false, and treating that as a
+ * send dispatches a prompt in the middle of choosing a character. Both are
+ * checked because neither is reliable alone.
+ *
+ * A MODIFIED ENTER IS NEVER A NEWLINE-BY-DEFAULT: Shift+Enter is the documented
+ * newline, and Meta/Ctrl/Alt+Enter are left to the platform rather than being
+ * silently re-bound here.
+ */
+export function composerKeyAction(event, { touchPrimary = false } = {}) {
+  if (!event || event.key !== "Enter") return "ignore";
+  if (event.isComposing === true || event.keyCode === 229) return "ignore";
+  if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return "ignore";
+  return touchPrimary ? "newline" : "send";
+}
+
+/**
+ * Does this environment type on glass?
+ *
+ * `(hover: none) and (pointer: coarse)` is the media query for a primary input
+ * that cannot hover and is finger-sized — every phone and tablet, and no mouse
+ * or trackpad. Width is deliberately not consulted: a phone in landscape and a
+ * tablet are both wide and both have no Shift key, and a narrow desktop window
+ * has one. Absence of matchMedia resolves to false, which keeps the documented
+ * desktop behaviour rather than silently disabling send.
+ */
+/**
+ * IS THERE ANYTHING TO SEND?
+ *
+ * THE DEFECT, found by tapping Send on an empty composer during the mounted
+ * proof: nothing anywhere refused it. The client had no emptiness check at all,
+ * and the Send control was disabled only while a send was in flight — so an
+ * empty tap dispatched an empty instruction to a live agent, and Enter on a
+ * desktop did the same.
+ *
+ * ATTACHMENTS COUNT AS CONTENT. A prompt that is images with no words is a real
+ * prompt, so "empty" means no text AND nothing attached — not "the textarea is
+ * blank". Whitespace alone is not content.
+ *
+ * An upload still in flight is NOT ready: sending then would silently drop the
+ * image out of the prompt, which is the case the existing in-flight check was
+ * written for. This states the same rule where the CONTROL can read it, so the
+ * button is disabled rather than the tap being refused after the fact.
+ */
+export function composerCanSend({
+  text = "",
+  attachments = [],
+  uploading = 0,
+  sending = false,
+  disabled = false,
+} = {}) {
+  if (disabled || sending) return false;
+  if (Number(uploading) > 0) return false;
+  const hasText = String(text ?? "").trim().length > 0;
+  const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+  return hasText || hasAttachments;
+}
+
+export function touchPrimaryInput(win = (typeof window !== "undefined" ? window : null)) {
+  try {
+    if (!win || typeof win.matchMedia !== "function") return false;
+    return win.matchMedia("(hover: none) and (pointer: coarse)").matches === true;
+  } catch {
+    return false;
+  }
 }
 
 /**

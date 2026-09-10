@@ -2206,6 +2206,9 @@ async function sendCurrent() {
   const ta = document.getElementById("gw-instruction");
   const instruction = ta ? ta.value : getDraft(id);
   if (!id) return;
+  // The control is disabled when there is nothing to send, but Enter reaches
+  // here too, so the rule is enforced where the send actually happens.
+  if (!View.composerCanSend({ text: instruction, attachments: G.attachments || [], uploading: G.attachmentsUploading })) return;
   if (G.sending) {
     G.notice = { kind: "err", text: View.deliveryErrorText("send_in_progress") };
     paint();
@@ -2275,16 +2278,82 @@ document.addEventListener("input", (e) => {
     const count = document.querySelector("[data-gw-count]");
     if (count) count.textContent = `${t.value.length.toLocaleString()} characters`;
     autosizeInstruction(t);
+    syncSendEnabled(t.value);
   }
 });
 
+/**
+ * RETURN ON A PHONE IS A NEW LINE, NEVER A SEND.
+ *
+ * THE DEFECT. This read `Enter && !shiftKey` and sent. A software keyboard has
+ * no Shift key, so Return — the only way a phone can start a new line — sent
+ * the instruction instead. Multiline instructions were not awkward from a
+ * phone, they were impossible, and every attempt dispatched a half-written
+ * prompt to a live agent.
+ *
+ * The rule itself lives in the model (`composerKeyAction`) so it can be stated
+ * once and tested without a browser; this supplies the one thing only the
+ * browser knows — whether the primary input is glass.
+ */
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
   const t = e.target;
   if (!t || t.id !== "gw-instruction" || t.disabled) return;
+  if (View.composerKeyAction(e, { touchPrimary: View.touchPrimaryInput(window) }) !== "send") return;
   e.preventDefault();
   sendCurrent();
 });
+
+/**
+ * ONE DELIBERATE TAP ON SEND SENDS, WITH THE KEYBOARD OPEN OR CLOSED.
+ *
+ * THE DEFECT. With the keyboard up, the first tap on Send only dismissed it; a
+ * second tap was needed to actually send. The tap was not being ignored — it
+ * was being spent on a layout change it caused itself:
+ *
+ *   1. the tap moves focus off the textarea;
+ *   2. `focusout` runs `syncComposeMode()` and `autosizeInstruction()`, which
+ *      resize the composer;
+ *   3. the keyboard starts to retract, firing `visualViewport` resize, which
+ *      rewrites `--gw-vvh` and moves the whole composer down the screen;
+ *   4. the browser then resolves the `click` — and the button is no longer
+ *      under the finger.
+ *
+ * THE FIX IS TO NOT START THAT SEQUENCE. Suppressing the default action of the
+ * pointer press keeps focus in the textarea, so the keyboard never retracts,
+ * nothing resizes, the button does not move, and the click lands on it. It is
+ * the interaction primitive, not a timer, not a synthetic click, and not a
+ * touch handler that fires the send early — a press that drags off the button
+ * still cancels, because it is still an ordinary click that decides.
+ *
+ * `mousedown` is listened for as well: not every engine emits pointer events,
+ * and the one that matters here is the focus transfer, which both cancel.
+ */
+/**
+ * Keep the Send control in step with the field WITHOUT repainting.
+ *
+ * A repaint on every keystroke would replace the textarea the operator is
+ * typing into — and with it the focus, the selection and the phone's keyboard.
+ * The one attribute that has to move is set directly.
+ */
+function syncSendEnabled(text) {
+  const btn = document.querySelector("[data-gw-send]");
+  if (!btn) return;
+  btn.disabled = !View.composerCanSend({
+    text, attachments: G.attachments || [], uploading: G.attachmentsUploading,
+    sending: G.sending, disabled: G.releasing,
+  });
+}
+
+function keepFocusForSend(e) {
+  const btn = e.target?.closest?.("[data-gw-send]");
+  if (!btn || btn.disabled) return;
+  // The textarea has to actually be the thing losing focus, or there is nothing
+  // to protect and preventing the default would suppress an ordinary press.
+  if (document.activeElement?.id !== "gw-instruction") return;
+  e.preventDefault();
+}
+document.addEventListener("pointerdown", keepFocusForSend, true);
+document.addEventListener("mousedown", keepFocusForSend, true);
 
 document.addEventListener("paste", (e) => {
   const t = e.target;
