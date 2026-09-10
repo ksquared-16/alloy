@@ -960,9 +960,19 @@ export function EnrollmentConversationCard({
                     setJustUpdated((prev) => new Set([...prev, ref]));
                 }
 
-                // `refused` and `no_change` both mean the platform did not accept the answer. The
-                // participant is told plainly and the controls stay — never an internal code.
-                if (json.data.outcome === "refused" || json.data.outcome === "no_change") {
+                /*
+                 * `refused`, `no_change` and `answer_question` all mean the platform wrote nothing
+                 * and the same turn still stands. The participant is told plainly and the controls
+                 * stay — never an internal code.
+                 *
+                 * `answer_question` is the parent having ASKED something rather than answered: they
+                 * get their answer here, and the question they were asked is still waiting.
+                 */
+                if (
+                    json.data.outcome === "refused"
+                    || json.data.outcome === "no_change"
+                    || json.data.outcome === "answer_question"
+                ) {
                     if (optimistic) setSettled((prev) => prev.slice(0, -1));
                     // The provider's own clarifying question beats the generic ask-again — same
                     // voice, same turn, no new authority.

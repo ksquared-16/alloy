@@ -300,6 +300,16 @@ export function disposeParticipantCandidate(input: {
         case "clarification_needed":
             return { action: "no_change", reason: candidate.kind };
 
+        case "question":
+            /*
+             * Nothing is validated, because nothing is being offered as a value. The question text
+             * travels so the runtime can answer it; the active need is left exactly as it was.
+             */
+            return {
+                action: "answer_question",
+                question: typeof candidate.value === "string" ? candidate.value : "",
+            };
+
         case "declined": {
             /*
              * Declining is only available where the AUTHORED control says the answer is optional.

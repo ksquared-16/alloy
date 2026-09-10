@@ -28,6 +28,7 @@ import type {
     ParticipantTurn,
     StructuredCandidate,
 } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
+import { looksLikeParticipantQuestion } from "@/lib/enrollment/participantRuntime/participantQuestionShape";
 
 /** Unambiguous affirmations only. Anything hedged falls through to clarification. */
 const AFFIRMATIVE = new Set([
@@ -108,6 +109,21 @@ export function interpretParticipantResponseDeterministically(
 
     const text = (input.text ?? "").trim().toLowerCase();
     if (!text) return { kind: "unresolved" };
+
+    /*
+     * A QUESTION IS NOT AN ANSWER, AND IS CHECKED BEFORE ANYTHING CAN BE TAKEN WHOLE.
+     *
+     * This sits above every branch below on purpose. The free-text rule further down takes the
+     * participant's words as the value, and it was reached by "What do I still need to do?" — which
+     * became a child's emergency contact first name, settled, on its way to a form that prints.
+     *
+     * Placed here it also protects the confirm branch: asking a question while a known value is on
+     * screen is not agreement with that value.
+     */
+    if (looksLikeParticipantQuestion(input.text)) {
+        // The words travel so the runtime can answer them; they are never a value.
+        return { kind: "question", value: (input.text ?? "").trim() };
+    }
 
     const normalized = text.replace(/[.!]+$/, "");
     if (UNKNOWN.has(normalized)) return { kind: "unresolved" };

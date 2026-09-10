@@ -225,7 +225,10 @@ export async function applyParticipantTurnResponse(
         needKey &&
         disposition.action !== "no_change" &&
         disposition.action !== "refused" &&
-        disposition.action !== "clarify"
+        disposition.action !== "clarify" &&
+        // THE WRITE BOUNDARY. A question persists nothing — not the words, not a candidate, not a
+        // settlement. This exclusion is the guarantee; everything else about questions is presentation.
+        disposition.action !== "answer_question"
     ) {
         /**
          * THE MERGE BASE — this request's own session snapshot, not a second read of it.
