@@ -223,14 +223,29 @@ describeLive("parent tokenized intent — live", () => {
 
         // And the resolver reads it back as this child being known away.
         const { effective } = await effectiveFor(CHILD_A, SICK_DAY);
-        expect(effective.map((e) => e.expectationId)).toContain(out.act.id);
+        const authored = effective.find((e) => e.expectationId === out.act.id);
+        expect(authored).toBeTruthy();
+
+        /*
+         * The REASON is read from the expectation this scenario authored, not
+         * from whichever one the resolver surfaced.
+         *
+         * `interpretServiceDay` answers one expectation per child, and this
+         * certification tenant accumulates them: the ledger is append-only, the
+         * run-derived dates collide across runs, and 43 days already carry more
+         * than one family-authored expectation for this child — several with
+         * both `sick` and `holiday`. Asserting the surfaced reason was asserting
+         * something about the tenant's history rather than about this submission.
+         */
+        expect((authored?.condition as { params?: { reason_key?: string } })?.params?.reason_key).toBe("sick");
+
         const interpreted = interpretServiceDay({
             siteLocationId: RIVERSIDE,
             scheduledChildIds: [CHILD_A],
             effective,
         });
+        // Any live child-away intent reads as known-away, whichever one wins.
         expect(interpreted[0]?.interpretation).toBe("known_away");
-        expect(interpreted[0]?.reasonKey).toBe("sick");
     });
 
     it("P5 — the same submission wrote nothing to the Attendance ledger", async () => {
