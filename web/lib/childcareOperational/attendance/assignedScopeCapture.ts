@@ -30,8 +30,22 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Assignment statuses that describe a commitment currently in force. */
-const LIVE_ASSIGNMENT_STATUSES = ["active", "confirmed", "scheduled"] as const;
+/**
+ * Assignment statuses that describe a commitment currently in force.
+ *
+ * MEASURED against the schema, not guessed. The CHECK constraint admits
+ * `planned`, `active`, `ending`, `ended`, `superseded` and `canceled`, and the
+ * only staff assignment in the certification fixture carries `planned` — a row
+ * an operator has committed but whose window may not have opened yet. An earlier
+ * draft of this list said `confirmed` and `scheduled`, which this schema has
+ * never had, so it would have matched nothing and denied every teacher.
+ *
+ * The three in force are the ones that have not been withdrawn. `ended`,
+ * `superseded` and `canceled` are excluded deliberately: whether the DATE window
+ * still contains the service date is a separate question, asked below, and a
+ * canceled assignment must not authorise anything even inside its old window.
+ */
+const LIVE_ASSIGNMENT_STATUSES = ["planned", "active", "ending"] as const;
 
 export type AssignedScopeResolution = {
     /** Rooms the person may capture in. Empty means no applicable assignment. */
