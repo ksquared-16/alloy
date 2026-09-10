@@ -246,6 +246,16 @@ export async function dbGetSubmission(supabase: SupabaseClient, orgId: string, s
     return supabase.from("form_submissions").select("*").eq("org_id", orgId).eq("id", submissionId).maybeSingle();
 }
 
+/**
+ * A document linked to a submission, as admin review consumes it.
+ *
+ * `name` and `document_type` are the CONSUMER's names for the document's title and kind. The
+ * `documents` table calls them `title` and `doc_type` and has never had a `name` or a
+ * `document_type` column, so both loaders below select the real columns and rename here. Selecting
+ * the consumer's names straight from the table made every read fail with
+ * `column documents.name does not exist` — which 500'd the submission detail route and the packet
+ * review rollup, so a completed packet's signed paperwork could not be opened at all.
+ */
 export type FormSubmissionLinkedDocument = {
     role: string;
     junction_created_at: string;
@@ -277,7 +287,7 @@ export async function dbListSubmissionLinkedDocuments(
 
     const { data: docs, error: dErr } = await supabase
         .from("documents")
-        .select("id, name, original_filename, document_type, status, created_at")
+        .select("id, title, original_filename, doc_type, status, created_at")
         .eq("org_id", orgId)
         .in("id", ids);
     if (dErr) return { data: null, error: dErr };
@@ -289,9 +299,9 @@ export async function dbListSubmissionLinkedDocuments(
         const doc = docById.get(row.document_id) as
             | {
                   id: string;
-                  name: string | null;
+                  title: string | null;
                   original_filename: string | null;
-                  document_type: string | null;
+                  doc_type: string | null;
                   status: string | null;
                   created_at: string | null;
               }
@@ -302,9 +312,9 @@ export async function dbListSubmissionLinkedDocuments(
             junction_created_at: row.created_at,
             document: {
                 id: doc.id,
-                name: doc.name,
+                name: doc.title,
                 original_filename: doc.original_filename,
-                document_type: doc.document_type,
+                document_type: doc.doc_type,
                 status: doc.status,
                 created_at: doc.created_at,
             },
@@ -340,7 +350,7 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
     const ids = [...new Set(rows.map((r: { document_id: string }) => r.document_id))];
     const { data: docs, error: dErr } = await supabase
         .from("documents")
-        .select("id, name, original_filename, document_type, status, created_at")
+        .select("id, title, original_filename, doc_type, status, created_at")
         .eq("org_id", orgId)
         .in("id", ids);
     if (dErr) return { data: null, error: dErr };
@@ -362,9 +372,9 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
         const doc = docById.get(j.document_id) as
             | {
                   id: string;
-                  name: string | null;
+                  title: string | null;
                   original_filename: string | null;
-                  document_type: string | null;
+                  doc_type: string | null;
                   status: string | null;
                   created_at: string | null;
               }
@@ -375,9 +385,9 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
             junction_created_at: j.created_at,
             document: {
                 id: doc.id,
-                name: doc.name,
+                name: doc.title,
                 original_filename: doc.original_filename,
-                document_type: doc.document_type,
+                document_type: doc.doc_type,
                 status: doc.status,
                 created_at: doc.created_at,
             },
