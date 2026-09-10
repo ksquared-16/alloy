@@ -312,6 +312,14 @@ describe("W-43 — the failed-read answer is derived from W-7's denial, not rest
         expect(scopeAnswerForFailedProfileRead()).toEqual({
             departmentScope: "restricted",
             siteScope: "restricted",
+            /*
+             * The attendance capture policy is MOOT under denial: denyAll already
+             * withholds every site, so no capture can reach a location whatever
+             * this says. `site` rather than `assigned` because `assigned` would
+             * read as a second, independent restriction and invite a later reader
+             * to treat denial as a narrowing rather than a refusal.
+             */
+            attendanceCaptureScope: "site",
             denyAll: true,
         });
     });

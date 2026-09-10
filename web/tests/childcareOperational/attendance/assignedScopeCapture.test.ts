@@ -117,3 +117,74 @@ describe("unknown is never permission", () => {
         if (!empty.ok) expect(empty.code).toBe("no_applicable_assignment");
     });
 });
+
+/**
+ * T7 — composition.
+ *
+ * The first attempt expressed this narrowing as a permission key whose presence
+ * restricted access. That is anti-monotonic: an actor holding an administrator
+ * role AND an educator role would have ended up with LESS attendance authority
+ * than the administrator role alone, because the educator role contributed a
+ * restriction. Adding a role must never reduce access, and nobody should have to
+ * discover that law from behaviour.
+ *
+ * The correction moves the decision to a per-user MODE on the access profile.
+ * These pin why that composes: there is exactly one profile row per user per
+ * org, so there is nothing to union and no composition law to invent.
+ */
+describe("T7 — adding a role cannot narrow attendance authority", () => {
+    it("the policy is a per-user mode, so role union cannot reach it", async () => {
+        const { resolveScopeAnswerFromProfile } = await import("@/lib/admin/resolveAdminAccessCore");
+        // The profile answers for the USER. Roles are not an input to it at all,
+        // which is the structural reason a second role cannot change the answer.
+        const site = resolveScopeAnswerFromProfile(
+            { department_scope: "all", site_scope: "all", attendance_capture_scope: "site" },
+            "legacy-all",
+        );
+        expect(site.attendanceCaptureScope).toBe("site");
+    });
+
+    it("defaults to the ordinary policy, so nothing narrows by arriving", async () => {
+        const { resolveScopeAnswerFromProfile } = await import("@/lib/admin/resolveAdminAccessCore");
+        // An existing profile row predating this column. It must read as `site`,
+        // or shipping the column would silently constrain working operators.
+        const legacy = resolveScopeAnswerFromProfile(
+            { department_scope: "all", site_scope: "all" },
+            "legacy-all",
+        );
+        expect(legacy.attendanceCaptureScope).toBe("site");
+    });
+
+    it("an unrecognised value reads as the ordinary policy rather than narrowing", async () => {
+        const { resolveScopeAnswerFromProfile } = await import("@/lib/admin/resolveAdminAccessCore");
+        // A profile this code cannot fully understand must not tighten
+        // attendance for a working operator on a guess.
+        const odd = resolveScopeAnswerFromProfile(
+            { department_scope: "all", site_scope: "all", attendance_capture_scope: "classroom" },
+            "legacy-all",
+        );
+        expect(odd.attendanceCaptureScope).toBe("site");
+    });
+
+    it("only the explicit word narrows", async () => {
+        const { resolveScopeAnswerFromProfile } = await import("@/lib/admin/resolveAdminAccessCore");
+        const assigned = resolveScopeAnswerFromProfile(
+            { department_scope: "all", site_scope: "all", attendance_capture_scope: "assigned" },
+            "legacy-all",
+        );
+        expect(assigned.attendanceCaptureScope).toBe("assigned");
+    });
+
+    it("T6 — an administrator does not enter the constrained policy by having a link, an employment or an assignment", async () => {
+        const { resolveScopeAnswerFromProfile } = await import("@/lib/admin/resolveAdminAccessCore");
+        // None of those are inputs here. The ONLY way to reach `assigned` is for
+        // someone to have set this column on this user's profile, which is what
+        // "unless an explicit access policy says otherwise" has to mean.
+        const admin = resolveScopeAnswerFromProfile(
+            { department_scope: "all", site_scope: "all" },
+            "legacy-all",
+        );
+        expect(admin.attendanceCaptureScope).toBe("site");
+        expect(admin.denyAll).toBe(false);
+    });
+});

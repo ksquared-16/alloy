@@ -49,14 +49,6 @@ import {
 } from "@/lib/admin/accessScope";
 
 export const ATTENDANCE_RECORD_PERMISSION_KEY = "attendance.record" as const;
-/**
- * NARROWS `attendance.record`; it grants nothing on its own.
- *
- * A holder may capture only inside the locations their current staff
- * assignments cover. Not holding it leaves site-scoped capture exactly as it
- * was, which is why adding this could not reduce any existing operator's reach.
- */
-export const ATTENDANCE_ASSIGNED_ONLY_PERMISSION_KEY = "attendance.record.assigned_only" as const;
 export const ATTENDANCE_READ_PERMISSION_KEY = "attendance.read" as const;
 
 export type AttendanceAuthzVerdict =
@@ -167,33 +159,38 @@ export async function assertAttendanceCaptureAllowed(params: {
      */
     serviceDate?: string | null | undefined;
 }): Promise<AttendanceAuthzVerdict> {
-    const grants = await resolveActorPermissionGrants(
+    // 1 — the capability. WHAT the actor may do.
+    const permitted = await assertPermission(
         params.supabase,
         params.orgId,
-        params.userId ?? null,
+        params.userId,
+        ATTENDANCE_RECORD_PERMISSION_KEY,
+        "Recording attendance",
     );
-    if (grants.permissionKeys == null) {
-        return deny("permission_unresolved", "Recording attendance could not be authorized.");
-    }
-    if (!grants.permissionKeys.includes(ATTENDANCE_RECORD_PERMISSION_KEY)) {
-        return deny("permission_denied", `Recording attendance requires ${ATTENDANCE_RECORD_PERMISSION_KEY}.`);
-    }
+    if (!permitted.ok) return permitted;
 
+    // 2 — ordinary org/site scope. WHERE they may do it.
     const inScope = await assertAttendanceLocationsInScope(params);
     if (!inScope.ok) return inScope;
 
     /*
-     * THE NARROWED POLICY, CHOSEN BY WHAT THE ACTOR HOLDS.
+     * 3 — WHICH CAPTURE SCOPE POLICY APPLIES.
      *
-     * Absence of the narrowing capability is today's behaviour, so every
-     * existing director and administrator passes here untouched — the carve-out
-     * is structural rather than a list of roles somebody has to maintain.
+     * A per-user MODE on the access profile, never a permission. Permissions are
+     * additive and union across roles, so expressing this narrowing as a grant
+     * would have meant an actor holding both an administrator role and an
+     * educator role ended up with LESS attendance authority than the
+     * administrator role alone. Adding a role must never reduce access.
      *
-     * It applies AFTER site scope, never instead of it. An assignment names a
-     * room; it does not grant reach into a site the actor does not hold, and
-     * letting it would make a stale roster row a way across a tenant boundary.
+     * `site` is the default and today's behaviour, so a director cannot drift
+     * into the constrained policy by acquiring a role, an employment record or a
+     * schedule assignment — only by someone deliberately setting this mode.
+     *
+     * It applies AFTER site scope, never instead of it: an assignment names a
+     * room, it does not grant reach into a site the actor does not hold, or a
+     * stale roster row would become a way across a tenant boundary.
      */
-    if (!grants.permissionKeys.includes(ATTENDANCE_ASSIGNED_ONLY_PERMISSION_KEY)) {
+    if ((params.dim.attendanceCaptureScope ?? "site") !== "assigned") {
         return { ok: true };
     }
 
