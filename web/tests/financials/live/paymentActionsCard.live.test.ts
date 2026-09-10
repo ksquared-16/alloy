@@ -125,8 +125,13 @@ async function clearAll(client: SupabaseClient) {
         await client.from("payment_provider_events").delete().in("collection_attempt_id", ids);
         await client.from("payment_collection_attempts").delete().in("id", ids);
     }
-    const { error } = await client.from("payment_provider_merchants").delete().eq("org_id", ORG);
-    if (error) throw new Error(`merchant teardown failed: ${error.message}`);
+    /*
+     * The merchant is SHARED INFRASTRUCTURE this suite does not own. Asserting its removal stopped
+     * being possible once another lane's recognised attempts pointed at it — those produced money
+     * and are not deletable, so the foreign key refuses, the teardown throws, and every test in the
+     * file reports as skipped: a green-looking run that certified nothing.
+     */
+    await client.from("payment_provider_merchants").delete().eq("org_id", ORG);
 }
 
 /**
@@ -149,7 +154,7 @@ describeLive("Slice H — the Financials payment actions, live", () => {
         const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", { headers: { Authorization: `Bearer ${secret}` } });
         const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
         connectedAccount = String(acct.id);
-        await client.from("payment_provider_merchants").insert({
+        await client.from("payment_provider_merchants").upsert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,
             readiness: readinessFromStripeAccount(acct as { charges_enabled?: boolean }),
             created_by: ACTOR, updated_by: ACTOR,
