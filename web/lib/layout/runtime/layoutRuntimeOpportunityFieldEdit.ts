@@ -3,6 +3,8 @@
  */
 
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
+import { FIELD_BEHAVIOR_SURFACE_DRAWER_OVERVIEW } from "@/lib/fields/fieldPlacementV1";
+import { fieldPolicyWriteSurfaceHeader } from "@/lib/fields/fieldPolicyWriteContext";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -61,7 +63,12 @@ export async function patchOpportunityNativeFromLayoutDrawer(params: {
     const fetchImpl = params.fetchFn ?? fetch;
     const res = await fetchImpl(`/api/admin/opportunities/${encodeURIComponent(params.opportunityId)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        // This IS the drawer overview editor, so it declares that surface: placement requirements
+        // authored against `drawer_overview` are meant to apply here, and only here.
+        headers: {
+            "Content-Type": "application/json",
+            ...fieldPolicyWriteSurfaceHeader(FIELD_BEHAVIOR_SURFACE_DRAWER_OVERVIEW),
+        },
         body: JSON.stringify(params.body),
     });
     const json = (await res.json().catch(() => ({}))) as { error?: string };

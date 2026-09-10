@@ -184,13 +184,17 @@ describe("enforceDrawerFieldPoliciesOnPatch", () => {
         ],
     };
 
-    it("placement required_on_save rejects empty value", () => {
+    it("placement required_on_save rejects empty value on the surface it was authored for", () => {
+        // The placement raises a requirement the definition does not carry. It applies on
+        // `drawer_overview` — the surface it names — which the write declares here. See
+        // fieldPolicyWriteSurfaceScope.test.ts for why it must NOT apply to other origins.
         const r = evaluateDrawerFieldPoliciesOnPatch({
             entityType: "opportunity",
             defs: [{ ...customDef, is_required: false, requirement_policy: buildSimpleRequirementPolicy("optional") }],
             body: { campus_pref: "" },
             persisted: {},
             customValuesByFieldKey: {},
+            writeSurface: "drawer_overview",
             layoutConfig: {
                 field_placements_v1: [
                     {

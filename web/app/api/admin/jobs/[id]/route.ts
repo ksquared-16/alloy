@@ -26,6 +26,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import {
     enforceDrawerFieldPoliciesOnPatch,
+    fieldPolicyWriteSurfaceFromRequest,
     fieldPolicyValidationResponse,
 } from "@/lib/fields/enforceDrawerFieldPoliciesOnPatch";
 
@@ -239,6 +240,7 @@ export async function PATCH(
                 entityId: id,
                 body,
                 persistedRow: jobFull as Record<string, unknown>,
+                writeSurface: fieldPolicyWriteSurfaceFromRequest(request),
             });
             if (!policyCheck.ok) {
                 return NextResponse.json(fieldPolicyValidationResponse(policyCheck.violations), { status: 400 });
