@@ -1682,6 +1682,146 @@ export function finishClaimIsMeaningful(run) {
   return FINISH_CLAIM_STATES.includes(String(run?.state || "").toUpperCase());
 }
 
+/* ---------------------------------------------------------------------------
+ * OPERATOR PRIORITY — where a lane sits in the list, as its own layer.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * THE BOUNDARY THIS RESTORES.
+ *
+ * `sortLanesForIndex` ranked lanes by `canonicalLaneWorkState().group` — the
+ * CANONICAL runtime band — read straight off the resolver. That made the
+ * internal classification double as the operator-facing sorting ontology:
+ *
+ *     canonical bucket  ->  label + sorting behaviour
+ *
+ * and the cost is exact. `attention` is one internal band holding two
+ * materially different realities — a provider working with nothing tracking it,
+ * and a run that finished without an account of itself. They already carry
+ * different operator LABELS. They could not carry different operator
+ * PRIORITIES, because the only thing sorting could see was the band they share,
+ * so the sole way to move one of them was to reclassify it in the runtime
+ * resolver — changing canonical truth to achieve a presentation outcome, which
+ * is the inversion this layer exists to prevent.
+ *
+ * The shape is now the intended one:
+ *
+ *     canonical/runtime condition  ->  operator state/label  ->  operator priority
+ *
+ * Priority reads the operator projection and the runtime KEY, never the band
+ * alone, so `provider_active` and `completion_unreported` are separately
+ * rankable today and can be re-ranked tomorrow without the resolver moving.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT DO: it invents no new state, renames nothing,
+ * and reclassifies nothing. Every canonical group, every operator state and
+ * every label is exactly as it was; the order this produces for every state
+ * that exists today is byte-identical to the order the band table produced.
+ * The only thing that changed is which layer the question is asked at.
+ */
+export const OPERATOR_PRIORITY = Object.freeze([
+  // The fleet is doing this right now.
+  "running",
+  // Stopped, and cannot continue without a person.
+  "blocked",
+  // Running, but outside anything that is tracking it.
+  "active_exception",
+  // Finished, and the account of it is missing.
+  "completion_exception",
+  // An exceptional condition this table has not been taught yet. It ranks HERE,
+  // among the exceptions, and never among the lanes that are fine — see below.
+  "unclassified_exception",
+  // Can take work.
+  "ready",
+  // Done, failed, or read-and-finished.
+  "terminal",
+  // No runtime at all.
+  "offline",
+]);
+
+/**
+ * Attention causes are ranked INDIVIDUALLY. This is the table the boundary
+ * exists for: adding an entry here changes where a cause sorts, and touches no
+ * canonical classification at all.
+ */
+const PRIORITY_BY_ATTENTION_CAUSE = Object.freeze({
+  provider_active: "active_exception",
+  completion_unreported: "completion_exception",
+});
+
+/** Every operator state has an explicit rank. No fallthrough, no default. */
+const PRIORITY_BY_OPERATOR_STATE = Object.freeze({
+  [OPERATOR_STATE.WORKING]: "running",
+  [OPERATOR_STATE.FINALIZING]: "running",
+  [OPERATOR_STATE.NEEDS_YOU]: "blocked",
+  [OPERATOR_STATE.ATTENTION]: "unclassified_exception",
+  [OPERATOR_STATE.COMPLETED_UNREAD]: "terminal",
+  [OPERATOR_STATE.FAILED]: "terminal",
+  [OPERATOR_STATE.READY]: "ready",
+  [OPERATOR_STATE.OFFLINE]: "offline",
+});
+
+/**
+ * The runtime conditions that genuinely mean "this lane can take work".
+ *
+ * `operatorState` returns READY as its FINAL FALLTHROUGH — the answer for
+ * everything it did not recognise. That is right for a label, where "Ready" is
+ * the safe thing to show a lane with nothing happening, and wrong for a
+ * priority, where it silently files an unrecognised condition among the lanes
+ * that are fine. So READY has to be EARNED by a known-quiet runtime key here,
+ * rather than inherited from a default.
+ */
+const READY_RUNTIME_KEYS = Object.freeze(["ready", "idle", "complete", "stale_claim"]);
+
+/**
+ * A RUNTIME CONDITION CAN BE MORE SPECIFIC THAN THE OPERATOR STATE COVERING IT.
+ *
+ * `complete` and `idle` are both READY to the operator — neither wants
+ * anything — and they are not the same thing to the LIST: a finished run
+ * belongs with the terminal lanes, below the ones that are simply quiet. The
+ * band table used to carry that distinction for free, because `complete` sat in
+ * `completed` and `idle` in `idle`. Ranking purely by operator state lost it and
+ * moved a finished lane up above idle ones, which the existing suite caught.
+ *
+ * So the canonical key is consulted FIRST, where it says something the operator
+ * state cannot. That is the seam working as intended rather than an exception
+ * to it: presentation priority reads canonical truth, and does not need
+ * canonical truth to be reshaped to say what presentation wants.
+ */
+const PRIORITY_BY_RUNTIME_KEY = Object.freeze({
+  complete: "terminal",
+});
+
+/**
+ * Where this lane sits in the list.
+ *
+ * FAILS SAFE UPWARD, NEVER TO READY. An operator state this table has not been
+ * taught, an attention cause with no entry, and a runtime condition that lands
+ * on READY without being one of the known-quiet ones all resolve to
+ * `unclassified_exception` — visible, above every lane that is fine. The
+ * opposite default is the one that hurts: "I do not recognise this" rendered as
+ * "nothing to see here", for a lane something has just flagged.
+ */
+export function laneOperatorPriority(work, lane = null) {
+  const state = operatorState(work, lane);
+  const key = String(work?.key || "");
+  if (state === OPERATOR_STATE.ATTENTION) {
+    return PRIORITY_BY_ATTENTION_CAUSE[key] || "unclassified_exception";
+  }
+  // Most specific first: the canonical condition, where it distinguishes
+  // something the operator state does not.
+  if (PRIORITY_BY_RUNTIME_KEY[key]) return PRIORITY_BY_RUNTIME_KEY[key];
+  if (state === OPERATOR_STATE.READY && !READY_RUNTIME_KEYS.includes(key)) {
+    return "unclassified_exception";
+  }
+  return PRIORITY_BY_OPERATOR_STATE[state] || "unclassified_exception";
+}
+
+/** The sortable index of a lane's priority. Unknown ranks with the exceptions. */
+export function laneOperatorPriorityRank(work, lane = null) {
+  const i = OPERATOR_PRIORITY.indexOf(laneOperatorPriority(work, lane));
+  return i < 0 ? OPERATOR_PRIORITY.indexOf("unclassified_exception") : i;
+}
+
 /**
  * "ATTENTION" NAMES A CATEGORY, NOT A FACT — SO IT MUST CARRY ITS CAUSE.
  *
