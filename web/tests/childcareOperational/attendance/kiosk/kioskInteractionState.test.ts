@@ -24,6 +24,7 @@ const BUSY: KioskInteraction = {
     results: [{ child_id: "emma", display_name: "Emma Stone", recorded: true, message: null }],
     notice: "Something happened",
     operationToken: "tok-1",
+    operationEventAt: "2026-09-18T08:00:00.000Z",
 };
 
 describe("reset forgets the family, completely", () => {
@@ -53,6 +54,7 @@ describe("reset forgets the family, completely", () => {
             { results: BUSY.results },
             { operation: "check_in" },
             { operationToken: "t" },
+            { operationEventAt: "2026-09-18T08:00:00.000Z" },
             { notice: "n" },
         ];
         for (const patch of fields) {
