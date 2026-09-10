@@ -14,6 +14,7 @@
 
 import type { ProcessingCaseDetail, ProcessingCaseSourceKind, ProcessingCaseSourceRole } from "./types";
 import type { ProcessingCollectionSourceEvidence } from "@/lib/pos/processingCase/collection/types";
+import type { ReturnedValueClassification } from "@/lib/pos/processingCase/returnClassification/classifyReturnedValue";
 
 /**
  * A single read-only proposed value from a source.
@@ -39,6 +40,20 @@ export interface ProposedValue {
     sourceFormName?: string | null;
     sourceStepIndex?: number | null;
     sourceSubmissionId?: string | null;
+    /**
+     * WHAT ALLOY ALREADY HOLDS, AND THEREFORE WHETHER THIS IS A CHANGE AT ALL.
+     *
+     * A family completing a packet re-answers most of what is already on file. Presented as a flat
+     * list of "proposed values" it all reads as a change, and an operator shown thirty changes when
+     * two are real will approve all thirty. `classification` is computed by the same function the
+     * commit planner uses, so review and commit cannot disagree about what "unchanged" means.
+     *
+     * Optional: a source whose owning record cannot be read leaves these absent rather than
+     * claiming the value is new.
+     */
+    canonicalCurrentValue?: string | null;
+    classification?: ReturnedValueClassification;
+    refusalReason?: string | null;
 }
 
 /** Raw evidence a per-kind loader returns for one source id. */
