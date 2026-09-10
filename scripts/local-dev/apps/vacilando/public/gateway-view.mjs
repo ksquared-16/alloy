@@ -34,6 +34,7 @@ import {
   composerCanSend,
   governedActionLabel,
   isActionableGovernedAction,
+  laneOperatorPriorityRank,
   laneOperatorStatus,
   laneProgress,
   laneReturnTarget,
@@ -91,6 +92,15 @@ export const STALE_WORK_MS = 120_000;
  * asserts that every group literal `canonicalLaneWorkState` can return appears
  * here, so the next group added to that resolver cannot sink without failing a
  * test first.
+ */
+/*
+ * SCOPE NOTE, since this used to be the sort key and is not any more. This is
+ * the CANONICAL band order — the runtime ontology, in the order those bands
+ * describe a lane getting further from working. List position is now decided by
+ * OPERATOR_PRIORITY, one layer up, so that two causes inside one band can be
+ * ranked differently without the resolver reclassifying either of them. The
+ * exhaustive invariant moved with it: every band here, and every attention
+ * cause, must map to an explicit priority.
  */
 export const LANE_LIST_GROUP_ORDER = Object.freeze(["active", "needs_input", "attention", "idle", "completed", "offline"]);
 
@@ -1354,11 +1364,22 @@ export function laneUpdatedMs(lane) {
 
 export function sortLanesForIndex(lanes, { outputByLane = {}, nowMs = Date.now() } = {}) {
   const list = Array.isArray(lanes) ? [...lanes] : [];
-  const rank = (lane) => {
-    const st = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
-    const gi = LANE_LIST_GROUP_ORDER.indexOf(st.group);
-    return gi < 0 ? LANE_LIST_GROUP_ORDER.length : gi;
-  };
+  // ORDER IS AN OPERATOR QUESTION, ASKED AT THE OPERATOR LAYER.
+  //
+  // This read `LANE_LIST_GROUP_ORDER.indexOf(st.group)` — the CANONICAL runtime
+  // band — so the internal classification was also the sorting ontology. Two
+  // causes sharing a band could never be given different operator priorities
+  // except by reclassifying one of them in the resolver, i.e. by changing
+  // canonical truth to get a presentation outcome.
+  //
+  // `laneOperatorPriorityRank` asks the projection instead, which can see both
+  // the operator state AND the runtime key. Same order for every state that
+  // exists today, and `provider_active` and `completion_unreported` are now
+  // separately rankable without the resolver moving.
+  const rank = (lane) => laneOperatorPriorityRank(
+    canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs }),
+    lane,
+  );
   list.sort((a, b) => {
     const dg = rank(a) - rank(b);
     if (dg !== 0) return dg;

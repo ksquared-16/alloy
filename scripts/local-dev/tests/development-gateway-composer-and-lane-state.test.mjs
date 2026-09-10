@@ -45,7 +45,10 @@ import {
   operatorStatusLine as opLine,
   ATTENTION_CAUSE_LABEL,
   LANE_LIST_GROUP_ORDER,
+  OPERATOR_PRIORITY,
   OPERATOR_STATE_LABEL,
+  laneOperatorPriority,
+  laneOperatorPriorityRank,
   operatorStatusLine,
   renderLaneList,
   sortLanesForIndex,
@@ -499,6 +502,114 @@ test("A6. the lane row shows the cause too, since it reads the same projection",
   const html = renderLaneList([lane], null, {});
   assert.match(html, /class="gw-lane-posture[^"]*">Working · untracked</);
   assert.ok(!/class="gw-lane-posture[^"]*">Attention</.test(html), "the bucket name is gone from the row");
+});
+
+// ---------------------------------------------------------------------------
+// P — CANONICAL CLASSIFICATION AND OPERATOR PRIORITY ARE DIFFERENT LAYERS
+// ---------------------------------------------------------------------------
+
+test("P1. sorting asks the operator layer, not the canonical band", () => {
+  // THE BOUNDARY THIS HOLDS. sortLanesForIndex ranked by
+  // canonicalLaneWorkState().group, so the internal classification WAS the
+  // operator-facing sorting ontology. Two causes sharing a band could then only
+  // be ranked apart by reclassifying one of them in the resolver — changing
+  // canonical truth to obtain a presentation outcome.
+  const src = readFileSync(new URL("../apps/vacilando/public/gateway-view.mjs", import.meta.url), "utf8");
+  const at = src.indexOf("export function sortLanesForIndex");
+  // Comments stripped first: this function explains what it USED to read, and
+  // matching that sentence would fail the check for describing the very defect
+  // it closes.
+  const fn = src.slice(at, src.indexOf("\n}", at))
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  assert.match(fn, /laneOperatorPriorityRank\(/, "rank comes from the operator layer");
+  assert.ok(!/LANE_LIST_GROUP_ORDER\.indexOf/.test(fn),
+    "the canonical band must no longer be the sort key");
+});
+
+test("P2. the two attention causes are SEPARATELY rankable", () => {
+  // The whole point of the seam: same canonical band, different priorities,
+  // with no change to how the runtime classifies either one.
+  const a = { key: "provider_active", group: "attention" };
+  const b = { key: "completion_unreported", group: "attention" };
+  assert.equal(a.group, b.group, "same canonical band, by construction");
+  assert.notEqual(laneOperatorPriority(a), laneOperatorPriority(b),
+    "yet they can carry different operator priorities");
+  assert.equal(laneOperatorPriority(a), "active_exception");
+  assert.equal(laneOperatorPriority(b), "completion_exception");
+});
+
+test("P3. re-ranking a cause needs no canonical change", () => {
+  // Stated as a property of the wiring rather than by mutating the table: the
+  // priority function reads the runtime KEY, so a cause's rank is a function of
+  // something the resolver already publishes and nothing has to be reclassified
+  // to move it.
+  const src = readFileSync(new URL("../apps/vacilando/public/vacilando-ui-model.mjs", import.meta.url), "utf8");
+  const at = src.indexOf("export function laneOperatorPriority");
+  const fn = src.slice(at, src.indexOf("\n}", at));
+  assert.match(fn, /work\?\.key/, "priority is keyed on the runtime condition, not only the band");
+  assert.match(src, /PRIORITY_BY_ATTENTION_CAUSE = Object\.freeze\(\{/, "and causes are listed individually");
+});
+
+test("P4. EVERY operator state and EVERY attention cause has an explicit rank", () => {
+  // The exhaustive invariant, moved to the layer that now decides order.
+  for (const state of Object.values(OPERATOR_STATE)) {
+    const work = state === OPERATOR_STATE.ATTENTION
+      ? { key: "provider_active", group: "attention" }
+      : { key: state, group: state === "working" ? "active" : state, live: state === "working" };
+    const p = laneOperatorPriority(work, laneWith());
+    assert.ok(OPERATOR_PRIORITY.includes(p), `operator state ${state} resolved to unranked priority ${p}`);
+  }
+  for (const cause of Object.keys(ATTENTION_CAUSE_LABEL)) {
+    const p = laneOperatorPriority({ key: cause, group: "attention" });
+    assert.ok(OPERATOR_PRIORITY.includes(p), `attention cause ${cause} has no rank`);
+  }
+  // And every canonical band still resolves to a ranked priority, so a band
+  // cannot be added upstream and silently sink.
+  for (const band of LANE_LIST_GROUP_ORDER) {
+    const p = laneOperatorPriority({ key: `probe_${band}`, group: band });
+    assert.ok(OPERATOR_PRIORITY.includes(p), `band ${band} has no ranked priority`);
+  }
+});
+
+test("P5. an unknown exceptional condition fails SAFE — above ready, never Ready", () => {
+  // The opposite default is the one that hurts: "I do not recognise this"
+  // rendered as "nothing to see here", for a lane something just flagged.
+  const unknown = { key: "some_future_cause", group: "attention" };
+  assert.equal(laneOperatorPriority(unknown), "unclassified_exception");
+  assert.ok(laneOperatorPriorityRank(unknown) < OPERATOR_PRIORITY.indexOf("ready"),
+    "an unrecognised exception must outrank every lane that is fine");
+  assert.notEqual(laneOperatorPriority(unknown), "ready");
+  // Even a wholly unrecognised shape must not land on ready.
+  assert.notEqual(laneOperatorPriority({ key: "??", group: "??" }), "ready");
+});
+
+test("P6. an exception lane can never fall beneath Offline", () => {
+  const now = Date.now();
+  const lanes = [
+    laneWith({ lane_id: "off", label: "off", runtime: "offline", last_activity_ms: now - 1e3 }),
+    laneWith({ lane_id: "attn", label: "attn", claude: { presence: "present" }, provider_activity: { activity: "working" }, last_activity_ms: now - 9e6 }),
+  ];
+  const order = sortLanesForIndex(lanes, { nowMs: now }).map((l) => l.lane_id);
+  assert.deepEqual(order, ["attn", "off"],
+    "a two-and-a-half-hour-stale exception still outranks a lane touched a second ago");
+});
+
+test("P7. the certified order is unchanged for every state that exists today", () => {
+  const now = Date.now();
+  const mk = (id, over) => laneWith({ lane_id: id, label: id, ...over });
+  const lanes = [
+    mk("off", { runtime: "offline" }),
+    mk("failed", { execution_run: { state: "FAILED", updated_at: at(now - 9e3) } }),
+    mk("complete", { execution_run: { state: "COMPLETE", updated_at: at(now - 8500) } }),
+    mk("idle", { last_activity_ms: now - 8e3 }),
+    mk("unrep", { previous_run: { state: "COMPLETE", completed_at: at(now - 7e3) }, provider_activity: { activity: "ready" }, execution_capacity: { state: "CONNECTED" } }),
+    mk("provact", { claude: { presence: "present" }, provider_activity: { activity: "working" }, last_activity_ms: now - 6e3 }),
+    mk("needs", { execution_run: { state: "NEEDS_INPUT", updated_at: at(now - 5e3) } }),
+    mk("work", { execution_run: { state: "EXECUTING", updated_at: at(now - 4e3) }, provider_activity: { activity: "working" } }),
+  ];
+  assert.deepEqual(sortLanesForIndex(lanes, { nowMs: now }).map((l) => l.lane_id),
+    ["work", "needs", "provact", "unrep", "idle", "complete", "failed", "off"],
+    "a finished run stays with the terminal lanes, below the merely quiet ones");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
