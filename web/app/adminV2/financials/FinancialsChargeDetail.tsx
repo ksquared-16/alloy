@@ -32,6 +32,7 @@ type Application = {
     paymentStatus: string | null;
     receivedAt: string | null;
     referenceNumber: string | null;
+    status: string | null;
 };
 
 type ChargeDetail = {
@@ -156,13 +157,23 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
         : detail.customerId ? { text: "Household", state: "household" }
         : { text: "Original attribution unavailable", state: "unresolved" };
 
+    /*
+     * A reversed allocation no longer settles anything, and the position already stops counting it.
+     * The split is made once, here, so every reading below agrees about which money applied.
+     */
+    const applied = detail.applications.filter((a) => (a.status ?? "active") !== "reversed");
+    const reversedApplications = detail.applications.filter((a) => (a.status ?? "active") === "reversed");
+
     /* Ordered oldest-first: an account of the obligation reads forwards. */
     const history: { key: string; label: string; when: string | null }[] = [
         ...(detail.serviceDate ? [{ key: "service", label: "Charge is for", when: day(detail.serviceDate) }] : []),
         ...(detail.postedAt ? [{ key: "posted", label: "Posted", when: day(detail.postedAt) }] : []),
         ...detail.applications.map((a, i) => ({
             key: `applied-${a.paymentId}-${i}`,
-            label: `${money(a.allocatedAmountCents, detail.currencyCode)} applied${a.method ? ` · ${a.method}` : ""}`,
+            label:
+                (a.status ?? "active") === "reversed"
+                    ? `${money(a.allocatedAmountCents, detail.currencyCode)} applied, then reversed`
+                    : `${money(a.allocatedAmountCents, detail.currencyCode)} applied${a.method ? ` · ${a.method}` : ""}`,
             when: day(a.receivedAt),
         })),
     ];
@@ -250,16 +261,37 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 </>
             ) : null}
 
-            {detail.applications.length > 0 ? (
+            {/*
+             * APPLIED MEANS APPLIED. An allocation can be reversed while the payment that made it
+             * stands, and the collectible position stops counting it — so listing every allocation
+             * under one heading showed a family paying for something the balance still said they
+             * owed. Reversed money is kept visible, because it happened, and labelled, because it
+             * no longer settles anything.
+             */}
+            {applied.length > 0 ? (
                 <>
                     <Group>Applied payments</Group>
-                    {detail.applications.map((a) => (
+                    {applied.map((a) => (
                         <Row
                             key={`${a.paymentId}-${a.allocatedAmountCents}`}
                             label={[a.method ?? "Payment", day(a.receivedAt)].filter(Boolean).join(" · ")}
                             value={money(a.allocatedAmountCents, currency)}
                             muted
                             testId="application"
+                        />
+                    ))}
+                </>
+            ) : null}
+            {reversedApplications.length > 0 ? (
+                <>
+                    <Group>Reversed payments</Group>
+                    {reversedApplications.map((a) => (
+                        <Row
+                            key={`rev-${a.paymentId}-${a.allocatedAmountCents}`}
+                            label={[a.method ?? "Payment", day(a.receivedAt), "reversed"].filter(Boolean).join(" · ")}
+                            value={money(a.allocatedAmountCents, currency)}
+                            muted
+                            testId="application-reversed"
                         />
                     ))}
                 </>

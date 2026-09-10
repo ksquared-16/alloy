@@ -192,7 +192,15 @@ describeLive("charge detail composes canonical authority — live", () => {
         for (const chargeId of [...new Set(withMoney)].slice(0, 5)) {
             const detail = await resolveChargeDetail(supabase, { orgId: ORG, chargeId });
             if (!detail?.position) continue;
-            const listed = detail.applications.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
+            /*
+             * ACTIVE ALLOCATIONS ONLY. A reversed allocation no longer settles anything and the
+             * position stops counting it, so summing every allocation would demand the balance
+             * credit money that was taken back. This is the exact divergence the surface showed
+             * before it learned to tell the two apart.
+             */
+            const listed = detail.applications
+                .filter((a) => (a.status ?? "active") !== "reversed")
+                .reduce((sum, a) => sum + a.allocatedAmountCents, 0);
             expect(
                 listed,
                 `charge ${chargeId}: the applications listed do not add up to the applied money the position reports`,

@@ -48,6 +48,16 @@ export type ChargeDetailApplication = {
     method: string | null;
     /** The payment's own status, so money still in flight is not shown as settled. */
     paymentStatus: string | null;
+    /**
+     * THE APPLICATION'S OWN STATUS, and the reason it is here.
+     *
+     * An allocation can be reversed while the payment that made it stands. The collectible position
+     * stops counting a reversed allocation — correctly — so a surface that lists every allocation
+     * as applied money shows a family paying for something the balance says they still owe. The
+     * status travels with the row so the presentation can tell the two apart instead of implying
+     * one from the other.
+     */
+    status: string | null;
     receivedAt: string | null;
     referenceNumber: string | null;
 };
@@ -265,6 +275,7 @@ export async function resolveChargeDetail(
             return {
                 paymentId: a.payment_id,
                 allocatedAmountCents: Number(a.allocated_amount_cents) || 0,
+                status: a.status ?? null,
                 method: payment?.method ?? null,
                 paymentStatus: payment?.status ?? null,
                 receivedAt: payment?.receivedAt ?? null,
