@@ -4,11 +4,20 @@
  * RecordLaunchPicker — reusable operator control to search/select ONE existing record
  * (opportunity / customer / person / customer_member) for a packet's `launch_from_entity`.
  *
- * Reuses the existing admin global search (`GET /api/admin/global-search`). That endpoint
- * returns SUBJECTS (Search Platform V2), so results are flattened to flat record
- * references by `searchSelectionsFromResults` before the pure `buildRecordPickerOptions`
- * view-model maps them to friendly options. A raw-UUID fallback sits behind an "Enter ID
- * manually" affordance. The component is controlled: it emits the selected option or null.
+ * Searches through `GET /api/admin/forms/crm-entity-search`, the canonical org-scoped typeahead
+ * for linking to CRM rows, which speaks exactly the four entity types this picker offers.
+ *
+ * It used to search `GET /api/admin/global-search` and flatten the results with
+ * `searchSelectionsFromResults`. That adapter maps a CHILD subject to its PERSON id, because its
+ * consumers pick records in the drawer vocabulary, which has no child grain — and a child whose
+ * `person_id` is null (ordinary; the column is nullable) yields no reference at all and is dropped.
+ * So searching for a child by name returned an empty menu, and selecting an existing child was
+ * possible only by pasting its UUID into "Enter ID manually" — the raw-id interaction this product
+ * is not supposed to require. The drawer adapter is right for drawer consumers; this picker simply
+ * is not one of them.
+ *
+ * A raw-UUID fallback still sits behind "Enter ID manually" for the cases search cannot reach. The
+ * component is controlled: it emits the selected option or null.
  *
  * No packet-runtime, resolver, or duplicate-detection logic lives here.
  */
@@ -16,9 +25,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LAUNCH_ENTITY_TYPES, parseLaunchFromEntityInput } from "@/lib/pos/packet/launchFromEntity";
-import { buildRecordPickerOptions, type RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
-import type { SearchResult } from "@/lib/search/searchContracts";
-import { searchSelectionsFromResults } from "@/lib/search/searchSelectionAdapter";
+import { type RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
 
 const LAUNCH_TYPE_LABELS: Record<(typeof LAUNCH_ENTITY_TYPES)[number], string> = {
     opportunity: "Lead / opportunity",
@@ -87,14 +94,37 @@ export default function RecordLaunchPicker({
         setSearching(true);
         const handle = setTimeout(async () => {
             try {
-                const res = await fetch(`/api/admin/global-search?q=${encodeURIComponent(q)}&limit=20`, {
-                    credentials: "same-origin",
-                });
-                const body = (await res.json().catch(() => ({}))) as { ok?: boolean; results?: SearchResult[] };
+                /*
+                 * One query per entity type this picker offers, in parallel.
+                 *
+                 * The canonical typeahead is scoped to a single entity type by design, and the four
+                 * types are exactly the four this control can launch from — so asking each of them
+                 * is the whole search. Children are found by name here because this endpoint speaks
+                 * customer_member natively rather than through the drawer's person-shaped grain.
+                 */
+                const perType = await Promise.all(
+                    LAUNCH_ENTITY_TYPES.map(async (entityType) => {
+                        const res = await fetch(
+                            `/api/admin/forms/crm-entity-search?entity_type=${entityType}&q=${encodeURIComponent(q)}`,
+                            { credentials: "same-origin" },
+                        );
+                        if (!res.ok) return [] as RecordPickerOption[];
+                        const body = (await res.json().catch(() => ({}))) as {
+                            results?: { id: string; label: string; subtitle: string | null }[];
+                        };
+                        const rows = Array.isArray(body.results) ? body.results : [];
+                        return rows.map((row) => ({
+                            entity_type: entityType,
+                            entity_id: row.id,
+                            label: row.label,
+                            // The record's own detail (household, DOB) beside the generic kind, so
+                            // two children with the same name are still tellable apart.
+                            sublabel: row.subtitle ?? LAUNCH_TYPE_LABELS[entityType],
+                        })) satisfies RecordPickerOption[];
+                    }),
+                );
                 if (s !== seq.current) return;
-                // Search returns SUBJECTS; a picker wants a flat record reference.
-                const hits = searchSelectionsFromResults(Array.isArray(body.results) ? body.results : []);
-                setResults(res.ok && body.ok ? buildRecordPickerOptions(hits) : []);
+                setResults(perType.flat().slice(0, 20));
             } catch {
                 if (s === seq.current) setResults([]);
             } finally {
