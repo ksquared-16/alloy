@@ -3,7 +3,7 @@
   "query_hash": "694f1dab200f38da377a1f78466bccf31cd9efb730c23a6543014d859e61df0f",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-11T17:33:38.200Z",
+    "census_run_at": "2026-09-11T17:39:15.470Z",
     "question_ids": [
       "column",
       "fk",
@@ -96,5 +96,17 @@
       }
     },
     "row_count": 17
+  },
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-11T17:39:14.794Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_6e8e440494fa89",
+    "authorization_id": "grnt_cb404a0073fa4e8c",
+    "query_hash": "694f1dab200f38da377a1f78466bccf31cd9efb730c23a6543014d859e61df0f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
   }
 }
