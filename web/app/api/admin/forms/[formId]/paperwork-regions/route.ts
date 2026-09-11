@@ -30,19 +30,12 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { parseFidelityPdfMapping, resolveFidelitySourceBytes } from "@/lib/forms/pdf/fidelityMappingContract";
 import { extractPdfAcroFormFields } from "@/lib/pos/processingCase/structure/pdfAcroForm";
+import { buildPaperworkRegions, type PaperworkRegion } from "@/lib/forms/pdf/paperworkRegions";
 
 export const dynamic = "force-dynamic";
 
-export type PaperworkRegion = {
-    /** The SCHEMA field this region edits — the id the inspector already keys on. */
-    field_id: string;
-    /** The PDF widget it prints in, for provenance and for explaining an unmapped box. */
-    pdf_field: string;
-    /** 1-based. */
-    page: number;
-    /** [x0, y0, x1, y1] in PDF points, bottom-left origin — the canvas projects it. */
-    bbox: [number, number, number, number];
-};
+/** Re-exported so existing importers of this route's type keep working. */
+export type { PaperworkRegion };
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
     const ctx = await getAdminContextCached();
@@ -109,26 +102,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
         const acro = await extractPdfAcroFormFields(src.bytes);
 
-        /*
-         * Match on the widget's own name, case-insensitively.
-         *
-         * `acro_fields` is keyed by the name the mapping was authored against and the document
-         * reports the same names. A widget the mapping does NOT name is deliberately not returned:
-         * an unmapped box is not a destination, and offering it as one would invite binding by
-         * clicking a rectangle, which would make geometry the semantic authority.
-         */
-        const byLowerName = new Map<string, { field_id: string }>();
-        for (const [pdfField, target] of Object.entries(mapping.acro_fields)) {
-            byLowerName.set(pdfField.toLowerCase(), { field_id: target.field_id });
-        }
-
-        const regions: PaperworkRegion[] = [];
-        for (const f of acro.fields) {
-            if (!f.bbox) continue;
-            const hit = byLowerName.get((f.name ?? "").toLowerCase());
-            if (!hit) continue;
-            regions.push({ field_id: hit.field_id, pdf_field: f.name, page: f.page, bbox: f.bbox });
-        }
+        // The join itself lives in `buildPaperworkRegions`, where it can be tested without a
+        // database and a PDF. This route's job is choosing WHICH document to join against.
+        const { regions, missingFromDocument } = buildPaperworkRegions(mapping.acro_fields, acro.fields);
 
         if (regions.length === 0) {
             // A readable document that shares no widget names with the mapping is not this
@@ -145,9 +121,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             usedVersionId: candidate.id,
             pageCount: acro.page_count,
             /** Widgets the mapping names but the document does not contain — a real mapping defect. */
-            missingFromDocument: Object.keys(mapping.acro_fields).filter(
-                (n) => !acro.fields.some((f) => (f.name ?? "").toLowerCase() === n.toLowerCase()),
-            ),
+            missingFromDocument,
             regions,
         });
     }
