@@ -1,7 +1,20 @@
 # H2 — Communications → Work Items convergence
 
 Lane `lane_cb3973afe2c7` · run `erun_87b66f63ab8f9994` · slot 12 · `http://127.0.0.1:3022`
-Tenant: Firefly Early Learning (shared `alloy-cert` stack). Date: 2026-09-11.
+Tenant: Firefly Early Learning. Date: 2026-09-11.
+
+**Environment — corrected.** An earlier revision of this document named the shared `alloy-cert`
+stack. That was wrong, and the distinction matters enough to state plainly: `alloy-dev-start`
+injects `ALLOY_SERVER_ENV_SOURCE` (`$ALLOY_REPO/web/.env.local`), which points every lane's dev
+server at the **hosted** certification project `ikaxilmwmrmbagoidedu`. The local `alloy-cert`
+Postgres is the target of `database.apply_migration`, not of the browser runtime. Measured, not
+assumed: `alloy-cert` holds one `communication_threads` row and it is not this thread, while the
+running app returns this thread through its own API, and the slot's session cookie is
+`sb-ikaxilmwmrmbagoidedu-auth-token`.
+
+Nothing about the certification changes — the sender is still on a reserved undeliverable TLD and
+the flow is still inbound-only — but a reader who believed this ran against a disposable local
+stack would have mis-read the blast radius, so the environment is named correctly here.
 
 ## Why the existing fixture was disqualified — confirmed, not assumed
 
@@ -101,3 +114,55 @@ env file was modified and nothing was committed.
   **Recommend adding a refusal guard or deleting it** — as written it is a live hazard for anyone
   who runs it.
 - Work Items Queue health "Waiting" label actually represents Unassigned.
+
+---
+
+## Re-certification on the promotion candidate — `5419f3b6e`
+
+The round trip above was captured at `f808cce5e`. The candidate then merged `origin/staging` twice,
+so the result was re-measured rather than inherited. The whole round trip was driven again, live,
+against `5419f3b6e` on 2026-09-11 (run `erun_189aca1c83344798`, slot 12, `http://127.0.0.1:3022`).
+
+The fixture was re-run with a fresh key. Because a thread is keyed by sender identity, the inbound
+landed on the same thread and the **runtime moved it `resolved` → `needs_response` again** — which
+is a stronger demonstration than a first-time create: the transition was caused by ingestion, on
+this SHA, with nothing writing `attention_state` by hand.
+
+| step | measured at `5419f3b6e` |
+|---|---|
+| 1–2 · synthetic subject | `guardian-a@enrollment-cert.alloy.invalid`, person `fb4eb21b…`, household "Certfree Family" |
+| · receiving address | `kelly@workwithalloy.com` — read from the ACTIVE binding, Alloy-owned |
+| 3 · authoritative before | `attention=needs_response` `scope=resolved` `unread=3` `direction=inbound` |
+| 5 · Work Items queue | projection present — 1 row under **Unassigned** |
+| 6 · projection identity | `communications:03e76403-a833-4de6-a104-2d25b94704be` — prefixed; `is bare uuid: false` |
+| 7 · operational_tasks before | 7 durable rows · **0** referencing the thread |
+| 9 · detail explains ownership | "A family message is waiting for a reply." / "This clears once the conversation is answered in Communications." Sole command: **Open conversation** |
+| 10–11 · exact-thread navigation | Communications opened on the Inbox tab with `03e76403-…` **selected**; triage row reads `Queue · Needs response · Needs review · Needs response · Resolved` |
+| 12–13 · authoritative resolution | clicked `[data-cc-triage="resolved"]` → `attention: needs_response → resolved` |
+| 15 · convergence | projection **gone** — 0 rows, "No work items match your search." |
+| 16 · operational_tasks after | 7 durable rows · **0** referencing the thread · **0** with a `communications:` id shape |
+| 17 · external delivery | `last_message_direction` stays `inbound` before and after — no outbound send at any point |
+
+### Unread ≠ Needs Reply — measured again
+
+`unread` was **3 before and 3 after**. The thread stayed unread and stopped projecting, so the
+actionable row cannot be an unread artifact. This is structural, not incidental:
+`conversationRequiresReplyForWorkItemProjection` consults `attention_state` and `scope_status` and
+never reads the unread count.
+
+### A navigation finding worth recording
+
+"Open conversation" first appeared to land on the Communications **overview** rather than the
+thread. It does not. The Communications modal now opens through `CommunicationsWorkspaceShell`
+(Work/Studio · Overview/Inbox), and every tab panel is present in the DOM while only the active one
+is visible — so a text dump of the shell reads like the overview no matter which tab is active, and
+a guessed `data-testid` for the command center matches nothing. Verified properly, the event fires
+with the right thread id, `aria-selected` is `true` on **Inbox**, and the Certfree thread is the
+selected row with its messages rendered. Recorded because the wrong conclusion here would have been
+a fabricated defect against a product that behaves correctly.
+
+### Scope
+
+No product code was changed for H2. The only edits are this evidence file. `typecheck`,
+`typecheck:tests`, the four prebuild guards, `tests/workItems` and `tests/processing` were re-run on
+this SHA; results are in the promotion report.
