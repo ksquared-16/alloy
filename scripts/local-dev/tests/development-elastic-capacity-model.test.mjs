@@ -39,6 +39,7 @@ writeFileSync(CONFIG, 'ALLOY_MAX_ACTIVE_PROVIDERS="8"\nALLOY_MAX_RUNNING_SERVERS
 
 const C = await import("../lib/vacilando/capacity-precedence.mjs");
 const P = await import("../lib/vacilando/capacity-policy.mjs");
+const { managedSlotCount } = await import("../lib/vacilando/managed-slots.mjs");
 
 let pass = 0;
 let fail = 0;
@@ -155,7 +156,7 @@ await test("E11. a FULL slot table does not block admitting a provider", async (
   // The layer-1/layer-2 independence, at the admission point rather than in the
   // declarations: every slot occupied, execution capacity still free.
   const A = await import("../lib/vacilando/alloy-dev-adapter.mjs");
-  const full = Array.from({ length: 12 }, (_, i) => ({
+  const full = Array.from({ length: managedSlotCount() }, (_, i) => ({
     slot: i + 1, path: process.cwd(), lifecycle: "active", agent_status: "active",
     name: `wt${i + 1}`,
   }));
@@ -172,8 +173,8 @@ await test("E12. slots free, execution full — the refusal is concurrency, not 
   // empty while the execution ceiling is spent, and admission still refuses.
   // Placement availability and permission to work are different questions.
   const A = await import("../lib/vacilando/alloy-dev-adapter.mjs");
-  // FIXED_SLOT_RANGE is 6 (the fixed-PORT range, not the managed-slot count),
-  // so five occupied leaves one free while the ceiling of four is already spent.
+  // Free slots are counted against the managed topology, so five occupied
+  // leaves the rest free while the ceiling of four is already spent.
   const busy = Array.from({ length: 5 }, (_, i) => ({
     slot: i + 1, path: process.cwd(), lifecycle: "active", agent_status: "active",
     name: `wt${i + 1}`,
