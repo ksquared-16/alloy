@@ -6,6 +6,7 @@
  * or mutate, `/Users/Kelly/Alloy` or any other dirty checkout.
  */
 import { spawnSync } from "node:child_process";
+import { resolveTrustedDatabaseTarget } from "./trusted-host-database-target.mjs";
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { createHash } from "node:crypto";
@@ -828,6 +829,36 @@ export function ledgerLookupSql(version) {
   return `SELECT version FROM supabase_migrations.schema_migrations WHERE version = '${v}';`;
 }
 
+/*
+ * ── THE SAME-TARGET INVARIANT ──
+ *
+ * Ledger target, postcondition target and migration target MUST be identical for
+ * one governed migration action.
+ *
+ * They were not. The write child chose its database from the requested
+ * environment while the read child had no environment argument at all and always
+ * loaded the deployed credential. So `environment: certification` read its ledger
+ * from DEPLOYED and wrote to alloy-cert. A version recorded on deployed and
+ * absent from certification was then reported `idempotent: true, ledger:
+ * "applied"` and skipped -- a success message for a migration that never ran.
+ *
+ * Each child now reports the target it actually resolved, and those reports are
+ * compared against the target this request asked for. A disagreement fails
+ * CLOSED, before any mutation, rather than being reconciled or ignored.
+ */
+function assertSameTarget({ expected, observed, stage, version, path }) {
+  if (!observed || observed === expected) return null;
+  return {
+    ok: false,
+    version,
+    path,
+    code: "target_invariant_violated",
+    detail:
+      `The ${stage} for ${version} ran against ${observed}, but this request targets ${expected}. `
+      + "Ledger, postcondition and migration targets must be identical; refusing before any mutation.",
+  };
+}
+
 export function applyMigrationBatch(normalized, {
   inspectLedger = null,
   applyFile = null,
@@ -835,6 +866,20 @@ export function applyMigrationBatch(normalized, {
   nowMs = Date.now(),
 } = {}) {
   const results = [];
+  // Resolve once, from the canonical owner, and hold every child to it.
+  const expectedTarget = resolveTrustedDatabaseTarget(normalized.environment);
+  if (!expectedTarget.ok) {
+    return {
+      ok: false,
+      stopped: true,
+      code: expectedTarget.code,
+      detail: expectedTarget.detail,
+      environment: normalized.environment,
+      expectedSha: normalized.expectedSha,
+      results: [],
+    };
+  }
+  const expectedTargetId = expectedTarget.targetId;
   for (const entry of normalized.migrations) {
     const latest = readContent({
       // The runtime re-read applies the SAME environment rule as validation.
@@ -871,6 +916,16 @@ export function applyMigrationBatch(normalized, {
     const ledger = inspectLedger
       ? inspectLedger({ version: entry.version, environment: normalized.environment })
       : { applied: false };
+    // Before the ledger answer is ALLOWED to decide anything -- especially
+    // before "already applied" can skip a migration -- prove it came from the
+    // database this request is for.
+    for (const [stage, observed] of [["ledger read", ledger?.targetId], ["postcondition probe", ledger?.probeTargetId]]) {
+      const violation = assertSameTarget({ expected: expectedTargetId, observed, stage, version: entry.version, path: entry.path });
+      if (violation) {
+        results.push(violation);
+        return { ok: false, stopped: true, code: "target_invariant_violated", detail: violation.detail, environment: normalized.environment, expectedSha: normalized.expectedSha, results };
+      }
+    }
     if (ledger?.ok === false) {
       results.push({
         ok: false,
@@ -920,6 +975,13 @@ export function applyMigrationBatch(normalized, {
         detail: applied?.detail || "Migration apply failed",
       });
       return { ok: false, stopped: true, environment: normalized.environment, expectedSha: normalized.expectedSha, results };
+    }
+    // The write cannot be undone here, but it must not be reported as a success
+    // for the requested environment if it landed somewhere else.
+    const writeViolation = assertSameTarget({ expected: expectedTargetId, observed: applied?.targetId, stage: "migration write", version: entry.version, path: entry.path });
+    if (writeViolation) {
+      results.push(writeViolation);
+      return { ok: false, stopped: true, code: "target_invariant_violated", detail: writeViolation.detail, environment: normalized.environment, expectedSha: normalized.expectedSha, results };
     }
     results.push({
       ok: true,
