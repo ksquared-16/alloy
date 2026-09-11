@@ -4,6 +4,7 @@ import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles"
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import {
     resolveAdminAccessDimensionsForOrgMember,
+    type AttendanceCaptureScopeMode,
     type DepartmentScopeMode,
     type SiteScopeMode,
 } from "@/lib/admin/resolveAdminAccessCore";
@@ -19,6 +20,19 @@ function normalizeSiteScope(raw: unknown): SiteScopeMode | null {
     const s = typeof raw === "string" ? raw.trim().toLowerCase() : "";
     if (s === "all" || s === "") return "all";
     if (s === "restricted") return "restricted";
+    return null;
+}
+
+/**
+ * Attendance capture scope. Absent means "unchanged" rather than "site": this
+ * field was writable by nothing for its whole life, so a caller that predates it
+ * must not silently narrow a teacher who was set to `assigned` out of band.
+ */
+function normalizeCaptureScope(raw: unknown): AttendanceCaptureScopeMode | null | "unchanged" {
+    if (raw === undefined || raw === null) return "unchanged";
+    const s = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    if (s === "site") return "site";
+    if (s === "assigned") return "assigned";
     return null;
 }
 
@@ -95,6 +109,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         return NextResponse.json({ error: "department_scope and site_scope must be all or restricted" }, { status: 400 });
     }
 
+    const attendance_capture_scope = normalizeCaptureScope(body.attendance_capture_scope);
+    if (attendance_capture_scope == null) {
+        return NextResponse.json(
+            { error: "attendance_capture_scope must be site or assigned" },
+            { status: 400 }
+        );
+    }
+
     const department_ids = uniqStrings(body.department_ids);
     const site_location_ids = uniqStrings(body.site_location_ids);
 
@@ -146,15 +168,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         }
     }
 
-    const { error: upErr } = await supabase.from("user_access_profiles").upsert(
-        {
-            user_id: uid,
-            org_id: access.orgId,
-            department_scope,
-            site_scope,
-        },
-        { onConflict: "user_id,org_id" }
-    );
+    // Only the named columns are written, so omitting attendance_capture_scope
+    // leaves the stored value alone rather than resetting it to the column default.
+    const profile: Record<string, unknown> = {
+        user_id: uid,
+        org_id: access.orgId,
+        department_scope,
+        site_scope,
+    };
+    if (attendance_capture_scope !== "unchanged") {
+        profile.attendance_capture_scope = attendance_capture_scope;
+    }
+
+    const { error: upErr } = await supabase
+        .from("user_access_profiles")
+        .upsert(profile, { onConflict: "user_id,org_id" });
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
     const { error: delDeptErr } = await supabase.from("user_department_access").delete().eq("user_id", uid).eq("org_id", access.orgId);
