@@ -229,9 +229,16 @@ if (op === "restore") {
    * that could not be created at all, which is how this was caught on the live installation.
    */
   const { resolveGovernedAuthority } = await import("./lib/vacilando/governed-repository-authority.mjs");
-  const { requestGovernedAction } = await import("./lib/vacilando/governed-action-request.mjs");
+  /*
+   * Filed through the infrastructure preflight. The restore resolves slot, port
+   * and registered identity from the registry, so the lane must hold a
+   * Development Slot for this request to be executable at all; `ensureLaneSlot`
+   * gets it one if that can be done safely, and refuses rather than taking a
+   * working lane's.
+   */
+  const { fileGovernedActionWithQaSlotPreflight } = await import("./lib/vacilando/qa-slot-preflight.mjs");
   const authority = await resolveGovernedAuthority(validated.lane_id);
-  const asked = requestGovernedAction({
+  const asked = await fileGovernedActionWithQaSlotPreflight({
     action_key: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
     run_id: process.env.VACILANDO_RUN_ID || null,
     lane_id: validated.lane_id,
@@ -240,7 +247,9 @@ if (op === "restore") {
     inputs: { laneId: validated.lane_id },
     __authority: authority,
   }, { processNow: false });
-  const requested = asked?.ok ? { ok: true, requestId: asked.request?.request_id || null } : { ok: false, error: asked?.error || "request_refused" };
+  const requested = asked?.ok
+    ? { ok: true, requestId: asked.request?.request_id || null }
+    : { ok: false, error: asked?.error || "request_refused", detail: asked?.detail || null };
   const out = publicBootstrapOutcome({
     validated,
     state: requested?.ok === false ? "refused" : "awaiting_operator_approval",
@@ -249,6 +258,7 @@ if (op === "restore") {
   emit(out, () => {
     if (requested?.ok === false) {
       process.stdout.write(`Restore could not be requested: ${requested.error}\n`);
+      if (requested.detail) process.stdout.write(`  ${requested.detail}\n`);
       return;
     }
     process.stdout.write(`Restore requested for slot ${validated.slot} (${validated.expected_identity}).\n`);
