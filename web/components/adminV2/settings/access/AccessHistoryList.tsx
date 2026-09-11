@@ -193,7 +193,14 @@ export default function AccessHistoryList({
                             </span>
                         </div>
 
-                        {entry.changes.length ?
+                        {/*
+                          * ONLY WHEN THEY ADD SOMETHING. The summary already states the first change
+                          * in full — "… changed Portal only — Financials from No access to View" —
+                          * so for a single-change event the row beneath it repeated the same
+                          * sentence word for word, twenty lines where ten would do. The summary's
+                          * "and N more" is exactly the signal that the list is worth showing.
+                          */}
+                        {entry.changes.length > 1 ?
                             <ul className="mt-1 space-y-0.5">
                                 {entry.changes.map((c) => (
                                     <li

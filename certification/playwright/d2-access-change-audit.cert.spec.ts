@@ -178,10 +178,13 @@ test.describe("D2 — access change audit, mounted", () => {
         // And the specific leak this guards against, named rather than inferred from a shape.
         expect(text).not.toContain("fin.read");
 
-        const change = page.getByTestId("access-role-history-list-change").first();
-        await expect(change).toContainText("Financials");
-        await expect(change).toContainText("No access");
-        await expect(change).toContainText("View");
+        /*
+         * THE SENTENCE CARRIES IT. A single-change event states the whole change in its summary, so
+         * the per-row list would repeat it word for word — the list appears when there is more than
+         * one change and the summary can only say "and N more".
+         */
+        expect(text).toMatch(/Financials from No access to View/);
+        await expect(page.getByTestId("access-role-history-list-change").first()).toHaveCount(0);
 
         // Keys ARE available, one disclosure away, for whoever needs them.
         await page.getByTestId("access-role-history-list-detail-toggle").first().click();
@@ -231,16 +234,15 @@ test.describe("D2 — access change audit, mounted", () => {
         // The grant did not disappear when the revoke landed — history accumulates, it does not
         // replace. It is on this page or behind Load more; either way the feed still holds it.
         const summaries = await page.getByTestId("access-role-history-list-summary").allInnerTexts();
-        const hasGrantHere = summaries.some((t) => t.includes("to View"));
+        const hasGrantHere = summaries.some((t) => t.includes("No access to View"));
         expect(
             hasGrantHere || (await page.getByTestId("access-role-history-list-load-more").count()) > 0,
             "the grant must still be reachable in history after the revoke"
         ).toBe(true);
 
         // Newest first: the revoke is on top, and it says the opposite of the grant.
-        const newest = page.getByTestId("access-role-history-list-change").first();
-        await expect(newest).toContainText("View");
-        await expect(newest).toContainText("No access");
+        const newest = page.getByTestId("access-role-history-list-summary").first();
+        await expect(newest).toContainText("Financials from View to No access");
     });
 
     test("grant and revoke are separate correlated actions, not one", async ({ page }) => {

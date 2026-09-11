@@ -65,6 +65,34 @@ describe("the operator sentence", () => {
         expect(e.technical.newState).toBe("fin.read");
     });
 
+    it("names the row when one area moved in several directions at once", () => {
+        /*
+         * SEEN IN THE MOUNTED EVIDENCE. A save that moved four Financials capabilities rendered
+         * "Financials: Manage → No access" three times and "Financials: Manage → View" once — four
+         * lines an operator cannot tell apart, which reads as a display bug rather than four facts.
+         * When the area stops being a unique name, the row supplies its own.
+         */
+        const financials = CATALOG.filter((c) => c.group_key === "financials").map((c) => c.key);
+        expect(financials.length, "the catalog must define several Financials capabilities").toBeGreaterThan(2);
+
+        const presented = presentAccessEvent(
+            row({ previous_state: financials.join(","), new_state: "" }),
+            NAMES,
+            CATALOG
+        );
+        const labels = presented.changes.map((c) => c.area);
+        expect(labels.length, "several rows moved").toBeGreaterThan(1);
+        expect(new Set(labels).size, "two rows must never render the same sentence").toBe(labels.length);
+        for (const label of labels) expect(label).toContain("Financials");
+    });
+
+    it("keeps the bare area name when only one row moved", () => {
+        // The single-row case is the operator's own sentence — "Financials … No access → View" — and
+        // decorating it with the row name would make the common case wordier to fix the rare one.
+        const presented = presentAccessEvent(row({ previous_state: "", new_state: "fin.read" }), NAMES, CATALOG);
+        expect(presented.changes).toContainEqual({ area: "Financials", from: "No access", to: "View" });
+    });
+
     it("renders a revoke as the reverse, and keeps both directions legible", () => {
         const e = presentAccessEvent(row({ previous_state: "fin.read", new_state: "" }), NAMES, CATALOG);
         expect(e.summary).toContain("Financials");

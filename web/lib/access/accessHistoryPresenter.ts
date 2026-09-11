@@ -155,7 +155,7 @@ function capabilityAreaChanges(
 ): { area: string; from: string; to: string }[] {
     const beforeSet = new Set(before);
     const afterSet = new Set(after);
-    const changes: { area: string; from: string; to: string }[] = [];
+    const changes: { area: string; rowLabel: string; from: string; to: string }[] = [];
 
     for (const row of buildPermissionGridRows(catalog)) {
         // An inert row offers no control in the editor, so a change in it is not a change an
@@ -165,9 +165,31 @@ function capabilityAreaChanges(
         const to = levelFromGrantedKeys(row, afterSet);
         if (from === to) continue;
         const area = areaMeta(areaForRow(row))?.label ?? row.groupLabel;
-        changes.push({ area, from: LEVEL_WORD[from], to: LEVEL_WORD[to] });
+        changes.push({ area, rowLabel: row.label, from: LEVEL_WORD[from], to: LEVEL_WORD[to] });
     }
-    return changes.sort((a, b) => a.area.localeCompare(b.area));
+
+    /*
+     * NAME THE ROW WHEN THE AREA NO LONGER DISTINGUISHES IT.
+     *
+     * An area holds several grid rows, so a save that moved four Financials capabilities rendered
+     * "Financials: Manage → No access" three times and "Financials: Manage → View" once — four lines
+     * an operator cannot tell apart, which reads as a display bug rather than as four facts. Seen in
+     * the mounted evidence, not deduced.
+     *
+     * A SINGLE changed row keeps the area's name, because that is how the editor states it and
+     * "Financials — No access → View" is the sentence the operator just performed. Only when the area
+     * stops being a unique name does the row supply its own.
+     */
+    const perArea = new Map<string, number>();
+    for (const c of changes) perArea.set(c.area, (perArea.get(c.area) ?? 0) + 1);
+
+    return changes
+        .map(({ area, rowLabel, from, to }) => ({
+            area: (perArea.get(area) ?? 0) > 1 && rowLabel && rowLabel !== area ? `${area} · ${rowLabel}` : area,
+            from,
+            to,
+        }))
+        .sort((a, b) => a.area.localeCompare(b.area));
 }
 
 function joinRoles(keys: string[], names: ReadonlyMap<string, string>): string {
