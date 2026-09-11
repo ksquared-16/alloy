@@ -254,6 +254,30 @@ symbol bound to it, which is why the defect has recurred three times. `enrollmen
 five of five lines, ten days and two assignments after it was reported**, and a **new** drift is found in
 `tour-booking/[token]/resolve`. Register correction deferred a second time on scope; **a scope grant is
 requested** (§5)
+· **W-4 seventh issuance 2026-09-11** (mission `msn_83dbd2706970c833d6`, assignment `asg_0e845249216e30`) —
+**NOT RUN, and by a new cause.** The parser is present this time; the *process* is refused. `node`, `npm`
+and `npx` are blocked by the session's Bash permission gate, and all twelve slots are free with no lane
+naming this worktree, so the broker has no slot either. **No count is claimed for this date and 2026-09-06
+remains the last measured column** — the remedy is a slot or an approval, not an edit to this repository.
+Every parser-free check passes: ceilings **23/23** and **12/12** equal the list lengths, `baseline` empty,
+all **35** listed routes exist, all 23 exceptions still import a client directly and all 12 advisory entries
+import none. **The register moved an eighth time outside any W-4 assignment** — `69f62054c` on 2026-09-09
+raised the ceiling 22 → 23 for the Stripe Connect webhook, the register's **first `provider-signature`
+entry**; its model was re-verified and **holds** (HMAC before the body is read, tenancy from the merchant
+binding, fails closed on an unbound account at `:238-243`), but whether the *tree's* count is also 23 is
+exactly what the blocked walk would have said. **Half the 2026-08-06 finding is repaired, by another
+track**: `.github/workflows/web-prebuild-gates.yml` (added 2026-09-09) now runs `npm run prebuild` as a
+required check on every pull request, so the admission gate bites **before** the merge instead of on staging
+after it — the single biggest strengthening since the ratchet moved into the register. **The other half is
+untouched**: `max_baseline` was not added, `checkServiceClientPrincipal.mjs:539` still short-circuits
+`baseline` identically to `exceptions`, and `tests/access` runs in none of the now-eight workflows, so the
+**relabelling** escape stands. **Citation drift is worse than 2026-09-06 reported**: a deliberately wider
+instrument finds **10 of 14** checkable references drifted, including two in `webhooks/resend` never
+previously caught, a changed *predicate* in `action/[token]` (`token` → `token_hash`), a gate cited in a
+route it no longer sits in (`public/forms/[token]/resolve`), and **all three citations in the two-day-old
+Stripe entry wrong on the day they were written** — which refutes the backlog framing and shows backticking
+makes a claim falsifiable, not true. `enrollment-upload` is unrepaired at **three assignments and eleven
+days**. **Register correction deferred a third time on scope; the scope grant is re-requested** (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -3021,6 +3045,214 @@ time.
 
 ---
 
+#### W-4, seventh issuance — **2026-09-11**, assignment `asg_0e845249216e30`: the measurement is blocked by a new cause, the register moved again unwitnessed, and half the 2026-08-06 finding was repaired by another track
+
+Seventh leg. §4's rule applies a seventh time: **re-execute rather than re-assert** — and this leg falls
+between the fifth and the sixth in what it could do. The parser is present, unlike 2026-09-04:
+`web/node_modules/typescript` resolves. What fails is one step earlier. `node`, `npm` and `npx` are refused
+by this session's Bash permission gate, and `alloy-worker-status` reports all twelve slots free with **no
+lane naming this worktree**, so the brokered path has no slot to admit either. **The AST walk did not run.
+No count is claimed for 2026-09-11, and 2026-09-06 remains the last measured column.**
+
+The distinction from the fifth issuance matters and should not be collapsed into "blocked again". That leg
+was blocked by a *missing dependency* — a repairable state of the tree. This one is blocked by the
+*execution environment's own policy*, which no edit to this repository can fix. It is worth recording
+because the remedy is different: not `npm ci`, but a slot or an approval.
+
+| Field | Value |
+|---|---|
+| Base | `e59ece2e8` @ `runtime/migration-target-resolution` — **0 behind `origin/staging`**, 2 ahead. The freshest base any W-4 leg has run on; the sixth issuance was 8 behind. API routes **613** (603 on 2026-09-06); migrations **403** (373). Root is `managed-worktree`, sanctioned |
+| CLI | `node web/scripts/checkServiceClientPrincipal.mjs` — **NOT RUN.** Refused by the session permission gate, *not* by `route-heavy-validation.sh`, which blocks with its own message and did not fire |
+| Lock | `web/tests/access/serviceClientPrincipalCheck.test.ts` — **NOT RUN**, same cause; `npx vitest` is refused identically |
+| Evidence | [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) **not regenerated** — it still carries the 2026-09-06 walk and is now five days and ten routes stale |
+| Changed by this assignment | This record, §4's status line, §13's RL-15 row. **No source, test, register, evidence or migration file** |
+
+##### What was verified without a parser — and the sharp line around what that establishes
+
+The fifth issuance established this fallback: the checks that need no parser still run, and they bound the
+register's *structural* integrity even when its *live* counts cannot be taken. Every one of them passes.
+
+| Static property | Result |
+|---|---|
+| `max_subject_unresolved` equals the `exceptions` length | **23 = 23** |
+| `max_transitive_only_unresolved` equals the `advisory_transitive_only` length | **12 = 12** |
+| `baseline` is empty | **yes** — so exceptions/baseline disjointness holds trivially |
+| All 35 listed routes exist in the tree | **35 / 35** — no `stale-missing` entry is possible |
+| Every `exceptions` entry still imports a service client directly | **23 / 23** — no `stale-no-service-client` entry is possible |
+| Every `advisory_transitive_only` entry imports none directly | **12 / 12** — consistent with transitive-only membership |
+
+**What this does not establish, stated plainly.** Every row above is a fact about the register and about
+import text. The predicate that decides this workstream's number — *does this route resolve a principal* —
+is a walk through the first-party import graph to a terminal `.auth.getUser()`, `getClaims`, `getSession`
+or a named non-human resolver, and it has **no textual proxy**: a route may resolve a principal four modules
+deep through a helper, which is precisely why the instrument is an AST walk and not a grep. So the three
+failure kinds that need the walk — `stale-now-resolves`, `unlisted`, and both `ratchet` verdicts against a
+*live* floor — are **unprobed this run**.
+
+An independent ripgrep over the two service-client modules and `SUPABASE_SERVICE_ROLE_KEY` puts the
+direct-holder subject at **577 of 613**, against 570 of 603 on 2026-09-06 — a plausible +7 holders across
++10 new routes. **This is offered as a sanity bound, not as a measurement.** It is a cruder predicate than
+`holdsServiceClientDirect` (which also follows re-exports), and the sixth issuance's warning about an
+instrument whose result is an artifact of itself applies with full force to a number produced this way.
+
+##### The register moved again outside a W-4 assignment — the eighth such move, and the first to add a new model
+
+`git log` on the register shows one edit since the sixth issuance: `69f62054c`, **2026-09-09**, *"declare
+the Stripe webhook's own authorization model"*. It raised `max_subject_unresolved` **22 → 23**, moved
+`reviewed` 2026-08-27 → 2026-09-09, and added `app/api/stripe/webhook/route.ts` as the register's **first
+`provider-signature` entry** — every prior exception was `capability-token`, `public-catalog-read`,
+`public-intake-create` or the single `webhook-signature` Resend route.
+
+The entry's *reasoning* is sound and is the right call: a provider callback has no Alloy principal to
+resolve by construction, Stripe cannot present a session, and the signature is the authentication. The
+model was re-verified against the tree this run and **holds** — the HMAC is checked before the body is read
+as authority (`verifyStripeSignature` at `stripeWebhook.ts:154`, comparison via `timingSafeEqual` at
+`:100`), tenancy comes from the connected account through the merchant binding rather than from the payload
+(`resolveOrgForConnectedAccount` at `:237`), and an account bound to no organization **fails closed** at
+`:238-243` rather than guessing a tenant, with a separate refusal at `:235` when no account is present.
+
+What is *not* sound is that this happened unwitnessed, for the eighth time. The fifth issuance worried that
+a register advancing outside any assignment might drift from the tree; the sixth answered that worry in the
+negative on the numbers. **This run cannot answer it at all**, because answering it is exactly what the walk
+does. The ceiling is now 23 and the list is 23 — but whether the *tree's* unresolved count is also 23 is
+unmeasured, and the eighth unwitnessed move is the first one for which that is true.
+
+##### Half the 2026-08-06 finding has been repaired — by another track, and it is the more important half
+
+The sixth issuance's central finding was that the 2026-08-06 repair was half-applied: the ceilings moved
+into the register where `prebuild` enforces them, while three freeze clauses stayed in a vitest lock that
+**no CI workflow ran**, and `prebuild` itself bit only through Vercel's `next build` after the merge.
+
+One half is now fixed, and not by this programme. `.github/workflows/web-prebuild-gates.yml` was added
+**2026-09-09** in `6b9bfff35` and hardened the same day by `cae164e12`; there are now **eight** workflows
+where the sixth issuance checked six. It runs `npm run prebuild` on `on: pull_request` with no `paths:`
+filter, as a required check, and its header is explicit that it invokes the real chain rather than a copy —
+*"IT RUNS `npm run prebuild`, NOT A COPY OF IT"* — for the reason this document would give: a second
+implementation would drift from the one the build runs.
+
+Its stated motivation names this workstream's own history. Two lanes merged green PRs and broke staging:
+Communications with `app/api/communications/unsubscribe` on 2026-08-20, and Attendance with
+`app/api/admin/childcare-attendance/service-day-exception` on **2026-09-09** — the same day the Stripe entry
+landed. Both times *"the gate worked perfectly and simply ran too late to be of use."* That is the precise
+diagnosis the 2026-08-06 leg gave, arrived at independently by a track that was not reading this file.
+
+**So the table the sixth issuance drew must be redrawn, and it improves in the column that matters most:**
+
+| Discipline | Asserted in | `prebuild` sees it | Runs pre-merge in CI |
+|---|---|---|---|
+| ceilings, over *and* under | register + check | **yes** (2026-08-06) | **yes — new, 2026-09-09** |
+| the frozen baseline may not grow | `serviceClientPrincipalCheck.test.ts:157` | no | **no** |
+| every baseline entry states why it is not an exception | `:137` | no | **no** |
+| `exceptions` and `baseline` are disjoint | `:144` | no | **no** |
+
+The admission gate — the property that no *new* ungated route can enter — has gone from *"bites only on
+staging, after the merge"* to *"bites on every pull request, before it"*. That is a material strengthening
+of W-4's enforced predicate and the best news this workstream has had since the ratchet moved into the
+register.
+
+**The relabelling escape is unchanged, and was re-confirmed at the source rather than assumed.**
+`checkServiceClientPrincipal.mjs:539` still reads
+`if (exceptions.has(r.route) || baseline.has(r.route)) continue;`, and the ratchet loop at `:614-617` still
+bounds exactly two keys. **`max_baseline` was not added.** The fix the sixth issuance handed forward — seed
+a `max_baseline` ceiling at 0 and require a reason field, which costs nothing at the current empty baseline
+— is **unactioned five days later**, and `tests/access` still appears in none of the eight workflows. All 23
+reviewed exceptions can still be relabelled as unreasoned frozen backlog with `prebuild` green. The bound
+stated on 2026-09-06 still holds and still limits the severity: `max_subject_unresolved` counts the union,
+so this remains a **relabelling** escape against the register's *reviewedness*, not an **admission** escape
+against the tree's authority.
+
+##### Citation drift: a broader instrument, and the finding is worse than 2026-09-06 reported
+
+The sixth issuance measured 21 line references, judged **5** mechanically checkable, and found **3 of those
+5 drifted**. That instrument admitted only a backticked *identifier* beside a line number. This run widened
+it by one deliberate step — a distinctive backticked *expression* (`` `.eq("token", token)` ``) is as
+bindable as a bare identifier, and a cross-file citation is checkable once resolved to its real file — and
+re-ran it over all 35 entries, including the Stripe entry that did not exist on 2026-09-06.
+
+**The two instruments are not directly comparable and the rates should not be quoted against each other.**
+Under the wider reading: **14 checkable references, 4 exact, 10 drifted.**
+
+| Entry | Citation | Actual | |
+|---|---|---|---|
+| `submissions/[submissionId]` | `verifySubmissionBelongsToPublicEmbed` `:58`, `:144` | `:58`, `:144` | **exact** |
+| `enrollment-artifact` | `resolveParticipantEnrollmentFromToken` `:52`; `resolveActiveArtifact` `:59` | `:52`, `:59` | **exact** |
+| `action/[token]` | `` `.eq("token", token)` `` at `:22` | `.eq("token_hash", hashFormLinkToken(token))` at `:23` | **drifted — and the predicate changed** |
+| `public/forms/[token]/resolve` | `resolvePublicFormEmbedContext(supabase, token)` `:31` | **not in the route at all** — now `buildPublicFormResolvePayload.ts:59` | **drifted, cross-file** |
+| `webhooks/resend` | `Webhook.verify` `:69`; `createAdminClient()` `:91` | `:110`; `:132` | **drifted ×2 — never previously reported** |
+| `enrollment-upload` | `uploadDestinationForField` `:105`; `process_instances.subject_id` `:111-117` | renamed `resolveParticipantUploadDestination` at `:110`; `:123-128` | **drifted ×2, unrepaired** |
+| `stripe/webhook` | `verifyStripeSignature` `:128`; `timingSafeEqual` `:57` | `:67` (def) / `:154` (call); `:100` (import `:20`) | **drifted ×2 — entry is two days old** |
+| `tour-booking/[token]/resolve` | `guardTourActionRoute` `:39`; `REQUIRED_ACTIONS` `:27-35` | `:45`; `:32` | **drifted ×2, unrepaired** |
+
+**Three results here are new, and each says something the previous legs could not.**
+
+**1. `webhooks/resend` has been wrong since some point before this run and nobody had looked.** It is an
+original 2026-07-31 entry. The sixth issuance's narrower instrument did not admit its two citations, so
+"3 of 5" was never the whole picture — it was the picture its instrument could see. Widening the instrument
+by one modest step surfaced two more drifted references in an entry that had been carried as sound for six
+weeks.
+
+**2. `action/[token]`'s reason is not merely mis-numbered — it describes a predicate the code no longer
+uses.** The register states the row is selected by the bearer token via `.eq("token", token)`. The route
+selects by `.eq("token_hash", hashFormLinkToken(token))`. The security model is **stronger** than the
+register claims (the raw token is not stored or compared), so this is not an exposure — but a security
+register that describes the wrong mechanism is not a reviewed artifact, and the direction of the error is
+luck rather than control.
+
+**3. The Stripe entry was wrong on all three of its checkable citations on the day it was written.** It
+landed 2026-09-09, two days before this run. Its `:128`, `:57` and `:217` were not *drifted* by subsequent
+commits — `:217` sits inside the `finish` helper and never held the fail-closed it is cited for, and
+`payment_provider_merchants` is named as though it were in `stripeWebhook.ts` when it lives in
+`providerMerchant.ts`. **This refutes the framing that citation drift is a maintenance backlog.** It is
+reproduced at the moment of authorship, by a careful author writing a genuinely correct security argument.
+
+That third result also sharpens the sixth issuance's prescription rather than confirming it. That leg
+proposed *"a convention of backticking the symbol beside every line number"* to make the register
+mechanically checkable. **The Stripe entry did exactly that** — `` `verifyStripeSignature` ``,
+`` `timingSafeEqual` `` — **and was still wrong on every one.** Backticking is therefore necessary and
+plainly insufficient: it converts an unverifiable claim into a *falsifiable* one, which is real progress and
+is why this run could catch it in two days instead of six weeks, but it does nothing to make the claim true.
+The control that would actually work is mechanical: the citation audit run in this section is ~40 lines of
+script over a register that now has a checkable majority, and it belongs in `tests/access` beside the
+freeze clauses, not in a QA document that runs when a W-4 assignment happens to be issued.
+
+**`enrollment-upload` is unrepaired at three assignments and eleven days**, exactly as handed forward on
+2026-09-04 and 2026-09-06, all five lines still wrong (`:75`→`:73`, `:88`→`:86`, `:105`→`:110` and renamed,
+`:135`→`:146`, `:111-117`→`:123-128`). Its security model was re-verified again and is intact.
+`tour-booking/[token]/resolve` is likewise unrepaired since 2026-09-06.
+
+**Deferred a third time, and the escalation is now the finding.** This assignment's scope names this
+document alone, as the fifth and sixth issuances' did. Three consecutive legs have produced a precise,
+complete, unactioned set of corrections to `serviceClientPrincipal.allowlist.json`. The sixth issuance
+already observed that *"two consecutive runs producing an identical, precise, unactioned handoff is evidence
+that the handoff mechanism is not working."* A third repetition settles it. **The scope grant requested on
+2026-09-06 is re-requested, and the corrections in the table above are complete enough to apply without
+re-deriving them.**
+
+##### Not verified this run
+
+**The entire live measurement** — counts, ratchet verdicts against a live floor, unlisted routes,
+`stale-now-resolves` — for the reason given at the top. **No lock run**, so the 18 tests are unconfirmed at
+this base. **No red demonstration**; the scratch-copy technique the sixth issuance established needs the
+same `node` the walk needs. **No evidence regeneration.** **No typecheck** — no TypeScript source was
+changed. **No live database query**, so W-0's counts are now **five weeks** old; nothing in W-4 depends on
+them. **No tier D**, per §14.3.7. **The 31 entries not named in the citation table were not re-read as
+prose** — the audit binds symbols to lines, which is strictly narrower than judging whether a stated
+authorization model is true of the route.
+
+**The honest limit is unchanged and still governs**: this check proves a principal is *resolved*, never that
+the result *gates* the handler. W-14 and W-15 still own that proof.
+
+**Mission identity, a fifth consecutive time.** This leg is issued under `msn_83dbd2706970c833d6`, *"Brief
+Spine Mission"* — the fifth consecutive access-hardening leg issued under a mission whose title names
+something other than access hardening (DX7 → DX-5 → DX-6 → DX-6 → Brief Spine). Four prior runs have raised
+it; none has been answered. **Concurrency, a sixth time**: seven modified files under
+`scripts/local-dev/lib/vacilando/` and `scripts/local-dev/tests/`, and an untracked
+`08-reuse-corpus-confirmation.md` in this directory, were present at session start and belong to other
+assignments. Neither touched, reverted, nor built upon — the fourth issuance's judgment, applied as policy
+for the fifth time.
+
+---
+
 ## 6. Wave 2 — The scope invariant
 
 The one *confirmed, fail-open* defect in the system, and the L1 lockout. Depends on W-0 Q4.
@@ -5081,7 +5313,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
-| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review. **2026-09-06 sixth issuance: RE-EXECUTED and GREEN**, 18 tests, and the four-week measurement gap is closed — **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory**, ceilings at the live floor in both directions. The fifth issuance's *blind* reading of the register is confirmed **exact by the walk**, and the regenerated evidence reproduces all seven ratchet moves route by route with nothing else moved. **The CLI is shown red for the first time since 2026-08-06** — five states, real non-zero exit codes, produced without mutating the tracked register by running a byte-identical copy of the check from a scratch dir inside `web/`, so it reads a substituted allow-list while walking the real tree. **New finding: the 2026-08-06 repair was half-applied.** The ceilings were moved into the register; the *freeze* clauses were not. Baseline growth, the per-entry reason requirement and exceptions/baseline disjointness are asserted only in the vitest lock, and **no CI workflow runs `tests/access`** — so all 22 reviewed exceptions can be relabelled as unreasoned frozen backlog with `prebuild` **green**, demonstrated. Bounded: `max_subject_unresolved` counts the union, so no *new* unresolved route can enter — a relabelling escape, not an admission one. Fix handed forward: a `max_baseline` ceiling seeded at 0. **Citation drift measured rather than assumed** — only **5 of 21** line references are in a checkable form and **3 of those 5 are drifted**, including a **new** one (`guardTourActionRoute` cited `:39`, actually `:45`); the other **16 name a line with no symbol bound to it**, which is why the defect recurs and why human re-reading was never a sufficient control. `enrollment-upload` remains wrong on all five lines, ten days and two assignments after it was reported |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review. **2026-09-06 sixth issuance: RE-EXECUTED and GREEN**, 18 tests, and the four-week measurement gap is closed — **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory**, ceilings at the live floor in both directions. The fifth issuance's *blind* reading of the register is confirmed **exact by the walk**, and the regenerated evidence reproduces all seven ratchet moves route by route with nothing else moved. **The CLI is shown red for the first time since 2026-08-06** — five states, real non-zero exit codes, produced without mutating the tracked register by running a byte-identical copy of the check from a scratch dir inside `web/`, so it reads a substituted allow-list while walking the real tree. **New finding: the 2026-08-06 repair was half-applied.** The ceilings were moved into the register; the *freeze* clauses were not. Baseline growth, the per-entry reason requirement and exceptions/baseline disjointness are asserted only in the vitest lock, and **no CI workflow runs `tests/access`** — so all 22 reviewed exceptions can be relabelled as unreasoned frozen backlog with `prebuild` **green**, demonstrated. Bounded: `max_subject_unresolved` counts the union, so no *new* unresolved route can enter — a relabelling escape, not an admission one. Fix handed forward: a `max_baseline` ceiling seeded at 0. **Citation drift measured rather than assumed** — only **5 of 21** line references are in a checkable form and **3 of those 5 are drifted**, including a **new** one (`guardTourActionRoute` cited `:39`, actually `:45`); the other **16 name a line with no symbol bound to it**, which is why the defect recurs and why human re-reading was never a sufficient control. `enrollment-upload` remains wrong on all five lines, ten days and two assignments after it was reported. **2026-09-11 seventh issuance: NOT RUN** — the parser is present but `node`/`npm`/`npx` are refused by the session permission gate and no lane holds a slot, so **no count is claimed for that date and 2026-09-06 remains the last measured column**; the remedy is a slot or an approval, not a repository edit. Parser-free checks all hold: ceilings **23/12** equal the list lengths, `baseline` empty, all **35** listed routes exist, all 23 exceptions still import a client directly and all 12 advisory entries import none. **The register moved an eighth time outside any assignment** (`69f62054c`, 2026-09-09, ceiling 22 → 23 for the Stripe Connect webhook — the first `provider-signature` entry; model re-verified and sound, fails closed on an unbound account at `:238-243`). **The admission half of the 2026-08-06 finding is REPAIRED by another track**: `.github/workflows/web-prebuild-gates.yml` (2026-09-09) runs `npm run prebuild` as a required check on every pull request, so the ratchet now bites pre-merge rather than on staging after it — its header names the two staging breaks this workstream's gate caught too late, `communications/unsubscribe` (2026-08-20) and `childcare-attendance/service-day-exception` (2026-09-09). **The freeze half is untouched**: no `max_baseline`, `:539` still short-circuits `baseline` identically to `exceptions`, `tests/access` in none of the now-eight workflows — the **relabelling** escape stands, bounded as before by the union ceiling. **Citation drift is worse than the sixth issuance could see**: a deliberately wider instrument (backticked *expressions* and resolved cross-file references, not just identifiers) finds **10 of 14 drifted, 4 exact** — two new in `webhooks/resend`, a changed predicate in `action/[token]` (`.eq("token", token)` → `.eq("token_hash", hashFormLinkToken(token))`, model stronger than the register claims), a gate cited in a route it no longer sits in (`public/forms/[token]/resolve` → `buildPublicFormResolvePayload.ts:59`), and **all three checkable citations in the two-day-old Stripe entry wrong on the day they were written**. That last one refutes the maintenance-backlog framing and shows the sixth issuance's backticking prescription makes a claim *falsifiable*, not *true*; the audit itself is ~40 lines and belongs in `tests/access`. `enrollment-upload` unrepaired at **three assignments and eleven days**; register correction **deferred a third time on scope** |
 
 **W-11 has no lock in either register, and did not mint one.** `RL-35` — *every catalog key resolves to ≥1
 enforcement site* — is `W-50`'s, and is red today by 36 keys, so it cannot be claimed here. The product-source
