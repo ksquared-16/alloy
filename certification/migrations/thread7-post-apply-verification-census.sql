@@ -165,6 +165,15 @@ from (
                where m.version = '20260911170000'),
            '5b'
     union all
+    -- EXACTLY ONCE, AS A VERDICT RATHER THAN A NUMBER TO COMPARE BY EYE.
+    -- A version registered twice is its own defect, and it is the failure mode a
+    -- ledger repair could introduce — so it is asked after one, not only before.
+    select 'ledger_integrity', 'check',
+           'supabase_migrations.schema_migrations ~ 20260911170000 ~ registered_exactly_once ~ '
+           || ((select count(*) from supabase_migrations.schema_migrations m
+                where m.version = '20260911170000') = 1)::text,
+           '5b2'
+    union all
     select 'ledger_head', 'value',
            (select coalesce(max(version), 'none') from supabase_migrations.schema_migrations), '5c'
     union all
