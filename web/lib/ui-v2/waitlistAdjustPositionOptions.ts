@@ -1,17 +1,20 @@
 /**
  * Which positions an operator may actually choose when adjusting a waitlist row.
  *
- * ── WHY THIS IS NOT "1 TO 999" ──
+ * ── ONE RANKED UNIVERSE, ONE RANGE ──
  *
- * The adjust command takes a `pin_ordinal` scoped to the row's own group, while the rank the row
- * DISPLAYS is scoped to the section it is listed in. Those are different numbers, which is exactly
- * what `pin_scoped_to_cohort` explains: a row can be pinned first in its group and still show 3/7,
- * because the section lists an earlier group ahead of it. The old control offered a free-text box
- * from 1 to 999, so an operator could type a number that means nothing in the row's own group and
- * get a result that looks wrong without being wrong.
+ * The position a row displays and the position this control edits are the same number, in the same
+ * scope: the waitlist SECTION the operator is reading. A row shown at `2/12` opens on `2` and can
+ * be moved anywhere in `1..12`.
  *
- * The bound comes from the canonical label the placement engine already produced —
- * `parseWaitlistRankParts` — so this introduces NO second ranking rule. It only refuses to offer a
+ * It was not always so. The command's `pin_ordinal` was once scoped to the row's own
+ * `program_room_cohort_key` while the displayed rank was scoped to the section, so one number was
+ * read and a different one edited — and because a section can hold several cohorts, some displayed
+ * positions could not be reached at all. `applySectionManualPositions` now places a pin within the
+ * section, which collapses the two domains into one.
+ *
+ * The bound still comes from the canonical label the placement engine produced
+ * (`parseWaitlistRankParts`), so this introduces NO second ranking rule. It only refuses to offer a
  * move the model cannot express.
  */
 import { parseWaitlistRankParts } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
@@ -22,15 +25,14 @@ import { parseWaitlistRankParts } from "@/lib/orchestration/placement/waitlistCa
  * ── WHY THIS IS NOT 10 ──
  *
  * It was 10, and 10 is not a number this domain produces. The deployed Firefly INFANT section holds
- * twelve candidates across two cohorts, so the pinned cohort `infant_0_18_months` holds eleven — and
- * an operator who wanted position 11 found the list stopped at 10 and had to discover "Custom…" to
- * reach a position that is perfectly ordinary in their own group. The cap was a UI convenience
- * standing in front of a legal move.
+ * twelve ranked candidates, and an operator who wanted position 11 or 12 found the list stopped at
+ * 10 and had to discover "Custom…" to reach a position that is perfectly ordinary in the list they
+ * are reading. The cap was a UI convenience standing in front of a legal move.
  *
- * The BOUND on a move is still the cohort total and has not changed: `total` below is
- * `runtime_group_total`, published by the placement engine, and nothing here recomputes it. This
- * constant only decides how many of those legal positions are offered as a click rather than a
- * keystroke, so raising it cannot let the control express a move the command cannot mean.
+ * The BOUND on a move is the ranked set the row is displayed in — `total` below comes from the
+ * canonical label the placement engine produced, and nothing here recomputes it. This constant only
+ * decides how many of those legal positions are offered as a click rather than a keystroke, so
+ * raising it cannot let the control express a move the command cannot mean.
  *
  * Twenty-five covers the cohorts this product actually has — a room's waitlist, not a phone book —
  * while keeping a genuinely long list from becoming an unusable menu. Beyond it the control lists a
@@ -60,8 +62,6 @@ export type WaitlistAdjustPositionModel = {
     total: number | null;
     /** The row's current ordinal, or null when the label carried none. */
     current: number | null;
-    /** True when the row's pin applies within its group rather than the whole section. */
-    scopedToGroup: boolean;
     /** True when more positions exist than are listed, so Custom is the only way to reach them. */
     customReachesFurther: boolean;
 };
@@ -74,42 +74,12 @@ export type WaitlistAdjustPositionModel = {
  */
 export function waitlistAdjustPositionModel(
     positionLabel: string | null | undefined,
-    precedenceReason?: string | null,
-    /**
-     * The GROUP-LOCAL range published by the placement engine
-     * (`runtime_group_position` / `runtime_group_total`). When present it WINS over the section
-     * label, because that is the range the command can actually express.
-     *
-     * The section label answers "where am I in the list I am reading" — a different question. A
-     * section holding `infant` and `infant_0_18_months` shows 12 while the pinned candidate's own
-     * cohort holds 11, so bounding on the label offered a "12" the write had to clamp: the
-     * operator's number silently became a different number. Nothing is recomputed here; this only
-     * prefers the authority that already answered.
-     */
-    group?: { position?: number | null; total?: number | null } | null,
 ): WaitlistAdjustPositionModel {
-    const scopedToGroup = precedenceReason === "pin_scoped_to_cohort";
-    const groupTotal = typeof group?.total === "number" && group.total > 0 ? Math.trunc(group.total) : null;
-    const groupPosition =
-        typeof group?.position === "number" && group.position > 0 ? Math.trunc(group.position) : null;
-    if (groupTotal != null) {
-        const listed = waitlistAdjustListedCount(groupTotal);
-        const options: number[] = [];
-        for (let i = 1; i <= listed; i++) options.push(i);
-        if (groupPosition != null && groupPosition > listed && groupPosition <= groupTotal) options.push(groupPosition);
-        return {
-            options,
-            total: groupTotal,
-            current: groupPosition,
-            scopedToGroup,
-            customReachesFurther: groupTotal > listed,
-        };
-    }
-    // No group range published (non-candidate row, or an engine that did not rank it): fall back to
-    // the section label rather than inventing a range.
+    // The canonical label IS the range: `2/12` means position 2 of a ranked set of 12, and a manual
+    // move may address any of those 12. There is no second scope to prefer.
     const parts = parseWaitlistRankParts(positionLabel);
     if (!parts) {
-        return { options: [], total: null, current: null, scopedToGroup, customReachesFurther: true };
+        return { options: [], total: null, current: null, customReachesFurther: true };
     }
     const total = parts.denominator;
     const listed = waitlistAdjustListedCount(total);
@@ -122,7 +92,6 @@ export function waitlistAdjustPositionModel(
         options,
         total,
         current: parts.numerator,
-        scopedToGroup,
         customReachesFurther: total > listed,
     };
 }

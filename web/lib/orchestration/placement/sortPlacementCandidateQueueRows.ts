@@ -1,4 +1,4 @@
-import { applyCohortLocalManualPositions } from "@/lib/orchestration/placement/applyCohortLocalManualPositions";
+import { applySectionManualPositions } from "@/lib/orchestration/placement/applySectionManualPositions";
 import { comparePlacementSortTuples } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { readNormalizedCohortFromWaitlistRow } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
@@ -80,10 +80,14 @@ export function sortPlacementCandidateQueueRows(
     /*
      * The natural order is settled above. A manual position is the operator placing a row INTO that
      * order, so it is applied here rather than as a sort key — see
-     * `applyCohortLocalManualPositions` for why an ordinal cannot be a tuple component.
+     * `applySectionManualPositions` for why an ordinal cannot be a tuple component.
+     *
+     * The run it places within is the SECTION, which is the list the operator reads and the scope
+     * the displayed position counts. This function already owns the section context, so it hands
+     * the resolver down rather than letting the placement pass re-derive it.
      *
      * Shadow mode never reorders, so it never places either: a preview must show what the rules
      * alone produce.
      */
-    return shadowMode ? natural : applyCohortLocalManualPositions(natural);
+    return shadowMode ? natural : applySectionManualPositions(natural, (row) => waitlistSectionKey(row, context));
 }

@@ -3,7 +3,6 @@
  * One queue list row = one placement_candidate; opportunity/family is context.
  */
 
-import type { WaitlistRuntimePrecedenceReason } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import type { PlacementLinkMode } from "@/lib/orchestration/placement/placementCandidateTypes";
 import type { PlacementPriorityV2CandidatePreview } from "@/lib/orchestration/placement/applyPlacementV2ToOpportunityQueueRows";
 import type { HouseholdPlacementFactContextByCustomerId } from "@/lib/orchestration/placement/bulkLoadHouseholdPlacementFactContext";
@@ -71,10 +70,7 @@ export type PlacementWaitlistCandidateRowProjection = {
     runtime_position_mode?: "preview" | "live";
     runtime_position_section_key?: string;
     runtime_position_precedence_note?: string;
-    runtime_position_precedence_reason?: WaitlistRuntimePrecedenceReason;
     /** Group-local range from the placement engine — the legal span of a manual position. */
-    runtime_group_position?: number;
-    runtime_group_total?: number;
 };
 
 export function placementCandidateQueueRowId(opportunityId: string, candidateId: string): string {
