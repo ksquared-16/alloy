@@ -1298,6 +1298,68 @@ async function buildChargePlanForObligation(
  * correction therefore meets that refusal rather than compounding, and the refusal is read here as
  * "already answered" instead of being raised at a caller who did nothing wrong.
  */
+/**
+ * WHICH OBLIGATIONS CURRENTLY OWE MONEY, AND THE ONE WRITER THAT ANSWERS THEM.
+ *
+ * Deliberately not `restoreVacationCredit`. Restoration is not a different act from the original —
+ * it is the same question asked again after the truth moved, and giving it its own function would
+ * be the start of the second engine this thread has spent its length avoiding. Both the original
+ * path and the correction path arrive here with the same inputs and get the same answer.
+ *
+ * ELIGIBILITY IS READ, NEVER DECIDED. The commercial decision already happened: interpretation
+ * resolved the policy, the obligation carries its amount and the policy that authorised it, and an
+ * unresolvable valuation has already been routed to review as `no_charge` with a named reason.
+ * This only asks whether that decision currently stands. Adding any judgement here would move
+ * commerce into the correction orchestrator, where nobody would think to look for it.
+ */
+async function materializeCurrentFinancialConsequences(
+    supabase: SupabaseClient,
+    orgId: string,
+    args: {
+        obligations: Array<{ persistedId: string; intent: ResolvedObligationIntent }>;
+        consumptionEventId: string;
+        agreementId: string | null;
+        today: string;
+        actorUserId: string | null;
+    },
+): Promise<void> {
+    if (!args.agreementId) return;
+    for (const { persistedId, intent } of args.obligations) {
+        if (intent.obligationKind !== "vacation_credit") continue;
+        if (intent.status !== "previewed") continue;
+        if (intent.amountCents == null || intent.amountCents <= 0) continue;
+        if (!intent.decidedByFinancialPolicyId) continue;
+        if ("unresolved_valuation" in (intent.explanation ?? {})) continue;
+
+        const audit = intent.explanation as Record<string, unknown>;
+        await applyVacationCreditReduction(supabase, {
+            orgId,
+            actorUserId: args.actorUserId,
+            resolvedObligationId: persistedId,
+            // The event under which this obligation is financially current. A correction that
+            // reinstates it reparents it to a new one, and that is what makes the restored
+            // consequence a new consequence rather than a revival of a settled one.
+            materializingEventId: args.consumptionEventId,
+            financialPolicyId: intent.decidedByFinancialPolicyId,
+            enrollmentAgreementId: args.agreementId,
+            amountCents: intent.amountCents,
+            currencyCode: intent.currencyCode,
+            effectiveDate: intent.occursOn ?? args.today,
+            periodKey: typeof audit.period_key === "string"
+                ? audit.period_key
+                : (intent.periodStart ?? intent.occursOn ?? args.today).slice(0, 7),
+            periodStart: intent.periodStart,
+            periodEnd: intent.periodEnd,
+            valuation: {
+                acceptedTermId: typeof audit.accepted_term_id === "string" ? audit.accepted_term_id : null,
+                acceptedPeriodAmountCents: typeof audit.accepted_period_amount_cents === "number" ? audit.accepted_period_amount_cents : null,
+                periodDays: typeof audit.period_days_used === "number" ? audit.period_days_used : null,
+                creditedDays: typeof audit.credited_days === "number" ? audit.credited_days : 1,
+            },
+        });
+    }
+}
+
 async function compensateSupersededPostedReductions(
     supabase: SupabaseClient,
     orgId: string,
@@ -1476,11 +1538,40 @@ async function draftCorrectionConsumption(
     // Load the final obligations owned by the new correction event for the breakdown.
     const { data, error } = await supabase
         .from(OBLIGATIONS_TABLE)
-        .select("id, obligation_kind, draft_charge_id, status")
+        .select("id, obligation_kind, draft_charge_id, status, resolution_key")
         .eq("org_id", orgId)
         .eq("consumption_event_id", result.consumptionEventId);
     if (error) fail("db_error", error.message);
-    const e1Obls = (data ?? []) as { id: string; obligation_kind: ObligationKind | null; draft_charge_id: string | null; status: string }[];
+    const e1Obls = (data ?? []) as { id: string; obligation_kind: ObligationKind | null; draft_charge_id: string | null; status: string; resolution_key: string | null }[];
+
+    /*
+     * A RESTORED CONSEQUENCE IS STILL A CONSEQUENCE.
+     *
+     * The correction path reconciled obligations and returned, so a corrected truth that newly
+     * warrants money could never get any: A corrected to attended and corrected back again left the
+     * obligation reinstated and the family uncredited. Measured, on the certification stack.
+     *
+     * It runs the SAME writer the original path runs, with the same eligibility reading. What makes
+     * the restored credit a new credit rather than a revival is the identity: the obligation is the
+     * same row, but it is now current under a new consumption event, and the reduction is keyed on
+     * both. The withdrawn artifact stays withdrawn beside it.
+     *
+     * Matched by resolution key, because that is what reconciliation itself uses to decide an
+     * obligation is the same logical thing across corrections.
+     */
+    const byKey = new Map(e1Obls.filter((o) => o.resolution_key).map((o) => [o.resolution_key!, o.id]));
+    const restorable: Array<{ persistedId: string; intent: ResolvedObligationIntent }> = [];
+    for (const intent of preview.resolution.obligations) {
+        const persistedId = intent.resolutionKey ? byKey.get(intent.resolutionKey) : undefined;
+        if (persistedId) restorable.push({ persistedId, intent });
+    }
+    await materializeCurrentFinancialConsequences(supabase, orgId, {
+        obligations: restorable,
+        consumptionEventId: result.consumptionEventId,
+        agreementId,
+        today,
+        actorUserId,
+    });
     const drafted = e1Obls.map((o) => ({
         obligationKind: (o.obligation_kind ?? "registration") as ObligationKind,
         draftChargeId: o.draft_charge_id,
@@ -1536,6 +1627,7 @@ export async function draftConsumption(
 
     const agreementId = agreementIdFromFact(fact);
     const resolvedObligationIds: string[] = [];
+    const materializable: Array<{ persistedId: string; intent: ResolvedObligationIntent }> = [];
     const drafted: { obligationKind: ObligationKind; draftChargeId: string | null; draftChargeStatus: string | null }[] = [];
     let firstDraftChargeId: string | null = null;
     let firstDraftChargeStatus: string | null = null;
@@ -1566,57 +1658,22 @@ export async function draftConsumption(
         const status: ResolvedObligationIntent["status"] = draftChargeId ? "drafted" : obligation.status;
         const id = await upsertObligation(supabase, orgId, consumptionEventId, obligation, draftChargeId, status, actorUserId);
         resolvedObligationIds.push(id);
-
-        /*
-         * THE OBLIGATION BECOMES MONEY — AFTER IT EXISTS, AND ONLY THEN.
-         *
-         * The reduction is anchored on the obligation id, so it cannot be written before the
-         * obligation is persisted; that ordering is the idempotency, not an implementation detail.
-         * Attendance still owns no money here — Consumption resolved the obligation, Commerce
-         * decided the treatment, and Financials writes the consequence through its own engine.
-         *
-         * Four states reach this line and only one of them spends money. A credited vacation with
-         * a resolved valuation writes one reduction. `no_credit` and no-policy produce no
-         * vacation-credit obligation at all, so there is nothing here to write. An unresolved
-         * valuation arrives as `no_charge` with a named reason and goes to review instead — a
-         * granted consequence nobody could value must not become a silent zero.
-         */
-        if (
-            obligation.obligationKind === "vacation_credit"
-            && obligation.status === "previewed"
-            && obligation.amountCents != null
-            && obligation.amountCents > 0
-            && obligation.decidedByFinancialPolicyId
-            && agreementId
-            && !("unresolved_valuation" in (obligation.explanation ?? {}))
-        ) {
-            const audit = obligation.explanation as Record<string, unknown>;
-            await applyVacationCreditReduction(supabase, {
-                orgId,
-                actorUserId,
-                resolvedObligationId: id,
-                financialPolicyId: obligation.decidedByFinancialPolicyId,
-                enrollmentAgreementId: agreementId,
-                amountCents: obligation.amountCents,
-                currencyCode: obligation.currencyCode,
-                effectiveDate: obligation.occursOn ?? today,
-                periodKey: typeof audit.period_key === "string" ? audit.period_key : (obligation.periodStart ?? obligation.occursOn ?? today).slice(0, 7),
-                periodStart: obligation.periodStart,
-                periodEnd: obligation.periodEnd,
-                valuation: {
-                    acceptedTermId: typeof audit.accepted_term_id === "string" ? audit.accepted_term_id : null,
-                    acceptedPeriodAmountCents: typeof audit.accepted_period_amount_cents === "number" ? audit.accepted_period_amount_cents : null,
-                    periodDays: typeof audit.period_days_used === "number" ? audit.period_days_used : null,
-                    creditedDays: typeof audit.credited_days === "number" ? audit.credited_days : 1,
-                },
-            });
-        }
+        materializable.push({ persistedId: id, intent: obligation });
         drafted.push({ obligationKind: obligation.obligationKind, draftChargeId, draftChargeStatus });
         if (firstDraftChargeId == null && draftChargeId != null) {
             firstDraftChargeId = draftChargeId;
             firstDraftChargeStatus = draftChargeStatus;
         }
     }
+
+    /*
+     * MONEY AFTER THE OBLIGATIONS EXIST, AND ONLY THEN. The reduction is anchored on the obligation
+     * and the event that made it current, so it cannot be written before both are persisted; that
+     * ordering is the idempotency, not an implementation detail.
+     */
+    await materializeCurrentFinancialConsequences(supabase, orgId, {
+        obligations: materializable, consumptionEventId, agreementId, today, actorUserId,
+    });
 
     return {
         ...preview,

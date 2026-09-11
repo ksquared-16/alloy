@@ -44,8 +44,10 @@ const REDUCTION_CATEGORY = "discount";
 export type VacationCreditReductionInput = {
     orgId: string;
     actorUserId: string | null;
-    /** The obligation this answers. Canonical downstream identity, and the idempotency anchor. */
+    /** The obligation this answers. The lineage anchor across corrections. */
     resolvedObligationId: string;
+    /** The consumption event under which the obligation became financially current. */
+    materializingEventId: string;
     /** The `financial_policies` row that authorised it. Required — see the authority rule below. */
     financialPolicyId: string;
     enrollmentAgreementId: string;
@@ -80,9 +82,26 @@ export type PolicyReductionResult = {
     idempotent: boolean;
 };
 
-/** The obligation names the reduction. One obligation, one credit, however many times this runs. */
-export function vacationCreditReductionKey(resolvedObligationId: string): string {
-    return `fred:policy:vacation_credit:${resolvedObligationId}`;
+/**
+ * ONE CONSEQUENCE, ONE CREDIT — and a consequence is not the same thing as an obligation.
+ *
+ * The obligation is the lineage anchor and it survives correction: a day corrected to attended and
+ * corrected back again reinstates the SAME obligation row, which is right, because it is the same
+ * logical thing being argued about. But its money is not the same money. The first credit was
+ * withdrawn when the child turned out to have attended, and withdrawn money is settled — reviving
+ * it would rewrite a decision rather than make a new one.
+ *
+ * So the identity carries the incarnation: the obligation, AND the consumption event under which it
+ * became financially current. Replaying one version converges on its own credit; restoring a
+ * consequence after it was withdrawn mints a new one beside the old, and both stay readable.
+ *
+ * Both halves come from persisted lineage — `resolved_obligations.consumption_event_id` is what
+ * reconciliation reparents — so an auditor can reconstruct the key rather than having to trust it.
+ * Deliberately not a timestamp or a random id: those would dodge idempotency instead of expressing
+ * it, and a replay would mint money every time.
+ */
+export function vacationCreditReductionKey(resolvedObligationId: string, materializingEventId: string): string {
+    return `fred:policy:vacation_credit:${resolvedObligationId}:${materializingEventId}`;
 }
 
 export async function applyVacationCreditReduction(
@@ -104,10 +123,10 @@ export async function applyVacationCreditReduction(
             "A vacation credit is decided by a financial policy. Without naming it, the reduction could not explain what authorised the money.",
         );
     }
-    if (!input.resolvedObligationId) {
+    if (!input.resolvedObligationId || !input.materializingEventId) {
         throw new PolicyReductionError(
             "missing_obligation",
-            "A policy reduction answers a resolved obligation. Without one there is nothing to be idempotent against, and a replay would credit the family twice.",
+            "A policy reduction answers a resolved obligation under a particular consumption event. Without both there is nothing to be idempotent against, and a replay would credit the family twice.",
         );
     }
     if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
@@ -140,6 +159,7 @@ export async function applyVacationCreditReduction(
                     source: "policy_reduction",
                     policy_kind: "vacation_credit",
                     resolved_obligation_id: input.resolvedObligationId,
+                    materializing_event_id: input.materializingEventId,
                     reduces_charge_id: input.sourceChargeId ?? null,
                     period_key: input.periodKey,
                 },
@@ -173,7 +193,7 @@ export async function applyVacationCreditReduction(
                     ?? `vacation credit — ${input.valuation.creditedDays} day(s) of ${input.periodKey}`,
                 // NEGATIVE: the reduction is written beside the gross, not into it.
                 amountCents: -input.amountCents,
-                idempotencyKey: vacationCreditReductionKey(input.resolvedObligationId),
+                idempotencyKey: vacationCreditReductionKey(input.resolvedObligationId, input.materializingEventId),
             }],
             // The obligation is re-derived each run, so a draft whose valuation moved reconciles.
             onExisting: "reconcile",

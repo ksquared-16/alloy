@@ -92,6 +92,7 @@ describe("the vacation-credit writer", () => {
         orgId: "org",
         actorUserId: null,
         resolvedObligationId: "obl-1",
+        materializingEventId: "evt-1",
         financialPolicyId: "pol-1",
         enrollmentAgreementId: "agreement",
         amountCents: 4000,
@@ -109,7 +110,9 @@ describe("the vacation-credit writer", () => {
             });
     });
 
-    it("requires the obligation, because that is what makes a replay one credit", async () => {
+    it("requires the obligation and its event, because that is what makes a replay one credit", async () => {
+        await applyVacationCreditReduction(noDatabase, input({ materializingEventId: "" }) as never)
+            .catch((e: PolicyReductionError) => expect(e.code).toBe("missing_obligation"));
         await applyVacationCreditReduction(noDatabase, input({ resolvedObligationId: "" }) as never)
             .catch((e: PolicyReductionError) => {
                 expect(e.code).toBe("missing_obligation");
@@ -124,8 +127,12 @@ describe("the vacation-credit writer", () => {
         }
     });
 
-    it("keys on the obligation — not the child, the date or the policy", () => {
-        expect(vacationCreditReductionKey("obl-1")).toBe("fred:policy:vacation_credit:obl-1");
-        expect(vacationCreditReductionKey("obl-2")).not.toBe(vacationCreditReductionKey("obl-1"));
+    it("keys on the obligation AND the event that made it current", () => {
+        // The obligation alone was too coarse: a consequence withdrawn by a correction and restored
+        // by a later one would have collided with its own settled artifact. The event is the
+        // incarnation, so a restored credit is a new credit rather than a revival.
+        expect(vacationCreditReductionKey("obl-1", "evt-1")).toBe("fred:policy:vacation_credit:obl-1:evt-1");
+        expect(vacationCreditReductionKey("obl-2", "evt-1")).not.toBe(vacationCreditReductionKey("obl-1", "evt-1"));
+        expect(vacationCreditReductionKey("obl-1", "evt-2")).not.toBe(vacationCreditReductionKey("obl-1", "evt-1"));
     });
 });

@@ -293,7 +293,11 @@ describeLive("Slice 3C — one truth, four answers", () => {
         expect(reduction.financial_policy_id).toBe((created as { id: string }).id);
         expect(reduction.commercial_policy_id).toBeNull();
         expect(reduction.resolved_obligation_id).toBe(credit!.id);
-        expect(reduction.idempotency_key).toBe(`fred:policy:vacation_credit:${credit!.id}`);
+        // The obligation AND the event that made it financially current: the same obligation
+        // restored under a later correction is a new consequence, not a revival of this one.
+        expect(reduction.idempotency_key).toBe(
+            `fred:policy:vacation_credit:${credit!.id}:${outcome.consumptionEventId}`,
+        );
 
         // MONEY — negative, and equal in magnitude to what consumption valued.
         expect(reduction.amount_cents).toBe(-credit!.amount_cents!);

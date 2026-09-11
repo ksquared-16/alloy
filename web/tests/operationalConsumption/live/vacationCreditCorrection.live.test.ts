@@ -462,7 +462,7 @@ describeLive("Slice 4A — a credit meets a correction", () => {
      * reinstated it) so a reinstated consequence is a new consequence rather than a resurrection.
      * That is a design change, and it is reported rather than rushed in.
      */
-    it.fails("chain — C should restore the credit, and today it does not (KNOWN GAP)", async () => {
+    it("chain — C restores the credit as a NEW incarnation, and replay does not multiply it", async () => {
         await creditPolicy();
         const a = await absence(`t7-4f-a-${run}`, DATES.chainGap);
         await react(a.id);
@@ -479,7 +479,36 @@ describeLive("Slice 4A — a credit meets a correction", () => {
             if ((await chargeStatus(r.charge_id)) === "draft") liveAmounts.push(r.amount_cents);
         }
         expect(creditA.id).toBeTruthy();
-        expect(liveAmounts, "the restored truth should carry exactly one live credit").toHaveLength(1);
+        expect(liveAmounts, "the restored truth carries exactly one live credit").toHaveLength(1);
+
+        /*
+         * A NEW INCARNATION, NOT A REVIVAL. Same logical obligation, new application, new contra
+         * charge; the first application and its voided charge both remain, individually readable.
+         */
+        // Sorted by the CHARGE's own status, never by amount — both incarnations are worth the same
+        // money, which is the point, and an amount-based filter silently found nothing withdrawn.
+        const liveRows: typeof reductions = [];
+        const withdrawnRows: typeof reductions = [];
+        for (const r of reductions) {
+            ((await chargeStatus(r.charge_id)) === "draft" ? liveRows : withdrawnRows).push(r);
+        }
+        expect(reductions.length, "both incarnations are readable").toBeGreaterThanOrEqual(2);
+        expect(liveRows, "exactly one of them is current").toHaveLength(1);
+        expect(withdrawnRows.length, "and the earlier one remains, withdrawn").toBeGreaterThan(0);
+        for (const w of withdrawnRows) expect(await chargeStatus(w.charge_id)).toBe("void");
+        expect(liveRows[0]!.id, "the restored credit is a NEW application").not.toBe(withdrawnRows[0]!.id);
+        expect(liveRows[0]!.charge_id, "on a NEW contra artifact").not.toBe(withdrawnRows[0]!.charge_id);
+
+        // REPLAY C — the incarnation identity is what stops a third delivery minting a third credit.
+        await react(c.id);
+        await react(c.id);
+        const afterReplay = await reductionsFor((await obligationsOn(DATES.chainGap)).map((o) => o.id));
+        expect(afterReplay.length, "replaying C mints nothing new").toBe(reductions.length);
+        const liveAfter: string[] = [];
+        for (const r of afterReplay) {
+            if ((await chargeStatus(r.charge_id)) === "draft") liveAfter.push(r.id);
+        }
+        expect(liveAfter, "one live credit after three deliveries of C").toHaveLength(1);
     });
 
     // ── Reverse traceability — walked through persisted rows only ───────────
