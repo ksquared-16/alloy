@@ -94,7 +94,9 @@ export type ReductionCoreInput = {
 export type ReductionCoreResult =
     | { kind: "applied"; chargeId: string; applicationIds: string[]; amountCents: number }
     | { kind: "unchanged"; chargeId: string; applicationIds: string[]; amountCents: number }
-    | { kind: "already_posted"; chargeId: string; applicationIds: string[]; amountCents: number };
+    | { kind: "already_posted"; chargeId: string; applicationIds: string[]; amountCents: number }
+    /** The contra artifact is no longer a draft and no longer stands — withdrawn by a correction. */
+    | { kind: "withdrawn"; chargeId: string; applicationIds: string[]; amountCents: number };
 
 type ExistingRow = { id: string; charge_id: string; amount_cents: number; idempotency_key: string };
 
@@ -177,6 +179,17 @@ export async function applyReductionCore(
         // POSTED money is history. Re-running reports it and touches nothing.
         if (!row || row.status === "posted") {
             return { kind: "already_posted", chargeId, applicationIds, amountCents: recorded };
+        }
+        /*
+         * ONLY A DRAFT MAY BE RECONCILED, and that is narrower than "not posted".
+         *
+         * A correction can retire this consequence's contra charge — draft to void — while leaving
+         * the application row standing as the record that the credit was once decided. Recalculating
+         * a void charge would resurrect money a correction had already withdrawn, quietly, on the
+         * next replay. So anything that is not a live draft is treated as settled.
+         */
+        if (row.status !== "draft") {
+            return { kind: "withdrawn", chargeId, applicationIds, amountCents: recorded };
         }
         if (input.onExisting === "return" || row.amount_cents === total) {
             return { kind: "unchanged", chargeId, applicationIds, amountCents: recorded };

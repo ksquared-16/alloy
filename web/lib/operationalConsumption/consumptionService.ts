@@ -1312,10 +1312,42 @@ async function buildReconcilePlan(
     }
 
     const retireChargeIds: string[] = [];
+    const absentObligationIds: string[] = [];
     for (const po of prior.priorObligations) {
         const absent = !po.resolution_key || !newKeys.has(po.resolution_key);
-        if (absent && po.draft_charge_id) {
+        if (!absent) continue;
+        absentObligationIds.push(po.id);
+        if (po.draft_charge_id) {
             retireChargeIds.push(buildDraftChargeRetirementIntent(po.draft_charge_id).draftChargeId);
+        }
+    }
+
+    /*
+     * A SUPERSEDED OBLIGATION TAKES ITS MONEY WITH IT.
+     *
+     * An obligation that drafts its own charge is retired by the loop above, through
+     * `draft_charge_id`. A vacation credit does not: it is non-draftable, and its money lives on the
+     * contra charge of a Financial Reduction that points back at the obligation. Nothing joined
+     * those two facts, so a correction superseded the obligation correctly and left the reduction's
+     * draft contra charge live — an attended child keeping a vacation credit, which is the one
+     * outcome Slice 4 exists to prevent. Measured on the certification stack before this existed:
+     * obligation `superseded`, contra charge still `draft`, minus forty dollars still owed back.
+     *
+     * The charge ids are handed to the same retirement path, so posted money is untouched by the
+     * same rule that already protects it — the RPC retires drafts only and reports zero rows for
+     * anything settled. The application row itself is deliberately left standing: it is the record
+     * that a credit was once decided, and a correction does not un-decide history.
+     */
+    if (absentObligationIds.length) {
+        const { data: obsolete } = await supabase
+            .from("financial_reduction_applications")
+            .select("charge_id")
+            .eq("org_id", orgId)
+            .in("resolved_obligation_id", absentObligationIds);
+        for (const row of (obsolete ?? []) as Array<{ charge_id: string | null }>) {
+            if (!row.charge_id) continue;
+            const intent = buildDraftChargeRetirementIntent(row.charge_id).draftChargeId;
+            if (!retireChargeIds.includes(intent)) retireChargeIds.push(intent);
         }
     }
 
