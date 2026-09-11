@@ -590,6 +590,36 @@ async function hostProviderPanes() {
  */
 async function canProvisionNow(root) {
   if (capacityImpl) return capacityImpl({ root });
+  /*
+   * HOST HEALTH IS AN ADMISSION INPUT, NOT ONLY PROVIDER SEATS.
+   *
+   * THE GAP. This asked exactly one question — are there free provider seats? —
+   * so a host under real pressure looked identical to an idle one as long as a
+   * seat was free, and Vacilando kept starting heavy work into it.
+   *
+   * The signals are cheap and non-blocking by construction: load, free memory,
+   * this process's own RSS, and two small JSON reads for previous-generation
+   * ownership and recovery backlog. No du, no git status, no ps fan-out — an
+   * admission gate that walks the filesystem causes the pressure it measures.
+   *
+   * This only declines to START more. It never touches work already running,
+   * never kills anything, and PRESSURED still admits: shedding speculative work
+   * comes first, and refusing legitimate queued work is the last resort, not the
+   * first.
+   */
+  try {
+    const { hostAdmissionHealth } = await import("./control-plane-health.mjs");
+    const health = hostAdmissionHealth({ root });
+    if (!health.admits_new_work) {
+      return {
+        ok: false,
+        available: false,
+        reason: "host_under_pressure",
+        host_health: health.state,
+        detail: health.reasons.join("; ") || `host is ${health.state}`,
+      };
+    }
+  } catch { /* an unreadable health signal must never be the thing that blocks work */ }
   // Free any seat held only by a parked conversation first — a lane waiting on
   // the operator past its grace period does not need its process, and holding
   // one is what kept queued work from starting.

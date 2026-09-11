@@ -200,6 +200,109 @@ export function releaseControlPlaneOwnership({ pid = process.pid } = {}) {
   return { ok: true, released: true };
 }
 
+/**
+ * CHEAP HOST SIGNALS, FOR DECIDING WHETHER TO START MORE WORK.
+ *
+ * THE GAP. Admission asked exactly one question — `assessSessionStartCapacity`,
+ * which counts provider seats. A host under real pressure therefore looked
+ * identical to an idle one as long as a seat was free, and Vacilando would keep
+ * starting heavy work into it. Nothing anywhere fed CPU, memory, stale ownership
+ * or recovery backlog into a scheduling decision.
+ *
+ * This is NOT a new host-health authority. It lives on the control-plane health
+ * owner, beside `getControlPlaneHealth`, and it composes facts the canonical
+ * owners already hold: the generation from this module, owned processes and
+ * recovery episodes from the Governor's own stores, and load/memory from the
+ * kernel.
+ *
+ * EVERY SIGNAL IS CHEAP AND NON-BLOCKING. `os.loadavg`, `os.freemem`,
+ * `process.memoryUsage.rss`, and two small JSON reads. Deliberately no `du`, no
+ * `git status`, no `ps` fan-out, no recursive scan — an admission gate that has
+ * to walk the filesystem is a gate that causes the pressure it is measuring.
+ *
+ * The verdict never kills anything and never touches work already running. It
+ * answers one question: should MORE be started right now.
+ */
+export const HOST_HEALTH_STATES = Object.freeze(["HEALTHY", "PRESSURED", "CONSTRAINED", "CRITICAL"]);
+
+/** Admission is refused from CONSTRAINED upward; PRESSURED only sheds speculative work. */
+export const HOST_HEALTH_ADMITS = Object.freeze({
+  HEALTHY: true, PRESSURED: true, CONSTRAINED: false, CRITICAL: false,
+});
+
+function readJsonQuiet(path) {
+  try { return JSON.parse(readFileSync(path, "utf8")); } catch { return null; }
+}
+
+export function hostAdmissionHealth({
+  root = RUNTIME_ROOT,
+  nowMs = Date.now(),
+  // Seams, so a control can state a verdict without depending on the machine.
+  loadavg = null,
+  freeMemRatio = null,
+  rssBytes = null,
+} = {}) {
+  const cpuCount = Math.max(1, os.cpus()?.length || 1);
+  const load1 = loadavg ?? (os.loadavg()?.[0] ?? 0);
+  const loadPerCpu = load1 / cpuCount;
+  const freeRatio = freeMemRatio ?? (os.totalmem() ? os.freemem() / os.totalmem() : 1);
+  const rss = rssBytes ?? (process.memoryUsage?.rss?.() ?? 0);
+
+  const owned = readJsonQuiet(join(root, "vacilando", "execution-runs", "owned-processes.json"));
+  const ownedProcesses = Array.isArray(owned?.processes) ? owned.processes : [];
+  const generation = currentRuntimeGeneration();
+  const staleOwnership = ownedProcesses.filter((p) => p.runtime_generation !== generation).length;
+
+  const budgets = readJsonQuiet(join(root, "vacilando", "execution-runs", "recovery-budgets.json"));
+  const episodes = Object.values(budgets?.episodes || {});
+  const recoveryBacklog = episodes.filter((e) => e.terminal !== true).length;
+
+  const reasons = [];
+  let state = "HEALTHY";
+  const raise = (to, why) => {
+    reasons.push(why);
+    if (HOST_HEALTH_STATES.indexOf(to) > HOST_HEALTH_STATES.indexOf(state)) state = to;
+  };
+
+  if (loadPerCpu >= 4) raise("CRITICAL", `load ${load1.toFixed(2)} over ${cpuCount} cpus`);
+  else if (loadPerCpu >= 2) raise("CONSTRAINED", `load ${load1.toFixed(2)} over ${cpuCount} cpus`);
+  else if (loadPerCpu >= 1) raise("PRESSURED", `load ${load1.toFixed(2)} over ${cpuCount} cpus`);
+
+  if (freeRatio <= 0.05) raise("CRITICAL", `free memory ${(freeRatio * 100).toFixed(1)}%`);
+  else if (freeRatio <= 0.10) raise("CONSTRAINED", `free memory ${(freeRatio * 100).toFixed(1)}%`);
+  else if (freeRatio <= 0.20) raise("PRESSURED", `free memory ${(freeRatio * 100).toFixed(1)}%`);
+
+  // The control plane's OWN footprint. The September 11 host was not undersized
+  // — 48 GB with ~95% free and no swap — so a bloated Gateway is a Vacilando
+  // problem to surface, never a reason to call the machine unhealthy.
+  if (rss >= 2 * 1024 ** 3) raise("CONSTRAINED", `control-plane rss ${Math.round(rss / 1024 ** 2)} MB`);
+  else if (rss >= 1024 ** 3) raise("PRESSURED", `control-plane rss ${Math.round(rss / 1024 ** 2)} MB`);
+
+  if (staleOwnership >= 8) raise("CONSTRAINED", `${staleOwnership} previous-generation owned resources`);
+  else if (staleOwnership >= 1) raise("PRESSURED", `${staleOwnership} previous-generation owned resources`);
+
+  if (recoveryBacklog >= 50) raise("CONSTRAINED", `${recoveryBacklog} open recovery episodes`);
+  else if (recoveryBacklog >= 10) raise("PRESSURED", `${recoveryBacklog} open recovery episodes`);
+
+  return {
+    state,
+    admits_new_work: HOST_HEALTH_ADMITS[state],
+    reasons,
+    observed_at: iso(nowMs),
+    signals: {
+      load1: Math.round(load1 * 100) / 100,
+      cpu_count: cpuCount,
+      load_per_cpu: Math.round(loadPerCpu * 100) / 100,
+      free_memory_ratio: Math.round(freeRatio * 1000) / 1000,
+      control_plane_rss_bytes: rss,
+      owned_processes: ownedProcesses.length,
+      stale_generation_ownership: staleOwnership,
+      recovery_backlog: recoveryBacklog,
+      runtime_generation: generation,
+    },
+  };
+}
+
 export function getControlPlaneHealth() {
   return read() || {
     schema_version: "vacilando.control_plane_health.v1",
