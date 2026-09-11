@@ -460,7 +460,13 @@ test.describe("expected funding is configured against a responsible party's shar
         // eslint-disable-next-line no-console
         console.log("[funding:agencies] " + JSON.stringify(agencyOptions));
         expect(agencyOptions.join(" "), "the demo tenant's agency is offered").toMatch(/State Childcare Assistance/i);
-        await agencySelect.selectOption({ label: /State Childcare Assistance/ } as never);
+        /*
+         * Chosen by the label the registry actually returned, not by a pattern: the point of a
+         * canonical source is that the operator picks the agency the org holds, so the test picks
+         * the same way rather than asserting against a name it supplied itself.
+         */
+        const agencyLabel = agencyOptions.find((o) => /State Childcare Assistance/i.test(o))!;
+        await agencySelect.selectOption({ label: agencyLabel });
 
         // 6 · NOTHING MAY BE CONFIRMED THAT HAS NOT BEEN PREVIEWED.
         const confirm = page.locator('[data-financials-funding-confirm="true"]');
@@ -484,6 +490,8 @@ test.describe("expected funding is configured against a responsible party's shar
         // eslint-disable-next-line no-console
         console.log("[funding:preview] " + previewText);
         expect(previewText, "the preview itself must not imply money moved").toMatch(/not a payment/i);
+        await previewBlock.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(1_000);
         await page.screenshot({ path: `${OUT}/funding-01-preview.png`, fullPage: false });
 
         // 9 · ONLY NOW IS CONFIRM AVAILABLE.
@@ -519,6 +527,14 @@ test.describe("expected funding is configured against a responsible party's shar
         // eslint-disable-next-line no-console
         console.log("[funding:residual] " + residualText);
         expect(residualText).toMatch(/still their responsibility|exceeds this share/i);
+        /*
+         * PHOTOGRAPH THE SHARE THAT WAS FUNDED. A viewport shot of a scrolling pane captured
+         * whichever share happened to be in view — in the first run, the UNfunded one — so the
+         * evidence showed "Expected funding — none" beside a passing assertion that funding had
+         * been recorded. Evidence that does not show the thing it evidences is worse than none.
+         */
+        await firstShare.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(1_000);
         await page.screenshot({ path: `${OUT}/funding-02-committed.png`, fullPage: false });
     });
 
@@ -546,9 +562,11 @@ test.describe("expected funding is configured against a responsible party's shar
         const firstShare = page.locator("[data-financials-arrangement-share]").first();
         await firstShare.locator("[data-financials-manage-funding]").click();
         await page.waitForTimeout(6_000);
-        await page
-            .locator('[data-financials-funding-agency="true"]')
-            .selectOption({ label: /State Childcare Assistance/ } as never);
+        const correctionSelect = page.locator('[data-financials-funding-agency="true"]');
+        const correctionLabel = (await correctionSelect.locator("option").allInnerTexts()).find((o) =>
+            /State Childcare Assistance/i.test(o),
+        )!;
+        await correctionSelect.selectOption({ label: correctionLabel });
         await page.locator('[data-financials-funding-amount="true"]').fill("8");
         await page.locator('[data-financials-funding-preview-btn="true"]').click();
         await page.waitForTimeout(8_000);
@@ -580,6 +598,8 @@ test.describe("expected funding is configured against a responsible party's shar
         const stateAgencyRows = texts.filter((t) => /State Childcare Assistance/i.test(t));
         expect(stateAgencyRows, "one agency, one live expectation").toHaveLength(1);
         expect(stateAgencyRows[0], "the correction is what stands").toMatch(/\$8\.00/);
+        await page.locator("[data-financials-arrangement-share]").first().scrollIntoViewIfNeeded();
+        await page.waitForTimeout(1_000);
         await page.screenshot({ path: `${OUT}/funding-03-corrected.png`, fullPage: false });
     });
 
