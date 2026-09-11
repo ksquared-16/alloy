@@ -54,7 +54,31 @@ At the bottom: **This lifecycle is ready for staff on the workspace.**
 > rows is not **Ready**.
 
 **A4. DO** — Click the **Stages** tab, then click **Enrolling**.
-**EXPECT** — A **Requirements** row marked **Configured**.
+**EXPECT** — The Enrolling stage opens with a **Requirements** section.
+
+**A5. DO** — Click the **Requirements** section to expand it, and scroll to the card headed
+**Enrollment paperwork**.
+**EXPECT** — ONE paperwork requirement, not three separate forms:
+
+- **Enrollment Packet — Firefly V1**
+- **3 steps · Required · Blocking**
+- buttons **Manage** and **Change paperwork**
+
+> **STOP** if you see three separate Form requirements here. The stage should require the packet,
+> and the packet owns its steps.
+
+**A6. DO** — Click **Manage**.
+**EXPECT** — A focused pop-out titled **Enrollment Packet — Firefly V1**, saying that editing here
+changes the packet and not the process, and listing **Steps, in order**:
+
+1. Northwind Enrollment Application v4 — *Published*
+2. Health and Medical Authorization — *Published*
+3. Immunization Record — *Published*
+
+> **STOP** if any step says **Not published** — a family cannot complete it.
+
+**A7. DO** — Click **Close**.
+**EXPECT** — You are back on the Enrolling Requirements, unchanged.
 
 ---
 
