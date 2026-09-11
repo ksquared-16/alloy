@@ -421,15 +421,24 @@ await test("U9. a server refusal replaces the list and clears the stale choice",
  * A run between turns is the NORMAL state of a working lane. So three claims,
  * ANY of which means busy, each failing closed on its own.
  */
-await test("L1. a live agent session holds the slot even with no run in flight", async () => {
+await test("L1. a live agent session is WARM, not active — it no longer holds the slot", async () => {
+  // SUPERSEDED ON PURPOSE. This asserted that an open session protected the
+  // slot, which is exactly the coupling that made slots stick: a lane that had
+  // stopped working kept its port until someone ran `alloy-sprint-finish`.
+  //
+  // A session does not depend on the slot — proven directly in
+  // development-slot-yield-session-survival, where a real tmux session keeps
+  // the same pane process across a real reassignment. What depends on the slot
+  // is the ENVIRONMENT, and that is probed separately and still protects.
   seedLane("Working", "wt-working", { slot: 1 });
   const { candidates } = await L.slotReclaimCandidates({
     root: ROOT, activeRun: idle, sessionAlive: () => true, leaseHeld: () => false,
+    environmentInUse: () => false,
   });
   const c = candidates.find((x) => x.worktree === "wt-working");
-  assert.equal(c.group, "active", "an open agent session is work in progress");
-  assert.equal(c.reclaimable, false);
-  assert.match(c.reason, /agent session/, "the reason names the evidence, not a generic state");
+  assert.equal(c.group, "warm", "resident, but its slot is idle");
+  assert.equal(c.reclaimable, true, "and therefore takeable");
+  assert.match(c.reason, /keeps running, registered and dispatchable/);
 });
 
 await test("L2. holding the shared stack holds the slot", async () => {
@@ -444,16 +453,31 @@ await test("L2. holding the shared stack holds the slot", async () => {
   assert.match(c.reason, /shared local stack/);
 });
 
-await test("L3. a probe that cannot answer reads BUSY, and never throws out", async () => {
+await test("L3. a probe that cannot answer never throws out, and fails to the safe side", async () => {
+  // The fail-closed contract moved with the protection claim. Residency no
+  // longer protects, so an unreadable SESSION probe cannot make a slot unsafe —
+  // it only makes the RANKING uncertain, and the conservative answer there is
+  // warm: still takeable, but taken after everything quieter.
+  //
+  // Protection itself still fails closed on the signal that matters: an
+  // unreadable ENVIRONMENT reads active. That is asserted here and again in
+  // development-slot-warm-yield W3.
   seedLane("Unknown", "wt-unknown", { slot: 1 });
   const boom = () => { throw new Error("probe exploded"); };
-  const { candidates } = await L.slotReclaimCandidates({
+  const session = await L.slotReclaimCandidates({
     root: ROOT, activeRun: idle, sessionAlive: boom, leaseHeld: () => false,
+    environmentInUse: () => false,
   });
-  const c = candidates.find((x) => x.worktree === "wt-unknown");
-  assert.equal(c.reclaimable, false, "I cannot tell must mean busy");
-  // The whole ranking must still come back — a throwing probe took it all down once.
-  assert.equal(candidates.length, 1, "the ranking survived the failing probe");
+  const s = session.candidates.find((x) => x.worktree === "wt-unknown");
+  assert.equal(s.group, "warm", "unknown residency ranks conservatively");
+  assert.equal(session.candidates.length, 1, "the ranking survived the failing probe");
+
+  const env = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: () => false, leaseHeld: () => false,
+    environmentInUse: boom,
+  });
+  const e = env.candidates.find((x) => x.worktree === "wt-unknown");
+  assert.equal(e.reclaimable, false, "an unreadable environment must still mean busy");
 });
 
 await test("L4. with nothing working it is still offered — no over-refusal", async () => {

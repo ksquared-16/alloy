@@ -1033,23 +1033,101 @@ function holdsStackLease(worktreePath, { nowMs = Date.now(), env = process.env }
  */
 function laneWorkingEvidence(lane, hasActiveRun, {
   nowMs = Date.now(), env = process.env, sessionAlive = null, leaseHeld = null,
+  environmentInUse = null,
 } = {}) {
   // Each probe is wrapped the way the run probe already is: one that THROWS must
   // mean busy, never propagate and take the whole ranking down with it.
   const session = sessionAlive || agentSessionAlive;
   const lease = leaseHeld || ((wp) => holdsStackLease(wp, { nowMs, env }));
-  const ask = (fn, arg) => { try { return Boolean(fn(arg)); } catch { return true; } };
+  const envInUse = environmentInUse || (() => "its local environment could not be read");
+  const ask = (fn, arg) => { try { return fn(arg); } catch { return true; } };
 
   // Phrasing note: C4/R2 assert on "run in flight". The evidence string carries
   // that exact phrase so those controls keep certifying the run signal itself
   // rather than being rewritten to match a new wording.
   if (hasActiveRun(lane.lane_id)) return "there is a run in flight";
-  if (ask(session, lane.tmux_session)) return `its agent session ${norm(lane.tmux_session)} is still open`;
   if (ask(lease, lane.worktree_path)) return "it holds a lease on the shared local stack";
+
+  /*
+   * A RESIDENT AGENT SESSION NO LONGER PROTECTS A SLOT, AND THAT WAS THE
+   * COUPLING THAT MADE SLOTS STICK.
+   *
+   * The old rule protected whenever the tmux session was alive, so a lane that
+   * had stopped working kept its port forever and the operator had to run
+   * `alloy-sprint-finish` — ending a sprint — merely to free local capacity.
+   *
+   * What actually depends on the slot is the ENVIRONMENT: a dev server this
+   * lane owns, or a QA browser bound to it. Reassigning under either would
+   * break real work. Reassigning under a session that is merely resident does
+   * not: development-slot-yield-session-survival starts a real tmux session,
+   * runs a real reassignment, and proves the same pane process is still alive
+   * afterwards. The lane keeps its worktree, branch, history and registration
+   * and becomes slotless — a supported, dispatchable state.
+   */
+  const inUse = ask(envInUse, lane.slot ?? lane.binding_slot ?? null);
+  if (inUse) return typeof inUse === "string" ? inUse : "its local environment is in use";
   return null;
 }
 
-export const SLOT_RECLAIM_GROUPS = Object.freeze(["unowned", "offline", "inactive", "active"]);
+/**
+ * DOES THIS SLOT'S LOCAL ENVIRONMENT ACTUALLY HOLD ANYTHING?
+ *
+ * A Development Slot owns a deterministic port, the dev server on it, and the
+ * browser QA context keyed to it. It does not own the lane, the branch, the
+ * worktree or the resident agent process — those outlive it, which is the whole
+ * point of the elastic model.
+ *
+ * OBSERVED ONCE PER RANKING. `observeServerFleet` walks the process tree; doing
+ * that once per lane would turn ranking twelve slots into twelve scans.
+ *
+ * `ownership_state`, NOT `observed_state`. The observer distinguishes a server
+ * this lane OWNS from a foreign process that merely holds the port and from an
+ * unattributable listener. Only the first is a reason to keep the slot — letting
+ * a stray process pin another lane's slot open is the bug this distinction
+ * exists to prevent, and `observed_state` cannot tell them apart.
+ */
+async function slotEnvironmentProbe({ root = runtimeRoot() } = {}) {
+  let owned = null;
+  try {
+    const { observeServerFleet } = await import("./server-fleet-observation.mjs");
+    owned = new Set(
+      (observeServerFleet({ root })?.servers || [])
+        .filter((r) => r.ownership_state === "owned_running")
+        .map((r) => Number(r.slot)),
+    );
+  } catch { owned = null; }
+
+  return (slot) => {
+    const n = asSlot(slot);
+    if (n == null) return false;
+    // Unreadable is busy. A slot whose environment cannot be inspected is not a
+    // slot we may take.
+    if (owned === null) return "its local environment could not be read";
+    if (owned.has(n)) return "it owns a running dev server on its port";
+    // A QA browser bound to the slot is a live dependency; a captured storage
+    // file is NOT, and must never pin a slot open on its own.
+    try {
+      const pidPath = join(root, "browser-pids", `${n}.pid`);
+      if (existsSync(pidPath)) {
+        const pid = Number(String(readFileSync(pidPath, "utf8")).trim());
+        if (Number.isInteger(pid) && pid > 0) {
+          try { process.kill(pid, 0); return "a QA browser is open on its slot"; }
+          catch (e) { if (e?.code === "EPERM") return "a QA browser is open on its slot"; }
+        }
+      }
+    } catch { return "its local environment could not be read"; }
+    return false;
+  };
+}
+
+/*
+ * `warm` sits between `inactive` and `active` deliberately. A warm lane has a
+ * live agent session whose slot environment is idle: the slot may move and the
+ * session survives, proven directly by
+ * development-slot-yield-session-survival. A lane with no session at all is
+ * still the quieter thing to take, so warm is offered only after inactive.
+ */
+export const SLOT_RECLAIM_GROUPS = Object.freeze(["unowned", "offline", "inactive", "warm", "active"]);
 
 export async function slotReclaimCandidates({
   root = runtimeRoot(),
@@ -1062,6 +1140,7 @@ export async function slotReclaimCandidates({
   // machine it happens to run on.
   sessionAlive = null,
   leaseHeld = null,
+  environmentInUse = null,
   // The lane asking for a slot must never be offered its own. It has none to
   // give — that is why it is asking — and listing it would invite a choice that
   // resolves to nothing.
@@ -1085,6 +1164,7 @@ export async function slotReclaimCandidates({
   // mean BUSY rather than an exception.
   const probe = activeRun || ((laneId) => (activeRunForLane ? Boolean(activeRunForLane(laneId, root)) : true));
   const hasActiveRun = (laneId) => { try { return Boolean(probe(laneId)); } catch { return true; } };
+  const envInUse = environmentInUse || await slotEnvironmentProbe({ root });
 
   const out = [];
 
@@ -1128,8 +1208,13 @@ export async function slotReclaimCandidates({
     const missing = Boolean(l.worktree_path) && !existsSync(l.worktree_path);
     const finished = norm(l.registry?.lifecycle).toLowerCase() === "finished";
     const offline = !open || finished || missing;
-    const working = offline ? null : laneWorkingEvidence(l, hasActiveRun, { nowMs, sessionAlive, leaseHeld });
-    const group = offline ? "offline" : (working ? "active" : "inactive");
+    const working = offline
+      ? null
+      : laneWorkingEvidence(l, hasActiveRun, { nowMs, sessionAlive, leaseHeld, environmentInUse: envInUse });
+    const resident = offline || working
+      ? false
+      : (() => { try { return Boolean((sessionAlive || agentSessionAlive)(l.tmux_session)); } catch { return true; } })();
+    const group = offline ? "offline" : (working ? "active" : (resident ? "warm" : "inactive"));
     out.push({
       slot: heldSlot, port: l.port ?? asPort(l.registry?.port), worktree: l.worktree_name, path: l.worktree_path,
       group, holder_kind: "lane",
@@ -1142,7 +1227,9 @@ export async function slotReclaimCandidates({
             : `${l.lane_name} is closed.`)
         : group === "active"
           ? `${l.lane_name} is working — ${working}. Taking its slot would pull the dev server out from under it.`
-          : `${l.lane_name} is open with nothing running.`,
+          : group === "warm"
+            ? `${l.lane_name} has an agent session open but nothing using its slot. It keeps running, registered and dispatchable, without one.`
+            : `${l.lane_name} is open with nothing running.`,
     });
   }
 
@@ -1193,6 +1280,13 @@ export async function reassignSlot({
   toolkitDir = null,
   acknowledgeActive = false,
   activeRun = null,
+  // The SAME seams the ranking takes. This function re-ranks at mutation time —
+  // that is the point of it — so without these its verdict cannot be stated
+  // either, and a test of "a warm donor yields" would silently be testing the
+  // machine it runs on instead.
+  sessionAlive = null,
+  leaseHeld = null,
+  environmentInUse = null,
   nowMs = Date.now(),
 } = {}) {
   const donor = norm(fromWorktree);
@@ -1215,7 +1309,11 @@ export async function reassignSlot({
   // RE-EVALUATED HERE, AT MUTATION TIME. The operator chose from a list that
   // was true when it was rendered; a lane can start a turn between the render
   // and the click, and the stale answer must never be the one that decides.
-  const ranked = await slotReclaimCandidates({ root, cfg: conf, metadata: meta, nowMs, activeRun, excludeWorktree: recipient });
+  const ranked = await slotReclaimCandidates({
+    root, cfg: conf, metadata: meta, nowMs, activeRun,
+    sessionAlive, leaseHeld, environmentInUse,
+    excludeWorktree: recipient,
+  });
   const chosen = ranked.candidates.find((c) => norm(c.worktree) === donor);
   if (chosen && !chosen.reclaimable && !acknowledgeActive) {
     return { ok: false, error: "donor_active", detail: chosen.reason, candidate: chosen };
