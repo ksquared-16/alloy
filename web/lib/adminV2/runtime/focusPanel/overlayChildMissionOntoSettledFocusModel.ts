@@ -113,6 +113,16 @@ export function overlayChildMissionOntoSettledFocusModel(
      * bindings do not include. A missing DOB is a state the card states honestly, not a failure.
      */
     const childMemberId = trimOrNull(commitCritical.subjectIdentityTruth?.["child.customer_member_id"]);
+    /*
+     * The child's OWN stage as the runtime published it alongside the child's own identity. Used
+     * only where `situation` is silent; it is the same provider-resolved effective stage, never the
+     * family's and never the lens's.
+     */
+    const childOwnStageKey = trimOrNull(commitCritical.subjectIdentityTruth?.["child.stage_key"]);
+    const childOwnStageLabel =
+        (childOwnStageKey
+            ? settled.context.businessProcess?.stages?.find((s) => s.key === childOwnStageKey)?.label
+            : null) ?? null;
     const childRow = inquiryChildRow(settled.context.truth, childMemberId);
     const childSubject: DurableChildSubject = {
         memberId: childMemberId ?? commitCritical.subjectId,
@@ -215,8 +225,9 @@ export function overlayChildMissionOntoSettledFocusModel(
                           ?? trimOrNull(childRow?.photo_url)
                           ?? settled.context.participantScope?.imageUrl
                           ?? null,
-                      stageKey: situation?.stageKey ?? null,
-                      stageLabel: situation?.stageLabel ?? null,
+                      // Same rule as the process block below: the child's own stage, or none.
+                      stageKey: situation?.stageKey ?? childOwnStageKey,
+                      stageLabel: situation?.stageLabel ?? childOwnStageLabel,
                   }
                 : settled.context.participantScope,
             /*
@@ -231,11 +242,32 @@ export function overlayChildMissionOntoSettledFocusModel(
              * which happened to be `??`-guarded, passed. Spreading preserves EVERY field including
              * ones added later, and is safe when there is nothing to spread.
              */
+            /*
+             * ── THE CHILD'S STAGE, OR NONE — NEVER THE FAMILY'S ──
+             *
+             * `situation` is the child's own composed position: the effective stage the provider
+             * resolved from the child's process instance, which is the only record that owns it.
+             * When it is present it is the answer, as it always was.
+             *
+             * What changed is the ELSE. These three fields used to fall through to the settled
+             * context, which describes the FAMILY — so a child whose own stage had not resolved
+             * inherited the household's position and the Process card stated it as the child's.
+             * Before the rail stopped reading the work unit, that inherited value was the LENS, and
+             * every candidate opened from Waitlist read "Waitlist" whatever its process instance
+             * said. Both are the same substitution: a stage that belongs to something other than
+             * the subject, presented as the subject's.
+             *
+             * `child.stage_key` is the child's own stage carried on its identity bindings, so it is
+             * the one sanctioned second source — the same fact as `situation`, by another route,
+             * never a different record's. Past that there is nothing truthful left to say, and the
+             * fields resolve to null. A card with no stage renders as unstaged, which is a state it
+             * already knows how to show.
+             */
             businessProcess: {
                 ...settled.context.businessProcess,
-                key: situation?.stageKey ?? settled.context.businessProcess?.key,
-                label: situation?.stageLabel ?? settled.context.businessProcess?.label,
-                stageKey: situation?.stageKey ?? settled.context.businessProcess?.stageKey,
+                key: situation?.stageKey ?? childOwnStageKey,
+                label: situation?.stageLabel ?? childOwnStageLabel,
+                stageKey: situation?.stageKey ?? childOwnStageKey,
             },
             stageWorkRuntime,
             publishedStageInputs,

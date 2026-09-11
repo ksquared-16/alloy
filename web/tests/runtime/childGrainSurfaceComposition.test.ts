@@ -214,6 +214,33 @@ describe("child identity truth bindings", () => {
         expect(bindings._inquiry_children).toBeUndefined();
     });
 
+    /**
+     * THE CHILD'S OWN STAGE TRAVELS WITH THE CHILD'S OWN IDENTITY.
+     *
+     * `participantScopeFromChildSubjectTruth` has always read `child.stage_key`; no producer ever
+     * wrote it. A child subject therefore reached the Process card carrying no stage of its own,
+     * leaving the card to answer from the family's rail — or, before that seam was closed, from the
+     * work unit the operator arrived through.
+     */
+    it("carries the child's effective stage, so the card need not ask another record", () => {
+        const r = composeChildGrainSurface({ row: childRow({ stageKey: "waitlist" }), stages: STAGES });
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const bindings = childSubjectIdentityTruthBindings(r.composition, "Wrigley Kurzman")!;
+        // The stage the PROVIDER resolved (`process_instances.stage_key ?? opportunities.stage_key`),
+        // forwarded — not a second derivation of it.
+        expect(bindings["child.stage_key"]).toBe("waitlist");
+    });
+
+    it("carries a family-track child's inherited effective stage unchanged", () => {
+        // stage_key NULL on the participation → the provider already resolved `lead`. The binding
+        // reports what the child's position IS, which is the canonical fallback, not a substitution.
+        const r = composeChildGrainSurface({ row: childRow({ stageKey: "lead" }), stages: STAGES });
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(childSubjectIdentityTruthBindings(r.composition, "Wrigley Kurzman")!["child.stage_key"]).toBe("lead");
+    });
+
     it("omits absent values rather than emitting empties that render as data", () => {
         const r = composeChildGrainSurface({ row: childRow({ title: null }), stages: STAGES });
         expect(r.ok).toBe(true);
