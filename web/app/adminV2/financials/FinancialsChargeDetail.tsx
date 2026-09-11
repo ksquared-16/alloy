@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
+import FinancialsExpectedFundingPanel from "@/app/adminV2/financials/FinancialsExpectedFundingPanel";
 
 type Application = {
     paymentId: string;
@@ -68,7 +69,23 @@ type ChargeDetail = {
     accountArrangement: {
         id: string;
         effectiveStart: string | null;
-        shares: { responsiblePartyId: string | null }[];
+        shares: {
+            id: string;
+            responsiblePartyId: string | null;
+            name: string;
+            method: string | null;
+            amountCents: number | null;
+            percentBasisPoints: number | null;
+            expectedFunding: {
+                id: string;
+                sourceType: string;
+                label: string;
+                reference: string | null;
+                basis: string;
+                expectedAmountCents: number | null;
+                percentBasisPoints: number | null;
+            }[];
+        }[];
     } | null;
 };
 
@@ -254,6 +271,49 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     parties={detail.responsibility.parties}
                     onCommitted={reload}
                 />
+            ) : null}
+
+            {/*
+             * ── THE ARRANGEMENT'S OWN SHARES, AND WHAT IS EXPECTED TO FUND THEM ─────────────────
+             *
+             * `billing.configure_expected_funding` attaches to a SHARE. So the shares have to be
+             * visible and named: an operator cannot say "this agency covers $650 of this" while
+             * looking at a list that does not say whose responsibility "this" is.
+             *
+             * Shown beside the charge's own allocation rather than instead of it. The arrangement
+             * says who bears the account from a date; the allocation says who bears THIS obligation
+             * once it was resolved. A posted charge billed before the arrangement has the second
+             * and not the first, and conflating them would claim a division that never happened.
+             */}
+            {detail.accountArrangement && detail.accountArrangement.shares.length > 0 ? (
+                <>
+                    <Group>Responsibility arrangement</Group>
+                    {detail.accountArrangement.shares.map((share) => (
+                        <div key={share.id} data-financials-arrangement-share={share.id}>
+                            <Row
+                                label={share.name}
+                                value={
+                                    share.amountCents != null
+                                        ? money(share.amountCents, currency)
+                                        : share.percentBasisPoints != null
+                                          ? `${share.percentBasisPoints / 100}%`
+                                          : "Remainder"
+                                }
+                                testId="arrangement-share"
+                            />
+                            <FinancialsExpectedFundingPanel
+                                shareId={share.id}
+                                arrangementId={detail.accountArrangement!.id}
+                                customerMemberId={detail.customerMemberId}
+                                partyName={share.name}
+                                responsibleCents={share.amountCents}
+                                currency={currency}
+                                funding={share.expectedFunding}
+                                onCommitted={reload}
+                            />
+                        </div>
+                    ))}
+                </>
             ) : null}
 
             {detail.responsibility.parties.length > 0 || detail.responsibility.unassignedCents !== 0 ? (

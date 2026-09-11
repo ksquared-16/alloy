@@ -380,3 +380,235 @@ test.describe("responsibility can be configured from an account that has none", 
         }
     });
 });
+
+/**
+ * ── SLICE 5B · EXPECTED FUNDING, AT THE GRAIN IT ACTUALLY HAS ───────────────────────────────────
+ *
+ * `billing.configure_expected_funding` has existed since Thread 6 and no operator could reach it.
+ * It attaches to a responsibility SHARE — an agency or an employer covering part of what one named
+ * person owes — so it cannot be offered as an account-level toggle without inventing an answer to
+ * "whose share?".
+ *
+ * These cases run AFTER the arrangement cases above and in the same file, deliberately: there is no
+ * share to fund until somebody has been made responsible, and that ordering is the product's, not
+ * the suite's convenience.
+ *
+ * The claim under certification is as much about what the surface REFUSES to say as what it says.
+ * Expected funding is an expectation: no money has arrived, no claim has been submitted, no agency
+ * has committed, and the party is still responsible for all of it.
+ */
+test.describe("expected funding is configured against a responsible party's share", () => {
+    test("a share can be funded from a canonical agency, and remains the party's responsibility", async ({ page }) => {
+        test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
+        test.setTimeout(900_000);
+        const shell = await openFinancials(page);
+        const detail = await openHouseholdCharge(page, shell);
+
+        /*
+         * 1 · THE SHARES ARE VISIBLE AND NAMED. This is the precondition the old surface failed:
+         * expected funding was readable but nothing said WHOSE responsibility it funded.
+         */
+        const shareRows = page.locator("[data-financials-arrangement-share]");
+        await expect(shareRows.first(), "an arrangement's shares must be visible to be funded").toBeVisible({
+            timeout: 60_000,
+        });
+        const shareCount = await shareRows.count();
+        expect(shareCount, "the certification above left two responsible parties").toBeGreaterThanOrEqual(1);
+        const firstShare = shareRows.first();
+        const shareText = await firstShare.innerText();
+        // eslint-disable-next-line no-console
+        console.log("[funding:share] " + shareText);
+        expect(shareText, "a share names the person who holds it").toMatch(/Alvarez/);
+        expect(shareText, "and an account with no funding says so plainly").toMatch(/Expected funding — none/i);
+
+        // 2 · THE CONTROL IS OFFERED ON THE SHARE, not on the charge and not on the account.
+        const open = firstShare.locator("[data-financials-manage-funding]");
+        await expect(open).toBeVisible({ timeout: 30_000 });
+        await open.click();
+        await page.waitForTimeout(6_000);
+
+        const panel = page.locator("[data-financials-manage-funding-panel]");
+        await expect(panel).toBeVisible({ timeout: 30_000 });
+        const opened = await panel.innerText();
+        // eslint-disable-next-line no-console
+        console.log("[funding:opened] full panel text:\n" + opened);
+
+        // 3 · THE LAW IS STATED WHERE THE OPERATOR ACTS ON IT.
+        expect(opened, "an expectation must never read as a payment").toMatch(/not a payment/i);
+        expect(opened, "nor as a claim on an agency").toMatch(/claims nothing from an agency/i);
+        expect(opened, "nor as a reduction of what is owed").toMatch(/does not reduce what is owed/i);
+
+        // 4 · THE PARTY'S OWN RESPONSIBILITY IS SHOWN, so the operator funds a known figure.
+        const responsible = page.locator('[data-financials-funding-responsible="true"]');
+        await expect(responsible).toBeVisible();
+        const responsibleText = await responsible.innerText();
+        // eslint-disable-next-line no-console
+        console.log("[funding:responsible] " + responsibleText);
+        expect(responsibleText).toMatch(/\$/);
+
+        // 5 · GOVERNMENT MONEY IS PICKED FROM THE CANONICAL REGISTRY, never typed.
+        await expect(
+            page.locator('[data-financials-funding-agency="true"]'),
+            "a government expectation must name an agency the org actually holds",
+        ).toBeVisible({ timeout: 30_000 });
+        await expect(
+            page.locator('[data-financials-funding-label="true"]'),
+            "a free-text name is not offered where a registry exists",
+        ).toHaveCount(0);
+        const agencySelect = page.locator('[data-financials-funding-agency="true"]');
+        const agencyOptions = await agencySelect.locator("option").allInnerTexts();
+        // eslint-disable-next-line no-console
+        console.log("[funding:agencies] " + JSON.stringify(agencyOptions));
+        expect(agencyOptions.join(" "), "the demo tenant's agency is offered").toMatch(/State Childcare Assistance/i);
+        await agencySelect.selectOption({ label: /State Childcare Assistance/ } as never);
+
+        // 6 · NOTHING MAY BE CONFIRMED THAT HAS NOT BEEN PREVIEWED.
+        const confirm = page.locator('[data-financials-funding-confirm="true"]');
+        await expect(confirm, "Confirm is unavailable until the action has said what it will do").toBeDisabled();
+
+        // 7 · AN AMOUNT THE CAPABILITY CAN REPRESENT EXACTLY.
+        await page.locator('[data-financials-funding-amount="true"]').fill("10");
+
+        // 8 · THE ACTION'S OWN PREVIEW.
+        await page.locator('[data-financials-funding-preview-btn="true"]').click();
+        await page.waitForTimeout(8_000);
+        await expect(
+            page.locator('[data-financials-funding-error="true"]'),
+            "the expectation was refused at preview",
+        ).toHaveCount(0);
+        const previewBlock = page.locator('[data-financials-funding-preview="true"]');
+        await expect(previewBlock, "the registered action says what will change before it changes").toBeVisible({
+            timeout: 60_000,
+        });
+        const previewText = await previewBlock.innerText();
+        // eslint-disable-next-line no-console
+        console.log("[funding:preview] " + previewText);
+        expect(previewText, "the preview itself must not imply money moved").toMatch(/not a payment/i);
+        await page.screenshot({ path: `${OUT}/funding-01-preview.png`, fullPage: false });
+
+        // 9 · ONLY NOW IS CONFIRM AVAILABLE.
+        await expect(confirm).toBeEnabled();
+        await confirm.click();
+        await page.waitForTimeout(12_000);
+        await expect(
+            page.locator('[data-financials-funding-error="true"]'),
+            "the expectation was refused at execute",
+        ).toHaveCount(0);
+        await expect(
+            page.locator('[data-financials-funding-done="true"]'),
+            "the panel reports committed persistence, never optimism",
+        ).toBeVisible({ timeout: 60_000 });
+
+        /*
+         * 10 · THE SURFACE RE-READ IT, AND SAYS THE THREE THINGS THAT MATTER: who funds it, how
+         * much, and how much is STILL this party's. The last line is why the distinction exists.
+         */
+        const afterCommit = await detail.innerText();
+        // eslint-disable-next-line no-console
+        console.log("[funding:after-commit] full detail text:\n" + afterCommit);
+        await expect(page.locator("[data-financials-funding-row]").first()).toBeVisible({ timeout: 60_000 });
+        const fundingRow = await page.locator("[data-financials-funding-row]").first().innerText();
+        // eslint-disable-next-line no-console
+        console.log("[funding:row] " + fundingRow);
+        expect(fundingRow, "the expectation names its source").toMatch(/State Childcare Assistance/i);
+        expect(fundingRow, "and is stated as an expectation").toMatch(/Expected from/i);
+
+        const residual = page.locator('[data-financials-funding-residual="true"]');
+        await expect(residual, "what remains the party's responsibility must be said").toBeVisible();
+        const residualText = await residual.innerText();
+        // eslint-disable-next-line no-console
+        console.log("[funding:residual] " + residualText);
+        expect(residualText).toMatch(/still their responsibility|exceeds this share/i);
+        await page.screenshot({ path: `${OUT}/funding-02-committed.png`, fullPage: false });
+    });
+
+    /*
+     * ── WHAT AN EXPECTATION MUST NOT MOVE ───────────────────────────────────────────────────────
+     *
+     * The whole choreography lives or dies here. Net obligation, outstanding, applied payments and
+     * collectible-now are facts about money. An expectation is a fact about a hope.
+     */
+    test("expecting funding moves no money and reduces nothing owed", async ({ page }) => {
+        test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
+        test.setTimeout(900_000);
+        const shell = await openFinancials(page);
+        const detail = await openHouseholdCharge(page, shell);
+
+        const before = {
+            net: await detail.locator('[data-financials-charge-line="net"]').allInnerTexts(),
+            outstanding: await detail.locator('[data-financials-charge-line="outstanding"]').allInnerTexts(),
+            applied: await detail.locator('[data-financials-charge-line="application"]').allInnerTexts(),
+        };
+        // eslint-disable-next-line no-console
+        console.log("[funding:money-before] " + JSON.stringify(before));
+
+        /* A SECOND EXPECTATION, on the same share and the same agency — a correction. */
+        const firstShare = page.locator("[data-financials-arrangement-share]").first();
+        await firstShare.locator("[data-financials-manage-funding]").click();
+        await page.waitForTimeout(6_000);
+        await page
+            .locator('[data-financials-funding-agency="true"]')
+            .selectOption({ label: /State Childcare Assistance/ } as never);
+        await page.locator('[data-financials-funding-amount="true"]').fill("8");
+        await page.locator('[data-financials-funding-preview-btn="true"]').click();
+        await page.waitForTimeout(8_000);
+        await expect(page.locator('[data-financials-funding-preview="true"]')).toBeVisible({ timeout: 60_000 });
+        await page.locator('[data-financials-funding-confirm="true"]').click();
+        await page.waitForTimeout(12_000);
+        await expect(page.locator('[data-financials-funding-error="true"]')).toHaveCount(0);
+
+        const after = {
+            net: await detail.locator('[data-financials-charge-line="net"]').allInnerTexts(),
+            outstanding: await detail.locator('[data-financials-charge-line="outstanding"]').allInnerTexts(),
+            applied: await detail.locator('[data-financials-charge-line="application"]').allInnerTexts(),
+        };
+        // eslint-disable-next-line no-console
+        console.log("[funding:money-after] " + JSON.stringify(after));
+        expect(after.net, "expected funding changed the net obligation").toEqual(before.net);
+        expect(after.outstanding, "expected funding reduced what is owed").toEqual(before.outstanding);
+        expect(after.applied, "expected funding invented a payment").toEqual(before.applied);
+
+        /*
+         * AND THE CORRECTION REPLACED THE EXPECTATION RATHER THAN JOINING IT. Two active rows for
+         * one agency is the agency expected to cover the same money twice — which a claim would
+         * then be built from.
+         */
+        const rows = page.locator("[data-financials-funding-row]");
+        const texts = await rows.allInnerTexts();
+        // eslint-disable-next-line no-console
+        console.log("[funding:rows-after-correction] " + JSON.stringify(texts));
+        const stateAgencyRows = texts.filter((t) => /State Childcare Assistance/i.test(t));
+        expect(stateAgencyRows, "one agency, one live expectation").toHaveLength(1);
+        expect(stateAgencyRows[0], "the correction is what stands").toMatch(/\$8\.00/);
+        await page.screenshot({ path: `${OUT}/funding-03-corrected.png`, fullPage: false });
+    });
+
+    /*
+     * READING WHERE MONEY MIGHT COME FROM IS A PERMITTED READ, NOT A PUBLIC ONE. The funding
+     * registry names this organisation's agencies; a caller without financial read has no business
+     * enumerating them.
+     */
+    test("the funding source registry refuses a caller without financial read", async ({ page }) => {
+        test.skip(process.env.CERT_EXPECT_UNAUTHORIZED !== "1", "this is the unauthorized phase's case");
+        test.setTimeout(600_000);
+        await page.goto(HOME);
+        await page.waitForLoadState("domcontentloaded");
+        await page.waitForTimeout(20_000);
+
+        const refused = await page.evaluate(async () => {
+            const res = await fetch("/api/admin/financials/funding-sources", {
+                credentials: "include",
+                cache: "no-store",
+            });
+            return { status: res.status, body: await res.text() };
+        });
+        // eslint-disable-next-line no-console
+        console.log("[funding:unauthorized] " + JSON.stringify(refused));
+        expect([401, 403]).toContain(refused.status);
+        if (refused.status === 403) {
+            const body = JSON.parse(refused.body) as { error?: string; required_permission?: string };
+            expect(body.required_permission).toBe("fin.read");
+            expect(body.error ?? "", "operator copy must not name the grant").not.toContain("fin.read");
+        }
+    });
+});
