@@ -113,6 +113,11 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: "Email and messaging setup.",
             },
             {
+                href: settings("attendance-devices"),
+                label: "Attendance devices",
+                description: "Tablets that record attendance at a site.",
+            },
+            {
                 href: settings("departments"),
                 label: "Departments",
                 description: "Teams and organizational structure.",
