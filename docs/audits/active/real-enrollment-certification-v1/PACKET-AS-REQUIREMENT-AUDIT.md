@@ -96,3 +96,47 @@ per **D-H5**, structured dose truth is Health & Safety's to own, and an upload i
 than a value. The vaccine grid on the Oregon CIS stays truthfully blank until Health supplies it.
 
 Extraction, when it comes, writes to Health's destination — not to a competing one inside Enrollment.
+
+---
+
+## Open blocker — the packet requirement is authored but not published
+
+Measured 2026-09-11 against the certification org on slot 4.
+
+**Symptom.** Organization › Business Processes › **Health** reports:
+
+> Families have paperwork to complete — **Needs fix** — *No paperwork is required here, so a family
+> reaches this stage with nothing to do.*
+
+while the same page's Enrolling stage shows the packet requirement exactly as intended, and the
+process header still reads *6 stages · Healthy*.
+
+**Why both are true.** They are reading two different copies of the configuration:
+
+| Surface | Reads | Sees the packet requirement |
+| --- | --- | --- |
+| Business Process builder / stage editor | `business_process_drafts.draft_payload` | yes |
+| Configuration Health, `…/lifecycle-activation/validate`, runtime | `departments.metadata.lifecycle_builder_v1` (the **published projection**) | **no** |
+
+`gatherParticipantPaperworkFacts` is given `departments.metadata` and traverses
+`requirements_v1`. It expands a `packet` ref into its steps correctly — that code is present and
+deployed — but the projection it is handed has no such requirement to expand, so it returns nothing
+and every downstream row passes vacuously over an empty set:
+
+- *Required paperwork still exists* — "Every required form resolves" (of zero forms)
+- *Required paperwork is published* — "Every required form has a published version" (of zero forms)
+
+So three of the four paperwork rows are green for the wrong reason, which is worse than the one red
+row: only `participant_work_exists` is honest about the emptiness.
+
+**Root cause.** The stage edit that replaced three Form requirements with the one
+`enrollment_packet` requirement was saved to the draft and never published, so it has not reached
+the projection that runtime and health read.
+
+**Remedy.** Publish the Enrollment Business Process. That is a Director-facing configuration action
+with participant-runtime consequences, so it is deliberately **not** performed here — this slice
+changed no participant or canonical-return behaviour.
+
+**Do not "fix" this in the checker.** Teaching `participantPaperworkReadiness` to read the draft
+would make Configuration Health report on a configuration that is not the one running, which is the
+opposite of what that panel is for.
