@@ -142,6 +142,34 @@ describe("history outlives its subject", () => {
         expect(e.summary).toContain("Financials");
     });
 
+    it("names a system actor as a system, not as a departed colleague", () => {
+        /*
+         * The ladder's third rung says "this thing is gone", and for a person that is right. A
+         * provisioning script, an automation or a service principal was never a member to be removed
+         * from anything, so "Removed user (fixture:access-personas)" would have been a fabrication of
+         * exactly the kind this module refuses everywhere else.
+         */
+        for (const [origin, word] of [
+            ["system", "System"],
+            ["automation", "Automation"],
+            ["api", "API client"],
+        ] as const) {
+            const presented = presentAccessEvent(
+                row({ origin, operator_id: "fixture:access-personas" }),
+                NAMES,
+                CATALOG
+            );
+            expect(presented.actorDisplay).toBe(`${word} (fixture:access-personas)`);
+            expect(presented.actorDisplay).not.toMatch(/Removed user/);
+        }
+    });
+
+    it("still names a PERSON who acted through the API as that person", () => {
+        // A human using the API is a human. Only an unresolvable actor is described by its channel.
+        const presented = presentAccessEvent(row({ origin: "api", operator_id: "kelly" }), NAMES, CATALOG);
+        expect(presented.actorDisplay).toBe("Kelly");
+    });
+
     it("names a removed actor as removed rather than as nobody", () => {
         const e = presentAccessEvent(row({ operator_id: "ghost", new_state: "fin.read" }), NAMES, CATALOG);
         expect(e.actorDisplay).toContain("Removed user");

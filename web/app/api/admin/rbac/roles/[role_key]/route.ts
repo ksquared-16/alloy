@@ -139,17 +139,44 @@ export async function PATCH(
         return NextResponse.json(current ?? {});
     }
 
-    const { data: updated, error: updateErr } = await supabase
-        .from("role_definitions")
-        .update(updates)
-        .eq("org_id", orgId)
-        .eq("role_key", role_key)
-        .select("role_key, role_label, is_system, is_active, created_at")
-        .single();
+    /*
+     * THE SAME TRANSACTION OWNER AS THE GRID BRANCH, AND D2 IS WHY.
+     *
+     * This wrote `role_definitions` directly, so renaming a role — and, far more consequentially,
+     * DEACTIVATING one, which removes every capability it carries from everyone holding it — changed
+     * access and left no trace at all. It was the only mutating access path in the product that
+     * reached no audited owner, and a fixed list of routes could not have noticed: the route WAS on
+     * the list, and its other branch was audited.
+     *
+     * `p_permission_keys => null` means "the grid was not edited", the same way a null label means
+     * the label was not edited. An empty array would mean something entirely different — revoke
+     * everything — which is why the owner distinguishes them rather than treating absent as empty.
+     */
+    const audit = accessMutationAudit(auth.access);
+    const { error: metaErr } = await supabase.rpc("save_role_definition_and_grants", {
+        p_org_id: orgId,
+        p_role_key: role_key,
+        p_role_label: updates.role_label ?? null,
+        p_is_active: typeof updates.is_active === "boolean" ? updates.is_active : null,
+        p_permission_keys: null,
+        p_actor_user_id: audit.actorUserId,
+        p_origin: audit.origin,
+        p_correlation_id: audit.correlationId,
+    });
 
-    if (updateErr) {
-        return NextResponse.json({ error: updateErr.message }, { status: 400 });
+    if (metaErr) {
+        return NextResponse.json({ error: metaErr.message }, { status: 400 });
     }
 
-    return NextResponse.json(updated);
+    // Deactivating a role changes what its holders may do on their very next request.
+    invalidateAdminShellContextCache();
+
+    const { data: updated } = await supabase
+        .from("role_definitions")
+        .select("role_key, role_label, is_system, is_active, created_at")
+        .eq("org_id", orgId)
+        .eq("role_key", role_key)
+        .single();
+
+    return NextResponse.json(updated ?? {});
 }
