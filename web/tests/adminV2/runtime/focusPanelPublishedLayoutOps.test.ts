@@ -73,10 +73,12 @@ describe("focusPanelPublishedLayoutOps", () => {
     });
 
     it("published layout authored by the builder drives the runtime exactly (round-trip)", () => {
-        // Author: Children 2/3 + Current Work 1/3 (row 1); Household 1/2 + Readiness 1/2 (row 2)
+        // Author: Children 2/3 + Business Process 1/3 (row 1); Household 1/2 + Readiness 1/2 (row 2).
+        // Canonical keys: `current_work` is superseded and the reader normalizes it, so authoring
+        // with the predecessor made this round-trip assert that supersession had not happened.
         let l = addRow(emptyLayout());
         l = addCardToRow(l, 0, "children", "2/3");
-        l = addCardToRow(l, 0, "current_work", "1/3");
+        l = addCardToRow(l, 0, "business_process", "1/3");
         l = addRow(l);
         l = addCardToRow(l, 1, "household", "1/2");
         l = addCardToRow(l, 1, "readiness_kpi", "1/2");
@@ -90,7 +92,7 @@ describe("focusPanelPublishedLayoutOps", () => {
         const plan = planPublishedLayout(readBack, 900);
         expect(plan.rows[0]!.cells.map((c) => [c.widthUnits, c.cards])).toEqual([
             [8, ["children"]],
-            [4, ["current_work"]],
+            [4, ["business_process"]],
         ]);
         expect(plan.rows[1]!.cells.map((c) => [c.widthUnits, c.cards])).toEqual([
             [6, ["household"]],
@@ -113,7 +115,7 @@ describe("settings editor persist/load round-trip (metadata + fallback)", () => 
         let l = addRow(emptyLayout());
         l = addCardToRow(l, 0, "household", "1/2");
         l = addCardToRow(l, 0, "readiness_kpi", "1/2");
-        l = stackCardInCell(l, 0, 1, "current_work");
+        l = stackCardInCell(l, 0, 1, "business_process");
         const baseDoc = buildSummaryDocFromOrder(order);
         const savedDoc = { ...baseDoc, metadata: withPublishedLayoutMetadata(baseDoc.metadata, l) };
 
@@ -124,7 +126,7 @@ describe("settings editor persist/load round-trip (metadata + fallback)", () => 
         const plan = planPublishedLayout(readBack!, 900);
         expect(plan.rows[0]!.cells.map((c) => [c.widthUnits, c.cards])).toEqual([
             [6, ["household"]],
-            [6, ["readiness_kpi", "current_work"]],
+            [6, ["readiness_kpi", "business_process"]],
         ]);
     });
 

@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import {
     addCardToGrid,
+    gridOverlaps,
     moveArea,
     normalizeGridColumnStacking,
     placeArea,
@@ -14,32 +15,39 @@ import { planPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/compositio
 const BASE_GRID: FocusPanelGridLayout = { columns: 12, areas: [] };
 
 describe("Focus Panel card placement parity", () => {
-    it("stacks Household then Children in the same column without overlap", () => {
+    it("gives the JUST-PLACED card the slot, and pushes the incumbent below it", () => {
+        /*
+         * INSERT-ABOVE IS THE POINT OF THE TIE-BREAK.
+         *
+         * These two tests asserted the opposite until now — that the first card placed on a cell
+         * keeps it — and had been red since `79b39ba07` (2026-07-24) deliberately flipped the rule
+         * so that dropping a card onto the top of a column puts it at the top of that column.
+         * `placeArea` appends the placed card last precisely so `normalizeGridColumnStacking`
+         * prefers it on a same-cell tie; asserting the old order asserted that the drag gesture
+         * does not work.
+         *
+         * What must hold is stated below and is stronger than what was here: the just-placed card
+         * takes the cell, the incumbent moves DOWN rather than sideways or away, and the two do
+         * not overlap.
+         */
         let grid = addCardToGrid(BASE_GRID, "household", { colSpan: 6, rowSpan: 4 });
-        grid = placeArea(grid, {
-            card: "household",
-            colStart: 7,
-            colSpan: 6,
-            rowStart: 1,
-            rowSpan: 4,
-        });
-        grid = placeArea(grid, {
-            card: "children",
-            colStart: 7,
-            colSpan: 6,
-            rowStart: 1,
-            rowSpan: 4,
-        });
+        grid = placeArea(grid, { card: "household", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 4 });
+        grid = placeArea(grid, { card: "children", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 4 });
         grid = normalizeGridColumnStacking(grid);
 
-        const household = grid.areas.find((a) => a.card === "household");
-        const children = grid.areas.find((a) => a.card === "children");
-        expect(household?.colStart).toBe(7);
-        expect(children?.colStart).toBe(7);
-        expect(children!.rowStart).toBeGreaterThanOrEqual(household!.rowStart + household!.rowSpan);
+        const household = grid.areas.find((a) => a.card === "household")!;
+        const children = grid.areas.find((a) => a.card === "children")!;
+        // Both stay in the column they were dropped into.
+        expect(household.colStart).toBe(7);
+        expect(children.colStart).toBe(7);
+        // Children was placed last, so it owns the cell and Household is the one that moves.
+        expect(children.rowStart).toBe(1);
+        expect(household.rowStart).toBeGreaterThanOrEqual(children.rowStart + children.rowSpan);
+        // And the invariant the stacking exists to keep.
+        expect(gridOverlaps(grid)).toEqual([]);
     });
 
-    it("preserves column order after move + normalize", () => {
+    it("puts the most recently moved card on top of the column it was moved into", () => {
         let grid = addCardToGrid(BASE_GRID, "household", { colSpan: 6, rowSpan: 3 });
         grid = addCardToGrid(grid, "children", { colSpan: 6, rowSpan: 3 });
         grid = moveArea(grid, "household", 7, 1);
@@ -49,7 +57,10 @@ describe("Focus Panel card placement parity", () => {
             .filter((a) => a.colStart === 7)
             .sort((a, b) => a.rowStart - b.rowStart)
             .map((a) => a.card);
-        expect(rightColumn).toEqual(["household", "children"]);
+        // Children moved second, so Children reads first. Both cards are still in the column, in a
+        // definite order, and neither was dropped.
+        expect(rightColumn).toEqual(["children", "household"]);
+        expect(gridOverlaps(grid)).toEqual([]);
     });
 
     it("stacks cards that share column-range overlap (not only exact colStart)", () => {
