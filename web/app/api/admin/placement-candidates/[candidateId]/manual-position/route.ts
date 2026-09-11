@@ -11,6 +11,7 @@ import {
 } from "@/lib/orchestration/placement/placementOverrideMutations";
 import { loadWaitlistSectionOrder } from "@/lib/orchestration/placement/loadWaitlistSectionOrder";
 import { planPrefixCanonicalOrdinals } from "@/lib/orchestration/placement/waitlistSectionOrderPlan";
+import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 
 function readOptionalInt(raw: unknown): number | null {
     if (typeof raw === "number" && Number.isFinite(raw)) return Math.trunc(raw);
@@ -46,6 +47,41 @@ async function assertCandidateOpportunityScope(
         scopeDimensionsFromAccess(access),
         candidate.opportunity_id
     );
+}
+
+
+/**
+ * The ROUTE SLUG naming the list the operator is reading.
+ *
+ * A slug rather than a uuid, because the order comes from the provisioning answer and that answer is
+ * composed from the route — the slug IS the address of the list. The client always has it, since it
+ * is in the address bar from the first paint; the runtime kernel's canonical destination is not
+ * always there yet, and a queue row can be adjusted before it resolves. That was observed live:
+ * `destination` was null and every move was refused.
+ *
+ * A uuid is still accepted, and mapped back to its key, so a caller holding only an id is not turned
+ * away. Either way the slug is resolved against this org before it is used.
+ */
+async function resolveWorkUnitSlug(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    named: { id: string | null; key: string | null }
+): Promise<string | null> {
+    if (named.key) {
+        const identity = await resolveWorkUnitRouteIdentity(named.key);
+        if (identity.resolution?.status === "resolved") return named.key;
+    }
+    if (named.id) {
+        const { data } = await supabase
+            .from("work_units")
+            .select("key")
+            .eq("org_id", orgId)
+            .eq("id", named.id)
+            .maybeSingle();
+        const key = typeof data?.key === "string" ? data.key.trim() : "";
+        if (key) return key;
+    }
+    return null;
 }
 
 /** POST — apply manual waitlist position (pin override upsert or reset). */
@@ -128,19 +164,20 @@ export async function POST(
      * is precisely the behaviour that let a section accumulate three rows all claiming ordinal 2,
      * and a silent fallback would reintroduce it for any caller that forgot the field.
      */
-    const workUnitId = readOptionalString(body.work_unit_id);
-    if (!workUnitId) {
+    const workUnitSlug = await resolveWorkUnitSlug(supabase, ctx.orgId, {
+        id: readOptionalString(body.work_unit_id),
+        key: readOptionalString(body.work_unit_key),
+    });
+    if (!workUnitSlug) {
         return NextResponse.json(
-            { error: "work_unit_id is required: a position is only meaningful against a specific queue" },
+            { error: "work_unit_id or work_unit_key is required: a position is only meaningful against a specific queue" },
             { status: 400 },
         );
     }
 
     const section = await loadWaitlistSectionOrder({
-        orgId: ctx.orgId,
-        workUnitId,
+        workUnitSlug,
         placementCandidateId: candidateId,
-        queueKey: readOptionalString(body.queue_key),
     });
     if (!section) {
         return NextResponse.json(
