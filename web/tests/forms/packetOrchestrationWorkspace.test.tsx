@@ -66,6 +66,7 @@ describe("PacketBuilderWorkspaceLayout OW-4", () => {
                 onSaveMeta={() => {}}
                 onStepsChange={() => {}}
                 onAddStep={() => {}}
+                onAddDocumentStep={async () => {}}
                 onSaveSteps={() => {}}
                 onMoveStep={() => {}}
                 onRemoveStep={() => {}}

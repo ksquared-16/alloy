@@ -6,6 +6,8 @@ import type { StepDraft } from "@/components/forms/workspace/PacketStepCompositi
 import type { PacketCreatedLinkPayload, PacketPublicLinkRow } from "@/components/forms/workspace/PacketDistributionLaunchPanel";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { mergeFormListWithPacketItems, type PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
+import type { NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
+import { readPacketStepConfig } from "@/lib/forms/packets/packetStepKind";
 import { trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
 import { countSessionsByPacketDefinition } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
@@ -100,15 +102,53 @@ export default function ProcessingPacketBuilder({
                 setErr((fj as { error?: string }).error ?? "Could not load the form list for step pickers.");
             }
 
+            /*
+             * Name the document an acknowledgment step points at.
+             *
+             * Without this the row reads "Reads a document", which is exactly the vagueness this
+             * work exists to remove — an operator cannot confirm they attached the right Handbook
+             * from a sentence that does not name it. Resolved only when such a step exists, and a
+             * failure leaves the honest fallback rather than a wrong title.
+             */
+            const ackIds = new Set(
+                it
+                    .map((row) => readPacketStepConfig(row.metadata).acknowledgmentDocumentId)
+                    .filter((v): v is string => Boolean(v)),
+            );
+            const ackTitles = new Map<string, string>();
+            if (ackIds.size > 0) {
+                try {
+                    const dRes = await fetch("/api/admin/documents?limit=200", { credentials: "include" });
+                    if (dRes.ok) {
+                        const dj = (await dRes.json()) as {
+                            data?: Array<{ id: string; title?: string | null; original_filename?: string | null }>;
+                        };
+                        for (const d of dj.data ?? []) {
+                            if (!ackIds.has(d.id)) continue;
+                            const t = (d.title ?? "").trim() || (d.original_filename ?? "").trim();
+                            if (t) ackTitles.set(d.id, t);
+                        }
+                    }
+                } catch {
+                    // Fallback copy already says something true.
+                }
+            }
+
             if (it.length) {
                 setSteps(
                     it.map((row) => {
-                        const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
-                        const step_label = typeof meta.step_label === "string" ? meta.step_label : "";
+                        const cfg = readPacketStepConfig(row.metadata);
                         return {
                             packet_item_id: row.id,
                             form_definition_id: row.form_definition_id,
-                            step_label,
+                            step_label: cfg.label ?? "",
+                            kind: cfg.kind,
+                            document_type_key: cfg.documentTypeKey,
+                            acknowledgment_document_id: cfg.acknowledgmentDocumentId,
+                            acknowledgment_document_title: cfg.acknowledgmentDocumentId
+                                ? (ackTitles.get(cfg.acknowledgmentDocumentId) ?? null)
+                                : null,
+                            requires_signature: cfg.requiresSignature,
                         };
                     })
                 );
@@ -173,6 +213,9 @@ export default function ProcessingPacketBuilder({
             .map((s) => ({
                 form_definition_id: s.form_definition_id,
                 step_label: s.step_label.trim() || undefined,
+                // Names WHICH stored step this row is, so the PUT can carry its kind and document
+                // configuration across the delete-and-reinsert instead of flattening it to a form.
+                ...(s.packet_item_id ? { packet_item_id: s.packet_item_id } : {}),
             }));
         if (clean.length === 0) {
             setErr("Add at least one step with a form selected.");
@@ -197,6 +240,42 @@ export default function ProcessingPacketBuilder({
     };
 
     const addStep = () => setSteps((s) => [...s, { form_definition_id: "", step_label: "" }]);
+
+    /**
+     * A document step is persisted the moment it is added, unlike a form step.
+     *
+     * It has to be: the control that executes it does not exist until the server generates and
+     * publishes it, and a draft row pointing at nothing could not be saved by the ordinary steps
+     * PUT, which requires a published form per step. Reloading afterwards is what keeps the two
+     * halves of the editor consistent — the new row comes back with its real `packet_item_id`.
+     */
+    const addDocumentStep = async (step: NewDocumentStep) => {
+        setBusy(true);
+        setErr(null);
+        setOkBanner(null);
+        try {
+            const res = await fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetDefId)}/steps`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    kind: step.kind,
+                    label: step.label.trim(),
+                    instructions: step.instructions.trim() || undefined,
+                    document_type_key: step.document_type_key || undefined,
+                    acknowledgment_document_id: step.acknowledgment_document_id || undefined,
+                    requires_signature: step.requires_signature,
+                }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not add the step");
+            setOkBanner("Step added.");
+            await loadAll();
+        } catch (e) {
+            setErr((e as Error).message);
+        } finally {
+            setBusy(false);
+        }
+    };
     const removeStep = (i: number) =>
         setSteps((s) => {
             const next = s.length <= 1 ? s : s.filter((_, j) => j !== i);
@@ -347,6 +426,7 @@ export default function ProcessingPacketBuilder({
                             onSaveMeta={() => void saveMeta()}
                             onStepsChange={setSteps}
                             onAddStep={addStep}
+                            onAddDocumentStep={addDocumentStep}
                             onSaveSteps={() => void saveSteps()}
                             onMoveStep={moveStep}
                             onRemoveStep={removeStep}
