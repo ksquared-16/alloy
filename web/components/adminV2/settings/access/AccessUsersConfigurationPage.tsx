@@ -208,6 +208,11 @@ export default function AccessUsersConfigurationPage({
     const [editRole, setEditRole] = useState("");
     const [roleSaving, setRoleSaving] = useState(false);
     /**
+     * Bumped when THIS surface commits an access change, so the Access history card below the
+     * editors re-reads instead of keeping the answer it fetched before the change was made.
+     */
+    const [historyToken, setHistoryToken] = useState(0);
+    /**
      * `M2-17`. Acknowledgement that a replacement will delete the other roles this membership
      * holds. It starts false and is reset by any change of selection or of the target role, so an
      * acknowledgement can never outlive the statement it was given for.
@@ -524,6 +529,7 @@ export default function AccessUsersConfigurationPage({
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role save failed");
             setMessage("Role updated.");
+            setHistoryToken((n) => n + 1);
             setConfirmRoleReplace(false);
             await reload();
             /** Re-run settings layout server props so `AdminAuthProvider` roleKeys match fresh `user_roles`. */
@@ -559,6 +565,7 @@ export default function AccessUsersConfigurationPage({
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Access save failed");
             setMessage("Access updated.");
+            setHistoryToken((n) => n + 1);
             await reload();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Access save failed.");
@@ -1463,6 +1470,7 @@ export default function AccessUsersConfigurationPage({
                                         <AccessHistoryList
                                             testId="access-user-history-list"
                                             subjectUserId={selectedUserId}
+                                            refreshToken={historyToken}
                                             pageSize={5}
                                             emptyMessage="No access changes have been recorded for this person yet."
                                         />

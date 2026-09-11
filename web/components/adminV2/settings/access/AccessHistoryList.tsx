@@ -47,6 +47,17 @@ export type AccessHistoryListProps = {
     pageSize?: number;
     testId: string;
     emptyMessage: string;
+    /**
+     * Bumped by the surrounding surface when IT has just committed an access change.
+     *
+     * The feed loads on mount, which is correct for a card the operator navigates to, and wrong for
+     * the one case where the operator changes access WITHOUT leaving the screen the card is on: the
+     * selected-person workspace, where the role and scope editors sit directly above this card. The
+     * certification caught it saying "No access changes have been recorded for this person yet."
+     * one second after the operator changed that person's roles — the four truthful states are only
+     * truthful if `empty` still means empty by the time it is read.
+     */
+    refreshToken?: number;
 };
 
 function formatWhen(iso: string): string {
@@ -67,6 +78,7 @@ export default function AccessHistoryList({
     pageSize = 10,
     testId,
     emptyMessage,
+    refreshToken = 0,
 }: AccessHistoryListProps) {
     const [entries, setEntries] = useState<AccessHistoryEntryView[]>([]);
     const [cursor, setCursor] = useState<Cursor>(null);
@@ -131,7 +143,10 @@ export default function AccessHistoryList({
         return () => {
             cancelled = true;
         };
-    }, [load]);
+        // `refreshToken` is a signal, not an input to `load`: when the surrounding surface commits an
+        // access change it changes, and this feed re-reads from the server rather than keeping the
+        // answer it fetched before the change happened.
+    }, [load, refreshToken]);
 
     const loadMore = async () => {
         if (!cursor || loadingMore) return;
