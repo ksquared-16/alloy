@@ -419,8 +419,43 @@ export async function releaseLaneExecutionCapacity(laneId, {
   };
 }
 
-export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot() } = {}) {
-  const { assessProvisionCapacity } = await import("./alloy-dev-adapter.mjs");
+/**
+ * TWO FACTS, AND ONLY ONE OF THEM GOVERNS.
+ *
+ * THE DEFECT. This panel reported RESIDENCY — every agent-bearing pane — and
+ * then manufactured a `provider_capacity` blocker from it. Measured on the live
+ * host: eight resident agents, ceiling eight, so the operator surface said
+ * "8 / 8, All 8 agents are in use" and offered the release control. The
+ * admission gate, asked at the same instant, said active_providers 1 of 8,
+ * ok true, blockers none — it would have started another lane immediately.
+ *
+ * Nothing was actually refused: admission never reads this number. But the
+ * operator was being told the host was full while the gate disagreed, which is
+ * the one thing a capacity panel must never do.
+ *
+ * The two numbers answer different questions and both are worth showing:
+ *
+ *   execution capacity  what CONSUMES a provider seat — the admission answer,
+ *                       and the only input to "can another lane start?"
+ *   resident agents     how many provider processes are alive — operational
+ *                       context, never a gate
+ *
+ * Admission semantics are not re-derived here. `assessSessionStartCapacity` is
+ * called and its verdict used as-is, so this panel cannot drift from the gate:
+ * if they ever disagree it is because the gate changed, and the panel follows.
+ */
+export async function summarizeHostExecutionCapacity(lanes, {
+  root = runtimeRoot(),
+  // Seams, in the shape this codebase already uses for `activeRun` and
+  // `listPanesImpl`: a test must be able to STATE the world — n resident, m
+  // consuming — instead of depending on the machine it happens to run on. ES
+  // module bindings are read-only, so there is no monkey-patching alternative.
+  assessProvision = null,
+  assessAdmission = null,
+} = {}) {
+  const adapter = await import("./alloy-dev-adapter.mjs");
+  const assessProvisionCapacity = assessProvision || adapter.assessProvisionCapacity;
+  const assessSessionStartCapacity = assessAdmission || adapter.assessSessionStartCapacity;
   // Same live count the admission gate uses, so the number the operator READS
   // is the number that decides whether their lane starts.
   let providerPanes = null;
@@ -434,6 +469,12 @@ export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot
     if (seen.ok) providerPanes = seen.panes;
   } catch { /* metadata fallback */ }
   const provision = assessProvisionCapacity({ root, ...(providerPanes ? { providerPanes } : {}) });
+  // THE ADMISSION VERDICT, ASKED OF THE GATE ITSELF. Not recomputed from its
+  // parts: re-wiring panes, lanes, sessions, ceiling, runStateFor and
+  // suspensions here would be a second definition of provider liveness, and a
+  // second definition is exactly what this change exists to remove.
+  let admissionCap = null;
+  try { admissionCap = await assessSessionStartCapacity({ root }); } catch { admissionCap = null; }
   const { summarizeExecutionCapacity } = await import("../../apps/vacilando/public/gateway-view.mjs");
   const ui = summarizeExecutionCapacity(lanes, {
     max_active: provision.max_providers,
@@ -449,30 +490,69 @@ export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot
   // started a fourth provider over the ceiling.
   //
   // Provider capacity is about PROCESSES, so the process count decides.
-  const holders = provision.provider_holders || [];
-  const liveActive = Number.isFinite(provision.active_providers)
+  // RESIDENCY: live provider processes. Reported, never a gate.
+  const residentHolders = provision.provider_holders || [];
+  const resident = Number.isFinite(provision.active_providers)
     ? provision.active_providers
-    : holders.length;
-  // Live processes only. Taking max(ui.active) re-introduced ghost occupancy:
-  // leftover RUNNING claims and status-only NEEDS_INPUT lanes inflated the
-  // count, Vacilando reported 0 seats, and Trust/Surfaces could not start.
-  const active = Math.max(liveActive, holders.length);
-  const available = Math.max(0, provision.max_providers - active);
+    : residentHolders.length;
+
+  // EXECUTION CAPACITY: what the gate counts. Falling back to residency when
+  // the gate could not be asked is deliberate and conservative — it can only
+  // over-report consumption, and over-reporting shows a blocker that admission
+  // would also refuse to clear while it is in that state.
+  const max = Number(admissionCap?.max_providers) || provision.max_providers;
+  const consuming = Number.isFinite(admissionCap?.active_providers)
+    ? admissionCap.active_providers
+    : Math.max(resident, residentHolders.length);
+  const available = Math.max(0, max - consuming);
+
+  // Holders listed beside the count must be the ones the count is about, or the
+  // panel names eight agents under the number one.
+  // A holder with no tmux session name would render as an absolute path. The
+  // name is already known — residency carries it, and so do the lanes — so
+  // resolve it rather than showing the operator a filesystem path.
+  const nameByPath = new Map(residentHolders
+    .filter((h) => h?.path)
+    .map((h) => [String(h.path).replace(/\/+$/, ""), h.name || null]));
+  const nameByLane = new Map((Array.isArray(lanes) ? lanes : [])
+    .filter((l) => l?.lane_id)
+    .map((l) => [l.lane_id, l.label || l.name || null]));
+  const consumingHolders = Array.isArray(admissionCap?.occupying)
+    ? admissionCap.occupying.map((o) => {
+      const path = o.cwd || null;
+      const name = o.session
+        || nameByLane.get(o.lane_id)
+        || (path ? nameByPath.get(String(path).replace(/\/+$/, "")) : null)
+        || (path ? String(path).split("/").filter(Boolean).pop() : null)
+        || null;
+      return { name, path, lane_id: o.lane_id || null };
+    })
+    : residentHolders;
+
   return {
     ...ui,
-    active,
-    max_active: provision.max_providers,
+    active: consuming,
+    max_active: max,
     occupied_slots: provision.occupied_slots,
     free_slots: provision.free_slots,
-    active_providers: provision.active_providers,
-    provider_holders: holders,
-    counted_from: provision.counted_from || null,
+    active_providers: consuming,
+    provider_holders: consumingHolders,
+    counted_from: admissionCap ? "admission" : (provision.counted_from || null),
+    // Operational context. Named differently from the governing number on
+    // purpose — calling both of them "providers" is how they were confused.
+    resident_providers: resident,
+    resident_holders: residentHolders,
+    resident_counted_from: provision.counted_from || null,
     // Lanes whose posture occupies a seat, kept for display — never for the
     // arithmetic that gates admission.
     posture_active: ui.active || 0,
     available,
+    degraded: Boolean(admissionCap?.degraded),
+    // THE BLOCKER BELONGS TO ADMISSION. It used to be manufactured here from
+    // residency, which is how the panel came to claim "full" over a gate that
+    // was open.
     blockers: available > 0
       ? (provision.blockers || []).filter((b) => b !== "provider_capacity")
-      : Array.from(new Set(["provider_capacity", ...(provision.blockers || [])])),
+      : Array.from(new Set(["provider_capacity", ...(provision.blockers || []).filter((b) => b !== "provider_capacity")])),
   };
 }
