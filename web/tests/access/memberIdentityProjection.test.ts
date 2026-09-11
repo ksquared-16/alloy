@@ -102,6 +102,48 @@ describe("projectMemberScope — absent is not org-wide (W-47, IA-R3)", () => {
     });
 });
 
+describe("projectMemberScope — attendance capture is read, never assumed", () => {
+    it("reports `unset` when there is no profile row, not the column default", () => {
+        // `attendance_capture_scope` is NOT NULL DEFAULT 'site', so the permissive
+        // answer is the one a missing row would be coerced into. That coercion is
+        // exactly what this module exists to refuse: it would show a capture
+        // authority nobody granted.
+        const absent = projectMemberScope({ profileRow: null, departmentIds: [], siteLocationIds: [] });
+        expect(absent.attendance_capture_scope).toBe("unset");
+    });
+
+    it("reads `assigned` when it is stored", () => {
+        const projection = projectMemberScope({
+            profileRow: { department_scope: "all", site_scope: "all", attendance_capture_scope: "assigned" },
+            departmentIds: [],
+            siteLocationIds: [],
+        });
+        expect(projection.attendance_capture_scope).toBe("assigned");
+    });
+
+    it("reads `site` when it is stored", () => {
+        const projection = projectMemberScope({
+            profileRow: { department_scope: "all", site_scope: "all", attendance_capture_scope: "site" },
+            departmentIds: [],
+            siteLocationIds: [],
+        });
+        expect(projection.attendance_capture_scope).toBe("site");
+    });
+
+    it("falls back to `site` for a present row with an unrecognised value", () => {
+        // A row EXISTS, so the operator did configure this membership; the stored
+        // value is simply not one the product names. `site` matches what the
+        // enforcing resolver does with the same input, so the screen and the
+        // enforcement agree rather than diverging on a bad string.
+        const projection = projectMemberScope({
+            profileRow: { department_scope: "all", site_scope: "all", attendance_capture_scope: "nonsense" },
+            departmentIds: [],
+            siteLocationIds: [],
+        });
+        expect(projection.attendance_capture_scope).toBe("site");
+    });
+});
+
 describe("projectMemberLifecycle — no `active` that was not read (W-46, IA-R1/IA-R2)", () => {
     it("an unreadable auth record is `unknown`, with the reason, and never `active`", () => {
         const projection = projectMemberLifecycle(null, NOW);
