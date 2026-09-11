@@ -68,3 +68,52 @@ zero-duplicate-persistence guarantee the convergence doctrine requires.
 
 These artifacts carry counts, states, keys and infrastructure identifiers only. No person, child,
 family or message content, no free text, and no credentials, tokens or connection strings.
+
+## Closeout — COMPLETE_PROMOTED
+
+Promoted 2026-09-11 as PR [#840](https://github.com/ksquared-16/alloy/pull/840).
+
+| | |
+|---|---|
+| Certified candidate | `63433ceec` |
+| Promotion candidate (reconciled) | `2b4bd8837` |
+| Merge SHA | `5452ab901` |
+| Resulting `origin/staging` | `5452ab901` |
+| Commits | 12 · **Files** 50 · **Migrations** 0 |
+
+Staging moved between certification and promotion (`9f14a6b67` → `aecc4d9ec`, the host-lifecycle-v1
+program). The reconcile is clean and provably non-overlapping: the incoming commits touch only
+`scripts/local-dev/**` and `certification/host-lifecycle-v1/**`, the file sets are disjoint, and
+`web/` is **byte-identical** between the certified candidate and the promoted tree. The certified
+behaviour was not re-derived across the merge — it was carried across a merge that could not reach
+it.
+
+## The architecture outcome this program establishes
+
+Work Items is Alloy's **cross-record execution visibility layer**. It shows work; it does not own
+work it did not create. Four sources, one queue, and exactly one authority per row:
+
+| source | what Work Items holds | who owns completion |
+|---|---|---|
+| Manual | a durable Work-Items-owned task | **Work Items** |
+| Business Process | the *same* underlying BP / Current Work task — not a copy | **Business Process** |
+| Communications | a virtual projection keyed `communications:{threadId}` | **Communications** |
+| Processing | a virtual projection keyed `processing:{caseId}` | **Processing** |
+
+**No duplicate operational truth.** The virtual sources persist nothing: `virtual_source_durable_rows`
+returns zero rows org-wide, and the H2 round trip measured 7 durable `operational_tasks` before and
+after a full Communications lifecycle with **0** referencing the thread at either end. A projection
+that cannot be completed in Work Items says so in its own detail panel and offers only the command
+that reaches its real owner.
+
+## Follow-up debt — carried, deliberately not fixed here
+
+1. **Unsafe legacy Communications QA fixture.** `web/scripts/createCommunicationsNeedsReplyQaFixture.ts`
+   still selects existing correspondence (`order by last_message_at desc limit 10`) and mutates
+   `attention_state` through a service-role client. On this tenant it would choose real external
+   mailboxes. **It was not used for H2 certification** — `h2WorkItemsCommunicationsCertFixture.mjs`
+   was written precisely because it could not be. Options: add a hard refusal guard against
+   non-synthetic correspondence, replace it with safe synthetic behaviour, or delete it if obsolete.
+2. **Queue health terminology.** The health metric labelled **"Waiting"** actually measures
+   *unassigned open work*. A future reconciliation is Assigned / Unassigned / Due Soon / Overdue.
+   Product semantics were deliberately left unchanged during promotion.
