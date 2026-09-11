@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: sprint
-last_reviewed: 2026-09-06
+last_reviewed: 2026-09-11
 supersedes: []
 ---
 
@@ -73,6 +73,14 @@ counts never reached this plan, whose W-0 log ended at "run 4 filed" and whose f
 *"M1 is sized at exactly 2 rows"*. Also **corrected a false lockout alarm** (M1 self-sizes in-transaction, so a
 stale "2" cannot mis-apply) and **flagged that RULE 5 has now bitten**: a live M1 apply-authorization stands on a
 run-3 preflight, and its unattributed-growth abort condition is satisfied (§4, §6, §7)
+· **W-0 re-issued a ninth time — 2026-09-11** (mission `msn_83dbd2706970c833d6`, assignment
+`asg_141e39c1ddca5e`) — **no run 5**: the census has run, M1's gate is `unmet`, and W-7 no longer consumes a
+count. The finding is that **the M1 apply channel cannot reach a database on this base** — `alloy_deployed_primary`
+is unregistered in `trusted-host-database-target.mjs`, so a promoted apply clears governance and dies in the
+child as an unknown name; the fix is uncommitted work on another session's branch. **The census channel is
+unaffected** (it runs `trusted-host-run-sql.sh`, never the apply child), which is why run 4 executed while
+applies failed closed. **M1 re-authorization now has two preconditions — land the resolver fix, then census,
+then authorize** (§4, §6, §11)
 · **W-6 RULED and the M1 gate MOVED BACK — 2026-09-06** (mission `msn_b7040b5174ddeafb79`, assignment
 `asg_7b05887a569304`, **fourth dispatch**) — the ruling the seventh W-0 re-issue asked for. **`preflight.ok` is now
 `false`** and M1 drops `operator_review` → **`unmet`** (`preflight_void_reauthorization_required`): the 2026-08-07
@@ -1040,6 +1048,68 @@ compiled brief dispatched twice"* — that hash also rode a W-0 census brief.
 **For whoever dispatches a ninth re-issue.** The instruction is unchanged and now has a second half: check
 whether the census has already run — **and do not treat a matching `contentHash` as evidence of anything.**
 Re-run this census only immediately before a lockout-class switch or an M1 apply, per `residual_risks[0]`.
+
+#### W-0 re-issued a ninth time — **2026-09-11**, assignment `asg_141e39c1ddca5e`: no run 5, and the M1 apply channel is broken on the base
+
+Mission `msn_83dbd2706970c833d6` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e`, mission title **"Brief Spine
+Mission"** — a ninth title that does not name the work, consistent with the eighth pass's finding that neither the
+title nor the hash identifies a brief. Worktree `attendance` @ `runtime/migration-target-resolution`, **HEAD ==
+`origin/staging` @ `a323be5f9`, 0 ahead / 0 behind.**
+
+**The eighth pass's instruction was carried out first, and it answers the assignment in one read with no
+authorization spent.** `run_history[4]` and [`wave0-authority-census.results.json`](wave0-authority-census.results.json)
+both hold run 4 at 2026-09-04T11:28:53Z, `org_fingerprint` `ab7e5dde…` matching run 3, query hash `a3982ca5…`
+unchanged. **AC_W0 remains met. No run 5 was filed** — run 4 is seven days old, M1's gate is `unmet`
+(`preflight_void_reauthorization_required`), and W-7 was moved off a count and onto an invariant by the W-6
+ruling, so no Q4 figure can unblock it.
+
+**The new finding, and it changes when the next census should be filed: the M1 apply channel cannot reach a
+database on the current base.** `alloy_deployed_primary` is **not a registered database target** —
+`trusted-host-database-target.mjs:41-45` as committed holds `{ certification, cert, staging }` and nothing else,
+and `resolveTrustedDatabaseTarget` returns a refusal rather than a default. `database.apply_promoted_migration`
+validates its `target` against `PRODUCTION_APPLY_TARGETS` and then passes that same target through *as the
+environment*, so the name clears every governed check, reaches the apply child, and dies there as unknown. The
+in-flight fix's own comment records the observed cost: **three production migration attempts, no database ever
+contacted**, surfacing as *"the outcome could not be established"* rather than as *"nobody taught the resolver
+this name"*. **M1 would fail the same way.** The fix — registering the name and resolving it once before the
+child is spawned — exists **only as uncommitted working-tree changes** authored by a concurrent session on this
+branch. It is not on HEAD and not on staging, and it is not W-0's to land: this assignment's scope is the two
+evidence files, and the working tree was left untouched.
+
+**Why that is a W-0 finding rather than someone else's.** §4's re-run trigger is *"immediately before a
+lockout-class switch or an M1 apply"*, and that trigger **presumes the apply is capable of happening**. Until the
+resolver fix lands it is not, so a census filed now would spend an operator authorization refreshing numbers for
+an apply that fails closed before contacting the database — the waste §4 has named as the wrong outcome five
+times over. **For W-6 and the M1 owner: re-authorization now has two preconditions, not one.** The known one is a
+fresh preflight (RULE 5 — the 2026-08-07 authorization is void on staleness). The new one is that the
+target-resolution fix must be on the base the apply executes from. **Sequence them in that order** — land the
+resolver fix, *then* file the census that re-derives Q4, *then* seek re-authorization — so one authorization is
+spent once, correctly timed, rather than early and again afterwards.
+
+**W-0's own instrument is unaffected, and this was verified rather than assumed.** `database.read_census` does
+not travel the apply path: `trusted-host-actions.mjs:697` routes it through `RUN_SQL_SH =
+trusted-host-run-sql.sh` (`:125`), a different child from `APPLY_MIGRATION_SH`, and it never calls
+`resolveTrustedDatabaseTarget` — the in-flight diff adds that call at exactly two sites, the migration apply and
+the ledger repair, and touches no census code. **For the census, `alloy_deployed_primary` is an authorization
+label routed by `trusted-host-authz`, not a name resolved into a connection string.** That is precisely why run 4
+executed cleanly against this target on 2026-09-04 while promoted applies were failing closed on the same name.
+A run 5 remains executable the moment one is genuinely warranted. `target.confirmed_against_live` is unchanged at
+`false`; the census still identifies its target by `org_fingerprint`, never by project ref.
+
+**Artifact integrity re-verified.** Both standing traps are still disarmed: `runs_1_2_query_hash` keeps its name
+and the `743cd63b…` value, the top-level `query_hash` holds `a3982ca5…` (run 3/4's *current* hash, which is the
+correct occupant of that key — the hazard is that key holding the runs 1/2 value), and `combined_query` still
+carries the `target_identity` block, so a run 5 would self-identify.
+
+**⚠ Operator, unchanged and not re-litigated.** If `gar_3368b11eb1b1ce` / `dec_b1c5c947f5129e` is still pending,
+**decline it.** No worker can check or withdraw it; the eighth pass closed that search across four routes.
+
+**For whoever dispatches a tenth re-issue.** The instruction now has a third clause. (1) Check whether the census
+has already run — `run_history` and the `.results.json` answer it in one read. (2) Do not treat a matching
+`contentHash` as evidence of anything. (3) **Before concluding that an M1 apply is imminent enough to justify a
+census, check that `alloy_deployed_primary` actually resolves in `trusted-host-database-target.mjs` on the base
+the apply will run from.** A re-run trigger that presumes a working channel is not a trigger while the channel is
+broken.
 
 ---
 
@@ -4752,7 +4822,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
-| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**PREFLIGHT VOID 2026-09-06 — RE-AUTHORIZATION REQUIRED**) | shared | ~~**PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`~~ **VOIDED 2026-09-06 by `asg_7b05887a569304` (§6 W-6 ruling).** Census run 4 (2026-09-04) moved the population **2 → 5** on the `pairs_without_profile` grain (of **11** distinct pairs across **13** membership rows; **0 orphan profiles**, unchanged). RULE 5 (immediacy) fails: the 2026-08-07 authorization rests on a 28-day-old preflight and a written record saying *"2 rows"*. `preflight.ok` is now **`false`**, gate drops `operator_review` → **`unmet`**, `status` is **`preflight_void_reauthorization_required`**. **`abort_conditions[0]` FIRES** — growth attributed to the *class* (seed/QA tooling; four writers enumerated in §6) but not to the *instance*; **no product path can produce a fail-open pair**. The migration itself is **unchanged and correct** — it self-sizes in-transaction, so this is a stale *authorization*, not a stale migration. **No worker-reachable write channel exists to apply it** (see §6). Evidence [`w6-m1-preflight.json`](w6-m1-preflight.json) |
+| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**PREFLIGHT VOID 2026-09-06 — RE-AUTHORIZATION REQUIRED**) | shared | ~~**PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`~~ **VOIDED 2026-09-06 by `asg_7b05887a569304` (§6 W-6 ruling).** Census run 4 (2026-09-04) moved the population **2 → 5** on the `pairs_without_profile` grain (of **11** distinct pairs across **13** membership rows; **0 orphan profiles**, unchanged). RULE 5 (immediacy) fails: the 2026-08-07 authorization rests on a 28-day-old preflight and a written record saying *"2 rows"*. `preflight.ok` is now **`false`**, gate drops `operator_review` → **`unmet`**, `status` is **`preflight_void_reauthorization_required`**. **`abort_conditions[0]` FIRES** — growth attributed to the *class* (seed/QA tooling; four writers enumerated in §6) but not to the *instance*; **no product path can produce a fail-open pair**. The migration itself is **unchanged and correct** — it self-sizes in-transaction, so this is a stale *authorization*, not a stale migration. **No worker-reachable write channel exists to apply it** (see §6). **SECOND PRECONDITION ADDED 2026-09-11 by `asg_141e39c1ddca5e` (§4 W-0 ninth re-issue):** the apply channel cannot reach a database on the current base — `alloy_deployed_primary` is unregistered in `trusted-host-database-target.mjs:41-45`, so `database.apply_promoted_migration` clears governance and dies in the apply child as an unknown name (three such attempts already, none contacting a database). **Sequence: land the resolver fix → re-run the census → seek re-authorization**, so one authorization is spent once. Evidence [`w6-m1-preflight.json`](w6-m1-preflight.json), [`wave0-authority-census.json`](wave0-authority-census.json) `ninth_re_issue_2026_09_11` |
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090001_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
 | ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
