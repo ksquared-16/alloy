@@ -674,6 +674,52 @@ describeLive("D2 access change audit — live", () => {
     }, 60_000);
 
     // ─────────────────────────────────────────────────────────────────────────
+    // No administrator can lock the organization out of access administration.
+    // ─────────────────────────────────────────────────────────────────────────
+    it("refuses to remove access administration from the actor's only role, and nothing else", async () => {
+        /*
+         * FOUND BY THIS CERTIFICATION, DESTRUCTIVELY. A boundaries spec addressed the seeded `admin`
+         * role and — because the organization comes from the session rather than the request, which is
+         * correct — the write landed on the caller's own tenant. `admin` went from 68 capabilities to
+         * one, `settings.users_roles` among the 67 removed, and every administrator instantly lost the
+         * authority to undo it. There is no product path back: the screen that repairs role grants is
+         * the screen the removed capability gates.
+         */
+        await supabase.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", ROLE.target);
+        const { error: grantErr } = await supabase.rpc("replace_role_permission_grants", {
+            p_org_id: ORG, p_role_key: ROLE.target, p_permission_keys: ["settings.users_roles"],
+            p_actor_user_id: ACTOR, p_origin: "operator", p_correlation_id: `d2-lockout-setup-${crypto.randomUUID()}`,
+        });
+        expect(grantErr).toBeNull();
+        await supabase.from("user_roles").delete().eq("user_id", P.other).eq("org_id", ORG);
+        const { error: urErr } = await supabase.from("user_roles").insert({ user_id: P.other, org_id: ORG, role: ROLE.target });
+        expect(urErr).toBeNull();
+
+        // The lockout: their own role, their only source of the capability.
+        const locked = await supabase.rpc("replace_role_permission_grants", {
+            p_org_id: ORG, p_role_key: ROLE.target, p_permission_keys: ["fin.read"],
+            p_actor_user_id: P.other, p_origin: "operator", p_correlation_id: `d2-lockout-${crypto.randomUUID()}`,
+        });
+        expect(locked.error?.message ?? "").toContain("self_authority_lockout");
+
+        // And the refusal took the whole change with it — no partial strip.
+        const { data: still } = await supabase
+            .from("role_permission_grants").select("permission_key")
+            .eq("org_id", ORG).eq("role_key", ROLE.target).eq("allowed", true);
+        expect((still ?? []).map((g) => (g as { permission_key: string }).permission_key))
+            .toContain("settings.users_roles");
+
+        // A role they do NOT hold is none of the guard's business — over-refusing would be its own defect.
+        const other = await supabase.rpc("replace_role_permission_grants", {
+            p_org_id: ORG, p_role_key: ROLE.paged, p_permission_keys: ["fin.read"],
+            p_actor_user_id: P.other, p_origin: "operator", p_correlation_id: `d2-unheld-${crypto.randomUUID()}`,
+        });
+        expect(other.error, "an edit to a role the actor does not hold must proceed").toBeNull();
+
+        await supabase.from("user_roles").delete().eq("user_id", P.other).eq("org_id", ORG);
+    }, 90_000);
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PHASE 20 — history cannot be edited or erased.
     // ─────────────────────────────────────────────────────────────────────────
     it("refuses to update or delete a committed access event", async () => {

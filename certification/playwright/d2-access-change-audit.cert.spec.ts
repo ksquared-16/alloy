@@ -48,6 +48,19 @@ const FIN_NAV = '[data-adminv2-sidebar-modal-nav="financials"]';
 /** A dotted capability key. Correct in technical detail, wrong as the product's sentence. */
 const RAW_KEY = /\b[a-z_]+\.[a-z_.]+\b/;
 
+/**
+ * An operator's identity is an email address, and an email address is dot-shaped.
+ *
+ * The first run of this spec convicted the correct sentence — "qa.operator@northwind.invalid changed
+ * Portal only — Financials from No access to View" — of being a key wall, because `qa.operator` looks
+ * like `fin.read` to a shape test. The names are the canonical identities the members route already
+ * renders; what must not appear is a CAPABILITY key, so the actor is set aside before the shape is
+ * tested rather than the test being loosened.
+ */
+function withoutIdentities(text: string): string {
+    return text.replace(/\S+@\S+/g, "«actor»");
+}
+
 async function openRole(page: Page, roleKey: string) {
     await page.goto(`${ROLES}&roleKey=${roleKey}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("access-roles-page")).toBeVisible();
@@ -102,6 +115,21 @@ test.describe.configure({ mode: "serial" });
 test.describe("D2 — access change audit, mounted", () => {
     let target: { page: Page; context: BrowserContext } | null = null;
 
+    /*
+     * A CERTIFICATION HAS TO BE RE-RUNNABLE, so the controlled role is put back to its starting
+     * package here rather than only at the end. A run that aborts mid-matrix — which is exactly what
+     * happened the first time this file ran — otherwise leaves the role holding Financials, and the
+     * NEXT run's opening non-vacuity check fails for a reason that has nothing to do with the product.
+     */
+    test.beforeAll(async ({ browser }) => {
+        const context = await browser.newContext({ storageState: OPERATOR_STATE });
+        const res = await context.request.patch(`/api/admin/rbac/roles/${ROLE_KEY}`, {
+            data: { permission_keys: ["portal.access"] },
+        });
+        expect(res.status(), await res.text()).toBeLessThan(400);
+        await context.close();
+    });
+
     test.afterAll(async () => {
         await target?.context.close();
     });
@@ -146,7 +174,9 @@ test.describe("D2 — access change audit, mounted", () => {
         const text = (await summary.innerText()).trim();
         expect(text).toContain("Financials");
         // The raw capability key is technical detail, never the product's sentence.
-        expect(text, "history must not be a key wall").not.toMatch(RAW_KEY);
+        expect(withoutIdentities(text), "history must not be a key wall").not.toMatch(RAW_KEY);
+        // And the specific leak this guards against, named rather than inferred from a shape.
+        expect(text).not.toContain("fin.read");
 
         const change = page.getByTestId("access-role-history-list-change").first();
         await expect(change).toContainText("Financials");
@@ -179,7 +209,13 @@ test.describe("D2 — access change audit, mounted", () => {
     // ─────────────────────────────────────────────────────────────────────────
     test("revoking Financials removes it from the target immediately and adds a second event", async ({ page }) => {
         await openRole(page, ROLE_KEY);
-        const before = await entries(page, "access-role-history-list").count();
+        /*
+         * The NEWEST ROW, not the row COUNT. This card pages at five, so a sixth event cannot make
+         * the list longer — the first version of this assertion counted rows and failed against a
+         * product that was behaving perfectly. What proves the revoke is its own event is that the
+         * top of the feed changed, and that the feed still offers the grant below it.
+         */
+        const before = (await page.getByTestId("access-role-history-list-summary").first().innerText()).trim();
 
         const status = await setFinancials(page, "none");
         expect(status).toBeLessThan(400);
@@ -189,7 +225,17 @@ test.describe("D2 — access change audit, mounted", () => {
         await openRole(page, ROLE_KEY);
         const rows = entries(page, "access-role-history-list");
         await expect(rows.first()).toBeVisible();
-        expect(await rows.count(), "the revoke is its own event, not an edit of the grant").toBeGreaterThan(before);
+        const after = (await page.getByTestId("access-role-history-list-summary").first().innerText()).trim();
+        expect(after, "the revoke is its own event, not an edit of the grant").not.toBe(before);
+
+        // The grant did not disappear when the revoke landed — history accumulates, it does not
+        // replace. It is on this page or behind Load more; either way the feed still holds it.
+        const summaries = await page.getByTestId("access-role-history-list-summary").allInnerTexts();
+        const hasGrantHere = summaries.some((t) => t.includes("to View"));
+        expect(
+            hasGrantHere || (await page.getByTestId("access-role-history-list-load-more").count()) > 0,
+            "the grant must still be reachable in history after the revoke"
+        ).toBe(true);
 
         // Newest first: the revoke is on top, and it says the opposite of the grant.
         const newest = page.getByTestId("access-role-history-list-change").first();
@@ -346,5 +392,10 @@ test.describe("D2 — access change audit, mounted", () => {
         await openRole(page, ROLE_KEY);
         await expect(page.getByTestId("access-role-area-financials")).toHaveAttribute("data-authority", "none");
         expect(await offersFinancials(target!.page)).toBe(false);
+
+        // The portal capability the fixture gave it is still there — the matrix moved Financials and
+        // nothing else.
+        const res = await page.request.get(`/api/admin/rbac/grants?role_key=${ROLE_KEY}`);
+        expect(JSON.stringify(await res.json())).toContain("portal.access");
     });
 });

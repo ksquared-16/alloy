@@ -246,7 +246,17 @@ test.describe("D2 — access audit boundaries", () => {
         await pw.press("Enter");
         await page.waitForTimeout(2_000);
         await page.goto("/organization/access?section=security", { waitUntil: "domcontentloaded" });
-        expect(page.url(), "a hidden surface must not be reachable by URL").not.toContain("section=security");
+        /*
+         * THE SURFACE, NOT THE URL. W-49's acceptance is "hidden surfaces cannot be reached directly
+         * by URL", and the first version of this assertion read that as a claim about the address
+         * bar. It is not: the product answers the address with a refusal page and leaves the URL
+         * alone, which is a refusal. What must be true is that no part of the chapter renders —
+         * this page previously DID render, chapter tabs and all, with an apology inside it.
+         */
+        await expect(page.getByTestId("access-security-page")).toHaveCount(0);
+        await expect(page.getByTestId("access-security-audit-log")).toHaveCount(0);
+        await expect(page.getByTestId("access-security-audit-log-list")).toHaveCount(0);
+        await expect(page.locator("body")).toContainText(/access denied|unauthorized/i);
         await page.context().close();
 
         await outsider.close();
@@ -281,27 +291,49 @@ test.describe("D2 — access audit boundaries", () => {
     });
 
     test("an administrator of one tenant cannot change access in another", async ({ browser }) => {
-        const operator = await sessionFor(browser, OPERATOR);
-        const before = await countAccessEvents(OTHER_ORG);
+        /*
+         * A ROLE THAT EXISTS ONLY IN THE OTHER TENANT, created here and removed here.
+         *
+         * The first version of this test addressed the seeded `admin` role, and it was wrong twice.
+         * It read Org B's own seeded `fin.read` as evidence of a cross-org write — that grant was
+         * there before anyone asked for anything — and, had the server resolved the org from the
+         * body, it would have stripped Org A's administrators down to a single capability on a tenant
+         * every other certification in this repository shares.
+         *
+         * A role key that exists ONLY in Org B makes the question unambiguous. If org came from the
+         * request, this changes Org B. If it comes from the session — which is the contract — Org A
+         * has no such role and the attempt cannot even name a target.
+         */
+        const FOREIGN_ROLE = "cert_d2_foreign_only";
+        await sb.from("role_permission_grants").delete().eq("org_id", OTHER_ORG).eq("role_key", FOREIGN_ROLE);
+        await sb.from("role_definitions").delete().eq("org_id", OTHER_ORG).eq("role_key", FOREIGN_ROLE);
+        const { error: seedErr } = await sb.from("role_definitions").insert({
+            org_id: OTHER_ORG, role_key: FOREIGN_ROLE, role_label: "Foreign tenant only",
+            description: "D2 cross-org certification", is_system: false, is_active: true,
+        });
+        expect(seedErr).toBeNull();
 
-        // A role key that exists only in the other tenant, addressed by this tenant's administrator.
-        const res = await operator.request.patch("/api/admin/rbac/roles/admin", {
-            data: { permission_keys: ["fin.read"], org_id: OTHER_ORG, orgId: OTHER_ORG },
+        const operator = await sessionFor(browser, OPERATOR);
+        const beforeEvents = await countAccessEvents(OTHER_ORG);
+
+        const res = await operator.request.patch(`/api/admin/rbac/roles/${FOREIGN_ROLE}`, {
+            data: {
+                permission_keys: ["fin.read", "settings.users_roles"],
+                // Every handle a caller might reach for.
+                org_id: OTHER_ORG, orgId: OTHER_ORG, organization_id: OTHER_ORG,
+            },
         });
 
-        // Whatever the answer, it must not have been applied to the other tenant.
-        expect(await countAccessEvents(OTHER_ORG), "no event may be written in a tenant the caller does not administer").toBe(before);
-        if (res.status() < 400) {
-            const { data: foreignGrants } = await sb
-                .from("role_permission_grants")
-                .select("permission_key")
-                .eq("org_id", OTHER_ORG)
-                .eq("role_key", "admin")
-                .eq("permission_key", "fin.read");
-            // If the request succeeded it acted on the CALLER's org, never on the named one.
-            expect((foreignGrants ?? []).length === 0 || res.status() >= 400).toBeTruthy();
-        }
+        // Org A has no role by this key, so the attempt cannot name a target at all.
+        expect(res.status(), await res.text()).toBeGreaterThanOrEqual(400);
 
+        const { data: foreignGrants } = await sb
+            .from("role_permission_grants").select("permission_key")
+            .eq("org_id", OTHER_ORG).eq("role_key", FOREIGN_ROLE);
+        expect(foreignGrants ?? [], "no grant may appear in a tenant the caller does not administer").toHaveLength(0);
+        expect(await countAccessEvents(OTHER_ORG), "and no event either").toBe(beforeEvents);
+
+        await sb.from("role_definitions").delete().eq("org_id", OTHER_ORG).eq("role_key", FOREIGN_ROLE);
         await operator.close();
     });
 
