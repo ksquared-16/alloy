@@ -410,9 +410,6 @@ export function waitlistContextFromPlacementProjection(
     priority?: number | null;
     placement_candidate_id?: string | null;
     can_adjust_placement?: boolean | null;
-    precedence_reason?: "pin_scoped_to_cohort" | null;
-    group_position?: number | null;
-    group_total?: number | null;
 } | undefined {
     if (!proj) return undefined;
     const positionLabel = str(proj.runtime_position_label);
@@ -427,8 +424,5 @@ export function waitlistContextFromPlacementProjection(
         priority: score,
         placement_candidate_id: candidateId,
         can_adjust_placement: Boolean(candidateId),
-        precedence_reason: proj.runtime_position_precedence_reason ?? null,
-        group_position: proj.runtime_group_position ?? null,
-        group_total: proj.runtime_group_total ?? null,
     };
 }

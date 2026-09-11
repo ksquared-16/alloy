@@ -1,0 +1,53 @@
+{
+  "trusted_host_action_id": "tha_a2ceb4b3fce6d2",
+  "query_hash": "3da210b583ff47d25e7e604c3e04713e07ada0cf902a71b2068d50e161e89a18",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T15:49:55.102Z",
+    "question_ids": [
+      "7e83e653-0c69-4a69-9dd7-ce8036de90ac",
+      "82cbc16f-0928-4510-bec8-857172cd0427",
+      "d0953b15-89d6-4479-8e42-9cafffa26e0d",
+      "f64c8389-e828-42c6-b6f8-0e901d9dabe9",
+      "489a6460-0e20-40ca-9122-87f0bc87c459"
+    ],
+    "questions": {
+      "7e83e653-0c69-4a69-9dd7-ce8036de90ac": {
+        "question_id": "7e83e653-0c69-4a69-9dd7-ce8036de90ac",
+        "row_count": null,
+        "rows": [
+          "infant_0_18_months|pin|t|4|Manual waitlist position adjustment|2026-09-11 15:45:31.17271+00|infant_0_18_months|active"
+        ]
+      },
+      "82cbc16f-0928-4510-bec8-857172cd0427": {
+        "question_id": "82cbc16f-0928-4510-bec8-857172cd0427",
+        "row_count": null,
+        "rows": [
+          "infant_0_18_months|pin|t|2|Manual waitlist position adjustment|2026-09-11 14:55:11.809481+00|infant_0_18_months|active"
+        ]
+      },
+      "d0953b15-89d6-4479-8e42-9cafffa26e0d": {
+        "question_id": "d0953b15-89d6-4479-8e42-9cafffa26e0d",
+        "row_count": null,
+        "rows": [
+          "infant_0_18_months|pin|t|2|Manual waitlist position adjustment|2026-09-11 14:55:01.974566+00|infant_0_18_months|active"
+        ]
+      },
+      "f64c8389-e828-42c6-b6f8-0e901d9dabe9": {
+        "question_id": "f64c8389-e828-42c6-b6f8-0e901d9dabe9",
+        "row_count": null,
+        "rows": [
+          "infant_0_18_months|pin|t|3|Manual waitlist position adjustment|2026-08-26 14:58:39.281149+00|infant_0_18_months|active"
+        ]
+      },
+      "489a6460-0e20-40ca-9122-87f0bc87c459": {
+        "question_id": "489a6460-0e20-40ca-9122-87f0bc87c459",
+        "row_count": null,
+        "rows": [
+          "infant_0_18_months|pin|t|2|Manual waitlist position adjustment|2026-08-21 16:26:10.598845+00|infant_0_18_months|active"
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}
