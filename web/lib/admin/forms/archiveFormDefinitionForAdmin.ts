@@ -25,17 +25,42 @@ export async function archiveFormDefinitionForAdmin(
     if (formErr) throw new Error(formErr.message);
     if (!form) return { ok: false, status: 404, message: "Form not found" };
 
-    const { count: packetRefCount, error: pktErr } = await supabase
-        .from("form_packet_items")
-        .select("id", { count: "exact", head: true })
+    /*
+     * A form in a LIVE packet must not be archived. A form whose only packets are retired may be.
+     *
+     * The guard is right and stays: archiving a step out from under a packet families are being
+     * sent would break it. But it counted every packet item ever created, including those belonging
+     * to deactivated certification packets — so a fixture Form could never be tidied away without
+     * first dismantling the retired fixture packet that referenced it, which is exactly the
+     * cascade-delete this codebase avoids everywhere else.
+     *
+     * So the question it asks is narrowed to the one it always meant: is any ACTIVE packet using
+     * this form? Retired packets keep their items, their sessions and their history untouched.
+     */
+    const { data: activePackets, error: apErr } = await supabase
+        .from("form_packet_definitions")
+        .select("id")
         .eq("org_id", orgId)
-        .eq("form_definition_id", formDefinitionId);
-    if (pktErr) throw new Error(pktErr.message);
-    if ((packetRefCount ?? 0) > 0) {
+        .eq("is_active", true);
+    if (apErr) throw new Error(apErr.message);
+    const activeIds = (activePackets ?? []).map((p) => (p as { id: string }).id);
+
+    let packetRefCount = 0;
+    if (activeIds.length > 0) {
+        const { count, error: pktErr } = await supabase
+            .from("form_packet_items")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", orgId)
+            .eq("form_definition_id", formDefinitionId)
+            .in("packet_definition_id", activeIds);
+        if (pktErr) throw new Error(pktErr.message);
+        packetRefCount = count ?? 0;
+    }
+    if (packetRefCount > 0) {
         return {
             ok: false,
             status: 409,
-            message: "This form is used in a packet definition. Remove it from all packets before archiving.",
+            message: "This form is used in an active packet definition. Remove it from all packets before archiving.",
         };
     }
 

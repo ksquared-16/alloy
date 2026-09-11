@@ -8,10 +8,24 @@ import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthorit
 
 const KEY_RE = /^[a-z][a-z0-9_]{1,62}$/;
 
-/** GET /api/admin/forms/packet-definitions — list packet definitions for org. */
-export async function GET() {
+/**
+ * GET /api/admin/forms/packet-definitions — list packet definitions for org.
+ *
+ * Deactivated packets are HIDDEN by default, the same way archived Forms already are.
+ *
+ * A packet is never deleted here — sessions reference it and that history has to survive — so
+ * "retired" is expressed as `is_active = false`. Listing those alongside live ones made Packet
+ * Studio a pile of certification leftovers an operator had to sort through to find the one packet
+ * that is actually theirs, which is a browse problem, not a data problem.
+ *
+ * `include_inactive=true` still returns them for tooling and for any surface that deliberately
+ * wants to show retired packets; nothing an operator browses passes it.
+ */
+export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const includeInactive = request.nextUrl.searchParams.get("include_inactive") === "true";
 
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -20,7 +34,10 @@ export async function GET() {
         .eq("org_id", ctx.orgId)
         .order("name", { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return jsonData(data ?? []);
+    const rows = (data ?? []).filter(
+        (r) => includeInactive || (r as { is_active?: boolean }).is_active !== false,
+    );
+    return jsonData(rows);
 }
 
 /** POST /api/admin/forms/packet-definitions — create packet definition (admin only). */
