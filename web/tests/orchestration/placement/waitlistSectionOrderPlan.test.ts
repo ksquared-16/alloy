@@ -160,6 +160,23 @@ describe("membership changes keep the list dense and the manual intent intact", 
  * See `qa/repair/waitlist-ordering-repair-plan.md` for the ledger and the timeline.
  */
 describe("the Firefly repair is invariant under everything that is not known", () => {
+    /*
+     * ONE ASSUMPTION HERE IS LOAD-BEARING, AND IT IS NAMED RATHER THAN BURIED.
+     *
+     * Census gar_a2ceb4b3fce6d2 (15:49) recorded FIVE active pins, not four. The fifth belongs to
+     * candidate 94984f6c at ordinal 2, and it is omitted from LEGITIMATE/CORRUPTED below because
+     * that candidate does not appear among the twelve rendered rows.
+     *
+     * If that omission is wrong, every assertion in this block is wrong with it — so it is tested,
+     * not assumed: `the fifth pin is excluded because the renders exclude it` below fails loudly if
+     * including it ever becomes reproducible. Both observed renders currently reproduce ONLY with
+     * it absent, which is the evidence the omission rests on.
+     *
+     * Census gar_f67e20ce1b87e5 is the independent check, and until it returns the repair plan in
+     * qa/repair/waitlist-ordering-repair-plan.md is marked conditional. These tests describe a
+     * derivation, not an applied change; nothing has been written to the tenant.
+     */
+
     /** Captured while Wrigley still held QA pin `7e83e653` at ordinal 4. */
     const CAPTURED = ["PassA", "TP8", "TP6", "TP3", "Wrigley", "TP11", "PassB", "TP10", "TP7", "TP5", "TP4", "TP9"];
     /** After the faulty writer renumbered, with Wrigley's QA override cleared. */
@@ -190,6 +207,37 @@ describe("the Firefly repair is invariant under everything that is not known", (
 
     it("the evidence narrows the natural order, but does not determine it", () => {
         expect(consistent.length).toBe(660);
+    });
+
+    it("the fifth pin cannot sit anywhere in the damaged list holding the ordinal it stores", () => {
+        // Candidate 94984f6c held an active pin — ordinal 2, renumbered to 3 — the whole time, and it
+        // is left out of LEGITIMATE/CORRUPTED above. This is the check on that omission.
+        //
+        // The claim is deliberately narrow, because the wider one is FALSE and was briefly asserted
+        // here: other ordinals do reproduce the damaged list (PassA at 1, TP10 at 6, TP9 at 12, and
+        // so on), which stands to reason — an ordinal that happens to match a row's existing seat
+        // changes nothing. What the evidence actually supports is that the ordinal this override
+        // STORES cannot put it anywhere in the list. That is the fact the omission rests on, so that
+        // is the fact asserted.
+        const STORED_ORDINAL = 3;
+        const visible = ["PassA", "TP11", "TP10", "TP7", "TP5", "TP4", "TP9"];
+        for (const asRow of visible) {
+            {
+                const ordinal = STORED_ORDINAL;
+                const withFifth = new Map([...CORRUPTED, [asRow, ordinal]]);
+                const pinnedSet = new Set(withFifth.keys());
+                let bases: string[][] = [DAMAGED.filter((r) => !pinnedSet.has(r))];
+                for (const id of pinnedSet) {
+                    bases = bases.flatMap((b) =>
+                        b.map((_, i) => [...b.slice(0, i), id, ...b.slice(i)]).concat([[...b, id]]),
+                    );
+                }
+                const reproducible = bases.some(
+                    (natural) => JSON.stringify(resolveOrderFromOrdinals(natural, withFifth)) === JSON.stringify(DAMAGED),
+                );
+                expect(reproducible, `${asRow} at ordinal ${ordinal} should not reproduce DAMAGED`).toBe(false);
+            }
+        }
     });
 
     it("the QA pin on Wrigley was order-preserving, so the captured baseline is clean", () => {

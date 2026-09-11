@@ -2,6 +2,26 @@
 
 Firefly, INFANT section. Nothing in this document has been applied.
 
+> ## STATUS: CONDITIONAL — one assumption is load-bearing and is under test
+>
+> Everything below rests on candidate `94984f6c` **not rendering** in the twelve-row section.
+> When this was first written that was treated as a detail. It is not: if that candidate
+> renders, it held an active pin at ordinal 2 throughout, the pinned set used in the derivation
+> is wrong, and **the target below is void.**
+>
+> The evidence currently points at "does not render", and it does so from two directions.
+> Replaying the captured list reproduces it only with that candidate absent; replaying the
+> damaged list likewise, and no ordinal from 1 to 12 makes the damaged list reproduce with it
+> present. Two independently observed renders agreeing is real evidence.
+>
+> Against that, census `gar_b82c1696cf0457` reports it `active`, in `infant_0_18_months`, at the
+> same site as the other five — which would ordinarily mean it renders. That inference assumes
+> "active and in the cohort" is sufficient for queue membership, which is an assumption about
+> queue scope rather than a rule anyone has checked. Queue rows project from opportunities, so an
+> opportunity outside queue scope would explain the contradiction exactly.
+>
+> Census `gar_f67e20ce1b87e5` asks. **Do not apply this plan until it returns.**
+
 ## What is being repaired, and what is not
 
 A faulty writer renumbered manual-position overrides using a tie-break the renderer does not
@@ -96,14 +116,27 @@ Every other row — PassA, TP8, TP6, TP3, Wrigley, TP11, TP7, TP5, TP4, TP9 — 
 position it held before QA touched anything. The repair is minimal in the strict sense: no row
 moves that does not have to.
 
-## One row is held
+## The row that is held — and why it decides the whole plan
 
 Override `489a6460` points at candidate `94984f6c`, which appears in none of the twelve rendered
 rows. It cannot disturb the target — a row that does not render cannot occupy a position — so the
 plan above stands without it. But its ordinal was damaged 2→3 like the others, and restoring it
 to 2 would reintroduce a duplicate of TP8's ordinal **if** it shares the section.
 
-That is a question about the tenant, not about the plan, so it is not guessed. Census
-`gar_7117c45ba36235` (`qa/census/waitlist-candidate-identity.sql`) asks what section and status
-that candidate is in, with the other five as a control group. **This row is excluded from the
-repair until that returns.**
+That was the original reason for holding it, and it was too weak. The real stake is larger:
+this candidate held an **active pin at ordinal 2** from 2026-08-21 onward, confirmed by census
+`gar_a2ceb4b3fce6d2` at 15:49, which recorded FIVE active pins and not four. The derivation above
+uses four. If the fifth belongs in the section, the derivation is not merely incomplete — it is
+unsound, and the target is void.
+
+The renders say it does not belong: with the fifth pin included, neither observed list can be
+reproduced at all, for any assignment of that candidate to a visible row and any natural order
+(0 of 7 × all orders), and no ordinal from 1 to 12 rescues the damaged list. Without it, both
+reproduce. But census `gar_b82c1696cf0457` reports the candidate `active` in the same cohort at
+the same site, which cuts the other way.
+
+That contradiction is a fact about the tenant, not something to resolve by preferring the reading
+that keeps the plan alive. Census `gar_f67e20ce1b87e5`
+(`qa/census/waitlist-candidate-opportunity.sql`) asks whether its opportunity is in queue scope,
+and returns the child names that have been missing throughout. **The plan is not applicable until
+that returns.**
