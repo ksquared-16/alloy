@@ -303,7 +303,7 @@ export default function MyTasksPanel({
     useEffect(() => {
         if (!workEnabled) return;
         void fetchWorkItemBpLabelCatalog().then((catalog) => setCatalogProcessLabels(catalog.processLabels));
-        void warmProcessingQueueCache();
+        void warmProcessingQueueCache({ scope: "actionable" });
         void prefetchCommandCenterConversations();
     }, [workEnabled]);
 
@@ -374,7 +374,20 @@ export default function MyTasksPanel({
 
     const processingProjectedTasks = useMemo(() => {
         void processingWarmNonce;
-        const warm = getProcessingQueueWarmSnapshot().data?.rows ?? [];
+        /*
+         * The ACTIONABLE scope, not the default browse page.
+         *
+         * This read used to be `getProcessingQueueWarmSnapshot()` with no scope, which resolved to
+         * `/api/admin/processing/queue` with no parameters — the newest 25 cases by `created_at`.
+         * Work Items was therefore projecting "what arrived most recently" while believing it was
+         * projecting "what needs attention". A tenant with 6 `needs_resolution` cases projected none
+         * of them and 19 `received` ones, purely because the six were older than the page.
+         *
+         * Processing now publishes the cohort itself (`PROCESSING_ACTIONABLE_STATUSES`); this reads
+         * that. The mapper's own lane judgement is unchanged — it always intended to project
+         * `needs_resolution`, and never saw one.
+         */
+        const warm = getProcessingQueueWarmSnapshot("actionable").data?.rows ?? [];
         return mapProcessingQueueToWorkItemRows(warm);
     }, [processingWarmNonce]);
 
@@ -411,7 +424,7 @@ export default function MyTasksPanel({
             Object.fromEntries(
                 WORK_ITEM_FOLDER_DEFS.map((def) => [
                     def.key,
-                    countTasksForFolder(mergedTasks, def.key, processGroups, userId?.trim() || null),
+                    countTasksForFolder(mergedTasks, def.key, processGroups),
                 ]),
             ),
         [mergedTasks, processGroups, userId],
@@ -768,7 +781,7 @@ export default function MyTasksPanel({
 
     if (!compact) {
         return (
-            <div className="flex flex-col gap-4" data-adminv2-tasks-panel="true">
+            <div className="relative flex flex-col gap-4" data-adminv2-tasks-panel="true">
                 <header>
                     <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">My work items</h1>
                     <p className="mt-0.5 text-[12px] text-alloy-midnight/55">
@@ -820,17 +833,15 @@ export default function MyTasksPanel({
                         aria-label="Search work items"
                     />
                 </div>
-                {createOpen ? (
-                    <WorkItemCreateModal
-                        open={createOpen}
-                        busy={createBusy}
-                        presentation={presentation}
-                        workspaceSiteId={selectedSiteId}
-                        contextPrefill={contextPrefill}
-                        onCommit={onCommitCreate}
-                        onCancel={() => setCreateOpen(false)}
-                    />
-                ) : null}
+                <WorkItemCreateModal
+                    open={createOpen}
+                    busy={createBusy}
+                    presentation={presentation}
+                    workspaceSiteId={selectedSiteId}
+                    contextPrefill={contextPrefill}
+                    onCommit={onCommitCreate}
+                    onCancel={() => setCreateOpen(false)}
+                />
                 {errorBanner}
 
                 <div>
@@ -858,10 +869,19 @@ export default function MyTasksPanel({
     }));
 
     return (
-        <div className="flex min-h-0 flex-1 overflow-hidden bg-white" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
+        <div className="relative flex min-h-0 flex-1 overflow-hidden bg-white" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
+            <WorkItemCreateModal
+                open={createOpen}
+                busy={createBusy}
+                presentation={presentation}
+                workspaceSiteId={selectedSiteId}
+                contextPrefill={contextPrefill}
+                onCommit={onCommitCreate}
+                onCancel={() => setCreateOpen(false)}
+            />
             <WorkspaceZonePanel
                 title="Folders, views, sources"
-                className={`w-[24%] min-w-[12rem] max-w-[16rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
+                className={`w-[17%] min-w-[10rem] max-w-[12.5rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
                 data-testid="work-items-fvs-rail"
             >
                 <FoldersViewsSourcesRail
@@ -881,7 +901,7 @@ export default function MyTasksPanel({
 
             <WorkspaceZonePanel
                 title="Queue"
-                className={`w-[31%] min-w-[15rem] max-w-[20rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
+                className={`w-[40%] min-w-[19rem] max-w-[30rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
                 data-testid="work-items-queue"
             >
                 <div className="flex min-h-0 flex-1 flex-col gap-2 p-2" data-adminv2-tasks-queue="true">
@@ -939,22 +959,14 @@ export default function MyTasksPanel({
 
             <WorkspaceZonePanel
                 title="Work item detail"
-                className="min-w-[20rem] flex-1 self-stretch border-0"
+                className="min-w-[18rem] flex-1 self-stretch border-0"
                 data-testid="work-items-task-detail"
             >
                 <div className="min-h-0 flex-1 overflow-y-auto p-3" data-adminv2-tasks-detail="true">
                     <WorkItemDetailPanel
-                        key={`${selectedTask?.id ?? "none"}:${createOpen ? "create" : "view"}`}
+                        key={selectedTask?.id ?? "none"}
                         task={selectedTask}
                         taskCard={selectedTask ? <ul className="list-none">{renderTaskCard(selectedTask)}</ul> : null}
-                        createOpen={createOpen}
-                        createBusy={createBusy}
-                        contextPrefill={contextPrefill}
-                        workspaceSiteId={selectedSiteId}
-                        onCommitCreate={onCommitCreate}
-                        onCancelCreate={() => setCreateOpen(false)}
-                        presentation={presentation}
-                        entityLabels={entityLabels}
                         bpLabelOptions={bpLabelOptions}
                         onOpenRecord={selectedTask ? () => onOpenRecord(selectedTask) : undefined}
                         onOpenCurrentWork={selectedTask ? () => onOpenCurrentWork(selectedTask) : undefined}

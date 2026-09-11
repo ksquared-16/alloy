@@ -7,6 +7,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +49,64 @@ function write(rec) {
   return rec;
 }
 
+/**
+ * WHICH INCARNATION OF THE CONTROL PLANE OWNS A RESOURCE.
+ *
+ * THE GAP THIS CLOSES. There was no host or runtime generation anywhere in the
+ * tree — grepped, and the only matches were unrelated prose. Ownership of every
+ * ephemeral resource was therefore decided by PID NUMBER ALONE, and `pidAlive`
+ * cannot tell "my process, still running" from "a different process that reused
+ * the number after a restart". On a Mac that runs dev servers, test runners and
+ * browsers all day, PID reuse is ordinary, not exotic — and an owner record that
+ * survives a Gateway restart can be matched by a stranger.
+ *
+ * The generation is minted once per control-plane claim and never recomputed:
+ * a restart mints a new one, so every record still carrying the old one is
+ * PROVABLY stale without asking the operating system anything. `boot_ms` is
+ * carried for diagnosis — it says whether the host itself restarted — but
+ * correctness does not rest on it: the random component alone makes two claims
+ * unable to collide.
+ *
+ * Deliberately NOT a new registry. This is one field on the record that
+ * `claimControlPlaneOwnership` already writes, plus the same field on the
+ * owned-process records the Governor already keeps.
+ */
+const BOOT_MS = Math.round(Date.now() - os.uptime() * 1000);
+let RUNTIME_GENERATION = null;
+
+export function currentRuntimeGeneration() {
+  if (!RUNTIME_GENERATION) {
+    RUNTIME_GENERATION = `gen_${BOOT_MS.toString(36)}_${process.pid.toString(36)}_${randomUUID().slice(0, 8)}`;
+  }
+  return RUNTIME_GENERATION;
+}
+
+/** Test seam: a restart is a new generation, and a control must be able to stage one. */
+export function resetRuntimeGenerationForTests() {
+  RUNTIME_GENERATION = null;
+  return currentRuntimeGeneration();
+}
+
+/**
+ * Is this record owned by the CURRENT control plane?
+ *
+ * Both halves are required and neither is sufficient. A live pid from a previous
+ * generation is a stranger who inherited the number. A current generation whose
+ * pid is gone is our own process that has since exited.
+ */
+export function ownershipIsCurrent(rec, { generation = currentRuntimeGeneration() } = {}) {
+  if (!rec) return false;
+  if (!rec.runtime_generation) {
+    // Written before generations existed. It cannot prove it is current, so it
+    // is not treated as current — which is the fail-closed direction: the
+    // resource is reclaimable, never silently authoritative.
+    return false;
+  }
+  if (rec.runtime_generation !== generation) return false;
+  if (rec.pid != null && !pidAlive(rec.pid)) return false;
+  return true;
+}
+
 /** Record that this process owns the Vacilando server (safe restart target). */
 export function claimControlPlaneOwnership({
   pid = process.pid,
@@ -70,6 +129,11 @@ export function claimControlPlaneOwnership({
     executionProvider: String(executionProvider || "auto"),
     claimed_at: iso(),
     host: os.hostname(),
+    // The incarnation every ephemeral resource this process creates is stamped
+    // with. A restart mints a new one and orphans the old claims by identity
+    // rather than by PID arithmetic.
+    runtime_generation: currentRuntimeGeneration(),
+    boot_ms: BOOT_MS,
   };
   writeFileSync(OWNER_FILE, JSON.stringify(owner, null, 2));
   return owner;
@@ -134,6 +198,133 @@ export function releaseControlPlaneOwnership({ pid = process.pid } = {}) {
   }
   try { unlinkSync(OWNER_FILE); } catch { /* already gone */ }
   return { ok: true, released: true };
+}
+
+/**
+ * CHEAP HOST SIGNALS, FOR DECIDING WHETHER TO START MORE WORK.
+ *
+ * THE GAP. Admission asked exactly one question — `assessSessionStartCapacity`,
+ * which counts provider seats. A host under real pressure therefore looked
+ * identical to an idle one as long as a seat was free, and Vacilando would keep
+ * starting heavy work into it. Nothing anywhere fed CPU, memory, stale ownership
+ * or recovery backlog into a scheduling decision.
+ *
+ * This is NOT a new host-health authority. It lives on the control-plane health
+ * owner, beside `getControlPlaneHealth`, and it composes facts the canonical
+ * owners already hold: the generation from this module, owned processes and
+ * recovery episodes from the Governor's own stores, and load/memory from the
+ * kernel.
+ *
+ * EVERY SIGNAL IS CHEAP AND NON-BLOCKING. `os.loadavg`, `os.freemem`,
+ * `process.memoryUsage.rss`, and two small JSON reads. Deliberately no `du`, no
+ * `git status`, no `ps` fan-out, no recursive scan — an admission gate that has
+ * to walk the filesystem is a gate that causes the pressure it is measuring.
+ *
+ * The verdict never kills anything and never touches work already running. It
+ * answers one question: should MORE be started right now.
+ */
+export const HOST_HEALTH_STATES = Object.freeze(["HEALTHY", "PRESSURED", "CONSTRAINED", "CRITICAL"]);
+
+/** How recently an unresolved recovery episode must have been touched to count as pressure. */
+export const RECOVERY_BACKLOG_WINDOW_MS = 15 * 60_000;
+
+/** Admission is refused from CONSTRAINED upward; PRESSURED only sheds speculative work. */
+export const HOST_HEALTH_ADMITS = Object.freeze({
+  HEALTHY: true, PRESSURED: true, CONSTRAINED: false, CRITICAL: false,
+});
+
+function readJsonQuiet(path) {
+  try { return JSON.parse(readFileSync(path, "utf8")); } catch { return null; }
+}
+
+export function hostAdmissionHealth({
+  root = RUNTIME_ROOT,
+  nowMs = Date.now(),
+  // Seams, so a control can state a verdict without depending on the machine.
+  loadavg = null,
+  freeMemRatio = null,
+  rssBytes = null,
+} = {}) {
+  const cpuCount = Math.max(1, os.cpus()?.length || 1);
+  const load1 = loadavg ?? (os.loadavg()?.[0] ?? 0);
+  const loadPerCpu = load1 / cpuCount;
+  const freeRatio = freeMemRatio ?? (os.totalmem() ? os.freemem() / os.totalmem() : 1);
+  const rss = rssBytes ?? (process.memoryUsage?.rss?.() ?? 0);
+
+  const owned = readJsonQuiet(join(root, "vacilando", "execution-runs", "owned-processes.json"));
+  const ownedProcesses = Array.isArray(owned?.processes) ? owned.processes : [];
+  const generation = currentRuntimeGeneration();
+  const staleOwnership = ownedProcesses.filter((p) => p.runtime_generation !== generation).length;
+
+  /*
+   * BACKLOG IS CURRENT STATE, NOT THE SIZE OF THE HISTORY FILE.
+   *
+   * CAUGHT BY THIS GATE ON ITS FIRST LIVE READING, which is the only reason it
+   * is written down rather than shipped. Counting every non-terminal episode
+   * returned 73 and drove the host to CONSTRAINED — refusing to admit new work —
+   * on a completely idle machine. All 73 were EXHAUSTED, so recovery would never
+   * act on any of them, and the oldest had not been touched since 2026-08-19:
+   * three weeks of history being read as live pressure.
+   *
+   * `recovery-budgets.json` accumulates one episode per (policy, target) and
+   * never forgets. It is a ledger. Admission must key on what is HAPPENING, so
+   * an episode counts only while it is both unresolved and recent — which is
+   * also the invariant this mission set out to enforce: history is not current
+   * state, and a growing historical ledger must not participate in current-state
+   * resolution.
+   */
+  const budgets = readJsonQuiet(join(root, "vacilando", "execution-runs", "recovery-budgets.json"));
+  const episodes = Object.values(budgets?.episodes || {});
+  const recoveryBacklog = episodes.filter((e) => {
+    if (e.terminal === true) return false;
+    const touched = Date.parse(e.last_at || e.first_at || "");
+    return Number.isFinite(touched) && (nowMs - touched) <= RECOVERY_BACKLOG_WINDOW_MS;
+  }).length;
+
+  const reasons = [];
+  let state = "HEALTHY";
+  const raise = (to, why) => {
+    reasons.push(why);
+    if (HOST_HEALTH_STATES.indexOf(to) > HOST_HEALTH_STATES.indexOf(state)) state = to;
+  };
+
+  if (loadPerCpu >= 4) raise("CRITICAL", `load ${load1.toFixed(2)} over ${cpuCount} cpus`);
+  else if (loadPerCpu >= 2) raise("CONSTRAINED", `load ${load1.toFixed(2)} over ${cpuCount} cpus`);
+  else if (loadPerCpu >= 1) raise("PRESSURED", `load ${load1.toFixed(2)} over ${cpuCount} cpus`);
+
+  if (freeRatio <= 0.05) raise("CRITICAL", `free memory ${(freeRatio * 100).toFixed(1)}%`);
+  else if (freeRatio <= 0.10) raise("CONSTRAINED", `free memory ${(freeRatio * 100).toFixed(1)}%`);
+  else if (freeRatio <= 0.20) raise("PRESSURED", `free memory ${(freeRatio * 100).toFixed(1)}%`);
+
+  // The control plane's OWN footprint. The September 11 host was not undersized
+  // — 48 GB with ~95% free and no swap — so a bloated Gateway is a Vacilando
+  // problem to surface, never a reason to call the machine unhealthy.
+  if (rss >= 2 * 1024 ** 3) raise("CONSTRAINED", `control-plane rss ${Math.round(rss / 1024 ** 2)} MB`);
+  else if (rss >= 1024 ** 3) raise("PRESSURED", `control-plane rss ${Math.round(rss / 1024 ** 2)} MB`);
+
+  if (staleOwnership >= 8) raise("CONSTRAINED", `${staleOwnership} previous-generation owned resources`);
+  else if (staleOwnership >= 1) raise("PRESSURED", `${staleOwnership} previous-generation owned resources`);
+
+  if (recoveryBacklog >= 50) raise("CONSTRAINED", `${recoveryBacklog} open recovery episodes`);
+  else if (recoveryBacklog >= 10) raise("PRESSURED", `${recoveryBacklog} open recovery episodes`);
+
+  return {
+    state,
+    admits_new_work: HOST_HEALTH_ADMITS[state],
+    reasons,
+    observed_at: iso(nowMs),
+    signals: {
+      load1: Math.round(load1 * 100) / 100,
+      cpu_count: cpuCount,
+      load_per_cpu: Math.round(loadPerCpu * 100) / 100,
+      free_memory_ratio: Math.round(freeRatio * 1000) / 1000,
+      control_plane_rss_bytes: rss,
+      owned_processes: ownedProcesses.length,
+      stale_generation_ownership: staleOwnership,
+      recovery_backlog: recoveryBacklog,
+      runtime_generation: generation,
+    },
+  };
 }
 
 export function getControlPlaneHealth() {

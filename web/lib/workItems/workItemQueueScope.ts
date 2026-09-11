@@ -14,12 +14,20 @@ import { isCommunicationsProjectedWorkItem } from "@/lib/workItems/mapCommunicat
 import { isProcessingProjectedWorkItem } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 
-export type WorkItemFolderKey =
-    | "inbox"
-    | "all_work"
-    | "enrollment"
-    | "compliance"
-    | "projects";
+/*
+ * These are PROCESS lenses, not folders.
+ *
+ * A folder is where an operator PUT something — durable membership they chose. A view is a QUERY
+ * over everything. Every key here is a query, so calling them folders taught operators that Work
+ * Items has operator organization when it has none, and put two names on one idea: the old "inbox"
+ * folder was byte-for-byte the "Assigned to me" view (open work assigned to me), and "projects"
+ * matched no process and returned an empty list on every render.
+ *
+ * Real user-created folders need durable membership and are specified in
+ * docs/platform/governance/work-items-folders-and-views.md. Until that ships, this rail tells the
+ * truth about what it is rather than implying an organization model that does not exist.
+ */
+export type WorkItemFolderKey = "all_work" | "enrollment" | "compliance";
 
 export type WorkItemViewKey =
     | "mine"
@@ -56,13 +64,24 @@ export const DEFAULT_WORK_ITEM_QUEUE_SCOPE: WorkItemQueueScope = {
 };
 
 export const WORK_ITEM_FOLDER_DEFS: { key: WorkItemFolderKey; label: string }[] = [
-    { key: "inbox", label: "Inbox" },
     { key: "all_work", label: "All Work" },
     { key: "enrollment", label: "Enrollment" },
     { key: "compliance", label: "Compliance" },
-    { key: "projects", label: "Projects" },
 ];
 
+/*
+ * `waiting` is intentionally ABSENT from the selectable views.
+ *
+ * `filterTasksByView` returns [] for it unconditionally, because nothing in the model carries a
+ * waiting state: operational_tasks has no such column and WorkItemDraftV1.waiting_on never reaches
+ * the commit adapter. A rail entry that is guaranteed empty is a false affordance -- it teaches an
+ * operator that nothing is ever waiting, which is worse than not offering the lens.
+ *
+ * The KEY and its filter branches stay for compatibility (a resumed position or a stored scope may
+ * still name it; it resolves to an empty list rather than crashing). This removes the NAVIGATION,
+ * not the vocabulary, and adds no waiting state. See
+ * docs/platform/governance/work-items-folders-and-views.md.
+ */
 export const WORK_ITEM_VIEW_DEFS: { key: WorkItemViewKey; label: string }[] = [
     /*
      * Visible copy is deliberately explicit. "Mine" read as ownership, and sat on the same screen as
@@ -71,11 +90,24 @@ export const WORK_ITEM_VIEW_DEFS: { key: WorkItemViewKey; label: string }[] = [
      */
     { key: "mine", label: "Assigned to me" },
     { key: "unassigned", label: "Unassigned" },
-    { key: "waiting", label: "Waiting" },
     { key: "due_today", label: "Due Today" },
     { key: "due_soon", label: "Due Soon" },
     { key: "overdue", label: "Overdue" },
     { key: "completed", label: "Completed" },
+];
+
+/**
+ * Views the rail keeps permanently visible. The rest stay reachable under "More" — showing all
+ * seven at equal weight is what made the rail unscannable.
+ *
+ * `waiting` is not here because it is no longer a selectable view at all -- see the note on
+ * WORK_ITEM_VIEW_DEFS above. De-promoting a guaranteed-empty lens was not enough: it still rendered.
+ */
+export const WORK_ITEM_PRIMARY_VIEW_KEYS: WorkItemViewKey[] = [
+    "mine",
+    "unassigned",
+    "due_soon",
+    "overdue",
 ];
 
 export type WorkItemSourceDef = {
@@ -143,13 +175,11 @@ function isOpenTask(task: MyTasksTaskRow): boolean {
 }
 
 function folderProcessGroupKey(folder: WorkItemFolderKey, groups: WorkItemsProcessGroup[]): string {
-    if (folder === "all_work" || folder === "inbox") return WORK_ITEMS_ALL_GROUP_KEY;
-    const needle =
-        folder === "enrollment" ? "enrollment"
-        : folder === "compliance" ? "compliance"
-        : folder === "projects" ? "project"
-        : null;
+    if (folder === "all_work") return WORK_ITEMS_ALL_GROUP_KEY;
+    const needle = folder === "enrollment" ? "enrollment" : folder === "compliance" ? "compliance" : null;
     if (!needle) return WORK_ITEMS_ALL_GROUP_KEY;
+    // Substring match on the process LABEL: renaming a business process silently empties this lens.
+    // Durable process keys are the right binding and are part of the folders/views specification.
     const match = groups.find((g) => !g.isGeneral && g.label.toLowerCase().includes(needle));
     return match?.key ?? `__missing_${folder}`;
 }
@@ -158,14 +188,7 @@ export function filterTasksByFolder(
     tasks: MyTasksTaskRow[],
     folder: WorkItemFolderKey,
     groups: WorkItemsProcessGroup[],
-    currentUserId: string | null
 ): MyTasksTaskRow[] {
-    if (folder === "inbox") {
-        const uid = currentUserId?.trim();
-        if (!uid) return [];
-        return tasks.filter((t) => isOpenTask(t) && t.assigned_to_user_id?.trim() === uid);
-    }
-    if (folder === "projects") return [];
     const groupKey = folderProcessGroupKey(folder, groups);
     if (groupKey.startsWith("__missing_")) return [];
     if (groupKey === WORK_ITEMS_ALL_GROUP_KEY) return tasks;
@@ -266,7 +289,7 @@ export function applyWorkItemQueueScope(
     groups: WorkItemsProcessGroup[],
     currentUserId: string | null
 ): MyTasksTaskRow[] {
-    let rows = filterTasksByFolder(tasks, scope.folder, groups, currentUserId);
+    let rows = filterTasksByFolder(tasks, scope.folder, groups);
     rows = filterTasksByView(rows, scope.view, currentUserId);
     rows = filterTasksBySource(rows, scope.source);
     return sortWorkItemTasks(rows, scope.sort);
@@ -276,9 +299,8 @@ export function countTasksForFolder(
     tasks: MyTasksTaskRow[],
     folder: WorkItemFolderKey,
     groups: WorkItemsProcessGroup[],
-    currentUserId: string | null
 ): number {
-    return filterTasksByFolder(tasks, folder, groups, currentUserId).filter(isOpenTask).length;
+    return filterTasksByFolder(tasks, folder, groups).filter(isOpenTask).length;
 }
 
 export function countTasksForView(
