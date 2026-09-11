@@ -583,6 +583,10 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, {
         actor: actorDefault,
         expectedFingerprint: v.content_fingerprint || v.contentFingerprint || null,
+        // When the press happened, as the client saw it. Observability only —
+        // it is recorded next to the server's own stamps and authorises nothing,
+        // so a client that lies about it changes a metric and not a decision.
+        submittedAt: v.submitted_at || v.submittedAt || null,
       }));
       return { status: out.ok ? 200 : 409, body: out };
     } catch (e) {

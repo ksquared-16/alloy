@@ -67,6 +67,18 @@ export const OPERATOR_OWNED_ACTION_KEYS = Object.freeze([
   // action, so neither one is the only thing standing between a delegate and a
   // production write.
   "database.apply_promoted_migration",
+  // THE LEDGER IS WHAT EVERY LATER MIGRATION DECISION IS READ FROM.
+  //
+  // This action declares `delegable: false` on its registry definition and was
+  // then absent from this list, so the ONLY thing standing between a delegate
+  // and a production ledger write was `alloy_deployed_primary` being an
+  // operator-only ENVIRONMENT — a default target, not a decision about this
+  // action. That is one guard, in a file that governs a different concern, for
+  // a write whose failure mode is that every subsequent "has this been applied"
+  // returns the wrong answer. Stated here as well, so the two halves of the
+  // refusal are independent, which is the pattern apply_promoted_migration
+  // already documents two lines above.
+  "database.repair_migration_ledger",
   "environment.provision_qa_identity",
   "environment.assign_qa_identity_access",
   "environment.restore_qa_session",
@@ -279,6 +291,24 @@ export const GATES = Object.freeze({
     (ev.dispatch_target_not_busy == null ? null : ev.dispatch_target_not_busy === true),
   dispatch_bound_to_measurement: (ev) =>
     (ev.dispatch_bound_to_measurement == null ? null : ev.dispatch_bound_to_measurement === true),
+
+  // CENSUS. The risk surface of a census is the QUERY, never the read, so every
+  // gate here is about proving the query is the one that was allowlisted and
+  // that it cannot mutate. All of them are measured by re-running the registry's
+  // own validator at decision time — the same code the trusted host runs before
+  // it executes — so there is no second opinion about what read-only means.
+  census_is_read_only_mode: (ev) =>
+    (ev.census_mode_read_only == null ? null : ev.census_mode_read_only === true),
+  census_query_hash_pinned: (ev) =>
+    (ev.census_query_hash_pinned == null ? null : ev.census_query_hash_pinned === true),
+  census_artifact_validates: (ev) =>
+    (ev.census_artifact_validates == null ? null : ev.census_artifact_validates === true),
+  census_sql_proven_read_only: (ev) =>
+    (ev.census_sql_read_only == null ? null : ev.census_sql_read_only === true),
+  census_target_exact: (ev) =>
+    (ev.census_target_exact == null ? null : ev.census_target_exact === true),
+  census_artifact_inside_worktree: (ev) =>
+    (ev.census_artifact_inside_worktree == null ? null : ev.census_artifact_inside_worktree === true),
 });
 
 /**
@@ -290,6 +320,44 @@ export const GATES = Object.freeze({
  * should be switched on by an explicit operator decision, not by shipping it.
  */
 export const DELEGATED_POLICIES_V1 = Object.freeze([
+  Object.freeze({
+    policy_id: "allowlisted_read_only_census_v1",
+    label: "Allowlisted read-only census",
+    action_key: "database.read_census",
+    // The deployed primary is named here on purpose. A census that names any
+    // other target does not match this policy and escalates — which is the
+    // behaviour that already existed for every target.
+    environments: Object.freeze(["alloy_deployed_primary"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // WHY A PRODUCTION READ IS DELEGABLE AND A PRODUCTION WRITE IS NOT.
+    //
+    // A read changes nothing, and the only thing that could make this one
+    // dangerous is the QUERY. So every gate below is about the query's identity
+    // and its inability to mutate, and every one of them is measured by
+    // re-running the registry's own validator at decision time rather than by
+    // trusting that the same validator passed when the request was filed. The
+    // artifact is a file; files change.
+    //
+    // WHAT THE HUMAN WAS ACTUALLY SUPPLYING. 182 approvals in the 23 days to
+    // 2026-09-11, 73 in the last week, zero denials in the entire window. The
+    // operator was confirming that an allowlisted, hash-pinned, statically
+    // proven non-mutating query against a named target was safe to read. That is
+    // a measurement, and it is one this policy can take.
+    //
+    // WHAT STILL ESCALATES, AND MUST. An unpinned hash. An artifact that no
+    // longer matches its hash, or has moved outside the originating worktree. A
+    // query that does not validate as read-only. A target that is not exactly
+    // the one the executor will use. Any mode other than read_only. And a
+    // governance exception or operator hold, like everywhere else. Each of those
+    // is a refusal with a named cause rather than a generic prompt.
+    gates: Object.freeze([
+      "census_is_read_only_mode", "census_query_hash_pinned",
+      "census_artifact_validates", "census_sql_proven_read_only",
+      "census_target_exact", "census_artifact_inside_worktree",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
   Object.freeze({
     policy_id: "routine_managed_branch_push_v1",
     label: "Routine managed-branch push",
@@ -571,6 +639,56 @@ export function isOperatorOnlyEnvironment(env) {
 }
 
 /**
+ * THE ONLY WAY PAST THE OPERATOR-ONLY ENVIRONMENT CHECK, AND IT IS NOT A WAY IN.
+ *
+ * "Production never inherits staging authority" is the rule step 3 enforces and
+ * it is not being relaxed. What this admits is narrower than that rule: a small,
+ * named, explicitly enumerated set of (action, environment) pairs that may be
+ * EVALUATED against their policy rather than refused before one is looked for.
+ *
+ * Being evaluated is not being approved. The action still has to match an
+ * enabled policy for that exact environment and pass every gate on it, measured;
+ * every unmeasured gate still escalates; step 4's operator-owned reservation
+ * still runs afterwards and still wins. The difference is only that a refusal
+ * now comes from a gate that looked, rather than from a string comparison that
+ * could not.
+ *
+ * WHY THIS EXISTS. A read-only census against the deployed primary was the
+ * single largest source of Director interruption — 182 approvals in 23 days, 73
+ * in the last week, zero denials ever. Every one of those prompts asked a human
+ * to confirm that an allowlisted, hash-pinned, statically-proven-read-only query
+ * was safe to run, which is a measurement and not a judgement.
+ *
+ * WHY IT IS SAFE TO HAVE AT ALL. Three independent conditions, all required.
+ * The pair must be listed here. The action must not be operator-owned, so no
+ * entry added later can reach a class step 4 reserves. And the request must
+ * declare read_only mode — which `validateAgainstRegistry` already refuses to
+ * pair with a non-read risk class, so a write action cannot borrow this by
+ * relabelling itself. Adding a WRITE here cannot work; it would have to defeat
+ * all three.
+ */
+export const OPERATOR_ONLY_ENVIRONMENT_READ_EXEMPTIONS = Object.freeze([
+  Object.freeze({
+    action_key: "database.read_census",
+    environment: "alloy_deployed_primary",
+    why: "Read-only, allowlisted artifact, hash-pinned, statically proven non-mutating, exact target.",
+  }),
+]);
+
+export function readOnlyEnvironmentExemptionApplies(request = {}, env = null) {
+  const key = norm(request.action_key);
+  if (!key) return false;
+  // An operator-owned class can never be exempted, whatever is listed below.
+  if (OPERATOR_OWNED_ACTION_KEYS.map(norm).includes(key)) return false;
+  // The request must be asking for a read. `validateAgainstRegistry` refuses
+  // read_only for any non-read risk class, so this cannot be worn as a costume.
+  if (norm(request.requested_mode || request.requestedMode) !== "read_only") return false;
+  return OPERATOR_ONLY_ENVIRONMENT_READ_EXEMPTIONS.some(
+    (x) => norm(x.action_key) === key && norm(x.environment) === norm(env),
+  );
+}
+
+/**
  * The one canonical policy decision.
  *
  * Order matters and is deliberate: the things that must ALWAYS escalate are
@@ -614,9 +732,12 @@ export function evaluateDirectorAuthority({
     return escalate("This changes the delegated-authority policy itself. The Director cannot approve an expansion of its own authority.");
   }
 
-  // 3. Environment. Production never inherits staging authority.
+  // 3. Environment. Production never inherits staging authority — with one
+  // enumerated exception for a proven READ, which is still evaluated against a
+  // policy and every one of its gates rather than admitted here. See
+  // readOnlyEnvironmentExemptionApplies for why that is narrower than it sounds.
   const env = base.environment;
-  if (isOperatorOnlyEnvironment(env)) {
+  if (isOperatorOnlyEnvironment(env) && !readOnlyEnvironmentExemptionApplies(request, env)) {
     return escalate(`This targets ${env}, which is always an operator decision.`);
   }
 

@@ -2894,7 +2894,25 @@ document.addEventListener("click", async (e) => {
     const requestId = btn.getAttribute("data-request-id") || ga?.request_id;
     const row = (G.approvals || []).find((a) => a && a.request_id === requestId) || null;
     if (!requestId) return;
-    btn.disabled = true;
+    // ONE PRESS, ACKNOWLEDGED BEFORE THE NETWORK IS TOUCHED.
+    //
+    // `btn.disabled = true` on its own was not enough and could not be: it lives
+    // on a DOM node the next repaint replaces from a template that knows nothing
+    // about a decision in flight. A poll tick landing mid-request re-armed the
+    // button under an approval that was still running. The decision state now
+    // lives in the view module, so every repaint between here and the settled
+    // state redraws the control as submitting rather than as ready.
+    //
+    // The guard below is the in-flight check the DOM one only approximated: a
+    // second press on the same request, from ANY of the three approval surfaces,
+    // returns without issuing a second mutation.
+    const inFlight = View.governedDecisionStateFor(requestId)?.state;
+    if (inFlight === "submitting" || inFlight === "denying") return;
+    const submittedAt = new Date().toISOString();
+    View.setGovernedDecisionState(requestId, governedApprove ? "submitting" : "denying");
+    // Paint FIRST. The operator sees the press land in this frame, not after a
+    // round trip whose duration nothing on screen accounts for.
+    paint();
     try {
       const path = governedApprove ? "/api/v2/governed-actions/approve" : "/api/v2/governed-actions/deny";
       const r = await gwFetch(path, {
@@ -2905,6 +2923,9 @@ document.addEventListener("click", async (e) => {
           // What the operator actually read. The server refuses the decision if
           // the request has moved on since this card was drawn.
           content_fingerprint: btn.getAttribute("data-content-fingerprint") || null,
+          // When the press happened. The server cannot observe this and the
+          // audit could not answer "how long did the operator wait" without it.
+          submitted_at: submittedAt,
         }),
       });
       const out = await r.json().catch(() => ({}));
@@ -2918,13 +2939,38 @@ document.addEventListener("click", async (e) => {
         title: row ? View.governedActionLabel(row) : (ga ? View.governedActionLabel(ga) : null),
         approveLabel: row?.approve_label || ga?.approve_label,
       });
+      if (out.ok) {
+        // `already` is a success, not a failure: the server converged us onto a
+        // decision that stands. Saying so is the whole point — the alternative
+        // is an error for something that did in fact happen.
+        View.setGovernedDecisionState(requestId, "settled", {
+          label: governedApprove ? (out.already ? "Already approved" : "Approved") : "Denied",
+        });
+      } else {
+        // Visible, named, and retryable. No silent no-op and no spinner that
+        // never ends: the control comes back as "Try again" with the reason.
+        View.setGovernedDecisionState(requestId, "failed", {
+          error: View.governedDecisionFailureCopy(out.error),
+        });
+      }
+      // Show the outcome now; converge on server truth immediately after. The
+      // three refreshes below used to run BEFORE the first repaint, so the
+      // operator waited out all of them with nothing on screen having changed.
+      paint();
       const laneId = G.selected || G.lane?.lane_id;
       await refreshApprovals();
       await fetchLanes();
       if (laneId) await fetchLane(laneId);
+      // The projection is authoritative once it has caught up. Dropping the
+      // local state here is what stops a settled decision outliving the request
+      // it settled — and a stale response can no longer regress a newer state,
+      // because what is drawn from here on is the server's.
+      View.clearGovernedDecisionState(requestId);
       paint();
     } catch {
-      btn.disabled = false;
+      View.setGovernedDecisionState(requestId, "failed", {
+        error: "Vacilando could not be reached. Nothing was sent.",
+      });
       G.notice = View.governedDecisionNotice({
         approve: Boolean(governedApprove),
         error: "unreachable",
