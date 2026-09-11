@@ -88,10 +88,20 @@ function recoveryBacklog() {
   try {
     const raw = JSON.parse(readFileSync(join(GATEWAY_ROOT, "vacilando", "execution-runs", "recovery-budgets.json"), "utf8"));
     const eps = Object.values(raw?.episodes || {});
+    const now = Date.now();
+    // `open` counts only what is CURRENT. The ledger keeps one episode per
+    // (policy, target) forever, so counting every non-terminal row reports three
+    // weeks of history as live backlog — it read 73 on an idle host.
+    const recent = eps.filter((e) => {
+      if (e.terminal === true) return false;
+      const t = Date.parse(e.last_at || e.first_at || "");
+      return Number.isFinite(t) && (now - t) <= 15 * 60_000;
+    });
     return {
       episodes: eps.length,
       terminal: eps.filter((e) => e.terminal === true).length,
-      open: eps.filter((e) => e.terminal !== true).length,
+      open: recent.length,
+      unresolved_historical: eps.filter((e) => e.terminal !== true).length - recent.length,
     };
   } catch { return { episodes: null, terminal: null, open: null }; }
 }
