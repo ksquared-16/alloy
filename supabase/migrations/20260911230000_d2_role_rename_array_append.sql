@@ -134,6 +134,10 @@ BEGIN
      * it, and the migration aborts — which is the required behaviour.
      */
     BEGIN
+        -- A role belongs to an organization, so the throwaway tenant has to exist for the
+        -- throwaway role to. It is created and discarded with everything else in this block.
+        INSERT INTO public.orgs (id, name, slug)
+        VALUES (v_org, 'D2 self-test', '_d2_rename_selftest');
         INSERT INTO public.role_definitions (org_id, role_key, role_label, is_system, is_active)
         VALUES (v_org, v_key, 'before', false, true);
 

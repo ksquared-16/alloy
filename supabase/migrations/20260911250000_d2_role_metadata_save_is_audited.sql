@@ -134,6 +134,10 @@ DECLARE
     v_outcome text;
 BEGIN
     BEGIN
+        -- A role belongs to an organization, so the throwaway tenant has to exist for the
+        -- throwaway role to. It is created and discarded with everything else in this block.
+        INSERT INTO public.orgs (id, name, slug)
+        VALUES (v_org, 'D2 self-test', '_d2_metadata_selftest');
         INSERT INTO public.role_definitions (org_id, role_key, role_label, is_system, is_active)
         VALUES (v_org, v_key, 'before', false, true);
         INSERT INTO public.role_permission_grants (org_id, role_key, permission_key, allowed)
@@ -148,14 +152,15 @@ BEGIN
         RAISE EXCEPTION 'D2SELFTEST events=% active=% grants=%',
             (SELECT count(*) FROM public.mutation_events
               WHERE org_id = v_org AND command_key = 'access.role.updated'),
-            (SELECT is_active FROM public.role_definitions WHERE org_id = v_org AND role_key = v_key),
+            (SELECT CASE WHEN is_active THEN 'active' ELSE 'inactive' END
+               FROM public.role_definitions WHERE org_id = v_org AND role_key = v_key),
             (SELECT count(*) FROM public.role_permission_grants
               WHERE org_id = v_org AND role_key = v_key AND allowed);
     EXCEPTION WHEN raise_exception THEN
         v_outcome := SQLERRM;
     END;
 
-    IF v_outcome IS DISTINCT FROM 'D2SELFTEST events=1 active=false grants=1' THEN
+    IF v_outcome IS DISTINCT FROM 'D2SELFTEST events=1 active=inactive grants=1' THEN
         RAISE EXCEPTION
             'D2 ABORT: deactivating a role must record exactly one event and leave its package intact; observed "%".',
             v_outcome;
