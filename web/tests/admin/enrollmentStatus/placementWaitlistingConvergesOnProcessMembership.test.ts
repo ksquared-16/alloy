@@ -35,6 +35,7 @@ import { outcomeRulesForKey } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 const mockExecuteStageOperatingOutcome = vi.fn();
 const mockOnChildDispositionEntrySpawnWorkIntent = vi.fn();
+const mockApplyStageOutcomeRuleTarget = vi.fn();
 
 vi.mock("@/lib/lifecycle/executeStageOperatingOutcome", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/lib/lifecycle/executeStageOperatingOutcome")>();
@@ -47,6 +48,10 @@ vi.mock("@/lib/lifecycle/executeStageOperatingOutcome", async (importOriginal) =
 vi.mock("@/lib/lifecycle/onChildDispositionEntrySpawnWorkIntent", () => ({
     onChildDispositionEntrySpawnWorkIntent: (...args: unknown[]) =>
         mockOnChildDispositionEntrySpawnWorkIntent(...args),
+}));
+
+vi.mock("@/lib/lifecycle/stageOutcomeRuleTargetExecutor", () => ({
+    applyStageOutcomeRuleTarget: (...args: unknown[]) => mockApplyStageOutcomeRuleTarget(...args),
 }));
 
 function enrollmentDepartmentMetadata(): Record<string, unknown> {
@@ -126,6 +131,7 @@ describe("manual Change Enrollment Status → Waitlist, for a child", () => {
             action: "spawned",
             work_id: "work-waitlist-entry",
         });
+        mockApplyStageOutcomeRuleTarget.mockResolvedValue({});
     });
 
     it("no longer discards the configured stage move", async () => {
@@ -186,8 +192,117 @@ describe("manual Change Enrollment Status → Waitlist, for a child", () => {
             status_updated: false,
         });
         mockOnChildDispositionEntrySpawnWorkIntent.mockResolvedValue({ action: "skipped", reason: "already_open" });
+        mockApplyStageOutcomeRuleTarget.mockResolvedValue({});
         await effectsFor("child");
         expect(skipKindsFromCall()).toEqual(first);
+    });
+});
+
+/**
+ * A SOURCE STAGE'S RULES DO NOT LIMIT WHERE AN OPERATOR MAY SEND A CHILD.
+ *
+ * Everything above only runs when the SOURCE plan happens to declare a rule for the destination.
+ * `decision_pending` declares `to_waitlist`; `lead` declares only `ready_to_contact`. So a child
+ * waitlisted straight from Lead resolved no plan at all, `executeStageOperatingOutcome` never ran,
+ * and un-skipping `move_to_stage` had nothing to un-skip.
+ *
+ * Observed live before this branch existed: a child taken Lead → Waitlist came back
+ * `outcome_status_key = waitlisted` with a placement candidate created and
+ * `_effective_participant_stage_keys` still empty — riding its family's Lead.
+ */
+describe("the destination the operator chose is applied even when no rule names it", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        // No plan resolves for `lead` + `waitlist`, so the outcome runtime is never called.
+        mockExecuteStageOperatingOutcome.mockResolvedValue({
+            applied_targets: [],
+            errors: [],
+            queue_refresh_opportunity_id: "opp-1",
+            needs_attention_set: false,
+            status_updated: false,
+        });
+        mockOnChildDispositionEntrySpawnWorkIntent.mockResolvedValue({ action: "spawned", work_id: "w1" });
+        mockApplyStageOutcomeRuleTarget.mockResolvedValue({});
+    });
+
+    async function fromLead() {
+        return applyEnrollmentStatusTransitionOutcomeEffects({
+            supabase: departmentSupabase(enrollmentDepartmentMetadata()),
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            scope: {
+                grain: "child",
+                opportunityId: "opp-1",
+                opportunityCustomerMemberId: "ocm-1",
+            },
+            destinationKey: "waitlist",
+            targetStatusKey: "waitlisted",
+            previousStatusKey: "new_inquiry",
+            sourceBuilderStageKey: "lead",
+        } as never);
+    }
+
+    it("moves the child to the chosen destination through the canonical executor", async () => {
+        await fromLead();
+        expect(mockApplyStageOutcomeRuleTarget).toHaveBeenCalledTimes(1);
+        const call = mockApplyStageOutcomeRuleTarget.mock.calls[0]![1];
+        expect(call.target).toEqual({ kind: "move_to_stage", stage_key: "waitlist" });
+        expect(call.subject.journey_segment).toBe("child");
+    });
+
+    /**
+     * The participation id alone is enough. Requiring the durable child id made the branch
+     * unreachable from the drawer and the queue row, which name only the participation — and
+     * `resolveChildSubjectId` reads the durable child from it anyway.
+     */
+    it("runs on the participation id alone, as the drawer and queue row supply it", async () => {
+        await fromLead();
+        const call = mockApplyStageOutcomeRuleTarget.mock.calls[0]![1];
+        expect(call.subject.opportunity_customer_member_id).toBe("ocm-1");
+    });
+
+    it("surfaces a refused move as an error rather than reporting a clean transition", async () => {
+        mockApplyStageOutcomeRuleTarget.mockResolvedValue({ error: "no enrollment track was found" });
+        const r = await fromLead();
+        expect(r.errors.join(" ")).toContain("destination_stage_move");
+        expect(r.destination_stage_move?.error).toBeTruthy();
+    });
+
+    it("does NOT move a second time when a configured rule already moved the child", async () => {
+        mockExecuteStageOperatingOutcome.mockResolvedValue({
+            applied_targets: [{ kind: "move_to_stage", stage_key: "waitlist" }],
+            errors: [],
+            queue_refresh_opportunity_id: "opp-1",
+            needs_attention_set: false,
+            status_updated: false,
+        });
+        await effectsFor("child");
+        expect(mockApplyStageOutcomeRuleTarget).not.toHaveBeenCalled();
+    });
+
+    it("leaves a CASE transition alone — a case's position follows its status", async () => {
+        await effectsFor("case");
+        expect(mockApplyStageOutcomeRuleTarget).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `closed_withdrawn` is the one destination key that names no stage, and the guard is the
+     * vocabulary itself rather than a list maintained here.
+     */
+    it("refuses a destination that names no stage", async () => {
+        await applyEnrollmentStatusTransitionOutcomeEffects({
+            supabase: departmentSupabase(enrollmentDepartmentMetadata()),
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            scope: { grain: "child", opportunityId: "opp-1", opportunityCustomerMemberId: "ocm-1" },
+            destinationKey: "closed_withdrawn",
+            targetStatusKey: "not_enrolling",
+            previousStatusKey: "new_inquiry",
+            sourceBuilderStageKey: "lead",
+        } as never);
+        expect(mockApplyStageOutcomeRuleTarget).not.toHaveBeenCalled();
     });
 });
 
@@ -202,6 +317,7 @@ describe("the family path is untouched", () => {
             status_updated: false,
         });
         mockOnChildDispositionEntrySpawnWorkIntent.mockResolvedValue({ action: "skipped", reason: "case_grain" });
+        mockApplyStageOutcomeRuleTarget.mockResolvedValue({});
     });
 
     it("a case transition keeps the full skip set, movement included", async () => {

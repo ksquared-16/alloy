@@ -18,6 +18,8 @@ import {
     type StageOutcomeExecutionResult,
 } from "@/lib/lifecycle/executeStageOperatingOutcome";
 import type { StageOutcomeRuleTargetKind } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { applyStageOutcomeRuleTarget } from "@/lib/lifecycle/stageOutcomeRuleTargetExecutor";
+import { isLifecycleOperatorStage } from "@/lib/lifecycle/enrollmentOperatorStage";
 import { DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
 import { onChildDispositionEntrySpawnWorkIntent } from "@/lib/lifecycle/onChildDispositionEntrySpawnWorkIntent";
 import type { OnStageEntrySpawnWorkIntentResult } from "@/lib/lifecycle/onStageEntrySpawnWorkIntent";
@@ -40,8 +42,16 @@ export type ApplyEnrollmentStatusTransitionOutcomeEffectsInput = {
     builderStageKey?: string | null;
 };
 
+type StageOutcomeRuleTargetResult = Awaited<ReturnType<typeof applyStageOutcomeRuleTarget>>;
+
 export type ApplyEnrollmentStatusTransitionOutcomeEffectsResult = {
     outcome_execution: StageOutcomeExecutionResult | null;
+    /**
+     * The canonical destination move, applied when the source stage's plan declared no rule for the
+     * operator's chosen destination. Null means a configured rule already moved the child, or the
+     * destination names no stage.
+     */
+    destination_stage_move: StageOutcomeRuleTargetResult | null;
     stage_entry_spawn: OnStageEntrySpawnWorkIntentResult | null;
     outcome_key: string | null;
     source_builder_stage_key: string | null;
@@ -148,6 +158,7 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
     if (!orgId || !opportunityId) {
         return {
             outcome_execution: null,
+            destination_stage_move: null,
             stage_entry_spawn: null,
             outcome_key: null,
             source_builder_stage_key: null,
@@ -174,6 +185,7 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
     if (!departmentId) {
         return {
             outcome_execution: null,
+            destination_stage_move: null,
             stage_entry_spawn: null,
             outcome_key: null,
             source_builder_stage_key: null,
@@ -185,6 +197,7 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
     if (!departmentMetadata) {
         return {
             outcome_execution: null,
+            destination_stage_move: null,
             stage_entry_spawn: null,
             outcome_key: null,
             source_builder_stage_key: null,
@@ -248,6 +261,80 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
         }
     }
 
+    /*
+     * ── THE DESTINATION IS NAMED BY THE OPERATOR, NOT ONLY BY THE SOURCE STAGE'S RULES ──
+     *
+     * Everything above runs only when the SOURCE stage's plan happens to declare an outcome rule for
+     * this destination. `decision_pending` declares `to_waitlist`, so a child waitlisted from
+     * Decision moves. `lead` declares only `ready_to_contact` -- so a child waitlisted straight from
+     * Lead resolved no plan, `executeStageOperatingOutcome` never ran at all, and the child was left
+     * disposition-waitlisted with a placement candidate and a process instance that never moved.
+     *
+     * Reproduced live before this existed: a child taken from Lead to Waitlist came back
+     * `outcome_status_key = waitlisted`, a placement candidate created, and
+     * `_effective_participant_stage_keys` still empty -- the child riding its family's Lead.
+     *
+     * An operator choosing "Waitlist" has named a destination, and for a child that destination is
+     * a POSITION, not a label. `EnrollmentStatusDestinationKey` is `LifecycleOperatorStage |
+     * "closed_withdrawn"`, so the destination key already IS the builder stage -- nothing is mapped
+     * or guessed here, and `closed_withdrawn` (which names no stage) is excluded by the same check.
+     *
+     * The move goes through `applyStageOutcomeRuleTarget`, the same executor the configured rules
+     * use and the same one `applyChildWaitlistViaOutcomeRuntime` uses for the waitlist_child
+     * command. So it inherits the referential-integrity guard (the destination must exist in the
+     * configured process), the grain guard (a child outcome may not write a family stage), and the
+     * destination-stage work reconciliation that opens the entry work. This is not a second writer;
+     * it is the same one, reached when configuration named no rule.
+     *
+     * Skipped entirely when a configured rule already moved the child -- one move, never two.
+     */
+    let destination_stage_move: StageOutcomeRuleTargetResult | null = null;
+    const destinationStageKey =
+        grain === "child" && isLifecycleOperatorStage(input.destinationKey) ? input.destinationKey : null;
+    const alreadyMoved = (outcome_execution?.applied_targets ?? []).some((t) => t.kind === "move_to_stage");
+    /*
+     * EITHER identity is enough. A caller that names only the participation (`ocmId`) is the common
+     * case from the drawer and the queue row -- `resolveChildSubjectId` reads the durable child from
+     * it. Requiring the durable id here would have made the branch unreachable from exactly the
+     * surfaces that need it, which is how the live proof first came back with the child unmoved.
+     */
+    const childIdentityKnown = Boolean(input.scope.customerMemberId?.trim() || ocmId);
+    if (destinationStageKey && !alreadyMoved && childIdentityKnown) {
+        destination_stage_move = await applyStageOutcomeRuleTarget(input.supabase, {
+            orgId,
+            userId,
+            departmentId,
+            stageKey: sourceBuilderStageKey ?? destinationStageKey,
+            /*
+             * A stub carrying only what the executor reads for a move. The SOURCE plan is the right
+             * thing to pass when one resolved, but the whole point of this branch is that it often
+             * has not -- and the move does not read outcome rules, only the stage inventory.
+             */
+            plan: {
+                version: 1,
+                lifecycle_key: "enrollment",
+                stage_key: sourceBuilderStageKey ?? destinationStageKey,
+                journey_segment: "child",
+                work_templates: [],
+                outcomes: [],
+                outcome_rules: [],
+            } as unknown as NonNullable<ReturnType<typeof resolveEffectiveStageOperatingPlan>["plan"]>,
+            subject: {
+                journey_segment: "child",
+                opportunity_id: opportunityId,
+                customer_member_id: input.scope.customerMemberId,
+                opportunity_customer_member_id: ocmId,
+                placement_candidate_id: input.scope.placementCandidateId ?? null,
+            },
+            target: { kind: "move_to_stage", stage_key: destinationStageKey },
+        });
+        if (destination_stage_move.error) {
+            // Surfaced, never swallowed: a child that did not move is exactly the divergence this
+            // whole seam exists to prevent, and it must not read as a clean transition.
+            errors.push(`destination_stage_move: ${destination_stage_move.error}`);
+        }
+    }
+
     let stage_entry_spawn: OnStageEntrySpawnWorkIntentResult | null = null;
     if (ocmId && input.scope.grain !== "case") {
         const previous = input.previousStatusKey?.trim() ?? null;
@@ -269,6 +356,7 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
 
     return {
         outcome_execution,
+        destination_stage_move,
         stage_entry_spawn,
         outcome_key: outcomeKey,
         source_builder_stage_key: sourceBuilderStageKey,
