@@ -10,7 +10,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 
-import { applyReductionCore, ReductionCoreError } from "@/lib/financials/reductions/reductionCore";
+import {
+    applyReductionCore,
+    ReductionCoreError,
+    type ReductionApplicationDraft,
+    type ReductionCoreInput,
+} from "@/lib/financials/reductions/reductionCore";
 import {
     applyVacationCreditReduction,
     PolicyReductionError,
@@ -24,17 +29,17 @@ const noDatabase = new Proxy({}, {
     },
 }) as unknown as SupabaseClient;
 
-const coreInput = (over: Record<string, unknown> = {}) => ({
+const coreInput = (applications: ReductionApplicationDraft[]): ReductionCoreInput => ({
     orgId: "org",
     actorUserId: null,
     subject: { enrollmentAgreementId: "agreement" },
     charge: { chargeCategory: "discount", description: "d", serviceDate: "2026-03-04", currencyCode: "USD" },
-    onExisting: "return" as const,
-    ...over,
+    applications,
+    onExisting: "return",
 });
 
-const policyApp = (over: Record<string, unknown> = {}) => ({
-    reductionKind: "policy" as const,
+const policyApp = (over: Partial<ReductionApplicationDraft> = {}): ReductionApplicationDraft => ({
+    reductionKind: "policy",
     policyKind: "vacation_credit",
     amountCents: -4000,
     idempotencyKey: "k",
@@ -43,9 +48,9 @@ const policyApp = (over: Record<string, unknown> = {}) => ({
 
 describe("the reduction core refuses an unexplainable policy reduction", () => {
     it("refuses a policy reduction with no authority at all", async () => {
-        await expect(applyReductionCore(noDatabase, coreInput({ applications: [policyApp()] })))
+        await expect(applyReductionCore(noDatabase, coreInput([policyApp()])))
             .rejects.toThrow(ReductionCoreError);
-        await applyReductionCore(noDatabase, coreInput({ applications: [policyApp()] })).catch((e: ReductionCoreError) => {
+        await applyReductionCore(noDatabase, coreInput([policyApp()])).catch((e: ReductionCoreError) => {
             expect(e.code).toBe("missing_policy_authority");
             expect(e.message).toMatch(/exactly one/i);
         });
@@ -54,7 +59,7 @@ describe("the reduction core refuses an unexplainable policy reduction", () => {
     it("refuses a policy reduction naming both authorities", async () => {
         // Both is worse than neither: the row exists, looks complete, and nothing says which decided.
         const apps = [policyApp({ commercialPolicyId: "c", financialPolicyId: "f" })];
-        await applyReductionCore(noDatabase, coreInput({ applications: apps })).catch((e: ReductionCoreError) => {
+        await applyReductionCore(noDatabase, coreInput(apps)).catch((e: ReductionCoreError) => {
             expect(e.code).toBe("ambiguous_policy_authority");
         });
     });
@@ -62,21 +67,21 @@ describe("the reduction core refuses an unexplainable policy reduction", () => {
     it("accepts either authority alone — the commercial path is not narrowed", async () => {
         // Reaching the database is the pass here: validation let it through.
         for (const app of [policyApp({ commercialPolicyId: "c" }), policyApp({ financialPolicyId: "f" })]) {
-            await expect(applyReductionCore(noDatabase, coreInput({ applications: [app] })))
+            await expect(applyReductionCore(noDatabase, coreInput([app])))
                 .rejects.toThrow(/database was touched/);
         }
     });
 
     it("refuses a manual reduction that claims a policy decided it", async () => {
-        const apps = [{ reductionKind: "manual" as const, reason: "goodwill", financialPolicyId: "f", amountCents: -100, idempotencyKey: "k" }];
-        await applyReductionCore(noDatabase, coreInput({ applications: apps })).catch((e: ReductionCoreError) => {
+        const apps: ReductionApplicationDraft[] = [{ reductionKind: "manual", reason: "goodwill", financialPolicyId: "f", amountCents: -100, idempotencyKey: "k" }];
+        await applyReductionCore(noDatabase, coreInput(apps)).catch((e: ReductionCoreError) => {
             expect(e.code).toBe("manual_carries_policy_authority");
         });
     });
 
     it("refuses a manual reduction with no reason", async () => {
-        const apps = [{ reductionKind: "manual" as const, amountCents: -100, idempotencyKey: "k" }];
-        await applyReductionCore(noDatabase, coreInput({ applications: apps })).catch((e: ReductionCoreError) => {
+        const apps: ReductionApplicationDraft[] = [{ reductionKind: "manual", amountCents: -100, idempotencyKey: "k" }];
+        await applyReductionCore(noDatabase, coreInput(apps)).catch((e: ReductionCoreError) => {
             expect(e.code).toBe("reason_required");
         });
     });
