@@ -21,18 +21,39 @@ async function openFinancials(page: Page): Promise<Locator> {
     return shell;
 }
 
+/*
+ * SELECT WHATEVER THE TENANT ACTUALLY HAS.
+ *
+ * The Charges section holds two views: drafts awaiting posting, and the posted record. A shared
+ * tenant may legitimately have none of the first — another lane posts them — and a case about
+ * "a selected charge explains itself" is not a case about drafts. So this takes whichever view has
+ * work in it and fails only when neither does.
+ */
+async function selectAnyCharge(page: Page, shell: Locator): Promise<"awaiting" | "posted"> {
+    await shell.locator('[data-workspace-section-tab="charges"]').click();
+    await page.waitForTimeout(8_000);
+
+    const drafts = page.locator("[data-financials-queue-row]");
+    if ((await drafts.count()) > 0) {
+        await drafts.first().click();
+        await page.waitForTimeout(10_000);
+        return "awaiting";
+    }
+
+    await page.locator('[data-financials-charges-view="posted"]').click();
+    await page.waitForTimeout(10_000);
+    const posted = page.locator("[data-financials-posted-row]");
+    expect(await posted.count(), "neither charges view has anything to select").toBeGreaterThan(0);
+    await posted.first().click();
+    await page.waitForTimeout(10_000);
+    return "posted";
+}
+
 test("charge detail explains the selected obligation", async ({ page }) => {
     test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
     test.setTimeout(900_000);
     const shell = await openFinancials(page);
-
-    await shell.locator('[data-workspace-section-tab="charges"]').click();
-    await page.waitForTimeout(8_000);
-
-    const rows = page.locator("[data-financials-queue-row]");
-    expect(await rows.count(), "the charges queue has nothing to select").toBeGreaterThan(0);
-    await rows.first().click();
-    await page.waitForTimeout(10_000);
+    await selectAnyCharge(page, shell);
 
     // ── THE DETAIL RESOLVED BY ID, not from the row that was clicked ──────────────────────────
     const detail = page.locator("[data-financials-charge-detail]");
@@ -88,10 +109,7 @@ test("charge detail reconstructs after a cold reload", async ({ page }) => {
     test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
     test.setTimeout(900_000);
     const shell = await openFinancials(page);
-    await shell.locator('[data-workspace-section-tab="charges"]').click();
-    await page.waitForTimeout(8_000);
-    await page.locator("[data-financials-queue-row]").first().click();
-    await page.waitForTimeout(10_000);
+    const view = await selectAnyCharge(page, shell);
     const before = await page.locator("[data-financials-charge-detail]").innerText();
 
     await page.reload();
@@ -106,7 +124,13 @@ test("charge detail reconstructs after a cold reload", async ({ page }) => {
     })();
     await shellAfter.locator('[data-workspace-section-tab="charges"]').click();
     await page.waitForTimeout(8_000);
-    await page.locator("[data-financials-queue-row]").first().click();
+    if (view === "posted") {
+        await page.locator('[data-financials-charges-view="posted"]').click();
+        await page.waitForTimeout(10_000);
+        await page.locator("[data-financials-posted-row]").first().click();
+    } else {
+        await page.locator("[data-financials-queue-row]").first().click();
+    }
     await page.waitForTimeout(10_000);
     const after = await page.locator("[data-financials-charge-detail]").innerText();
     expect(after, "the same charge read differently after a reload").toBe(before);
@@ -117,14 +141,73 @@ test("charge detail stays usable at a narrow viewport", async ({ page }) => {
     test.setTimeout(900_000);
     await page.setViewportSize({ width: 900, height: 800 });
     const shell = await openFinancials(page);
-    await shell.locator('[data-workspace-section-tab="charges"]').click();
-    await page.waitForTimeout(8_000);
-    await page.locator("[data-financials-queue-row]").first().click();
-    await page.waitForTimeout(10_000);
+    await selectAnyCharge(page, shell);
     const detail = page.locator("[data-financials-charge-detail]");
     await expect(detail).toBeVisible({ timeout: 60_000 });
     const box = await detail.boundingBox();
     expect(box, "the charge detail has no box at a narrow viewport").toBeTruthy();
     expect(box!.width, "the charge detail collapsed at a narrow viewport").toBeGreaterThan(200);
     await page.screenshot({ path: "evidence/screens/charge-detail-narrow.png", fullPage: false });
+});
+
+
+/*
+ * THE RECORD, NOT ONLY THE WORK.
+ *
+ * Charge detail was reachable from the draft queue alone, so posted obligations — the ones carrying
+ * responsibility, funding, applications and suppression — could not be opened at all. Both views
+ * now converge on the same detail surface, and the action offered is the one the charge's own state
+ * allows.
+ */
+test("posted charges are reachable and offer the action their state allows", async ({ page }) => {
+    test.skip(process.env.CERT_EXPECT_UNAUTHORIZED === "1", "the unauthorized run drives its own case");
+    test.setTimeout(900_000);
+    const shell = await openFinancials(page);
+    await shell.locator('[data-workspace-section-tab="charges"]').click();
+    await page.waitForTimeout(8_000);
+
+    await expect(page.locator('[data-financials-charges-view="awaiting"]')).toBeVisible();
+    await page.locator('[data-financials-charges-view="posted"]').click();
+    await page.waitForTimeout(10_000);
+
+    const posted = page.locator("[data-financials-posted-row]");
+    expect(await posted.count(), "no posted charge is reachable").toBeGreaterThan(0);
+    await posted.first().click();
+    await page.waitForTimeout(12_000);
+
+    const detail = page.locator("[data-financials-charge-detail]");
+    await expect(detail, "a posted charge opens the same detail surface").toBeVisible({ timeout: 60_000 });
+    // eslint-disable-next-line no-console
+    console.log("[posted-charge] full panel text:\n" + (await detail.innerText()));
+
+    await expect(
+        page.locator("[data-financials-charge-status]"),
+        "the posted charge states its lifecycle",
+    ).toBeVisible();
+
+    /*
+     * THE ACTION THE STATE ALLOWS. A posted charge is reversed, not posted again. Neither control
+     * decides whether it may run — the registered command does — but offering Post here would be a
+     * product claim that the charge is still a draft.
+     */
+    await expect(page.locator("[data-financials-reverse-charge]")).toHaveCount(1);
+    await expect(page.locator("[data-financials-post-charge]")).toHaveCount(0);
+
+    /* Money that was taken back may not be presented as money that settled something. */
+    const reversedRows = page.locator('[data-financials-charge-line="application-reversed"]');
+    const appliedRows = page.locator('[data-financials-charge-line="application"]');
+    if ((await reversedRows.count()) > 0) {
+        expect(
+            (await reversedRows.first().innerText()).toLowerCase(),
+            "a reversed application must say so",
+        ).toContain("reversed");
+    }
+    void appliedRows;
+
+    // Switching back returns to the work queue: the two questions stay separate.
+    await page.locator('[data-financials-charges-view="awaiting"]').click();
+    await page.waitForTimeout(6_000);
+    await expect(shell).toHaveAttribute("data-financials-section", "charges");
+
+    await page.screenshot({ path: "evidence/screens/posted-charge-detail.png", fullPage: false });
 });
