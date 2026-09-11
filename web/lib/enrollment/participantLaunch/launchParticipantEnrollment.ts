@@ -63,6 +63,7 @@ import { activeLifecycleProcess } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     ensureRequirementDerivedPacketDefinition,
     planRequirementDerivedPacket,
+    referencedPacketDefinitionId,
     type RequirementDerivedPacketRefusal,
 } from "@/lib/enrollment/participantLaunch/requirementDerivedPacket";
 import {
@@ -193,19 +194,41 @@ export async function launchParticipantEnrollment(
         };
     }
 
-    const plan = planRequirementDerivedPacket({
+    /*
+     * A STAGE THAT REQUIRES A PACKET LAUNCHES THAT PACKET.
+     *
+     * Asked before derivation, and deliberately: the referenced packet already owns its ordered
+     * steps, so projecting it into a second derived definition would hand the family two packets for
+     * one obligation and leave the copy drifting from what an administrator edits in Studio.
+     *
+     * Derivation remains the path for stages that list individual Form requirements — both models
+     * stay supported, and the stage's own configuration decides which one applies.
+     */
+    const referenced = referencedPacketDefinitionId({
         builder: configuration.builder,
         processKey,
         stageKey,
     });
 
-    const packet = await ensureRequirementDerivedPacketDefinition(supabase, {
-        orgId,
-        revisionId,
-        processKey,
-        plan,
-    });
-    if (!packet.ok) return { ok: false, refusal: packet.refusal };
+    let packetDefinitionId: string;
+    if (referenced) {
+        packetDefinitionId = referenced;
+    } else {
+        const plan = planRequirementDerivedPacket({
+            builder: configuration.builder,
+            processKey,
+            stageKey,
+        });
+
+        const packet = await ensureRequirementDerivedPacketDefinition(supabase, {
+            orgId,
+            revisionId,
+            processKey,
+            plan,
+        });
+        if (!packet.ok) return { ok: false, refusal: packet.refusal };
+        packetDefinitionId = packet.packetDefinitionId;
+    }
 
     // RESUME before mint — see the header. A current session already owns a link.
     const current = await resolveCurrentEnrollmentSession(supabase, { orgId, processInstanceId });
@@ -225,7 +248,7 @@ export async function launchParticipantEnrollment(
             value: {
                 processInstanceId,
                 sessionId: String(current.session.id),
-                packetDefinitionId: packet.packetDefinitionId,
+                packetDefinitionId,
                 publicLinkId: linkId,
                 stageKey,
                 businessProcessRevisionId: revisionId,
@@ -240,7 +263,7 @@ export async function launchParticipantEnrollment(
         orgId,
         embedBaseUrl: null,
         body: {
-            packet_definition_id: packet.packetDefinitionId,
+            packet_definition_id: packetDefinitionId,
             label: `Enrollment — ${stageKey}`,
             metadata: {
                 created_via: "enrollment_start",
@@ -269,7 +292,7 @@ export async function launchParticipantEnrollment(
     const launched = await launchEnrollmentObjectiveSession(supabase, {
         orgId,
         processInstanceId,
-        packetDefinitionId: packet.packetDefinitionId,
+        packetDefinitionId,
         linkId: publicLinkId,
         launchFks: {
             person_id: null,
@@ -287,7 +310,7 @@ export async function launchParticipantEnrollment(
         value: {
             processInstanceId,
             sessionId: String(launched.value.session.id),
-            packetDefinitionId: packet.packetDefinitionId,
+            packetDefinitionId,
             publicLinkId,
             stageKey,
             businessProcessRevisionId: revisionId,

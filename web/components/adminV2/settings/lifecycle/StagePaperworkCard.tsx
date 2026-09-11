@@ -8,19 +8,32 @@
  * `kind: form` requirements at `scope: record`, `timing: stage_exit`". This card is that sentence,
  * and it compiles the answer into the same canonical action the advanced editor uses.
  *
- * ## Why the packet's NAME is not shown after choosing it
+ * ## The stage now requires the PACKET, and why that reversed
  *
- * Because BP does not store it, on purpose. Storing a packet id on the stage would be the live link
- * the doctrine forbids — a later Studio edit could then reach into a published revision, or the label
- * would quietly go stale and lie about what a family is actually asked for. So the packet is how the
- * selection is MADE, and the forms are what the stage then owns and displays. The trade-off is real
- * and is the point: what you see is what will be required.
+ * This card used to compile a chosen packet into one `kind: form` requirement per step, deliberately
+ * storing no packet id. The reason was real: a stage holding a packet id is a live link, so a later
+ * Studio edit can change what a published revision asks a family for.
+ *
+ * Live QA rejected the consequence. A director reading the Enrolling stage saw three separately
+ * managed Forms and asked, correctly, why the process knows about paperwork composition at all — the
+ * packet IS the requirement. Compiling also meant adding a step to the family's paperwork required
+ * editing the lifecycle.
+ *
+ * So the ownership split is now explicit: the stage owns whether enrolment paperwork is required and
+ * how strictly; the packet owns what completing it consists of. The original risk is answered rather
+ * than ignored — Configuration Health traverses the packet's steps instead of trusting that it
+ * exists, and an in-flight family keeps the Form versions their session pinned, so a Studio edit
+ * cannot rewrite paperwork someone is part-way through. The remaining piece, pinning an explicit
+ * published packet VERSION on the requirement, is built and waiting on a blocked migration.
+ *
+ * Individual Form requirements remain a supported platform primitive; Enrollment V0.5 simply chooses
+ * the packet.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileCheck2, Loader2 } from "lucide-react";
 import type { LifecycleBuilderProcessRecord, LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { compilePacketToStageRequirements, requirementIdForForm } from "@/lib/lifecycle/compilePacketToStageRequirements";
+import { requirementIdForForm } from "@/lib/lifecycle/compilePacketToStageRequirements";
 
 type FormOption = { id: string; name: string; has_published_version?: boolean };
 type PacketOption = { id: string; name: string; is_active?: boolean };
@@ -31,20 +44,40 @@ export default function StagePaperworkCard({
     stageRecord,
     process,
     onSaved,
+    onManagePacket,
 }: {
     departmentId: string;
     stageKey: string;
     stageRecord?: LifecycleBuilderStageRecord | null;
     process?: LifecycleBuilderProcessRecord | null;
     onSaved?: () => void | Promise<void>;
+    /**
+     * Open the packet's own configuration, focused.
+     *
+     * The host owns the pop-out because this card renders inside the stage editor and must not
+     * decide how a focused surface is presented. Editing there changes the PACKET; the stage keeps
+     * requiring the same packet, which is the whole point of the split.
+     */
+    onManagePacket?: (packetDefinitionId: string, packetName: string | null) => void;
 }) {
     const [choosing, setChoosing] = useState(false);
     const [forms, setForms] = useState<FormOption[]>([]);
     const [packets, setPackets] = useState<PacketOption[]>([]);
+    /** Step counts for the compact row — the packet's own composition, read from the packet. */
+    const [packetSteps, setPacketSteps] = useState<number | null>(null);
+    /** The packet's own name, read from the packet rather than guessed from a list. */
+    const [packetFetchedName, setPacketFetchedName] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
 
+    const packetRequirement = useMemo(
+        () =>
+            (stageRecord?.requirements_v1?.requirements ?? []).find(
+                (r): r is typeof r & { ref: { kind: "packet"; packet_definition_id: string } } => r.ref.kind === "packet",
+            ) ?? null,
+        [stageRecord],
+    );
     const required = useMemo(
         () => (stageRecord?.requirements_v1?.requirements ?? []).filter((r) => r.ref.kind === "form"),
         [stageRecord],
@@ -64,6 +97,38 @@ export default function StagePaperworkCard({
         }).catch(() => { if (live) { setForms([]); setPackets([]); } });
         return () => { live = false; };
     }, [choosing]);
+
+    /*
+     * The step count comes from the PACKET, not from the stage. The stage deliberately stores only
+     * "this packet is required" — asking it how many steps there are would be asking the wrong owner.
+     */
+    useEffect(() => {
+        const id = packetRequirement?.ref.packet_definition_id;
+        if (!id) {
+            setPacketSteps(null);
+            setPacketFetchedName(null);
+            return;
+        }
+        let live = true;
+        fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(id)}`, { credentials: "include" })
+            .then((r) => r.json().catch(() => ({})))
+            .then((j) => {
+                if (!live) return;
+                const d = (j as { data?: { definition?: { name?: string }; items?: unknown[] } }).data;
+                setPacketSteps(Array.isArray(d?.items) ? d!.items!.length : null);
+                setPacketFetchedName(d?.definition?.name ?? null);
+            })
+            .catch(() => { if (live) setPacketSteps(null); });
+        return () => { live = false; };
+    }, [packetRequirement]);
+
+    const packetName = useMemo(
+        () =>
+            packetFetchedName ??
+            packets.find((p) => p.id === packetRequirement?.ref.packet_definition_id)?.name ??
+            null,
+        [packetFetchedName, packets, packetRequirement],
+    );
 
     const nameOf = useCallback((id: string) => forms.find((f) => f.id === id)?.name ?? null, [forms]);
 
@@ -91,17 +156,32 @@ export default function StagePaperworkCard({
         [departmentId, process?.id, stageKey, onSaved],
     );
 
-    /** One-time compile. Nothing is stored that points back at the packet. */
+    /** The stage requires the packet itself. Its steps stay the packet's business. */
     const choosePacket = useCallback(
         async (packetId: string, packetName: string) => {
             setBusy(true); setError(null);
             try {
+                // Read it only to refuse an empty packet — a requirement a family cannot complete is
+                // worse than no requirement, and the count is what the row reports.
                 const res = await fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetId)}`, { credentials: "include" });
                 const json = (await res.json().catch(() => ({}))) as { data?: { items?: { sequence_index: number; form_definition_id: string }[] }; error?: string };
                 if (!res.ok) throw new Error(json.error ?? "Could not read that packet.");
-                const compiled = compilePacketToStageRequirements(json.data?.items ?? []);
-                if (!compiled.length) throw new Error(`“${packetName}” has no forms to require.`);
-                await save(compiled, `Set from “${packetName}” — ${compiled.length} form${compiled.length === 1 ? "" : "s"} required. Publish to make it live.`);
+                const steps = json.data?.items ?? [];
+                if (!steps.length) throw new Error(`“${packetName}” has no steps to require.`);
+                await save(
+                    [
+                        {
+                            requirement_id: "enrollment_packet",
+                            kind: "packet",
+                            packet_definition_id: packetId,
+                            level: "required",
+                            scope: "record",
+                            timing: "stage_exit",
+                            enforcement: "blocking",
+                        },
+                    ],
+                    `This stage now requires “${packetName}” — ${steps.length} step${steps.length === 1 ? "" : "s"}. Publish to make it live.`,
+                );
             } catch (e) {
                 setError((e as Error).message);
                 setBusy(false);
@@ -150,12 +230,27 @@ export default function StagePaperworkCard({
                         <h4 className="text-[0.8125rem] font-semibold text-alloy-midnight">Enrollment paperwork</h4>
                     </div>
                     <p className="mt-1 text-[0.8125rem] text-alloy-midnight/70" data-testid="stage-paperwork-summary">
-                        {required.length
-                            ? `${required.length} form${required.length === 1 ? "" : "s"} required`
-                            : authored
-                              ? "No paperwork required — an authored decision"
-                              : "No paperwork chosen yet"}
+                        {packetRequirement
+                            ? (packetName ?? "Enrollment packet")
+                            : required.length
+                              ? `${required.length} form${required.length === 1 ? "" : "s"} required`
+                              : authored
+                                ? "No paperwork required — an authored decision"
+                                : "No paperwork chosen yet"}
                     </p>
+                    {packetRequirement ? (
+                        /*
+                         * One line, the way a director reads it: what is required, how much of it,
+                         * and how strictly. The steps themselves belong to the packet and are opened
+                         * with Manage — rendering them here would put paperwork composition back on
+                         * the process page, which is the thing this replaced.
+                         */
+                        <p className="mt-0.5 text-[0.6875rem] text-alloy-midnight/45" data-testid="stage-paperwork-packet-meta">
+                            {packetSteps === null ? "Steps loading…" : `${packetSteps} step${packetSteps === 1 ? "" : "s"}`}
+                            {` · ${packetRequirement.level === "required" ? "Required" : packetRequirement.level}`}
+                            {` · ${packetRequirement.enforcement === "blocking" ? "Blocking" : (packetRequirement.enforcement ?? "blocking")}`}
+                        </p>
+                    ) : null}
                     {required.length ? (
                         // Same rule as the advanced rows: state what is configured, never imply an
                         // enforcement the platform does not perform yet.
@@ -170,15 +265,28 @@ export default function StagePaperworkCard({
                         </p>
                     ) : null}
                 </div>
-                <button
-                    type="button"
-                    data-testid="stage-paperwork-change"
-                    className="config-secondary-btn config-secondary-btn--sm shrink-0"
-                    disabled={busy}
-                    onClick={() => setChoosing((v) => !v)}
-                >
-                    {choosing ? "Cancel" : required.length ? "Change paperwork" : "Choose paperwork"}
-                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                    {packetRequirement ? (
+                        <button
+                            type="button"
+                            data-testid="stage-paperwork-manage"
+                            className="config-secondary-btn config-secondary-btn--sm"
+                            disabled={busy}
+                            onClick={() => onManagePacket?.(packetRequirement.ref.packet_definition_id, packetName)}
+                        >
+                            Manage
+                        </button>
+                    ) : null}
+                    <button
+                        type="button"
+                        data-testid="stage-paperwork-change"
+                        className="config-secondary-btn config-secondary-btn--sm"
+                        disabled={busy}
+                        onClick={() => setChoosing((v) => !v)}
+                    >
+                        {choosing ? "Cancel" : packetRequirement || required.length ? "Change paperwork" : "Choose paperwork"}
+                    </button>
+                </div>
             </div>
 
             {choosing ? (
