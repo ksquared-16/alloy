@@ -26,6 +26,10 @@
  * `node ../certification/playwright/fixtures/access-personas.mjs setup` from `web/` first.
  */
 import { test, expect, type Page, type BrowserContext, type Browser } from "@playwright/test";
+import path from "node:path";
+
+/** The session `auth.setup.ts` captured — resolved from this file, not from the invoking cwd. */
+const OPERATOR_STATE = path.join(__dirname, "..", ".auth", "operator.json");
 
 const ACCESS = "/organization/access";
 const ROLES = `${ACCESS}?section=roles`;
@@ -210,7 +214,7 @@ test.describe("D2 — access change audit, mounted", () => {
     // PHASE 18 — cold reload. History is reconstructed from the server, not remembered.
     // ─────────────────────────────────────────────────────────────────────────
     test("a cold reload rebuilds history and the current access from the server", async ({ browser }) => {
-        const fresh = await browser.newContext({ storageState: "certification/.auth/operator.json" });
+        const fresh = await browser.newContext({ storageState: OPERATOR_STATE });
         const page = await fresh.newPage();
         await openRole(page, ROLE_KEY);
 

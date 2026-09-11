@@ -18,12 +18,20 @@
  */
 import { test, expect, type APIRequestContext, type Browser } from "@playwright/test";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
-const require_ = createRequire(`${process.cwd()}/web/package.json`);
+/*
+ * Resolved from THIS FILE, not from the invoking cwd. `certification/` carries no `node_modules` —
+ * it is a sibling of the app package, not a package — so the resolver is anchored to the app's own
+ * manifest, the same way the persona fixture does it. A spec that only runs from one directory is a
+ * spec that stops running.
+ */
+const webDir = path.join(__dirname, "..", "..", "web");
+const require_ = createRequire(path.join(webDir, "package.json"));
 const { createClient } = require_("@supabase/supabase-js");
-const { readFileSync } = require_("node:fs");
 
-const envText = readFileSync(`${process.cwd()}/web/.env.certification.local`, "utf8");
+const envText = readFileSync(path.join(webDir, ".env.certification.local"), "utf8");
 const readEnv = (k: string) =>
     envText.split("\n").find((l: string) => l.startsWith(`${k}=`))?.slice(k.length + 1).trim() ?? "";
 const sb = createClient(
@@ -100,7 +108,7 @@ test.describe("D2 — access audit boundaries", () => {
         const operatorId = await userIdFor(OPERATOR);
         const before = await eventsFor(ROLE_KEY);
 
-        const res = await operator.request.post(`/api/admin/rbac/roles/${ROLE_KEY}`, {
+        const res = await operator.request.patch(`/api/admin/rbac/roles/${ROLE_KEY}`, {
             data: { permission_keys: ["fin.read", "fin.write"] },
         });
         expect(res.status(), await res.text()).toBeLessThan(400);
@@ -128,7 +136,7 @@ test.describe("D2 — access audit boundaries", () => {
         const operator = await sessionFor(browser, OPERATOR);
         const operatorId = await userIdFor(OPERATOR);
 
-        const res = await operator.request.post(`/api/admin/rbac/roles/${ROLE_KEY}`, {
+        const res = await operator.request.patch(`/api/admin/rbac/roles/${ROLE_KEY}`, {
             headers: { "x-alloy-origin": "system", "user-agent": "automation/1.0" },
             data: { permission_keys: ["fin.read"], origin: "system", audit_origin: "automation" },
         });
@@ -149,7 +157,7 @@ test.describe("D2 — access audit boundaries", () => {
         const operatorId = await userIdFor(OPERATOR);
         const victimId = await userIdFor(FIN_VIEWER);
 
-        const res = await operator.request.post(`/api/admin/rbac/roles/${ROLE_KEY}`, {
+        const res = await operator.request.patch(`/api/admin/rbac/roles/${ROLE_KEY}`, {
             data: {
                 permission_keys: ["fin.read", "fin.adjust"],
                 // Every shape a client might try to name its own author.
@@ -174,6 +182,39 @@ test.describe("D2 — access audit boundaries", () => {
         await operator.close();
     });
 
+    test("renaming and deactivating a role is audited, and leaves the package alone", async ({ browser }) => {
+        /*
+         * THE BRANCH THE EDITOR NEVER TAKES. The role editor always submits `permission_keys`, so a
+         * metadata-only save is reachable only from the API — which is precisely how it changed access
+         * with no event at all until the producer coverage scan found it. Deactivating a role removes
+         * every capability it carries from everyone holding it; it is the most consequential mutation
+         * on this route, and it was the unaudited one.
+         */
+        const operator = await sessionFor(browser, OPERATOR);
+        const operatorId = await userIdFor(OPERATOR);
+        const before = await eventsFor(ROLE_KEY);
+
+        const renamed = await operator.request.patch(`/api/admin/rbac/roles/${ROLE_KEY}`, {
+            data: { role_label: `Financials viewer ${Date.now().toString(36)}` },
+        });
+        expect(renamed.status(), await renamed.text()).toBeLessThan(400);
+
+        const after = await eventsFor(ROLE_KEY);
+        const updates = after.filter((e) => e.command_key === "access.role.updated");
+        expect(updates.length, "renaming a role is an access change and must be recorded").toBeGreaterThan(
+            before.filter((e) => e.command_key === "access.role.updated").length
+        );
+        expect(updates[0]!.operator_id).toBe(operatorId);
+
+        // And the package is untouched: absent keys mean "not edited", never "revoke everything".
+        const { data: grants } = await sb
+            .from("role_permission_grants").select("permission_key")
+            .eq("org_id", ORG).eq("role_key", ROLE_KEY).eq("allowed", true);
+        expect((grants ?? []).length, "a metadata-only save must not strip the role's package").toBeGreaterThan(0);
+
+        await operator.close();
+    });
+
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 13 — reading history requires the authority to change access.
     // ─────────────────────────────────────────────────────────────────────────
@@ -187,7 +228,7 @@ test.describe("D2 — access audit boundaries", () => {
             `/api/admin/access/history?role=${ROLE_KEY}`,
         ]) {
             const res = await outsider.request.get(url);
-            expect(res.status(), `${url} must be refused`).toBeGreaterThanOrEqual(400);
+            expect([401, 403], `${url} must be refused on authority, not on shape`).toContain(res.status());
 
             const body = await res.text();
             // Not one actor, role, capability or scope may leak through the refusal itself.
@@ -244,7 +285,7 @@ test.describe("D2 — access audit boundaries", () => {
         const before = await countAccessEvents(OTHER_ORG);
 
         // A role key that exists only in the other tenant, addressed by this tenant's administrator.
-        const res = await operator.request.post("/api/admin/rbac/roles/admin", {
+        const res = await operator.request.patch("/api/admin/rbac/roles/admin", {
             data: { permission_keys: ["fin.read"], org_id: OTHER_ORG, orgId: OTHER_ORG },
         });
 
@@ -272,15 +313,21 @@ test.describe("D2 — access audit boundaries", () => {
         const climberId = await userIdFor(FIN_VIEWER);
         const before = await countAccessEvents(ORG);
 
-        const attempts: [string, Record<string, unknown>][] = [
-            [`/api/admin/rbac/roles/${ROLE_KEY}`, { permission_keys: ["fin.read", "portal.access", "settings.users_roles"] }],
-            ["/api/admin/rbac/grants", { role_key: ROLE_KEY, permission_keys: ["portal.access"] }],
-            [`/api/admin/users/${climberId}/role`, { role: "admin" }],
+        const attempts: [("patch" | "put"), string, Record<string, unknown>][] = [
+            ["patch", `/api/admin/rbac/roles/${ROLE_KEY}`, { permission_keys: ["fin.read", "portal.access", "settings.users_roles"] }],
+            ["put", `/api/admin/rbac/grants?role_key=${ROLE_KEY}`, { permission_keys: ["portal.access"] }],
+            ["patch", `/api/admin/users/${climberId}/role`, { role: "admin" }],
         ];
 
-        for (const [url, data] of attempts) {
-            const res = await climber.request.post(url, { data });
-            expect(res.status(), `${url} must refuse a principal who cannot administer access`).toBeGreaterThanOrEqual(400);
+        for (const [method, url, data] of attempts) {
+            const res = method === "put" ? await climber.request.put(url, { data }) : await climber.request.patch(url, { data });
+            /*
+             * 401 or 403 SPECIFICALLY, not "any 4xx". A malformed-body 400 would satisfy a loose
+             * assertion while proving nothing about authorization — and every one of these routes
+             * runs its gate BEFORE it parses a body, so an authorization refusal is what a
+             * well-formed attempt gets.
+             */
+            expect([401, 403], `${method.toUpperCase()} ${url} must REFUSE, not merely reject`).toContain(res.status());
         }
 
         // No grant, and — just as important — no SUCCESS event for a change that did not happen.
@@ -303,7 +350,7 @@ test.describe("D2 — access audit boundaries", () => {
     // ─────────────────────────────────────────────────────────────────────────
     test("puts the controlled role back", async ({ browser }) => {
         const operator = await sessionFor(browser, OPERATOR);
-        const res = await operator.request.post(`/api/admin/rbac/roles/${ROLE_KEY}`, {
+        const res = await operator.request.patch(`/api/admin/rbac/roles/${ROLE_KEY}`, {
             data: { permission_keys: ["fin.read"] },
         });
         expect(res.status()).toBeLessThan(400);
