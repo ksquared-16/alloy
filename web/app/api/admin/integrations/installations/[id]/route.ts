@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireIntegrationsAccess } from "../../_guard";
 import { withAdministrativeAudit } from "@/lib/platform/admin/administrativeAudit";
-import { getInstallation, presentScopes } from "@/lib/platform/admin/integrationsService";
+import { getInstallation, presentScopes, scopesIntroducedBeyondCatalog } from "@/lib/platform/admin/integrationsService";
 import { allPublicScopes } from "@/lib/platform/external/scopeCatalog";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -63,13 +63,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     if (Array.isArray(body.grantedScopes)) {
-        // Unknown scopes fail safe: a scope the catalog does not define is refused
-        // rather than stored, because stored is the thing a future reader trusts.
+        /*
+         * Unknown scopes fail safe: a scope the catalog does not define is refused
+         * rather than stored, because stored is the thing a future reader trusts.
+         *
+         * But only a scope being ADDED. One this installation already holds is
+         * grandfathered, because the editor deliberately shows it and keeps it
+         * selected so that saving an unrelated change cannot revoke it by
+         * omission. Refusing it here would contradict that: an installation
+         * holding a scope this version no longer defines could never be edited at
+         * all -- not its capabilities, not its locations -- and the only way to
+         * make it editable would be to silently drop the very grant the editor
+         * was careful to preserve.
+         */
         const known = new Set(allPublicScopes().map((d) => d.scope));
-        const unknown = body.grantedScopes.filter((s) => !known.has(s));
-        if (unknown.length > 0) {
+        const introduced = scopesIntroducedBeyondCatalog(body.grantedScopes, owned.installation.grantedScopes, known);
+        if (introduced.length > 0) {
             return NextResponse.json(
-                { error: `Not offered by this version of Alloy: ${unknown.join(", ")}` },
+                { error: `Not offered by this version of Alloy: ${introduced.join(", ")}` },
                 { status: 400 },
             );
         }

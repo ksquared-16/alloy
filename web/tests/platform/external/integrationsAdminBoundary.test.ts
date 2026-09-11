@@ -16,7 +16,7 @@ import {
 } from "@/lib/platform/admin/integrationsAdminAuth";
 import { allPublicScopes } from "@/lib/platform/external/scopeCatalog";
 import { presentScopes } from "@/lib/platform/external/scopePresentation";
-import { installationStateOf } from "@/lib/platform/admin/integrationsService";
+import { installationStateOf, scopesIntroducedBeyondCatalog } from "@/lib/platform/admin/integrationsService";
 
 /** Everything Gate 2 calls a sensitive operation. */
 const MUST_REQUIRE_MANAGE = [
@@ -84,6 +84,37 @@ describe("capabilities come from the catalog, and unknown fails safe", () => {
         const [p] = presentScopes(["attendance.write"]);
         expect(p.recognised).toBe(true);
         expect(p.access).toBe("write");
+    });
+});
+
+describe("editing an installation that holds a scope this Alloy no longer defines", () => {
+    const known = new Set(allPublicScopes().map((d) => d.scope));
+    const HELD_UNKNOWN = "legacy.read";
+
+    it("refuses an unknown scope that the change is ADDING", () => {
+        expect(scopesIntroducedBeyondCatalog(["billing.write"], [], known)).toEqual(["billing.write"]);
+    });
+
+    it("allows an unknown scope the installation ALREADY holds", () => {
+        // The editor shows this scope and keeps it selected so an unrelated save
+        // cannot revoke it by omission. Refusing it here would make the
+        // installation uneditable and force exactly that silent revocation.
+        expect(scopesIntroducedBeyondCatalog([HELD_UNKNOWN], [HELD_UNKNOWN], known)).toEqual([]);
+    });
+
+    it("lets a capability change be saved while the held unknown scope rides along", () => {
+        const requested = [HELD_UNKNOWN, "locations.read"];
+        expect(scopesIntroducedBeyondCatalog(requested, [HELD_UNKNOWN, "children.read"], known)).toEqual([]);
+    });
+
+    it("still refuses a NEW unknown scope smuggled in beside a held one", () => {
+        const requested = [HELD_UNKNOWN, "billing.write"];
+        expect(scopesIntroducedBeyondCatalog(requested, [HELD_UNKNOWN], known)).toEqual(["billing.write"]);
+    });
+
+    it("removing the held unknown scope remains possible", () => {
+        // Grandfathering keeps it editable; it does not make it permanent.
+        expect(scopesIntroducedBeyondCatalog(["locations.read"], [HELD_UNKNOWN], known)).toEqual([]);
     });
 });
 

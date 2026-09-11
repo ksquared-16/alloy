@@ -342,7 +342,7 @@ function SecretReveal({ revealed, onDismiss }: { revealed: Revealed; onDismiss: 
                 lost, rotate the credential to issue a new one.
             </p>
             {revealed.clientId && (
-                <p className="mt-2 text-xs"><span className="opacity-70">Client ID: </span>{revealed.clientId}</p>
+                <p className="mt-2 text-xs" data-testid="credential-client-id"><span className="opacity-70">Client ID: </span><span data-testid="credential-client-id-value">{revealed.clientId}</span></p>
             )}
             <code className="mt-2 block break-all rounded bg-black/5 p-2 text-xs" data-testid="credential-secret-value">
                 {revealed.secret}

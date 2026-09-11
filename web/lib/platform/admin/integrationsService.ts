@@ -35,6 +35,31 @@ export function installationStateOf(row: {
     return "active";
 }
 
+/**
+ * The scopes a change would INTRODUCE that this Alloy does not define.
+ *
+ * An unknown scope must never be stored on the strength of a request, because
+ * stored is what a future reader trusts. But "unknown" and "new" are different
+ * questions, and only the second one is a refusal.
+ *
+ * An installation can already hold a scope this version no longer defines --
+ * the catalog shrank, or the row predates it. The capability editor shows that
+ * scope and keeps it selected on purpose, so that saving an unrelated change
+ * cannot revoke it by omission. If the write path then refused every unknown
+ * scope it was sent, that installation could never be edited at all, and the
+ * only way to make it editable would be to drop the grant the editor was
+ * careful to preserve. So a held scope is grandfathered and only an addition
+ * is refused.
+ */
+export function scopesIntroducedBeyondCatalog(
+    requested: readonly string[],
+    held: readonly string[],
+    known: ReadonlySet<string>,
+): string[] {
+    const alreadyHeld = new Set(held);
+    return requested.filter((s) => !known.has(s) && !alreadyHeld.has(s));
+}
+
 export type CredentialSummary = {
     id: string;
     /** Never a hash, never a secret. */
