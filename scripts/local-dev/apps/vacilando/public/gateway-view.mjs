@@ -1713,6 +1713,84 @@ export function laneAwaitingOperatorApproval(lane) {
  * Each row leads with the NAME of the work and carries its own controls, so a
  * decision costs one tap from wherever the operator already is.
  */
+/**
+ * THE STATE OF A DECISION THE OPERATOR HAS ALREADY MADE.
+ *
+ * THE DEFECT. The click handler disabled the pressed button directly on the DOM
+ * node and then awaited the POST. Every repaint — a poll tick, an SSE frame, a
+ * lane refresh — rebuilds this markup from the template, and the template has no
+ * notion of a decision in flight, so the button came back ENABLED underneath a
+ * request that was still running. The operator, who had been shown nothing to
+ * say their press had landed, pressed it again.
+ *
+ * MEASURED over the 23 days to 2026-09-11: 111 duplicate approval events across
+ * 20 requests. The worst single request was approved 30 times in about 45
+ * minutes, at intervals from 1 second to 10 minutes — the signature of someone
+ * with no feedback, not someone changing their mind.
+ *
+ * WHY THE STATE LIVES HERE. It is transient per-control interaction state, not
+ * server truth, and the view is the only layer that survives every repaint AND
+ * is reachable from the handler. Threading it through renderGatewayShell would
+ * put a decision the operator made two frames ago behind five layers of props.
+ * The server remains authoritative: this only ever governs what the CONTROL
+ * looks like between the press and the state that follows it.
+ */
+const governedDecisionState = new Map();
+
+export function setGovernedDecisionState(requestId, state, { error = null, label = null } = {}) {
+  if (!requestId) return;
+  if (!state) { governedDecisionState.delete(requestId); return; }
+  governedDecisionState.set(requestId, { state, error, label, at: Date.now() });
+}
+
+export function governedDecisionStateFor(requestId) {
+  return (requestId && governedDecisionState.get(requestId)) || null;
+}
+
+export function clearGovernedDecisionState(requestId) {
+  if (requestId) governedDecisionState.delete(requestId);
+}
+
+/**
+ * The approve/deny controls, in whichever of the four states this decision is.
+ *
+ * READY → SUBMITTING → SETTLED, or READY → SUBMITTING → FAILED, with retry
+ * explicit. There is no fifth state and in particular no indefinite spinner:
+ * a failure says what happened and offers the press again, because "press it
+ * again just in case" is the behaviour this exists to end.
+ */
+export function renderGovernedDecisionControls(ga, { size = "sm" } = {}) {
+  const rid = esc(ga?.request_id || "");
+  const fp = esc(ga?.content_fingerprint || "");
+  const cls = size === "sm" ? "btn sm" : "btn";
+  const decision = governedDecisionStateFor(ga?.request_id || "");
+  if (decision?.state === "submitting") {
+    return `<span class="gw-approval-pending" role="status" aria-live="polite">
+      <button type="button" class="${cls} primary" data-gw-governed-approve data-request-id="${rid}" disabled aria-disabled="true">Approving…</button>
+      <button type="button" class="${cls}" disabled aria-disabled="true">${esc(ga?.deny_label || "Deny")}</button>
+    </span>`;
+  }
+  if (decision?.state === "denying") {
+    return `<span class="gw-approval-pending" role="status" aria-live="polite">
+      <button type="button" class="${cls} primary" disabled aria-disabled="true">${esc(ga?.approve_label || "Approve")}</button>
+      <button type="button" class="${cls}" disabled aria-disabled="true">Denying…</button>
+    </span>`;
+  }
+  if (decision?.state === "settled") {
+    // Deliberately still a control-shaped element rather than nothing: the row
+    // vanishes on the next refresh, and a gap appearing where the button was
+    // reads as "it disappeared" rather than "it was accepted".
+    return `<span class="gw-approval-settled" role="status" aria-live="polite">
+      <button type="button" class="${cls} primary" disabled aria-disabled="true">${esc(decision.label || "Accepted")}</button>
+    </span>`;
+  }
+  const failure = decision?.state === "failed"
+    ? `<p class="gw-approval-failed" role="alert">${esc(decision.error || "That did not go through.")}</p>`
+    : "";
+  return `${failure}<button type="button" class="${cls} primary" data-gw-governed-approve data-request-id="${rid}" data-content-fingerprint="${fp}">${esc(decision?.state === "failed" ? "Try again" : (ga?.approve_label || "Approve"))}</button>
+      <button type="button" class="${cls}" data-gw-governed-deny data-request-id="${rid}" data-content-fingerprint="${fp}">${esc(ga?.deny_label || "Deny")}</button>`;
+}
+
 export function renderPendingApprovalsBar(approvals) {
   const rows = Array.isArray(approvals) ? approvals.filter(Boolean) : [];
   if (!rows.length) return "";
@@ -1732,8 +1810,7 @@ export function renderPendingApprovalsBar(approvals) {
           ${ga.purpose ? `<p class="gw-approval-row-why">${esc(ga.purpose)}</p>` : ""}
         </div>
         <div class="gw-approval-row-actions">
-          <button type="button" class="btn sm primary" data-gw-governed-approve data-request-id="${rid}" data-content-fingerprint="${fp}">${esc(ga.approve_label || "Approve")}</button>
-          <button type="button" class="btn sm" data-gw-governed-deny data-request-id="${rid}" data-content-fingerprint="${fp}">${esc(ga.deny_label || "Deny")}</button>
+          ${renderGovernedDecisionControls(ga)}
         </div>
         <p class="gw-approval-row-ref" title="Diagnostic identifier — not the name of the work">Request ${rid}</p>
       </article>`;
@@ -1767,8 +1844,7 @@ export function renderLaneApprovalCard(lane, ga) {
     <p class="gw-runtime-d"><strong>Why this needs you.</strong> ${esc(ga?.escalation_reason || why)}</p>
     <p class="gw-runtime-d"><strong>Effect.</strong> ${esc(effect)}</p>
     <div class="gw-runtime-actions gw-approval-actions">
-      <button type="button" class="btn sm primary" data-gw-governed-approve data-request-id="${rid}" data-content-fingerprint="${fingerprint}">${esc(ga?.approve_label || "Approve")}</button>
-      <button type="button" class="btn sm" data-gw-governed-deny data-request-id="${rid}" data-content-fingerprint="${fingerprint}">${esc(ga?.deny_label || "Deny")}</button>
+      ${renderGovernedDecisionControls({ ...(ga || {}), content_fingerprint: fingerprint })}
     </div>
     <p class="gw-approval-ref" title="Diagnostic identifier — not the name of the work">Request ${rid}</p>
   </aside>`;
@@ -2720,8 +2796,7 @@ export function renderOperatorDecisionActions(run, { activity = null } = {}) {
       <p class="gw-work-stale-copy">${esc(ga.detail || ga.mission_need || `Read-only database census · Target: ${ga.target || "alloy_deployed_primary"} · Data mode: Read-only`)}</p>
       ${proposal}
       <div class="gw-work-stale-actions">
-        <button type="button" class="btn primary" data-gw-governed-approve data-request-id="${esc(ga.request_id || "")}">${esc(ga.approve_label || "Authorize census")}</button>
-        <button type="button" class="btn" data-gw-governed-deny data-request-id="${esc(ga.request_id || "")}">${esc(ga.deny_label || "Deny")}</button>
+        ${renderGovernedDecisionControls(ga, { size: "md" })}
       </div>
     </div>`;
   }
@@ -2893,6 +2968,25 @@ export function governedDecisionNotice({
       : actionKey === "database.read_census" ? "Census"
       : (title || "Action"));
   return { kind: "ok", text: `${what} authorized. Director is executing.` };
+}
+
+/**
+ * The failure, said next to the control that failed.
+ *
+ * `governedDecisionNotice` speaks to the top of the page; this speaks in the
+ * card the operator is looking at, which is where a failed decision has to be
+ * visible if "press it again just in case" is ever going to stop being the
+ * rational response. Same vocabulary, deliberately, so the two never disagree.
+ */
+export function governedDecisionFailureCopy(error) {
+  const notice = governedDecisionNotice({ error: error || "approve_failed" });
+  if (error === "governed_action_terminal") {
+    return "This already finished — refreshing to show what happened.";
+  }
+  if (error === "stale_content_fingerprint" || error === "content_moved") {
+    return "The request changed since this card was drawn. Read it again before deciding.";
+  }
+  return notice.text;
 }
 
 export function renderOperatorDecisionBar(run, extras = {}) {
