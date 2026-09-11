@@ -247,3 +247,38 @@ ref.
 not execute within a few minutes has usually *failed*, and elapsed time proves
 nothing. Read `requests.json`. And before any governed action naming an
 `expectedSha`, push the branch so the SHA is reachable.
+
+### Migration attempt 5 — validation finally passed, the apply did not
+
+`gar_12a5c207cdcf6e` is the first request to get past validation. Its state
+progression was `requested → awaiting_operator → failed`, where the three before
+it failed immediately on input or source checks.
+
+| Field | Value |
+|---|---|
+| `status` | `failed` |
+| `failure_code` | `execution_failed` |
+| `failure_reason` | `apply_failed` |
+
+So the two defects previously diagnosed are genuinely fixed — the SHA was
+reachable, the object-shaped migration items resolved, the environment was
+accepted, and the collision was gone. What failed is the **apply step itself**,
+and the record carries no SQL-level detail. No `tha_` artifact was produced.
+
+**Verified after the failure, not inferred:**
+
+- **No partial apply.** All eight Developer Platform tables still 404.
+- **No damage.** `attendance_integration_producers`,
+  `attendance_integration_mappings` and `child_attendance_events` all 200.
+
+**One incidental finding worth keeping:** the audit's `failed_notified` event
+carries `error: provider_prompt_not_ready`. That is the *notification* path
+failing, not the apply — and it is a plausible explanation for why several of
+these governed failures never reached the lane as notifications, which is the
+silent-failure trap already recorded above. Reading `requests.json` remains the
+reliable way to know.
+
+**What is now unknown and needs operator-side visibility:** why the apply failed.
+The lane can see that it failed but not the SQL error, and diagnosing further
+would mean applying the migrations by hand against a shared stack — which is the
+thing the governed action exists to prevent.
