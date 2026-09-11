@@ -36,6 +36,7 @@ import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financia
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { HOUSEHOLD_IDENTITY_TRUTH_KEYS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -83,6 +84,22 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     const scope = context.participantScope ?? null;
     const scopedMemberId = scope?.customerMemberId ?? null;
     const customerId = householdIdFrom(context);
+    /*
+     * ── "NOT YET" IS NOT "NEVER" ────────────────────────────────────────────────────────────────
+     *
+     * The card had one way of having no subject, and said the same terminal sentence for both of
+     * them: "No financial record." One is a household whose account genuinely cannot be resolved.
+     * The other is the ordinary window while the panel's own truth is still composing — during which
+     * the card holds no id, is not loading anything (there is nothing to load yet), and therefore
+     * printed a verdict about an account it had not looked for.
+     *
+     * The context already answers this: `status` is `composing` until the subject is settled. So the
+     * card asks the question it actually means — is the subject resolved yet — instead of inferring
+     * it from the absence of an id.
+     */
+    const subjectStillResolving = context.status === "composing";
+    /** Settled, and there is no account to ask about — the only state that may speak terminally. */
+    const noFinancialSubject = !subjectStillResolving && !customerId && !scopedMemberId;
 
     const [vm, setVm] = useState<FinancialsCardVM | null>(null);
     const [loading, setLoading] = useState(false);
@@ -1588,8 +1605,28 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 footerAction={null}
             >
                 {!vm ? (
-                    <p className="alloy-os-financials__empty" data-financials-empty="loading">
-                        {loading ? "Loading the account…" : "No financial record."}
+                    <p
+                        className="alloy-os-financials__empty"
+                        data-financials-empty={
+                            loading || subjectStillResolving
+                                ? "loading"
+                                : noFinancialSubject
+                                  ? "no-subject"
+                                  : "no-account"
+                        }
+                    >
+                        {/*
+                         * THREE STATES, AND ONLY ONE OF THEM IS TERMINAL.
+                         *
+                         * "No financial record" was wrong in every case it was shown. It reads as a
+                         * statement about the FAMILY — that they have no financial history — and
+                         * having no financial activity is a perfectly ordinary, fully supported
+                         * state that renders as $0.00 with Add charge available. What the card
+                         * actually meant was that it could not resolve an account to ask about.
+                         */}
+                        {loading || subjectStillResolving
+                            ? "Loading the account…"
+                            : "Financial account unavailable"}
                     </p>
                 ) : (
                     <>
@@ -2041,9 +2078,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
  * so this reads them in order of authority rather than assuming one. Returning null is ordinary — a
  * panel with no household simply has no account.
  */
+/**
+ * THE ACCOUNT THIS CARD IS ABOUT — read through the registry's own key list, not a copy of it.
+ *
+ * These four keys were written out twice: once in `HOUSEHOLD_IDENTITY_TRUTH_KEYS`, which decides
+ * whether Financials may MOUNT at all, and once here, which decides what it then ASKS ABOUT. The
+ * registry's own comment names the hazard exactly — "admitting on one key and reading another is how
+ * a card mounts and then sits still" — and then two literal lists were left to drift into it.
+ *
+ * They agree today. That is not a property anyone maintains; it is a coincidence that survives until
+ * somebody teaches one surface about a new identity shape. Importing the constant makes mounting and
+ * reading the same decision, which is what the comment was asking for.
+ */
 function householdIdFrom(context: OperationalContext): string | null {
     const truth = context.truth as Record<string, unknown>;
-    for (const key of ["customer.id", "household.id", "child.family_customer_id", "customer_id"]) {
+    for (const key of HOUSEHOLD_IDENTITY_TRUTH_KEYS) {
         const value = truth[key];
         const s = value != null ? String(value).trim() : "";
         if (s) return s;
