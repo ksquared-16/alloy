@@ -179,48 +179,54 @@
  * The approved specimen sizes each action to its own label and right-aligns the set. Overriding the
  * inherited grid here rather than in the platform rule keeps What's Next unchanged; wrapping rather
  * than scrolling means a fifth action costs a line, never a truncated word.
+ *
+ * That last sentence was true of this comment and false of the rule beneath it for a while — the
+ * rule had been changed to scroll without the paragraph following. It wraps again now, and the
+ * rule below says why.
  */
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row {
   display: flex;
   /*
-   * ONE ROW, ALWAYS.
+   * THE ROW WRAPS. IT DOES NOT SCROLL.
    *
-   * Wrapping was the earlier answer — "a fifth action costs a line, never a truncated word" — and
-   * it costs something the line did not buy: the command row stops reading as one rail. With three
-   * commands in the work band's `minmax(300px, 0.9fr)` column, Send form dropped beneath Tour and
-   * Add family member and read as a separate, lesser group.
+   * This replaces a deliberate "ONE ROW, ALWAYS" rule, so the reason it lost is worth recording.
+   * That rule set `flex-wrap: nowrap` with `overflow-x: auto` and a hidden scrollbar, reasoning that
+   * a wrapped command reads as a separate, lesser group. What it produced instead was a command
+   * cut off at the card edge with nothing to indicate it existed: measured on a deployed Waitlist
+   * card, `scrollWidth 409` against `clientWidth 300`, so 109px of the set — the whole of "Send
+   * form" — sat outside the visible box. A five-command card was worse, at 518 against 300.
    *
-   * The set stays on one line and keeps whole labels. When the row genuinely cannot fit its
-   * commands it scrolls along that line rather than folding: a command may be out of view and
-   * reachable, never restacked into a second row that changes what the set looks like.
+   * A horizontal rail is only honest when the operator can tell it scrolls. With `scrollbar-width:
+   * none` there was no such signal, and on a card this narrow the set will exceed the column
+   * routinely rather than exceptionally — every one of six cards sampled across four work units was
+   * clipped. So the failure was not an edge case being handled ungracefully; it was the normal case.
+   *
+   * Wrapping costs vertical space the card can afford and keeps every configured command reachable
+   * without a gesture nobody is prompted to make.
    */
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   /*
-   * `safe` IS LOAD-BEARING, NOT DECORATION.
+   * `safe` IS STILL LOAD-BEARING.
    *
-   * Plain `flex-end` aligns the set to the right, and when the set is wider than the column the
-   * overflow goes past the START edge. Leftward overflow in a left-to-right row is not scrollable
-   * -- the browser does not count it in `scrollWidth`, so `overflow-x: auto` never produces a
-   * scroll position that can reach it. Measured on a Work Unit: the row's box was x=910..1237 while
-   * "Contact Family" rendered at x=719, entirely outside its own container, with
-   * `scrollWidth === clientWidth`. The PRIMARY command was invisible and unreachable at every
-   * viewport width, which is the exact opposite of what the paragraph above promises.
-   *
-   * `safe flex-end` keeps the right alignment whenever the set fits and falls back to start
-   * alignment only when it would otherwise overflow the unreachable end, so the overflow lands on
-   * the scrollable side and the promise holds. The unprefixed declaration stays first as the
-   * fallback for engines that do not parse the keyword.
+   * Plain `flex-end` pushes overflow past the START edge, which is unreachable in a left-to-right
+   * row. Wrapping makes that far less likely, but a single command wider than the column can still
+   * do it, so the guard stays: `safe flex-end` keeps the right alignment whenever the line fits and
+   * falls back to start alignment when it would otherwise overflow the unreachable end. The
+   * unprefixed declaration stays first as the fallback for engines that do not parse the keyword.
    */
   justify-content: flex-end;
   justify-content: safe flex-end;
   grid-template-columns: none;
-  overflow-x: auto;
-  /* The row is a rail, not a scroll region to look at — no gutter, no chained scrolling. */
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-}
-.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row::-webkit-scrollbar {
-  display: none;
+  /*
+   * Wrapped lines need their own rhythm. `row-gap` is set explicitly rather than inherited so a
+   * second line sits clear of the first instead of touching it.
+   */
+  row-gap: 6px;
+  /*
+   * No `overflow-x`. A row that wraps has nothing to scroll, and leaving `auto` here would let a
+   * single over-wide command re-introduce a silent hidden region.
+   */
+  overflow-x: visible;
 }
 
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action,
@@ -228,8 +234,23 @@
 .alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > [data-work-tour-grouped="true"] {
   width: auto;
   min-width: 0;
-  /* Keep its own label whole; never absorb a neighbour's overflow by shrinking to nothing. */
+  /*
+   * Size to content, and never shrink. `0 0 auto` is what keeps a command's own label whole instead
+   * of absorbing a neighbour's overflow — the behaviour that produced "hange lead locatio". A
+   * command too wide for the line now takes a line of its own rather than being compressed.
+   */
   flex: 0 0 auto;
+  /*
+   * THE LAST RESORT, AND ONLY THAT.
+   *
+   * A single command whose label is wider than the entire card cannot be made to fit by wrapping,
+   * and it must still not render outside the card. `max-width: 100%` bounds it to the container and
+   * the ellipsis is what that bound costs. This engages only when one label exceeds the whole row,
+   * which no configured command does today; every ordinary set wraps with its labels intact.
+   */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   /* One line per action. A wrapped label reads as two actions on a rail of many. */
   white-space: nowrap;
 }
