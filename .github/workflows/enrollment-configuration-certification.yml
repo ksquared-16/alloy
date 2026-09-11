@@ -143,4 +143,11 @@ jobs:
             tests/forms/pdf/fidelityEngine.test.ts \
             tests/forms/pdf/fidelityMappingVertical.test.ts \
             tests/lifecycle/outcomeBehaviorRoundTrip.test.ts \
-            tests/lifecycle/childGrainOutcomeAuthoring.test.ts
+            tests/lifecycle/childGrainOutcomeAuthoring.test.ts \
+            tests/lifecycle/stageEntryWorkForWaitlist.test.ts \
+            tests/admin/enrollmentStatus/placementWaitlistingConvergesOnProcessMembership.test.ts \
+            tests/admin/enrollmentStatus/enrollmentStatusTransitionOutcomeEffects.test.ts \
+            tests/adminV2/runtime/childStageAuthorityIsTheProcessInstance.test.ts \
+            tests/adminV2/runtime/processStageAuthority.test.ts \
+            tests/adminV2/viewModel/lifecycleRailStageIsNotTheLens.test.ts \
+            tests/runtime/childGrainSurfaceComposition.test.ts

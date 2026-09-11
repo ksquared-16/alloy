@@ -25,6 +25,30 @@ import {
     getPlatformWorkDefinition,
     PLATFORM_DEFAULT_WORK_DEFINITION_STAGE_BINDINGS,
 } from "@/lib/admin/operationalWork/platformWorkDefinitionCatalog";
+import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+import { resolveDestinationStageEntryTemplates } from "@/lib/lifecycle/spawnDestinationStageEntryWork";
+import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    ENROLLMENT_DEFAULT_TRACKS,
+    buildEnrollmentTemplateStageRecords,
+} from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
+
+/** The department metadata the platform's own Enrollment template produces. */
+function enrollmentDepartmentMetadata(): Record<string, unknown> {
+    const process: LifecycleBuilderProcessRecord = {
+        id: "proc-1",
+        key: "enrollment",
+        name: "Enrollment",
+        primary_entity: "opportunity",
+        is_active: true,
+        sort_order: 0,
+        tracks_v1: ENROLLMENT_DEFAULT_TRACKS,
+        stages: buildEnrollmentTemplateStageRecords(),
+    };
+    return {
+        lifecycle_builder_v1: { version: 1 as const, active_process_id: "proc-1", processes: [process] },
+    };
+}
 
 /** The Waitlist shape: two optional templates, the first marked primary. */
 const WAITLIST_TEMPLATES: StageWorkTemplateV1[] = [
@@ -80,6 +104,28 @@ describe("Waitlist entry resolves an entry work template", () => {
 
     it("a genuinely workless stage resolves nothing rather than inventing work", () => {
         expect(resolveEffectivePrimaryWorkTemplate({ work_templates: [] })).toBeNull();
+    });
+
+    /**
+     * THE SHIPPED PLAN, NOT THE FIXTURE.
+     *
+     * The fixture above marks `review_waitlist_position` primary; the plan the platform actually
+     * ships marks NEITHER template primary or required, so the right answer there depends entirely
+     * on the order-fallback. Asserting against the fixture alone would keep passing if the shipped
+     * plan's template order were ever reversed — and that reversal would make entering Waitlist open
+     * `offer_spot` automatically, which is the one thing the offer flow must not do.
+     */
+    it("resolves review_waitlist_position from the SHIPPED Waitlist plan, and never offer_spot", () => {
+        const plan = defaultStageOperatingPlanForEnrollmentStage("waitlist");
+        expect(plan).toBeTruthy();
+        expect(plan!.work_templates.map((t) => t.template_key)).toContain("offer_spot");
+
+        const entry = resolveDestinationStageEntryTemplates({
+            departmentMetadata: enrollmentDepartmentMetadata(),
+            destinationStageKey: "waitlist",
+        });
+        // Exactly ONE entry template, and it is the review — offer spot stays operator-initiated.
+        expect(entry.templates.map((t) => t.template_key)).toEqual(["review_waitlist_position"]);
     });
 });
 
