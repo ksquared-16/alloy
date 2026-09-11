@@ -14,6 +14,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { CapabilityEditor, LocationAccessEditor } from "./AccessEditor";
+
 type Capability = { scope: string; title: string; detail: string; access: "read" | "write"; recognised: boolean };
 
 type Installation = {
@@ -73,6 +75,7 @@ export default function InstallationDetail({
     const [revealed, setRevealed] = useState<Revealed | null>(null);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [editing, setEditing] = useState<"none" | "locations" | "capabilities">("none");
 
     const loadActivity = useCallback(async () => {
         const res = await fetch(
@@ -174,7 +177,37 @@ export default function InstallationDetail({
             {revealed && <SecretReveal revealed={revealed} onDismiss={() => setRevealed(null)} />}
 
             <section className="mt-5" data-testid="installation-access">
-                <h2 className="text-sm font-medium">Access</h2>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h2 className="text-sm font-medium">Access</h2>
+                    <span className="flex gap-2">
+                        <button type="button" className="text-xs underline" data-testid="edit-locations"
+                            onClick={() => setEditing(editing === "locations" ? "none" : "locations")}>
+                            {editing === "locations" ? "Close" : "Edit locations"}
+                        </button>
+                        <button type="button" className="text-xs underline" data-testid="edit-capabilities"
+                            onClick={() => setEditing(editing === "capabilities" ? "none" : "capabilities")}>
+                            {editing === "capabilities" ? "Close" : "Edit capabilities"}
+                        </button>
+                    </span>
+                </div>
+
+                {editing === "locations" && (
+                    <LocationAccessEditor
+                        installationId={installation.id}
+                        boundaryMode={installation.boundaryMode}
+                        onCancel={() => setEditing("none")}
+                        onSaved={async () => { setEditing("none"); setMessage("Access updated."); await onChanged(); }}
+                    />
+                )}
+                {editing === "capabilities" && (
+                    <CapabilityEditor
+                        installationId={installation.id}
+                        grantedScopes={installation.grantedScopes}
+                        onCancel={() => setEditing("none")}
+                        onSaved={async () => { setEditing("none"); setMessage("Capabilities updated."); await onChanged(); }}
+                    />
+                )}
+
                 <p className="mt-1 text-sm">
                     {installation.boundaryMode === "org_wide"
                         ? "All locations"

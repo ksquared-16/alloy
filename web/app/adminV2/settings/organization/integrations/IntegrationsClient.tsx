@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import InstallationDetail from "./InstallationDetail";
+import AddIntegrationWizard from "./AddIntegrationWizard";
 
 type Capability = { scope: string; title: string; detail: string; access: "read" | "write"; recognised: boolean };
 
@@ -67,6 +68,7 @@ export default function IntegrationsClient() {
     const [installations, setInstallations] = useState<Installation[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [selected, setSelected] = useState<string | null>(null);
+    const [adding, setAdding] = useState(false);
 
     const load = useCallback(async () => {
         setError(null);
@@ -103,17 +105,32 @@ export default function IntegrationsClient() {
         );
     }
 
+    if (adding) {
+        return (
+            <AddIntegrationWizard
+                onCancel={() => setAdding(false)}
+                onCreated={async (id) => { setAdding(false); await load(); setSelected(id); }}
+            />
+        );
+    }
+
     if (current) {
         return <InstallationDetail installation={current} onBack={() => setSelected(null)} onChanged={load} />;
     }
 
     return (
         <div className="p-6" data-testid="organization-integrations">
-            <header className="mb-4">
-                <h1 className="text-lg font-medium">Integrations</h1>
-                <p className="mt-1 text-sm opacity-75">
-                    Approved external software, and exactly what it may access.
-                </p>
+            <header className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h1 className="text-lg font-medium">Integrations</h1>
+                    <p className="mt-1 text-sm opacity-75">
+                        Approved external software, and exactly what it may access.
+                    </p>
+                </div>
+                <button type="button" className="rounded border px-3 py-1 text-sm" data-testid="add-integration"
+                    onClick={() => setAdding(true)}>
+                    Add integration
+                </button>
             </header>
 
             {installations.length === 0 ? <EmptyState /> : (
