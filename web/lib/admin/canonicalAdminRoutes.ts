@@ -414,6 +414,13 @@ export function isPublicMarketingChromeSuppressedPath(pathname: string | null | 
         return true;
     }
     if (p === "/tour-booking" || p.startsWith("/tour-booking/")) return true;
+    /*
+     * `/dev/*` are internal surfaces — design sign-off galleries and the QA walkthrough reader.
+     * Wrapping them in the public site header put "Sign In" and "Book a Demo" above a QA script an
+     * operator is running against the product in the next tab, which reads as the marketing site
+     * rather than an internal page and buries the page's own controls.
+     */
+    if (p === "/dev" || p.startsWith("/dev/")) return true;
     return isCanonicalWorkspacePath(p) || isCanonicalSettingsPath(p);
 }
 
