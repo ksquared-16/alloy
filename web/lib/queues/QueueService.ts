@@ -2446,7 +2446,12 @@ function resolveOpportunityQueueScopeBundle(params: {
     return { scope, departmentWorkUnitIds: [params.workUnitId] };
 }
 
-async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; workUnitId: string }): Promise<{
+/**
+ * Exported so the MANUAL-POSITION WRITER can rank against the same definition the renderer used.
+ * The writer must never derive its own notion of the queue; see
+ * `loadWaitlistSectionOrder`, which is the only other caller outside this module.
+ */
+export async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; workUnitId: string }): Promise<{
     def: QueueDefinitionV1;
     normalized: NormalizedQueueDefinitionDocument;
     cacheHit: boolean;

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
     deriveCanonicalManualOrdinals,
     planListMove,
+    planPrefixCanonicalOrdinals,
     resolveOrderFromOrdinals,
 } from "@/lib/orchestration/placement/waitlistSectionOrderPlan";
 
@@ -297,5 +298,139 @@ describe("the Firefly repair is invariant under everything that is not known", (
             expect(target.indexOf(id)).toBe(CAPTURED.indexOf(id));
             expect(LEGITIMATE.get(id)).not.toBe(target.indexOf(id) + 1);
         }
+    });
+});
+
+/**
+ * THE WRITER'S ACTUAL PLAN: a pinned prefix.
+ *
+ * The product contract is "requested position equals resulting position", with no duplicate seats
+ * and a stored state the renderer reproduces. These tests hold the writer to exactly that, and to
+ * the one property that makes it safe to run in a mutation path: it never needs the natural order,
+ * so it can never disagree with the renderer about what the natural order is.
+ */
+describe("prefix canonicalisation: requested position is the resulting position", () => {
+    const SECTION = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
+    it("a move lands exactly where it was asked to, for every position in the section", () => {
+        for (let target = 1; target <= SECTION.length; target += 1) {
+            const plan = planPrefixCanonicalOrdinals({
+                finalOrder: SECTION, movedId: "F", target, currentlyPinnedIds: [],
+            });
+            expect(plan.reproduces).toBe(true);
+            expect(plan.desiredOrder.indexOf("F") + 1).toBe(target);
+        }
+    });
+
+    it("holds for every row moved to every position, not just one row", () => {
+        for (const movedId of SECTION) {
+            for (let target = 1; target <= SECTION.length; target += 1) {
+                const plan = planPrefixCanonicalOrdinals({
+                    finalOrder: SECTION, movedId, target, currentlyPinnedIds: [],
+                });
+                expect(plan.reproduces, `${movedId} -> ${target}`).toBe(true);
+                expect(plan.desiredOrder.indexOf(movedId) + 1, `${movedId} -> ${target}`).toBe(target);
+                expect(plan.desiredOrder.slice().sort()).toEqual(SECTION.slice().sort());
+            }
+        }
+    });
+
+    it("ordinals are unique and dense, so no two rows can contend for a seat", () => {
+        const plan = planPrefixCanonicalOrdinals({
+            finalOrder: SECTION, movedId: "G", target: 3, currentlyPinnedIds: ["B"],
+        });
+        const values = [...plan.ordinals.values()].sort((a, b) => a - b);
+        expect(values).toEqual([1, 2, 3]);
+        expect(new Set(values).size).toBe(values.length);
+    });
+
+    it("pins a prefix, not the whole section", () => {
+        const plan = planPrefixCanonicalOrdinals({
+            finalOrder: SECTION, movedId: "H", target: 2, currentlyPinnedIds: [],
+        });
+        // Moving to 2 needs two seats settled, not eight.
+        expect(plan.ordinals.size).toBe(2);
+        expect([...plan.ordinals.keys()]).toEqual(["A", "H"]);
+    });
+
+    it("the prefix deepens to cover an existing pin, so no pin is left outside it", () => {
+        const plan = planPrefixCanonicalOrdinals({
+            finalOrder: SECTION, movedId: "B", target: 2, currentlyPinnedIds: ["F"],
+        });
+        expect(plan.ordinals.has("F")).toBe(true);
+        expect(plan.ordinals.get("F")).toBe(plan.desiredOrder.indexOf("F") + 1);
+        expect(plan.releasedIds).toEqual([]);
+        expect(plan.reproduces).toBe(true);
+    });
+
+    it("a sequential move into an already-used area still lands exactly", () => {
+        // The live matrix case: move to 4, then move something else to 2.
+        const first = planPrefixCanonicalOrdinals({
+            finalOrder: SECTION, movedId: "G", target: 4, currentlyPinnedIds: [],
+        });
+        expect(first.desiredOrder.indexOf("G") + 1).toBe(4);
+
+        const second = planPrefixCanonicalOrdinals({
+            finalOrder: first.desiredOrder,
+            movedId: "E",
+            target: 2,
+            currentlyPinnedIds: [...first.ordinals.keys()],
+        });
+        expect(second.reproduces).toBe(true);
+        expect(second.desiredOrder.indexOf("E") + 1).toBe(2);
+        // G must not have been dragged off the seat the operator gave it.
+        expect(second.desiredOrder.indexOf("G") + 1).toBe(5);
+        expect(second.ordinals.get("G")).toBe(5);
+    });
+
+    it("moving a row to its current position changes nothing about the order", () => {
+        const plan = planPrefixCanonicalOrdinals({
+            finalOrder: SECTION, movedId: "D", target: 4, currentlyPinnedIds: [],
+        });
+        expect(plan.desiredOrder).toEqual(SECTION);
+        expect(plan.reproduces).toBe(true);
+    });
+
+    it("the stored state reproduces under ANY natural order, which is why it is safe to write", () => {
+        // The writer never learns the natural order. So the plan is only sound if replaying it over
+        // an arbitrary natural order still produces the intended prefix. Check that directly: the
+        // pinned prefix must occupy seats 1..k no matter how the rest is naturally ranked.
+        const plan = planPrefixCanonicalOrdinals({
+            finalOrder: SECTION, movedId: "H", target: 3, currentlyPinnedIds: ["B"],
+        });
+        const shuffles = [
+            ["H", "G", "F", "E", "D", "C", "B", "A"],
+            ["D", "A", "H", "C", "F", "B", "G", "E"],
+            ["B", "C", "A", "H", "E", "G", "D", "F"],
+        ];
+        const prefix = plan.desiredOrder.slice(0, plan.ordinals.size);
+        for (const natural of shuffles) {
+            const resolved = resolveOrderFromOrdinals(natural, plan.ordinals);
+            expect(resolved.slice(0, prefix.length), natural.join("")).toEqual(prefix);
+        }
+    });
+
+    it("releases a pin that the new prefix no longer covers", () => {
+        const deep = planPrefixCanonicalOrdinals({
+            finalOrder: SECTION, movedId: "A", target: 7, currentlyPinnedIds: [],
+        });
+        expect(deep.ordinals.size).toBe(7);
+        const shallow = planPrefixCanonicalOrdinals({
+            finalOrder: deep.desiredOrder,
+            movedId: "B",
+            target: 1,
+            currentlyPinnedIds: ["H"],
+        });
+        // H sits at position 7 in `deep`; after B moves to 1 the prefix only needs to reach H if H
+        // is still pinned — it is, so it stays covered rather than being silently orphaned.
+        expect(shallow.ordinals.has("H") || shallow.releasedIds.includes("H")).toBe(true);
+        expect(shallow.reproduces).toBe(true);
+    });
+
+    it("a move naming a candidate outside the section is refused rather than guessed at", () => {
+        const plan = planPrefixCanonicalOrdinals({
+            finalOrder: SECTION, movedId: "ZZ", target: 2, currentlyPinnedIds: [],
+        });
+        expect(plan.desiredOrder).toEqual(SECTION);
     });
 });

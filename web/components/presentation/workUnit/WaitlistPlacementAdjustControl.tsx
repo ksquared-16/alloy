@@ -242,6 +242,16 @@ function WaitlistPlacementAdjustPopover({
                           action: "move",
                           pin_ordinal: Number.parseInt(pinOrdinal, 10),
                           reason: reason.trim() || "Manual waitlist position adjustment",
+                          /*
+                           * WHICH LIST, not what is in it.
+                           *
+                           * A position is meaningless without the list it indexes, so the command
+                           * names the queue the operator is reading and the server rebuilds that
+                           * list itself. Sending the order from here would be faster and wrong: the
+                           * client would then be a second ranking authority, which is the thing this
+                           * whole model exists to prevent.
+                           */
+                          work_unit_id: kernel.attention.get()?.destination?.workUnitId ?? null,
                       };
             if (action === "move") {
                 const n = Number.parseInt(pinOrdinal, 10);

@@ -102,3 +102,83 @@ export function deriveCanonicalManualOrdinals(args: {
     for (const id of args.desiredOrder) if (pinned.has(id)) ordinals.set(id, positionOf.get(id)!);
     return { ordinals, reproduces: false, resolved: resolveOrderFromOrdinals(args.naturalOrder, ordinals) };
 }
+
+export type PrefixCanonicalPlan = {
+    /** The order the section must end up in. */
+    desiredOrder: string[];
+    /** Candidate id -> the ordinal its active pin must store. Dense, 1..k, unique. */
+    ordinals: Map<string, number>;
+    /** Candidates whose existing pin is no longer needed and must be released. */
+    releasedIds: string[];
+    /** True when replaying `ordinals` reproduces `desiredOrder`. Checked, never assumed. */
+    reproduces: boolean;
+};
+
+/**
+ * Canonicalise a section as a PINNED PREFIX. PURE.
+ *
+ * ── WHY A PREFIX, AND WHY THIS NEEDS NO NATURAL ORDER ──
+ *
+ * `deriveCanonicalManualOrdinals` produces a smaller pin set, but it needs the natural order to do
+ * it — and the writer cannot observe the natural order. A candidate that has been pinned since
+ * before anyone looked has never had its natural rank rendered, so asking the database for "the
+ * order without pins" means re-running the whole placement projection in the mutation path, and
+ * getting it subtly wrong there is precisely how the previous writer corrupted four live
+ * adjustments.
+ *
+ * A prefix sidesteps the question entirely. Give the rows at positions 1..k the ordinals 1..k and
+ * `resolveOrderFromOrdinals` seats each one exactly, in ascending order, at index 0..k-1 — that
+ * placement is forced, and no natural rank participates in it. Everything after k is unpinned and
+ * falls in natural order.
+ *
+ * So the result reproduces if and only if the TAIL is already in natural order, and it is, for a
+ * reason that survives inspection: `finalOrder` comes from the renderer, where unpinned rows keep
+ * their natural relative order by construction. Choosing `k` to cover every pinned row AND the
+ * moved row leaves a tail containing only rows that were unpinned before and stay unpinned after,
+ * whose relative order the move did not touch. Their order in `finalOrder` IS their natural order.
+ *
+ * That is why `finalOrder` is a sound stand-in for the natural order in the verification below,
+ * even though it is not the natural order: the two agree exactly where this plan relies on them.
+ *
+ * The cost is honest and bounded — moving to position 3 pins three rows, not the whole section —
+ * and it buys a writer that cannot disagree with the renderer, because it never forms an opinion
+ * the renderer has to share.
+ */
+export function planPrefixCanonicalOrdinals(args: {
+    /** The section in the order the operator is reading it, as candidate ids. */
+    finalOrder: readonly string[];
+    movedId: string;
+    /** 1-based requested position. This is what the result must equal. */
+    target: number;
+    /** Candidates that currently carry an active manual position. */
+    currentlyPinnedIds: readonly string[];
+}): PrefixCanonicalPlan {
+    const desiredOrder = planListMove(args.finalOrder, args.movedId, args.target);
+    const positionOf = new Map(desiredOrder.map((id, i) => [id, i + 1]));
+
+    // k must cover every row that carries manual intent: the one just moved, and every row already
+    // pinned. Anything shallower would leave a pin outside the prefix, where its ordinal would have
+    // to contend with natural rank again — the exact contention this model exists to remove.
+    let prefixDepth = positionOf.get(args.movedId) ?? 0;
+    for (const id of args.currentlyPinnedIds) {
+        const at = positionOf.get(id);
+        if (at != null && at > prefixDepth) prefixDepth = at;
+    }
+
+    const ordinals = new Map<string, number>();
+    for (let i = 0; i < prefixDepth && i < desiredOrder.length; i += 1) {
+        ordinals.set(desiredOrder[i]!, i + 1);
+    }
+
+    // A pin outside the prefix is not merely redundant — it would be seated by an ordinal that no
+    // longer describes a position, so it must be released rather than left behind.
+    const releasedIds = args.currentlyPinnedIds.filter((id) => !ordinals.has(id));
+
+    const resolved = resolveOrderFromOrdinals(args.finalOrder, ordinals);
+    return {
+        desiredOrder,
+        ordinals,
+        releasedIds,
+        reproduces: resolved.length === desiredOrder.length && resolved.every((id, i) => id === desiredOrder[i]),
+    };
+}

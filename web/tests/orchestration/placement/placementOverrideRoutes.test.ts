@@ -9,7 +9,8 @@ const OVERRIDE = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 const createOverrideMock = vi.hoisted(() => vi.fn());
 const releaseOverrideMock = vi.hoisted(() => vi.fn());
-const upsertPinMock = vi.hoisted(() => vi.fn());
+const applyCanonicalMock = vi.hoisted(() => vi.fn());
+const loadSectionOrderMock = vi.hoisted(() => vi.fn());
 const releaseManualMock = vi.hoisted(() => vi.fn());
 const createAdminClientMock = vi.hoisted(() => vi.fn());
 
@@ -59,8 +60,12 @@ vi.mock("@/lib/admin/accessScope", async (importOriginal) => {
 vi.mock("@/lib/orchestration/placement/placementOverrideMutations", () => ({
     createPlacementOverride: createOverrideMock,
     releasePlacementOverride: releaseOverrideMock,
-    upsertPlacementPinOverride: upsertPinMock,
+    applyCanonicalSectionOrder: applyCanonicalMock,
     releaseManualPositionOverrides: releaseManualMock,
+}));
+
+vi.mock("@/lib/orchestration/placement/loadWaitlistSectionOrder", () => ({
+    loadWaitlistSectionOrder: loadSectionOrderMock,
 }));
 
 vi.mock("@/lib/orchestration/placement/placementPresetRegistry", () => ({
@@ -131,19 +136,81 @@ describe("placement override admin routes", () => {
         expect(releaseOverrideMock).toHaveBeenCalled();
     });
 
-    it("POST manual-position move upserts pin override", async () => {
-        upsertPinMock.mockResolvedValue({
-            ok: true,
-            override: { id: OVERRIDE, override_kind: "pin" },
-        });
+    const WORK_UNIT = "44444444-4444-4444-8444-444444444444";
+    const SECTION = ["s1", "s2", CANDIDATE, "s4", "s5"];
+
+    function sectionOrder(over: Partial<{ finalOrder: string[]; pinnedIds: string[] }> = {}) {
+        return {
+            sectionKey: "infant",
+            queueKey: "waitlist",
+            finalOrder: over.finalOrder ?? SECTION,
+            pinnedIds: over.pinnedIds ?? [],
+        };
+    }
+
+    async function post(body: Record<string, unknown>) {
         const { POST } = await import("@/app/api/admin/placement-candidates/[candidateId]/manual-position/route");
         const req = new NextRequest("http://localhost/api/admin/placement-candidates/x/manual-position", {
             method: "POST",
-            body: JSON.stringify({ action: "move", reason: "Sibling starting soon", pin_ordinal: 1 }),
+            body: JSON.stringify(body),
         });
-        const res = await POST(req, { params: Promise.resolve({ candidateId: CANDIDATE }) });
+        return POST(req, { params: Promise.resolve({ candidateId: CANDIDATE }) });
+    }
+
+    it("POST manual-position move writes one canonical order for the section", async () => {
+        loadSectionOrderMock.mockResolvedValue(sectionOrder());
+        applyCanonicalMock.mockResolvedValue({ ok: true, written: 1, released: 0 });
+        const res = await post({
+            action: "move",
+            reason: "Sibling starting soon",
+            pin_ordinal: 1,
+            work_unit_id: WORK_UNIT,
+        });
         expect(res.status).toBe(200);
-        expect(upsertPinMock).toHaveBeenCalled();
+        expect(applyCanonicalMock).toHaveBeenCalled();
+        // The response states where the row actually ended up, which is the contract being kept.
+        await expect(res.json()).resolves.toMatchObject({ ok: true, position: 1, position_total: 5 });
+    });
+
+    it("the resulting position equals the requested position, for every position", async () => {
+        for (let target = 1; target <= SECTION.length; target += 1) {
+            vi.clearAllMocks();
+            loadSectionOrderMock.mockResolvedValue(sectionOrder());
+            applyCanonicalMock.mockResolvedValue({ ok: true, written: 1, released: 0 });
+            const res = await post({ action: "move", pin_ordinal: target, work_unit_id: WORK_UNIT, reason: "r" });
+            expect(res.status, `target ${target}`).toBe(200);
+            await expect(res.json()).resolves.toMatchObject({ position: target });
+        }
+    });
+
+    it("the ordinals handed to the writer are unique, so no two rows contend for a seat", async () => {
+        loadSectionOrderMock.mockResolvedValue(sectionOrder({ pinnedIds: ["s1", "s4"] }));
+        applyCanonicalMock.mockResolvedValue({ ok: true, written: 2, released: 0 });
+        await post({ action: "move", pin_ordinal: 2, work_unit_id: WORK_UNIT, reason: "r" });
+        const ordinals = applyCanonicalMock.mock.calls[0]![1].ordinals as Map<string, number>;
+        const values = [...ordinals.values()];
+        expect(new Set(values).size).toBe(values.length);
+        expect(values.every((v) => Number.isInteger(v) && v >= 1)).toBe(true);
+    });
+
+    it("refuses a move that does not name a work unit rather than writing a bare ordinal", async () => {
+        const res = await post({ action: "move", reason: "no queue named", pin_ordinal: 1 });
+        expect(res.status).toBe(400);
+        expect(applyCanonicalMock).not.toHaveBeenCalled();
+    });
+
+    it("refuses when the candidate is not ranked in that work unit", async () => {
+        loadSectionOrderMock.mockResolvedValue(null);
+        const res = await post({ action: "move", pin_ordinal: 1, work_unit_id: WORK_UNIT, reason: "r" });
+        expect(res.status).toBe(409);
+        expect(applyCanonicalMock).not.toHaveBeenCalled();
+    });
+
+    it("refuses a position outside the section instead of clamping it", async () => {
+        loadSectionOrderMock.mockResolvedValue(sectionOrder());
+        const res = await post({ action: "move", pin_ordinal: 99, work_unit_id: WORK_UNIT, reason: "r" });
+        expect(res.status).toBe(400);
+        expect(applyCanonicalMock).not.toHaveBeenCalled();
     });
 
     it("POST manual-position reset releases pin overrides", async () => {
