@@ -1,0 +1,19 @@
+{
+  "trusted_host_action_id": "tha_e11b0f19cbda73",
+  "query_hash": "ee2d588906011c14a9a3b7c538823005cfb0d4bebde9d0ad0e6c5f669ff39ff8",
+  "results": {
+    "tenant_totals": {
+      "orgs": 2,
+      "customer_members": 21,
+      "placement_candidates": 37,
+      "waitlist_opportunities": 1
+    },
+    "lennox_members": [],
+    "participations": [],
+    "cases": [],
+    "candidates": [],
+    "case_customer_present": [],
+    "work_units": [],
+    "household_children": []
+  }
+}

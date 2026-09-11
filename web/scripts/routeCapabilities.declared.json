@@ -1669,12 +1669,26 @@
         "supersedes": "Superseded 2026-09-10 by the Access & Identity V2 Financials slice. The prior entry reasoned that \"fin.read is a Financials-workspace capability, not this projection's\" \u2014 but the key's own refusal says \"You don't have access to view financial information for this organization\", and the role editor now offers View Financials as a control an organization sets. Under that meaning a composed household financial card, and the amount and canonical payment id of a collection attempt, ARE financial information; leaving them on admission alone would make \"a role with no Financials access cannot read financial data\" false through a second door. Overturning a reasoned `none` is a decision, and this is the record of it."
       }
     },
+    "app/api/admin/financials/charge/[id]/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
     "app/api/admin/financials/collection-state/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed",
         "supersedes": "Superseded 2026-09-10 by the Access & Identity V2 Financials slice. The prior entry reasoned that \"fin.read is a Financials-workspace capability, not this projection's\" \u2014 but the key's own refusal says \"You don't have access to view financial information for this organization\", and the role editor now offers View Financials as a control an organization sets. Under that meaning a composed household financial card, and the amount and canonical payment id of a collection attempt, ARE financial information; leaving them on admission alone would make \"a role with no Financials access cannot read financial data\" false through a second door. Overturning a reasoned `none` is a decision, and this is the record of it."
+      }
+    },
+    "app/api/admin/financials/funding-sources/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
       }
     },
     "app/api/admin/financials/job/[id]/route.ts": {
@@ -1727,6 +1741,13 @@
       }
     },
     "app/api/admin/financials/position/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/responsibility-candidates/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",

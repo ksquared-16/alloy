@@ -141,4 +141,6 @@ jobs:
             tests/forms/resolveActiveStepEnvelope.test.ts \
             tests/forms/pdf/documentDestinationDateFormat.test.ts \
             tests/forms/pdf/fidelityEngine.test.ts \
-            tests/forms/pdf/fidelityMappingVertical.test.ts
+            tests/forms/pdf/fidelityMappingVertical.test.ts \
+            tests/lifecycle/outcomeBehaviorRoundTrip.test.ts \
+            tests/lifecycle/childGrainOutcomeAuthoring.test.ts

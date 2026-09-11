@@ -232,6 +232,13 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
         () =>
             resolveTourCommandPresentation(projection.commands, context.signals.tour, {
                 timeZone: viewerTimeZone,
+                /*
+                 * Whether THIS stage can resolve the tour, taken from the row the card already has.
+                 * `record_outcome` is projected only when the stage's own work is outcome-led with
+                 * open outcomes, so its presence is the same ownership fact the completion
+                 * affordance is gated on — not a second opinion about it, and not a stage name.
+                 */
+                outcomeWorkAvailable: projection.commands.some((command) => command.key === "record_outcome"),
             }),
         [projection.commands, context.signals.tour, viewerTimeZone],
     );

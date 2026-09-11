@@ -19,6 +19,9 @@
  * rule against real money; this proves it in the small, on every run, including the branch that a
  * healthy database will never take.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { ID_BATCH, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
@@ -144,5 +147,56 @@ describe("the fail-closed batched cohort read", () => {
             );
         });
         expect(rows.length, "later batches still contribute their rows").toBe(80);
+    });
+});
+
+/*
+ * ── THE CAP THAT IS NOT OURS ────────────────────────────────────────────────────────────────────
+ *
+ * The cohort asked for `limit(2000)`. PostgREST answered 1,000 — its own `db-max-rows` — with no
+ * error and nothing on the response anyone read. The code treated that page as the entire cohort
+ * and set `truncated: false`, because 1,000 is not >= 2,000.
+ *
+ * The consequence was not a slightly short list. With 1,228 posted charges in the certification
+ * tenant, the four representative households — older service dates than the tuition another lane
+ * had just generated — were absent from Accounts and from Charges entirely. A family who owed money
+ * could not be looked up. Nothing said so.
+ *
+ * These are source-level pins rather than behavioural ones: the seam is inside
+ * `resolveFinancialPositionCohort`, the behaviour needs a database with more than a thousand
+ * charges in it, and the rule is simple enough to state exactly. A live tenant proves the effect;
+ * this proves the rule survives the next edit.
+ */
+describe("the cohort's own charge read", () => {
+    const source = readFileSync(
+        resolve(__dirname, "../../lib/financials/workspace/resolveFinancialPosition.ts"),
+        "utf8",
+    );
+
+    it("pages the read rather than trusting a single limit", () => {
+        expect(source, "the cohort must request successive pages").toMatch(/\.range\(/);
+        expect(source, "the server's page size is stated, not assumed away").toMatch(/const PAGE = 1000/);
+    });
+
+    it("stops on a short page instead of asking forever", () => {
+        expect(source).toMatch(/batch\.length < want/);
+    });
+
+    /*
+     * A SHORT READ MUST NOT BE REPORTED AS A COMPLETE ONE. `truncated` is what the surface would
+     * use to tell an operator their view is partial; if it lies, the omission is undetectable.
+     */
+    it("reports truncation only when the cap was actually reached", () => {
+        expect(source).toMatch(/const truncated = !reachedEnd && charges\.length >= scanCap/);
+    });
+
+    /*
+     * PAGING BY RANGE OVER A NON-UNIQUE SORT KEY REPEATS AND SKIPS ROWS at the page boundary — and
+     * a month of generated tuition is thousands of charges sharing one service date.
+     */
+    it("orders by a unique tiebreaker so pages cannot overlap or skip", () => {
+        expect(source, "service_date alone is not a stable page key").toMatch(
+            /\.order\("id", \{ ascending: true \}\)/,
+        );
     });
 });
