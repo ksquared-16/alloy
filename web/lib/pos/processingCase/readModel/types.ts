@@ -133,6 +133,16 @@ export interface ProcessingCaseQueueCursor {
 
 export interface ProcessingCaseQueueQuery {
     orgId: string;
+    /**
+     * Restrict the page to these exact cases.
+     *
+     * The queue is otherwise a RECENCY page: newest `limit` cases, `created_at desc`. That page
+     * cannot answer "give me case X", so a surface holding a case id — a deep link, a cross-workspace
+     * handoff — had no way to load its row and simply rendered whatever the page happened to contain.
+     * Naming the cases is what lets the requested subject be resolved independently of where it falls
+     * in the ordering.
+     */
+    caseIds?: string[];
     statuses?: ProcessingCaseStatus[];
     sourceKinds?: ProcessingCaseSourceKind[];
     caseTypes?: string[];

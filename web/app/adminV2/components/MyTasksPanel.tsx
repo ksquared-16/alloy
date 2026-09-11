@@ -303,7 +303,7 @@ export default function MyTasksPanel({
     useEffect(() => {
         if (!workEnabled) return;
         void fetchWorkItemBpLabelCatalog().then((catalog) => setCatalogProcessLabels(catalog.processLabels));
-        void warmProcessingQueueCache();
+        void warmProcessingQueueCache({ scope: "actionable" });
         void prefetchCommandCenterConversations();
     }, [workEnabled]);
 
@@ -374,7 +374,20 @@ export default function MyTasksPanel({
 
     const processingProjectedTasks = useMemo(() => {
         void processingWarmNonce;
-        const warm = getProcessingQueueWarmSnapshot().data?.rows ?? [];
+        /*
+         * The ACTIONABLE scope, not the default browse page.
+         *
+         * This read used to be `getProcessingQueueWarmSnapshot()` with no scope, which resolved to
+         * `/api/admin/processing/queue` with no parameters — the newest 25 cases by `created_at`.
+         * Work Items was therefore projecting "what arrived most recently" while believing it was
+         * projecting "what needs attention". A tenant with 6 `needs_resolution` cases projected none
+         * of them and 19 `received` ones, purely because the six were older than the page.
+         *
+         * Processing now publishes the cohort itself (`PROCESSING_ACTIONABLE_STATUSES`); this reads
+         * that. The mapper's own lane judgement is unchanged — it always intended to project
+         * `needs_resolution`, and never saw one.
+         */
+        const warm = getProcessingQueueWarmSnapshot("actionable").data?.rows ?? [];
         return mapProcessingQueueToWorkItemRows(warm);
     }, [processingWarmNonce]);
 
