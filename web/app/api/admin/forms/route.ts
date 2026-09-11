@@ -17,12 +17,33 @@ export async function GET(request: NextRequest) {
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const includeArchived = request.nextUrl.searchParams.get("include_archived") === "true";
+    /*
+     * The forms that EXECUTE a packet's document steps are not the administrator's forms.
+     *
+     * A "Read & acknowledge" or "Upload a document" step is run by a generated single-control form,
+     * which is an implementation detail the step vocabulary exists to keep out of an operator's
+     * model. Left in this list they leaked straight into Packet Studio's own Form picker, where an
+     * administrator would be offered "Family Handbook" as a form to add as a step — the adapter
+     * offering itself as the thing it stands in for, one letter apart from the real imported
+     * "Immunization Record" beside it.
+     *
+     * Hidden here, at the one list every admin surface reads, rather than filtered in each picker
+     * where the next new surface would forget. `include_packet_adapters=true` exists for tooling
+     * that genuinely needs to see them; nothing an operator touches passes it.
+     */
+    const includePacketAdapters = request.nextUrl.searchParams.get("include_packet_adapters") === "true";
 
     const supabase = createAdminClient();
     const { data, error } = await dbListFormDefinitions(supabase, ctx.orgId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const forms = (data ?? []).filter((row) => includeArchived || (row as { is_active?: boolean }).is_active !== false);
+    const forms = (data ?? [])
+        .filter((row) => includeArchived || (row as { is_active?: boolean }).is_active !== false)
+        .filter((row) => {
+            if (includePacketAdapters) return true;
+            const meta = (row as { metadata?: Record<string, unknown> | null }).metadata;
+            return meta?.packet_step_adapter !== true;
+        });
     if (forms.length === 0) {
         return jsonData([]);
     }
