@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
 # Trusted Host Action child — apply one committed migration file.
-# Never prints credentials. Args: <migration_file> <out_file> <stderr_file>
+# Never prints credentials.
+# Args: <migration_file> <out_file> <stderr_file> <target_class>
 set -euo pipefail
 
 MIG_FILE="${1:?migration file required}"
 OUT_FILE="${2:?out file required}"
 ERR_FILE="${3:?stderr file required}"
-# The requested environment SELECTS the database. It used to be absent here
+# The RESOLVED TARGET CLASS selects the database. This used to be absent
 # entirely, which is how a request labelled `certification` could reach a
 # deployed pooler: the child simply used whichever DATABASE_URL the trusted
 # host had. Absent is not defaulted — it refuses.
-MIG_ENVIRONMENT="${4:-}"
+#
+# It is a CLASS, not an environment name, and that distinction is the repair.
+# This script briefly carried its own copy of the alias map — certification,
+# cert, staging — while `trusted-host-database-target.mjs` carried another. Two
+# registries means one of them is always the stale one, and it was this one:
+# `alloy_deployed_primary` cleared every governed check upstream and died here
+# as an unknown environment. So the names live in the resolver, the resolver
+# hands down a class, and this file knows only the three classes it must
+# actually connect differently for.
+MIG_TARGET_CLASS="${4:-}"
 
 CANONICAL="${ALLOY_CANONICAL_ROOT:-${ALLOY_REPO:-/Users/Kelly/Alloy}}"
 export ALLOY_REPO="$CANONICAL"
@@ -30,14 +40,14 @@ source "$TOOLKIT/lib/verify.sh"
 
 unset ALLOY_BLOCK_REMOTE_SUPABASE || true
 
-if [[ -z "$MIG_ENVIRONMENT" ]]; then
-  echo "target_resolution_failed: no environment supplied to the apply child" >"$ERR_FILE"
+if [[ -z "$MIG_TARGET_CLASS" ]]; then
+  echo "target_resolution_failed: no resolved target class supplied to the apply child" >"$ERR_FILE"
   exit 45
 fi
 
 # ── THE DATABASE IS CHOSEN BY THE ENVIRONMENT, NEVER BY WHAT HAPPENS TO EXIST ──
-case "$MIG_ENVIRONMENT" in
-  certification|cert)
+case "$MIG_TARGET_CLASS" in
+  certification_local)
     # The local certification stack has its own credential, supplied explicitly.
     # It is NOT read from the server env, because that file is the deployed
     # credential and reading it here is the whole defect.
@@ -56,7 +66,11 @@ case "$MIG_ENVIRONMENT" in
     DATABASE_URL="$ALLOY_CERT_DATABASE_URL"
     EXPECT_LOCAL=1
     ;;
-  staging)
+  staging_deployed|deployed_primary)
+    # Both are deployed infrastructure reached through the one trusted-host
+    # credential resolver already in production use. They are separate classes
+    # because the audit must say which was asked for, not because the
+    # connection is sourced differently.
     if ! alloy_load_trusted_server_env_exports; then
       echo "trusted_credential_unavailable" >"$ERR_FILE"
       exit 42
@@ -68,7 +82,7 @@ case "$MIG_ENVIRONMENT" in
     EXPECT_LOCAL=0
     ;;
   *)
-    echo "target_resolution_failed: environment '$MIG_ENVIRONMENT' has no registered database target" >"$ERR_FILE"
+    echo "target_resolution_failed: target class '$MIG_TARGET_CLASS' is not one this child can connect" >"$ERR_FILE"
     exit 45
     ;;
 esac
@@ -86,11 +100,11 @@ esac
 
 if [[ "$EXPECT_LOCAL" == "1" ]]; then
   if [[ "$HOST_IS_LOCAL" != "1" || "$DB_PORT" != "54422" ]]; then
-    echo "target_environment_mismatch: environment '$MIG_ENVIRONMENT' resolved to ${DB_HOST}:${DB_PORT:-<none>}, which is not the local certification database" >"$ERR_FILE"
+    echo "target_environment_mismatch: target class '$MIG_TARGET_CLASS' resolved to ${DB_HOST}:${DB_PORT:-<none>}, which is not the local certification database" >"$ERR_FILE"
     exit 44
   fi
 elif [[ "$HOST_IS_LOCAL" == "1" && "$DB_PORT" == "54422" ]]; then
-  echo "target_environment_mismatch: environment '$MIG_ENVIRONMENT' resolved to the local certification database" >"$ERR_FILE"
+  echo "target_environment_mismatch: target class '$MIG_TARGET_CLASS' resolved to the local certification database" >"$ERR_FILE"
   exit 44
 fi
 

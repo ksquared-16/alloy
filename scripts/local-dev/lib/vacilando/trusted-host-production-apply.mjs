@@ -120,9 +120,31 @@ export const PRODUCTION_APPLY_FAILURES = Object.freeze({
   REQUIRED_SET_UNREADABLE: "candidate_required_set_unreadable",
   APPLY_FAILED: "migration_sql_failed",
   APPLY_AMBIGUOUS: "migration_outcome_ambiguous",
+  // Raised by the apply child before a connection exists. Named here so they
+  // can be surfaced verbatim rather than folded into "the SQL failed".
+  TARGET_UNREGISTERED: "target_resolution_failed",
+  TARGET_ENVIRONMENT_MISMATCH: "target_environment_mismatch",
+  HOST_DEPENDENCY_MISSING: "trusted_host_dependency_missing",
   VERIFICATION_FAILED: "post_apply_verification_failed",
   RESULT_CONTAINED_SECRETS: "result_contained_secrets",
 });
+
+/**
+ * No-effect failures worth naming to the caller as themselves.
+ *
+ * Not a second classifier. `classifyApplyFailure` has already decided the
+ * database was never touched; this only decides whether the operator is told
+ * WHY in the code, or told the generic thing and left to find the reason in a
+ * detail string. Each is raised before a connection exists, carries no
+ * credential material in its name, and has exactly one cause — which is what
+ * makes it both safe and useful to surface verbatim.
+ */
+const PRE_EXECUTION_SURFACED_CODES = new Set([
+  PRODUCTION_APPLY_FAILURES.TARGET_UNREGISTERED,
+  PRODUCTION_APPLY_FAILURES.TARGET_ENVIRONMENT_MISMATCH,
+  PRODUCTION_APPLY_FAILURES.CREDENTIAL_UNAVAILABLE,
+  PRODUCTION_APPLY_FAILURES.HOST_DEPENDENCY_MISSING,
+]);
 
 /** Every failure this executor can return. Used by tests to prove none is a catch-all. */
 export const PRODUCTION_APPLY_FAILURE_CODES = Object.freeze(Object.values(PRODUCTION_APPLY_FAILURES));
@@ -437,10 +459,21 @@ export function executeProductionMigrationApply({
   }
   if (applyResult?.ok !== true) {
     const classified = classifyApplyFailure({ applyResult });
-    // A refusal that never reached the database and an execution that may have
-    // half-run are different facts and must never share a code.
+    /*
+     * A refusal that never reached the database and an execution that may have
+     * half-run are different facts and must never share a code — and among the
+     * refusals that never reached it, "the SQL failed" is its own kind of lie.
+     *
+     * So a no-effect refusal surfaces the reason it actually had. A target the
+     * resolver does not recognise says `target_resolution_failed` and names the
+     * name; a missing credential says so. Only a no-effect failure with nothing
+     * more specific to say falls back to `migration_sql_failed`, which is then
+     * true: something reached the database and did not take.
+     */
     const code = classified.classification === "no_effect"
-      ? PRODUCTION_APPLY_FAILURES.APPLY_FAILED
+      ? (PRE_EXECUTION_SURFACED_CODES.has(classified.code)
+        ? classified.code
+        : PRODUCTION_APPLY_FAILURES.APPLY_FAILED)
       : PRODUCTION_APPLY_FAILURES.APPLY_AMBIGUOUS;
     return done(refuse(code, classified.detail, {
       migration_attempted: classified.classification !== "no_effect",

@@ -52,6 +52,7 @@ import { executeRestoreDeployedQaSessionSync } from "./deployed-qa-session-resto
 import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
 import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
+import { resolveTrustedDatabaseTarget } from "./trusted-host-database-target.mjs";
 import { executeProviderCeiling } from "./trusted-host-provider-ceiling.mjs";
 import { executeToolkitInstall } from "./toolkit-convergence.mjs";
 import { executeLaneDispatch } from "./lane-dispatch.mjs";
@@ -1331,10 +1332,28 @@ function defaultApplyMigrationFile({ entry, text, environment }) {
   const errFile = join(tmpDir, `${entry.version}.err`);
   writeFileSync(file, text);
   try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
-  // The environment is an ARGUMENT, not an ambient default. The child selects
-  // its database from it; omitting it is a hard refusal there rather than a
-  // fallback to whichever credential the host happens to hold.
-  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, String(environment ?? "")], {
+  /*
+   * RESOLVE HERE, ONCE, AND HAND THE CHILD A CLASS.
+   *
+   * The environment is an ARGUMENT, not an ambient default — the child selects
+   * its database from it, and omitting it is a hard refusal there rather than a
+   * fallback to whichever credential the host happens to hold. What changed is
+   * WHICH argument: the child used to be handed the raw environment name and
+   * keep its own alias map, so the name vocabulary lived in two files and one
+   * of them was always behind. `alloy_deployed_primary` passed every governed
+   * check and then died in the child as unknown.
+   *
+   * So the single registry resolves the name, and the child receives the
+   * canonical class. A name nobody registered is refused HERE, before a process
+   * is spawned, and it is refused by its real reason rather than by an exit code
+   * that has to be guessed at from stderr.
+   */
+  const resolved = resolveTrustedDatabaseTarget(environment, { repoRoot: resolveCanonicalRepoRoot() });
+  if (!resolved.ok) {
+    try { unlinkSync(file); } catch { /* */ }
+    return { ok: false, code: resolved.code, detail: resolved.detail };
+  }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, resolved.targetClass], {
     env: {
       ...process.env,
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
@@ -2664,7 +2683,7 @@ export function executeLedgerRepairTrustedHostAction(action, { actor = "director
   action.updated_at = iso(nowMs);
   writeAction(action);
 
-  const run = (evidence.runSql || defaultRunLedgerRepairSql)({ sql: built.sql });
+  const run = (evidence.runSql || defaultRunLedgerRepairSql)({ sql: built.sql, target: inputs.target });
   if (!run?.ok) {
     return failTrustedAction(action, run?.code || "ledger_repair_failed",
       run?.detail || "The ledger repair transaction did not commit.", { nowMs });
@@ -2778,7 +2797,7 @@ function defaultLedgerRepairEvidence({ inputs = {}, nowMs = Date.now() } = {}) {
     : derived;
 }
 
-function defaultRunLedgerRepairSql({ sql }) {
+function defaultRunLedgerRepairSql({ sql, target }) {
   const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
   const file = join(tmpDir, `ledger-repair-${Date.now()}.sql`);
@@ -2786,7 +2805,19 @@ function defaultRunLedgerRepairSql({ sql }) {
   const errFile = `${file}.err`;
   writeFileSync(file, sql);
   try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile], {
+  /*
+   * The repair runs the same child, so it owes it the same resolved class. It
+   * was passing three arguments and no target at all — which, once the child
+   * started requiring one, made every ledger repair exit 45. That path is the
+   * sanctioned remedy for a ledger that disagrees with the schema, so it would
+   * have failed silently at exactly the moment it was needed.
+   */
+  const resolved = resolveTrustedDatabaseTarget(target, { repoRoot: resolveCanonicalRepoRoot() });
+  if (!resolved.ok) {
+    try { unlinkSync(file); } catch { /* */ }
+    return { ok: false, code: resolved.code, detail: resolved.detail };
+  }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, resolved.targetClass], {
     env: {
       ...process.env,
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),

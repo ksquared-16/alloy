@@ -36,12 +36,37 @@ import { join } from "node:path";
 export const TARGET_CLASS = Object.freeze({
   CERTIFICATION: "certification_local",
   STAGING: "staging_deployed",
+  DEPLOYED_PRIMARY: "deployed_primary",
 });
 
+/*
+ * ONE VOCABULARY, ONE REGISTRY.
+ *
+ * This map is the only place an environment or target NAME becomes a database.
+ * It has to admit every name the governed action layer accepts, because a name
+ * that clears governance and then dies here is not a safety control — it is a
+ * broken contract, and it presents as an unexplained failure at the worst
+ * moment.
+ *
+ * That is not hypothetical. `database.apply_promoted_migration` validates its
+ * `target` against `PRODUCTION_APPLY_TARGETS` and then passes that same target
+ * through as the environment. `alloy_deployed_primary` cleared every governed
+ * check, reached the apply child, and was refused here as unknown — three
+ * production migration attempts, no database ever contacted, and a failure that
+ * surfaced as "the outcome could not be established" rather than as "nobody
+ * taught the resolver this name". The registry is kept whole instead.
+ */
 const ENVIRONMENT_TO_CLASS = Object.freeze({
   certification: TARGET_CLASS.CERTIFICATION,
   cert: TARGET_CLASS.CERTIFICATION,
   staging: TARGET_CLASS.STAGING,
+  // The registered deployed primary, named as `database.apply_promoted_migration`
+  // and `database.repair_migration_ledger` name it. Kept in step with
+  // PRODUCTION_APPLY_TARGETS / LEDGER_REPAIR_TARGETS by test rather than by
+  // import: those lists answer "which action may touch this", which is a
+  // different question from "which database is this", and an import between
+  // them would be a cycle.
+  alloy_deployed_primary: TARGET_CLASS.DEPLOYED_PRIMARY,
 });
 
 /**
@@ -111,6 +136,19 @@ export function resolveTrustedDatabaseTarget(environment, { repoRoot = null } = 
     };
   }
 
+  if (targetClass === TARGET_CLASS.DEPLOYED_PRIMARY) {
+    return {
+      ok: true,
+      environment: env,
+      targetClass,
+      targetId: "deployed_primary",
+      connectionSourceKind: "trusted_server_env",
+      expectedHostIsLocal: false,
+      expectedPort: null,
+      workdir: null,
+    };
+  }
+
   return {
     ok: true,
     environment: env,
@@ -131,6 +169,7 @@ export function resolveTrustedDatabaseTarget(environment, { repoRoot = null } = 
  * the two.
  */
 export function assertTargetMatchesEnvironment(environment, connectionUrl, { repoRoot = null } = {}) {
+  const env = normalizeEnvironmentName(environment);
   const target = resolveTrustedDatabaseTarget(environment, { repoRoot });
   if (!target.ok) return target;
 
@@ -159,12 +198,14 @@ export function assertTargetMatchesEnvironment(environment, connectionUrl, { rep
     return { ok: true, target, host: conn.host, port: conn.port };
   }
 
-  // Staging must not quietly land on the throwaway stack.
+  // A DEPLOYED target must not quietly land on the throwaway stack. Applying a
+  // migration to a disposable database reports success while changing nothing
+  // that matters — the quieter and more expensive half of the same bug.
   if (conn.isLocal && conn.port === CERTIFICATION_DB_PORT) {
     return {
       ok: false,
       code: "target_environment_mismatch",
-      detail: "staging requested but the resolved database is the local certification stack",
+      detail: `${env} requested but the resolved database is the local certification stack`,
       target,
     };
   }

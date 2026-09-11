@@ -10,7 +10,7 @@
 
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { dirname, join } from "node:path";
@@ -23,6 +23,8 @@ import {
   describeConnection,
   resolveTrustedDatabaseTarget,
 } from "../lib/vacilando/trusted-host-database-target.mjs";
+import { PRODUCTION_APPLY_TARGETS } from "../lib/vacilando/trusted-host-production-migrate.mjs";
+import { LEDGER_REPAIR_TARGETS } from "../lib/vacilando/trusted-host-ledger-repair.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..", "..");
@@ -106,9 +108,14 @@ test("an unusable connection string refuses rather than being parsed optimistica
 
 // ── The child enforces it too, so the guard is not only advisory ────────────
 
-function runChild(environment, certUrl) {
+/*
+ * The child now takes the RESOLVED TARGET CLASS, not an environment name. The
+ * alias vocabulary lives in the resolver and nowhere else — it used to live
+ * here too, and the copy here was the one that went stale.
+ */
+function runChild(targetClass, certUrl) {
   try {
-    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-out.tmp", "/tmp/thm-err.tmp", environment], {
+    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-out.tmp", "/tmp/thm-err.tmp", targetClass], {
       env: {
         ...process.env,
         ALLOY_CANONICAL_ROOT: REPO,
@@ -134,19 +141,25 @@ function runChild(environment, certUrl) {
 }
 
 test("the apply child refuses a certification request pointed at deployed infrastructure", () => {
-  const r = runChild("certification", DEPLOYED);
+  const r = runChild(TARGET_CLASS.CERTIFICATION, DEPLOYED);
   assert.notEqual(r.status, 0, "must not proceed to psql");
   assert.match(r.stderr, /target_environment_mismatch/);
 });
 
-test("the apply child refuses an unknown environment", () => {
-  const r = runChild("bogus", CERT);
-  assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /target_resolution_failed/);
+test("the apply child refuses a class it cannot connect, and refuses an empty one", () => {
+  // Fail closed at the last boundary too. The resolver refuses unknown NAMES
+  // before a process is spawned; this is the backstop for anything that reaches
+  // the child anyway — including a caller that forgets the argument entirely,
+  // which is how every ledger repair would have died silently.
+  for (const bogus of ["bogus_class", ""]) {
+    const r = runChild(bogus, CERT);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /target_resolution_failed/);
+  }
 });
 
 test("the apply child refuses certification with no explicit certification credential", () => {
-  const r = runChild("certification", "");
+  const r = runChild(TARGET_CLASS.CERTIFICATION, "");
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /trusted_credential_unavailable/);
 });
@@ -163,7 +176,7 @@ test("the child loads the certification credential from the host config, not jus
   let status = 0;
   let stderr = "";
   try {
-    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-cfg-out.tmp", "/tmp/thm-cfg-err.tmp", "certification"], {
+    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-cfg-out.tmp", "/tmp/thm-cfg-err.tmp", TARGET_CLASS.CERTIFICATION], {
       env: {
         ...process.env,
         ALLOY_CANONICAL_ROOT: REPO,
@@ -184,4 +197,114 @@ test("the child loads the certification credential from the host config, not jus
   assert.doesNotMatch(stderr, /trusted_credential_unavailable/,
     "the configured credential must be found rather than reported missing");
   assert.notEqual(status, 42, "must not refuse as unconfigured when the host config supplies the target");
+});
+
+// ── The deployed primary, and the contract that broke ───────────────────────
+
+test("the registered deployed primary resolves to its own deployed class", () => {
+  const r = resolveTrustedDatabaseTarget("alloy_deployed_primary");
+  assert.equal(r.ok, true);
+  assert.equal(r.targetClass, TARGET_CLASS.DEPLOYED_PRIMARY);
+  assert.equal(r.connectionSourceKind, "trusted_server_env");
+  assert.equal(r.expectedHostIsLocal, false);
+  // Safe to write into an audit row: a name, never a connection string.
+  assert.ok(!/:\/\/|@|password/i.test(r.targetId));
+});
+
+test("every target governance accepts is a target this resolver knows", () => {
+  /*
+   * THE REGRESSION, STATED AS A RULE.
+   *
+   * `database.apply_promoted_migration` validated `alloy_deployed_primary`
+   * against PRODUCTION_APPLY_TARGETS, passed it down as the environment, and
+   * the resolver had never heard of it. Three production applies died at this
+   * seam having contacted no database at all. A name that clears governance and
+   * dies in the resolver is not a safety control; it is a broken contract.
+   *
+   * Deliberately a test rather than an import: these lists answer different
+   * questions — which action may touch a database, versus which database a name
+   * means — and importing one into the other would be a cycle.
+   */
+  for (const target of [...PRODUCTION_APPLY_TARGETS, ...LEDGER_REPAIR_TARGETS]) {
+    const r = resolveTrustedDatabaseTarget(target);
+    assert.equal(r.ok, true, `${target} is accepted by a governed action but unknown to the resolver`);
+  }
+});
+
+test("a deployed target still refuses to land on the throwaway stack", () => {
+  const r = assertTargetMatchesEnvironment("alloy_deployed_primary", CERT);
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "target_environment_mismatch");
+  assert.match(r.detail, /alloy_deployed_primary/);
+});
+
+test("the deployed primary accepts a deployed connection", () => {
+  assert.equal(assertTargetMatchesEnvironment("alloy_deployed_primary", DEPLOYED).ok, true);
+});
+
+test("an unregistered name refuses, and refuses by name", () => {
+  const r = resolveTrustedDatabaseTarget("alloy_deployed_secondary");
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "target_resolution_failed");
+  assert.match(r.detail, /alloy_deployed_secondary/);
+});
+
+test("no unresolved name is ever handed a connection source", () => {
+  // The fix must not become "unknown target, use whatever we have".
+  for (const name of ["", "  ", "production", "prod", "bogus", "alloy_deployed_secondary"]) {
+    const r = resolveTrustedDatabaseTarget(name);
+    assert.equal(r.ok, false, `${JSON.stringify(name)} must not resolve`);
+    assert.equal(r.connectionSourceKind, undefined);
+  }
+});
+
+test("the deployed primary reaches the database — the exact handoff that was broken", () => {
+  /*
+   * THE REGRESSION TEST THAT MATTERS.
+   *
+   * Three governed production applies died here with exit 45, having assigned
+   * no DATABASE_URL, opened no connection and dispatched no SQL. Proving the
+   * resolver knows the name is not enough: the name has to survive the handoff
+   * into the child and come out the other side as a connection attempt.
+   *
+   * So this drives the real child with the real deployed class, and points the
+   * trusted env source at a throwaway file whose URL goes nowhere. Getting
+   * "connection refused" is the pass: it means target resolution succeeded,
+   * DATABASE_URL was assigned, the host/port guard allowed it, and psql ran.
+   * Nothing real is touched — the canonical root is a temp directory, so the
+   * host's own .env.local cannot be picked up by accident.
+   */
+  const dir = mkdtempSync(join(tmpdir(), "alloy-deployed-seam-"));
+  const envFile = join(dir, "env");
+  const fakeRoot = join(dir, "root");
+  mkdirSync(fakeRoot, { recursive: true });
+  writeFileSync(envFile, "DATABASE_URL=postgresql://u:p@127.0.0.1:1/postgres\n");
+
+  let status = 0;
+  let stderr = "";
+  const errFile = join(dir, "err");
+  try {
+    execFileSync("bash", [CHILD, "/dev/null", join(dir, "out"), errFile, TARGET_CLASS.DEPLOYED_PRIMARY], {
+      env: {
+        ...process.env,
+        ALLOY_CANONICAL_ROOT: fakeRoot,
+        ALLOY_REPO: fakeRoot,
+        VACILANDO_CHECKOUT: REPO,
+        ALLOY_WORKTREE: REPO,
+        ALLOY_SERVER_ENV_SOURCE: envFile,
+      },
+      stdio: "ignore",
+    });
+  } catch (error) {
+    status = error.status ?? -1;
+  }
+  try { stderr = readFileSync(errFile, "utf8"); } catch { /* */ }
+
+  assert.doesNotMatch(stderr, /target_resolution_failed/, "the deployed primary must get past target resolution");
+  assert.doesNotMatch(stderr, /target_environment_mismatch/);
+  assert.notEqual(status, 45);
+  // It got all the way to the client, which only happens once DATABASE_URL exists.
+  assert.match(stderr, /psql: error: connection to server/);
+  // And the failure it reports names a host and a port, never a credential.
+  assert.doesNotMatch(stderr, /u:p@|password/i);
 });
