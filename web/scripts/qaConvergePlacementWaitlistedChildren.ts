@@ -19,6 +19,14 @@
  * would defeat the point -- the destination-stage work reconciliation that opens
  * `review_waitlist_position` hangs off that runtime, not off the row.
  *
+ * ── IT NOW ALSO BRINGS MISSING TRACKS INTO EXISTENCE ──
+ *
+ * Unchanged here, and worth stating because the behaviour changed underneath it: a child that never
+ * crossed into a child-grain stage has no process instance at all, and this used to fail closed on
+ * them with "no enrollment track was found". The canonical runtime it calls now ensures the track at
+ * the grain crossing, so those children converge on the same path as everyone else — the boundary is
+ * defined once, in the target executor, and this script inherits it rather than restating it.
+ *
  * ── IDEMPOTENT ──
  *
  * A child already at `waitlist` is skipped before any write (`already_converged`). Should one be
