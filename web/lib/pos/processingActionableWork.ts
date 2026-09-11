@@ -65,18 +65,47 @@ export function isProcessingTerminalStatus(status: string | null | undefined): b
 }
 
 /**
- * Page size for the actionable read.
+ * ── Why this is read in BANDS rather than as one page ─────────────────────────────────────────
  *
- * Capped at the queue endpoint's `MAX_QUEUE_LIMIT`. This is a ceiling, not a window: the read is
- * already narrowed to the actionable statuses, so it is not competing with completed/archived
- * history for room the way the unfiltered recency page was.
+ * Filtering by status is necessary and was not sufficient. Measured against the certification
+ * tenant through the running app:
+ *
+ *   counts                                    received 139 · needs_resolution 6 · archived 2
+ *   GET /queue                     (old)      25 rows — ALL received
+ *   GET /queue?status=<actionable>&limit=100  100 rows — ALL received
+ *   GET /queue?status=needs_review,needs_resolution&limit=100   6 rows — the six
+ *
+ * The middle line is the trap. A single status-filtered page is STILL a recency page, so 139
+ * `received` cases crowd out all six `needs_resolution` ones long before the limit is reached. The
+ * cohort would have looked fixed in every unit test and stayed broken on the only tenant that
+ * matters, because the six were never competing on attention — they were competing on age.
+ *
+ * So the cohort is read as bands, each on its own budget. A band that is large cannot starve a band
+ * that is urgent. `decision` is first because a case parked awaiting a human decision outranks one
+ * that merely arrived.
  */
-export const PROCESSING_ACTIONABLE_LIMIT = 100;
+export interface ProcessingActionableBand {
+    key: "decision" | "intake";
+    statuses: ProcessingCaseStatus[];
+    limit: number;
+}
 
-/** Query string for the actionable cohort read against `/api/admin/processing/queue`. */
-export function processingActionableQueryString(): string {
+export const PROCESSING_ACTIONABLE_BANDS: ProcessingActionableBand[] = [
+    // Explicitly awaiting an operator: review it, or decide it. Small, urgent, easily starved.
+    { key: "decision", statuses: ["needs_review", "needs_resolution"], limit: 100 },
+    // Arrived, or mid-automation. The bulk of the cohort, and the reason banding is needed at all.
+    { key: "intake", statuses: ["received", "processing"], limit: 100 },
+];
+
+/** Query string for one band against `/api/admin/processing/queue`. */
+export function processingActionableBandQueryString(band: ProcessingActionableBand): string {
     const params = new URLSearchParams();
-    params.set("status", PROCESSING_ACTIONABLE_STATUSES.join(","));
-    params.set("limit", String(PROCESSING_ACTIONABLE_LIMIT));
+    params.set("status", band.statuses.join(","));
+    params.set("limit", String(band.limit));
     return params.toString();
+}
+
+/** Every band's query string, highest attention first. */
+export function processingActionableQueryStrings(): string[] {
+    return PROCESSING_ACTIONABLE_BANDS.map(processingActionableBandQueryString);
 }

@@ -244,26 +244,23 @@ export default function ProcessingQueueList({
      * the section that holds it is the other half.
      */
     const requestedRow = requestedCaseId ? rows.find((r) => r.id === requestedCaseId) ?? null : null;
-    const requestedFolderSignature = requestedRow
-        ? [
-              deriveWorkLane(requestedRow) === "completed" ? "completed" : "incoming",
-              ...categoryFolders.filter((f) => caseMatchesCategoryFolder(requestedRow, f.id)).map((f) => f.id),
-          ].join(",")
+    /*
+     * EXACTLY ONE folder, not every folder that contains the case.
+     *
+     * Folders are overlapping filter layers: an Incoming case that also matches a category renders
+     * in BOTH sections. Opening both put two copies of the requested row on screen, both marked
+     * `aria-current` — caught in the browser, where the rail showed the case twice. The most
+     * specific section wins, so the operator gets one row in the place that describes it best.
+     */
+    const requestedFolder = requestedRow
+        ? deriveWorkLane(requestedRow) === "completed"
+            ? "completed"
+            : categoryFolders.find((f) => caseMatchesCategoryFolder(requestedRow, f.id))?.id ?? "incoming"
         : "";
     useEffect(() => {
-        if (!requestedFolderSignature) return;
-        setOpenFolders((prev) => {
-            let changed = false;
-            const next = { ...prev };
-            for (const key of requestedFolderSignature.split(",")) {
-                if (!next[key]) {
-                    next[key] = true;
-                    changed = true;
-                }
-            }
-            return changed ? next : prev;
-        });
-    }, [requestedFolderSignature]);
+        if (!requestedFolder) return;
+        setOpenFolders((prev) => (prev[requestedFolder] ? prev : { ...prev, [requestedFolder]: true }));
+    }, [requestedFolder]);
 
     const load = refresh;
 

@@ -16,7 +16,7 @@
 import type { ProcessingCaseQueueRow } from "@/lib/pos/processingCase/readModel/types";
 import type { QueueRecommendationSummary } from "@/lib/pos/processingCase/recommendation/recommendationSummary";
 import { createWarmCache, type WarmCacheEntryState } from "@/lib/runtime/warmCache";
-import { processingActionableQueryString } from "@/lib/pos/processingActionableWork";
+import { processingActionableQueryStrings } from "@/lib/pos/processingActionableWork";
 
 /**
  * The two questions this cache answers, which used to be one entry and should never have been.
@@ -49,25 +49,43 @@ interface QueueResponse {
     };
 }
 
-function queueUrlForScope(scope: ProcessingQueueScope): string {
-    if (scope === "actionable") return `/api/admin/processing/queue?${processingActionableQueryString()}`;
-    return "/api/admin/processing/queue";
+async function readQueue(queryString: string): Promise<ProcessingQueueWarmData> {
+    const url = queryString ? `/api/admin/processing/queue?${queryString}` : "/api/admin/processing/queue";
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    const body = (await res.json()) as QueueResponse;
+    return {
+        rows: Array.isArray(body.data?.rows) ? body.data.rows : [],
+        counts: body.data?.counts ?? {},
+        recommendations: body.data?.recommendations ?? {},
+    };
+}
+
+/**
+ * The actionable cohort, read as BANDS and merged.
+ *
+ * One status-filtered page was not enough: on the certification tenant 139 `received` cases filled
+ * a 100-row page and all six `needs_resolution` cases fell off the end, exactly as they had under
+ * the unfiltered 25-row page. Reading each band on its own budget is what stops a large band from
+ * starving an urgent one. `counts` are org-wide (the count query ignores the status filter), so the
+ * first band's counts describe the whole tenant.
+ */
+async function readActionableCohort(): Promise<ProcessingQueueWarmData> {
+    const bands = await Promise.all(processingActionableQueryStrings().map(readQueue));
+    const byId = new Map<string, ProcessingCaseQueueRow>();
+    const recommendations: Record<string, QueueRecommendationSummary> = {};
+    for (const band of bands) {
+        for (const row of band.rows) if (!byId.has(row.id)) byId.set(row.id, row);
+        Object.assign(recommendations, band.recommendations);
+    }
+    return { rows: [...byId.values()], counts: bands[0]?.counts ?? {}, recommendations };
 }
 
 const warmCache = createWarmCache<ProcessingQueueScope, ProcessingQueueWarmData>({
     keyOf: (scope) => `queue:${scope}`,
     staleMs: 20_000,
     errorMessage: "Failed to load processing queue",
-    fetcher: async (scope) => {
-        const res = await fetch(queueUrlForScope(scope), { credentials: "same-origin" });
-        if (!res.ok) throw new Error(`Request failed (${res.status})`);
-        const body = (await res.json()) as QueueResponse;
-        return {
-            rows: Array.isArray(body.data?.rows) ? body.data.rows : [],
-            counts: body.data?.counts ?? {},
-            recommendations: body.data?.recommendations ?? {},
-        };
-    },
+    fetcher: async (scope) => (scope === "actionable" ? readActionableCohort() : readQueue("")),
 });
 
 export function getProcessingQueueWarmSnapshot(scope: ProcessingQueueScope = "browse"): ProcessingQueueWarmState {

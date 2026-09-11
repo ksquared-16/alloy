@@ -20,11 +20,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    PROCESSING_ACTIONABLE_LIMIT,
+    PROCESSING_ACTIONABLE_BANDS,
     PROCESSING_ACTIONABLE_STATUSES,
     isProcessingActionableStatus,
     isProcessingTerminalStatus,
-    processingActionableQueryString,
+    processingActionableQueryStrings,
 } from "@/lib/pos/processingActionableWork";
 import {
     mapProcessingCaseToWorkItemRow,
@@ -82,23 +82,47 @@ describe("the actionable-work cohort is a status predicate, not a page window", 
         expect(mapProcessingCaseToWorkItemRow(caseRow("r1", "ready"))).toBeNull();
     });
 
-    it("asks the queue endpoint for the cohort explicitly rather than accepting the default page", () => {
-        const qs = processingActionableQueryString();
-        const params = new URLSearchParams(qs);
-        expect(params.get("status")?.split(",")).toEqual(PROCESSING_ACTIONABLE_STATUSES);
-        expect(Number(params.get("limit"))).toBe(PROCESSING_ACTIONABLE_LIMIT);
-        // The whole defect in one assertion: the cohort read must not inherit the 25-row page.
-        expect(Number(params.get("limit"))).toBeGreaterThan(DEFAULT_QUEUE_LIMIT);
+    it("reads the decision band SEPARATELY, so a large band cannot starve an urgent one", () => {
+        /*
+         * Measured on the certification tenant through the running app — this is the assertion that
+         * a status filter alone would have passed while the tenant stayed broken:
+         *
+         *   GET /queue                                       25 rows, ALL received
+         *   GET /queue?status=<all four actionable>&limit=100 100 rows, STILL ALL received
+         *   GET /queue?status=needs_review,needs_resolution   the six needs_resolution cases
+         *
+         * 139 `received` cases outrank all six on `created_at` long before any limit is reached.
+         * The cohort is therefore read per band, never as one page.
+         */
+        const decision = PROCESSING_ACTIONABLE_BANDS.find((b) => b.key === "decision");
+        expect(decision?.statuses).toEqual(["needs_review", "needs_resolution"]);
+        expect(decision?.statuses).not.toContain("received");
+
+        const intake = PROCESSING_ACTIONABLE_BANDS.find((b) => b.key === "intake");
+        expect(intake?.statuses).toContain("received");
+
+        // Every actionable status is covered by exactly one band — no status silently unread.
+        const banded = PROCESSING_ACTIONABLE_BANDS.flatMap((b) => b.statuses);
+        expect([...banded].sort()).toEqual([...PROCESSING_ACTIONABLE_STATUSES].sort());
+        expect(new Set(banded).size).toBe(banded.length);
     });
 
-    it("round-trips through the request builder as a status filter, not a recency page", () => {
-        const { query } = buildProcessingQueueRequest(
-            new URLSearchParams(processingActionableQueryString()),
-            "org-1",
+    it("round-trips each band through the request builder as a status filter, not a recency page", () => {
+        const queries = processingActionableQueryStrings().map(
+            (qs) => buildProcessingQueueRequest(new URLSearchParams(qs), "org-1").query,
         );
-        expect(query.statuses).toEqual(PROCESSING_ACTIONABLE_STATUSES);
-        expect(query.statuses).toContain("needs_resolution");
-        expect(query.limit).toBe(PROCESSING_ACTIONABLE_LIMIT);
+        expect(queries).toHaveLength(PROCESSING_ACTIONABLE_BANDS.length);
+
+        const decision = queries[0];
+        expect(decision.statuses).toEqual(["needs_review", "needs_resolution"]);
+        // The decision band must not inherit the 25-row default page either.
+        expect(decision.limit).toBeGreaterThan(DEFAULT_QUEUE_LIMIT);
+
+        // `needs_resolution` is read on a budget it shares with nothing large.
+        expect(queries.filter((q) => q.statuses?.includes("needs_resolution"))).toHaveLength(1);
+        expect(queries.find((q) => q.statuses?.includes("needs_resolution"))?.statuses).not.toContain(
+            "received",
+        );
     });
 });
 

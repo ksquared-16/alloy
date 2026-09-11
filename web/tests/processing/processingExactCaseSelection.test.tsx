@@ -159,6 +159,33 @@ describe("Processing — the requested case outranks default-lane membership", (
         expect(selected).toEqual(["case-off-page"]);
     });
 
+    it("renders the requested case EXACTLY ONCE, in one folder", async () => {
+        /*
+         * Folders are overlapping filter layers: an Incoming case that also matches a category
+         * belongs to both sections. Auto-opening every section that contains the requested case put
+         * two copies of it on screen, both marked `aria-current` — the browser proof caught it. One
+         * ask means one row.
+         */
+        warmRows.current = [caseRow("case-on-page-1")];
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({ data: { rows: [caseRow("case-off-page", { adminCategory: "enrollment" })] } }),
+            }),
+        );
+
+        setProcessingRequestedCase("case-off-page");
+        const el = await renderRail("case-off-page");
+
+        const occurrences = rowIdsOnScreen(el).filter((id) => id === "case-off-page");
+        expect(occurrences).toHaveLength(1);
+        const selected = [...el.querySelectorAll('[aria-current="true"]')].map((n) =>
+            n.getAttribute("data-processing-case-id"),
+        );
+        expect(selected).toEqual(["case-off-page"]);
+    });
+
     it("opens the folder holding the requested case — a collapsed folder hides it just as well", async () => {
         warmRows.current = [caseRow("case-on-page-1")];
         vi.stubGlobal(
