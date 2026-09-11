@@ -10,7 +10,8 @@
 
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -114,6 +115,12 @@ function runChild(environment, certUrl) {
         ALLOY_REPO: REPO,
         VACILANDO_CHECKOUT: REPO,
         ALLOY_WORKTREE: REPO,
+        // Point the config loader at a file that does not exist, so the test
+        // judges the CHILD rather than whatever this host happens to have
+        // configured. Without this, "no credential" silently becomes "the
+        // operator's real certification credential" and the refusal path stops
+        // being exercised on a correctly configured machine.
+        ALLOY_CONFIG_FILE: "/nonexistent/alloy-dev-config-for-tests",
         ALLOY_CERT_DATABASE_URL: certUrl ?? "",
       },
       stdio: "ignore",
@@ -142,4 +149,39 @@ test("the apply child refuses certification with no explicit certification crede
   const r = runChild("certification", "");
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /trusted_credential_unavailable/);
+});
+
+test("the child loads the certification credential from the host config, not just the environment", () => {
+  // The gap this locks: sourcing common.sh DEFINES alloy_load_config without
+  // RUNNING it, so a correctly configured host still refused — the value sat in
+  // the config file and never reached the shell. Publishing configuration that
+  // has no effect is worse than having none, because it reads as done.
+  const dir = mkdtempSync(join(tmpdir(), "alloy-cert-cfg-"));
+  const cfg = join(dir, "config");
+  writeFileSync(cfg, `ALLOY_CERT_DATABASE_URL="${CERT}"\n`);
+
+  let status = 0;
+  let stderr = "";
+  try {
+    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-cfg-out.tmp", "/tmp/thm-cfg-err.tmp", "certification"], {
+      env: {
+        ...process.env,
+        ALLOY_CANONICAL_ROOT: REPO,
+        ALLOY_REPO: REPO,
+        VACILANDO_CHECKOUT: REPO,
+        ALLOY_WORKTREE: REPO,
+        ALLOY_CONFIG_FILE: cfg,
+        // Deliberately absent from the environment: the config must supply it.
+        ALLOY_CERT_DATABASE_URL: "",
+      },
+      stdio: "ignore",
+    });
+  } catch (error) {
+    status = error.status ?? -1;
+    try { stderr = readFileSync("/tmp/thm-cfg-err.tmp", "utf8"); } catch { /* */ }
+  }
+
+  assert.doesNotMatch(stderr, /trusted_credential_unavailable/,
+    "the configured credential must be found rather than reported missing");
+  assert.notEqual(status, 42, "must not refuse as unconfigured when the host config supplies the target");
 });
