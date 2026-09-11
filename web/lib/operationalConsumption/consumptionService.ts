@@ -30,6 +30,8 @@ import {
 import { resolveConsumption, type ConsumptionResolution } from "@/lib/operationalConsumption/resolveConsumption";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
+import { valueVacationCredit, type VacationCreditValuation } from "@/lib/operationalConsumption/vacationCreditValuation";
+import type { VacationTreatment } from "@/lib/financials/policies/financialPolicyTypes";
 import type { ChildcareRatePlanRow, ChildcareRateRuleRow } from "@/lib/financials/rates/rateTypes";
 // Phase 9 — Billing prices tuition from Commercial Execution (frozen V1), not Substrate A.
 import { composeCommercialExport } from "@/lib/commercial/execution/export";
@@ -263,7 +265,6 @@ function buildCandidate(fact: OperationalFactDto, today: string): ConsumptionCan
             check_out_time: fact.checkOutTime ?? null,
             late_threshold_time: fact.lateThresholdTime ?? null,
             hours: fact.hours ?? null,
-            vacation_eligible: fact.vacationEligible ?? null,
             schedule_basis: fact.scheduleBasis ?? null,
         },
     };
@@ -590,7 +591,6 @@ async function previewAttendanceConsumption(
     const candidate = buildCandidate(fact, today);
     const agreementId = agreementIdFromFact(fact);
     const scope = await resolveAgreementScope(supabase, orgId, fact, agreementId);
-    const interpretation = interpretAttendance(fact);
 
     const plans = await listRows<ChildcareRatePlanRow>(supabase, RATE_PLANS_TABLE, orgId);
     const rules = await listRows<ChildcareRateRuleRow>(supabase, RATE_RULES_TABLE, orgId);
@@ -599,6 +599,20 @@ async function previewAttendanceConsumption(
     const anchorDate = fact.occursOn ?? fact.eventDate ?? today;
     const periodStart = fact.periodStart ?? firstOfMonth(anchorDate);
     const policyCtx = { locationId: scope.siteLocationId ?? undefined, serviceId: undefined, ratePlanId: undefined };
+
+    /*
+     * POLICY IS RESOLVED BEFORE INTERPRETATION, because interpretation now needs
+     * it. `vacation_credit` goes through the ordinary scope hierarchy — org,
+     * location, service, rate plan, most-specific-wins, effective-dated — with no
+     * attendance-specific precedence of its own. The interpreter stays pure; the
+     * commercial answer is handed to it.
+     */
+    const vacationPolicy = resolveFinancialPolicy(policies, "vacation_credit", policyCtx, anchorDate);
+    const vacationTreatment = vacationPolicy.resolved
+        ? ((vacationPolicy.policy.value as { treatment?: VacationTreatment }).treatment ?? null)
+        : null;
+    const interpretation = interpretAttendance(fact, { vacationTreatment });
+
     const proration = resolveFinancialPolicy(policies, "proration", policyCtx, anchorDate);
     const reviewPolicy = resolveFinancialPolicy(policies, "posting_review", policyCtx, anchorDate);
     const reviewByPolicy = reviewPolicy.resolved ? reviewPolicy.policy.value.required === true : false;
@@ -606,7 +620,22 @@ async function previewAttendanceConsumption(
     const hasVacationCredit = interpretation.directives.some((d) => d.obligationKind === "vacation_credit");
     const policiesApplied: PolicyApplication[] = [
         { policyType: "posting_review", scope: reviewPolicy.resolved ? reviewPolicy.sourceScope : null, value: reviewPolicy.resolved ? reviewPolicy.policy.value : null, applied: reviewByPolicy, effect: reviewByPolicy ? "obligations flagged review_required" : "no review required" },
-        { policyType: "vacation_credit_eligibility", scope: null, value: { eligible: fact.vacationEligible === true }, applied: hasVacationCredit, effect: hasVacationCredit ? "absence → vacation credit (preview)" : "no vacation credit (not eligible / not an absence)" },
+        /*
+         * The REAL resolved policy, with its scope, replacing a synthetic entry
+         * that reported `scope: null` and a value read off the fact. The lineage
+         * an auditor reads must name the policy that actually decided.
+         */
+        {
+            policyType: "vacation_credit",
+            scope: vacationPolicy.resolved ? vacationPolicy.sourceScope : null,
+            value: vacationPolicy.resolved ? vacationPolicy.policy.value : null,
+            applied: hasVacationCredit,
+            effect: vacationTreatment === "credit"
+                ? "vacation policy = credit → absence earns a vacation credit"
+                : vacationTreatment === "no_credit"
+                  ? "vacation policy = no_credit → no credit"
+                  : "no vacation_credit policy configured → no automatic credit",
+        },
         { policyType: "proration", scope: proration.resolved ? proration.sourceScope : null, value: proration.resolved ? proration.policy.value : null, applied: hasVacationCredit, effect: proration.resolved ? `method=${(proration.policy.value as { method?: string }).method ?? "?"}` : "no proration policy (default none)" },
     ];
 
@@ -865,7 +894,48 @@ async function resolveDirective(
 
     // Non-draftable (proration / proration_credit / vacation_credit) — preview only.
     const proratedDays = fact.proratedDays ?? (directive.obligationKind === "vacation_credit" ? 1 : null);
-    const amount = prorateAmountCents(rateAmount, proratedDays, fact.periodDays);
+
+    /*
+     * A VACATION CREDIT IS VALUED AGAINST THE TUITION THE FAMILY AGREED TO.
+     *
+     * `rateAmount` above resolves from an accepted term or from the directive's
+     * schedule basis, and a vacation-credit directive carries neither — it has no
+     * basis, because it is not pricing a day of care. So the amount came out null
+     * whatever the catalog said.
+     *
+     * The agreed term for the period is the right source: a credit gives back
+     * part of what was billed, and deriving it from today's catalog would hand
+     * back money against a price nobody agreed to. `valueVacationCredit` reuses
+     * the SAME term selection tuition generation performs, so the credit and the
+     * charge cannot disagree about which price was in force.
+     */
+    let vacationValuation: VacationCreditValuation | null = null;
+    if (directive.obligationKind === "vacation_credit" && ctx.agreementId) {
+        vacationValuation = await valueVacationCredit(supabase, {
+            orgId,
+            enrollmentAgreementId: ctx.agreementId,
+            anchorDate: ctx.anchorDate,
+            creditedDays: proratedDays ?? 1,
+            prorationMethod: ctx.prorationMethod as Parameters<typeof valueVacationCredit>[1]["prorationMethod"],
+        });
+    }
+
+    const amount = vacationValuation
+        ? (vacationValuation.resolved ? vacationValuation.amountCents : null)
+        : prorateAmountCents(rateAmount, proratedDays, fact.periodDays);
+
+    /*
+     * A CREDIT THE POLICY GRANTED BUT NOBODY CAN VALUE IS NOT A REFUSAL.
+     *
+     * Commerce has already said this vacation earns a credit. If the amount will
+     * not resolve — no rate for the child's plan, no period length — then the
+     * honest state is "owed, and unresolved", not `no_charge`. Reporting it as
+     * no_charge would make it indistinguishable from a `no_credit` policy, and the
+     * family would quietly not receive money an organisation decided they were
+     * due. It fails closed on the money and opens the existing review lifecycle
+     * instead, which is where an operator already looks.
+     */
+    const unresolvedValuation = amount == null;
     return {
         obligation: {
             obligationKind: directive.obligationKind,
@@ -878,11 +948,46 @@ async function resolveDirective(
             billableOn: ctx.anchorDate,
             periodStart,
             periodEnd: fact.periodEnd ?? null,
-            reviewRequired: ctx.reviewByPolicy,
+            reviewRequired: ctx.reviewByPolicy || unresolvedValuation,
             draftable: false,
             status: amount != null ? "previewed" : "no_charge",
             resolutionKey: `cons:${directive.obligationKind}:${ctx.anchorDate}:${ctx.agreementId ?? fact.sourceEntityId}`,
-            explanation: { directive_reason: directive.reason, proration_method: ctx.prorationMethod, prorated_days: proratedDays, period_days: fact.periodDays ?? null, full_period_amount_cents: rateAmount, note: "preview only; the adjustment/credit posts downstream" },
+            explanation: {
+                directive_reason: directive.reason,
+                proration_method: ctx.prorationMethod,
+                prorated_days: proratedDays,
+                period_days: fact.periodDays ?? null,
+                full_period_amount_cents: rateAmount,
+                note: "preview only; the adjustment/credit posts downstream",
+                ...(vacationValuation?.resolved
+                    ? {
+                          /*
+                           * THE AUDIT ANSWER, structured rather than prose: which
+                           * agreed term this credit reduced, and the three numbers
+                           * that produced the amount. An operator asked "why this
+                           * figure" can reconstruct it without rerunning anything.
+                           */
+                          accepted_term_id: vacationValuation.termId,
+                          accepted_period_amount_cents: vacationValuation.acceptedPeriodAmountCents,
+                          period_key: vacationValuation.periodKey,
+                          credited_days: vacationValuation.creditedDays,
+                          period_days_used: vacationValuation.periodDays,
+                      }
+                    : {}),
+                ...(unresolvedValuation
+                    ? {
+                          // Named so review reads as a valuation gap, never as a commercial refusal.
+                          unresolved_valuation: vacationValuation
+                              ? vacationValuation.resolved
+                                  ? "unknown"
+                                  : vacationValuation.reason
+                              : rateAmount == null
+                                ? "no_rate_resolved"
+                                : "no_period_length",
+                          review_reason: "a granted consequence whose amount could not be resolved",
+                      }
+                    : {}),
+            },
         },
         chargePreview: null,
         template: null,

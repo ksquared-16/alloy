@@ -25,8 +25,9 @@ describe("deriveAttendanceFactType — exhaustive, context-sensitive", () => {
     });
 
     it("absence → absence regardless of vacation eligibility (interpreter decides the credit)", () => {
-        expect(deriveAttendanceFactType({ eventKind: "absence", vacationEligible: true })).toBe("absence");
-        expect(deriveAttendanceFactType({ eventKind: "absence", vacationEligible: false })).toBe("absence");
+        expect(deriveAttendanceFactType({ eventKind: "absence" })).toBe("absence");
+        // An absence translates the same way whatever commerce later decides.
+        expect(deriveAttendanceFactType({ eventKind: "absence" })).toBe("absence");
     });
 
     it("present → expected vs unexpected attendance", () => {

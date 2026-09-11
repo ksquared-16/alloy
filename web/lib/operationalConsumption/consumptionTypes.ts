@@ -203,8 +203,6 @@ export type OperationalFactDto = {
     lateThresholdTime?: string | null;
     /** Hours of care (for hourly/extended billing). */
     hours?: number | null;
-    /** Whether the child is vacation-credit eligible (policy-supplied) — gates absence → vacation credit. */
-    vacationEligible?: boolean | null;
 
     // --- Correction identity (D12a) ---
     /**
