@@ -4402,7 +4402,109 @@ function doNotRetryLine(actionKey) {
   return "Do not retry this action from this lane. It already executed; read the result and continue.";
 }
 
-export function continuationTextForGovernedAction(rec, action = null) {
+/**
+ * WHAT A LANE MAY DO ABOUT ITS RUN — READ OFF THE RUN, NEVER ASSUMED.
+ *
+ * THE DEFECT THIS CLOSES. Two notification builders below spoke about the
+ * Execution Run without ever looking at it. The success notice appended
+ * `vac run-status <run> complete` whenever the record carried a run id, and the
+ * failure notice asserted "The current Execution Run is still open" on every
+ * failure, unconditionally.
+ *
+ * MEASURED, on lane_db3431e755a8. Run erun_0ef763c4a6a8e491 went
+ * QUEUED -> EXECUTING (admission_delivered) -> FAILED
+ * (delivery_unacknowledged, origin governor) in 30 seconds, and the lane's
+ * `current_run_id` was left null. THREE notifications then arrived: one
+ * asserting the run was still open, and two instructing a completion report.
+ * Every attempt was refused `illegal_transition (FAILED -> COMPLETE)`, which is
+ * the state machine being RIGHT. The instruction was the thing that was wrong.
+ *
+ * An operator handed an impossible cleanup step cannot tell "I did this wrong"
+ * from "the system asked for something that cannot exist", and the second is
+ * corrosive: it teaches the reader to distrust the instructions that ARE
+ * actionable.
+ *
+ * So: FAILED -> COMPLETE stays illegal. Nothing here mutates a run, and nothing
+ * here invents a transition to make a sentence true. What changes is that the
+ * sentence is derived from two facts the store already holds — the run's state,
+ * and whether the lane still owns it as its current run.
+ */
+export function runClosureGuidance(rec, {
+  root = runtimeRoot(),
+  getRun = null,
+  laneRun = null,
+} = {}) {
+  const runId = rec?.run_id || null;
+  const laneId = rec?.lane_id || null;
+  const none = { run_id: runId, lane_id: laneId, state: null, lane_owns_run: false, may_report_complete: false, lines: [] };
+  if (!runId) return none;
+
+  const lookup = getRun || ((id) => getExecutionRun(id, root) || findExecutionRun(id));
+  let run = null;
+  try { run = lookup(runId); } catch { run = null; }
+  const state = run ? String(run.state || "").toUpperCase() : null;
+
+  const laneLookup = laneRun || ((id) => activeRunForLane(id, root));
+  let active = null;
+  try { active = laneId ? laneLookup(laneId) : null; } catch { active = null; }
+  const laneOwnsRun = Boolean(active && active.run_id === runId);
+  const laneFlag = laneId ? ` --lane ${laneId}` : "";
+
+  /*
+   * A run the canonical owner has never heard of. Naming a close command for it
+   * would be the run_not_found substitution one layer up, in prose.
+   */
+  if (!run) {
+    return {
+      ...none,
+      lines: [`Execution Run ${runId} is not in the canonical run store, so nothing can be filed against it. Do not report a state for it.`],
+    };
+  }
+
+  if (state === "COMPLETE") {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun,
+      lines: [`Execution Run ${runId} is already COMPLETE. It needs no closing report; do not report it again.`],
+    };
+  }
+
+  if (isTerminalRunState(state)) {
+    // WHY it ended, from the transition the governor actually wrote. "It failed"
+    // without a cause is what sends someone looking for their own mistake.
+    const last = Array.isArray(run.transitions) && run.transitions.length
+      ? run.transitions[run.transitions.length - 1]
+      : null;
+    const cause = last?.reason ? ` (${last.reason}${last.origin ? `, ${last.origin}` : ""})` : "";
+    const lines = [
+      `Execution Run ${runId} already terminated as ${state}${cause}. ${state} to COMPLETE is not a legal transition — do not report this run complete and do not try to close it.`,
+    ];
+    lines.push(laneOwnsRun
+      ? `Nothing can be filed against it. Continue only when a new Execution Run is delivered to this lane.`
+      : `This lane no longer owns an open Execution Run, so it has nothing to close. Recovery is the operator's: a new Execution Run carries the work forward.`);
+    return { ...none, state, lane_owns_run: laneOwnsRun, lines };
+  }
+
+  /*
+   * Non-terminal, and the lane's CURRENT run. Only here is a completion
+   * instruction the truth. A non-terminal run the lane no longer owns is
+   * somebody else's to report, and telling this lane to close it would hand it
+   * the same impossible step by a different route.
+   */
+  if (laneOwnsRun) {
+    return {
+      ...none, state, lane_owns_run: true, may_report_complete: true,
+      lines: [`When this assignment is finished, report: vac run-status ${runId} complete --summary "..."${laneFlag}`],
+    };
+  }
+  return {
+    ...none, state, lane_owns_run: false,
+    lines: active
+      ? [`Execution Run ${runId} is ${state}, but this lane's current run is ${active.run_id}. Report against the run the lane owns, not this one.`]
+      : [`Execution Run ${runId} is ${state} and is not this lane's current run, so do not report a state for it.`],
+  };
+}
+
+export function continuationTextForGovernedAction(rec, action = null, { root = runtimeRoot() } = {}) {
   const evidencePath = rec.result_ref || action?.result?.evidencePath || null;
   const envelope = governedResultEnvelope(rec.action_key, action?.result || rec.result || {});
   return redact([
@@ -4416,7 +4518,9 @@ export function continuationTextForGovernedAction(rec, action = null) {
     "Director executed this on the trusted host.",
     credentialIsolationLine(rec.action_key),
     doNotRetryLine(rec.action_key),
-    rec.run_id ? `When this assignment is finished, report: vac run-status ${rec.run_id} complete --summary "..."${rec.lane_id ? ` --lane ${rec.lane_id}` : ""}` : null,
+    // Derived from the run, never from the mere presence of a run id. A lane
+    // whose run already terminated is told that, not told to close it.
+    ...runClosureGuidance(rec, { root }).lines,
     "",
     envelope.ok ? "Bounded result summary:" : "RESULT ENVELOPE MISMATCH — the trusted-host result did not carry the shape this action produces. Report this rather than acting on it:",
     JSON.stringify(envelope.ok ? envelope.summary : envelope, null, 2),
@@ -4425,7 +4529,7 @@ export function continuationTextForGovernedAction(rec, action = null) {
   ].filter((line) => line != null).join("\n"));
 }
 
-export function continuationTextForFailedGovernedAction(rec) {
+export function continuationTextForFailedGovernedAction(rec, { root = runtimeRoot() } = {}) {
   return redact([
     "[VACILANDO GOVERNED ACTION FAILED]",
     `Request: ${rec.request_id}`,
@@ -4451,7 +4555,17 @@ export function continuationTextForFailedGovernedAction(rec) {
      */
     "This action did NOT complete, and nothing it would have changed has changed.",
     "Repository and database state remain whatever they were before this attempt — check them rather than inferring from this message.",
-    "The current Execution Run is still open. Wait for the next operator instruction in this lane, then continue the assignment.",
+    /*
+     * THIS LINE USED TO SAY "The current Execution Run is still open."
+     *
+     * Unconditionally, on every failed action — including one delivered to a
+     * lane whose run the governor had already failed and whose current_run_id
+     * was null. A notice that asserts a state it never read is the same class
+     * of defect as the merge claim above it, and it stranded the operator with
+     * a cleanup step the state machine correctly refuses.
+     */
+    ...runClosureGuidance(rec, { root }).lines,
+    "Wait for the next operator instruction in this lane, then continue the assignment.",
   ].filter((line) => line != null).join("\n"));
 }
 
@@ -4497,12 +4611,12 @@ export async function drainGovernedNotificationsForLane(laneId, {
     },
     buildText: async (rec) => {
       if (rec.notification_delivery?.kind === "governed_action_failed") {
-        return continuationTextForFailedGovernedAction(rec);
+        return continuationTextForFailedGovernedAction(rec, { root });
       }
       const action = rec.trusted_host_action_id
         ? await getTrustedHostAction(rec.trusted_host_action_id)
         : null;
-      return continuationTextForGovernedAction(rec, action);
+      return continuationTextForGovernedAction(rec, action, { root });
     },
   });
 }
@@ -4570,7 +4684,7 @@ export async function resumeLaneAfterFailedGovernedAction(requestId, {
   releaseRunAfterGovernedFailure(rec, { nowMs, root });
   const { sendLaneInstruction } = await import("./lanes.mjs");
   const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
-  const text = continuationTextForFailedGovernedAction(rec);
+  const text = continuationTextForFailedGovernedAction(rec, { root });
   const send = sendImpl || sendLaneInstruction;
   const start = startSessionImpl || startLaneAgentSession;
   let delivered = await send(rec.lane_id, text, {
@@ -4661,7 +4775,7 @@ export async function resumeLaneAfterGovernedAction(requestId, {
   const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
   const { getTrustedHostAction } = await import("./trusted-host-actions.mjs");
   const action = rec.trusted_host_action_id ? getTrustedHostAction(rec.trusted_host_action_id) : null;
-  const text = continuationTextForGovernedAction(rec, action);
+  const text = continuationTextForGovernedAction(rec, action, { root });
 
   if (rec.run_id) {
     const run = getExecutionRun(rec.run_id, root);
