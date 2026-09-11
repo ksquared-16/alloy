@@ -242,6 +242,25 @@ function WaitlistPlacementAdjustPopover({
                           action: "move",
                           pin_ordinal: Number.parseInt(pinOrdinal, 10),
                           reason: reason.trim() || "Manual waitlist position adjustment",
+                          /*
+                           * WHICH LIST, not what is in it.
+                           *
+                           * A position is meaningless without the list it indexes, so the command
+                           * names the queue the operator is reading and the server rebuilds that
+                           * list itself. Sending the order from here would be faster and wrong: the
+                           * client would then be a second ranking authority, which is the thing this
+                           * whole model exists to prevent.
+                           */
+                          work_unit_id: kernel.attention.get()?.destination?.workUnitId ?? null,
+                          /*
+                           * The slug, because the uuid is often not there yet. The kernel publishes
+                           * a canonical destination only once a surface has resolved one, and a row
+                           * can be adjusted before that — observed live: `destination` was null and
+                           * every move was refused. The slug is in the address bar from the first
+                           * paint, so it is the reliable half. The server resolves it against the
+                           * org, so this stays a NAME for a list and never a claim about its order.
+                           */
+                          work_unit_key: kernel.attention.get()?.target ?? null,
                       };
             if (action === "move") {
                 const n = Number.parseInt(pinOrdinal, 10);

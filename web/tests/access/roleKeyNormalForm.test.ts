@@ -31,13 +31,14 @@ function builder(data: unknown) {
     b.eq = () => b;
     b.in = () => b;
     b.order = () => b;
+    b.limit = () => b;
     b.maybeSingle = () => Promise.resolve({ data, error: null });
     b.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
         Promise.resolve({ data, error: null }).then(res, rej);
     return b;
 }
 
-/** A membership whose stored role is exactly `storedRole`, with an `admin` grant configured. */
+/** A membership whose stored role is exactly `storedRole`, with that role's grants configured. */
 function mockSupabase(storedRole: string): SupabaseClient {
     const from = vi.fn((table: string) => ({
         select: () => {
@@ -45,7 +46,24 @@ function mockSupabase(storedRole: string): SupabaseClient {
                 case "user_roles":
                     return builder([{ org_id: ORG, role: storedRole }]);
                 case "role_permission_grants":
-                    return builder([{ permission_key: "settings.users_roles" }]);
+                    /*
+                     * W-13 — the grant table now decides admission, so this fixture has to model it
+                     * rather than return one answer for every role.
+                     *
+                     * `portal.access` is seeded to `admin` and `ops` and to nothing else
+                     * (`20260911140000`), so the fixture grants it on exactly that condition. It is
+                     * keyed to the NORMALIZED role on purpose: that is what makes this file's claim
+                     * — preview ≡ runtime across `"admin "`, `"Admin"`, `"  AdMiN  "` — a claim
+                     * about the normal form rather than about a role name the fixture hard-codes.
+                     */
+                    return builder(
+                        ["admin", "ops"].includes(normalizeRoleKey(storedRole))
+                            ? [
+                                  { permission_key: "portal.access" },
+                                  { permission_key: "settings.users_roles" },
+                              ]
+                            : [{ permission_key: "settings.users_roles" }]
+                    );
                 case "user_access_profiles":
                     return builder({ department_scope: "all", site_scope: "all" });
                 default:

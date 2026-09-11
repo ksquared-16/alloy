@@ -69,6 +69,8 @@ const APPROVED_ADDITIONS: Record<string, string> = {
     "fin.subsidy": "20260909130000 — administering agency funding",
     "attendance.read": "20260909230000 — viewing child attendance",
     "attendance.record": "20260909230000 — recording child attendance",
+    "portal.access":
+        "20260911140000 — W-13, entering the operator portal at all; the capability that replaced the PORTAL_ROLES role literal",
 };
 
 describe("W-11 — the catalog is discovered completely", () => {
@@ -84,6 +86,11 @@ describe("W-11 — the catalog is discovered completely", () => {
         // inconvenience: each of the seven was catalogued, granted to the orgs that existed that day,
         // and never added to `seed_default_rbac`. Which capabilities an organization's administrator
         // held therefore depended on the date its `orgs` row was created.
+        //
+        // The tenth, `portal.access`, is the one addition that did not repeat that pattern: W-13
+        // catalogued it, granted it, and enumerated it in the seed in a single migration, because
+        // an organization created without it would have had no administrator who could open the
+        // portal at all.
         const added = Object.keys(APPROVED_ADDITIONS).filter((k) => catalog.has(k));
         expect(catalog.size).toBe(artifact.catalog_width + added.length);
         expect(catalog.size).toBe(57 + added.length);

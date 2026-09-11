@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 
 /** PATCH: update role (role_label, is_active). Requires org admin or `settings.users_roles` permission. */
 export async function PATCH(
@@ -88,6 +89,14 @@ export async function PATCH(
             // must not be left believing half of their edit landed.
             return NextResponse.json({ error: "Nothing was saved." }, { status: 500 });
         }
+
+        /*
+         * W-13 — the same reason as `rbac/grants/route.ts`, which carries the argument in full.
+         * `adminShellContextCache` now holds ADMISSION as well as capabilities, so a grant edit that
+         * did not clear it left a revoked operator with a portal that still opened for up to 120
+         * seconds. Cleared wholesale: a role's grants belong to every principal holding it.
+         */
+        invalidateAdminShellContextCache();
 
         const { data: role } = await supabase
             .from("role_definitions")

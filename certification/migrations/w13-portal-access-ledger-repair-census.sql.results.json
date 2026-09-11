@@ -1,0 +1,52 @@
+{
+  "trusted_host_action_id": "tha_e249692839a6f9",
+  "query_hash": "0efebb2e25ecebb6c207ab8b9eb83b79b5179f91c692b5202dcde6f98dc9f5a1",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T18:33:31.008Z",
+    "question_ids": [
+      "m140000",
+      "ledger_version",
+      "ledger_head",
+      "ledger_total"
+    ],
+    "questions": {
+      "m140000": {
+        "question_id": "m140000",
+        "row_count": null,
+        "rows": [
+          "permission_definitions ~ portal.access ~ active_in_group_portal ~ true",
+          "permission_definitions ~ portal.access ~ label_access_operator_portal ~ true",
+          "role_permission_grants ~ admin ~ every_org_granted ~ true",
+          "role_permission_grants ~ ops ~ every_org_granted ~ true",
+          "role_permission_grants ~ other_system_roles ~ none_granted ~ true",
+          "seed_default_rbac ~ admin_region ~ names_portal_access ~ true",
+          "seed_default_rbac ~ ops_region ~ names_portal_access ~ true",
+          "seed_default_rbac ~ historical_catalog_literal ~ unedited ~ true"
+        ]
+      },
+      "ledger_version": {
+        "question_id": "ledger_version",
+        "row_count": null,
+        "rows": [
+          "20260911140000 ~ registered ~ absent ~ false"
+        ]
+      },
+      "ledger_head": {
+        "question_id": "ledger_head",
+        "row_count": null,
+        "rows": [
+          20260911130000
+        ]
+      },
+      "ledger_total": {
+        "question_id": "ledger_total",
+        "row_count": null,
+        "rows": [
+          403
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 
@@ -56,6 +57,11 @@ export async function POST(
         .eq("org_id", orgId);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // W-13: the deletion is the revocation, and this is what makes it take effect on the next
+    // request rather than whenever a 120s bundle happens to expire. The revoked principal's cached
+    // bundle carries admission.
+    invalidateAdminShellContextCache(userId);
 
     // W-20: membership was the only source, so the row's deletion IS the revocation. The field is
     // kept — clients read it — and it is now true by construction rather than by inspection.

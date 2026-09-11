@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 
@@ -129,6 +130,26 @@ export async function PUT(request: NextRequest) {
             { status: 500 },
         );
     }
+
+/*
+ * W-13 — an authority change must reach the NEXT authoritative check, not the one after the cache
+ * expires.
+ *
+ * `adminShellContextCache` holds a resolved bundle per user for 120 seconds so navigation routes do
+ * not re-pay `resolveAdminAccessCore` at ~1.1s each. Its own docstring says mutations must not rely
+ * on it and names `invalidateAdminShellContextCache` as the hook for logout and org switch — and
+ * nothing in the tree had ever called it. So a grant edit took effect somewhere between immediately
+ * and two minutes later, depending on when the affected operator last loaded a page.
+ *
+ * That was survivable while the cache held only capabilities: a stale capability set is a stale
+ * screen. W-13 put ADMISSION in the same bundle, so the same staleness became *revoked access to
+ * the portal that still opens*, which is the one thing the revocation proof has to rule out.
+ *
+ * Cleared wholesale rather than per user, because a role's grants belong to every principal holding
+ * that role and this route does not know who they are. A role edit is an administrator action taken
+ * a few times a day; the cost is that those operators re-resolve once.
+ */
+    invalidateAdminShellContextCache();
 
     // The function returns the resulting set. Echoing it means the operator's next render is the
     // state the database committed, not the state the client hoped for.

@@ -26,41 +26,72 @@ describe("resolveAdminPortalOrgCore (org pick parity)", () => {
         ).toEqual({ orgId: "org-a", roleKeys: ["admin", "viewer"] });
     });
 
-    it("resolves org and portalEligible without querying grants or scope tables", async () => {
+    /**
+     * The light path's contract, restated by W-13.
+     *
+     * It used to read `user_roles` and nothing else, because a role literal needs no grant to answer.
+     * Capability admission does, so this path now reads ONE grant row — `portal.access` for the
+     * resolved org and role keys — and still skips the grant UNION and the two scope tables, which
+     * is the expensive part it exists to avoid. Leaving it on the literal would have made admission
+     * mean two different things in one product (`M2-13`).
+     */
+    function lightSupabase(rows: { org_id: string; role: string }[], grants: { permission_key: string }[]) {
+        const seen: string[] = [];
         const from = vi.fn((table: string) => {
+            seen.push(table);
             if (table === "user_roles") {
                 return {
-                    select: () => ({
-                        eq: () => Promise.resolve({ data: [{ org_id: "org-x", role: "ops" }], error: null }),
-                    }),
+                    select: () => ({ eq: () => Promise.resolve({ data: rows, error: null }) }),
                 };
+            }
+            if (table === "role_permission_grants") {
+                const b: Record<string, unknown> = {};
+                b.select = () => b;
+                b.eq = () => b;
+                b.in = () => b;
+                b.limit = () => Promise.resolve({ data: grants, error: null });
+                return b;
             }
             throw new Error(`unexpected table ${table}`);
         });
-        const sb = { from } as unknown as SupabaseClient;
+        return { sb: { from } as unknown as SupabaseClient, from, seen };
+    }
+
+    it("resolves org and admission from one grant row, and touches no scope table", async () => {
+        const { sb, from, seen } = lightSupabase(
+            [{ org_id: "org-x", role: "ops" }],
+            [{ permission_key: "portal.access" }],
+        );
         const core = await resolveAdminPortalOrgCore(sb, "user-1");
-        expect(core).toEqual({ orgId: "org-x", roleKeys: ["ops"], portalEligible: true });
-        expect(from).toHaveBeenCalledTimes(1);
-        expect(from.mock.calls[0]?.[0]).toBe("user_roles");
+        expect(core).toEqual({
+            orgId: "org-x",
+            roleKeys: ["ops"],
+            portalEligible: true,
+            admission: "admitted",
+        });
+        expect(from).toHaveBeenCalledTimes(2);
+        expect(seen).toEqual(["user_roles", "role_permission_grants"]);
+        // The tables this path exists NOT to read.
+        for (const skipped of ["user_access_profiles", "user_department_access", "user_site_access"]) {
+            expect(seen).not.toContain(skipped);
+        }
     });
 
-    it("returns null portal ineligible for custom role only", async () => {
-        const from = vi.fn((table: string) => {
-            if (table === "user_roles") {
-                return {
-                    select: () => ({
-                        eq: () =>
-                            Promise.resolve({
-                                data: [{ org_id: "org-x", role: "school_director" }],
-                                error: null,
-                            }),
-                    }),
-                };
-            }
-            throw new Error(`unexpected table ${table}`);
-        });
-        const sb = { from } as unknown as SupabaseClient;
+    it("refuses a role that holds no portal.access — including one named admin", async () => {
+        for (const role of ["school_director", "admin"]) {
+            const { sb } = lightSupabase([{ org_id: "org-x", role }], []);
+            const core = await resolveAdminPortalOrgCore(sb, "user-1");
+            expect(core?.portalEligible, role).toBe(false);
+            expect(core?.admission, role).toBe("no-capability");
+        }
+    });
+
+    it("admits a custom role that holds it — the name is not consulted in either direction", async () => {
+        const { sb } = lightSupabase(
+            [{ org_id: "org-x", role: "cert_custom" }],
+            [{ permission_key: "portal.access" }],
+        );
         const core = await resolveAdminPortalOrgCore(sb, "user-1");
-        expect(core?.portalEligible).toBe(false);
+        expect(core?.portalEligible).toBe(true);
     });
 });
