@@ -107,13 +107,15 @@ does not create the actionable Work Items row; the projection predicate consults
 platform's own env-gated certification route. It was passed as inherited process env — no worktree
 env file was modified and nothing was committed.
 
-## Follow-up debt
+## Follow-up debt — both CLOSED in the zero-debt hardening pass
 
-- `createCommunicationsNeedsReplyQaFixture.ts` remains in the tree and still selects arbitrary real
-  correspondence. It was left untouched because repairing it was outside this instruction's scope.
-  **Recommend adding a refusal guard or deleting it** — as written it is a live hazard for anyone
-  who runs it.
-- Work Items Queue health "Waiting" label actually represents Unassigned.
+- ~~`createCommunicationsNeedsReplyQaFixture.ts` remains in the tree and still selects arbitrary
+  real correspondence.~~ **DELETED.** The recommendation was a refusal guard or deletion; deletion
+  was correct, because this file already is the safe replacement and the only thing the other script
+  offered was the ability to reach real families. Its guard was extracted to
+  `web/scripts/lib/certificationSenderSafety.mjs` and is now unit-tested.
+- ~~Work Items Queue health "Waiting" label actually represents Unassigned.~~ **CORRECTED** to
+  `Assigned · Unassigned · Due Soon · Overdue`, with count parity pinned by test.
 
 ---
 

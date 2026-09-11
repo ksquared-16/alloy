@@ -26,13 +26,13 @@ type TaskCounts = {
     due_soon: number;
     overdue: number;
     assigned: number;
-    waiting: number;
+    unassigned: number;
 };
 
 /** Static trend placeholders until historical comparison APIs exist. */
 const QUEUE_TRENDS = {
     assigned: { direction: "none" as const, label: "—" },
-    waiting: { direction: "none" as const, label: "—" },
+    unassigned: { direction: "none" as const, label: "—" },
     due_soon: { direction: "none" as const, label: "—" },
     overdue: { direction: "none" as const, label: "—", tone: "ember" as const },
 };
@@ -41,15 +41,24 @@ function isOpenTask(task: MyTasksTaskRow): boolean {
     return task.status !== "completed" && task.status !== "cancelled";
 }
 
-function deriveQueueAssignmentCounts(tasks: MyTasksTaskRow[]): { assigned: number; waiting: number } {
+/**
+ * ONE POPULATION, SPLIT BY ASSIGNMENT — and named for what the split actually asks.
+ *
+ * The second bucket is every open task with no assignee. It was labelled `Waiting`, which named a
+ * state this product does not have: there is no waiting column, no domain-authoritative blocked
+ * signal, and `filterTasksByView` returns `[]` for the `waiting` lens unconditionally. An operator
+ * reading `Waiting` was told work was blocked on something when the only fact measured is that
+ * nobody owns it yet. The count is unchanged; only the question it answers is stated honestly.
+ */
+function deriveQueueAssignmentCounts(tasks: MyTasksTaskRow[]): { assigned: number; unassigned: number } {
     const open = tasks.filter(isOpenTask);
     let assigned = 0;
-    let waiting = 0;
+    let unassigned = 0;
     for (const task of open) {
         if (task.assigned_to_user_id?.trim()) assigned += 1;
-        else waiting += 1;
+        else unassigned += 1;
     }
-    return { assigned, waiting };
+    return { assigned, unassigned };
 }
 
 export default function WorkItemsKpiStrip() {
@@ -78,14 +87,14 @@ export default function WorkItemsKpiStrip() {
                 if (cancelled) return;
 
                 const openRows = openResult.tasks ?? cachedOpen ?? [];
-                const { assigned, waiting } = deriveQueueAssignmentCounts(openRows);
+                const { assigned, unassigned } = deriveQueueAssignmentCounts(openRows);
 
                 if (summaryRes.ok && summaryJson.ok && summaryJson.counts) {
                     setCounts({
                         due_soon: summaryJson.counts.due_soon,
                         overdue: summaryJson.counts.overdue,
                         assigned,
-                        waiting,
+                        unassigned,
                     });
                 }
             } catch {
@@ -100,7 +109,7 @@ export default function WorkItemsKpiStrip() {
         };
     }, []);
 
-    const empty: TaskCounts = { due_soon: 0, overdue: 0, assigned: 0, waiting: 0 };
+    const empty: TaskCounts = { due_soon: 0, overdue: 0, assigned: 0, unassigned: 0 };
     const c = counts ?? empty;
 
     const items: WorkspaceOperationalHealthItem[] = useMemo(
@@ -112,11 +121,17 @@ export default function WorkItemsKpiStrip() {
              * The KEY stays `assigned`.
              */
             { key: "assigned", label: "Tasks assigned", value: String(c.assigned), tone: "pine", trend: QUEUE_TRENDS.assigned },
-            { key: "waiting", label: "Waiting", value: String(c.waiting), tone: "gold", trend: QUEUE_TRENDS.waiting },
+            {
+                key: "unassigned",
+                label: "Unassigned",
+                value: String(c.unassigned),
+                tone: "gold",
+                trend: QUEUE_TRENDS.unassigned,
+            },
             { key: "due_soon", label: "Due Soon", value: String(c.due_soon), tone: "gold", trend: QUEUE_TRENDS.due_soon },
             { key: "overdue", label: "Overdue", value: String(c.overdue), tone: "ember", trend: QUEUE_TRENDS.overdue },
         ],
-        [c.assigned, c.waiting, c.due_soon, c.overdue]
+        [c.assigned, c.unassigned, c.due_soon, c.overdue]
     );
 
     return (

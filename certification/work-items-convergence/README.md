@@ -106,14 +106,28 @@ after a full Communications lifecycle with **0** referencing the thread at eithe
 that cannot be completed in Work Items says so in its own detail panel and offers only the command
 that reaches its real owner.
 
-## Follow-up debt — carried, deliberately not fixed here
+## Follow-up debt — both items CLOSED
 
-1. **Unsafe legacy Communications QA fixture.** `web/scripts/createCommunicationsNeedsReplyQaFixture.ts`
-   still selects existing correspondence (`order by last_message_at desc limit 10`) and mutates
-   `attention_state` through a service-role client. On this tenant it would choose real external
-   mailboxes. **It was not used for H2 certification** — `h2WorkItemsCommunicationsCertFixture.mjs`
-   was written precisely because it could not be. Options: add a hard refusal guard against
-   non-synthetic correspondence, replace it with safe synthetic behaviour, or delete it if obsolete.
-2. **Queue health terminology.** The health metric labelled **"Waiting"** actually measures
-   *unassigned open work*. A future reconciliation is Assigned / Unassigned / Due Soon / Overdue.
-   Product semantics were deliberately left unchanged during promotion.
+Carried out of the promotion deliberately, then closed in a dedicated zero-debt hardening pass.
+
+1. **Unsafe legacy Communications QA fixture — DELETED.**
+   `web/scripts/createCommunicationsNeedsReplyQaFixture.ts` selected existing correspondence
+   (`order by last_message_at desc limit 10`) and mutated `attention_state` through a service-role
+   client; on this tenant it would have chosen real external mailboxes. It was **not** used for H2
+   certification, and `h2WorkItemsCommunicationsCertFixture.mjs` already *is* the safe replacement —
+   so repairing it would only have produced a second fixture whose sole distinguishing feature was
+   that it could reach real families. It was deleted rather than guarded.
+
+   Its sender guard now lives in `web/scripts/lib/certificationSenderSafety.mjs` and is unit-tested
+   in `web/tests/communications/certificationFixtureSafety.test.ts`, which pins the refusal against
+   the exact four real addresses the deleted script would have selected, refuses look-alike domains
+   such as `alloy.invalid.com`, fails closed on an unresolved sender, and asserts the deleted file
+   does not exist and that the surviving fixture holds no service-role client, writes no
+   `attention_state`, and touches no `operational_tasks`.
+
+2. **Queue health terminology — CORRECTED.** The metric labelled **"Waiting"** was computed as
+   `assigned_to_user_id` absent over open tasks — which is *unassigned*. The health vocabulary is
+   now **Assigned · Unassigned · Due Soon · Overdue**. Count parity is pinned by test: the same
+   corpus that produced `Waiting: 1` produces `Unassigned: 1`, and the band's label set is asserted
+   exactly so the word cannot return. No waiting state, status, schema or assignment behaviour was
+   added, and no selectable Waiting view reappeared.

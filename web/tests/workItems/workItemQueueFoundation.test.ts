@@ -69,14 +69,13 @@ describe("work item queue foundations", () => {
 
         expect(model.id).toBe("task-1");
         expect(model.badge).toBe("BOS");
-        expect(model.isWaiting).toBe(true);
         expect(model.completed).toBe(false);
         expect(model.breadcrumb.length).toBeGreaterThan(0);
         expect(model.dueOrTime?.startsWith("Due ")).toBe(true);
         expect(model.assigneeInitials).toBe("KO");
     });
 
-    it("maps BP-generated rows without false waiting state", () => {
+    it("maps BP-generated rows to the BP badge, not the BOS one", () => {
         const model = mapWorkItemQueueRow(
             task({
                 source: "manual",
@@ -86,6 +85,23 @@ describe("work item queue foundations", () => {
             { presentation, entityLabels, labelOptions: { processLabels: { enrollment: "Enrollment" } } },
         );
         expect(model.badge).toBe("BP");
-        expect(model.isWaiting).toBe(false);
+    });
+
+    /*
+     * THE ROW CARRIES NO WAITING CLAIM AT ALL.
+     *
+     * `isWaiting` was `source === "task_assist" && open`, and the row rendered an amber **Waiting**
+     * pill from it. That named a state this product does not have — the BOS badge beside it already
+     * said, truthfully, where the row came from. The pill and the field are gone; this pins that a
+     * BOS-sourced open row exposes no waiting flag for a pill to grow back from.
+     */
+    it("exposes no waiting flag on any row shape", () => {
+        for (const row of [
+            mapWorkItemQueueRow(task(), { presentation, entityLabels }),
+            mapWorkItemQueueRow(task({ source: "manual" }), { presentation, entityLabels }),
+        ]) {
+            expect(row).not.toHaveProperty("isWaiting");
+            expect(JSON.stringify(row)).not.toMatch(/waiting/i);
+        }
     });
 });
