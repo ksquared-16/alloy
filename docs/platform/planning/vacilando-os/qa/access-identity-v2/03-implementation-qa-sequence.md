@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: sprint
-last_reviewed: 2026-09-11
+last_reviewed: 2026-09-06
 supersedes: []
 ---
 
@@ -73,14 +73,6 @@ counts never reached this plan, whose W-0 log ended at "run 4 filed" and whose f
 *"M1 is sized at exactly 2 rows"*. Also **corrected a false lockout alarm** (M1 self-sizes in-transaction, so a
 stale "2" cannot mis-apply) and **flagged that RULE 5 has now bitten**: a live M1 apply-authorization stands on a
 run-3 preflight, and its unattributed-growth abort condition is satisfied (§4, §6, §7)
-· **W-0 re-issued a ninth time — 2026-09-11** (mission `msn_83dbd2706970c833d6`, assignment
-`asg_141e39c1ddca5e`) — **no run 5**: the census has run, M1's gate is `unmet`, and W-7 no longer consumes a
-count. The finding is that **the M1 apply channel cannot reach a database on this base** — `alloy_deployed_primary`
-is unregistered in `trusted-host-database-target.mjs`, so a promoted apply clears governance and dies in the
-child as an unknown name; the fix is uncommitted work on another session's branch. **The census channel is
-unaffected** (it runs `trusted-host-run-sql.sh`, never the apply child), which is why run 4 executed while
-applies failed closed. **M1 re-authorization now has two preconditions — land the resolver fix, then census,
-then authorize** (§4, §6, §11)
 · **W-6 RULED and the M1 gate MOVED BACK — 2026-09-06** (mission `msn_b7040b5174ddeafb79`, assignment
 `asg_7b05887a569304`, **fourth dispatch**) — the ruling the seventh W-0 re-issue asked for. **`preflight.ok` is now
 `false`** and M1 drops `operator_review` → **`unmet`** (`preflight_void_reauthorization_required`): the 2026-08-07
@@ -215,24 +207,6 @@ red by three negative fixtures, all removed before commit. **W-2's exit criterio
 rather than statically read. Six `tests/access` failures are **W-11/W-12's, not Wave 1's**, and are reported
 unrepaired. **A third consecutive fixture-titled mission has issued this access workstream** — DX7, then DX-5,
 now DX-6 — and no run has answered whether it should (§5)
-· **W-1…W-3 ninth issuance 2026-09-06 — RECORD RECONSTRUCTED 2026-09-11** (commit `5c5ea716b`) — the run
-**landed code and left no trace in this plan**, the §5 counterpart of W-0 run 4's propagation debt.
-`selfAuthorityRouteDiscovery` was **red on arrival with no product code changed**: a doc-comment sentence in
-another session's uncommitted edit made the resolver an authority writer and import closure carried it into
-**180 of 603** routes — mention-vs-call, the **seventh** instance of this workstream's escape class. Stripping
-comments alone would have **hidden a real membership writer** (`admin/dev/create-org`, targetable via
-`admin_user_id`); the subject is now asserted **exactly at 6** rather than by a 25×-slack bound (§5)
-· **W-1…W-3 issued a tenth time — 2026-09-11** (mission `msn_83dbd2706970c833d6`, assignment
-`asg_61c645b68894b3`) — the first Wave 1 run across a **moved corpus** since the sixth: 215 web commits, routes
-**603 → 613**, migrations **373 → 403**, and **every ratchet still exactly its floor** (family 27, class-wide
-**103 of 613**, aliases 3). The finding is that the eighth issuance's *"irreducible residue"* — a module
-exporting a primitive no list names — **arrived**: `lib/financials/financialsPermissions.ts` houses two
-capability gates called by **19 routes**, and no lock in the file had ever read it. **Not an exposure** (all
-three of its routes in the class-wide subject already call a sufficient gate) but the eighth instance of the
-escape class, closed by classifying the gates and letting the eighth issuance's derivation drag the module in
-unchanged. Proved red by three fixtures, including a **new export added beside the gates in product code**.
-Suites **102 passed / 0 failed**, `vac run typecheck:tests` **rc=0**. The honest limit is sharper than before:
-**the lock did not find this module — a reader did, and the lock then confirmed it** (§5)
 · **W-4 sixth issuance 2026-09-06** (mission `msn_b7040b5174ddeafb79`, assignment `asg_81ca7096360e56`) — the
 run that **discharges the fifth issuance's blocked measurement and the demonstration debt carried since
 2026-08-06**. The check executes: **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory,
@@ -254,30 +228,6 @@ symbol bound to it, which is why the defect has recurred three times. `enrollmen
 five of five lines, ten days and two assignments after it was reported**, and a **new** drift is found in
 `tour-booking/[token]/resolve`. Register correction deferred a second time on scope; **a scope grant is
 requested** (§5)
-· **W-4 seventh issuance 2026-09-11** (mission `msn_83dbd2706970c833d6`, assignment `asg_0e845249216e30`) —
-**NOT RUN, and by a new cause.** The parser is present this time; the *process* is refused. `node`, `npm`
-and `npx` are blocked by the session's Bash permission gate, and all twelve slots are free with no lane
-naming this worktree, so the broker has no slot either. **No count is claimed for this date and 2026-09-06
-remains the last measured column** — the remedy is a slot or an approval, not an edit to this repository.
-Every parser-free check passes: ceilings **23/23** and **12/12** equal the list lengths, `baseline` empty,
-all **35** listed routes exist, all 23 exceptions still import a client directly and all 12 advisory entries
-import none. **The register moved an eighth time outside any W-4 assignment** — `69f62054c` on 2026-09-09
-raised the ceiling 22 → 23 for the Stripe Connect webhook, the register's **first `provider-signature`
-entry**; its model was re-verified and **holds** (HMAC before the body is read, tenancy from the merchant
-binding, fails closed on an unbound account at `:238-243`), but whether the *tree's* count is also 23 is
-exactly what the blocked walk would have said. **Half the 2026-08-06 finding is repaired, by another
-track**: `.github/workflows/web-prebuild-gates.yml` (added 2026-09-09) now runs `npm run prebuild` as a
-required check on every pull request, so the admission gate bites **before** the merge instead of on staging
-after it — the single biggest strengthening since the ratchet moved into the register. **The other half is
-untouched**: `max_baseline` was not added, `checkServiceClientPrincipal.mjs:539` still short-circuits
-`baseline` identically to `exceptions`, and `tests/access` runs in none of the now-eight workflows, so the
-**relabelling** escape stands. **Citation drift is worse than 2026-09-06 reported**: a deliberately wider
-instrument finds **10 of 14** checkable references drifted, including two in `webhooks/resend` never
-previously caught, a changed *predicate* in `action/[token]` (`token` → `token_hash`), a gate cited in a
-route it no longer sits in (`public/forms/[token]/resolve`), and **all three citations in the two-day-old
-Stripe entry wrong on the day they were written** — which refutes the backlog framing and shows backticking
-makes a claim falsifiable, not true. `enrollment-upload` is unrepaired at **three assignments and eleven
-days**. **Register correction deferred a third time on scope; the scope grant is re-requested** (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -1090,68 +1040,6 @@ compiled brief dispatched twice"* — that hash also rode a W-0 census brief.
 **For whoever dispatches a ninth re-issue.** The instruction is unchanged and now has a second half: check
 whether the census has already run — **and do not treat a matching `contentHash` as evidence of anything.**
 Re-run this census only immediately before a lockout-class switch or an M1 apply, per `residual_risks[0]`.
-
-#### W-0 re-issued a ninth time — **2026-09-11**, assignment `asg_141e39c1ddca5e`: no run 5, and the M1 apply channel is broken on the base
-
-Mission `msn_83dbd2706970c833d6` v1, contentHash `282eace8ea5a991546ba9e8b1c19fc7e`, mission title **"Brief Spine
-Mission"** — a ninth title that does not name the work, consistent with the eighth pass's finding that neither the
-title nor the hash identifies a brief. Worktree `attendance` @ `runtime/migration-target-resolution`, **HEAD ==
-`origin/staging` @ `a323be5f9`, 0 ahead / 0 behind.**
-
-**The eighth pass's instruction was carried out first, and it answers the assignment in one read with no
-authorization spent.** `run_history[4]` and [`wave0-authority-census.results.json`](wave0-authority-census.results.json)
-both hold run 4 at 2026-09-04T11:28:53Z, `org_fingerprint` `ab7e5dde…` matching run 3, query hash `a3982ca5…`
-unchanged. **AC_W0 remains met. No run 5 was filed** — run 4 is seven days old, M1's gate is `unmet`
-(`preflight_void_reauthorization_required`), and W-7 was moved off a count and onto an invariant by the W-6
-ruling, so no Q4 figure can unblock it.
-
-**The new finding, and it changes when the next census should be filed: the M1 apply channel cannot reach a
-database on the current base.** `alloy_deployed_primary` is **not a registered database target** —
-`trusted-host-database-target.mjs:41-45` as committed holds `{ certification, cert, staging }` and nothing else,
-and `resolveTrustedDatabaseTarget` returns a refusal rather than a default. `database.apply_promoted_migration`
-validates its `target` against `PRODUCTION_APPLY_TARGETS` and then passes that same target through *as the
-environment*, so the name clears every governed check, reaches the apply child, and dies there as unknown. The
-in-flight fix's own comment records the observed cost: **three production migration attempts, no database ever
-contacted**, surfacing as *"the outcome could not be established"* rather than as *"nobody taught the resolver
-this name"*. **M1 would fail the same way.** The fix — registering the name and resolving it once before the
-child is spawned — exists **only as uncommitted working-tree changes** authored by a concurrent session on this
-branch. It is not on HEAD and not on staging, and it is not W-0's to land: this assignment's scope is the two
-evidence files, and the working tree was left untouched.
-
-**Why that is a W-0 finding rather than someone else's.** §4's re-run trigger is *"immediately before a
-lockout-class switch or an M1 apply"*, and that trigger **presumes the apply is capable of happening**. Until the
-resolver fix lands it is not, so a census filed now would spend an operator authorization refreshing numbers for
-an apply that fails closed before contacting the database — the waste §4 has named as the wrong outcome five
-times over. **For W-6 and the M1 owner: re-authorization now has two preconditions, not one.** The known one is a
-fresh preflight (RULE 5 — the 2026-08-07 authorization is void on staleness). The new one is that the
-target-resolution fix must be on the base the apply executes from. **Sequence them in that order** — land the
-resolver fix, *then* file the census that re-derives Q4, *then* seek re-authorization — so one authorization is
-spent once, correctly timed, rather than early and again afterwards.
-
-**W-0's own instrument is unaffected, and this was verified rather than assumed.** `database.read_census` does
-not travel the apply path: `trusted-host-actions.mjs:697` routes it through `RUN_SQL_SH =
-trusted-host-run-sql.sh` (`:125`), a different child from `APPLY_MIGRATION_SH`, and it never calls
-`resolveTrustedDatabaseTarget` — the in-flight diff adds that call at exactly two sites, the migration apply and
-the ledger repair, and touches no census code. **For the census, `alloy_deployed_primary` is an authorization
-label routed by `trusted-host-authz`, not a name resolved into a connection string.** That is precisely why run 4
-executed cleanly against this target on 2026-09-04 while promoted applies were failing closed on the same name.
-A run 5 remains executable the moment one is genuinely warranted. `target.confirmed_against_live` is unchanged at
-`false`; the census still identifies its target by `org_fingerprint`, never by project ref.
-
-**Artifact integrity re-verified.** Both standing traps are still disarmed: `runs_1_2_query_hash` keeps its name
-and the `743cd63b…` value, the top-level `query_hash` holds `a3982ca5…` (run 3/4's *current* hash, which is the
-correct occupant of that key — the hazard is that key holding the runs 1/2 value), and `combined_query` still
-carries the `target_identity` block, so a run 5 would self-identify.
-
-**⚠ Operator, unchanged and not re-litigated.** If `gar_3368b11eb1b1ce` / `dec_b1c5c947f5129e` is still pending,
-**decline it.** No worker can check or withdraw it; the eighth pass closed that search across four routes.
-
-**For whoever dispatches a tenth re-issue.** The instruction now has a third clause. (1) Check whether the census
-has already run — `run_history` and the `.results.json` answer it in one read. (2) Do not treat a matching
-`contentHash` as evidence of anything. (3) **Before concluding that an M1 apply is imminent enough to justify a
-census, check that `alloy_deployed_primary` actually resolves in `trusted-host-database-target.mjs` on the base
-the apply will run from.** A re-run trigger that presumes a working channel is not a trigger while the channel is
-broken.
 
 ---
 
@@ -2109,163 +1997,6 @@ otherwise conclude this run happened outside a sanctioned root.
 **Not verified this run.** No live database query — W-0's run-4 counts are two days old and are the W-0 owner's
 to refresh. Wave 1 needs no live query.
 
-#### Wave 1, ninth issuance — **2026-09-06**, commit `5c5ea716b`: RECORD RECONSTRUCTED — a comment reddened the lock, and the lock was holding a real writer by a sentence
-
-**This record was missing, and is written here by the tenth issuance rather than by the run that earned it.**
-The ninth issuance shipped its change — `5c5ea716b`, `selfAuthorityRouteDiscovery.test.ts`, +124/−15 — and its
-findings never reached this document, which still ended at the eighth. That is the same propagation debt §4
-recorded against W-0 run 4, now demonstrated in §5: **a Wave 1 run can land code and leave no trace in the plan,
-so the plan under-reports its own workstream.** Stated plainly because the next reader would otherwise date this
-lock's last change to 2026-09-06's *eighth* entry and miss a subject repair entirely.
-
-Reconstructed from the commit message and **verified against the delivered tree** by the tenth issuance — every
-claim below was re-read in the shipped file, not taken on the commit's word:
-
-| Field | Value |
-|---|---|
-| Finding | `selfAuthorityRouteDiscovery` was **RED on arrival with no product code changed**. An uncommitted doc-comment edit in another session added a sentence to `lib/admin/resolveAdminAccessCore.ts` saying `create_membership_with_access_profile` *"is convention that a direct INSERT bypasses"*. The predicates read raw source, so the resolver became an authority writer and import closure carried that into **180 of 603** routes |
-| Class | **Mention vs. call — the seventh instance** of this workstream's recurring escape class, and the *same* defect RL-1 fixed on 2026-08-06: a repair never carried across to the discovery lock written after it. `codeOnly` is now copied from `analyticsRouteGates.test.ts` verbatim, URL rule included |
-| The worse half | `appliesSelfGuard` credited any file merely **containing** `isSelfAuthorityMutation`, so a route carrying only a TODO comment would have been recorded as guarded and dropped out silently. The guard must now be *called*. This half had never tripped |
-| Near-miss | Comment-stripping alone was **not sufficient and would have hidden a real membership writer**: with `codeOnly` and nothing else the subject fell to 5 and `admin/dev/create-org` dropped out. It reaches `createMembershipWithAccessProfile` and takes its target from body field `admin_user_id`, which a caller may set to itself; it was in the subject only via a doc comment. The old regex could not match `admin_user_id` — `_` is a word character, so `\b` never matched before `user`. Leading boundary removed; over-matching is safe because the predicate is conjunctive with `reachesAuthorityWrite`. Subject restored to **6** |
-| Vacuity | The bound was `< routes.length / 4` — **150 against a true subject of 6**, i.e. 25× slack, which is why 180 tripped it only by being enormous. The subject is now **asserted exactly**, naming all six routes (`selfAuthorityRouteDiscovery.test.ts:328-335`, re-read 2026-09-11) |
-| Register | One **stale exemption removed**: `settings/users-roles/members` is a read-only projection and was therefore never in the subject, so it excused nothing. The stale-entry half of the exemption register is now enforced |
-| Suites | 102 passed / 0 failed · `vac run typecheck:tests` **rc=0** · no route handler, library, schema or migration changed |
-
-#### Wave 1, tenth issuance — **2026-09-11**, assignment `asg_61c645b68894b3`: the residue arrived — a new capability module, 19 routes, and no lock had read it
-
-The tenth issuance of W-1…W-3. §4's rule holds a tenth time: **re-execute rather than re-assert.** Two things
-make this run unlike the eighth, which measured a byte-identical corpus: the base moved **215 web commits**, and
-the thing the eighth issuance filed as an *irreducible residue* turned up in the tree with live callers.
-
-| Field | Value |
-|---|---|
-| Base | `8525437e8` @ `runtime/migration-target-resolution` — **215 web commits** since the eighth-issuance base `77ddbc622`, a 5-day interval. API routes **603 → 613**, migrations **373 → 403**. Root `managed-worktree`, **SANCTIONED**, 1 ahead / 0 behind `origin/staging` |
-| Suites | **Passed — 102 passed / 0 failed**, 4 files. `analyticsRouteGates` **58** · `permissionGrid` 20 · `selfAuthorityMutation` 14 · `selfAuthorityRouteDiscovery` **10** (was 6 — the ninth issuance's repair, above) |
-| Subjects | Executed, not derived: analytics family **27** (floor 27) · class-wide G2 **103 of 613** (floor 103) · aliases **3** (floor 3) · **classified exports 27 across 7 modules** (floor 27, was 21 across 6) · lib modules **4293** (was 4212) |
-| Typecheck | `vac run typecheck:tests` **rc=0 class=ok** (brokered, 18:05:39Z → 18:06:56Z). Fourth consecutive Wave 1 run to reproduce one |
-| Regression | Full `tests/access`: **853 passed / 3 failed / 7 skipped** across 53 files. The three are **not Wave 1's** — see below |
-| Changed | `web/tests/access/analyticsRouteGates.test.ts` only. **No route handler, library, schema or migration**, so nothing here is a behaviour change |
-
-**Every W-1 ratchet still reads exactly its floor, and one of them survived a real test.** Family **27**,
-class-wide **103**, aliases **3** — each re-read from the predicates themselves via temporary impossible floors,
-then reverted. The class-wide figure is the interesting one: **the denominator moved +10 and the subject did not
-move at all.** That is a result rather than a stalled selector, and it was checked route by route — all ten new
-route files were read, and none holds a raw resolution. Six are `admin/financials/*`, which gate through
-`loadAdminRouteGate` or `requireAdminOrOps` and *then* a capability; two are `public/kiosk/*`, which authenticate
-a **device** by header credential and so never resolve an org member for G2 to be about; one is
-`stripe/webhook`, authenticated by HMAC signature over the raw body. A flat subject against a growing corpus is
-what closing G2 is supposed to look like.
-
-**The finding: the eighth issuance's "irreducible residue" is no longer hypothetical, and it arrived at scale.**
-
-That run closed by naming exactly what its derivation could not reach: *"a module exporting a wholly new
-primitive that no list names remains outside every lock here."* On this base that module exists.
-`lib/financials/financialsPermissions.ts` exports **two capability gates** — `assertFinancialsReadAllowed` and
-`assertFinancialsWriteAllowed` — which admit on `(grants.permissionKeys ?? []).includes("fin.read" | "fin.write")`
-and nothing else (`financialsPermissions.ts:90`). That is the *same shape* as `canReadAnalytics`, which this file
-already classifies. They are called by **19 route files**. No symbol list named them, so the module was outside
-`ACCESS_PRIMITIVE_MODULES`, and **every export sitting beside those two gates was unread by every lock in this
-file** — the precise channel `getAdminAuthCached` escaped through for months, reopened one module over.
-
-This is the **eighth instance** of this workstream's recurring escape class, and the first to arrive from a
-*new* module rather than from one that was already present when a lock was written.
-
-**What it is not: an exposure.** Stated first so the finding is not read as worse than it is. All 19 callers
-were checked; only **three** are in the class-wide subject at all — `financials/schedule/[id]`,
-`financials/journal-entries/[id]` and `financials/job/[id]` — and **each already calls a sufficient gate**, so
-no route was relying on an unclassified primitive to pass. The defect was in what the lock could *see*, not in
-what the product *enforces*.
-
-**The repair, and why it needed no new mechanism.** The eighth issuance's derivation already states that adding
-a gate to a symbol list drags its defining module into the classification lock. So the whole change is to
-classify the two gates honestly — they authorize on a capability, not on portal eligibility, so they belong in
-`CAPABILITY_GATES` rather than `SUFFICIENT_GATES` — and let the derivation do the rest. It did: the module was
-named by path, by the lock, before it was added. The four sibling constants it dragged in
-(`FINANCIALS_{READ,WRITE}_PERMISSION_KEY`, `FINANCIALS_{READ,WRITE}_DENIED_MESSAGE`) are registered as reviewed
-non-gates with reasons — two permission-key strings and two operator-facing refusal sentences, none callable.
-**That the eighth issuance's mechanism absorbed a genuinely new module with no change to the mechanism itself is
-the strongest evidence yet that the derivation was the right repair.**
-
-**The permissive step, made safe by measurement rather than by assumption** — the standard this file set when it
-listed `canReadAnalytics`. Widening `CAPABILITY_GATES` widens what satisfies the class-wide lock, so the
-inertness claim is checked rather than argued: the three subject routes above already call a sufficient gate, so
-**no route's verdict changes in either direction**. Unlike `canReadAnalytics` — inert because *nothing* calls it —
-these two have 19 live callers, so the claim here is narrower and is stated as such: inert on *verdicts*, not
-unused.
-
-**Proved red by three negative fixtures**, each mutated, observed, reverted, and absent from the delivered tree:
-
-1. The shipped six-module list against the newly-classified gates → **rejected as designed**, naming
-   `lib/financials/financialsPermissions.ts` by path. This is the finding itself, produced by the lock rather
-   than argued into it.
-2. The module admitted but its siblings unregistered → **rejected as designed**, naming all four constants as
-   unclassified (`…:FINANCIALS_READ_DENIED_MESSAGE` and the other three).
-3. **A new export added beside the gates in product code** — `export const FINANCIALS_PROBE_NEGATIVE_FIXTURE` —
-   → **rejected as designed**, naming the symbol. This is the escape channel itself, and it is the fixture that
-   matters: it is the one the *previous* six instances of this class would all have passed. Reverted immediately;
-   `financialsPermissions.ts` is byte-identical to HEAD.
-
-**W-2 / RL-11 — MET, re-verified at source and by execution.**
-`lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts` still contains **zero** `insert`/`upsert`/`update`
-calls; the self guard is called by all three routes (`role:33`, `remove:46`, `access-scope:81` — a one-line
-drift from the eighth issuance, no semantic change); `selfAuthorityRouteDiscovery` **10 passed** and
-`selfAuthorityMutation` **14 passed**. The stronger result is the ninth issuance's exact subject assertion
-holding across **+10 route files**: the six authority writers are still exactly those six, so **no new authority
-writer arrived in 215 commits**, and that is now asserted by name rather than inferred from a slack bound.
-
-**W-3 / RL-2 → RL-3 — green, executed, unchanged.** `permissionGrid.test.ts` **20 passed**. `permissionGrid.ts`
-mentions `PERMISSION_GRID_ROWS` **only in a header comment recording that W-10 removed it**, so the grid remains
-a projection of `permission_definitions` and a row naming an absent key stays unrepresentable. **All 30 new
-migrations were scanned** (non-vacuity: the file list was counted, not assumed) and **none mentions `workflows`
-or `permission_definitions`**, so the catalog is untouched and C13 → W-11 still owns the `workflows.*` restore
-question.
-
-**Three failures in `tests/access` that are not Wave 1's — reported, not repaired, and proved pre-existing.**
-`catalogConsolidationLock` (2, RL-7/W-9 — migrations writing the catalog through a deprecated name) and
-`live/newOrgBootstrapAndRevocation.live` (1 — a live-database grant set now including `portal.access`). **Proved
-not mine by execution rather than by argument**: the working-tree change was set aside, the two files re-run
-against the pristine base, and the same 3 failures reproduced. Note the composition has *changed* since the
-eighth issuance — its six (`catalogVocabularyReconciliation`, `capabilityTaxonomy`, `grantSeedEnumeration`) are
-**gone**, fixed by another track, and these three are new. **Outside this assignment's scope**, not claimed
-fixed.
-
-**Mission identity divergence — not raised this run, because it did not recur.** The eighth issuance escalated a
-fourth consecutive fixture-titled mission (`DX-1 Executive Overview Fixture`) issuing this workstream. This
-assignment arrives under mission `msn_83dbd2706970c833d6`, whose brief body *is* Wave 1 and whose title matches
-its content. Recorded so the streak's end is visible: **the divergence is intermittent, not permanent**, which
-is itself information for whoever eventually rules on it. The standing finding is unchanged — only the brief
-body identifies the work.
-
-**Concurrency, a sixth time.** Seven `scripts/local-dev/**` files were uncommitted at session start — another
-session's in-progress `alloy_deployed_primary` resolver fix, which is precisely the work §4's W-0 ninth re-issue
-names as M1's first precondition — plus an untracked `08-reuse-corpus-confirmation.md`. **None was touched,
-reverted, or built upon**, and this commit takes only `analyticsRouteGates.test.ts` plus this section.
-
-**The tooling discrepancy the eighth issuance recorded has recurred, with a different label.** `alloy-root`
-classifies this root `managed-worktree — SANCTIONED`; the validation broker logged the same root as
-`worktree=unmanaged-attendance` (the eighth saw `unmanaged-wt5-vacilando`). Two runs, two different
-`unmanaged-*` labels, same sanctioned root — so this is the broker's own slot naming and **not** a second
-governance opinion. Recorded again because it is now a pattern rather than a one-off, and a future reader
-grepping broker logs for `unmanaged` would draw the wrong conclusion twice.
-
-**A capacity note for the next runner.** `vac run typecheck:tests` first returned **exit 144** with stdout
-suppressed — broker capacity refusal, not a type error — while `alloy-worker-status` showed all 12 slots free,
-i.e. this lane holds no slot. It succeeded on a later retry as its own invocation. **Do not read 144 as a
-failed typecheck**, and do not chase it by piping the command anywhere.
-
-**What this run did not close**, stated so it is not mistaken for completeness: the derivation still discovers
-only modules housing an **already-classified** symbol. It caught `financialsPermissions.ts` because this run
-classified its gates *by hand* after finding them *by reading the diff* — **the lock did not find the module;
-a human reading 215 commits did, and the lock then confirmed it.** That is the honest shape of this repair and
-it is weaker than the eighth issuance's, which was self-discovering within its subject. A wholly new capability
-module whose gates nobody notices is still invisible, and **W-14's declared `(route → capability)` table remains
-the only mechanism that would surface one without a reader.** Each repair has raised the cost of the next
-escape; none has eliminated it, and eight instances in, the class is better described as *permanent* than as
-*closing*.
-
-**Not verified this run.** No live database query — Wave 1 needs none. The one live suite in `tests/access` is a
-pre-existing failure and is W-9/W-11 territory.
-
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
 517 of 539 route files hold a service-role client. I-3 requires every one to resolve and gate a principal
@@ -3042,214 +2773,6 @@ and none has been answered. **Concurrency, a fifth time**: `wave0-authority-cens
 and `web/playwright/artifacts/` were modified or present at session start and belong to other assignments.
 Neither touched, reverted, nor built upon — the fourth issuance's judgment, applied as policy for the fourth
 time.
-
----
-
-#### W-4, seventh issuance — **2026-09-11**, assignment `asg_0e845249216e30`: the measurement is blocked by a new cause, the register moved again unwitnessed, and half the 2026-08-06 finding was repaired by another track
-
-Seventh leg. §4's rule applies a seventh time: **re-execute rather than re-assert** — and this leg falls
-between the fifth and the sixth in what it could do. The parser is present, unlike 2026-09-04:
-`web/node_modules/typescript` resolves. What fails is one step earlier. `node`, `npm` and `npx` are refused
-by this session's Bash permission gate, and `alloy-worker-status` reports all twelve slots free with **no
-lane naming this worktree**, so the brokered path has no slot to admit either. **The AST walk did not run.
-No count is claimed for 2026-09-11, and 2026-09-06 remains the last measured column.**
-
-The distinction from the fifth issuance matters and should not be collapsed into "blocked again". That leg
-was blocked by a *missing dependency* — a repairable state of the tree. This one is blocked by the
-*execution environment's own policy*, which no edit to this repository can fix. It is worth recording
-because the remedy is different: not `npm ci`, but a slot or an approval.
-
-| Field | Value |
-|---|---|
-| Base | `e59ece2e8` @ `runtime/migration-target-resolution` — **0 behind `origin/staging`**, 2 ahead. The freshest base any W-4 leg has run on; the sixth issuance was 8 behind. API routes **613** (603 on 2026-09-06); migrations **403** (373). Root is `managed-worktree`, sanctioned |
-| CLI | `node web/scripts/checkServiceClientPrincipal.mjs` — **NOT RUN.** Refused by the session permission gate, *not* by `route-heavy-validation.sh`, which blocks with its own message and did not fire |
-| Lock | `web/tests/access/serviceClientPrincipalCheck.test.ts` — **NOT RUN**, same cause; `npx vitest` is refused identically |
-| Evidence | [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) **not regenerated** — it still carries the 2026-09-06 walk and is now five days and ten routes stale |
-| Changed by this assignment | This record, §4's status line, §13's RL-15 row. **No source, test, register, evidence or migration file** |
-
-##### What was verified without a parser — and the sharp line around what that establishes
-
-The fifth issuance established this fallback: the checks that need no parser still run, and they bound the
-register's *structural* integrity even when its *live* counts cannot be taken. Every one of them passes.
-
-| Static property | Result |
-|---|---|
-| `max_subject_unresolved` equals the `exceptions` length | **23 = 23** |
-| `max_transitive_only_unresolved` equals the `advisory_transitive_only` length | **12 = 12** |
-| `baseline` is empty | **yes** — so exceptions/baseline disjointness holds trivially |
-| All 35 listed routes exist in the tree | **35 / 35** — no `stale-missing` entry is possible |
-| Every `exceptions` entry still imports a service client directly | **23 / 23** — no `stale-no-service-client` entry is possible |
-| Every `advisory_transitive_only` entry imports none directly | **12 / 12** — consistent with transitive-only membership |
-
-**What this does not establish, stated plainly.** Every row above is a fact about the register and about
-import text. The predicate that decides this workstream's number — *does this route resolve a principal* —
-is a walk through the first-party import graph to a terminal `.auth.getUser()`, `getClaims`, `getSession`
-or a named non-human resolver, and it has **no textual proxy**: a route may resolve a principal four modules
-deep through a helper, which is precisely why the instrument is an AST walk and not a grep. So the three
-failure kinds that need the walk — `stale-now-resolves`, `unlisted`, and both `ratchet` verdicts against a
-*live* floor — are **unprobed this run**.
-
-An independent ripgrep over the two service-client modules and `SUPABASE_SERVICE_ROLE_KEY` puts the
-direct-holder subject at **577 of 613**, against 570 of 603 on 2026-09-06 — a plausible +7 holders across
-+10 new routes. **This is offered as a sanity bound, not as a measurement.** It is a cruder predicate than
-`holdsServiceClientDirect` (which also follows re-exports), and the sixth issuance's warning about an
-instrument whose result is an artifact of itself applies with full force to a number produced this way.
-
-##### The register moved again outside a W-4 assignment — the eighth such move, and the first to add a new model
-
-`git log` on the register shows one edit since the sixth issuance: `69f62054c`, **2026-09-09**, *"declare
-the Stripe webhook's own authorization model"*. It raised `max_subject_unresolved` **22 → 23**, moved
-`reviewed` 2026-08-27 → 2026-09-09, and added `app/api/stripe/webhook/route.ts` as the register's **first
-`provider-signature` entry** — every prior exception was `capability-token`, `public-catalog-read`,
-`public-intake-create` or the single `webhook-signature` Resend route.
-
-The entry's *reasoning* is sound and is the right call: a provider callback has no Alloy principal to
-resolve by construction, Stripe cannot present a session, and the signature is the authentication. The
-model was re-verified against the tree this run and **holds** — the HMAC is checked before the body is read
-as authority (`verifyStripeSignature` at `stripeWebhook.ts:154`, comparison via `timingSafeEqual` at
-`:100`), tenancy comes from the connected account through the merchant binding rather than from the payload
-(`resolveOrgForConnectedAccount` at `:237`), and an account bound to no organization **fails closed** at
-`:238-243` rather than guessing a tenant, with a separate refusal at `:235` when no account is present.
-
-What is *not* sound is that this happened unwitnessed, for the eighth time. The fifth issuance worried that
-a register advancing outside any assignment might drift from the tree; the sixth answered that worry in the
-negative on the numbers. **This run cannot answer it at all**, because answering it is exactly what the walk
-does. The ceiling is now 23 and the list is 23 — but whether the *tree's* unresolved count is also 23 is
-unmeasured, and the eighth unwitnessed move is the first one for which that is true.
-
-##### Half the 2026-08-06 finding has been repaired — by another track, and it is the more important half
-
-The sixth issuance's central finding was that the 2026-08-06 repair was half-applied: the ceilings moved
-into the register where `prebuild` enforces them, while three freeze clauses stayed in a vitest lock that
-**no CI workflow ran**, and `prebuild` itself bit only through Vercel's `next build` after the merge.
-
-One half is now fixed, and not by this programme. `.github/workflows/web-prebuild-gates.yml` was added
-**2026-09-09** in `6b9bfff35` and hardened the same day by `cae164e12`; there are now **eight** workflows
-where the sixth issuance checked six. It runs `npm run prebuild` on `on: pull_request` with no `paths:`
-filter, as a required check, and its header is explicit that it invokes the real chain rather than a copy —
-*"IT RUNS `npm run prebuild`, NOT A COPY OF IT"* — for the reason this document would give: a second
-implementation would drift from the one the build runs.
-
-Its stated motivation names this workstream's own history. Two lanes merged green PRs and broke staging:
-Communications with `app/api/communications/unsubscribe` on 2026-08-20, and Attendance with
-`app/api/admin/childcare-attendance/service-day-exception` on **2026-09-09** — the same day the Stripe entry
-landed. Both times *"the gate worked perfectly and simply ran too late to be of use."* That is the precise
-diagnosis the 2026-08-06 leg gave, arrived at independently by a track that was not reading this file.
-
-**So the table the sixth issuance drew must be redrawn, and it improves in the column that matters most:**
-
-| Discipline | Asserted in | `prebuild` sees it | Runs pre-merge in CI |
-|---|---|---|---|
-| ceilings, over *and* under | register + check | **yes** (2026-08-06) | **yes — new, 2026-09-09** |
-| the frozen baseline may not grow | `serviceClientPrincipalCheck.test.ts:157` | no | **no** |
-| every baseline entry states why it is not an exception | `:137` | no | **no** |
-| `exceptions` and `baseline` are disjoint | `:144` | no | **no** |
-
-The admission gate — the property that no *new* ungated route can enter — has gone from *"bites only on
-staging, after the merge"* to *"bites on every pull request, before it"*. That is a material strengthening
-of W-4's enforced predicate and the best news this workstream has had since the ratchet moved into the
-register.
-
-**The relabelling escape is unchanged, and was re-confirmed at the source rather than assumed.**
-`checkServiceClientPrincipal.mjs:539` still reads
-`if (exceptions.has(r.route) || baseline.has(r.route)) continue;`, and the ratchet loop at `:614-617` still
-bounds exactly two keys. **`max_baseline` was not added.** The fix the sixth issuance handed forward — seed
-a `max_baseline` ceiling at 0 and require a reason field, which costs nothing at the current empty baseline
-— is **unactioned five days later**, and `tests/access` still appears in none of the eight workflows. All 23
-reviewed exceptions can still be relabelled as unreasoned frozen backlog with `prebuild` green. The bound
-stated on 2026-09-06 still holds and still limits the severity: `max_subject_unresolved` counts the union,
-so this remains a **relabelling** escape against the register's *reviewedness*, not an **admission** escape
-against the tree's authority.
-
-##### Citation drift: a broader instrument, and the finding is worse than 2026-09-06 reported
-
-The sixth issuance measured 21 line references, judged **5** mechanically checkable, and found **3 of those
-5 drifted**. That instrument admitted only a backticked *identifier* beside a line number. This run widened
-it by one deliberate step — a distinctive backticked *expression* (`` `.eq("token", token)` ``) is as
-bindable as a bare identifier, and a cross-file citation is checkable once resolved to its real file — and
-re-ran it over all 35 entries, including the Stripe entry that did not exist on 2026-09-06.
-
-**The two instruments are not directly comparable and the rates should not be quoted against each other.**
-Under the wider reading: **14 checkable references, 4 exact, 10 drifted.**
-
-| Entry | Citation | Actual | |
-|---|---|---|---|
-| `submissions/[submissionId]` | `verifySubmissionBelongsToPublicEmbed` `:58`, `:144` | `:58`, `:144` | **exact** |
-| `enrollment-artifact` | `resolveParticipantEnrollmentFromToken` `:52`; `resolveActiveArtifact` `:59` | `:52`, `:59` | **exact** |
-| `action/[token]` | `` `.eq("token", token)` `` at `:22` | `.eq("token_hash", hashFormLinkToken(token))` at `:23` | **drifted — and the predicate changed** |
-| `public/forms/[token]/resolve` | `resolvePublicFormEmbedContext(supabase, token)` `:31` | **not in the route at all** — now `buildPublicFormResolvePayload.ts:59` | **drifted, cross-file** |
-| `webhooks/resend` | `Webhook.verify` `:69`; `createAdminClient()` `:91` | `:110`; `:132` | **drifted ×2 — never previously reported** |
-| `enrollment-upload` | `uploadDestinationForField` `:105`; `process_instances.subject_id` `:111-117` | renamed `resolveParticipantUploadDestination` at `:110`; `:123-128` | **drifted ×2, unrepaired** |
-| `stripe/webhook` | `verifyStripeSignature` `:128`; `timingSafeEqual` `:57` | `:67` (def) / `:154` (call); `:100` (import `:20`) | **drifted ×2 — entry is two days old** |
-| `tour-booking/[token]/resolve` | `guardTourActionRoute` `:39`; `REQUIRED_ACTIONS` `:27-35` | `:45`; `:32` | **drifted ×2, unrepaired** |
-
-**Three results here are new, and each says something the previous legs could not.**
-
-**1. `webhooks/resend` has been wrong since some point before this run and nobody had looked.** It is an
-original 2026-07-31 entry. The sixth issuance's narrower instrument did not admit its two citations, so
-"3 of 5" was never the whole picture — it was the picture its instrument could see. Widening the instrument
-by one modest step surfaced two more drifted references in an entry that had been carried as sound for six
-weeks.
-
-**2. `action/[token]`'s reason is not merely mis-numbered — it describes a predicate the code no longer
-uses.** The register states the row is selected by the bearer token via `.eq("token", token)`. The route
-selects by `.eq("token_hash", hashFormLinkToken(token))`. The security model is **stronger** than the
-register claims (the raw token is not stored or compared), so this is not an exposure — but a security
-register that describes the wrong mechanism is not a reviewed artifact, and the direction of the error is
-luck rather than control.
-
-**3. The Stripe entry was wrong on all three of its checkable citations on the day it was written.** It
-landed 2026-09-09, two days before this run. Its `:128`, `:57` and `:217` were not *drifted* by subsequent
-commits — `:217` sits inside the `finish` helper and never held the fail-closed it is cited for, and
-`payment_provider_merchants` is named as though it were in `stripeWebhook.ts` when it lives in
-`providerMerchant.ts`. **This refutes the framing that citation drift is a maintenance backlog.** It is
-reproduced at the moment of authorship, by a careful author writing a genuinely correct security argument.
-
-That third result also sharpens the sixth issuance's prescription rather than confirming it. That leg
-proposed *"a convention of backticking the symbol beside every line number"* to make the register
-mechanically checkable. **The Stripe entry did exactly that** — `` `verifyStripeSignature` ``,
-`` `timingSafeEqual` `` — **and was still wrong on every one.** Backticking is therefore necessary and
-plainly insufficient: it converts an unverifiable claim into a *falsifiable* one, which is real progress and
-is why this run could catch it in two days instead of six weeks, but it does nothing to make the claim true.
-The control that would actually work is mechanical: the citation audit run in this section is ~40 lines of
-script over a register that now has a checkable majority, and it belongs in `tests/access` beside the
-freeze clauses, not in a QA document that runs when a W-4 assignment happens to be issued.
-
-**`enrollment-upload` is unrepaired at three assignments and eleven days**, exactly as handed forward on
-2026-09-04 and 2026-09-06, all five lines still wrong (`:75`→`:73`, `:88`→`:86`, `:105`→`:110` and renamed,
-`:135`→`:146`, `:111-117`→`:123-128`). Its security model was re-verified again and is intact.
-`tour-booking/[token]/resolve` is likewise unrepaired since 2026-09-06.
-
-**Deferred a third time, and the escalation is now the finding.** This assignment's scope names this
-document alone, as the fifth and sixth issuances' did. Three consecutive legs have produced a precise,
-complete, unactioned set of corrections to `serviceClientPrincipal.allowlist.json`. The sixth issuance
-already observed that *"two consecutive runs producing an identical, precise, unactioned handoff is evidence
-that the handoff mechanism is not working."* A third repetition settles it. **The scope grant requested on
-2026-09-06 is re-requested, and the corrections in the table above are complete enough to apply without
-re-deriving them.**
-
-##### Not verified this run
-
-**The entire live measurement** — counts, ratchet verdicts against a live floor, unlisted routes,
-`stale-now-resolves` — for the reason given at the top. **No lock run**, so the 18 tests are unconfirmed at
-this base. **No red demonstration**; the scratch-copy technique the sixth issuance established needs the
-same `node` the walk needs. **No evidence regeneration.** **No typecheck** — no TypeScript source was
-changed. **No live database query**, so W-0's counts are now **five weeks** old; nothing in W-4 depends on
-them. **No tier D**, per §14.3.7. **The 31 entries not named in the citation table were not re-read as
-prose** — the audit binds symbols to lines, which is strictly narrower than judging whether a stated
-authorization model is true of the route.
-
-**The honest limit is unchanged and still governs**: this check proves a principal is *resolved*, never that
-the result *gates* the handler. W-14 and W-15 still own that proof.
-
-**Mission identity, a fifth consecutive time.** This leg is issued under `msn_83dbd2706970c833d6`, *"Brief
-Spine Mission"* — the fifth consecutive access-hardening leg issued under a mission whose title names
-something other than access hardening (DX7 → DX-5 → DX-6 → DX-6 → Brief Spine). Four prior runs have raised
-it; none has been answered. **Concurrency, a sixth time**: seven modified files under
-`scripts/local-dev/lib/vacilando/` and `scripts/local-dev/tests/`, and an untracked
-`08-reuse-corpus-confirmation.md` in this directory, were present at session start and belong to other
-assignments. Neither touched, reverted, nor built upon — the fourth issuance's judgment, applied as policy
-for the fifth time.
 
 ---
 
@@ -5229,7 +4752,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
-| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**PREFLIGHT VOID 2026-09-06 — RE-AUTHORIZATION REQUIRED**) | shared | ~~**PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`~~ **VOIDED 2026-09-06 by `asg_7b05887a569304` (§6 W-6 ruling).** Census run 4 (2026-09-04) moved the population **2 → 5** on the `pairs_without_profile` grain (of **11** distinct pairs across **13** membership rows; **0 orphan profiles**, unchanged). RULE 5 (immediacy) fails: the 2026-08-07 authorization rests on a 28-day-old preflight and a written record saying *"2 rows"*. `preflight.ok` is now **`false`**, gate drops `operator_review` → **`unmet`**, `status` is **`preflight_void_reauthorization_required`**. **`abort_conditions[0]` FIRES** — growth attributed to the *class* (seed/QA tooling; four writers enumerated in §6) but not to the *instance*; **no product path can produce a fail-open pair**. The migration itself is **unchanged and correct** — it self-sizes in-transaction, so this is a stale *authorization*, not a stale migration. **No worker-reachable write channel exists to apply it** (see §6). **SECOND PRECONDITION ADDED 2026-09-11 by `asg_141e39c1ddca5e` (§4 W-0 ninth re-issue):** the apply channel cannot reach a database on the current base — `alloy_deployed_primary` is unregistered in `trusted-host-database-target.mjs:41-45`, so `database.apply_promoted_migration` clears governance and dies in the apply child as an unknown name (three such attempts already, none contacting a database). **Sequence: land the resolver fix → re-run the census → seek re-authorization**, so one authorization is spent once. Evidence [`w6-m1-preflight.json`](w6-m1-preflight.json), [`wave0-authority-census.json`](wave0-authority-census.json) `ninth_re_issue_2026_09_11` |
+| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**PREFLIGHT VOID 2026-09-06 — RE-AUTHORIZATION REQUIRED**) | shared | ~~**PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`~~ **VOIDED 2026-09-06 by `asg_7b05887a569304` (§6 W-6 ruling).** Census run 4 (2026-09-04) moved the population **2 → 5** on the `pairs_without_profile` grain (of **11** distinct pairs across **13** membership rows; **0 orphan profiles**, unchanged). RULE 5 (immediacy) fails: the 2026-08-07 authorization rests on a 28-day-old preflight and a written record saying *"2 rows"*. `preflight.ok` is now **`false`**, gate drops `operator_review` → **`unmet`**, `status` is **`preflight_void_reauthorization_required`**. **`abort_conditions[0]` FIRES** — growth attributed to the *class* (seed/QA tooling; four writers enumerated in §6) but not to the *instance*; **no product path can produce a fail-open pair**. The migration itself is **unchanged and correct** — it self-sizes in-transaction, so this is a stale *authorization*, not a stale migration. **No worker-reachable write channel exists to apply it** (see §6). Evidence [`w6-m1-preflight.json`](w6-m1-preflight.json) |
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090001_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
 | ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
@@ -5313,7 +4836,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
-| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review. **2026-09-06 sixth issuance: RE-EXECUTED and GREEN**, 18 tests, and the four-week measurement gap is closed — **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory**, ceilings at the live floor in both directions. The fifth issuance's *blind* reading of the register is confirmed **exact by the walk**, and the regenerated evidence reproduces all seven ratchet moves route by route with nothing else moved. **The CLI is shown red for the first time since 2026-08-06** — five states, real non-zero exit codes, produced without mutating the tracked register by running a byte-identical copy of the check from a scratch dir inside `web/`, so it reads a substituted allow-list while walking the real tree. **New finding: the 2026-08-06 repair was half-applied.** The ceilings were moved into the register; the *freeze* clauses were not. Baseline growth, the per-entry reason requirement and exceptions/baseline disjointness are asserted only in the vitest lock, and **no CI workflow runs `tests/access`** — so all 22 reviewed exceptions can be relabelled as unreasoned frozen backlog with `prebuild` **green**, demonstrated. Bounded: `max_subject_unresolved` counts the union, so no *new* unresolved route can enter — a relabelling escape, not an admission one. Fix handed forward: a `max_baseline` ceiling seeded at 0. **Citation drift measured rather than assumed** — only **5 of 21** line references are in a checkable form and **3 of those 5 are drifted**, including a **new** one (`guardTourActionRoute` cited `:39`, actually `:45`); the other **16 name a line with no symbol bound to it**, which is why the defect recurs and why human re-reading was never a sufficient control. `enrollment-upload` remains wrong on all five lines, ten days and two assignments after it was reported. **2026-09-11 seventh issuance: NOT RUN** — the parser is present but `node`/`npm`/`npx` are refused by the session permission gate and no lane holds a slot, so **no count is claimed for that date and 2026-09-06 remains the last measured column**; the remedy is a slot or an approval, not a repository edit. Parser-free checks all hold: ceilings **23/12** equal the list lengths, `baseline` empty, all **35** listed routes exist, all 23 exceptions still import a client directly and all 12 advisory entries import none. **The register moved an eighth time outside any assignment** (`69f62054c`, 2026-09-09, ceiling 22 → 23 for the Stripe Connect webhook — the first `provider-signature` entry; model re-verified and sound, fails closed on an unbound account at `:238-243`). **The admission half of the 2026-08-06 finding is REPAIRED by another track**: `.github/workflows/web-prebuild-gates.yml` (2026-09-09) runs `npm run prebuild` as a required check on every pull request, so the ratchet now bites pre-merge rather than on staging after it — its header names the two staging breaks this workstream's gate caught too late, `communications/unsubscribe` (2026-08-20) and `childcare-attendance/service-day-exception` (2026-09-09). **The freeze half is untouched**: no `max_baseline`, `:539` still short-circuits `baseline` identically to `exceptions`, `tests/access` in none of the now-eight workflows — the **relabelling** escape stands, bounded as before by the union ceiling. **Citation drift is worse than the sixth issuance could see**: a deliberately wider instrument (backticked *expressions* and resolved cross-file references, not just identifiers) finds **10 of 14 drifted, 4 exact** — two new in `webhooks/resend`, a changed predicate in `action/[token]` (`.eq("token", token)` → `.eq("token_hash", hashFormLinkToken(token))`, model stronger than the register claims), a gate cited in a route it no longer sits in (`public/forms/[token]/resolve` → `buildPublicFormResolvePayload.ts:59`), and **all three checkable citations in the two-day-old Stripe entry wrong on the day they were written**. That last one refutes the maintenance-backlog framing and shows the sixth issuance's backticking prescription makes a claim *falsifiable*, not *true*; the audit itself is ~40 lines and belongs in `tests/access`. `enrollment-upload` unrepaired at **three assignments and eleven days**; register correction **deferred a third time on scope** |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally. **2026-09-04 fifth issuance: NOT RUN** — no `node_modules` and no resolvable `typescript`, so the AST walk had no parser; **no count is claimed for that date and 2026-08-07 remains the last measured column**. The register nonetheless moved **seven times** in the interval (unresolved 15 → **22**, advisory 10 → **12**), **twice because this check went red on staging and stopped a build** (PR #416, PR #555) — the first evidence that it bites in CI and not only locally. Static checks that need no parser all hold: ceilings **22/12** equal the list lengths, `baseline` empty, all **34** listed routes exist, and every exception imports a client directly while every advisory entry imports none. Citation drift recurred — `enrollment-upload` drifted on five of five cited lines and names a renamed function, eight days after its entry claimed line-by-line review. **2026-09-06 sixth issuance: RE-EXECUTED and GREEN**, 18 tests, and the four-week measurement gap is closed — **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory**, ceilings at the live floor in both directions. The fifth issuance's *blind* reading of the register is confirmed **exact by the walk**, and the regenerated evidence reproduces all seven ratchet moves route by route with nothing else moved. **The CLI is shown red for the first time since 2026-08-06** — five states, real non-zero exit codes, produced without mutating the tracked register by running a byte-identical copy of the check from a scratch dir inside `web/`, so it reads a substituted allow-list while walking the real tree. **New finding: the 2026-08-06 repair was half-applied.** The ceilings were moved into the register; the *freeze* clauses were not. Baseline growth, the per-entry reason requirement and exceptions/baseline disjointness are asserted only in the vitest lock, and **no CI workflow runs `tests/access`** — so all 22 reviewed exceptions can be relabelled as unreasoned frozen backlog with `prebuild` **green**, demonstrated. Bounded: `max_subject_unresolved` counts the union, so no *new* unresolved route can enter — a relabelling escape, not an admission one. Fix handed forward: a `max_baseline` ceiling seeded at 0. **Citation drift measured rather than assumed** — only **5 of 21** line references are in a checkable form and **3 of those 5 are drifted**, including a **new** one (`guardTourActionRoute` cited `:39`, actually `:45`); the other **16 name a line with no symbol bound to it**, which is why the defect recurs and why human re-reading was never a sufficient control. `enrollment-upload` remains wrong on all five lines, ten days and two assignments after it was reported |
 
 **W-11 has no lock in either register, and did not mint one.** `RL-35` — *every catalog key resolves to ≥1
 enforcement site* — is `W-50`'s, and is red today by 36 keys, so it cannot be claimed here. The product-source

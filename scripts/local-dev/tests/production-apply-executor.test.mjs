@@ -429,15 +429,15 @@ test("X11b — a refusal that never reached the database is distinguished from o
   assert.equal(out.classification.classification, "no_effect");
 });
 
-test("X11d — a target the resolver never knew is named, not called ambiguous", () => {
+test("X11d — a refusal from before the connection is named, not called ambiguous", () => {
   /*
-   * WHAT THIS COST. `alloy_deployed_primary` cleared every governed check, was
-   * passed down as the environment, and the apply child refused it as an
-   * unregistered name — before assigning DATABASE_URL, before connecting,
-   * before dispatching a statement. The executor then reported
-   * `migration_outcome_ambiguous`: the loudest outcome in the system, meaning
-   * "a production migration may have half-applied", for the safest event it
-   * has. Establishing that nothing had happened took two governed censuses.
+   * WHAT THIS COST. `alloy_deployed_primary` cleared every governed check and
+   * was then refused while the apply child was still choosing its database —
+   * before a credential was assigned, before a socket, before a statement. The
+   * executor reported `migration_outcome_ambiguous`: the loudest outcome it
+   * has, meaning "a production migration may have half-applied", for the safest
+   * event it has. Establishing that nothing had happened took two governed
+   * censuses.
    *
    * A failure that provably never reached the database says which failure it
    * was.
@@ -462,6 +462,17 @@ test("X11d — a target the resolver never knew is named, not called ambiguous",
   // The operator is told the name, and never a connection string.
   assert.match(out.detail, /alloy_deployed_primary/);
   assert.doesNotMatch(out.detail, /:\/\/|password/i);
+});
+
+test("X11d2 — the other pre-connection refusals are named too", () => {
+  for (const code of ["target_environment_mismatch", "trusted_credential_unavailable", "trusted_host_dependency_missing"]) {
+    const calls = { applied: [] };
+    const { out } = run({
+      applyBatch: (n) => realBatch(n, calls, { applyFile: () => ({ ok: false, code, detail: `${code} detail` }) }),
+    });
+    assert.equal(out.code, code, `${code} must surface as itself`);
+    assert.equal(out.migration_attempted, false);
+  }
 });
 
 test("X11e — the ambiguous bucket is preserved for outcomes that truly are unknown", () => {

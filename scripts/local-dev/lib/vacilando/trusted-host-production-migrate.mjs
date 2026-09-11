@@ -574,12 +574,12 @@ export function classifyApplyFailure({ applyResult = null } = {}) {
     /*
      * THE TARGET GUARD REFUSES BEFORE THE FIRST CONNECTION, SO SAY SO.
      *
-     * These four are raised by the apply child before `DATABASE_URL` is
-     * assigned in any branch — no socket is opened, no transaction begun, no
-     * statement dispatched. Leaving them out reported the safest event in the
-     * system as its loudest one: three production applies that provably never
-     * contacted a database came back as "the outcome could not be established",
-     * and closing that question cost two governed censuses and most of a day.
+     * These four are raised while the apply child is still choosing its
+     * database — no credential assigned, no socket opened, no statement
+     * dispatched. Leaving them out reported the safest event in the system as
+     * its loudest one: three production applies that provably never contacted a
+     * database came back as "the outcome could not be established", and closing
+     * that question cost two governed censuses and most of a day.
      *
      * The ambiguous bucket keeps its meaning — an outcome genuinely unknown,
      * such as a connection lost after mutation — precisely by not holding

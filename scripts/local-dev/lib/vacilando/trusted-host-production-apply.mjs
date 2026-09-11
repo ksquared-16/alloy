@@ -120,8 +120,9 @@ export const PRODUCTION_APPLY_FAILURES = Object.freeze({
   REQUIRED_SET_UNREADABLE: "candidate_required_set_unreadable",
   APPLY_FAILED: "migration_sql_failed",
   APPLY_AMBIGUOUS: "migration_outcome_ambiguous",
-  // Raised by the apply child before a connection exists. Named here so they
-  // can be surfaced verbatim rather than folded into "the SQL failed".
+  // Raised while the apply child is still choosing its database, before a
+  // connection exists. Named here so they can be surfaced verbatim rather than
+  // folded into "the SQL failed".
   TARGET_UNREGISTERED: "target_resolution_failed",
   TARGET_ENVIRONMENT_MISMATCH: "target_environment_mismatch",
   HOST_DEPENDENCY_MISSING: "trusted_host_dependency_missing",
@@ -459,16 +460,15 @@ export function executeProductionMigrationApply({
   }
   if (applyResult?.ok !== true) {
     const classified = classifyApplyFailure({ applyResult });
+    // A refusal that never reached the database and an execution that may have
+    // half-run are different facts and must never share a code.
     /*
-     * A refusal that never reached the database and an execution that may have
-     * half-run are different facts and must never share a code — and among the
-     * refusals that never reached it, "the SQL failed" is its own kind of lie.
-     *
-     * So a no-effect refusal surfaces the reason it actually had. A target the
-     * resolver does not recognise says `target_resolution_failed` and names the
-     * name; a missing credential says so. Only a no-effect failure with nothing
-     * more specific to say falls back to `migration_sql_failed`, which is then
-     * true: something reached the database and did not take.
+     * Among refusals that never reached the database, "the SQL failed" is its
+     * own kind of lie. So a no-effect refusal surfaces the reason it actually
+     * had: a target routing does not recognise says so and names the name; a
+     * missing credential says so. Only a no-effect failure with nothing more
+     * specific to say falls back to `migration_sql_failed`, which is then true —
+     * something reached the database and did not take.
      */
     const code = classified.classification === "no_effect"
       ? (PRE_EXECUTION_SURFACED_CODES.has(classified.code)

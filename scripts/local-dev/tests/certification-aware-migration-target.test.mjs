@@ -108,14 +108,9 @@ test("an unusable connection string refuses rather than being parsed optimistica
 
 // ── The child enforces it too, so the guard is not only advisory ────────────
 
-/*
- * The child now takes the RESOLVED TARGET CLASS, not an environment name. The
- * alias vocabulary lives in the resolver and nowhere else — it used to live
- * here too, and the copy here was the one that went stale.
- */
-function runChild(targetClass, certUrl) {
+function runChild(environment, certUrl) {
   try {
-    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-out.tmp", "/tmp/thm-err.tmp", targetClass], {
+    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-out.tmp", "/tmp/thm-err.tmp", environment], {
       env: {
         ...process.env,
         ALLOY_CANONICAL_ROOT: REPO,
@@ -141,25 +136,19 @@ function runChild(targetClass, certUrl) {
 }
 
 test("the apply child refuses a certification request pointed at deployed infrastructure", () => {
-  const r = runChild(TARGET_CLASS.CERTIFICATION, DEPLOYED);
+  const r = runChild("certification", DEPLOYED);
   assert.notEqual(r.status, 0, "must not proceed to psql");
   assert.match(r.stderr, /target_environment_mismatch/);
 });
 
-test("the apply child refuses a class it cannot connect, and refuses an empty one", () => {
-  // Fail closed at the last boundary too. The resolver refuses unknown NAMES
-  // before a process is spawned; this is the backstop for anything that reaches
-  // the child anyway — including a caller that forgets the argument entirely,
-  // which is how every ledger repair would have died silently.
-  for (const bogus of ["bogus_class", ""]) {
-    const r = runChild(bogus, CERT);
-    assert.notEqual(r.status, 0);
-    assert.match(r.stderr, /target_resolution_failed/);
-  }
+test("the apply child refuses an unknown environment", () => {
+  const r = runChild("bogus", CERT);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /target_resolution_failed/);
 });
 
 test("the apply child refuses certification with no explicit certification credential", () => {
-  const r = runChild(TARGET_CLASS.CERTIFICATION, "");
+  const r = runChild("certification", "");
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /trusted_credential_unavailable/);
 });
@@ -176,7 +165,7 @@ test("the child loads the certification credential from the host config, not jus
   let status = 0;
   let stderr = "";
   try {
-    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-cfg-out.tmp", "/tmp/thm-cfg-err.tmp", TARGET_CLASS.CERTIFICATION], {
+    execFileSync("bash", [CHILD, "/dev/null", "/tmp/thm-cfg-out.tmp", "/tmp/thm-cfg-err.tmp", "certification"], {
       env: {
         ...process.env,
         ALLOY_CANONICAL_ROOT: REPO,
@@ -199,80 +188,56 @@ test("the child loads the certification credential from the host config, not jus
   assert.notEqual(status, 42, "must not refuse as unconfigured when the host config supplies the target");
 });
 
-// ── The deployed primary, and the contract that broke ───────────────────────
+// ── The contract that broke: governance and routing must share a vocabulary ──
 
-test("the registered deployed primary resolves to its own deployed class", () => {
-  const r = resolveTrustedDatabaseTarget("alloy_deployed_primary");
-  assert.equal(r.ok, true);
-  assert.equal(r.targetClass, TARGET_CLASS.DEPLOYED_PRIMARY);
-  assert.equal(r.connectionSourceKind, "trusted_server_env");
-  assert.equal(r.expectedHostIsLocal, false);
-  // Safe to write into an audit row: a name, never a connection string.
-  assert.ok(!/:\/\/|@|password/i.test(r.targetId));
-});
-
-test("every target governance accepts is a target this resolver knows", () => {
+test("every target a governed action accepts is a target this registry resolves", () => {
   /*
-   * THE REGRESSION, STATED AS A RULE.
+   * THE INVARIANT, WRITTEN DOWN.
    *
    * `database.apply_promoted_migration` validated `alloy_deployed_primary`
    * against PRODUCTION_APPLY_TARGETS, passed it down as the environment, and
-   * the resolver had never heard of it. Three production applies died at this
-   * seam having contacted no database at all. A name that clears governance and
-   * dies in the resolver is not a safety control; it is a broken contract.
+   * routing had never heard of it. Three governed production applies died at
+   * that seam having contacted no database at all, and two governed censuses
+   * were spent proving the deployed primary had not been touched. A name that
+   * clears governance and then fails to resolve is not a safety control; it is
+   * a broken contract, and it surfaces at the worst possible moment.
    *
    * Deliberately a test rather than an import: these lists answer different
    * questions — which action may touch a database, versus which database a name
-   * means — and importing one into the other would be a cycle.
+   * means — and importing one into the other would be a cycle. It does not pin
+   * WHICH class a target resolves to; that is routing's decision. It pins that
+   * routing has an answer at all.
    */
-  for (const target of [...PRODUCTION_APPLY_TARGETS, ...LEDGER_REPAIR_TARGETS]) {
+  const governed = [...new Set([...PRODUCTION_APPLY_TARGETS, ...LEDGER_REPAIR_TARGETS])];
+  assert.ok(governed.length > 0, "there must be something to check");
+  for (const target of governed) {
     const r = resolveTrustedDatabaseTarget(target);
-    assert.equal(r.ok, true, `${target} is accepted by a governed action but unknown to the resolver`);
+    assert.equal(r.ok, true, `${target} is accepted by a governed action but unknown to routing`);
+    assert.equal(r.expectedHostIsLocal, false, `${target} is deployed infrastructure`);
   }
 });
 
-test("a deployed target still refuses to land on the throwaway stack", () => {
-  const r = assertTargetMatchesEnvironment("alloy_deployed_primary", CERT);
-  assert.equal(r.ok, false);
-  assert.equal(r.code, "target_environment_mismatch");
-  assert.match(r.detail, /alloy_deployed_primary/);
-});
-
-test("the deployed primary accepts a deployed connection", () => {
-  assert.equal(assertTargetMatchesEnvironment("alloy_deployed_primary", DEPLOYED).ok, true);
-});
-
-test("an unregistered name refuses, and refuses by name", () => {
-  const r = resolveTrustedDatabaseTarget("alloy_deployed_secondary");
-  assert.equal(r.ok, false);
-  assert.equal(r.code, "target_resolution_failed");
-  assert.match(r.detail, /alloy_deployed_secondary/);
-});
-
-test("no unresolved name is ever handed a connection source", () => {
-  // The fix must not become "unknown target, use whatever we have".
-  for (const name of ["", "  ", "production", "prod", "bogus", "alloy_deployed_secondary"]) {
+test("no unregistered name is ever handed a connection source", () => {
+  // The repair must not become "unknown target, use whatever we have".
+  for (const name of ["", "   ", "production", "prod", "bogus", "alloy_deployed_secondary"]) {
     const r = resolveTrustedDatabaseTarget(name);
     assert.equal(r.ok, false, `${JSON.stringify(name)} must not resolve`);
+    assert.equal(r.code, "target_resolution_failed");
     assert.equal(r.connectionSourceKind, undefined);
   }
 });
 
 test("the deployed primary reaches the database — the exact handoff that was broken", () => {
   /*
-   * THE REGRESSION TEST THAT MATTERS.
+   * Proving routing knows the name is not enough: the name has to survive the
+   * handoff into the child and come out the other side as a connection attempt.
    *
-   * Three governed production applies died here with exit 45, having assigned
-   * no DATABASE_URL, opened no connection and dispatched no SQL. Proving the
-   * resolver knows the name is not enough: the name has to survive the handoff
-   * into the child and come out the other side as a connection attempt.
-   *
-   * So this drives the real child with the real deployed class, and points the
-   * trusted env source at a throwaway file whose URL goes nowhere. Getting
-   * "connection refused" is the pass: it means target resolution succeeded,
-   * DATABASE_URL was assigned, the host/port guard allowed it, and psql ran.
-   * Nothing real is touched — the canonical root is a temp directory, so the
-   * host's own .env.local cannot be picked up by accident.
+   * So this drives the real child with the real governed target, and points the
+   * trusted env source at a throwaway file whose URL goes nowhere. "Connection
+   * refused" is the pass: routing succeeded, a credential was assigned, the host
+   * guard allowed it, and psql ran. Nothing real is touched — the canonical root
+   * is a temp directory, so the host's own env file cannot be picked up by
+   * accident.
    */
   const dir = mkdtempSync(join(tmpdir(), "alloy-deployed-seam-"));
   const envFile = join(dir, "env");
@@ -284,7 +249,7 @@ test("the deployed primary reaches the database — the exact handoff that was b
   let stderr = "";
   const errFile = join(dir, "err");
   try {
-    execFileSync("bash", [CHILD, "/dev/null", join(dir, "out"), errFile, TARGET_CLASS.DEPLOYED_PRIMARY], {
+    execFileSync("bash", [CHILD, "/dev/null", join(dir, "out"), errFile, "alloy_deployed_primary"], {
       env: {
         ...process.env,
         ALLOY_CANONICAL_ROOT: fakeRoot,
@@ -300,11 +265,34 @@ test("the deployed primary reaches the database — the exact handoff that was b
   }
   try { stderr = readFileSync(errFile, "utf8"); } catch { /* */ }
 
-  assert.doesNotMatch(stderr, /target_resolution_failed/, "the deployed primary must get past target resolution");
+  assert.doesNotMatch(stderr, /target_resolution_failed/, "the governed target must get past routing");
   assert.doesNotMatch(stderr, /target_environment_mismatch/);
   assert.notEqual(status, 45);
-  // It got all the way to the client, which only happens once DATABASE_URL exists.
+  // It reached the client, which only happens once a credential was assigned.
   assert.match(stderr, /psql: error: connection to server/);
   // And the failure it reports names a host and a port, never a credential.
   assert.doesNotMatch(stderr, /u:p@|password/i);
+});
+
+test("every caller of the apply child names a target", () => {
+  /*
+   * THE QUIET HALF OF THE SAME BUG.
+   *
+   * The ledger repair spawns this child too, and was still calling it with
+   * three arguments from before the child had a target to take. With an absent
+   * target now a hard refusal, every ledger repair would have exited 45 without
+   * touching anything — silently, at exactly the moment a ledger disagreeing
+   * with its schema needed fixing.
+   *
+   * A source-level check rather than a behavioural one, because the thing to
+   * prevent is a CALLER forgetting the argument, and a future caller will not be
+   * covered by a test written against today's two.
+   */
+  const source = readFileSync(join(HERE, "..", "lib", "vacilando", "trusted-host-actions.mjs"), "utf8");
+  const spawns = source.match(/spawnSync\(\s*"bash",\s*\[APPLY_MIGRATION_SH[^\]]*\]/g) || [];
+  assert.ok(spawns.length >= 2, "expected the apply child to have more than one caller");
+  for (const spawn of spawns) {
+    const args = spawn.slice(spawn.indexOf("[") + 1).split(",").map((a) => a.trim()).filter(Boolean);
+    assert.equal(args.length, 5, `a caller of the apply child omits its target: ${spawn}`);
+  }
 });

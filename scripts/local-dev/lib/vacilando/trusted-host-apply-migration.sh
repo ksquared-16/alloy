@@ -1,26 +1,16 @@
 #!/usr/bin/env bash
 # Trusted Host Action child — apply one committed migration file.
-# Never prints credentials.
-# Args: <migration_file> <out_file> <stderr_file> <target_class>
+# Never prints credentials. Args: <migration_file> <out_file> <stderr_file>
 set -euo pipefail
 
 MIG_FILE="${1:?migration file required}"
 OUT_FILE="${2:?out file required}"
 ERR_FILE="${3:?stderr file required}"
-# The RESOLVED TARGET CLASS selects the database. This used to be absent
+# The requested environment SELECTS the database. It used to be absent here
 # entirely, which is how a request labelled `certification` could reach a
 # deployed pooler: the child simply used whichever DATABASE_URL the trusted
 # host had. Absent is not defaulted — it refuses.
-#
-# It is a CLASS, not an environment name, and that distinction is the repair.
-# This script briefly carried its own copy of the alias map — certification,
-# cert, staging — while `trusted-host-database-target.mjs` carried another. Two
-# registries means one of them is always the stale one, and it was this one:
-# `alloy_deployed_primary` cleared every governed check upstream and died here
-# as an unknown environment. So the names live in the resolver, the resolver
-# hands down a class, and this file knows only the three classes it must
-# actually connect differently for.
-MIG_TARGET_CLASS="${4:-}"
+MIG_ENVIRONMENT="${4:-}"
 
 CANONICAL="${ALLOY_CANONICAL_ROOT:-${ALLOY_REPO:-/Users/Kelly/Alloy}}"
 export ALLOY_REPO="$CANONICAL"
@@ -37,76 +27,17 @@ fi
 source "$TOOLKIT/lib/common.sh"
 # shellcheck disable=SC1091
 source "$TOOLKIT/lib/verify.sh"
+# The routing rules are NOT written here. This helper asks
+# trusted-host-database-target.mjs which credential the environment names and
+# proves the connection matches before the first statement.
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/trusted-host-database-target.sh"
 
 unset ALLOY_BLOCK_REMOTE_SUPABASE || true
 
-if [[ -z "$MIG_TARGET_CLASS" ]]; then
-  echo "target_resolution_failed: no resolved target class supplied to the apply child" >"$ERR_FILE"
-  exit 45
-fi
-
 # ── THE DATABASE IS CHOSEN BY THE ENVIRONMENT, NEVER BY WHAT HAPPENS TO EXIST ──
-case "$MIG_TARGET_CLASS" in
-  certification_local)
-    # The local certification stack has its own credential, supplied explicitly.
-    # It is NOT read from the server env, because that file is the deployed
-    # credential and reading it here is the whole defect.
-    # Sourcing common.sh DEFINES alloy_load_config; it does not RUN it. Without
-    # this call the host config is written and inert — the value sits in
-    # ~/.config/alloy-dev/config and never reaches the shell, so a correctly
-    # configured host still refuses. Measured: the config was published and the
-    # child still exited 42.
-    if [[ -z "${ALLOY_CERT_DATABASE_URL:-}" ]] && declare -F alloy_load_config >/dev/null 2>&1; then
-      alloy_load_config >/dev/null 2>&1 || true
-    fi
-    if [[ -z "${ALLOY_CERT_DATABASE_URL:-}" ]]; then
-      echo "trusted_credential_unavailable: ALLOY_CERT_DATABASE_URL is not set; certification migrations require an explicit local certification connection" >"$ERR_FILE"
-      exit 42
-    fi
-    DATABASE_URL="$ALLOY_CERT_DATABASE_URL"
-    EXPECT_LOCAL=1
-    ;;
-  staging_deployed|deployed_primary)
-    # Both are deployed infrastructure reached through the one trusted-host
-    # credential resolver already in production use. They are separate classes
-    # because the audit must say which was asked for, not because the
-    # connection is sourced differently.
-    if ! alloy_load_trusted_server_env_exports; then
-      echo "trusted_credential_unavailable" >"$ERR_FILE"
-      exit 42
-    fi
-    if [[ -z "${DATABASE_URL:-}" ]]; then
-      echo "trusted_credential_unavailable" >"$ERR_FILE"
-      exit 42
-    fi
-    EXPECT_LOCAL=0
-    ;;
-  *)
-    echo "target_resolution_failed: target class '$MIG_TARGET_CLASS' is not one this child can connect" >"$ERR_FILE"
-    exit 45
-    ;;
-esac
-
-# ── THE GUARD: PROVE THE TARGET BEFORE THE FIRST STATEMENT ──
-#
-# A hard refusal, not a warning. This is the check whose absence meant a
-# certification request could have written to deployed infrastructure.
-DB_HOST="$(printf '%s' "$DATABASE_URL" | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:?]+).*#\2#')"
-DB_PORT="$(printf '%s' "$DATABASE_URL" | sed -nE 's#^[a-z+]+://([^@/]*@)?[^/:?]+:([0-9]+).*#\2#p')"
-case "$DB_HOST" in
-  127.0.0.1|localhost|::1|0.0.0.0) HOST_IS_LOCAL=1 ;;
-  *) HOST_IS_LOCAL=0 ;;
-esac
-
-if [[ "$EXPECT_LOCAL" == "1" ]]; then
-  if [[ "$HOST_IS_LOCAL" != "1" || "$DB_PORT" != "54422" ]]; then
-    echo "target_environment_mismatch: target class '$MIG_TARGET_CLASS' resolved to ${DB_HOST}:${DB_PORT:-<none>}, which is not the local certification database" >"$ERR_FILE"
-    exit 44
-  fi
-elif [[ "$HOST_IS_LOCAL" == "1" && "$DB_PORT" == "54422" ]]; then
-  echo "target_environment_mismatch: target class '$MIG_TARGET_CLASS' resolved to the local certification database" >"$ERR_FILE"
-  exit 44
-fi
+alloy_resolve_trusted_database_target "$MIG_ENVIRONMENT" "$ERR_FILE" || exit $?
+DATABASE_URL="$ALLOY_RESOLVED_DATABASE_URL"
 
 sanitize_database_url() {
   local url="$1"
