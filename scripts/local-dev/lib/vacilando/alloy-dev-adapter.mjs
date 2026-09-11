@@ -186,12 +186,27 @@ export function sprintSlugFromLaneName(name, laneId) {
  * lane discovery already reads. A worktree counts as running an agent only when
  * a live pane sits inside it AND that pane looks like an agent.
  */
-/**
- * How many FIXED placement slots exist. These map to the permanent ports
- * (3011–3016) and the legacy `alloy-sprint-*` commands. A lane or worktree
- * without a slot is entirely valid — most of them have none.
+/*
+ * `FIXED_SLOT_RANGE = 6` STOOD HERE, AND IT DESCRIBED A RANGE THAT DOES NOT EXIST.
+ *
+ * It claimed the permanent ports were 3011–3016 and that the legacy
+ * `alloy-sprint-*` commands needed their own six-slot range, separate from the
+ * managed topology. Audited against the shell it was supposedly protecting:
+ *
+ *   alloy_validate_slot   bounds by ALLOY_MAX_AGENTS, not 6
+ *   alloy_slot_to_port    is ALLOY_FIRST_AGENT_PORT + slot - 1, unbounded by 6
+ *
+ * So the legacy path was already topology-driven and always had been. Measured
+ * on the host at the time of removal, SIX slots above the supposed range were
+ * holding working fixed ports: 7→3017, 8→3018, 9→3019, 10→3020, 11→3021,
+ * 12→3022. There was no separate compatibility range to preserve — only a
+ * literal that had outlived the six-slot era and was quietly bounding
+ * `free_slots` at 6 on a twelve-slot host.
+ *
+ * Free slots now come from the topology owner, which is what `scheduler.mjs`
+ * and `lane-worktree-lifecycle.freeSlots()` already did. Three implementations
+ * of "which slots are free" now agree because they read the same source.
  */
-export const FIXED_SLOT_RANGE = 6;
 
 /**
  * A tmux session name tmux will actually accept, matching the allowlist
@@ -253,12 +268,17 @@ export function assessProvisionCapacity({ cfg = null, metadata = null, providerP
     if (String(m.lifecycle || "").toLowerCase() === "finished") return false;
     return Boolean(m.path && existsSync(m.path));
   });
-  // Slots are a PLACEMENT identifier — for governed fixed ports and the legacy
+  // Slots are a PLACEMENT identifier — for deterministic ports and the legacy
   // sprint commands — not the upper bound on durable work. Six slots never
   // meant six workspaces, and `no_free_slot` was refusing new lanes on that
   // reading. Free slots are still reported (a fixed-port task needs one) but
-  // running out of them no longer blocks admission: see FIXED_SLOT_RANGE.
-  const freeSlots = Math.max(0, FIXED_SLOT_RANGE - occupied.length);
+  // running out of them no longer blocks admission.
+  //
+  // Counted by SLOT NUMBER against the managed topology, not by subtracting a
+  // length from a constant. Two duplicate registrations on one slot used to
+  // consume two of the six; now they consume the one slot they actually hold.
+  const occupiedSlots = new Set(occupied.map((m) => Number(m.slot)));
+  const freeSlots = managedSlots().filter((n) => !occupiedSlots.has(n)).length;
   /*
    * THE CEILING HAS TO BE READ WHERE IT IS WRITTEN.
    *
@@ -320,7 +340,9 @@ export function assessProvisionCapacity({ cfg = null, metadata = null, providerP
     free_slots: freeSlots,
     occupied_slots: occupied.length,
     // Reported so a fixed-port task can see it; never a concurrency ceiling.
-    fixed_slot_range: FIXED_SLOT_RANGE,
+    // "fixed" here means a DETERMINISTIC PORT (slot N always serves
+    // FIRST_AGENT_PORT + N - 1), not a fixed-size range — the range is whatever
+    // the managed topology currently is.
     fixed_slots_exhausted: freeSlots <= 0,
     active_providers: activeProviders,
     max_providers: maxProviders,

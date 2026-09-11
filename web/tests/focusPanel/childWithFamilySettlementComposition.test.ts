@@ -92,22 +92,42 @@ describe("a child with family settlement keeps the enrollment context", () => {
     });
 
     it("represents the focused child through Children, not a card of its own", () => {
+        /*
+         * THE GUARD IS THE SET, NOT THE SEQUENCE.
+         *
+         * This asserted an exact ORDERED list, and its own comment already disclaimed that reading
+         * — "the guard's point is that `child_identity` is ABSENT ... not that this list never
+         * grows". The composition was re-authored to the approved artifact's geometry (`8ffcf4f71`,
+         * 2026-08-27), which reordered the declarations without changing which cards compose, and
+         * the sequence assertion failed for a change it was never meant to police.
+         *
+         * Membership is what this test is about, so membership is what it asserts. Order is
+         * asserted where order is owned: `rowStart`, checked directly below.
+         */
         expect(visible(composition)).toContain("children");
-        expect(visible(composition)).toEqual([
-            "current_work",
-            "household",
-            "children",
-            // The child's operating day and the family account, both added as production verticals
-            // closed. The guard's point is that `child_identity` is ABSENT — the focused child is
-            // represented through Children — not that this list never grows.
+        expect([...visible(composition)].sort()).toEqual([
             "attendance",
-            "scheduling",
-            "financials",
             "billing_preview",
+            "children",
+            "current_work",
+            "financials",
             // Health & Safety, placed at child grain because this is where the record of attention
             // IS a child. At case grain the card refuses rather than choosing a subject.
             "health_safety",
+            "household",
+            "scheduling",
         ]);
+        expect(visible(composition)).not.toContain("child_identity");
+    });
+
+    it("leads with the journey and closes with the roster, whatever the declaration order", () => {
+        // The reading order the composition owns, stated as the ordering key that owns it.
+        const rowOf = (k: string) => composition.find((e) => e.key === k)!.area!.rowStart;
+        expect(rowOf("current_work")).toBe(1);
+        for (const later of ["financials", "household", "attendance", "children"]) {
+            expect(rowOf(later), later).toBeGreaterThan(rowOf("current_work"));
+        }
+        expect(rowOf("children")).toBeGreaterThanOrEqual(rowOf("attendance"));
     });
 
     it("composes Assignments, the destination the Children placement links resolve to", () => {
@@ -149,11 +169,26 @@ describe("the other grains are unchanged", () => {
 });
 
 describe("the composed layout is plannable", () => {
-    it("gives no card all 12 columns", () => {
-        // A full-width card cannot be planned into lanes and forces `planPublishedLayout` to fall
-        // back from `lanes` to `grid` for the WHOLE panel, moving every other card with it.
+    it("places every card inside the twelve-column canvas", () => {
+        /*
+         * WHAT THIS USED TO ASSERT NO LONGER EXISTS.
+         *
+         * It read "gives no card all 12 columns", because a full-width card was the one shape the
+         * runtime's lane reading refused, which dropped the WHOLE panel to the grid strategy and
+         * moved every other card with it. PR #809 retired that second reading: an authored grid has
+         * one interpretation, and a 12-column card changes nothing about its neighbours. The rule
+         * had also already been broken deliberately — `current_work` is authored at a full row
+         * because the Journey is the most horizontal thing on the panel.
+         *
+         * So the constraint is gone and the real invariant takes its place: every authored region
+         * fits the canvas it is authored on. A card running past column 12 is a defect in any
+         * reading.
+         */
         for (const entry of FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION) {
-            if (entry.area) expect(entry.area.colSpan).toBeLessThan(12);
+            if (!entry.area) continue;
+            expect(entry.area.colStart, entry.key).toBeGreaterThanOrEqual(1);
+            expect(entry.area.colSpan, entry.key).toBeGreaterThanOrEqual(1);
+            expect(entry.area.colStart + entry.area.colSpan - 1, entry.key).toBeLessThanOrEqual(12);
         }
     });
 

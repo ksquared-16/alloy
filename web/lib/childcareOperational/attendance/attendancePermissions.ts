@@ -38,6 +38,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
+import { resolveLinkedPersonId } from "@/lib/access/linkedPersonIdentity";
+import {
+    assignedScopeCovers,
+    resolveAssignedCaptureScope,
+} from "@/lib/childcareOperational/attendance/assignedScopeCapture";
 import {
     locationAllowedUnderSiteScope,
     type AdminAccessScopeDimensions,
@@ -147,7 +152,14 @@ export async function assertAttendanceCaptureAllowed(params: {
     dim: AdminAccessScopeDimensions;
     siteLocationId: string | null | undefined;
     roomLocationIds?: readonly (string | null | undefined)[];
+    /**
+     * The service date the fact belongs to. Required to resolve which staff
+     * assignments are in force; omitted, the narrowed policy cannot be evaluated
+     * and therefore denies rather than falling back to the wider one.
+     */
+    serviceDate?: string | null | undefined;
 }): Promise<AttendanceAuthzVerdict> {
+    // 1 — the capability. WHAT the actor may do.
     const permitted = await assertPermission(
         params.supabase,
         params.orgId,
@@ -157,7 +169,64 @@ export async function assertAttendanceCaptureAllowed(params: {
     );
     if (!permitted.ok) return permitted;
 
-    return assertAttendanceLocationsInScope(params);
+    // 2 — ordinary org/site scope. WHERE they may do it.
+    const inScope = await assertAttendanceLocationsInScope(params);
+    if (!inScope.ok) return inScope;
+
+    /*
+     * 3 — WHICH CAPTURE SCOPE POLICY APPLIES.
+     *
+     * A per-user MODE on the access profile, never a permission. Permissions are
+     * additive and union across roles, so expressing this narrowing as a grant
+     * would have meant an actor holding both an administrator role and an
+     * educator role ended up with LESS attendance authority than the
+     * administrator role alone. Adding a role must never reduce access.
+     *
+     * `site` is the default and today's behaviour, so a director cannot drift
+     * into the constrained policy by acquiring a role, an employment record or a
+     * schedule assignment — only by someone deliberately setting this mode.
+     *
+     * It applies AFTER site scope, never instead of it: an assignment names a
+     * room, it does not grant reach into a site the actor does not hold, or a
+     * stale roster row would become a way across a tenant boundary.
+     */
+    if ((params.dim.attendanceCaptureScope ?? "site") !== "assigned") {
+        return { ok: true };
+    }
+
+    const linked = await resolveLinkedPersonId(params.supabase, params.orgId, params.userId);
+    if (!linked.resolved) {
+        return deny("identity_unresolved", "Your linked person record could not be resolved.");
+    }
+    if (!linked.personId) {
+        // Explicitly not an email fallback. An account nobody has linked is an
+        // account whose assignments cannot be known, and guessing is how one
+        // teacher inherits another's rooms.
+        return deny(
+            "identity_not_linked",
+            "This account is not linked to a person record, so your room assignments cannot be resolved.",
+        );
+    }
+
+    const serviceDate = (params.serviceDate ?? "").trim();
+    if (!serviceDate) {
+        return deny("service_date_required", "A service date is required to resolve your room assignments.");
+    }
+
+    const scope = await resolveAssignedCaptureScope({
+        supabase: params.supabase,
+        orgId: params.orgId,
+        personId: linked.personId,
+        serviceDate,
+    });
+    const covered = assignedScopeCovers({
+        scope,
+        siteLocationId: params.siteLocationId,
+        roomLocationIds: params.roomLocationIds,
+    });
+    if (!covered.ok) return deny(covered.code, covered.message);
+
+    return { ok: true };
 }
 
 /** Reading attendance truth. Same two questions, the read capability. */

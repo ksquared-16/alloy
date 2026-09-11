@@ -90,6 +90,10 @@ async function authorizeAttendanceCapture(
     siteLocationId: string | null,
     roomLocationIds: readonly (string | null | undefined)[],
     correlationId: string,
+    // The date the fact belongs to. Assignment-scoped callers are narrowed to the
+    // rooms they hold ON THAT DAY, so authorizing a backdated correction against
+    // today's roster would be the wrong question.
+    serviceDate: string | null,
 ): Promise<ActionResult | null> {
     if (!ctx.accessScope) {
         return {
@@ -106,6 +110,7 @@ async function authorizeAttendanceCapture(
         dim: ctx.accessScope,
         siteLocationId,
         roomLocationIds,
+        serviceDate,
     });
     if (!verdict.ok) {
         return { ok: false, correlationId, status: verdict.status, error: verdict.message };
@@ -288,6 +293,7 @@ function recordAction(args: {
                     resolved.subject.siteLocationId,
                     [roomForEvent, fromRoom, t(payload.to_room_location_id) || null],
                     correlationId,
+                    serviceDate,
                 );
                 if (denied) return denied;
 
@@ -452,6 +458,15 @@ export const attendanceCorrectAction: RegisteredAction = {
             if (!resolved.ok) {
                 return { ok: false, correlationId, status: 409, error: resolved.message };
             }
+            /*
+             * The date the CORRECTED fact belongs to, not today. An
+             * assignment-scoped caller is narrowed to the rooms they held on the
+             * day in question; authorizing a backdated correction against
+             * today's roster would ask the wrong question in both directions —
+             * denying a teacher fixing yesterday's room, and permitting one to
+             * rewrite a day they never worked.
+             */
+            const correctionServiceDate = t(payload.service_date) || null;
             const denied = await authorizeAttendanceCapture(
                 supabase,
                 ctx,
@@ -462,6 +477,7 @@ export const attendanceCorrectAction: RegisteredAction = {
                     t(payload.to_room_location_id) || null,
                 ],
                 correlationId,
+                correctionServiceDate,
             );
             if (denied) return denied;
 

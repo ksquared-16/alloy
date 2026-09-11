@@ -48,11 +48,12 @@ describe("FocusPanelSummarySkeleton (pending Focus Panel)", () => {
         it("matches the resolved grid render strategy for the same doc", () => {
             const strategyMatch = render().match(/data-fp-render-strategy="([^"]+)"/);
             expect(strategyMatch?.[1]).toBeTruthy();
-            // The resolved body (`OpportunityFocusPanelModeGrid`) passes
-            // `preferLanesFromGrid = Boolean(publishedLayout?.grid)`, so a grid-bearing doc plans
-            // `published-lanes`. The pending skeleton MUST plan the SAME strategy — `published-grid`
-            // here would mean the surface changes DOM structure + geometry on settle.
-            expect(strategyMatch?.[1]).toBe("published-lanes");
+            // The skeleton and the resolved body (`OpportunityFocusPanelModeGrid`) hand the same
+            // published layout to the same planner, and neither can name a strategy — so a
+            // grid-bearing doc plans `published-grid` in both. A disagreement here would mean the
+            // surface changes DOM structure + geometry on settle, which is the reflow this
+            // component exists to prevent.
+            expect(strategyMatch?.[1]).toBe("published-grid");
         });
     });
 

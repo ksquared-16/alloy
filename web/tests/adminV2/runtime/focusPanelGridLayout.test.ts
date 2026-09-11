@@ -102,18 +102,41 @@ describe("focusPanelGridLayout — V5 responsive grid", () => {
         };
         const layout = buildPublishedLayoutFromGrid(twoCol);
 
-        // Default (no opt) keeps the exact CSS-Grid placement — unchanged behavior.
+        // ONE reading of an authored grid, for every consumer. This used to be two: an
+        // opt-in `preferLanesFromGrid` transposed the same coordinates into lanes for the
+        // Work Unit only, so the composer and the runtime drew the same document
+        // differently. The plan no longer takes a strategy hint.
         expect(planPublishedLayout(layout, 1040).strategy).toBe("grid");
-
-        // Work mode transposes the SAME authored columns into continuous lanes.
-        const lanes = planPublishedLayout(layout, 1040, { preferLanesFromGrid: true });
-        expect(lanes.strategy).toBe("lanes");
-        expect(lanes.lanes).toHaveLength(2);
-        expect(lanes.lanes[0]!.cards.map((c) => c.key)).toEqual(["household", "children"]);
-        expect(lanes.lanes[1]!.cards.map((c) => c.key)).toEqual(["readiness_kpi", "health"]);
+        expect(planPublishedLayout(layout, 1040).lanes).toEqual([]);
+        expect(planPublishedLayout(layout, 1040).areas.map((a) => [a.card, a.colStart, a.colSpan])).toEqual([
+            ["household", 1, 6],
+            ["children", 1, 6],
+            ["readiness_kpi", 7, 6],
+            ["health", 7, 6],
+        ]);
     });
 
-    it("Work-mode lanes fall back to the exact grid when a card spans full width", () => {
+    it("keeps an authored span that is NARROWER than its column neighbours", () => {
+        // The measured defect, as a unit: Financials authored two columns wide beside two
+        // six-wide cards in the same column band. The lane reading gave every card in a band
+        // the band's widest span, so the runtime drew Financials three times its authored
+        // width while the composer drew it correctly.
+        const narrowInABand: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "business_process", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "attendance", colStart: 1, colSpan: 6, rowStart: 2, rowSpan: 2 },
+                { card: "financials", colStart: 7, colSpan: 2, rowStart: 1, rowSpan: 2 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 2, rowSpan: 4 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 3, rowSpan: 4 },
+            ],
+        };
+        const plan = planPublishedLayout(buildPublishedLayoutFromGrid(narrowInABand), 1040);
+        expect(plan.strategy).toBe("grid");
+        expect(plan.areas.find((a) => a.card === "financials")!.colSpan).toBe(2);
+    });
+
+    it("plans a full-width spanner as a grid, exactly as it plans every other layout", () => {
         const withFullWidth: FocusPanelGridLayout = {
             columns: 12,
             areas: [
@@ -122,10 +145,9 @@ describe("focusPanelGridLayout — V5 responsive grid", () => {
                 { card: "readiness_kpi", colStart: 7, colSpan: 6, rowStart: 2, rowSpan: 1 },
             ],
         };
-        const plan = planPublishedLayout(buildPublishedLayoutFromGrid(withFullWidth), 1040, {
-            preferLanesFromGrid: true,
-        });
+        const plan = planPublishedLayout(buildPublishedLayoutFromGrid(withFullWidth), 1040);
         expect(plan.strategy).toBe("grid");
+        expect(plan.areas.find((a) => a.card === "attention")!.colSpan).toBe(12);
     });
 
     it("PRESERVES the grid through the publish round-trip — never persists a rows-only stack", () => {

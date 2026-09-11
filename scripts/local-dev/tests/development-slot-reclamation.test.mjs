@@ -320,11 +320,65 @@ await test("U6. declining is a real answer, not a dead end", () => {
   assert.match(html, /data-gw-reclaim-cancel[^>]*>Leave it without a slot/);
 });
 
+await test("U0. each route is REACHABLE by the method it is called with", async () => {
+  /*
+   * THE DEFECT THIS CLOSES, and it reached the promoted runtime.
+   *
+   * The candidates route was written beside `/api/lanes/create` — the two
+   * halves of one feature, side by side, which reads well. `/api/lanes/create`
+   * is inside `if (req.method === "POST")`, so the GET route could never match
+   * and answered 404 on the running Gateway while every test passed: U7 below
+   * asserts the route's SOURCE TEXT, and the mounted proof ran against a
+   * stubbed server. Neither can see method scope.
+   *
+   * "The handler exists" and "the handler is reachable" are different claims,
+   * and only the second is worth anything. This pins each route to the method
+   * scope of a route already known to work at that verb.
+   */
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../lib/vacilando-server.mjs", import.meta.url), "utf8");
+
+  /*
+   * BRACES, NOT PROXIMITY. The first version of this control asked "what is the
+   * nearest preceding `if (req.method === "POST")`", which treats every line
+   * after any POST guard as being inside it — so it passed against the very
+   * layout that shipped the 404. A block ENDS, and the only honest way to know
+   * whether an index is inside one is to match the braces.
+   */
+  const postBlocks = [];
+  for (const m of src.matchAll(/if \(req\.method === "POST"\) \{/g)) {
+    let depth = 0;
+    let i = m.index + m[0].length - 1;
+    for (; i < src.length; i += 1) {
+      if (src[i] === "{") depth += 1;
+      else if (src[i] === "}") { depth -= 1; if (depth === 0) break; }
+    }
+    postBlocks.push([m.index, i]);
+  }
+  const inPost = (idx) => postBlocks.some(([a, b]) => idx > a && idx < b);
+
+  const getCandidates = src.indexOf('path === "/api/lanes/slots/reclaim-candidates"');
+  const knownGet = src.indexOf('path === "/api/lanes") {');
+  assert.ok(getCandidates > 0 && knownGet > 0, "both routes are present");
+  assert.equal(inPost(knownGet), false, "GET /api/lanes is the reference: it is not in a POST block");
+  assert.equal(inPost(getCandidates), false,
+    "the candidates route is inside a POST block, so a GET can never reach it — this is the 404 that shipped");
+
+  const postReclaim = src.indexOf('path === "/api/lanes/slots/reclaim") {');
+  const knownPost = src.indexOf('path === "/api/lanes/create"');
+  assert.ok(postReclaim > 0 && knownPost > 0);
+  assert.equal(inPost(knownPost), true, "POST /api/lanes/create is the reference: it is in a POST block");
+  assert.equal(inPost(postReclaim), true, "the reclaim mutation must be reachable by POST");
+});
+
 await test("U7. the API delegates; it does not re-implement ranking or mutation", async () => {
   const src = readFileSync(new URL("../lib/vacilando-server.mjs", import.meta.url), "utf8");
-  const i = src.indexOf('path === "/api/lanes/slots/reclaim-candidates"');
-  const j = src.indexOf('path === "/api/lanes/create"');
-  const routes = src.slice(i, j);
+  // The two routes now live in different method scopes, so each is read where
+  // it actually is rather than as one adjacent block.
+  const getStart = src.indexOf('path === "/api/lanes/slots/reclaim-candidates"');
+  const postStart = src.indexOf('path === "/api/lanes/slots/reclaim") {');
+  const routes = src.slice(getStart, src.indexOf('path === "/api/lanes") {', getStart))
+    + src.slice(postStart, src.indexOf('path === "/api/lanes/create"', postStart));
   assert.match(routes, /slotReclaimCandidates\(/, "ranking comes from the owner");
   assert.match(routes, /reassignSlot\(/, "mutation comes from the owner");
   assert.ok(!/SLOT_RECLAIM_GROUPS|writeFileSync|adopt/.test(routes), "no second copy of the rules");
@@ -347,6 +401,85 @@ await test("U9. a server refusal replaces the list and clears the stale choice",
   const fn = src.slice(src.indexOf("async function confirmSlotReclaim"), src.indexOf("async function fetchCandidates"));
   assert.match(fn, /st\.candidates = j\.candidates/, "the current ranking replaces the stale one");
   assert.match(fn, /st\.selected = null/, "and the stale selection is cleared");
+});
+
+/*
+ * "NOTHING RUNNING" MEANT "NO RUN THIS INSTANT", AND THAT WAS FAIL-OPEN.
+ *
+ * The first version of this ranker decided busy/idle from `hasActiveRun` alone.
+ * MEASURED ON THE LIVE HOST the morning after it shipped: ELEVEN of twelve slots
+ * came back reclaimable — including the lane running the measurement (agent open,
+ * 22 uncommitted files, its run merely between turns) and the lane holding the
+ * shared-stack lease with 63 uncommitted files. Only one slot was protected,
+ * because only one happened to have a run mid-flight in that second. Run the same
+ * code an hour later and a different set is protected: the predicate was not just
+ * wrong, it was UNSTABLE, which is why ordering-by-recency never rescued it.
+ *
+ * Nothing was lost — reclaim is operator-confirmed — but "the operator would
+ * probably not pick the dangerous one" is not a safety model.
+ *
+ * A run between turns is the NORMAL state of a working lane. So three claims,
+ * ANY of which means busy, each failing closed on its own.
+ */
+await test("L1. a live agent session holds the slot even with no run in flight", async () => {
+  seedLane("Working", "wt-working", { slot: 1 });
+  const { candidates } = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: () => true, leaseHeld: () => false,
+  });
+  const c = candidates.find((x) => x.worktree === "wt-working");
+  assert.equal(c.group, "active", "an open agent session is work in progress");
+  assert.equal(c.reclaimable, false);
+  assert.match(c.reason, /agent session/, "the reason names the evidence, not a generic state");
+});
+
+await test("L2. holding the shared stack holds the slot", async () => {
+  // Certification keeps the stack alive across many runs; its run records are
+  // not the claim, which is why a lease outranks run state.
+  seedLane("Certifying", "wt-cert", { slot: 1 });
+  const { candidates } = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: () => false, leaseHeld: () => true,
+  });
+  const c = candidates.find((x) => x.worktree === "wt-cert");
+  assert.equal(c.reclaimable, false);
+  assert.match(c.reason, /shared local stack/);
+});
+
+await test("L3. a probe that cannot answer reads BUSY, and never throws out", async () => {
+  seedLane("Unknown", "wt-unknown", { slot: 1 });
+  const boom = () => { throw new Error("probe exploded"); };
+  const { candidates } = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: boom, leaseHeld: () => false,
+  });
+  const c = candidates.find((x) => x.worktree === "wt-unknown");
+  assert.equal(c.reclaimable, false, "I cannot tell must mean busy");
+  // The whole ranking must still come back — a throwing probe took it all down once.
+  assert.equal(candidates.length, 1, "the ranking survived the failing probe");
+});
+
+await test("L4. with nothing working it is still offered — no over-refusal", async () => {
+  // The other direction matters just as much: a predicate that refuses everything
+  // is exactly as useless as one that offers everything, and much harder to notice.
+  seedLane("Quiet", "wt-quiet", { slot: 1 });
+  const { candidates } = await L.slotReclaimCandidates({
+    root: ROOT, activeRun: idle, sessionAlive: () => false, leaseHeld: () => false,
+  });
+  const c = candidates.find((x) => x.worktree === "wt-quiet");
+  assert.equal(c.group, "inactive");
+  assert.equal(c.reclaimable, true);
+});
+
+await test("L5. busy is not decided by the run probe alone", async () => {
+  // Source control, comments STRIPPED — an earlier control in this repo matched
+  // the very comment describing the defect it was meant to catch.
+  const src = readFileSync(new URL("../lib/vacilando/lane-worktree-lifecycle.mjs", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const fn = src.slice(src.indexOf("function laneWorkingEvidence"));
+  const body = fn.slice(0, fn.indexOf("\n}"));
+  assert.match(body, /hasActiveRun/, "the run signal is still first");
+  assert.match(body, /session/, "and is no longer alone");
+  assert.match(body, /lease/, "and the lease is consulted too");
+  assert.ok(!/const busy = .*hasActiveRun\(l\.lane_id\) : false/.test(src),
+    "the single-signal predicate is gone");
 });
 
 try { rmSync(ROOT, { recursive: true, force: true }); } catch { /* */ }

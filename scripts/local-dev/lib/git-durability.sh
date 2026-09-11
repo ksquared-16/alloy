@@ -51,6 +51,30 @@ alloy_durability_head_pushed() {
   [[ -n "$remote_sha" && "$remote_sha" == "$local_sha" ]]
 }
 
+# The SECOND way work survives this machine: it is already in the base.
+#
+# `head_pushed` asks whether origin still carries this exact commit on this
+# exact branch. That is one route to durability and it is not the only one — a
+# sprint whose work was merged into staging is finished whether or not its
+# feature branch still exists anywhere. Requiring the branch to survive as well
+# confuses "the work is safe" with "the branch is tidy".
+#
+# Read from local refs deliberately. A stale `origin/staging` can only make this
+# answer NO when the truth is yes, which blocks a finish that would have been
+# allowed — the harmless direction. It cannot invent containment that is absent.
+alloy_durability_head_contained_in_base() {
+  local path="$1" base head
+  base="$(alloy_git_base_ref)"
+  head="$(git -C "$path" rev-parse HEAD 2>/dev/null)"
+  printf 'DURABILITY_CONTAINED_BASE=%s\n' "$base"
+  if [[ -n "$head" ]] && git -C "$path" merge-base --is-ancestor "$head" "$base" 2>/dev/null; then
+    printf 'DURABILITY_CONTAINED=yes\n'
+    return 0
+  fi
+  printf 'DURABILITY_CONTAINED=no\n'
+  return 1
+}
+
 alloy_durability_integration_state() {
   local path="$1" base ahead behind mb
   base="$(alloy_git_base_ref)"
@@ -134,10 +158,31 @@ alloy_assert_sprint_finishable() {
 
   out="$(alloy_durability_clean_tree "$path")" || failures+=("uncommitted changes in the working tree")
   printf '%s\n' "$out"
-  out="$(alloy_durability_tracking_branch "$path")" || failures+=("branch has no upstream tracking branch")
+  # AN UPSTREAM REF IS LOCAL CONFIG, NOT EVIDENCE THAT WORK LEFT THIS MACHINE.
+  #
+  # This was a hard failure, and it blocked a finish on a branch whose commits
+  # were provably on origin — the same run printed DURABILITY_REMOTE_HEAD equal
+  # to DURABILITY_LOCAL_HEAD and DURABILITY_UNPUSHED_COMMITS=0 while refusing
+  # with "commits exist only on this machine". `git push origin HEAD:<branch>`
+  # sets no upstream; neither does a worktree whose config was rebuilt. The
+  # reverse is worse: `--set-upstream-to` on a branch that was never pushed
+  # satisfies this check while the work is still only here.
+  #
+  # It stays as reported EVIDENCE because it is genuinely useful to see. It is
+  # no longer a gate, because it never measured the invariant.
+  out="$(alloy_durability_tracking_branch "$path")" || true
   printf '%s\n' "$out"
-  out="$(alloy_durability_head_pushed "$path")" || failures+=("HEAD is not on origin — commits exist only on this machine")
+
+  # DURABILITY IS EITHER-OR, AND ONLY THESE TWO COUNT.
+  # Origin carries this exact commit, or the base already contains it. Fail
+  # closed: if neither can be established — including a remote that cannot be
+  # reached — the sprint does not finish.
+  local durable=0
+  if out="$(alloy_durability_head_pushed "$path")"; then durable=1; fi
   printf '%s\n' "$out"
+  if out="$(alloy_durability_head_contained_in_base "$path")"; then durable=1; fi
+  printf '%s\n' "$out"
+  [[ "$durable" == "1" ]] || failures+=("HEAD is neither on origin nor contained in $(alloy_git_base_ref) — commits exist only on this machine")
   alloy_durability_integration_state "$path"
   out="$(alloy_durability_no_owned_processes "$name")" || failures+=("managed processes are still running")
   printf '%s\n' "$out"

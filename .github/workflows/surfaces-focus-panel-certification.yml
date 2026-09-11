@@ -1,0 +1,62 @@
+# Surfaces / Focus Panel certification gate — standing invariants for composition and parity.
+#
+# ── WHY THIS EXISTS ──
+#
+# Seven Focus Panel tests were red on staging for up to seven weeks and no required check
+# noticed. The reason is not that they were excluded from a suite: it is that no required gate
+# runs them at all.
+#
+# `Full graph (tests + scripts)` reads like the job that would catch this. It runs
+# `npm run typecheck:tests` — a TypeScript check of the test graph. It compiles the tests; it
+# never executes them. Every required job that does run Vitest is scoped to a named directory
+# or file list (docs-lint, operational-expectations, trust-adoption, trust-db, enrollment
+# configuration), and bare `npm run test` is run by nothing. Focus Panel composition was simply
+# in none of those lists, so a regression there could not fail CI.
+#
+# ── WHY SCOPED, NOT WHOLE-SUITE ──
+#
+# The same reason `operational-expectations-gates.yml` gives in as many words: the repository's
+# full Vitest suite is not green at baseline, so a whole-suite job could not be a gate — it
+# would be red for unrelated reasons and ignored within a week. `tests/adminV2/runtime` alone
+# carries substantial failures in Current Work, stage-work outcomes and child-grain row sources
+# that are nobody's regression and predate this gate. Scoping keeps the signal unambiguous: this
+# job is green today, so anything that turns it red is ours.
+#
+# ── WHAT IT HOLDS ──
+#
+#   tests/surfaces/     the Surface Builder and the published-grid runtime parity suites,
+#                       including the PR #809 contract that an authored grid has ONE reading
+#                       and the builder and the Work Unit are two consumers of it
+#   tests/focusPanel/   grain and composition ownership (child / case / person)
+#   six files under tests/adminV2/runtime/ that own published-layout read-back, grid placement
+#                       ops, and pending/settled plan agreement
+#
+# The list is deliberately explicit rather than a `focusPanel*` glob: the glob pulls in ~47
+# files, many of them carrying older failures this mission did not open and must not silently
+# adopt. Adding a file here is how this gate grows.
+name: Surfaces / Focus Panel certification
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/surfaces-focus-panel-certification.yml"
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  surfaces-focus-panel-certification:
+    name: Surfaces / Focus Panel certification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "web/.nvmrc"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Run Surfaces / Focus Panel certification suites
+        run: npm run test:surfaces-focus-panel

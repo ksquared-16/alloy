@@ -1560,9 +1560,17 @@ export function summarizeExecutionCapacity(lanes, provision = {}) {
 
 export function renderExecutionCapacity(summary) {
   if (!summary || typeof summary !== "object") return "";
-  // ONE number, and it is the one that governs admission: live provider
-  // processes. Showing the lane-posture count beside a longer list of running
-  // agents was two counters disagreeing in the same panel.
+  // TWO numbers, labelled so it is obvious which one governs.
+  //
+  // This showed ONE number and called it Active, and that number was residency
+  // — every live provider process. On a host with eight resident agents and a
+  // ceiling of eight it read "8 / 8, Available 0" while the admission gate
+  // would have started another lane immediately. Collapsing the two facts into
+  // one label is what let the panel contradict the gate.
+  //
+  // "In use" is the admission answer and the only one that decides anything.
+  // "Resident agents" is operational context: processes alive right now,
+  // which is a real and useful fact and is never a gate.
   const holders = (summary.provider_holders || []).map((h) => summaryText(h?.name) || summaryText(h?.path)).filter(Boolean);
   const running = (holders.length ? holders : (summary.running || []).map((r) => r.name).filter(Boolean)).join(", ") || "None";
   const queued = (summary.queued || []).map((q) => (
@@ -1571,7 +1579,10 @@ export function renderExecutionCapacity(summary) {
   return `<div class="gw-status-block" data-gw-capacity>
     <div class="gw-status-h">Execution capacity</div>
     <dl class="gw-kv">
-      <dt>Active</dt><dd>${esc(String(summary.active_providers ?? summary.active ?? 0))} / ${esc(String(summary.max_active ?? 3))}</dd>
+      <dt>In use</dt><dd>${esc(String(summary.active_providers ?? summary.active ?? 0))} of ${esc(String(summary.max_active ?? 3))}</dd>
+      ${Number.isFinite(Number(summary.resident_providers))
+        ? `<dt>Resident agents</dt><dd>${esc(String(summary.resident_providers))}</dd>`
+        : ""}
       <dt>Running</dt><dd>${esc(running)}</dd>
       <dt>Queued</dt><dd>${esc(queued)}</dd>
       <dt>Available</dt><dd>${esc(String(Math.max(0, Number(summary.max_active ?? 3) - Number(summary.active_providers ?? summary.active ?? 0))))}</dd>
@@ -1585,7 +1596,10 @@ export function renderExecutionCapacity(summary) {
 
 /**
  * Who is actually holding the agent capacity, and the two ways to free some.
- * Driven by the live provider count, so the names match the number.
+ *
+ * Driven by the EXECUTION-CAPACITY count, not residency, so this block appears
+ * only when the admission gate is genuinely full. It used to fire on residency
+ * and offered "release one to free capacity" while capacity was already free.
  */
 export function renderCapacityHolders(capacity) {
   if (!capacity) return "";

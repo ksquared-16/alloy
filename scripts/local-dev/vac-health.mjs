@@ -395,18 +395,32 @@ if (seatSummary) {
   w(`seats      ${c.active} active · ${c.attentive} attentive · ${c.idle} idle (${seatSummary.idle_reclaimable} reclaimable) · ${c.blocked} blocked · ${c.dormant} dormant   (grace ${Math.round((idleGracePolicy?.grace_ms || 0) / 60000)}m, policy ${idleGracePolicy?.version})\n`);
 }
 const A = capacity.axes;
-w(`capacity   providers ${A.provider_capacity.current}/${A.provider_capacity.ceiling} (by ${A.provider_capacity.bounded_by}) · tokens ${A.validation_capacity.used}/${A.validation_capacity.tokens} (by ${A.validation_capacity.bounded_by}) · workers ≤${A.validation_capacity.worker_ceiling} · dev servers ${A.dev_server_capacity.current}/${A.dev_server_capacity.ceiling}\n`);
+/*
+ * ONE ANSWER TO "HOW MANY AGENTS MAY WORK AT ONCE?".
+ *
+ * This line used to print `providers ${current}/${provider_capacity.ceiling}`,
+ * which is the HARDWARE ADVISORY — what the machine could carry. On this host
+ * that read 4 while the enforced ceiling was 8 and eight providers were live,
+ * so the first capacity number an operator saw was one nothing enforces, and
+ * the `enforced` line below then said something different.
+ *
+ * The enforced ceiling is now the answer, with its source, and the hardware
+ * estimate stays beside it explicitly marked advisory. Dev servers keep the
+ * axis ceiling because for them the axis IS slot-bounded and enforced.
+ */
+const enforced = capacityStatus({ derived: capacity });
+const providerLimit = enforced.limits.ALLOY_MAX_ACTIVE_PROVIDERS;
+w(`capacity   providers ${A.provider_capacity.current}/${providerLimit.value} enforced (${providerLimit.source}) · hw advisory ${A.provider_capacity.ceiling} (by ${A.provider_capacity.bounded_by}) · tokens ${A.validation_capacity.used}/${A.validation_capacity.tokens} (by ${A.validation_capacity.bounded_by}) · workers ≤${A.validation_capacity.worker_ceiling} · dev servers ${A.dev_server_capacity.current}/${A.dev_server_capacity.ceiling}\n`);
 w(`reserves   memory ${A.memory_capacity.free_gb ?? "?"} GB free / ${A.memory_capacity.reserve_gb} GB reserve · disk ${A.disk_headroom.free_gb ?? "?"} GB free / ${A.disk_headroom.reserve_gb} GB reserve · policy ${capacity.policy_version}\n`);
 if (capacity.constrained_axes.length) w(`constrained ${capacity.constrained_axes.map((c) => c.value).join(", ")}\n`);
 
 // DERIVED IS NOT ENFORCED, AND HEALTH MUST NOT CONFLATE THEM.
 //
-// The line above reports what this host could safely OFFER — 6 dev servers on
-// 48 GB. The toolkit refuses at 3, because the host config says 3. Printing only
-// the derived ceiling is how a capacity experiment came to believe it had four
-// slots of headroom it was never going to be given. Both numbers, always, and
-// the reason each one is what it is.
-const enforced = capacityStatus({ derived: capacity });
+// The axes report what this host could safely OFFER. What the toolkit actually
+// refuses at comes from the host config, and the two are routinely different.
+// Printing only the derived ceiling is how a capacity experiment came to believe
+// it had four slots of headroom it was never going to be given. Both numbers,
+// always, and the reason each one is what it is.
 w(`enforced   ${CAPACITY_NAMES.map((n) => {
   const r = enforced.limits[n];
   return `${n.replace("ALLOY_MAX_", "").toLowerCase()} ${r.value} (${r.source})`;

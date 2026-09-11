@@ -1090,20 +1090,6 @@ export function createVacilandoServer() {
        * because a second copy of "which slot is safe to take" is exactly the
        * kind of thing that drifts and then takes a port from a lane mid-turn.
        */
-      if (path === "/api/lanes/slots/reclaim-candidates") {
-        const forWorktree = url.searchParams.get("for") || null;
-        const { slotReclaimCandidates } = await import("./vacilando/lane-worktree-lifecycle.mjs");
-        const out = await slotReclaimCandidates({ excludeWorktree: forWorktree });
-        return sendJson(res, 200, {
-          ok: true,
-          free_slots: out.free,
-          candidates: out.candidates,
-          // Said once, by the server, so every surface tells the operator the
-          // same thing about what a reclaim costs.
-          consequence: SLOT_RECLAIM_CONSEQUENCE,
-        });
-      }
-
       if (path === "/api/lanes/slots/reclaim") {
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
@@ -2065,6 +2051,35 @@ export function createVacilandoServer() {
       return sendJson(res, 200, { slot, requests: readRequests(slot) });
     }
     // ---- Single source of truth: who is this slot, and where does this runtime live? ----
+    /*
+     * THIS ROUTE LIVES WITH THE OTHER GET LANE ROUTES, AND THAT IS THE POINT.
+     *
+     * It was first written next to `/api/lanes/create` for readability — the
+     * two halves of one feature, side by side. `/api/lanes/create` is inside
+     * `if (req.method === "POST")`, so the GET never matched and the route
+     * answered 404 on the running build while every test passed: the unit
+     * control asserted the route's SOURCE TEXT, and the mounted proof ran
+     * against a stubbed server. Only probing the promoted runtime found it.
+     *
+     * A control now pins it to the same method scope as `/api/lanes`, because
+     * "the handler exists" and "the handler is reachable" are different claims
+     * and only the second one is worth anything.
+     */
+    if (path === "/api/lanes/slots/reclaim-candidates") {
+      const forWorktree = url.searchParams.get("for") || null;
+      const { slotReclaimCandidates } = await import("./vacilando/lane-worktree-lifecycle.mjs");
+      const out = await slotReclaimCandidates({ excludeWorktree: forWorktree });
+      return sendJson(res, 200, {
+        ok: true,
+        free_slots: out.free,
+        candidates: out.candidates,
+        // Said once, by the server, so every surface tells the operator the
+        // same thing about what a reclaim costs.
+        consequence: SLOT_RECLAIM_CONSEQUENCE,
+      });
+    }
+
+
     if (path === "/api/lanes") {
       try {
         try { evaluateExclusiveWindow(); } catch { /* exclusive tick must not fail discovery */ }
