@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logAccessReadFailure } from "@/lib/admin/accessReadFailureLog";
+import { isPortalAdmitted, portalAdmissionFromPermissionKeys } from "@/lib/admin/portalAdmission";
 
 export type DepartmentScopeMode = "all" | "restricted";
 export type SiteScopeMode = "all" | "restricted";
@@ -22,11 +24,26 @@ export type ResolvedAdminAccessCore = {
     siteScope: SiteScopeMode;
     allowedSiteLocationIds: string[] | null;
     attendanceCaptureScope: AttendanceCaptureScopeMode;
-    /** True when role_keys for this org include admin or ops (admin shell / legacy PATCH gate). */
+    /**
+     * W-13 — true when this principal's grant union for this org contains `portal.access`.
+     *
+     * It used to read *"role_keys for this org include admin or ops"*. It no longer asks about role
+     * names at all: {@link import("./portalAdmission") portalAdmission} owns the question, and this
+     * field is that module's answer carried on the resolved context. `unresolved` never reaches
+     * here — a failed grant read denies at the resolver, before the context exists.
+     */
     portalEligible: boolean;
 };
 
-const PORTAL_ROLES = new Set(["admin", "ops"]);
+/*
+ * `PORTAL_ROLES` STOOD HERE, and its absence is the W-13 repair.
+ *
+ * `const PORTAL_ROLES = new Set(["admin", "ops"])` was the admission owner: a role literal, stored
+ * in no table, scoped to no org, and editable by nobody through the product. Both `portalEligible`
+ * bindings below now derive from the principal's resolved capabilities instead, through the one
+ * module that owns the question. `web/tests/access/portalAdmissionIsCapability.test.ts` fails if a
+ * role literal is restored here or anywhere else on the admission path.
+ */
 
 /**
  * W-42 (`I-28`ᴬ, `RL-24`) — THE normal form for a role key. One function, applied at the boundary.
@@ -170,18 +187,8 @@ export function scopeAnswerForFailedProfileRead(): ScopeAnswer {
  * `reason=absent_profile_row` would inflate that count with events that are not that thing, and
  * corrupt the evidence base for a lockout-sensitive decision. Separate cause, separate channel.
  */
-function logAccessReadFailure(
-    where: string,
-    table: string,
-    userId: string,
-    orgId: string | null,
-    message: string
-): void {
-    console.error(
-        `[access-identity][W-43][read-failure] where=${where} table=${table} user_id=${userId} ` +
-            `org_id=${orgId ?? "unresolved"} outcome=deny reason=read_error message=${message}`
-    );
-}
+/* Moved to `lib/admin/accessReadFailureLog.ts` when W-13 gave portal admission a second module that
+ * denies on the same failure class. One format, one owner — see that file. */
 
 /** Stable, greppable divergence record for W-7's observation window. Identifiers only — no free text. */
 function logScopeDivergence(
@@ -354,7 +361,6 @@ export async function resolveAdminAccessCore(
     if (!picked) return null;
     const { orgId, roleKeys } = picked;
 
-    const portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r));
     const permissionKeys = await fetchPermissionKeys(
         supabase,
         orgId,
@@ -365,6 +371,11 @@ export async function resolveAdminAccessCore(
     // W-43 — a failed grant read denies rather than resolving to "no permissions", which most
     // surfaces cannot tell apart from a successful read of an unprivileged role.
     if (permissionKeys === null) return null;
+
+    // W-13 — admission is read from the SAME union every capability gate consults, resolved by the
+    // same call. The ordering is the change: the old binding sat above this fetch because a role
+    // literal needs no grants to answer, which is exactly what made admission unconfigurable.
+    const portalEligible = isPortalAdmitted(portalAdmissionFromPermissionKeys(permissionKeys));
 
     const { data: profileRow, error: profileErr } = await supabase
         .from("user_access_profiles")
@@ -469,7 +480,6 @@ export async function resolveAdminAccessDimensionsForOrgMember(
     ].sort();
     if (!roleKeys.length) return null;
 
-    const portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r));
     const permissionKeys = await fetchPermissionKeys(
         supabase,
         orgId,
@@ -480,6 +490,10 @@ export async function resolveAdminAccessDimensionsForOrgMember(
     // W-43 — as the enforcement path. The preview denies on a failed grant read too: a preview that
     // stays readable when enforcement has denied is the divergence this pair exists to prevent.
     if (permissionKeys === null) return null;
+
+    // W-13 — and from the same union as the enforcement path, for the same reason `W-42` exists:
+    // a preview that computes admission by a different method eventually disagrees with runtime.
+    const portalEligible = isPortalAdmitted(portalAdmissionFromPermissionKeys(permissionKeys));
 
     const { data: profileRow, error: profileErr } = await supabase
         .from("user_access_profiles")

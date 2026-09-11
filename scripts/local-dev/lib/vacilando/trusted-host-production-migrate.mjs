@@ -571,6 +571,22 @@ export function classifyApplyFailure({ applyResult = null } = {}) {
     // database, escalating a safe refusal as a suspected partial migration.
     "production_runners_not_composed", "production_runners_partially_injected",
     "production_runners_refused_in_test_context",
+    /*
+     * THE TARGET GUARD REFUSES BEFORE THE FIRST CONNECTION, SO SAY SO.
+     *
+     * These four are raised while the apply child is still choosing its
+     * database — no credential assigned, no socket opened, no statement
+     * dispatched. Leaving them out reported the safest event in the system as
+     * its loudest one: three production applies that provably never contacted a
+     * database came back as "the outcome could not be established", and closing
+     * that question cost two governed censuses and most of a day.
+     *
+     * The ambiguous bucket keeps its meaning — an outcome genuinely unknown,
+     * such as a connection lost after mutation — precisely by not holding
+     * failures that are known.
+     */
+    "target_resolution_failed", "target_environment_mismatch",
+    "trusted_credential_unavailable", "trusted_host_dependency_missing",
   ]);
   if (PRE_EXECUTION.has(code)) {
     return {

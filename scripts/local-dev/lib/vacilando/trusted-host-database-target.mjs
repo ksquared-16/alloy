@@ -29,8 +29,9 @@
  * more expensive half of the same bug.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** Canonical target classes. An environment alias resolves to exactly one. */
 export const TARGET_CLASS = Object.freeze({
@@ -41,7 +42,16 @@ export const TARGET_CLASS = Object.freeze({
 const ENVIRONMENT_TO_CLASS = Object.freeze({
   certification: TARGET_CLASS.CERTIFICATION,
   cert: TARGET_CLASS.CERTIFICATION,
+  alloy_cert: TARGET_CLASS.CERTIFICATION,
   staging: TARGET_CLASS.STAGING,
+  /*
+   * The census action names its database with a TARGET id rather than a
+   * migration environment name. Both vocabularies are registered here, in the
+   * one place that owns routing, so a caller never has to translate between them
+   * -- a translation table at a call site is the same duplicated rule this
+   * module exists to prevent.
+   */
+  alloy_deployed_primary: TARGET_CLASS.STAGING,
 });
 
 /**
@@ -105,6 +115,10 @@ export function resolveTrustedDatabaseTarget(environment, { repoRoot = null } = 
       // Human-readable and secret-free; safe to record in an audit row.
       targetId: `alloy-cert@127.0.0.1:${CERTIFICATION_DB_PORT}`,
       connectionSourceKind: "local_certification_stack",
+      // WHICH credential, by name only. Callers read the value themselves; the
+      // name is routing information and is safe to log, the value never is.
+      credentialEnvVar: "ALLOY_CERT_DATABASE_URL",
+      credentialLoader: "explicit_env",
       expectedHostIsLocal: true,
       expectedPort: CERTIFICATION_DB_PORT,
       workdir: workdir && existsSync(workdir) ? workdir : null,
@@ -117,6 +131,8 @@ export function resolveTrustedDatabaseTarget(environment, { repoRoot = null } = 
     targetClass,
     targetId: "deployed_staging",
     connectionSourceKind: "trusted_server_env",
+    credentialEnvVar: "DATABASE_URL",
+    credentialLoader: "trusted_server_env",
     expectedHostIsLocal: false,
     expectedPort: null,
     workdir: null,
@@ -169,4 +185,68 @@ export function assertTargetMatchesEnvironment(environment, connectionUrl, { rep
     };
   }
   return { ok: true, target, host: conn.host, port: conn.port };
+}
+
+/*
+ * ── ONE OWNER, TWO LANGUAGES ──
+ *
+ * The trusted-host children are shell. Before this CLI existed the routing rules
+ * were written twice: once here, and once as a `case` inside
+ * `trusted-host-apply-migration.sh`. Two copies of a security rule is one copy
+ * and one future divergence, and the read child had no copy at all — which is
+ * exactly how a certification request came to read its ledger from deployed.
+ *
+ * So the shell no longer decides anything. It asks this module which credential
+ * to read and what the answer must look like, and refuses if it cannot ask.
+ *
+ * Output is `KEY=VALUE` lines rather than JSON so the caller needs no parser and
+ * never has to `eval` — values are read with `while IFS='=' read -r k v`.
+ * Nothing secret is printed: the credential is named, never resolved. The
+ * environment name is echoed back only after being reduced to a safe charset,
+ * because it is the one field that comes from the request.
+ */
+function describeForShell(environment) {
+  const target = resolveTrustedDatabaseTarget(environment);
+  const lines = [];
+  // Echo-safety: the request supplies this, so strip anything that is not a
+  // plain identifier before it reaches a shell-read line.
+  const safeEnv = normalizeEnvironmentName(environment).replace(/[^a-z0-9_.-]/g, "");
+  if (!target.ok) {
+    lines.push("ALLOY_TARGET_OK=0");
+    lines.push(`ALLOY_TARGET_CODE=${target.code}`);
+    lines.push(`ALLOY_TARGET_DETAIL=${String(target.detail || "").replace(/[\r\n]+/g, " ")}`);
+    lines.push(`ALLOY_TARGET_ENVIRONMENT=${safeEnv}`);
+    return lines.join("\n");
+  }
+  lines.push("ALLOY_TARGET_OK=1");
+  lines.push(`ALLOY_TARGET_ENVIRONMENT=${target.environment}`);
+  lines.push(`ALLOY_TARGET_CLASS=${target.targetClass}`);
+  lines.push(`ALLOY_TARGET_ID=${target.targetId}`);
+  lines.push(`ALLOY_TARGET_CREDENTIAL_ENV=${target.credentialEnvVar}`);
+  lines.push(`ALLOY_TARGET_CREDENTIAL_LOADER=${target.credentialLoader}`);
+  lines.push(`ALLOY_TARGET_EXPECT_LOCAL=${target.expectedHostIsLocal ? "1" : "0"}`);
+  lines.push(`ALLOY_TARGET_EXPECT_PORT=${target.expectedPort ?? ""}`);
+  // The port a NON-certification target must never land on. Emitted for every
+  // environment so the shell never has to know the number itself.
+  lines.push(`ALLOY_TARGET_CERTIFICATION_PORT=${CERTIFICATION_DB_PORT}`);
+  return lines.join("\n");
+}
+
+export { describeForShell as __describeForShell };
+
+const invokedDirectly = (() => {
+  try {
+    const entry = process.argv[1];
+    if (!entry) return false;
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+})();
+
+if (invokedDirectly) {
+  const [command, environment] = process.argv.slice(2);
+  if (command !== "describe-sh") {
+    process.stderr.write("usage: trusted-host-database-target.mjs describe-sh <environment>\n");
+    process.exit(2);
+  }
+  process.stdout.write(`${describeForShell(environment)}\n`);
 }

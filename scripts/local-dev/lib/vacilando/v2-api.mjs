@@ -1265,7 +1265,10 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       const { controlMissionLocalServer } = await import("./mission-local-server.mjs");
       const mid = v.mission_id || v.missionId;
       const action = v.action || v.command || null;
-      const out = controlMissionLocalServer(mid, action);
+      // AWAITED. Starting a server can now acquire a Development Slot first,
+      // which is asynchronous; without this the body would be a Promise and
+      // every start would answer 409 with an empty result.
+      const out = await controlMissionLocalServer(mid, action);
       return { status: out.ok ? 200 : 409, body: out };
     } catch (e) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };

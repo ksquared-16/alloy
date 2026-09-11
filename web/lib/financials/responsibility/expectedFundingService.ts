@@ -53,7 +53,7 @@ const SOURCE_TYPES: readonly string[] = [
 export async function configureExpectedFunding(
     supabase: SupabaseClient,
     input: ExpectedFundingInput,
-): Promise<{ fundingId: string; idempotent: boolean }> {
+): Promise<{ fundingId: string; idempotent: boolean; supersededIds?: string[] }> {
     if (!input.shareId && !input.allocationId) {
         throw new ResponsibilityError(
             "missing_anchor",
@@ -87,6 +87,42 @@ export async function configureExpectedFunding(
     if (existingError) throw new ResponsibilityError("db_error", existingError.message);
     if (existing) return { fundingId: (existing as { id: string }).id, idempotent: true };
 
+    /*
+     * ── ONE ACTIVE EXPECTATION PER SOURCE, PER ANCHOR ───────────────────────────────────────────
+     *
+     * This function only ever INSERTed. `state` has always allowed `active | superseded`, every
+     * reader filters on `active`, and nothing in the codebase ever wrote `superseded` — so
+     * configuring funding twice for the same share left TWO active rows, and the agency was then
+     * expected to cover the same money twice: `buildSubsidyClaim` sums them into one claim, and the
+     * account card lists both.
+     *
+     * That was survivable while expected funding had no operator surface and was written once by a
+     * seed. It is not survivable in a workflow with a "Manage expected funding" control, where
+     * correcting $750 to $650 is the second most likely thing an operator will ever do with it.
+     *
+     * So a new expectation supersedes the prior active one for the SAME anchor and the SAME source.
+     * Same source means same type and same reference: a state agency and an employer funding one
+     * share are two expectations, not a correction of each other, and both stay active.
+     *
+     * The predecessor is kept, not deleted. What a funder was expected to cover last month is how a
+     * variance gets explained, and `financial_subsidy_variances` is downstream of exactly this.
+     */
+    const anchorColumn = input.allocationId ? "allocation_id" : "share_id";
+    const anchorValue = input.allocationId ?? input.shareId!;
+    let priorQuery = supabase
+        .from("financial_expected_funding")
+        .select("id")
+        .eq("org_id", input.orgId)
+        .eq("state", "active")
+        .eq(anchorColumn, anchorValue)
+        .eq("funding_source_type", input.fundingSourceType);
+    priorQuery = input.fundingSourceReference
+        ? priorQuery.eq("funding_source_reference", input.fundingSourceReference)
+        : priorQuery.is("funding_source_reference", null);
+    const { data: priorRows, error: priorError } = await priorQuery;
+    if (priorError) throw new ResponsibilityError("db_error", priorError.message);
+    const supersededIds = ((priorRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+
     const { data, error } = await supabase
         .from("financial_expected_funding")
         .insert({
@@ -117,7 +153,22 @@ export async function configureExpectedFunding(
         }
         throw new ResponsibilityError("db_error", error.message);
     }
-    return { fundingId: (data as { id: string }).id, idempotent: false };
+
+    /*
+     * THE PREDECESSOR IS RETIRED ONLY ONCE ITS REPLACEMENT EXISTS. In the other order, a failed
+     * insert would leave the share with no active expectation at all — a funder silently dropped,
+     * which reads downstream as a family owing money nobody was ever going to cover.
+     */
+    if (supersededIds.length > 0) {
+        const { error: supersedeError } = await supabase
+            .from("financial_expected_funding")
+            .update({ state: "superseded", updated_by: input.actorUserId, updated_at: new Date().toISOString() })
+            .eq("org_id", input.orgId)
+            .in("id", supersededIds);
+        if (supersedeError) throw new ResponsibilityError("db_error", supersedeError.message);
+    }
+
+    return { fundingId: (data as { id: string }).id, idempotent: false, supersededIds };
 }
 
 /**

@@ -36,6 +36,7 @@ import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financia
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -83,6 +84,22 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     const scope = context.participantScope ?? null;
     const scopedMemberId = scope?.customerMemberId ?? null;
     const customerId = householdIdFrom(context);
+    /*
+     * ── "NOT YET" IS NOT "NEVER" ────────────────────────────────────────────────────────────────
+     *
+     * The card had one way of having no subject, and said the same terminal sentence for both of
+     * them: "No financial record." One is a household whose account genuinely cannot be resolved.
+     * The other is the ordinary window while the panel's own truth is still composing — during which
+     * the card holds no id, is not loading anything (there is nothing to load yet), and therefore
+     * printed a verdict about an account it had not looked for.
+     *
+     * The context already answers this: `status` is `composing` until the subject is settled. So the
+     * card asks the question it actually means — is the subject resolved yet — instead of inferring
+     * it from the absence of an id.
+     */
+    const subjectStillResolving = context.status === "composing";
+    /** Settled, and there is no account to ask about — the only state that may speak terminally. */
+    const noFinancialSubject = !subjectStillResolving && !customerId && !scopedMemberId;
 
     const [vm, setVm] = useState<FinancialsCardVM | null>(null);
     const [loading, setLoading] = useState(false);
@@ -1588,8 +1605,28 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 footerAction={null}
             >
                 {!vm ? (
-                    <p className="alloy-os-financials__empty" data-financials-empty="loading">
-                        {loading ? "Loading the account…" : "No financial record."}
+                    <p
+                        className="alloy-os-financials__empty"
+                        data-financials-empty={
+                            loading || subjectStillResolving
+                                ? "loading"
+                                : noFinancialSubject
+                                  ? "no-subject"
+                                  : "no-account"
+                        }
+                    >
+                        {/*
+                         * THREE STATES, AND ONLY ONE OF THEM IS TERMINAL.
+                         *
+                         * "No financial record" was wrong in every case it was shown. It reads as a
+                         * statement about the FAMILY — that they have no financial history — and
+                         * having no financial activity is a perfectly ordinary, fully supported
+                         * state that renders as $0.00 with Add charge available. What the card
+                         * actually meant was that it could not resolve an account to ask about.
+                         */}
+                        {loading || subjectStillResolving
+                            ? "Loading the account…"
+                            : "Financial account unavailable"}
                     </p>
                 ) : (
                     <>
@@ -1652,11 +1689,29 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                         currency={currency}
                                     />
                                 ) : null}
+                                {/* ── THE NET OBLIGATION, CALLED THAT ────────────────────────
+                                    This figure is gross plus discounts, funding and adjustments —
+                                    the type that produces it says so by construction. It was
+                                    labelled "Responsibility", which is also the word directly
+                                    beneath it for the split between named parties, so one word
+                                    stood for two different things: what the family owes after
+                                    reductions, and who owes it. An operator reading a total of
+                                    $900 above a list adding to $900 had no way to tell whether
+                                    the list explained the total or repeated it. */}
                                 <Line
-                                    label="Responsibility"
+                                    label="Net obligation"
                                     cents={reconciliation!.responsibilityCents}
                                     currency={currency}
                                     strong
+                                    testId="net-obligation"
+                                />
+                                {/* The part of that net someone has actually been made responsible
+                                    for. Allocated and unassigned sum to the net above, which is
+                                    what makes the two readable together. */}
+                                <Line
+                                    label="Responsibility"
+                                    cents={vm.responsibility.allocatedCents}
+                                    currency={currency}
                                     testId="responsibility"
                                 />
                                 {/* ── WHO OWES IT ────────────────────────────────────────────
@@ -1687,6 +1742,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                         cents={vm.responsibility.unassignedCents}
                                         currency={currency}
                                         testId="responsibility-unassigned"
+                                    />
+                                ) : null}
+                                {/* ── WHAT MAY BE COLLECTED FROM THE FAMILY TODAY ────────────
+                                    Only shown when a submitted claim is actually suppressing
+                                    something. Outstanding is what is owed; collectible-now is what
+                                    an operator may ask this family for while an agency has been
+                                    told it will pay part of it. With no claim in flight the two
+                                    are the same number and a second line would be noise. The
+                                    figure is the canonical one — nothing here subtracts. */}
+                                {vm.collectible.submittedClaimSuppressionCents > 0 ? (
+                                    <Line
+                                        label="Collectible now"
+                                        cents={vm.collectible.currentlyCollectibleCents}
+                                        currency={currency}
+                                        testId="collectible-now"
                                     />
                                 ) : null}
                                 {vm.expectedFunding.length > 0 ? (
@@ -2008,14 +2078,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
  * so this reads them in order of authority rather than assuming one. Returning null is ordinary — a
  * panel with no household simply has no account.
  */
+/**
+ * THE ACCOUNT THIS CARD IS ABOUT — the shared rule, not this card's opinion of it.
+ *
+ * These keys were written out twice: once where mounting is decided, once here where the read is
+ * addressed. They agreed only by coincidence, and the registry's own comment had already named the
+ * hazard — "admitting on one key and reading another is how a card mounts and then sits still".
+ * Both now call `resolveFinancialSubjectId`, so the two decisions cannot diverge.
+ */
 function householdIdFrom(context: OperationalContext): string | null {
-    const truth = context.truth as Record<string, unknown>;
-    for (const key of ["customer.id", "household.id", "child.family_customer_id", "customer_id"]) {
-        const value = truth[key];
-        const s = value != null ? String(value).trim() : "";
-        if (s) return s;
-    }
-    return null;
+    /*
+     * THE SHARED RULE, NOT A COPY OF IT. The registry decides whether this card may mount from the
+     * same function — so a card can no longer be admitted because an account "is available" and then
+     * fail to find one in the very context that admitted it.
+     */
+    return resolveFinancialSubjectId(context);
 }
 
 function money(cents: number, currency: string): string {

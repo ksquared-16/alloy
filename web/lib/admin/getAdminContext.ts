@@ -6,6 +6,7 @@
 import { cache } from "react";
 import { NextResponse } from "next/server";
 import type { AdminAccessContextFailure } from "@/lib/admin/getAdminAccessContext";
+import { logPortalDenied } from "@/lib/admin/portalAdmission";
 import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 
@@ -36,6 +37,8 @@ async function loadAdminContext(): Promise<AdminContextResult> {
         }
 
         if (!bundle.portalEligible) {
+            // W-13 — see `loadAdminRouteGate`: reaching here means the grant read succeeded.
+            logPortalDenied("getAdminContext", bundle.userId, bundle.orgId, "no-capability");
             return { ok: false, status: 403 };
         }
 

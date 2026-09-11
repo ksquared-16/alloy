@@ -788,7 +788,12 @@ function SummaryBody({
                                     actions={helpful}
                                     // One resolver names the state for both surfaces.
                                     label={
-                                        resolveTourCommandPresentation(helpful, context.signals.tour).label
+                                        resolveTourCommandPresentation(helpful, context.signals.tour, {
+                                            // The canonical ownership gate, straight from the surface:
+                                            // an elapsed tour may only be called "awaiting outcome"
+                                            // where outcome-bearing work actually exists to resolve it.
+                                            outcomeWorkAvailable: surface.showOutcomeCompletion,
+                                        }).label
                                     }
                                     onAction={onAction}
                                     onWarm={onWarm}

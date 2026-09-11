@@ -248,14 +248,17 @@ describe("resolveAdminAccessCore", () => {
     it("admin membership resolves portalEligible with default all/all when profile missing", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "org-x", role: "admin" }],
-            grants: [{ permission_key: "crm.read" }],
+            // W-13 — `portalEligible` is read from this list now, not from the role name, so an
+            // administrator fixture that omits `portal.access` describes a principal who cannot open
+            // the portal. That is a real state the product can express; it is not this test's.
+            grants: [{ permission_key: "crm.read" }, { permission_key: "portal.access" }],
             profile: null,
         });
         const core = await resolveAdminAccessCore(sb, "user-1");
         expect(core).not.toBeNull();
         expect(core!.orgId).toBe("org-x");
         expect(core!.roleKeys).toEqual(["admin"]);
-        expect(core!.permissionKeys).toEqual(["crm.read"]);
+        expect(core!.permissionKeys).toEqual(["crm.read", "portal.access"]);
         expect(core!.departmentScope).toBe("all");
         expect(core!.siteScope).toBe("all");
         expect(core!.allowedDepartmentIds).toBeNull();
@@ -266,7 +269,7 @@ describe("resolveAdminAccessCore", () => {
     it("ops membership resolves all/all when profile missing", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "org-x", role: "ops" }],
-            grants: [],
+            grants: [{ permission_key: "portal.access" }],
             profile: null,
         });
         const core = await resolveAdminAccessCore(sb, "user-1");
@@ -337,7 +340,7 @@ describe("resolveAdminAccessCore", () => {
         // anything at all, which is the vacuity an inverted test invites.
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "legacy-org", role: "admin" }],
-            grants: [],
+            grants: [{ permission_key: "portal.access" }],
             profile: null,
             app_users_by_id: { role: "admin", org_id: "legacy-org" },
             app_users_by_auth: null,
@@ -353,7 +356,9 @@ describe("layout vs API org alignment (same resolver)", () => {
     it("getAdminOrgIdForUser matches resolveAdminAccessCore org when portalEligible", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [{ org_id: "same-org", role: "admin" }],
-            grants: [],
+            // `getAdminOrgIdForUser` returns null unless the principal is admitted, so the fixture
+            // has to carry the admission grant for the alignment claim to have a subject at all.
+            grants: [{ permission_key: "portal.access" }],
             profile: null,
         });
 

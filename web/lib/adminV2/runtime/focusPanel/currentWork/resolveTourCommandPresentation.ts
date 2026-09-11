@@ -27,7 +27,10 @@
  * label, which is what put a blank Compose New behind Send Tour Invitation.
  */
 
-import { partitionTourGroupedActions } from "@/lib/adminV2/runtime/focusPanel/currentWork/groupTourPresentationActions";
+import {
+    hasTourOutcomeAction,
+    partitionTourGroupedActions,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/groupTourPresentationActions";
 import type { OperationalTourSignal } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { TourBookingStatusKey } from "@/lib/tours/bookings/types";
 
@@ -98,6 +101,18 @@ const STATE_CARRIES_TIME = new Set<TourBookingStatusKey>([
  *
  * States absent from this map keep their own stem and simply lose the date: a requested slot that
  * has gone by is stale, not concluded, and "Tour requested" remains the true statement about it.
+ *
+ * ── AND IT IS ONLY TRUE WHERE THE OUTCOME CAN BE RECORDED ──
+ *
+ * "Awaiting outcome" is operational language: it tells the operator there is something here for
+ * them to resolve. That is a claim about the CURRENT context, not about the booking. Measured on
+ * the deployed tenant, the Waitlist Process card said it while the Waitlist stage owned no Tour
+ * outcome work at all — 2 work items, 0 outcomes, 0 ways out — so the sentence was unactionable
+ * where it was printed. Tour outcomes belong to the Tour stage's `conduct_tour` work, which the
+ * family had already left behind.
+ *
+ * So the stem is gated on there being a completion path here, not merely on time having passed.
+ * See `canRecordOutcome` below for what counts as one.
  */
 const ELAPSED_STEM: Partial<Record<TourBookingStatusKey, string>> = {
     confirmed: "Tour awaiting outcome",
@@ -154,7 +169,19 @@ export function formatTourControlWhen(
 export function resolveTourCommandPresentation<T extends { key: string; handlerKey?: string | null }>(
     actions: readonly T[],
     tour: Pick<OperationalTourSignal, "scheduled" | "startAt" | "statusKey"> | null | undefined,
-    opts?: { timeZone?: string | null; now?: number },
+    opts?: {
+        timeZone?: string | null;
+        now?: number;
+        /**
+         * True when the CURRENT operational context carries outcome-bearing work that would resolve
+         * this tour — i.e. the stage's own work is outcome-led and a completion path is projected.
+         *
+         * Supplied by the caller because ownership is a fact about the stage's configured work, and
+         * this module is not permitted to reach for it: it reads a resolved command list and a
+         * projected signal, and nothing else. The caller passes what it already knows.
+         */
+        outcomeWorkAvailable?: boolean;
+    },
 ): TourCommandPresentation & { tour: T[]; rest: T[] } {
     const { tour: tourActions, rest } = partitionTourGroupedActions(actions);
 
@@ -177,7 +204,40 @@ export function resolveTourCommandPresentation<T extends { key: string; handlerK
     // states where the Tour concept actually stands instead of quoting a date that has gone by.
     const carriesTime = STATE_CARRIES_TIME.has(statusKey!);
     const elapsed = carriesTime && tourInstantHasPassed(tour?.startAt ?? null, opts?.now ?? Date.now());
-    const statedStem = (elapsed ? ELAPSED_STEM[statusKey!] : null) ?? stem;
+
+    /*
+     * TWO WAYS THE OUTCOME CAN BE RECORDED FROM HERE, AND NEITHER IS A STAGE NAME.
+     *
+     * Either the group itself carries a tour-domain command that records what happened
+     * (`complete_tour` / `no_show_tour` / `record_tour_outcome`), or the current stage's work is
+     * outcome-led and the caller says a completion path is projected. Both are statements about
+     * what the operator can actually do; neither branches on which stage this is, so a process that
+     * configures tour work somewhere else keeps working without this file learning about it.
+     */
+    const canRecordOutcome = hasTourOutcomeAction(tourActions) || opts?.outcomeWorkAvailable === true;
+
+    const elapsedStem = elapsed ? ELAPSED_STEM[statusKey!] ?? null : null;
+
+    /*
+     * An elapsed tour with no completion path here gets NO state stem at all.
+     *
+     * "Awaiting outcome" would be unactionable and "Tour scheduled" would be false — the tour is
+     * not scheduled, it happened. Rather than invent a third phrase to narrate history in a
+     * current-work band, the control falls back to the neutral group label it already uses when
+     * there is no state worth announcing. The commands inside it are unchanged, and the tour's
+     * history remains available on the surfaces that own history.
+     *
+     * Scoped to states that HAVE an elapsed stem, which is the whole of the overstatement. A
+     * requested slot that has gone by is stale, not concluded — `ELAPSED_STEM` deliberately omits
+     * it, "Tour requested" is still the true statement, and suppressing that would be a second
+     * error rather than a fix. An earlier draft of this guard did exactly that; the existing suite
+     * caught it.
+     */
+    if (elapsedStem && !canRecordOutcome) {
+        return { grouped: true, label: "Tour", statusKey, tour: tourActions, rest };
+    }
+
+    const statedStem = elapsedStem ?? stem;
     const when =
         carriesTime && !elapsed
             ? formatTourControlWhen(tour?.startAt ?? null, opts?.timeZone ?? null)

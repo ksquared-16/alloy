@@ -9,6 +9,7 @@ import { cache } from "react";
 import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
+import { logPortalDenied } from "@/lib/admin/portalAdmission";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 import { getCachedAuthUser, getCachedAuthUserId } from "@/lib/admin/cachedAuthSession";
 import {
@@ -50,6 +51,8 @@ async function loadAdminAuth(): Promise<AdminAuthResult | null> {
     const bundleMs = Date.now() - t1;
 
     if (!bundle.ok || !bundle.portalEligible) {
+        // W-13 — the shell's own refusal, and the one an operator sees as a redirect to /login.
+        if (bundle.ok) logPortalDenied("getAdminAuth", bundle.userId, bundle.orgId, "no-capability");
         return null;
     }
 

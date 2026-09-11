@@ -27,64 +27,17 @@ fi
 source "$TOOLKIT/lib/common.sh"
 # shellcheck disable=SC1091
 source "$TOOLKIT/lib/verify.sh"
+# The routing rules are NOT written here. This helper asks
+# trusted-host-database-target.mjs which credential the environment names and
+# proves the connection matches before the first statement.
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/trusted-host-database-target.sh"
 
 unset ALLOY_BLOCK_REMOTE_SUPABASE || true
 
-if [[ -z "$MIG_ENVIRONMENT" ]]; then
-  echo "target_resolution_failed: no environment supplied to the apply child" >"$ERR_FILE"
-  exit 45
-fi
-
 # ── THE DATABASE IS CHOSEN BY THE ENVIRONMENT, NEVER BY WHAT HAPPENS TO EXIST ──
-case "$MIG_ENVIRONMENT" in
-  certification|cert)
-    # The local certification stack has its own credential, supplied explicitly.
-    # It is NOT read from the server env, because that file is the deployed
-    # credential and reading it here is the whole defect.
-    if [[ -z "${ALLOY_CERT_DATABASE_URL:-}" ]]; then
-      echo "trusted_credential_unavailable: ALLOY_CERT_DATABASE_URL is not set; certification migrations require an explicit local certification connection" >"$ERR_FILE"
-      exit 42
-    fi
-    DATABASE_URL="$ALLOY_CERT_DATABASE_URL"
-    EXPECT_LOCAL=1
-    ;;
-  staging)
-    if ! alloy_load_trusted_server_env_exports; then
-      echo "trusted_credential_unavailable" >"$ERR_FILE"
-      exit 42
-    fi
-    if [[ -z "${DATABASE_URL:-}" ]]; then
-      echo "trusted_credential_unavailable" >"$ERR_FILE"
-      exit 42
-    fi
-    EXPECT_LOCAL=0
-    ;;
-  *)
-    echo "target_resolution_failed: environment '$MIG_ENVIRONMENT' has no registered database target" >"$ERR_FILE"
-    exit 45
-    ;;
-esac
-
-# ── THE GUARD: PROVE THE TARGET BEFORE THE FIRST STATEMENT ──
-#
-# A hard refusal, not a warning. This is the check whose absence meant a
-# certification request could have written to deployed infrastructure.
-DB_HOST="$(printf '%s' "$DATABASE_URL" | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:?]+).*#\2#')"
-DB_PORT="$(printf '%s' "$DATABASE_URL" | sed -nE 's#^[a-z+]+://([^@/]*@)?[^/:?]+:([0-9]+).*#\2#p')"
-case "$DB_HOST" in
-  127.0.0.1|localhost|::1|0.0.0.0) HOST_IS_LOCAL=1 ;;
-  *) HOST_IS_LOCAL=0 ;;
-esac
-
-if [[ "$EXPECT_LOCAL" == "1" ]]; then
-  if [[ "$HOST_IS_LOCAL" != "1" || "$DB_PORT" != "54422" ]]; then
-    echo "target_environment_mismatch: environment '$MIG_ENVIRONMENT' resolved to ${DB_HOST}:${DB_PORT:-<none>}, which is not the local certification database" >"$ERR_FILE"
-    exit 44
-  fi
-elif [[ "$HOST_IS_LOCAL" == "1" && "$DB_PORT" == "54422" ]]; then
-  echo "target_environment_mismatch: environment '$MIG_ENVIRONMENT' resolved to the local certification database" >"$ERR_FILE"
-  exit 44
-fi
+alloy_resolve_trusted_database_target "$MIG_ENVIRONMENT" "$ERR_FILE" || exit $?
+DATABASE_URL="$ALLOY_RESOLVED_DATABASE_URL"
 
 sanitize_database_url() {
   local url="$1"

@@ -129,9 +129,15 @@ await test("9 — the feature lane cannot obtain the credential, for four indepe
 await test("9b — the executor child really does unset and redact, as the boundary claims", () => {
   // The document is only worth what the script does.
   const sh = readFileSync(new URL("../lib/vacilando/trusted-host-apply-migration.sh", import.meta.url), "utf8");
+  // Credential ROUTING now lives in the helper both trusted children source, so
+  // that the read child and the write child cannot drift apart on which database
+  // an environment means. The claim is unchanged; it is simply proven across the
+  // child and the helper it sources rather than in one file.
+  const helper = readFileSync(new URL("../lib/vacilando/trusted-host-database-target.sh", import.meta.url), "utf8");
+  assert.match(sh, /trusted-host-database-target\.sh/, "the child sources the shared target helper");
   assert.match(sh, /unset SAFE_DATABASE_URL PGPASSWORD SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(sh, /trusted_credential_unavailable/);
-  assert.match(sh, /exit 42/);
+  assert.match(helper, /trusted_credential_unavailable/);
+  assert.match(helper, /return 42/, "absence is still a distinct exit code");
   assert.match(sh, /postgresql:\/\/\[redacted\]/, "postgres URLs are scrubbed from stderr");
 });
 

@@ -10,6 +10,7 @@ import {
     type AdminAccessContextSuccess,
 } from "@/lib/admin/getAdminAccessContext";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
+import { logPortalDenied } from "@/lib/admin/portalAdmission";
 import {
     scopeDimensionsFromAccess,
     type AdminAccessScopeDimensions,
@@ -43,6 +44,9 @@ export async function loadAdminRouteGate(): Promise<AdminRouteGateResult> {
     const bundle = await loadAdminAccessBundleCached();
     if (!bundle.ok) return bundle;
     if (!bundle.portalEligible) {
+        // W-13 — the principal resolved; their grants do not carry `portal.access`. A failed grant
+        // read never gets here: it denied at the resolver and left `bundle.ok` false.
+        logPortalDenied("loadAdminRouteGate", bundle.userId, bundle.orgId, "no-capability");
         return { ok: false, status: 403 };
     }
     const access: AdminAccessContextSuccess = {

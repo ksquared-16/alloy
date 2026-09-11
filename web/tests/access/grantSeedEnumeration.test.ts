@@ -55,7 +55,31 @@ const M6 = "20260807170000_w12_seed_default_rbac_enumerated_grants.sql";
  * here are derived from the tree rather than restated: the tenth key fails this file, in the
  * repository, before a tenant is created without it.
  */
-const LIVE_SEED = "20260910183000_access_v2_default_role_package_completeness.sql";
+const LIVE_SEED = "20260911140000_w13_portal_access_capability_admission.sql";
+
+/**
+ * The migration that owns the COMPLETENESS contract — the admin-is-the-whole-catalog rule, the nine
+ * ops exclusions and their reasons, and the repair of the organizations that predate it.
+ *
+ * Separate from {@link LIVE_SEED} because the two names answer different questions. `LIVE_SEED` is
+ * *which definition survives a replay of the tree*; this is *where the contract is argued*. They
+ * were the same file until W-13 added one key, and keeping them apart is what lets a later
+ * amendment reproduce the enumeration without being asked to re-litigate the whole catalog against
+ * a database it does not own.
+ */
+const COMPLETENESS_GUARD = "20260910183000_access_v2_default_role_package_completeness.sql";
+
+/**
+ * W-13 moved this constant for the first time since the lock was written, and the move is the lock
+ * working rather than the lock being edited around.
+ *
+ * `20260910183000` is still where the enumeration's REASONING lives — the admin contract, the nine
+ * ops exclusions, the two director roles. `20260911140000` reproduces it with one key added
+ * (`portal.access`, to `admin` and `ops`), because a new organization whose administrator cannot
+ * open the portal is the defect the completeness migration had just closed, one migration earlier.
+ * The assertions below are stated over whichever definition SURVIVES a replay of the tree, so they
+ * followed the redefinition without being told to; only this name had to move.
+ */
 
 /**
  * Blanket grants that predate W-12 and are frozen in applied migrations: the baseline's pair in
@@ -320,24 +344,54 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
             expect(migration).toMatch(/the ops enumeration grants %, which the blanket it replaces explicitly withheld/);
         });
 
-        it("the completeness migration re-runs the check against the database it is applied to", () => {
+        it("the completeness migration re-runs the catalog check against the database it is applied to", () => {
             /*
              * W-12's guard was correct and it still could not prevent this: a check that runs once,
              * at its own apply, cannot notice a catalog that grows afterwards. So the property is
              * asserted in two places with different lifetimes — here, in the repository, on every
              * run; and inside the migration, against whichever database it lands on, at apply time.
              * Neither one alone was enough.
+             *
+             * It is asserted against `COMPLETENESS_GUARD` by name rather than against whatever
+             * currently defines the function, and W-13 is why. A check that reads DATABASE state
+             * aborts on state the repository does not produce: the shared certification database
+             * carries `attendance.record.assigned_only`, active, granted to nobody, seeded by no
+             * migration in this tree, because the attendance lane created it while exploring and
+             * their merged migration (`20260911110000`) records that they deliberately did NOT put
+             * it in the catalog. Requiring EVERY later redefinition to re-run that check makes one
+             * lane's residue block every other lane's seed edit, and no edit to the blocked
+             * migration can make the assertion true.
+             *
+             * So the two halves are split by what they read. The catalog-completeness check belongs
+             * to the migration that owns the completeness contract, below. The guards that read the
+             * FUNCTION — which every redefinition can satisfy, because every redefinition writes
+             * it — are required of the live seed in the next test. The general property is not
+             * weakened: it is asserted in this file, over the tree, on every commit.
+             */
+            const guard = readMigration(COMPLETENESS_GUARD);
+            expect(guard).toMatch(/pg_get_functiondef\('public\.seed_default_rbac\(uuid\)'::regprocedure\)/);
+            expect(guard).toMatch(/ACCESS-V2 ABORT: % of % active catalog key\(s\) are absent from the enumerated admin grant list/);
+            // And the repair itself is asserted: no active system role may be left holding nothing.
+            expect(guard).toMatch(/active system role\(s\) still hold no capability after the repair/);
+        });
+
+        it("and whichever migration defines the seed re-asserts the guards that read the function", () => {
+            /*
+             * These are the ones a redefinition cannot honestly skip. Reproducing a 66-key
+             * enumeration in order to add one key to it is exactly the operation that drops a line
+             * by accident, and an ops EXCLUSION is an absence — the kind of thing that comes back
+             * silently. Both checks read `pg_get_functiondef`, so they are statements about the text
+             * this migration itself installs, and they hold on any database.
              */
             const live = readMigration(LIVE_SEED);
             expect(live).toMatch(/pg_get_functiondef\('public\.seed_default_rbac\(uuid\)'::regprocedure\)/);
-            expect(live).toMatch(/ACCESS-V2 ABORT: % of % active catalog key\(s\) are absent from the enumerated admin grant list/);
+            expect(live).toMatch(/does not carry the grant-enumeration sentinels/);
             for (const withheld of OPS_WITHHELD) {
                 expect(live, `${withheld} is withheld from ops but the migration does not assert it`).toContain(
                     `'${withheld}'`,
                 );
             }
-            // And the repair itself is asserted: no active system role may be left holding nothing.
-            expect(live).toMatch(/active system role\(s\) still hold no capability after the repair/);
+            expect(live).toMatch(/the ops enumeration grants %, which the migration that introduced each of those keys explicitly withheld from ops/);
         });
 
         it("wires the grant half to the org, the way the role half already was", () => {

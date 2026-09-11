@@ -429,6 +429,67 @@ test("X11b — a refusal that never reached the database is distinguished from o
   assert.equal(out.classification.classification, "no_effect");
 });
 
+test("X11d — a refusal from before the connection is named, not called ambiguous", () => {
+  /*
+   * WHAT THIS COST. `alloy_deployed_primary` cleared every governed check and
+   * was then refused while the apply child was still choosing its database —
+   * before a credential was assigned, before a socket, before a statement. The
+   * executor reported `migration_outcome_ambiguous`: the loudest outcome it
+   * has, meaning "a production migration may have half-applied", for the safest
+   * event it has. Establishing that nothing had happened took two governed
+   * censuses.
+   *
+   * A failure that provably never reached the database says which failure it
+   * was.
+   */
+  const calls = { applied: [] };
+  const { out } = run({
+    applyBatch: (n) => realBatch(n, calls, {
+      applyFile: () => ({
+        ok: false,
+        code: "target_resolution_failed",
+        detail: "environment 'alloy_deployed_primary' has no registered database target",
+      }),
+    }),
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.code, EX.PRODUCTION_APPLY_FAILURES.TARGET_UNREGISTERED);
+  assert.notEqual(out.code, EX.PRODUCTION_APPLY_FAILURES.APPLY_AMBIGUOUS);
+  assert.notEqual(out.code, EX.PRODUCTION_APPLY_FAILURES.APPLY_FAILED);
+  assert.equal(out.migration_attempted, false);
+  assert.equal(out.classification.classification, "no_effect");
+  assert.equal(out.classification.safe_to_retry, true);
+  // The operator is told the name, and never a connection string.
+  assert.match(out.detail, /alloy_deployed_primary/);
+  assert.doesNotMatch(out.detail, /:\/\/|password/i);
+});
+
+test("X11d2 — the other pre-connection refusals are named too", () => {
+  for (const code of ["target_environment_mismatch", "trusted_credential_unavailable", "trusted_host_dependency_missing"]) {
+    const calls = { applied: [] };
+    const { out } = run({
+      applyBatch: (n) => realBatch(n, calls, { applyFile: () => ({ ok: false, code, detail: `${code} detail` }) }),
+    });
+    assert.equal(out.code, code, `${code} must surface as itself`);
+    assert.equal(out.migration_attempted, false);
+  }
+});
+
+test("X11e — the ambiguous bucket is preserved for outcomes that truly are unknown", () => {
+  // The repair narrows the bucket; it must not empty it. A statement that may
+  // have run and cannot be re-read is still ambiguous, and still not a retry.
+  const calls = { applied: [] };
+  const { out } = run({
+    applyBatch: (n) => realBatch(n, calls, {
+      applyFile: () => ({ ok: false, code: "connection_lost_after_dispatch", detail: "server closed the connection" }),
+    }),
+  });
+  assert.equal(out.code, EX.PRODUCTION_APPLY_FAILURES.APPLY_AMBIGUOUS);
+  assert.equal(out.migration_attempted, true);
+  assert.equal(out.classification.safe_to_retry, false);
+  assert.equal(out.classification.escalate, true);
+});
+
 test("X11c — every failure has its own code; none is action_unavailable", () => {
   assert.ok(EX.PRODUCTION_APPLY_FAILURE_CODES.length >= 10);
   assert.equal(new Set(EX.PRODUCTION_APPLY_FAILURE_CODES).size, EX.PRODUCTION_APPLY_FAILURE_CODES.length);
