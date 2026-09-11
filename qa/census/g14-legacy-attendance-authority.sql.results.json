@@ -1,0 +1,36 @@
+{
+  "trusted_host_action_id": "tha_48371a66661a9e",
+  "query_hash": "d0fb62ce1693be38a093a7e8e1d2c1debbc925c1c8577b7e4a3ec14d52ad9c9a",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-11T19:14:31.427Z",
+    "question_ids": [
+      "g14_legacy_authority"
+    ],
+    "questions": {
+      "g14_legacy_authority": {
+        "question_id": "g14_legacy_authority",
+        "row_count": null,
+        "rows": [
+          {
+            "producers_total": 0,
+            "producers_active": 0,
+            "producers_inactive": 0,
+            "producers_with_credential": 0,
+            "producer_sites_total": 0,
+            "mappings_total": 0,
+            "mappings_active": 0,
+            "active_no_site_rows": 0,
+            "active_missing_producer_key": 0,
+            "active_unmappable_capability": 0,
+            "active_ambiguous_mappings": 0,
+            "active_already_installed": 0,
+            "events_via_producer": 0,
+            "orgs_with_active_producers": 0
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

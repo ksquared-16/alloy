@@ -1,23 +1,24 @@
 /**
  * WHO authored an inbound attendance event.
  *
- * ── ONE INGESTION PATH, TWO KINDS OF AUTHOR ──
+ * ── ONE AUTHORITY, WHICH IS THE POINT OF G-14 ──
  *
  * Attendance used to answer "who is allowed to author this" by reading
- * `attendance_integration_producers`. The Developer Platform answers the same
- * question from an application, an installation and a credential. Two
- * independent authorities for one question is G-14.
+ * `attendance_integration_producers`, while the Developer Platform answered the
+ * same question from an application, an installation and a credential. Two
+ * independent authorities for one question WAS G-14.
  *
- * The convergence is not a second ingestion path. It is this type: ingestion
- * takes a RESOLVED author, and each side resolves its own. Attendance stops
- * knowing how a credential becomes an authority, and the Developer Platform
- * never learns what an attendance fact is.
+ * There is now one:
  *
- *   legacy producer     → resolveIntegrationProducer  ┐
- *                                                     ├→ AttendanceIngestAuthor → ingest
- *   application principal → attendanceAuthorityForPrincipal ┘
+ *   application principal → attendanceAuthorForPrincipal → AttendanceIngestAuthor → ingest
  *
- * Both kinds carry the SAME `NonHumanProducerAuthority`, so
+ * The legacy producer kind is gone rather than deprecated. A production census
+ * of `alloy_deployed_primary` returned zero producers, zero producer sites, zero
+ * mappings and zero producer-attributed events, so the compatibility path was
+ * authority nothing held — and a dormant credential path that nobody uses is
+ * still a credential path somebody can reach.
+ *
+ * The author carries a `NonHumanProducerAuthority`, so
  * `assertNonHumanCaptureAllowed` remains the single gate on what may be
  * authored. This type settles identity and correlation only; it grants nothing.
  */
@@ -25,8 +26,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { NonHumanProducerAuthority } from "@/lib/childcareOperational/attendance/attendancePermissions";
-import { resolveExternalMapping } from "@/lib/childcareOperational/attendance/integration/externalMapping";
-import type { ResolvedIntegrationProducer } from "@/lib/childcareOperational/attendance/integration/producerAuthority";
 import { resolveIntegrationResourceRef } from "@/lib/platform/external/integrationResourceRefs";
 
 /**
@@ -36,53 +35,29 @@ import { resolveIntegrationResourceRef } from "@/lib/platform/external/integrati
  * as `source_key`. It is deliberately stable across credential rotation, so
  * provenance survives a rotation on either side.
  */
-export type AttendanceIngestAuthor =
-    | {
-        kind: "producer";
-        /** `attendance_integration_producers.id`. */
-        producerId: string;
-        orgId: string;
-        producerKey: string;
-        label: string;
-        authority: NonHumanProducerAuthority;
-    }
-    | {
-        kind: "installation";
-        /** `app_installations.id`. There is no producer row, and there will not be one. */
-        installationId: string;
-        orgId: string;
-        producerKey: string;
-        label: string;
-        authority: NonHumanProducerAuthority;
-    };
-
-/** Express a legacy resolution as an author, so one shape reaches ingestion. */
-export function authorFromLegacyProducer(producer: ResolvedIntegrationProducer): AttendanceIngestAuthor {
-    return {
-        kind: "producer",
-        producerId: producer.producerId,
-        orgId: producer.orgId,
-        producerKey: producer.producerKey,
-        label: producer.label,
-        authority: producer.authority,
-    };
-}
+export type AttendanceIngestAuthor = {
+    kind: "installation";
+    /** `app_installations.id`. There is no producer row, and there will not be one. */
+    installationId: string;
+    orgId: string;
+    producerKey: string;
+    label: string;
+    authority: NonHumanProducerAuthority;
+};
 
 /**
- * The two columns that identify an author on an evidence row.
+ * The columns that identify an author on an evidence row.
  *
- * Exactly one is ever set. `attendance_integration_events` carries a CHECK that
- * says so, because the alternative — a null `producer_id` standing in for a
- * Developer Platform author — collides with the UNATTRIBUTED bucket and would
- * both misreport provenance and let one installation's event id evict another's.
+ * `producer_id` is written NULL and stays in the shape deliberately: the table
+ * keeps it as historical storage for events legacy producers authored before the
+ * retirement, and the CHECK that only one author is ever set still holds. What
+ * changed is that nothing can write it again.
  */
 export function evidenceIdentityOf(author: AttendanceIngestAuthor): {
     producer_id: string | null;
     installation_id: string | null;
 } {
-    return author.kind === "producer"
-        ? { producer_id: author.producerId, installation_id: null }
-        : { producer_id: null, installation_id: author.installationId };
+    return { producer_id: null, installation_id: author.installationId };
 }
 
 export type CorrelationResult =
@@ -92,13 +67,12 @@ export type CorrelationResult =
 /**
  * Turn one of the author's external identifiers into an Alloy resource.
  *
- * Each kind of author owns its own correlation table and neither may read the
- * other's: a legacy producer resolves through `attendance_integration_mappings`,
- * an installation through `integration_resource_refs`. Letting an installation
- * fall back to legacy mappings would re-create the dual authority this replaces,
- * and would let a mapping made for one producer authorize a different caller.
+ * `integration_resource_refs` is the only correlation owner. There is deliberately
+ * no fallback to `attendance_integration_mappings`: a fallback would re-create the
+ * dual authority this replaces, and would let a mapping made for one producer
+ * authorize a different caller.
  *
- * Unknown never creates, on either side.
+ * Unknown never creates.
  */
 export async function correlateExternalId(params: {
     supabase: SupabaseClient;
@@ -108,36 +82,18 @@ export async function correlateExternalId(params: {
 }): Promise<CorrelationResult> {
     const { supabase, author, entityType, externalId } = params;
 
-    if (author.kind === "producer") {
-        const r = await resolveExternalMapping({
-            supabase,
-            orgId: author.orgId,
-            producerId: author.producerId,
-            entityType,
-            externalId,
-        });
-        if (!r.ok) return { ok: false, code: r.code, detail: r.detail };
-        // Narrowed on the literal, not on a comparison to a variable: a mapping
-        // row that resolved as a child must never be read as a room, which is
-        // what the typed targets in the schema exist to prevent.
-        if (entityType === "child") {
-            if (r.entityType !== "child") {
-                return {
-                    ok: false,
-                    code: "mapping_wrong_entity_kind",
-                    detail: `The mapping for "${externalId}" does not name a child.`,
-                };
-            }
-            return { ok: true, entityType: "child", alloyId: r.customerMemberId };
-        }
-        if (r.entityType !== "location") {
-            return {
-                ok: false,
-                code: "mapping_wrong_entity_kind",
-                detail: `The mapping for "${externalId}" does not name a location.`,
-            };
-        }
-        return { ok: true, entityType: "location", alloyId: r.locationId };
+    /*
+     * ABSENT IS NOT UNKNOWN.
+     *
+     * "You sent no child identity" and "you sent a child id we do not know" are
+     * different facts, and only the first tells an integrator their payload is
+     * wrong. The distinction matters most for a door event, where attributing a
+     * threshold crossing to whoever is scheduled in the room is the tempting
+     * failure -- so a blank id is named as missing rather than folded into
+     * unmapped.
+     */
+    if (!String(externalId ?? "").trim()) {
+        return { ok: false, code: "external_id_missing", detail: `No ${entityType} identity was supplied.` };
     }
 
     const ref = await resolveIntegrationResourceRef({
@@ -149,7 +105,7 @@ export async function correlateExternalId(params: {
     });
     if (!ref.ok) {
         // Kept in the vocabulary the inbox already speaks, so a disposition means
-        // the same thing whichever authority resolved it.
+        // the same thing it always did.
         const detail = ref.code === "ambiguous"
             ? `More than one active mapping claims "${externalId}".`
             : ref.code === "lookup_failed"

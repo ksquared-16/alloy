@@ -56,7 +56,8 @@ import { resolve } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { hashProducerCredential } from "@/lib/childcareOperational/attendance/integration/producerAuthority";
+import { attendanceAuthorForPrincipal } from "@/lib/platform/principal/attendanceAuthorityAdapter";
+import type { ApplicationPrincipal } from "@/lib/platform/principal/platformPrincipalTypes";
 import { ingestExternalAttendanceEvent } from "@/lib/childcareOperational/attendance/integration/ingestExternalAttendance";
 import { listAttendanceEvents } from "@/lib/childcareOperational/attendance/attendanceService";
 
@@ -90,8 +91,6 @@ const CHILD = "00000000-0000-4000-8000-000070000050";
 const AGREEMENT = "00000000-0000-4000-8000-000070000060";
 
 const PROVIDER = "door_access";
-const DOOR_SECRET = "cert-door-secret";
-const CONTROL_SECRET = "cert-door-control-secret";
 const TODAY = new Date().toISOString().slice(0, 10);
 const run = Date.now();
 
@@ -100,8 +99,10 @@ describeLive("door / access capture — negative certification", () => {
         ? createClient(env.url, env.serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
         : null) as unknown as SupabaseClient;
 
-    let doorProducerId = "";
-    let controlProducerId = "";
+    let doorApplicationId = "";
+    let controlApplicationId = "";
+    let doorInstallationId = "";
+    let controlInstallationId = "";
 
     const doorEvent = (over: Record<string, unknown> = {}) => ({
         externalEventId: `door-${run}`,
@@ -115,74 +116,72 @@ describeLive("door / access capture — negative certification", () => {
     });
 
     async function cleanup() {
-        for (const id of [doorProducerId, controlProducerId].filter(Boolean)) {
-            await supabase.from("attendance_integration_events").delete().eq("producer_id", id);
+        for (const id of [doorInstallationId, controlInstallationId].filter(Boolean)) {
+            await supabase.from("attendance_integration_events").delete().eq("installation_id", id);
+            await supabase.from("integration_resource_refs").delete().eq("installation_id", id);
+            await supabase.from("app_installations").delete().eq("id", id);
         }
         await supabase
             .from("attendance_integration_events")
             .delete()
-            .is("producer_id", null)
+            .is("installation_id", null)
             .like("provider_event_id", `door-${run}%`);
-        await supabase.from("attendance_integration_producers").delete().in("producer_key", [
-            `door:cert:${run}`,
-            `door:cert:${run}-control`,
-        ]);
+        for (const id of [doorApplicationId, controlApplicationId].filter(Boolean)) {
+            await supabase.from("developer_applications").delete().eq("id", id);
+        }
     }
 
     beforeAll(async () => {
         await cleanup();
 
-        const mk = async (key: string, secret: string, capabilities: string[]) => {
-            const { data, error } = await supabase
-                .from("attendance_integration_producers")
-                .insert({
-                    org_id: ORG,
-                    provider_key: PROVIDER,
-                    producer_key: key,
-                    label: `Cert ${key}`,
-                    credential_hash: hashProducerCredential(secret),
-                    credential_last_four: secret.slice(-4),
-                    capabilities,
-                })
-                .select("id")
-                .single();
-            if (error) throw new Error(`producer fixture failed: ${error.message}`);
+        // One installation per application per organization (uq_app_installations_app_org),
+        // so the door and its positive control are two applications rather than
+        // two installations of one.
+        const mkApp = async (slug: string) => {
+            const app = await supabase.from("developer_applications").insert({
+                slug, name: slug, publisher: "alloy-certification",
+                ownership_mode: "tenant_private", environment: "production", status: "active",
+            }).select("id").single();
+            if (app.error) throw new Error(`application fixture failed: ${app.error.message}`);
+            return (app.data as { id: string }).id;
+        };
+        doorApplicationId = await mkApp(`door-cert-${run}`);
+        controlApplicationId = await mkApp(`door-cert-${run}-control`);
+
+        const mk = async (applicationId: string, key: string, scopes: string[]) => {
+            const { data, error } = await supabase.from("app_installations").insert({
+                application_id: applicationId, org_id: ORG, producer_key: key,
+                granted_scopes: scopes, boundary_mode: "locations",
+                location_boundary: [RIVERSIDE], status: "active",
+            }).select("id").single();
+            if (error) throw new Error(`installation fixture failed: ${error.message}`);
             const id = (data as { id: string }).id;
-            const grant = await supabase
-                .from("attendance_integration_producer_sites")
-                .insert({ org_id: ORG, producer_id: id, site_location_id: RIVERSIDE });
-            if (grant.error) throw new Error(`site grant failed: ${grant.error.message}`);
+            // Complete, correct correlation — including the one a vendor would
+            // propose: the adult's badge pointed straight at the child.
+            for (const m of [
+                { resource_type: "child", external_id: "BADGE-8841", child_customer_member_id: CHILD, location_id: null },
+                { resource_type: "location", external_id: "DOOR-FRONT", child_customer_member_id: null, location_id: ROOM_A },
+            ]) {
+                const r = await supabase.from("integration_resource_refs").insert({ installation_id: id, org_id: ORG, status: "active", ...m });
+                if (r.error) throw new Error(`ref fixture failed: ${r.error.message}`);
+            }
             return id;
         };
 
         /*
-         * A door producer as it would really be registered: authenticated, site
-         * authorized, and WITHOUT `attendance.record`. Everything about it is
-         * legitimate except its authority to say a child was present.
+         * A door installation as it would really be registered: authenticated,
+         * site authorized, and WITHOUT the public attendance scope. Everything
+         * about it is legitimate except its authority to say a child was present.
          */
-        doorProducerId = await mk(`door:cert:${run}`, DOOR_SECRET, ["access.observe"]);
+        doorInstallationId = await mk(doorApplicationId, `door:cert:${run}`, []);
 
         /*
          * The positive control. Identical in every respect except that it holds
-         * `attendance.record`. Without this, D2 would prove only that something
+         * the attendance scope. Without this, D2 would prove only that something
          * refused the event.
          */
-        controlProducerId = await mk(`door:cert:${run}-control`, CONTROL_SECRET, ["attendance.record"]);
-
-        // BOTH producers get complete, correct mappings — including the one a
-        // vendor would propose: the adult's badge pointed straight at the child.
-        for (const id of [doorProducerId, controlProducerId]) {
-            for (const m of [
-                { external_entity_type: "child", external_id: "BADGE-8841", child_customer_member_id: CHILD },
-                { external_entity_type: "location", external_id: "DOOR-FRONT", location_id: ROOM_A },
-            ]) {
-                const r = await supabase
-                    .from("attendance_integration_mappings")
-                    .insert({ org_id: ORG, producer_id: id, ...m });
-                if (r.error) throw new Error(`mapping fixture failed: ${r.error.message}`);
-            }
-        }
-    });
+        controlInstallationId = await mk(controlApplicationId, `door:cert:${run}-control`, ["attendance.write"]);
+    }, 120_000);
 
     afterAll(cleanup);
 
@@ -191,27 +190,38 @@ describeLive("door / access capture — negative certification", () => {
             (e) => e.source_key === `door:cert:${run}`,
         );
 
+    const principalFor = (applicationId: string, installationId: string, producerKey: string, scopes: string[]): ApplicationPrincipal => ({
+        kind: "application", applicationId, applicationSlug: `door-cert-${run}`,
+        ownershipMode: "tenant_private", environment: "production",
+        installationId, orgId: ORG, producerKey,
+        credentialId: "cred-door", clientId: `alloy_app_door_${run}`,
+        grantedScopes: scopes,
+        boundary: { mode: "locations", locationIds: [RIVERSIDE] },
+    });
+
+    /** Resolve authority the way the request boundary does, then ingest. */
+    async function ingestAs(p: ApplicationPrincipal, event: ReturnType<typeof doorEvent>) {
+        const a = await attendanceAuthorForPrincipal(supabase, p);
+        if (!a.ok) return { disposition: "denied" as const, attendanceEventId: null, code: a.code };
+        return ingestExternalAttendanceEvent({ supabase, providerKey: PROVIDER, event, author: a.author });
+    }
+
+    const asDoor = (event: ReturnType<typeof doorEvent>) =>
+        ingestAs(principalFor(doorApplicationId, doorInstallationId, `door:cert:${run}`, []), event);
+    const asControl = (event: ReturnType<typeof doorEvent>) =>
+        ingestAs(principalFor(controlApplicationId, controlInstallationId, `door:cert:${run}-control`, ["attendance.write"]), event);
+
     // ── D1 — no child identity ─────────────────────────────────────────────
 
     it("D1 — a badge nobody has mapped to a child produces no Attendance fact", async () => {
-        const out = await ingestExternalAttendanceEvent({
-            supabase,
-            presentedCredential: DOOR_SECRET,
-            providerKey: PROVIDER,
-            event: doorEvent({ externalEventId: `door-${run}-unknownbadge`, externalChildId: "BADGE-UNKNOWN" }),
-        });
+        const out = await asDoor(doorEvent({ externalEventId: `door-${run}-unknownbadge`, externalChildId: "BADGE-UNKNOWN" }));
         expect(out.disposition).toBe("unmapped");
         expect(out.attendanceEventId).toBeFalsy();
         expect(await factsToday()).toHaveLength(0);
     });
 
     it("D1 — a door event carrying no child identity at all is refused, not attributed to the room", async () => {
-        const out = await ingestExternalAttendanceEvent({
-            supabase,
-            presentedCredential: DOOR_SECRET,
-            providerKey: PROVIDER,
-            event: doorEvent({ externalEventId: `door-${run}-nochild`, externalChildId: "" }),
-        });
+        const out = await asDoor(doorEvent({ externalEventId: `door-${run}-nochild`, externalChildId: "" }));
         // The tempting failure is to attribute a threshold crossing to whoever is
         // scheduled in that room. There is no child in this event, so there is no
         // child in the ledger.
@@ -222,32 +232,22 @@ describeLive("door / access capture — negative certification", () => {
 
     // ── D2 — the enforced boundary ─────────────────────────────────────────
 
-    it("D2 — a fully mapped, authenticated, site-authorized door producer STILL cannot author attendance", async () => {
-        const out = await ingestExternalAttendanceEvent({
-            supabase,
-            presentedCredential: DOOR_SECRET,
-            providerKey: PROVIDER,
-            event: doorEvent(),
-        });
-        // Nothing is wrong with the request. The producer simply has no authority
+    it("D2 — a fully mapped, authenticated, site-authorized door installation STILL cannot author attendance", async () => {
+        const out = await asDoor(doorEvent());
+        // Nothing is wrong with the request. The installation simply has no authority
         // to assert that a child was present, and that is the whole boundary.
         expect(out.disposition).toBe("rejected");
         expect(out.code).toBe("capability_not_granted");
         expect(await factsToday()).toHaveLength(0);
     });
 
-    it("D2 — the positive control: the identical event commits when the producer holds the capability", async () => {
-        const out = await ingestExternalAttendanceEvent({
-            supabase,
-            presentedCredential: CONTROL_SECRET,
-            providerKey: PROVIDER,
-            event: doorEvent({ externalEventId: `door-${run}-control` }),
-        });
+    it("D2 — the positive control: the identical event commits when the installation holds the scope", async () => {
+        const out = await asControl(doorEvent({ externalEventId: `door-${run}-control` }));
         /*
          * This is what makes D2 mean something: the payload, the mappings, the
          * site and the child are all identical, so the ONLY difference is the
-         * capability. It also demonstrates the hazard precisely — grant a door
-         * `attendance.record` and the platform will faithfully record an adult's
+         * scope. It also demonstrates the hazard precisely — grant a door
+         * `attendance.write` and the platform will faithfully record an adult's
          * badge as a child's arrival. The refusal is a registration decision, not
          * a thing the schema can infer.
          */
@@ -255,22 +255,27 @@ describeLive("door / access capture — negative certification", () => {
         expect(out.attendanceEventId).toBeTruthy();
     });
 
-    // ── D3 — unknown producer ──────────────────────────────────────────────
+    // ── D3 — an external caller with no authority ──────────────────────────
 
-    it("D3 — an unrecognised door controller is refused and attributed to no tenant", async () => {
-        const out = await ingestExternalAttendanceEvent({
-            supabase,
-            presentedCredential: "some-door-controller-nobody-registered",
-            providerKey: PROVIDER,
-            event: doorEvent({ externalEventId: `door-${run}-unknownproducer` }),
+    it("D3 — an installation whose boundary grants no site never becomes an author at all", async () => {
+        /*
+         * This used to present an unregistered CREDENTIAL and assert the inbox
+         * recorded it as `unattributed`. Ingestion no longer accepts a credential
+         * — a production census found zero legacy producers, so the path was
+         * removed rather than left dormant — and an external caller that cannot
+         * be resolved is now refused BEFORE ingestion rather than recorded by it.
+         *
+         * The boundary being proven is the same one: an external caller without
+         * established authority authors nothing, and leaves no attendance fact.
+         */
+        const stranger = principalFor(doorApplicationId, doorInstallationId, `door:cert:${run}`, ["attendance.write"]);
+        const a = await attendanceAuthorForPrincipal(supabase, {
+            ...stranger,
+            boundary: { mode: "locations", locationIds: [] },
         });
-        expect(out.disposition).toBe("unattributed");
+        expect(a.ok).toBe(false);
+        if (a.ok) return;
+        expect(a.code).toBe("no_sites_in_boundary");
         expect(await factsToday()).toHaveLength(0);
-
-        const { data } = await supabase
-            .from("attendance_integration_events")
-            .select("org_id, producer_id, disposition")
-            .eq("provider_event_id", `door-${run}-unknownproducer`);
-        expect((data ?? [])[0]).toMatchObject({ org_id: null, producer_id: null, disposition: "unattributed" });
     });
 });

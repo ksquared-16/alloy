@@ -1,3 +1,19 @@
+-- ── WHY THIS VERSION MOVED ──
+--
+-- This migration was authored as 20260911140000. Staging independently landed
+-- 20260911140000_w13_portal_access_capability_admission.sql, which is the
+-- registered authority for that version, so two different files claimed one
+-- number.
+--
+-- The consequence was not a merge conflict -- there was no file overlap -- but a
+-- silent one: alloy-cert recorded 20260911140000 as applied on the strength of
+-- W-13, so the governed executor reported THIS migration as already applied and
+-- skipped it, while `app_security_audit_outcome_check` never gained 'attempted'.
+-- A ledger hit is not evidence that a migration ran.
+--
+-- Renamed to the next version free across staging and Thread 5. W-13 is
+-- untouched.
+
 -- Thread 5 Slice B.4 — an administrative act is recorded before it happens.
 --
 -- B.1 wrote `app_security_audit` with outcomes allowed | denied | error, which

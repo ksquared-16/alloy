@@ -12,7 +12,6 @@ import { createFakeSupabase, type Tables } from "../principal/fakeSupabase";
 import { resolveIntegrationResourceRef } from "@/lib/platform/external/integrationResourceRefs";
 import { attendanceAuthorityForPrincipal, attendanceAuthorForPrincipal } from "@/lib/platform/principal/attendanceAuthorityAdapter";
 import {
-    authorFromLegacyProducer,
     correlateExternalId,
     evidenceIdentityOf,
 } from "@/lib/childcareOperational/attendance/integration/attendanceIngestAuthor";
@@ -254,18 +253,26 @@ describe("principal → attendance ingest author", () => {
         expect(evidenceIdentityOf(r.author)).toEqual({ producer_id: null, installation_id: "inst-1" });
     });
 
-    it("a legacy producer still writes producer_id, and never installation_id", () => {
-        const author = authorFromLegacyProducer({
-            producerId: "prod-1", orgId: ORG_A, providerKey: "classroom_coach",
-            producerKey: "legacy:org-a", label: "Door reader",
-            authority: { producerKey: "legacy:org-a", allowedSiteLocationIds: [SITE_A1], grantedPermissionKeys: [] },
+    it("producer_id is never written again, though the column remains for history", () => {
+        /*
+         * `attendance_integration_events.producer_id` stays in the schema as
+         * historical storage for events legacy producers authored before the
+         * retirement. What changed is that nothing can write it: a production
+         * census found zero legacy producers, so the credential path was removed
+         * rather than left dormant, and the only author left is an installation.
+         */
+        const r = evidenceIdentityOf({
+            kind: "installation", installationId: "inst-9", orgId: ORG_A,
+            producerKey: "partner:org-a", label: "partner",
+            authority: { producerKey: "partner:org-a", allowedSiteLocationIds: [SITE_A1], grantedPermissionKeys: [] },
         });
-        expect(evidenceIdentityOf(author)).toEqual({ producer_id: "prod-1", installation_id: null });
+        expect(r.producer_id).toBeNull();
+        expect(r.installation_id).toBe("inst-9");
     });
 });
 
-describe("correlation follows the author, and never crosses over", () => {
-    it("an installation resolves through integration_resource_refs", async () => {
+describe("correlation has exactly one owner", () => {
+    it("an installation resolves through integration_resource_refs, the only correlation table", async () => {
         const r = await attendanceAuthorForPrincipal(fake.client, principal());
         if (!r.ok) return;
         const c = await correlateExternalId({

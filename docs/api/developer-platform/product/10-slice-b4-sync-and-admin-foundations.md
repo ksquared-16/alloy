@@ -32,7 +32,7 @@ Everything below is real and tested. Nothing claims a surface that does not exis
 |---|---|
 | `updated_since` (G-12 closed) | `supabase/migrations/20260911130000_external_locations_updated_since.sql` |
 | Watermark parsing | `web/lib/platform/external/collection.ts` |
-| Administrative audit | `web/lib/platform/admin/administrativeAudit.ts` + `20260911140000_administrative_audit_attempted.sql` |
+| Administrative audit | `web/lib/platform/admin/administrativeAudit.ts` + `20260911190000_administrative_audit_attempted.sql` |
 | Internal operator authorization | `web/lib/platform/admin/integrationsAdminAuth.ts` |
 | Installation health | `web/lib/platform/admin/installationHealth.ts` |
 | Scope presentation | `web/lib/platform/external/scopePresentation.ts` |

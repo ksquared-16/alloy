@@ -137,7 +137,7 @@ there:
 20260910200000_external_request_boundary.sql
 20260910210000_external_locations_read.sql
 20260911130000_external_locations_updated_since.sql
-20260911140000_administrative_audit_attempted.sql
+20260911190000_administrative_audit_attempted.sql
 20260911150000_integration_resource_refs.sql
 ```
 
