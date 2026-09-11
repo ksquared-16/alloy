@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 
 /** GET: list permission_keys granted for org + role_key. Portal (admin/ops) or Users & Roles managers. */
 export async function GET(request: NextRequest) {
@@ -104,10 +105,16 @@ export async function PUT(request: NextRequest) {
     //
     // Authorization did not move. `requireUsersRolesManageAuth` above still decides WHO may ask;
     // the function decides only WHAT the set becomes, and is `EXECUTE`-able by `service_role` alone.
+    // D2 — the actor and correlation the transaction owner records. Server-derived: the RPC refuses
+    // a change that names no actor, and a request body cannot name its own author.
+    const audit = accessMutationAudit(auth.access);
     const { data: granted, error: replaceErr } = await supabase.rpc("replace_role_permission_grants", {
         p_org_id: orgId,
         p_role_key: role_key,
         p_permission_keys: permission_keys,
+        p_actor_user_id: audit.actorUserId,
+        p_origin: audit.origin,
+        p_correlation_id: audit.correlationId,
     });
 
     if (replaceErr) {

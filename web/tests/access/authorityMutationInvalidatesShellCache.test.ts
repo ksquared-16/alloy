@@ -58,8 +58,17 @@ function authorityMutators(): string[] {
     return routeFiles().filter((rel) => {
         const src = executable(rel);
         const grantWrite = /rpc\(\s*"(?:replace_role_permission_grants|save_role_definition_and_grants)"/.test(src);
+        /*
+         * D2 moved three of these writes behind transaction owners so state and audit commit
+         * together, which made a discovery that looked only for `.from("user_roles")` stop finding
+         * them — the non-vacuity guard below caught it rather than the suite going quietly green on
+         * three routes. A route that mutates authority through an RPC is still a route that mutates
+         * authority, so the predicate names both shapes.
+         */
         const membershipWrite =
             /from\("user_roles"\)[\s\S]{0,200}?\.(?:insert|upsert|delete|update)\(/.test(src)
+            || /rpc\(\s*"(?:remove_member_access_audited|replace_member_access_scope_audited|create_role_definition_audited)"/.test(src)
+            || /replaceMembershipWithAccessProfile\(/.test(src)
             || /replaceMembershipWithAccessProfile\(/.test(src);
         return grantWrite || membershipWrite;
     });
