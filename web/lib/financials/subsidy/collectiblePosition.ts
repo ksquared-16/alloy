@@ -50,6 +50,18 @@ export type CollectiblePosition = {
         grossCents: number;
         reductionsCents: number;
         netCents: number;
+        /*
+         * WHAT MONEY ALREADY SATISFIED. This was computed here all along — `outstandingCents` is
+         * posted gross minus exactly this — and then discarded, so every surface could say what a
+         * family still owes and none could say what had already been paid. An operator asked "why
+         * is this the balance?" could be shown the answer's two halves only by subtracting them
+         * back out, which is how a presentation layer starts doing money arithmetic of its own.
+         *
+         * Counted applications only: an application whose payment cannot be shown to have settled
+         * has not satisfied anything, and is excluded here for the same reason it is excluded from
+         * the balance above.
+         */
+        appliedCents: number;
         suppressionBoundBy: "claimed" | "expected" | "outstanding" | "none";
         submittedClaimIds: string[];
         openVarianceStates: string[];
@@ -196,6 +208,7 @@ export function computeCollectiblePosition(inputs: CollectiblePositionInputs): C
             grossCents: inputs.grossCents,
             reductionsCents: inputs.reductionsCents,
             netCents: inputs.netCents,
+            appliedCents,
             suppressionBoundBy: submittedLines.length === 0 ? "none" : winner.kind,
             submittedClaimIds,
             openVarianceStates: [...new Set(openVariances.map((v) => v.state))],

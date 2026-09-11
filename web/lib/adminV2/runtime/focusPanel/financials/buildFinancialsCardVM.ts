@@ -431,7 +431,12 @@ function platformUnavailabilities(): FinancialsUnavailable[] {
  * and stated no share because no allocation store existed. That role is still a way to reach a
  * human; it is no longer what makes somebody financially responsible.
  */
-async function readResponsibility(
+/*
+ * Exported because charge detail asks the same question about one charge that the card asks
+ * about an account's. Two readers of `financial_responsibility_allocations` would be two
+ * chances to disagree about who owes what, so there is one.
+ */
+export async function readResponsibility(
     supabase: SupabaseClient,
     orgId: string,
     chargeIds: readonly string[],

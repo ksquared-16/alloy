@@ -258,8 +258,38 @@ export type FinancialsPeriod = {
     charges: { label: string; value: string }[];
     reductions: { label: string; value: string }[];
     funding: { label: string; value: string }[];
-    /** Only totals carry weight. Individual rows stay regular. */
+    /**
+     * THE NET OBLIGATION — gross plus discounts, funding and adjustments.
+     *
+     * The field keeps its original name because every fixture and the design lab already write it,
+     * but the card no longer LABELS it "Responsibility". That word now belongs only to the split
+     * below, and one dollar amount may not appear under two different financial concepts.
+     */
     familyResponsibility: string;
+    /**
+     * WHO OWES THE NET, from Thread 6's persisted allocations.
+     *
+     * `allocated` and `unassigned` come from the canonical view model and sum to the obligation
+     * above by construction; nothing here adds them up to check. `unassigned` is null when there is
+     * none, and is otherwise the operator's most actionable fact on the card — money nobody has
+     * been made responsible for. It is stated rather than quietly folded into the household.
+     */
+    responsibility: {
+        allocated: string;
+        parties: { name: string; amount: string }[];
+        unassigned: string | null;
+    } | null;
+    /**
+     * FUNDING THAT HAS NOT ARRIVED. Distinct from the `funding` rows above, which are money that
+     * actually came in. An expectation reduces nothing owed, so it is never a line in a total.
+     */
+    expectedFunding: { label: string; amount: string | null }[];
+    /**
+     * WHAT MAY BE ASKED OF THE FAMILY TODAY — present only while a submitted or accepted claim is
+     * suppressing a bounded amount. With nothing suppressed this equals the balance and a second
+     * line would repeat it, so it is null instead.
+     */
+    collectibleNow: string | null;
     paymentsReceived: string;
     currentBalance: string;
     dueLabel: string;

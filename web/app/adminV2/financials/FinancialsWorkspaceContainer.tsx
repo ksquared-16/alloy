@@ -77,7 +77,15 @@ export default function FinancialsWorkspaceContainer({ onClose }: { onClose?: ()
 
     const queue = useFinancialWorkQueue(siteId);
     const metrics = useFinancialsOverviewMetrics(siteId, section === "overview");
-    const position = useFinancialsPosition(siteId, section === "accounts" || section === "subsidy");
+    /*
+     * CHARGES READS THE COHORT TOO, now that its Posted view is the record of what has been
+     * billed. It is the same read Accounts and Subsidy already use — the section gained a
+     * second view, not a second projection.
+     */
+    const position = useFinancialsPosition(
+        siteId,
+        section === "accounts" || section === "subsidy" || section === "charges",
+    );
     const flow = useFinancialsPaymentFlow(siteId, section === "payments");
     /*
      * Overview reads the activity feed too, because a landing page that cannot say what MOVED is
