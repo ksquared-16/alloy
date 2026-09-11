@@ -9,7 +9,6 @@
  */
 
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
-import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import type { DraftCollectionGroup, DraftFormField, StoredFormDraftPreview } from "./types";
 import {
     PROCESSING_NEEDS_DESTINATION_DESCRIPTION,
@@ -18,14 +17,42 @@ import {
 import type { SectionDisposition } from "./sectionDisposition";
 import { sectionKeepsDetectedFields, staticTextWithoutFieldLabels } from "./sectionDisposition";
 
-/** Map one detected draft field to a valid FormSchemaV1 field, preserving canonical binding. */
+/**
+ * Map one detected draft field to a valid FormSchemaV1 field, carrying an APPROVED canonical binding.
+ *
+ * ## A suggestion is not a binding
+ *
+ * This line used to read
+ *
+ *     f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source
+ *
+ * so any question the operator had not decided about acquired the label matcher's best guess at
+ * materialization time, and that guess became persisted Form truth indistinguishable from a
+ * decision. The real Admissions import was saved with FOUR approved bindings and stored FIFTEEN.
+ *
+ * What the extra eleven were is the argument for the general rule rather than a fix list: a full
+ * name landing in a first-name destination; four distinct concepts (home, mailing, and two
+ * employers) all landing on one canonical address; a second guardian's contact details landing on
+ * the generic person record that cannot say which person it means; medications landing on a
+ * generic notes field that Health owns. The matcher is a good matcher — it simply has no idea whose
+ * fact it is looking at, which is the same hole `lib/pos/discovery/bindingSafety.ts` documents for
+ * the discovery path.
+ *
+ * So the rule here is unconditional and carries no vocabulary of its own: a canonical binding is
+ * persisted only when the draft field already carries one. That happens when an operator accepts it
+ * in review (the save route takes `field_source` per field) or when a durable approved decision
+ * writes it onto the draft (`applyDiscovery` sets `live.field_source` from an accepted proposal).
+ *
+ * Suggestions keep their real job — they are still offered to the operator in the review surface,
+ * which is where a proposal belongs. They just no longer decide anything.
+ *
+ * The asymmetry is deliberate, and it is the same one bindingSafety states: a MISSING binding costs
+ * an operator one decision, a FALSE binding silently writes a stranger's fact onto a family's record
+ * and looks correct while doing it.
+ */
 function mapDraftField(f: DraftFormField): FormField {
     const unresolvedAtGenerate = f.evidence === UNRESOLVED_AT_GENERATE_EVIDENCE;
-    // Persist canonical binding: operator-reviewed binding wins; otherwise auto-suggest
-    // from the label/type so generated forms prefill + drive guided intake by default.
-    const field_source = unresolvedAtGenerate
-        ? undefined
-        : f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source;
+    const field_source = unresolvedAtGenerate ? undefined : f.field_source;
     const description = f.description ?? (unresolvedAtGenerate ? PROCESSING_NEEDS_DESTINATION_DESCRIPTION : undefined);
     const base = {
         id: f.id,
