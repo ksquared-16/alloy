@@ -225,6 +225,9 @@ export function releaseControlPlaneOwnership({ pid = process.pid } = {}) {
  */
 export const HOST_HEALTH_STATES = Object.freeze(["HEALTHY", "PRESSURED", "CONSTRAINED", "CRITICAL"]);
 
+/** How recently an unresolved recovery episode must have been touched to count as pressure. */
+export const RECOVERY_BACKLOG_WINDOW_MS = 15 * 60_000;
+
 /** Admission is refused from CONSTRAINED upward; PRESSURED only sheds speculative work. */
 export const HOST_HEALTH_ADMITS = Object.freeze({
   HEALTHY: true, PRESSURED: true, CONSTRAINED: false, CRITICAL: false,
@@ -253,9 +256,30 @@ export function hostAdmissionHealth({
   const generation = currentRuntimeGeneration();
   const staleOwnership = ownedProcesses.filter((p) => p.runtime_generation !== generation).length;
 
+  /*
+   * BACKLOG IS CURRENT STATE, NOT THE SIZE OF THE HISTORY FILE.
+   *
+   * CAUGHT BY THIS GATE ON ITS FIRST LIVE READING, which is the only reason it
+   * is written down rather than shipped. Counting every non-terminal episode
+   * returned 73 and drove the host to CONSTRAINED — refusing to admit new work —
+   * on a completely idle machine. All 73 were EXHAUSTED, so recovery would never
+   * act on any of them, and the oldest had not been touched since 2026-08-19:
+   * three weeks of history being read as live pressure.
+   *
+   * `recovery-budgets.json` accumulates one episode per (policy, target) and
+   * never forgets. It is a ledger. Admission must key on what is HAPPENING, so
+   * an episode counts only while it is both unresolved and recent — which is
+   * also the invariant this mission set out to enforce: history is not current
+   * state, and a growing historical ledger must not participate in current-state
+   * resolution.
+   */
   const budgets = readJsonQuiet(join(root, "vacilando", "execution-runs", "recovery-budgets.json"));
   const episodes = Object.values(budgets?.episodes || {});
-  const recoveryBacklog = episodes.filter((e) => e.terminal !== true).length;
+  const recoveryBacklog = episodes.filter((e) => {
+    if (e.terminal === true) return false;
+    const touched = Date.parse(e.last_at || e.first_at || "");
+    return Number.isFinite(touched) && (nowMs - touched) <= RECOVERY_BACKLOG_WINDOW_MS;
+  }).length;
 
   const reasons = [];
   let state = "HEALTHY";
