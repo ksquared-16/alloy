@@ -44,6 +44,7 @@ import { join } from "node:path";
 
 import { getDurableLane, listDurableLanes, readDevelopmentLaneStore, writeDevelopmentLaneStore } from "./development-lane.mjs";
 import { readAllMetadata, resolveRuntimeConfig } from "./workspace-facts.mjs";
+import { pidAlive } from "./control-plane-health.mjs";
 
 const iso = (ms) => new Date(ms ?? Date.now()).toISOString();
 
@@ -553,19 +554,156 @@ export async function closeDurableLane(laneId, {
   store.lanes[lane.lane_id] = rec;
   writeDevelopmentLaneStore(store, root);
 
+  const worktreeName = resolved.worktree_name || lane.binding?.worktree_name || null;
+  /*
+   * "I asked for it to stop" and "it stopped" are different claims, and only the
+   * second one makes a completed lane's resources genuinely free. The graceful
+   * path has already run by this point; this looks.
+   */
+  let teardown = null;
+  try {
+    teardown = verifyLaneTeardown(lane.lane_id, {
+      root,
+      slot,
+      port: resolved.port ?? null,
+      worktreeName,
+    });
+  } catch { /* a failed verification must never undo a completed close */ }
+
   return {
     ok: true,
     command: LANE_CLOSE_COMMAND,
     lane_id: lane.lane_id,
     name: lane.name || null,
     status: LANE_CLOSED,
-    worktree_name: resolved.worktree_name || lane.binding?.worktree_name || null,
+    worktree_name: worktreeName,
     worktree_path: resolved.worktree_path || lane.binding?.worktree_path || null,
     slot_retired: slot,
     worktree_retired: Boolean(slot != null && retirement?.ok && !retirement.skipped),
     retirement,
     capacity_release: released || null,
+    // Reported, never acted on: a survivor is a fact the operator needs, not a
+    // licence to kill something this lane may not own.
+    teardown_verified: teardown?.ok ?? null,
+    teardown_survivors: teardown?.survivors || [],
+    teardown_checks: teardown?.checked || null,
   };
+}
+
+/**
+ * DID THE TEARDOWN ACTUALLY LEAVE NOTHING BEHIND?
+ *
+ * THE GAP. `closeDurableLane` released capacity, retired the worktree
+ * registration and marked the lane closed — and then returned, having never
+ * looked. "I asked for it to stop" and "it stopped" are different claims, and
+ * only the second one makes a completed lane's resources genuinely free.
+ *
+ * This VERIFIES and REPORTS. It does not kill: killing arbitrary processes is
+ * prohibited, and the graceful path — `alloy-sprint-finish` via
+ * `releaseSprintSlot` — has already run by the time this is called. A survivor
+ * is a fact the operator needs, not a licence to escalate.
+ *
+ * Every check is cheap and read-only: the Governor's own owned-process records,
+ * `kill -0` on their pids, the lane's pid claim file, and a bind test on the
+ * slot's port. No `ps` fan-out and no filesystem walk.
+ *
+ * A lane does NOT own every resource type. Absence of a dev server is not a
+ * finding; a dev server still listening on a retired slot's port is.
+ */
+export function verifyLaneTeardown(laneId, {
+  root = runtimeRoot(),
+  slot = null,
+  port = null,
+  worktreeName = null,
+  pidAliveImpl = null,
+  portInUseImpl = null,
+  listOwnedImpl = null,
+} = {}) {
+  const survivors = [];
+  const id = String(laneId || "").trim();
+  const alive = pidAliveImpl || pidAlive;
+  const listOwned = listOwnedImpl || readOwnedProcessesQuiet;
+
+  // 1. Owned processes this lane's work registered, still alive.
+  let ownedChecked = false;
+  try {
+    for (const p of listOwned(root) || []) {
+      ownedChecked = true;
+      if (String(p.lane_id || "") !== id) continue;
+      if (p.pid != null && alive(p.pid)) {
+        survivors.push({ kind: "owned_process", pid: Number(p.pid), id: p.id || null, process_kind: p.kind || null });
+      }
+    }
+    ownedChecked = true;
+  } catch { ownedChecked = false; }
+
+  // 2. The lane's PID claim, if one is still on disk with a live process.
+  let claimChecked = false;
+  if (worktreeName) {
+    const claim = join(root, "pids", `${worktreeName}.pid`);
+    claimChecked = true;
+    try {
+      const pid = readFileSync(claim, "utf8").trim();
+      if (pid && alive(pid)) survivors.push({ kind: "pid_claim", pid: Number(pid), path: claim });
+    } catch { /* absent claim is the expected outcome */ }
+  }
+
+  // 3. The slot's port, still answering after the slot was retired.
+  const checkPort = portInUseImpl || defaultPortInUse;
+  if (port != null && checkPort(port)) {
+    survivors.push({ kind: "port", port: Number(port), slot });
+  }
+
+  return {
+    ok: survivors.length === 0,
+    lane_id: id || null,
+    slot,
+    port,
+    verified_at: new Date().toISOString(),
+    survivors,
+    // Said plainly, because "no survivors" is the claim that matters and it must
+    // not be inferred from an empty list that nothing was able to check.
+    checked: { owned_processes: ownedChecked, pid_claim: claimChecked, port: port != null },
+  };
+}
+
+/**
+ * The Governor's owned-process store, read directly.
+ *
+ * NOT imported from `execution-recovery.mjs`, and the reason is load order
+ * rather than taste: a static import from here creates a cycle
+ * (lane-worktree-lifecycle -> execution-recovery -> execution-resource -> ...)
+ * whose observable symptom is `Cannot access 'reclaimHook' before
+ * initialization` at module init — four suites crashed on it before this was
+ * backed out. Nothing is duplicated except the path: this is a read-only
+ * consumer, `registerOwnedProcess` remains the sole writer, and the store's
+ * shape is its own module's contract.
+ */
+function readOwnedProcessesQuiet(root) {
+  try {
+    const raw = JSON.parse(readFileSync(join(root, "vacilando", "execution-runs", "owned-processes.json"), "utf8"));
+    return Array.isArray(raw?.processes) ? raw.processes : [];
+  } catch {
+    return [];
+  }
+}
+
+function spawnSyncText(cmd, args, opts) {
+  const r = spawnSync(cmd, args, opts);
+  return String(r?.stdout || "").trim();
+}
+
+/** A port that still accepts a connection is a resource that did not go away. */
+function defaultPortInUse(port) {
+  try {
+    const out = spawnSyncText("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], {
+      encoding: "utf8", timeout: 4000,
+    });
+    return Boolean(out);
+  } catch {
+    // lsof exits non-zero when nothing is listening — the common, healthy case.
+    return false;
+  }
 }
 
 /** Fleet view: every lane, with its canonical resolution. For audit and cleanup. */
