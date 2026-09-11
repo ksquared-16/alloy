@@ -86,6 +86,51 @@ async function callAction(
     return { ok: true, preview: json.data?.preview ?? null };
 }
 
+/**
+ * WHO MAY BE MADE RESPONSIBLE.
+ *
+ * `financial_responsibility_allocations.responsible_party_id` references `persons`, and the
+ * arrangement service checks server-side that every party is a person IN THIS ORG — a party id from
+ * another tenant is refused there, not here. So the authority's rule is org membership, and this
+ * list is an operator convenience over it rather than a second policy: the people already holding a
+ * share, plus the account's own contacts who carry a person identity. A contact is a role a person
+ * holds on an account, which is why the person id is what travels.
+ *
+ * Children are not offered. `customer_members` are the household's children and a child does not
+ * bear their own tuition.
+ */
+async function loadCandidates(
+    customerId: string | null,
+    existing: { personId: string | null; name: string }[],
+): Promise<{ personId: string; name: string }[]> {
+    const byId = new Map<string, string>();
+    for (const p of existing) if (p.personId) byId.set(p.personId, p.name);
+    if (customerId) {
+        try {
+            const res = await fetch(`/api/admin/contact-options?customer_id=${encodeURIComponent(customerId)}`, {
+                credentials: "include",
+                cache: "no-store",
+            });
+            const body = (await res.json()) as { contacts?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+            const rows = Array.isArray(body) ? body : (body.contacts ?? []);
+            for (const row of rows) {
+                const personId = row.person_id != null ? String(row.person_id).trim() : "";
+                if (!personId || byId.has(personId)) continue;
+                const name =
+                    [row.first_name, row.last_name]
+                        .map((v) => (v != null ? String(v).trim() : ""))
+                        .filter(Boolean)
+                        .join(" ") || "Contact";
+                byId.set(personId, name);
+            }
+        } catch {
+            /* A contact read that fails leaves the parties already on record — never an empty list
+               presented as "nobody is eligible". */
+        }
+    }
+    return [...byId.entries()].map(([personId, name]) => ({ personId, name }));
+}
+
 export default function FinancialsResponsibilityPanel({
     customerId,
     customerMemberId,
@@ -106,17 +151,19 @@ export default function FinancialsResponsibilityPanel({
     const [error, setError] = useState<string | null>(null);
     const [done, setDone] = useState<string | null>(null);
 
-    const start = useCallback(() => {
-        setShares(
-            parties
-                .filter((p) => p.personId)
-                .map((p) => ({ responsiblePartyId: p.personId!, name: p.name, amount: "" })),
-        );
+    const start = useCallback(async () => {
         setPreview(null);
         setError(null);
         setDone(null);
         setOpen(true);
-    }, [parties]);
+        /*
+         * CREATING IS THE POINT. This command is how an arrangement comes to exist, so an account
+         * with none is the case that needs it most — the panel opens on the people who could bear
+         * it, not only on the people who already do.
+         */
+        const candidates = await loadCandidates(customerId, parties);
+        setShares(candidates.map((c) => ({ responsiblePartyId: c.personId, name: c.name, amount: "" })));
+    }, [customerId, parties]);
 
     const run = useCallback(
         async (mode: "preview" | "execute") => {
@@ -152,15 +199,15 @@ export default function FinancialsResponsibilityPanel({
                 <button
                     type="button"
                     className="text-xs font-medium text-alloy-bend-pine hover:underline"
-                    onClick={start}
+                    onClick={() => void start()}
                     data-financials-manage-responsibility="open"
-                    disabled={parties.filter((p) => p.personId).length === 0}
                 >
                     Manage responsibility →
                 </button>
                 {parties.filter((p) => p.personId).length === 0 ? (
+                    /* A statement of fact and an invitation — not a reason the control is unusable. */
                     <p className="mt-1 text-[11px] text-alloy-midnight/50" data-financials-responsibility-empty="true">
-                        No responsible party is on record for this account yet.
+                        No responsibility arrangement yet.
                     </p>
                 ) : null}
                 {done ? (
@@ -194,6 +241,11 @@ export default function FinancialsResponsibilityPanel({
                 />
             </label>
 
+            {shares.length === 0 ? (
+                <p className="mt-2 text-[11px] text-alloy-midnight/55" data-financials-responsibility-no-parties="true">
+                    Nobody on this account can be made responsible yet. Add a contact with a person record first.
+                </p>
+            ) : null}
             {shares.map((share, i) => (
                 <label key={share.responsiblePartyId} className="mt-2 block text-[11px] text-alloy-midnight/60">
                     {share.name}
