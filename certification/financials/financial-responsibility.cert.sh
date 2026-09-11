@@ -25,10 +25,30 @@ ORG='00000000-0000-4000-8000-000000000001'
 APP="${CERT_APP_URL:-http://localhost:3012}"
 PW="$ROOT/web/node_modules/.bin/playwright"
 
+# ── THE DATABASE CLIENT LIVES IN THE DATABASE ───────────────────────────────────────────────────
+#
+# This host has no `psql`, so every statement below died on `command not found` and the whole
+# certification reported "teardown failed" — a message about the proof's own scaffolding that reads
+# exactly like a product failure. `demo-tenant.sh` and `alloy-certify` already solve this the same
+# way; this script was simply written before they did and never re-run here.
+#
+# `psql` is still preferred when the host has one, so nothing changes on a machine that does.
+CERT_DIR="$ROOT/certification"
+cert_db_container() { printf 'supabase_db_%s\n' "$(sed -n 's/^[[:space:]]*project_id[[:space:]]*=[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$CERT_DIR/supabase/config.toml" 2>/dev/null | head -1)"; }
+cert_db_url_incontainer() { printf '%s\n' "$1" | sed -E 's#^(postgresql://[^@]+@)[^/]+(/.*)$#\1127.0.0.1:5432\2#'; }
+pg() {
+  if command -v psql >/dev/null 2>&1; then pg "$@"; return $?; fi
+  docker exec -i "$(cert_db_container)" psql "$(cert_db_url_incontainer "$DB")" "$@"
+}
+
 teardown() {
-  psql "$DB" -q -v ON_ERROR_STOP=1 <<SQL
+  pg -q -v ON_ERROR_STOP=1 <<SQL
 -- Consequences before the things they point at: allocations hold arrangements by RESTRICT, because
 -- an arrangement that produced money must not be deletable out from under it.
+-- A SUBSIDY CLAIM LINE POINTS AT A RESPONSIBILITY ALLOCATION, and that reference does not cascade.
+-- It is as much a consequence of the allocation as an attribution is, so it goes with them — without
+-- it the delete below answers 23503 and the whole certification reports "teardown failed".
+delete from public.financial_subsidy_claim_lines where org_id = '$ORG';
 delete from public.payment_responsibility_attributions where org_id = '$ORG';
 delete from public.financial_expected_funding where org_id = '$ORG';
 delete from public.financial_responsibility_allocations where org_id = '$ORG';
@@ -59,11 +79,11 @@ teardown
 [ $? -eq 0 ] || { echo "✗ teardown failed"; exit 1; }
 
 echo "── the substrate this thread divides"
-psql "$DB" -tAc "select count(*) from public.financial_charge_templates where org_id='$ORG' and template_key='tuition' and is_active" \
+pg -tAc "select count(*) from public.financial_charge_templates where org_id='$ORG' and template_key='tuition' and is_active" \
   | grep -q '^1$' || { echo "✗ no active 'tuition' charge template — Thread 7's gross cannot be generated"; exit 1; }
-psql "$DB" -tAc "select count(*) from public.role_permission_grants where permission_key='fin.responsibility'" \
+pg -tAc "select count(*) from public.role_permission_grants where permission_key='fin.responsibility'" \
   | grep -qv '^0$' || { echo "✗ fin.responsibility is not granted to any role — the migration has not run"; exit 1; }
-psql "$DB" -tAc "select count(*) from pg_constraint where conname='financial_responsibility_arrangements_no_overlap'" \
+pg -tAc "select count(*) from pg_constraint where conname='financial_responsibility_arrangements_no_overlap'" \
   | grep -q '^1$' || { echo "✗ the overlap exclusion constraint is missing"; exit 1; }
 
 echo "── running the live cases"
@@ -81,19 +101,19 @@ if [ "${CERT_BROWSER:-0}" = "1" ]; then
   TERM='6c000000-0000-4000-8000-00000000b001'
   ARRANGEMENT='6c000000-0000-4000-8000-00000000c001'
   QUEUE_FIRST="${CERT_RESP_SUBJECT:-00000000-0000-4000-8000-40000000099b}"
-  read -r OCM MEMBER CUSTOMER <<<"$(psql "$DB" -tA -F' ' -c "
+  read -r OCM MEMBER CUSTOMER <<<"$(pg -tA -F' ' -c "
     select o.id, o.customer_member_id, m.customer_id
       from public.opportunity_customer_members o
       join public.customer_members m on m.id = o.customer_member_id
      where o.org_id = '$ORG' and o.opportunity_id = '$QUEUE_FIRST' limit 1;")"
-  read -r ALEX SAM <<<"$(psql "$DB" -tA -F' ' -c "
+  read -r ALEX SAM <<<"$(pg -tA -F' ' -c "
     select string_agg(person_id::text, ' ' order by person_id)
       from (select distinct person_id from public.customer_persons
              where org_id = '$ORG' and customer_id = '$CUSTOMER' limit 2) p;")"
   [ -n "${OCM:-}" ] && [ -n "${ALEX:-}" ] && [ -n "${SAM:-}" ]
   check $? "a household with two people and an assignment: ${CUSTOMER:-none}"
 
-  psql "$DB" -q -v ON_ERROR_STOP=1 <<SQL
+  pg -q -v ON_ERROR_STOP=1 <<SQL
 delete from public.enrollment_pricing_terms where org_id = '$ORG';
 insert into public.child_enrollment_agreements
     (id, org_id, customer_member_id, customer_id, site_location_id, opportunity_customer_member_id, status, start_date)
@@ -140,19 +160,19 @@ SQL
   check $? "persisted responsibility visible, unassigned truthful, actual payer distinct, no fabricated shares"
 
   echo "── the same command, with fin.responsibility revoked"
-  psql "$DB" -q -c "update public.role_permission_grants set allowed = false where permission_key = 'fin.responsibility'"
+  pg -q -c "update public.role_permission_grants set allowed = false where permission_key = 'fin.responsibility'"
   ( cd "$ROOT/certification" \
     && NODE_PATH="$ROOT/web/node_modules" CERT_APP_URL="$APP" CERT_EXPECT_UNAUTHORIZED=1 \
        CERT_RESP_CUSTOMER="$CUSTOMER" CERT_RESP_ALEX="$ALEX" \
        "$PW" test -c playwright.config.ts playwright/financial-responsibility.cert.spec.ts \
        -g "without the grant" --workers=1 --reporter=line )
   unauthorized=$?
-  psql "$DB" -q -c "update public.role_permission_grants set allowed = true where permission_key = 'fin.responsibility'"
+  pg -q -c "update public.role_permission_grants set allowed = true where permission_key = 'fin.responsibility'"
   check $unauthorized "configuring responsibility is refused server-side, and records nothing"
 
   # AND IT PUTS THE TENANT BACK — after the product assertions, never before.
   teardown
-  psql "$DB" -q -c "delete from public.enrollment_pricing_terms where id = '$TERM'; delete from public.child_enrollment_agreements where id = '$AGREEMENT';"
+  pg -q -c "delete from public.enrollment_pricing_terms where id = '$TERM'; delete from public.child_enrollment_agreements where id = '$AGREEMENT';"
   check $? "the tenant is left as the browser proof found it"
 fi
 
