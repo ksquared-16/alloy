@@ -20,7 +20,13 @@ Firefly, INFANT section. Nothing in this document has been applied.
 > queue scope rather than a rule anyone has checked. Queue rows project from opportunities, so an
 > opportunity outside queue scope would explain the contradiction exactly.
 >
-> Census `gar_f67e20ce1b87e5` asks. **Do not apply this plan until it returns.**
+> Three censuses have now been aimed at this question and two failed `execution_failed`
+> (`gar_f67e20ce1b87e5`, joining opportunities; `gar_9617d85d1e9464`, counting cohort membership
+> with no join at all). The cause is not established — the second failure retires the explanation
+> drawn from the first — and this lane has been told not to retry. **Do not apply this plan.** The
+> question needs either an operator-side answer or a route that is not a census: reading the twelve
+> rendered rows' candidate ids directly from the section would settle it in one pass, and the
+> lane's QA browser session is expired (`blocks execution: true`).
 
 ## What is being repaired, and what is not
 

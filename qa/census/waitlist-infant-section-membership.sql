@@ -15,9 +15,17 @@
 -- useful for narrowing the natural order, though not sufficient for it, since the priority
 -- buckets depend on household flags that live elsewhere.
 --
--- Only placement_candidates is touched. It is the one table censuses have returned from
--- repeatedly; a LEFT JOIN onto opportunities failed execution_failed. Seven columns, no comments
--- inside the statement.
+-- Only placement_candidates is touched, which censuses have returned from repeatedly.
+--
+-- THIS QUERY ALSO FAILED execution_failed (gar_9617d85d1e9464), and that failure retires the
+-- theories built up to this point rather than confirming one. It has no join, so "opportunities
+-- is not readable" - inferred from the previous failure - is unsupported. It has no comments
+-- inside the statement, so that theory does not cover it either, and the earlier success it was
+-- drawn from had changed two things at once (comments removed AND ten columns cut to seven).
+--
+-- What separates every success from every failure here is not established. The successes returned
+-- 5, 5 and 6 rows against literal id lists; this one selects a whole cohort and would return
+-- twelve or more. A row cap is a guess and is recorded as one. Do not refile from this lane.
 SELECT
     pc.id::text                                                      AS candidate_id,
     'candidate'                                                      AS discarded_label,
