@@ -66,10 +66,13 @@ const FORM_REQUIREMENT = {
 };
 
 describe("requirement kinds — architectural vocabulary vs executable subset", () => {
-    it("declares all seven kinds", () => {
+    it("declares all eight kinds", () => {
+        // `packet` joined the vocabulary when a stage gained the ability to require the Enrollment
+        // Packet itself rather than each of its Forms.
         expect([...REQUIREMENT_KINDS_V1]).toEqual([
             "field",
             "form",
+            "packet",
             "work",
             "document",
             "consent",
@@ -87,8 +90,14 @@ describe("requirement kinds — architectural vocabulary vs executable subset", 
          * distinction this constant exists to hold: architecture may admit a kind, and the
          * platform still refuses to pretend it can satisfy one.
          */
-        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form", "work"]);
+        /*
+         * `packet` is authorable for the same reason: a packet session and its items already prove,
+         * per step, what a family completed and against which Form version. The four below stay
+         * refused because nothing can prove them.
+         */
+        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form", "packet", "work"]);
         expect(isAuthorableRequirementKind("form")).toBe(true);
+        expect(isAuthorableRequirementKind("packet")).toBe(true);
         expect(isAuthorableRequirementKind("work")).toBe(true);
         expect(isAuthorableRequirementKind("consent")).toBe(false);
     });

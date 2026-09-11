@@ -56,6 +56,8 @@ function artifactIdFor(ref: StageRequirementV1["ref"]): string {
             return ref.rule_id;
         case "form":
             return ref.form_definition_id;
+        case "packet":
+            return ref.packet_definition_id;
         case "work":
             return ref.work_template_key;
         case "document":

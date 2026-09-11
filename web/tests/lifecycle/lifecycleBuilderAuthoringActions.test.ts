@@ -191,7 +191,9 @@ describe("set_stage_requirements", () => {
          * canonical owner and nothing had to be invented to prove it. The remaining four still have
          * no owner that could answer, and the loop keeps them refused.
          */
-        const AUTHORABLE = ["form", "field", "work"] as const;
+        // `packet` joined them because a packet session and its items prove, per step, what a
+        // family completed and against which Form version.
+        const AUTHORABLE = ["form", "field", "packet", "work"] as const;
         for (const kind of AUTHORABLE) {
             expect(isAuthorableRequirementKind(kind), kind).toBe(true);
         }
