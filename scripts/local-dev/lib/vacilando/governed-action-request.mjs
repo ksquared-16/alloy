@@ -80,6 +80,7 @@ import {
   findExecutionRun,
   getExecutionRun as getExecutionRun,
   isTerminalRunState as isTerminalRunState,
+  isIrreversibleRunState,
   patchRunFields as patchRunFields,
   patchRunResourceWait as patchRunResourceWait,
   publicExecutionRun,
@@ -4468,20 +4469,53 @@ export function runClosureGuidance(rec, {
     };
   }
 
-  if (isTerminalRunState(state)) {
-    // WHY it ended, from the transition the governor actually wrote. "It failed"
-    // without a cause is what sends someone looking for their own mistake.
-    const last = Array.isArray(run.transitions) && run.transitions.length
-      ? run.transitions[run.transitions.length - 1]
-      : null;
-    const cause = last?.reason ? ` (${last.reason}${last.origin ? `, ${last.origin}` : ""})` : "";
-    const lines = [
-      `Execution Run ${runId} already terminated as ${state}${cause}. ${state} to COMPLETE is not a legal transition — do not report this run complete and do not try to close it.`,
-    ];
-    lines.push(laneOwnsRun
-      ? `Nothing can be filed against it. Continue only when a new Execution Run is delivered to this lane.`
-      : `This lane no longer owns an open Execution Run, so it has nothing to close. Recovery is the operator's: a new Execution Run carries the work forward.`);
-    return { ...none, state, lane_owns_run: laneOwnsRun, lines };
+  // WHY it ended, from the transition the governor actually wrote. "It failed"
+  // without a cause is what sends someone looking for their own mistake.
+  const last = Array.isArray(run.transitions) && run.transitions.length
+    ? run.transitions[run.transitions.length - 1]
+    : null;
+  const cause = last?.reason ? ` (${last.reason}${last.origin ? `, ${last.origin}` : ""})` : "";
+
+  /*
+   * TERMINAL FOR SCHEDULING IS NOT THE SAME AS TERMINAL FOR REPORTING, and
+   * conflating them strands exactly the lane this whole change exists to help.
+   *
+   * `TERMINAL_RUN_STATES` holds COMPLETE, FAILED **and ABANDONED**, but only
+   * COMPLETE and FAILED are irreversible. ABANDONED has a documented recovery:
+   * `reportExecutionRunState` treats a worker reporting on an abandoned run as
+   * proof the abandonment was wrong, hops it through RECOVERING, and lets it
+   * reach COMPLETE — "rather than answering illegal_transition and stranding a
+   * live sprint with no way to reach COMPLETE".
+   *
+   * MEASURED, on this lane. Run erun_05f2787e4a3cb02c was abandoned by the
+   * governor as `needs_input_without_operator_input` while its worker was
+   * mid-turn, and a `vac run-status … complete` filed against it SUCCEEDED via
+   * that recovery. A guidance that had called ABANDONED unreportable would have
+   * told the worker to abandon a turn it could still legitimately close — the
+   * same defect as the one above, pointing the other way.
+   *
+   * So the rule is keyed to irreversibility, never to the scheduling flag.
+   */
+  if (isIrreversibleRunState(state)) {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun,
+      lines: [
+        `Execution Run ${runId} already terminated as ${state}${cause}. ${state} to COMPLETE is not a legal transition — do not report this run complete and do not try to close it.`,
+        laneOwnsRun
+          ? `Nothing can be filed against it. Continue only when a new Execution Run is delivered to this lane.`
+          : `This lane no longer owns an open Execution Run, so it has nothing to close. Recovery is the operator's: a new Execution Run carries the work forward.`,
+      ],
+    };
+  }
+
+  if (state === "ABANDONED") {
+    return {
+      ...none, state, lane_owns_run: laneOwnsRun, may_report_complete: true,
+      lines: [
+        `Execution Run ${runId} was abandoned${cause}. Reporting on it is itself proof the abandonment was wrong: the report recovers the run rather than being refused.`,
+        `When this assignment is finished, report: vac run-status ${runId} complete --summary "..."${laneFlag}`,
+      ],
+    };
   }
 
   /*
