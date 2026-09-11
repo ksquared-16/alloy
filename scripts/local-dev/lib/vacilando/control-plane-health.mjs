@@ -7,6 +7,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +49,64 @@ function write(rec) {
   return rec;
 }
 
+/**
+ * WHICH INCARNATION OF THE CONTROL PLANE OWNS A RESOURCE.
+ *
+ * THE GAP THIS CLOSES. There was no host or runtime generation anywhere in the
+ * tree — grepped, and the only matches were unrelated prose. Ownership of every
+ * ephemeral resource was therefore decided by PID NUMBER ALONE, and `pidAlive`
+ * cannot tell "my process, still running" from "a different process that reused
+ * the number after a restart". On a Mac that runs dev servers, test runners and
+ * browsers all day, PID reuse is ordinary, not exotic — and an owner record that
+ * survives a Gateway restart can be matched by a stranger.
+ *
+ * The generation is minted once per control-plane claim and never recomputed:
+ * a restart mints a new one, so every record still carrying the old one is
+ * PROVABLY stale without asking the operating system anything. `boot_ms` is
+ * carried for diagnosis — it says whether the host itself restarted — but
+ * correctness does not rest on it: the random component alone makes two claims
+ * unable to collide.
+ *
+ * Deliberately NOT a new registry. This is one field on the record that
+ * `claimControlPlaneOwnership` already writes, plus the same field on the
+ * owned-process records the Governor already keeps.
+ */
+const BOOT_MS = Math.round(Date.now() - os.uptime() * 1000);
+let RUNTIME_GENERATION = null;
+
+export function currentRuntimeGeneration() {
+  if (!RUNTIME_GENERATION) {
+    RUNTIME_GENERATION = `gen_${BOOT_MS.toString(36)}_${process.pid.toString(36)}_${randomUUID().slice(0, 8)}`;
+  }
+  return RUNTIME_GENERATION;
+}
+
+/** Test seam: a restart is a new generation, and a control must be able to stage one. */
+export function resetRuntimeGenerationForTests() {
+  RUNTIME_GENERATION = null;
+  return currentRuntimeGeneration();
+}
+
+/**
+ * Is this record owned by the CURRENT control plane?
+ *
+ * Both halves are required and neither is sufficient. A live pid from a previous
+ * generation is a stranger who inherited the number. A current generation whose
+ * pid is gone is our own process that has since exited.
+ */
+export function ownershipIsCurrent(rec, { generation = currentRuntimeGeneration() } = {}) {
+  if (!rec) return false;
+  if (!rec.runtime_generation) {
+    // Written before generations existed. It cannot prove it is current, so it
+    // is not treated as current — which is the fail-closed direction: the
+    // resource is reclaimable, never silently authoritative.
+    return false;
+  }
+  if (rec.runtime_generation !== generation) return false;
+  if (rec.pid != null && !pidAlive(rec.pid)) return false;
+  return true;
+}
+
 /** Record that this process owns the Vacilando server (safe restart target). */
 export function claimControlPlaneOwnership({
   pid = process.pid,
@@ -70,6 +129,11 @@ export function claimControlPlaneOwnership({
     executionProvider: String(executionProvider || "auto"),
     claimed_at: iso(),
     host: os.hostname(),
+    // The incarnation every ephemeral resource this process creates is stamped
+    // with. A restart mints a new one and orphans the old claims by identity
+    // rather than by PID arithmetic.
+    runtime_generation: currentRuntimeGeneration(),
+    boot_ms: BOOT_MS,
   };
   writeFileSync(OWNER_FILE, JSON.stringify(owner, null, 2));
   return owner;
