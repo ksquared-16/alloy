@@ -50,9 +50,15 @@ describe("selectable waitlist positions", () => {
         expect(m.customReachesFurther).toBe(true);
     });
 
-    it("carries the group-scoped truth through, so the control can say it", () => {
-        expect(waitlistAdjustPositionModel("3/7", "pin_scoped_to_cohort").scopedToGroup).toBe(true);
-        expect(waitlistAdjustPositionModel("3/7", null).scopedToGroup).toBe(false);
+    it("takes the label alone — there is no second scope to carry", () => {
+        // This asserted a `scopedToGroup` flag, which let the control title its field "Group
+        // position" when the pin applied to a narrower set than the rank on screen. A pin is now
+        // placed in the section the row is displayed in, so the field is just "Position".
+        expect(waitlistAdjustPositionModel.length).toBe(1);
+        const m = waitlistAdjustPositionModel("3/7");
+        expect(m.current).toBe(3);
+        expect(m.total).toBe(7);
+        expect(m.options).toEqual([1, 2, 3, 4, 5, 6, 7]);
     });
 });
 
