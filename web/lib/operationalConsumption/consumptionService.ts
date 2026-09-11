@@ -30,6 +30,7 @@ import {
 import { resolveConsumption, type ConsumptionResolution } from "@/lib/operationalConsumption/resolveConsumption";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
+import { valueVacationCredit, type VacationCreditValuation } from "@/lib/operationalConsumption/vacationCreditValuation";
 import type { VacationTreatment } from "@/lib/financials/policies/financialPolicyTypes";
 import type { ChildcareRatePlanRow, ChildcareRateRuleRow } from "@/lib/financials/rates/rateTypes";
 // Phase 9 — Billing prices tuition from Commercial Execution (frozen V1), not Substrate A.
@@ -893,7 +894,35 @@ async function resolveDirective(
 
     // Non-draftable (proration / proration_credit / vacation_credit) — preview only.
     const proratedDays = fact.proratedDays ?? (directive.obligationKind === "vacation_credit" ? 1 : null);
-    const amount = prorateAmountCents(rateAmount, proratedDays, fact.periodDays);
+
+    /*
+     * A VACATION CREDIT IS VALUED AGAINST THE TUITION THE FAMILY AGREED TO.
+     *
+     * `rateAmount` above resolves from an accepted term or from the directive's
+     * schedule basis, and a vacation-credit directive carries neither — it has no
+     * basis, because it is not pricing a day of care. So the amount came out null
+     * whatever the catalog said.
+     *
+     * The agreed term for the period is the right source: a credit gives back
+     * part of what was billed, and deriving it from today's catalog would hand
+     * back money against a price nobody agreed to. `valueVacationCredit` reuses
+     * the SAME term selection tuition generation performs, so the credit and the
+     * charge cannot disagree about which price was in force.
+     */
+    let vacationValuation: VacationCreditValuation | null = null;
+    if (directive.obligationKind === "vacation_credit" && ctx.agreementId) {
+        vacationValuation = await valueVacationCredit(supabase, {
+            orgId,
+            enrollmentAgreementId: ctx.agreementId,
+            anchorDate: ctx.anchorDate,
+            creditedDays: proratedDays ?? 1,
+            prorationMethod: ctx.prorationMethod as Parameters<typeof valueVacationCredit>[1]["prorationMethod"],
+        });
+    }
+
+    const amount = vacationValuation
+        ? (vacationValuation.resolved ? vacationValuation.amountCents : null)
+        : prorateAmountCents(rateAmount, proratedDays, fact.periodDays);
 
     /*
      * A CREDIT THE POLICY GRANTED BUT NOBODY CAN VALUE IS NOT A REFUSAL.
@@ -930,10 +959,31 @@ async function resolveDirective(
                 period_days: fact.periodDays ?? null,
                 full_period_amount_cents: rateAmount,
                 note: "preview only; the adjustment/credit posts downstream",
+                ...(vacationValuation?.resolved
+                    ? {
+                          /*
+                           * THE AUDIT ANSWER, structured rather than prose: which
+                           * agreed term this credit reduced, and the three numbers
+                           * that produced the amount. An operator asked "why this
+                           * figure" can reconstruct it without rerunning anything.
+                           */
+                          accepted_term_id: vacationValuation.termId,
+                          accepted_period_amount_cents: vacationValuation.acceptedPeriodAmountCents,
+                          period_key: vacationValuation.periodKey,
+                          credited_days: vacationValuation.creditedDays,
+                          period_days_used: vacationValuation.periodDays,
+                      }
+                    : {}),
                 ...(unresolvedValuation
                     ? {
                           // Named so review reads as a valuation gap, never as a commercial refusal.
-                          unresolved_valuation: rateAmount == null ? "no_rate_resolved" : "no_period_length",
+                          unresolved_valuation: vacationValuation
+                              ? vacationValuation.resolved
+                                  ? "unknown"
+                                  : vacationValuation.reason
+                              : rateAmount == null
+                                ? "no_rate_resolved"
+                                : "no_period_length",
                           review_reason: "a granted consequence whose amount could not be resolved",
                       }
                     : {}),

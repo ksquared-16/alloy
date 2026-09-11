@@ -146,7 +146,7 @@ describeLive("vacation credit valuation — period context and fail-closed", () 
 
     // ── The finding: a granted credit that cannot be valued ─────────────────
 
-    it("a granted credit with no resolvable rate fails CLOSED into review, not into silence", async () => {
+    it("a granted credit with no accepted tuition term fails CLOSED into review, not into silence", async () => {
         await credit();
         const fact = await absenceOn(TODAY, `t7-3a-unvalued-${run}`);
         const outcome = await reactToAttendanceFact(supabase, {
@@ -173,7 +173,12 @@ describeLive("vacation credit valuation — period context and fail-closed", () 
          * quietly not receive money the organisation decided they were owed.
          */
         expect(ob.review_required).toBe(true);
-        expect(ob.explanation.unresolved_valuation).toBe("no_rate_resolved");
+        /*
+         * The reason is now the SELECTION owner's own word — this certification
+         * agreement has no accepted tuition term — which is more useful than the
+         * generic "no rate": it says which resolver stopped and why.
+         */
+        expect(ob.explanation.unresolved_valuation).toBe("no_accepted_term");
         expect(ob.explanation.review_reason).toContain("could not be resolved");
     });
 
