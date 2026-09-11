@@ -193,14 +193,27 @@ and household membership implies nothing — exactly the Thread 5 invariant.
 
 Improvement here is navigation and diagnostics, not new configuration.
 
-### Target 7 — Expectations / closure discoverability · **B**
+### Target 7 — Expectations / closure discoverability · **B**, and this entry was WRONG
 
-`api/admin/operational-expectations/route.ts` exists. A `find` for
-`*expectation*` over `web/components` and `web/app` returns **only that route** —
-there is no authoring or administration UI. Planned absence, vacation, sick,
-site closure and group closure are API-only today.
+The original classification here said authoring was API-only. It is not, and the
+error is worth recording because of how it was made: the search was for
+`*expectation*`, and the product calls these **service-day exceptions**. An
+inventory that greps for the architecture's word finds nothing when the product
+uses the operator's word.
 
-No Attendance absence or closure table was created, and none should be.
+What staging actually has: `AttendanceWorkspace.tsx` authors child-away
+(`CHILD_AWAY_REASONS`), site and group closure (`close_grain`), and reopening
+(`reopen_grain`), posting to
+`api/admin/childcare-attendance/service-day-exception` — a purpose-scoped door
+that reaches the generic Operational Expectations intake without granting the
+generic `operational_expectations.author` capability. Authoring is
+**EXISTS_AND_WORKS**, and it is in the right place: the decision is operational
+and taken in context, against the day it changes.
+
+The real gap was narrower and is what Thread 8 closed: an administrator asking
+"where is absence managed?" had no answer anywhere, because nothing in Settings
+mentioned it under any name they would search for. That is discoverability, not
+authoring, so the fix is a signpost with no editor on it.
 
 ### Target 8 — Financial policy discoverability · **E**
 

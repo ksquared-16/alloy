@@ -181,6 +181,11 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: CONFIGURATION_RUNTIME_OWNERSHIP_COPY.businessProcessesSpine,
             },
             {
+                href: settings("attendance-expectations"),
+                label: "Expected absence and closures",
+                description: "Where planned absence, holidays and closures are recorded.",
+            },
+            {
                 href: settings("placement-priority"),
                 label: "Waitlist ranking",
                 description: "Priority factors for waitlisted children.",
