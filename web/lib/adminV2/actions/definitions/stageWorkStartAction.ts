@@ -102,7 +102,7 @@ export async function resolveStageWorkStart(params: {
      */
     const { data: piData, error: piErr } = await params.supabase
         .from("process_instances")
-        .select("id, stage_key, context_id, context_type, acquisition_opportunity_id, state")
+        .select("id, stage_key, context_id, context_type, state")
         .eq("org_id", params.orgId)
         .eq("process_key", "enrollment")
         .eq("subject_id", customerMemberId);
@@ -114,7 +114,6 @@ export async function resolveStageWorkStart(params: {
         stage_key: string | null;
         context_id: string | null;
         context_type: string | null;
-        acquisition_opportunity_id: string | null;
         state: string | null;
     }>;
     if (!piRows.length) {
@@ -223,15 +222,18 @@ export async function resolveStageWorkStart(params: {
     };
 }
 
-/** The acquisition case behind a journey, under either anchor shape. */
+/**
+ * The case behind a journey, under either anchor shape.
+ *
+ * There is no `acquisition_opportunity_id` COLUMN — the acquisition id is an input that selects the
+ * department pin at creation, and the durable anchor is `context_id` + `context_type`. Reading a
+ * column that does not exist is how the first live invocation failed, loudly and correctly.
+ */
 async function resolveOpportunityForInstance(
     supabase: SupabaseClient,
     orgId: string,
-    instance: { context_id: string | null; context_type: string | null; acquisition_opportunity_id: string | null },
+    instance: { context_id: string | null; context_type: string | null },
 ): Promise<string | null> {
-    const acquisition = t(instance.acquisition_opportunity_id);
-    if (acquisition) return acquisition;
-
     const contextId = t(instance.context_id);
     if (!contextId) return null;
     // Participation-anchored: the context is an OCM id, and the case is on that row.

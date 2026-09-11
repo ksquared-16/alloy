@@ -130,6 +130,11 @@ jobs:
             tests/lifecycle/participantProviderAuthorization.test.ts \
             tests/lifecycle/startEnrollmentParticipantLaunch.test.ts \
             tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
+            tests/lifecycle/offerSpotIsAnOperatorAct.test.ts \
+            tests/queues/childGrainQueueFollowsChildTruth.test.ts \
+            tests/queues/candidateGrainWaitlistQueue.test.ts \
+            tests/queues/candidateGrainWaitlistSiteScope.test.ts \
+            tests/platform/commands/capabilityRegistry.test.ts \
             tests/lifecycle/participantSurfaceHookOrder.test.ts \
             tests/lifecycle/participantExperienceConvergence.test.ts \
             tests/lifecycle/participantArtifactHandoff.test.ts \

@@ -96,8 +96,7 @@ function makeSupabase(world: World) {
                             id: `pi-${i}`,
                             stage_key: world.childStage,
                             context_id: OPP,
-                            context_type: null,
-                            acquisition_opportunity_id: OPP,
+                            context_type: "enrollment_participation",
                             state: null,
                         }));
                         resolve({ data: rows, error: null });

@@ -401,7 +401,25 @@ export async function applyStageOutcomeRuleTarget(
         }
 
         case "update_child_enrollment_status": {
-            const dispositionKey = target.disposition_key?.trim();
+            /*
+             * `status_key` IS a disposition here, under its other authored name.
+             *
+             * The target schema declares both `disposition_key` and `status_key` as optional fields
+             * on this kind, and the parser preserves whichever was authored — so
+             * `{ kind: "update_child_enrollment_status", status_key: "enrolling" }` is
+             * schema-valid configuration. The executor read only the first, which made that config
+             * validate and then refuse: an operator could publish a Waitlist plan whose Spot offered
+             * rule could never run.
+             *
+             * Found by running it. The deployed tenant's `spot_offered` rule authors `status_key`,
+             * so recording the offer outcome aborted with "Child enrollment disposition required"
+             * after the stage move had already been applied — the transaction unwound correctly, and
+             * the outcome was simply unreachable.
+             *
+             * Reading both loosens nothing: they name the same child disposition, and an unnamed
+             * one is still refused below.
+             */
+            const dispositionKey = target.disposition_key?.trim() || target.status_key?.trim();
             if (!dispositionKey) return { error: "Child enrollment disposition required" };
             // Resolve the child from the threaded identity (no OCM read on the primary path).
             const childId = await resolveChildSubjectId(supabase, orgId, subject);
