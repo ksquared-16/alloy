@@ -148,6 +148,39 @@ test("H3. previous-generation ownership is a pressure signal — F feeding G", (
   assert.ok(h.reasons.some((r) => /previous-generation/.test(r)));
 });
 
+test("H3b. HISTORY IS NOT CURRENT STATE — an old ledger is not live pressure", () => {
+  /*
+   * CAUGHT BY THIS GATE ON ITS FIRST LIVE READING. Counting every non-terminal
+   * episode returned 73 and drove a completely idle host to CONSTRAINED, which
+   * refuses to admit new work. All 73 were exhausted — recovery would never act
+   * on any of them — and the oldest had not been touched since 2026-08-19.
+   *
+   * recovery-budgets.json keeps one episode per (policy, target) forever. It is
+   * a ledger, and a ledger must never decide whether the host is busy now.
+   */
+  // H3 deliberately left a previous-generation owned record behind; this control
+  // is about the recovery ledger alone, so start from a clean owned store.
+  rmSync(join(ROOT, "vacilando", "execution-runs", "owned-processes.json"), { force: true });
+  const budgets = join(ROOT, "vacilando", "execution-runs", "recovery-budgets.json");
+  const old = new Date(Date.now() - 21 * 24 * 3600_000).toISOString();
+  const fresh = new Date(Date.now() - 60_000).toISOString();
+  const episodes = {};
+  for (let i = 0; i < 60; i += 1) {
+    episodes[`stale_slot_pid:/x/${i}.pid`] = { policy: "stale_slot_pid", attempts: 1, first_at: old, last_at: old };
+  }
+  writeFileSync(budgets, JSON.stringify({ episodes }, null, 2), "utf8");
+  const historical = C.hostAdmissionHealth({ root: ROOT, loadavg: 0.1, freeMemRatio: 0.9, rssBytes: 0 });
+  assert.equal(historical.signals.recovery_backlog, 0, "three weeks of ledger is not backlog");
+  assert.equal(historical.state, "HEALTHY", "an idle host must not be talked into CONSTRAINED by its own history");
+  assert.equal(historical.admits_new_work, true);
+
+  episodes["stale_slot_pid:/x/now.pid"] = { policy: "stale_slot_pid", attempts: 1, first_at: fresh, last_at: fresh };
+  writeFileSync(budgets, JSON.stringify({ episodes }, null, 2), "utf8");
+  const live = C.hostAdmissionHealth({ root: ROOT, loadavg: 0.1, freeMemRatio: 0.9, rssBytes: 0 });
+  assert.equal(live.signals.recovery_backlog, 1, "something unresolved and RECENT does count");
+  rmSync(budgets, { force: true });
+});
+
 test("H4. the signals are cheap — no scan may become an admission input", () => {
   const text = src("../lib/vacilando/control-plane-health.mjs");
   const fn = text.slice(text.indexOf("export function hostAdmissionHealth"), text.indexOf("export function getControlPlaneHealth"));
