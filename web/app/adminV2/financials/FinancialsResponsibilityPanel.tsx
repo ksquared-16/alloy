@@ -58,7 +58,19 @@ async function callAction(
             confirmation: { confirmed: mode === "execute" },
             payload: {
                 customer_id: args.customerId,
-                customer_member_id: args.customerMemberId,
+                /*
+                 * NULL, AND DELIBERATELY SO — this is the account's arrangement.
+                 *
+                 * `configureResponsibilityArrangement` reads `customerMemberId` as "one child, or
+                 * null for the whole account". The panel used to pass the child whose charge the
+                 * operator happened to be looking at, which recorded a CHILD-grain arrangement while
+                 * telling them "who contractually owes this account". On a household with two
+                 * children that is simply wrong: the sibling's tuition stayed outside it.
+                 *
+                 * The child still travels as the action's entity — that is which subject the
+                 * operator is acting from — but the arrangement is about the household.
+                 */
+                customer_member_id: null,
                 effective_start: args.effectiveStart,
                 /*
                  * FIXED CENTS, because that is what the operator typed. The action also accepts

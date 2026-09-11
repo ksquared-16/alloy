@@ -49,6 +49,18 @@ describe("the Manage Responsibility panel", () => {
     });
 
     /*
+     * THE GRAIN THE PANEL CLAIMS IS THE GRAIN IT WRITES.
+     *
+     * The operator is told "who contractually owes this ACCOUNT". The payload used to carry the
+     * child whose charge they happened to have open, which records a child-grain arrangement — so
+     * on a household with two children, the sibling's tuition stayed outside the arrangement the
+     * operator believed they had just made for the family.
+     */
+    it("configures the account, not the child whose charge happens to be open", () => {
+        expect(panel, "an account-grain arrangement passes no child").toMatch(/customer_member_id: null/);
+    });
+
+    /*
      * NOTHING IS COMMITTED THAT HAS NOT BEEN PREVIEWED. The disabled Confirm is the whole of that
      * guarantee on this surface.
      */

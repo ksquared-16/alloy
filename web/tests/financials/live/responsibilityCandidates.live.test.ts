@@ -122,4 +122,35 @@ describeLive("who this household's obligation can be put on — live", () => {
         }
         expect((data ?? []).length, "Alvarez must begin with no arrangement").toBe(0);
     }, 60_000);
+
+    /*
+     * ── THE GRAIN, WHERE IT WAS ACTUALLY WRITTEN ────────────────────────────────────────────────
+     *
+     * Alvarez has two children. An arrangement made from Ana's charge while the panel says "who
+     * contractually owes this account" must govern the household — otherwise Rio's tuition sits
+     * outside the arrangement the operator believes they made, and nothing on any surface says so.
+     *
+     * This reads whatever the browser certification created. Before it has run there is nothing to
+     * check, and that is said rather than passed over.
+     */
+    it("records an arrangement for the household, not for one of its children", async (ctx) => {
+        const { data, error } = await supabase
+            .from("financial_responsibility_arrangements")
+            .select("id, customer_member_id, effective_start")
+            .eq("org_id", ORG)
+            .eq("customer_id", ALVAREZ)
+            .eq("state", "active");
+        expect(error, error?.message).toBeNull();
+        const rows = (data ?? []) as Array<{ id: string; customer_member_id: string | null }>;
+        if (rows.length === 0) {
+            ctx.skip("no arrangement on Alvarez yet — run the responsibility certification first");
+            return;
+        }
+        for (const row of rows) {
+            expect(
+                row.customer_member_id,
+                `arrangement ${row.id} was recorded against one child; the account has two`,
+            ).toBeNull();
+        }
+    }, 60_000);
 });
