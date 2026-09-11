@@ -94,7 +94,7 @@ export function applyPlacementCandidateOverrides(params: {
      *
      * The ordinal now stays OUT of the tuple. `sort_tuple` is the NATURAL order — the baseline a
      * pin is expressed against — and the pin is applied as a cohort-local placement by
-     * `applyCohortLocalManualPositions` once that baseline is sorted. `applied[].pin_ordinal` below
+     * `applySectionManualPositions` once that baseline is sorted. `applied[].pin_ordinal` below
      * still reports the ordinal, so nothing downstream loses the fact that a pin is in force.
      *
      * `PLACEMENT_OVERRIDE_UNPINNED_PRECEDENCE` is retained as the documented "no manual position"

@@ -6,6 +6,11 @@ set -euo pipefail
 MIG_FILE="${1:?migration file required}"
 OUT_FILE="${2:?out file required}"
 ERR_FILE="${3:?stderr file required}"
+# The requested environment SELECTS the database. It used to be absent here
+# entirely, which is how a request labelled `certification` could reach a
+# deployed pooler: the child simply used whichever DATABASE_URL the trusted
+# host had. Absent is not defaulted — it refuses.
+MIG_ENVIRONMENT="${4:-}"
 
 CANONICAL="${ALLOY_CANONICAL_ROOT:-${ALLOY_REPO:-/Users/Kelly/Alloy}}"
 export ALLOY_REPO="$CANONICAL"
@@ -22,18 +27,17 @@ fi
 source "$TOOLKIT/lib/common.sh"
 # shellcheck disable=SC1091
 source "$TOOLKIT/lib/verify.sh"
+# The routing rules are NOT written here. This helper asks
+# trusted-host-database-target.mjs which credential the environment names and
+# proves the connection matches before the first statement.
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/trusted-host-database-target.sh"
 
 unset ALLOY_BLOCK_REMOTE_SUPABASE || true
 
-if ! alloy_load_trusted_server_env_exports; then
-  echo "trusted_credential_unavailable" >"$ERR_FILE"
-  exit 42
-fi
-
-if [[ -z "${DATABASE_URL:-}" ]]; then
-  echo "trusted_credential_unavailable" >"$ERR_FILE"
-  exit 42
-fi
+# ── THE DATABASE IS CHOSEN BY THE ENVIRONMENT, NEVER BY WHAT HAPPENS TO EXIST ──
+alloy_resolve_trusted_database_target "$MIG_ENVIRONMENT" "$ERR_FILE" || exit $?
+DATABASE_URL="$ALLOY_RESOLVED_DATABASE_URL"
 
 sanitize_database_url() {
   local url="$1"

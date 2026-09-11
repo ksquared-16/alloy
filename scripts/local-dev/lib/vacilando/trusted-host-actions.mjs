@@ -757,7 +757,15 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   const hostCheckout = findRepoRoot();
   const canonical = resolveCanonicalRepoRoot();
   const envSource = resolveTrustedServerEnvSource();
-  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
+  // A census names its database too. It used to inherit whichever credential the
+  // host held; now it declares one, and an unrecognised target refuses instead of
+  // silently reading deployed.
+  const censusEnvironment = action.inputs.databaseTarget
+    || action.inputs.database_target
+    || action.inputs.environment
+    || action.target
+    || "alloy_deployed_primary";
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile, String(censusEnvironment)], {
     env: {
       ...process.env,
       ALLOY_CANONICAL_ROOT: canonical,
@@ -1211,24 +1219,20 @@ export function executeMergeTrustedHostAction(action, { actor = "director", nowM
  *
  * `fallback` is the caller's own operation-shaped code and still applies to genuine SQL failures.
  */
-function classifySqlChildFailure(errText, fallback) {
-  if (/trusted_credential_unavailable/.test(errText)) return "trusted_credential_unavailable";
-  if (/trusted_host_dependency_missing/.test(errText)) return "trusted_host_dependency_missing";
-  // Defence in depth: the child resolves psql itself now, but an older child or a different missing
-  // binary must still surface as a dependency problem rather than as a failed query.
-  if (/command not found|No such file or directory/.test(errText)) return "trusted_host_dependency_missing";
-  return fallback;
-}
-
-function defaultInspectLedger({ version }) {
-  const tmpDir = join(storeDir(), "tmp");
-  mkdirSync(tmpDir, { recursive: true });
-  const sqlFile = join(tmpDir, `ledger-${version}.sql`);
-  const outFile = join(tmpDir, `ledger-${version}.out`);
-  const errFile = join(tmpDir, `ledger-${version}.err`);
-  writeFileSync(sqlFile, ledgerLookupSql(version));
+/*
+ * Run the read-only SQL child against ONE named environment.
+ *
+ * `environment` is passed explicitly rather than inherited, and the child writes
+ * back the target it actually resolved. The caller compares that against the
+ * target the request asked for, so "all three reads and the write hit the same
+ * database" is something the run PROVES rather than something it assumes by
+ * having passed the same string more than once.
+ */
+function runTrustedSqlChild({ sqlFile, outFile, errFile, environment, timeoutMs = 60_000 }) {
+  const reportFile = `${outFile}.target`;
+  try { unlinkSync(reportFile); } catch { /* */ }
   try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile, String(environment ?? "")], {
     env: {
       ...process.env,
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
@@ -1237,23 +1241,61 @@ function defaultInspectLedger({ version }) {
       VACILANDO_CHECKOUT: findRepoRoot(),
       ALLOY_WORKTREE: findRepoRoot(),
       ALLOY_BLOCK_REMOTE_SUPABASE: "",
+      ALLOY_TARGET_REPORT_FILE: reportFile,
     },
-    timeout: 60_000,
+    timeout: timeoutMs,
     encoding: "utf8",
   });
-  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
-  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  let targetId = null;
+  try { targetId = existsSync(reportFile) ? readFileSync(reportFile, "utf8").trim() || null : null; } catch { /* */ }
+  try { unlinkSync(reportFile); } catch { /* */ }
+  return {
+    status: child.status,
+    outText: existsSync(outFile) ? readFileSync(outFile, "utf8") : "",
+    errText: redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || "")),
+    targetId,
+  };
+}
+
+function classifySqlChildFailure(errText, fallback) {
+  if (/trusted_credential_unavailable/.test(errText)) return "trusted_credential_unavailable";
+  if (/trusted_host_dependency_missing/.test(errText)) return "trusted_host_dependency_missing";
+  // Defence in depth: the child resolves psql itself now, but an older child or a different missing
+  // binary must still surface as a dependency problem rather than as a failed query.
+  if (/command not found|No such file or directory/.test(errText)) return "trusted_host_dependency_missing";
+  // Target selection and the pre-execution guard. These happen BEFORE any
+  // statement reaches a database, so they must never be reported as a failed
+  // query — a caller told "the apply failed" reasonably wonders what ran.
+  if (/target_environment_mismatch/.test(errText)) return "target_environment_mismatch";
+  if (/target_resolution_failed/.test(errText)) return "target_resolution_failed";
+  return fallback;
+}
+
+function defaultInspectLedger({ version, environment }) {
+  const tmpDir = join(storeDir(), "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, `ledger-${version}.sql`);
+  const outFile = join(tmpDir, `ledger-${version}.out`);
+  const errFile = join(tmpDir, `ledger-${version}.err`);
+  writeFileSync(sqlFile, ledgerLookupSql(version));
+  // The ledger is read from the SAME database the migration will be written to.
+  // Reading it from deployed while writing to certification is how a version
+  // absent from alloy-cert got classified as already applied.
+  const child = runTrustedSqlChild({ sqlFile, outFile, errFile, environment });
+  const outText = child.outText;
+  const errText = child.errText;
   try { unlinkSync(sqlFile); } catch { /* */ }
   if (child.status !== 0) {
     return {
       ok: false,
       applied: false,
+      targetId: child.targetId,
       code: classifySqlChildFailure(errText, "preflight_failed"),
       detail: errText.slice(0, 400) || "Ledger inspect failed",
     };
   }
   const applied = String(outText).includes(String(version));
-  if (!applied) return { applied: false };
+  if (!applied) return { applied: false, targetId: child.targetId };
 
   /*
    * RECORDED IS NOT THE SAME AS APPLIED.
@@ -1268,16 +1310,22 @@ function defaultInspectLedger({ version }) {
    * failed verifier -- an unreadable probe must not manufacture a mismatch.
    */
   const probe = migrationPostconditionSql(version);
-  if (!probe) return { applied: true, verification: "unverifiable" };
+  if (!probe) return { applied: true, verification: "unverifiable", targetId: child.targetId };
 
-  const verified = runLedgerProbe(probe, `verify-${version}`);
-  if (!verified.ok) return { applied: true, verification: "unverifiable", detail: verified.detail };
-  if (verified.satisfied) return { applied: true, verification: "verified" };
+  // The postcondition is evidence about the SAME database the ledger was read
+  // from, so it travels on the same environment.
+  const verified = runLedgerProbe(probe, `verify-${version}`, environment);
+  if (!verified.ok) {
+    return { applied: true, verification: "unverifiable", detail: verified.detail, targetId: child.targetId, probeTargetId: verified.targetId };
+  }
+  if (verified.satisfied) return { applied: true, verification: "verified", targetId: child.targetId, probeTargetId: verified.targetId };
 
   const expected = migrationPostconditionDescription(version) || "declared postcondition";
   return {
     applied: true,
     inconsistent: true,
+    targetId: child.targetId,
+    probeTargetId: verified.targetId,
     detail:
       `Ledger records ${version} as applied, but its durable postcondition is absent. `
       + `Expected: ${expected}. Observed: the probe returned false. `
@@ -1287,38 +1335,25 @@ function defaultInspectLedger({ version }) {
 }
 
 /** Run a single-boolean probe through the trusted SQL child. Never throws. */
-function runLedgerProbe(sql, label) {
+function runLedgerProbe(sql, label, environment) {
   const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
   const sqlFile = join(tmpDir, `${label}.sql`);
   const outFile = join(tmpDir, `${label}.out`);
   const errFile = join(tmpDir, `${label}.err`);
   writeFileSync(sqlFile, sql);
-  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
-    env: {
-      ...process.env,
-      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
-      ALLOY_REPO: resolveCanonicalRepoRoot(),
-      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
-      VACILANDO_CHECKOUT: findRepoRoot(),
-      ALLOY_WORKTREE: findRepoRoot(),
-      ALLOY_BLOCK_REMOTE_SUPABASE: "",
-    },
-    timeout: 60_000,
-    encoding: "utf8",
-  });
-  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
-  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  const child = runTrustedSqlChild({ sqlFile, outFile, errFile, environment });
+  const outText = child.outText;
+  const errText = child.errText;
   try { unlinkSync(sqlFile); } catch { /* */ }
-  if (child.status !== 0) return { ok: false, detail: errText.slice(0, 300) || "postcondition probe failed" };
+  if (child.status !== 0) return { ok: false, targetId: child.targetId, detail: errText.slice(0, 300) || "postcondition probe failed" };
   // psql -A -t prints a bare `t` or `f`; anything else is not an answer this may act on.
   const answer = String(outText).replace(/BEGIN|COMMIT/g, "").trim().split(/\s+/).filter(Boolean).pop();
-  if (answer !== "t" && answer !== "f") return { ok: false, detail: "postcondition probe returned no boolean" };
-  return { ok: true, satisfied: answer === "t" };
+  if (answer !== "t" && answer !== "f") return { ok: false, targetId: child.targetId, detail: "postcondition probe returned no boolean" };
+  return { ok: true, satisfied: answer === "t", targetId: child.targetId };
 }
 
-function defaultApplyMigrationFile({ entry, text }) {
+function defaultApplyMigrationFile({ entry, text, environment }) {
   const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
   const file = join(tmpDir, `${entry.version}.sql`);
@@ -1326,7 +1361,14 @@ function defaultApplyMigrationFile({ entry, text }) {
   const errFile = join(tmpDir, `${entry.version}.err`);
   writeFileSync(file, text);
   try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile], {
+  // The environment is an ARGUMENT, not an ambient default. The child selects
+  // its database from it; omitting it is a hard refusal there rather than a
+  // fallback to whichever credential the host happens to hold.
+  // The write reports the target it resolved, exactly as the reads do, so the
+  // batch can prove all four landed on one database.
+  const reportFile = `${outFile}.target`;
+  try { unlinkSync(reportFile); } catch { /* */ }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, String(environment ?? "")], {
     env: {
       ...process.env,
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
@@ -1335,17 +1377,32 @@ function defaultApplyMigrationFile({ entry, text }) {
       VACILANDO_CHECKOUT: findRepoRoot(),
       ALLOY_WORKTREE: findRepoRoot(),
       ALLOY_BLOCK_REMOTE_SUPABASE: "",
+      ALLOY_TARGET_REPORT_FILE: reportFile,
     },
     timeout: 180_000,
     encoding: "utf8",
   });
   const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  let targetId = null;
+  try { targetId = existsSync(reportFile) ? readFileSync(reportFile, "utf8").trim() || null : null; } catch { /* */ }
+  try { unlinkSync(reportFile); } catch { /* */ }
   try { unlinkSync(file); } catch { /* */ }
   if (child.status !== 0) {
-    return { ok: false, code: classifySqlChildFailure(errText, "apply_failed"), detail: errText.slice(0, 400) };
+    return { ok: false, targetId, code: classifySqlChildFailure(errText, "apply_failed"), detail: errText.slice(0, 400) };
   }
-  return { ok: true, ledger: "applied" };
+  return { ok: true, ledger: "applied", targetId };
 }
+
+/*
+ * Exported for the ledger-routing lock only.
+ *
+ * The defect lived HERE, not in the batch: `applyMigrationBatch` already passed
+ * `environment` down, and this function silently dropped it and spawned a child
+ * with no target. A test that drives the batch with its own stub therefore
+ * passes with the defect fully present -- measured. The lock has to reach the
+ * real default runner.
+ */
+export const __defaultInspectLedgerForTests = defaultInspectLedger;
 
 export function executeMigrationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
   const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
@@ -1363,24 +1420,55 @@ export function executeMigrationTrustedHostAction(action, { actor = "director", 
     readContent: runners.readContent || readMigrationContent,
     nowMs,
   });
-  if (payloadHasSecrets(out)) {
+  /*
+   * A VALUE CHECK, NOT A WORD CHECK.
+   *
+   * `payloadHasSecrets` matches the bare token DATABASE_URL, and `redactSecrets`
+   * rewrites a connection string to `postgresql://[redacted]` — which that
+   * pattern then matches too. So a migration result was reported as
+   * `result_contained_secrets` for naming an environment variable, and the real
+   * code was discarded: measured on gar_75e7df3ac3fac6, where a clean
+   * `trusted_credential_unavailable` surfaced as a credential leak and cost
+   * several runs to re-derive. The production-apply path already draws this
+   * distinction; the migration path now draws it too. A connection string, a key
+   * and an assignment are still refused.
+   */
+  if (containsCredentialMaterial(out)) {
     return failTrustedAction(action, "result_contained_secrets", "Migration result contained secrets and was discarded.", { nowMs });
   }
   if (!out?.ok) {
     const failed = out?.results?.find((r) => !r.ok);
     const publicResult = publicMigrationResult(out);
-    const failedAction = failTrustedAction(
-      action,
-      failed?.code || "apply_failed",
-      failed?.detail || "Migration batch stopped on failure.",
-      { nowMs },
-    );
+    /*
+     * A batch can fail WITHOUT reaching any migration — target resolution, an
+     * empty or unusable plan, a composition error. Those carry their code on the
+     * batch itself, and reading only `results` discarded it: the caller received
+     * a bare `apply_failed` for a path where nothing was ever attempted, and
+     * then reasonably spent runs looking for a SQL error that did not exist.
+     *
+     * So the batch's own code is preferred when no migration produced one, and a
+     * failure that reached no migration says so rather than borrowing the
+     * vocabulary of one that did.
+     */
+    const reachedAMigration = Array.isArray(out?.results) && out.results.length > 0;
+    const code = failed?.code || out?.code || (reachedAMigration ? "apply_failed" : "dispatch_failed");
+    const detail = failed?.detail
+      || out?.detail
+      || (reachedAMigration
+        ? "Migration batch stopped on failure."
+        : "Migration batch failed before any migration was attempted.");
+    const failedAction = failTrustedAction(action, code, detail, { nowMs });
     if (failedAction.action) {
       failedAction.action.result = {
         ...publicResult,
         ok: false,
-        code: failed?.code || "apply_failed",
-        detail: failed?.detail || "Migration batch stopped on failure.",
+        code,
+        detail,
+        // Execution-stage evidence, so a result artifact exists and says how far
+        // the attempt got even when no child was ever spawned.
+        child_spawned: reachedAMigration,
+        stage_reached: reachedAMigration ? "migration_apply" : "dispatch",
+        requested_environment: action?.inputs?.environment ?? null,
       };
       writeAction(failedAction.action);
     }
@@ -1480,22 +1568,11 @@ function defaultReadHostedMigrationVersions() {
   const outFile = join(tmpDir, "hosted-migration-versions.out");
   const errFile = join(tmpDir, "hosted-migration-versions.err");
   writeFileSync(sqlFile, "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version");
-  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
-    env: {
-      ...process.env,
-      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
-      ALLOY_REPO: resolveCanonicalRepoRoot(),
-      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
-      VACILANDO_CHECKOUT: findRepoRoot(),
-      ALLOY_WORKTREE: findRepoRoot(),
-      ALLOY_BLOCK_REMOTE_SUPABASE: "",
-    },
-    timeout: 120_000,
-    encoding: "utf8",
-  });
-  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
-  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  // "Hosted" IS the deployed ledger — that is what this function is for — so it
+  // says so rather than inheriting it.
+  const child = runTrustedSqlChild({ sqlFile, outFile, errFile, environment: "staging", timeoutMs: 120_000 });
+  const outText = child.outText;
+  const errText = child.errText;
   try { unlinkSync(sqlFile); } catch { /* */ }
   if (child.status !== 0) {
     const code = classifySqlChildFailure(errText, PRODUCTION_APPLY_FAILURES.HOSTED_READ_FAILED);

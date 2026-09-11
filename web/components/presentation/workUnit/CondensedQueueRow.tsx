@@ -337,11 +337,6 @@ export function CondensedQueueRow({
                                                 ?? context.waitlist_context?.position_label
                                             }
                                             childDisplayName={displayName}
-                                            precedenceReason={context.waitlist_context?.precedence_reason}
-                                            group={{
-                                                position: context.waitlist_context?.group_position,
-                                                total: context.waitlist_context?.group_total,
-                                            }}
                                         />
                                     ) : null}
                                 </span>

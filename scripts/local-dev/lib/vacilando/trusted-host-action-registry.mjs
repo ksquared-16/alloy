@@ -25,6 +25,7 @@ import {
   validateProviderCeilingInputs, CEILING_MIN, CEILING_MAX, MANAGED_KEY as PROVIDER_CEILING_KEY,
 } from "./trusted-host-provider-ceiling.mjs";
 import { validateInstallToolkitInputs, CONVERGENCE_REF } from "./toolkit-convergence.mjs";
+import { ALLOWED_ENVIRONMENTS } from "./trusted-host-migrate.mjs";
 import { validateLaneDispatchInputs, DISPATCH_PURPOSES } from "./lane-dispatch.mjs";
 
 export const ACTION_TYPES = Object.freeze({
@@ -659,6 +660,9 @@ function defineDatabaseApplyMigration() {
     retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
     inputSchema: {
       required: ["environment", "expectedSha", "migrations"],
+      // Read from the constant the validator compares against, so discovery and
+      // refusal can never disagree about what `environment` accepts.
+      enums: { environment: [...ALLOWED_ENVIRONMENTS] },
     },
     outputSchema: { environment: "string", migrations: "array" },
     evidenceSchema: ["migration_path", "expected_sha", "ledger", "execution_audit"],
@@ -814,6 +818,23 @@ export function listRegisteredActions() {
     // Without this, discovery tells you an action exists and nothing about how
     // to propose it, and the next thing you see is a validation refusal.
     requiredInputs: a.inputSchema?.required || [],
+    /*
+     * WHICH INPUTS WAS NEVER THE HARD PART. WHICH VALUES IS.
+     *
+     * Discovery said `database.apply_migration` requires `environment` and
+     * stopped there. A worker filing against the certification database had no
+     * way to learn that `environment` is an enum of three strings, so when the
+     * request did not visibly execute it went looking for the accepted values —
+     * found `DIRECTOR_ELIGIBLE_ENVIRONMENTS`, which is a DIFFERENT contract
+     * describing who may approve rather than what may be targeted — and filed
+     * `development_certification`. That request failed `environment_not_allowed`,
+     * which is the one refusal this field makes impossible to earn by accident.
+     *
+     * Only enums that the validator actually enforces belong here; a value list
+     * that drifts from the check is worse than no list at all, so each entry is
+     * read from the same frozen constant the validator compares against.
+     */
+    acceptedValues: a.inputSchema?.enums || null,
   }));
 }
 

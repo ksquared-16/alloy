@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { overlayChildMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayChildMissionOntoSettledFocusModel";
+import { resolveFocusPanelSummaryActiveDoc } from "@/lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryActiveDoc";
 import { deriveChildIdentityCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveChildFocusPanelCards";
 import { focusPanelDefaultCompositionForGrain } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
@@ -67,6 +68,25 @@ const commitCritical = (over: Record<string, unknown> = {}) =>
         ...over,
     }) as never;
 
+/*
+ * ONE INSTANT FOR BOTH PATHS.
+ *
+ * The comparison below is "one child card, two entry paths". The durable path is handed an explicit
+ * `now`; the lens path reads the clock. With a hard-coded `now` the two agreed only while the real
+ * date happened to fall in the same month-bucket — the test read `2 yr 4 mo` for a child born
+ * 2024-04-02 and started failing the moment the calendar rolled past 2026-09-02, which is a
+ * property of the day it is run, not of the code. Freezing the clock makes the assertion about the
+ * two producers again.
+ */
+const FROZEN_NOW = new Date("2026-08-16T00:00:00.000Z");
+beforeAll(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_NOW);
+});
+afterAll(() => {
+    vi.useRealTimers();
+});
+
 describe("the lens path produces the card the child composition asks for", () => {
     it("emits child_identity, ready, for a child-grain subject", () => {
         const model = overlayChildMissionOntoSettledFocusModel(settled(), commitCritical());
@@ -75,7 +95,7 @@ describe("the lens path produces the card the child composition asks for", () =>
     });
 
     it("produces the SAME canonical model as the subject-first durable path", () => {
-        const now = new Date("2026-08-16T00:00:00.000Z");
+        const now = FROZEN_NOW;
         const subject: DurableChildSubject = {
             memberId: "member-lennon",
             personId: null,
@@ -141,19 +161,50 @@ describe("the grain guard is not weakened", () => {
         "utf8",
     );
 
+    /*
+     * THE RULE MOVED; THE GUARD FOLLOWS IT.
+     *
+     * These two asserted the shape of an inline ternary in `OpportunityFocusPanelModeGrid` —
+     * `const isCaseGrain = ...`, `(isCaseGrain ? publishedDoc : null) ?? focusPanelSummaryDefault-
+     * DocForGrain(...)`. That logic is now `focusPanelSummaryUsesPublishedDoc` +
+     * `resolveFocusPanelSummaryActiveDoc`, so the skeleton and the settled body cannot answer
+     * "which doc composes this surface" differently. `focusPanelSurfaceParityRegression` asserts
+     * the relocation outright, requiring ModeGrid NOT to reach for a default doc itself — so these
+     * two tests were asserting the exact thing a newer, promoted test forbids.
+     *
+     * The BEHAVIOUR they guard is real and unchanged, so it is asserted here against the function
+     * that owns it rather than against source text that will move again.
+     */
     it("still consults the publication for the CASE grain only", () => {
-        expect(grid).toContain('const isCaseGrain = subjectGrain === "opportunity"');
-        expect(grid).toContain("usePublishedFocusPanelSummaryDoc(isSummary && isCaseGrain)");
-        // The published doc reaches `activeDoc` only through the case-grain ternary; a non-case
-        // subject falls through to its own code-owned composition.
-        expect(grid).toMatch(/\(isCaseGrain \? publishedDoc : null\)\s*\n?\s*\?\?\s*focusPanelSummaryDefaultDocForGrain\(subjectGrain/);
+        const published = { sections: [], metadata: {} } as never;
+        // A case composes from the org's published Surface.
+        expect(resolveFocusPanelSummaryActiveDoc({
+            isSummary: true, grain: "opportunity", publishedDoc: published,
+        })).toBe(published);
+        // A person or household never does — that is the leak the gate exists to prevent.
+        for (const grain of ["person", "household"] as const) {
+            expect(resolveFocusPanelSummaryActiveDoc({
+                isSummary: true, grain, publishedDoc: published,
+            }), grain).not.toBe(published);
+        }
+        // And the wiring still reads the rule from its owner rather than restating it.
+        expect(grid).toContain("focusPanelSummaryUsesPublishedDoc(subjectGrain, { familySettlement })");
+        expect(grid).toContain("usePublishedFocusPanelSummaryDoc(isSummary && usesPublishedDoc)");
     });
 
     it("decides family settlement from the subject's PATH, never from its grain", () => {
         // Expressing this as a grain would re-litigate `cardAppliesToGrain` and leak family cards
         // onto every child, including a durable standalone one.
         expect(grid).toContain('const familySettlement = model.source !== "durable_subject"');
-        expect(grid).toContain("focusPanelSummaryDefaultDocForGrain(subjectGrain, { familySettlement })");
+        expect(grid).toContain("context: { familySettlement }");
+        // Same grain, two paths: the settled child takes the publication, the durable one does not.
+        const published = { sections: [], metadata: {} } as never;
+        expect(resolveFocusPanelSummaryActiveDoc({
+            isSummary: true, grain: "child", publishedDoc: published, context: { familySettlement: true },
+        })).toBe(published);
+        expect(resolveFocusPanelSummaryActiveDoc({
+            isSummary: true, grain: "child", publishedDoc: published, context: { familySettlement: false },
+        })).not.toBe(published);
     });
 
     it("keeps a non-case subject on its own code-owned composition", () => {

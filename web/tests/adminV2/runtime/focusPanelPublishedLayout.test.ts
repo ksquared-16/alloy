@@ -10,9 +10,18 @@ import {
     type FocusPanelPublishedLayout,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 
+/*
+ * Authored with CANONICAL card keys.
+ *
+ * This fixture named `current_work`, which `current_work → business_process` supersedes globally,
+ * and then asserted the reader handed it back unchanged. The reader normalizes stored keys by
+ * design — a published blob is configuration, and configuration normalizes — so the fixture was
+ * asserting that supersession had not happened. The normalization it was accidentally testing now
+ * has a test of its own, below.
+ */
 const LAYOUT: FocusPanelPublishedLayout = {
     rows: [
-        { cells: [{ width: "2/3", cards: ["children"] }, { width: "1/3", cards: ["current_work"] }] },
+        { cells: [{ width: "2/3", cards: ["children"] }, { width: "1/3", cards: ["business_process"] }] },
         { cells: [{ width: "1/2", cards: ["household"] }, { width: "1/2", cards: ["readiness_kpi"] }] },
     ],
 };
@@ -132,7 +141,7 @@ describe("focusPanelPublishedLayout", () => {
         expect(plan.rows).toHaveLength(2);
         expect(plan.rows[0]!.cells.map((c) => [c.widthUnits, c.cards])).toEqual([
             [8, ["children"]],
-            [4, ["current_work"]],
+            [4, ["business_process"]],
         ]);
         expect(plan.rows[1]!.cells.map((c) => [c.widthUnits, c.cards])).toEqual([
             [6, ["household"]],
@@ -147,7 +156,7 @@ describe("focusPanelPublishedLayout", () => {
         expect(plan.rows.every((r) => r.cells.length === 1 && r.cells[0]!.widthUnits === 12)).toBe(true);
         expect(plan.rows.flatMap((r) => r.cells[0]!.cards)).toEqual([
             "children",
-            "current_work",
+            "business_process",
             "household",
             "readiness_kpi",
         ]);
@@ -183,5 +192,30 @@ describe("focusPanelPublishedLayout", () => {
         expect(readFocusPanelPublishedLayout({ metadata: {} })).toBeNull();
         expect(readFocusPanelPublishedLayout(null)).toBeNull();
         expect(readFocusPanelPublishedLayout({ metadata: { focusPanelLayout: { rows: [] } } })).toBeNull();
+    });
+
+    it("normalizes a superseded card key stored in an older published layout", () => {
+        // A tenant who published before `current_work → business_process` has the predecessor key
+        // in their stored blob. Both records of the composition — the doc's card sections and this
+        // layout in doc metadata — must resolve to the SAME card, or one reader places a card the
+        // other does not and it renders both present and absent.
+        const stored = {
+            rows: [{ cells: [{ width: "full" as const, cards: ["current_work"] }] }],
+        };
+        const read = readFocusPanelPublishedLayout({ metadata: { focusPanelLayout: stored } });
+        expect(read!.rows[0]!.cells[0]!.cards).toEqual(["business_process"]);
+    });
+
+    it("normalizes a superseded card key inside a stored GRID as well as its rows", () => {
+        const stored = {
+            grid: {
+                columns: 12,
+                areas: [{ card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 2 }],
+            },
+        };
+        const read = readFocusPanelPublishedLayout({ metadata: { focusPanelLayout: stored } });
+        expect(read!.grid!.areas.map((a) => a.card)).toEqual(["business_process"]);
+        // The derived reading-order projection agrees with the grid it was derived from.
+        expect(read!.rows.flatMap((r) => r.cells.flatMap((c) => c.cards))).toEqual(["business_process"]);
     });
 });

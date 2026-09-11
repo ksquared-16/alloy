@@ -145,6 +145,90 @@ Enrollment lifecycle references placement decisions; placement table owns histor
 
 ---
 
+## Operator waitlist rank — one ranking grain
+
+**A waitlist SECTION is the operator-visible ranking grain.** A section is a program category
+(Infant, Toddler, Preschool, Pre-K); it is the list an operator reads, and the numerator and
+denominator on a row both describe it.
+
+Manual position adjustments resolve against that same section. When an operator moves a candidate
+shown at `2/12`, the command means "put this candidate second among these twelve", and the result
+is `2/12`. The pin is placed by `applySectionManualPositions`, whose run is the section.
+
+**Internal cohort keys may inform natural ranking or carry lineage; they do not define a second
+operator-facing position domain.** `program_room_cohort_key` remains the provenance recorded on
+`placement_overrides` and continues to group the natural sort, but it no longer decides which
+positions exist.
+
+This was not always true, and the failure is worth remembering. A pin used to be scoped to the
+candidate's own cohort while the queue counted positions across the section, so an operator read one
+number and edited another — `2/12` on the row, `1/11` in the control. Because
+`program_room_cohort_key` is a slugified program/room LABEL rather than a controlled vocabulary, one
+program drifts into several spellings: the deployed Firefly INFANT section held twelve candidates,
+eleven under `infant_0_18_months` and one under a degraded `infant`. The natural sort groups cohorts
+into contiguous blocks, so that one row held section position 1 and **nothing the operator did to
+the other eleven could reach it**. A ranked list of twelve with unreachable positions is not a
+ranked list.
+
+The ranking model is deliberately robust to that drift rather than dependent on repairing it.
+Normalizing degraded cohort keys is separate hygiene; this contract holds either way.
+
+### The list contract
+
+A waitlist section is an ORDERED LIST, and a manual adjustment is a LIST MOVE. Five statements,
+which hold together or not at all:
+
+1. **One section ranking.** Natural ranking decides the order first; manual adjustment then places
+   rows into it. There is no second ranking algorithm and no per-row sort key that encodes position.
+2. **Requested position IS the resulting position.** Moving a row shown at `7/12` to `4` leaves it
+   at `4/12`. Not near 4, not 4 unless something contends — 4.
+3. **No duplicate seats.** Active ordinals within a section are unique. Nothing contends, so no
+   contention rule exists to reason about.
+4. **The renderer reproduces the stored state.** Replaying stored ordinals through the placement
+   rule yields the order the operator was shown. The writer checks this before writing and refuses
+   if it fails.
+5. **Queue and Focus Panel show the same rank,** because both read the same projection.
+
+**Contended ordinals used to be a feature, and that was the mistake.** The rule was: seats fill in
+ascending ordinal and never move backwards, so rivals on one number take consecutive seats. It
+sounded like graceful degradation. What it actually meant was that a stored ordinal did not
+determine a position — ordinals 2, 5 and 12 could render identically — so an operator could not
+predict where a row would land, and one deployed section accumulated three rows all claiming
+ordinal 2. Duplicate ordinals are now prevented rather than resolved.
+
+### The writer does not rank
+
+**A position is not a property of a row.** "Third" is a claim about a list, so making one row third
+is a claim about every row above it. A writer that sets one `pin_ordinal` and leaves the rest alone
+has not expressed the operator's intent; it has recorded a number next to a row.
+
+So the writer obtains the list rather than deriving it. `loadWaitlistSectionOrder` asks the queue
+through `getWorkUnitQueueItems` — the same entry point the work-unit surface calls — and reads the
+positions the projection already stamped. It contains no ordering logic, which is the point: a
+writer holding its own copy of the ordering rules will eventually disagree with the renderer.
+
+That is not hypothetical. A previous writer renumbered ordinals by breaking ties on `created_at`
+while the renderer broke them on natural rank. The two disagreed and four live director adjustments
+were silently rearranged — TP8 2→4, TP3 4→7, TP11 6→5, TP10 8→6. Nobody asked for that. The lesson
+is not "be careful with the tie-break"; it is that the writer must not own a tie-break at all.
+
+**The canonical form is a pinned prefix.** The rows at positions 1..k hold ordinals 1..k, where k
+covers the moved row and every already-pinned row; everything after k is unpinned and falls in
+natural order. The smaller pin set that `deriveCanonicalManualOrdinals` finds requires knowing the
+NATURAL order, and the writer cannot observe it — a row pinned before anyone looked has never had
+its natural rank rendered. A prefix removes the question: ordinals 1..k are seated by force, no
+natural rank participates, and the result reproduces because the tail holds only rows that were
+unpinned before and after, whose relative order the move did not touch.
+
+The cost is bounded and honest: moving to position 3 pins three rows, not the section. Rows pinned
+only to hold the prefix record that as their reason rather than borrowing the operator's.
+
+**Provenance survives normalization.** Existing overrides are updated, never replaced: id,
+`created_by`, `created_at` and reason are preserved, and only `pin_ordinal` moves, only when it
+actually changes. "Who put this child here, and why" keeps its original answer.
+
+---
+
 ## Configuration surfaces
 
 - **Fields:** `field_definitions.label` is canonical for operator labels (School / Location, Program, Room).

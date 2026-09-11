@@ -4,7 +4,6 @@
  */
 
 import { comparePlacementSortTuples } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
-import { readRowManualPinOrdinal } from "@/lib/orchestration/placement/applyCohortLocalManualPositions";
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 import {
@@ -17,17 +16,6 @@ export const WAITLIST_RUNTIME_POSITION_HELP =
 
 export type WaitlistRuntimePositionMode = "preview" | "live";
 
-/**
- * Typed precedence outcomes. Copy lives at the presentation owner, never in the ordering engine.
- *
- * `pin_scoped_to_cohort` — the row's pin IS in force: it sits at exactly the ordinal the operator
- * chose within its own cohort. The section it is displayed in lists an earlier cohort first, so the
- * section-scoped position is a different (larger) number than the one they picked. Derived only
- * from this row's own pin and cohort plus the cohort keys ahead of it; it never depends on the
- * identity, accessibility or contested state of whichever row is actually ahead.
- */
-export type WaitlistRuntimePrecedenceReason = "pin_scoped_to_cohort";
-
 export type WaitlistRuntimePositionFields = {
     runtime_position: number;
     runtime_position_total: number;
@@ -37,22 +25,6 @@ export type WaitlistRuntimePositionFields = {
     runtime_position_section_key?: string;
     /** Preview-only hint when manual pin(s) rank above this row in the section. */
     runtime_position_precedence_note?: string;
-    /** Operator-safe typed precedence outcome — NOT shadow-gated. */
-    runtime_position_precedence_reason?: WaitlistRuntimePrecedenceReason;
-    /*
-     * THE GROUP-LOCAL RANGE — the only range a manual position may legally express.
-     *
-     * `runtime_position` / `runtime_position_total` are SECTION-scoped: they answer "where does this
-     * row sit in the list the operator is reading". A pin is COHORT-scoped: `pin_ordinal` orders a
-     * candidate inside its own program/room cohort, and a section can hold several cohorts.
-     *
-     * Publishing both is what stops the Adjust control offering a position the command cannot mean.
-     * Bounding that control on the section total let it offer "12" to a candidate whose cohort holds
-     * 11 — the write then clamped, and the operator's number silently became a different number.
-     * The control must read THIS, and no client may recompute it: one placement authority.
-     */
-    runtime_group_position?: number;
-    runtime_group_total?: number;
 };
 
 export function formatWaitlistRuntimePositionLabel(
@@ -130,15 +102,6 @@ function readRowActiveOverrideKinds(row: Record<string, unknown>): string[] {
     return kinds.filter((k): k is string => typeof k === "string" && k.trim().length > 0);
 }
 
-/** Normalized cohort key for a row — the same normalization the canonical sorter groups by. */
-function readWaitlistRowCohortKey(row: Record<string, unknown>): string | null {
-    const wr = row._placement_waitlist_row;
-    if (wr == null || typeof wr !== "object" || Array.isArray(wr)) return null;
-    const o = wr as { program_room_cohort_key?: string; program_room_group_label?: string };
-    const { cohortKey } = normalizePlacementWaitlistCohort(o.program_room_cohort_key, o.program_room_group_label);
-    return cohortKey?.trim() ? cohortKey.trim() : null;
-}
-
 function rowHasManualPinOverride(row: Record<string, unknown>): boolean {
     return readRowActiveOverrideKinds(row).includes("pin");
 }
@@ -200,13 +163,12 @@ function writeRuntimePositionOnRow(
     if (wr == null || typeof wr !== "object" || Array.isArray(wr)) return;
     const target = wr as Record<string, unknown>;
     /*
-     * Clear the precedence outcomes before writing. `Object.assign` only ADDS keys, so a row that no
+     * Clear the precedence note before writing. `Object.assign` only ADDS keys, so a row that no
      * longer qualifies would silently keep the explanation written for a previous ordering — the
-     * operator would read a stale reason after a Work View switch, a site change, or an unpin.
+     * operator would read a stale note after a Work View switch, a site change, or an unpin.
      * Position is recomputed on every assignment; its explanation must be too.
      */
     delete target.runtime_position_precedence_note;
-    delete target.runtime_position_precedence_reason;
     Object.assign(target, fields);
 }
 
@@ -251,65 +213,22 @@ export function assignWaitlistCandidateRuntimePositions(
                 position > 1 &&
                 rankIndices.slice(0, rank).some((higherIdx) => rowHasManualPinOverride(rows[higherIdx]!));
             /*
-             * A pin is an ordinal WITHIN ITS COHORT, but the position shown is scoped to the whole
-             * program section, and a section may contain several cohorts. So an operator can pin to 1,
-             * have the pin fully in force, and still read "2/12" — which is indistinguishable from a
-             * pin that failed. This says the pin worked and names only the generic rule.
-             *
-             * Every input is this row's own: its pin, its cohort, and the set of cohort keys ordered
-             * ahead of it. Nothing about the row actually in front is consulted, so a contested or
-             * inaccessible neighbour cannot leak through this reason.
+             * ONE POSITION. A pin is now placed within the SECTION — the list the operator reads —
+             * so the ordinal they choose is the position they get and there is no second number to
+             * reconcile. The cohort offset this block used to compute, and the reason that explained
+             * it, are gone with the scope change; see `applySectionManualPositions`.
              */
-            const ownCohort = readWaitlistRowCohortKey(rows[rowIdx]!);
-            const requestedOrdinal = readRowManualPinOrdinal(rows[rowIdx]!);
-            // Where the row actually sits among its OWN cohort members in this section.
-            const cohortLocalPosition =
-                ownCohort == null
-                    ? null
-                    : rankIndices
-                          .slice(0, rank)
-                          .filter((higherIdx) => readWaitlistRowCohortKey(rows[higherIdx]!) === ownCohort)
-                          .length + 1;
-            /*
-             * The pin is honoured — the row is exactly where the operator put it within its cohort —
-             * but the SECTION lists an earlier cohort first, so the number on screen is larger than
-             * the number they chose. Say so.
-             *
-             * This used to require the row to be FIRST in its cohort, which meant the one case that
-             * most needs explaining went unexplained: a row pinned to 2, correctly second in its
-             * cohort, displaying 3/12, with no indication the pin had taken. Now the test is the
-             * honest one — "you asked for N, you got N in your group, the section says something
-             * else" — and it never consults the identity of whichever row is ahead.
-             */
-            const pinScopedToCohort =
-                requestedOrdinal != null &&
-                cohortLocalPosition != null &&
-                cohortLocalPosition === requestedOrdinal &&
-                position !== requestedOrdinal;
-            // How many candidates share this row's cohort in this section — the legal range a manual
-            // position may address. Counted from the same `rankIndices` the positions come from, so
-            // the control can never be bounded by a number this engine did not produce.
-            const cohortTotal =
-                ownCohort == null
-                    ? null
-                    : rankIndices.filter((idx) => readWaitlistRowCohortKey(rows[idx]!) === ownCohort).length;
             writeRuntimePositionOnRow(rows[rowIdx]!, {
                 runtime_position: position,
                 runtime_position_total: total,
                 runtime_position_label: formatWaitlistRuntimePositionLabel(mode, position, total),
                 runtime_position_mode: mode,
                 runtime_position_section_key: sectionKey,
-                ...(cohortLocalPosition != null && cohortTotal != null
-                    ? { runtime_group_position: cohortLocalPosition, runtime_group_total: cohortTotal }
-                    : {}),
                 ...(beatenByManualPin ?
                     {
                         runtime_position_precedence_note:
                             "Ranked below manually adjusted row(s) in this program section.",
                     }
-                :   {}),
-                ...(pinScopedToCohort ?
-                    { runtime_position_precedence_reason: "pin_scoped_to_cohort" as const }
                 :   {}),
             });
         });

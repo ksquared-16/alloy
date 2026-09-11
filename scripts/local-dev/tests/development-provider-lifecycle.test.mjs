@@ -43,7 +43,8 @@ const {
 const {
   activeAgentSessionForLane, createAgentSession, markAgentSessionActive, resetAgentSessionsForTests,
 } = await import("../lib/vacilando/agent-session.mjs");
-const { assessProvisionCapacity, FIXED_SLOT_RANGE } = await import("../lib/vacilando/alloy-dev-adapter.mjs");
+const { assessProvisionCapacity } = await import("../lib/vacilando/alloy-dev-adapter.mjs");
+const { managedSlotCount } = await import("../lib/vacilando/managed-slots.mjs");
 const { deriveLaneExecutionPosture, occupiesClaudeProviderCapacity, canonicalLaneWorkState, renderLaneRuntimeControls } =
   await import("../apps/vacilando/public/gateway-view.mjs");
 
@@ -158,16 +159,19 @@ await test("more than six lanes and worktrees coexist and consume nothing", () =
   const cap = assessProviderCapacity({ panes: [], lanes });
   assert.equal(cap.active, 0, "nine lanes, zero computation");
   assert.equal(cap.available, cap.ceiling);
-  // Nine dormant worktrees on slots do not block anything either.
-  const meta = Array.from({ length: 9 }, (_, i) => {
+  // A FULL slot table does not block anything either. "Full" is now measured
+  // against the managed topology rather than a literal 6, so the fixture fills
+  // whatever this host actually has — the assertion means the same thing at any
+  // topology instead of being accidentally true at six.
+  const meta = Array.from({ length: managedSlotCount() }, (_, i) => {
     const p = join(WT, `w${i}`); mkdirSync(p, { recursive: true }); writeFileSync(join(p, ".keep"), "");
     return { slot: i + 1, name: `w${i}`, lifecycle: "active", agent_status: "", path: p };
   });
   const provision = assessProvisionCapacity({ metadata: meta, providerPanes: [] });
   assert.equal(provision.blockers.includes("no_free_slot"), false, "a full slot table is not a ceiling on work");
   assert.equal(provision.active_providers, 0);
+  assert.equal(provision.free_slots, 0, "the topology really is full");
   assert.equal(provision.fixed_slots_exhausted, true, "but it is still reported for fixed-port placement");
-  assert.equal(FIXED_SLOT_RANGE, 6);
 });
 
 await test("a lane with no slot is entirely valid", () => {

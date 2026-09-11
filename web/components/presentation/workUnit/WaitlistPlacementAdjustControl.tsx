@@ -17,7 +17,7 @@
  * Two further simplifications, both about not asking for more than the task needs:
  *   POSITION is a dropdown of the positions the model can actually express (see
  *   `waitlistAdjustPositionModel`), with Custom for the rest — replacing a free-text 1-999 box that
- *   happily accepted numbers meaningless in this row's group.
+ *   happily accepted numbers meaningless in this row's ranked list.
  *   REASON is optional and hidden behind "Add reason", because most adjustments do not need one and
  *   an always-present empty field reads as required.
  */
@@ -44,23 +44,12 @@ type Props = {
     /** Current operator-facing position label when known (e.g. "Position 1/1"). */
     currentPositionLabel?: string | null;
     childDisplayName?: string | null;
-    /** Canonical precedence reason from placement — never inferred from rendered order. */
-    precedenceReason?: string | null;
-    /**
-     * Authoritative GROUP-LOCAL range from the placement engine
-     * (`runtime_group_position` / `runtime_group_total`). Bounds the selectable positions.
-     * `currentPositionLabel` is SECTION-scoped and is only a fallback when no group range is
-     * published — bounding on it offered positions the write had to clamp.
-     */
-    group?: { position?: number | null; total?: number | null } | null;
 };
 
 export function WaitlistPlacementAdjustControl({
     placementCandidateId,
     currentPositionLabel,
     childDisplayName,
-    precedenceReason,
-    group,
 }: Props) {
     const [open, setOpen] = useState(false);
     const titleId = useId();
@@ -114,8 +103,6 @@ export function WaitlistPlacementAdjustControl({
                     placementCandidateId={placementCandidateId}
                     currentPositionLabel={currentPositionLabel}
                     childDisplayName={childDisplayName}
-                    precedenceReason={precedenceReason}
-                    group={group}
                     onClose={close}
                 />
             ) : null}
@@ -129,8 +116,6 @@ function WaitlistPlacementAdjustPopover({
     placementCandidateId,
     currentPositionLabel,
     childDisplayName,
-    precedenceReason,
-    group,
     onClose,
 }: {
     anchorEl: HTMLElement;
@@ -138,13 +123,11 @@ function WaitlistPlacementAdjustPopover({
     placementCandidateId: string;
     currentPositionLabel?: string | null;
     childDisplayName?: string | null;
-    precedenceReason?: string | null;
-    /** Authoritative group-local range from the placement engine — bounds the control. */
-    group?: { position?: number | null; total?: number | null } | null;
     onClose: () => void;
 }) {
     const kernel = useRuntimeKernel();
-    const model = waitlistAdjustPositionModel(currentPositionLabel, precedenceReason, group);
+    // ONE domain: the label the row displays is the range this control edits.
+    const model = waitlistAdjustPositionModel(currentPositionLabel);
     // Opens on the row's CURRENT position, so applying without touching the dropdown is a no-op
     // rather than a silent move to 1 — the old default.
     const [pinOrdinal, setPinOrdinal] = useState(String(model.current ?? 1));
@@ -259,12 +242,31 @@ function WaitlistPlacementAdjustPopover({
                           action: "move",
                           pin_ordinal: Number.parseInt(pinOrdinal, 10),
                           reason: reason.trim() || "Manual waitlist position adjustment",
+                          /*
+                           * WHICH LIST, not what is in it.
+                           *
+                           * A position is meaningless without the list it indexes, so the command
+                           * names the queue the operator is reading and the server rebuilds that
+                           * list itself. Sending the order from here would be faster and wrong: the
+                           * client would then be a second ranking authority, which is the thing this
+                           * whole model exists to prevent.
+                           */
+                          work_unit_id: kernel.attention.get()?.destination?.workUnitId ?? null,
+                          /*
+                           * The slug, because the uuid is often not there yet. The kernel publishes
+                           * a canonical destination only once a surface has resolved one, and a row
+                           * can be adjusted before that — observed live: `destination` was null and
+                           * every move was refused. The slug is in the address bar from the first
+                           * paint, so it is the reliable half. The server resolves it against the
+                           * org, so this stays a NAME for a list and never a claim about its order.
+                           */
+                          work_unit_key: kernel.attention.get()?.target ?? null,
                       };
             if (action === "move") {
                 const n = Number.parseInt(pinOrdinal, 10);
                 if (!isValidWaitlistAdjustPosition(n, model)) {
                     // Bounded by THIS ROW's scope, not the command's 1-999 guard: a position past the
-                    // end of its group is a move the model cannot express, so it is refused here
+                    // end of its section is a move the model cannot express, so it is refused here
                     // rather than sent and rendered as something the operator did not ask for.
                     setError(
                         model.total != null
@@ -356,7 +358,7 @@ function WaitlistPlacementAdjustPopover({
             </div>
             <div className="px-3 pb-2 pt-2">
                 <label className="block text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/60">
-                    {model.scopedToGroup ? "Group position" : "Position"}
+                    {"Position"}
                     {positionField}
                 </label>
                 {custom && model.options.length > 0 ? (
@@ -533,7 +535,15 @@ function PositionMenu({
                     role="listbox"
                     tabIndex={-1}
                     aria-activedescendant={`wl-pos-${activeIndex}`}
-                    className={`${ALLOY_MENU_SURFACE} absolute left-0 right-0 top-[calc(100%+4px)]`}
+                    /*
+                     * Scrolls, because the list is now as long as the cohort.
+                     *
+                     * It listed at most ten positions when this was written, so it could not outgrow
+                     * the popover. It now lists every legal position for cohorts up to
+                     * `WAITLIST_ADJUST_FULL_LIST_MAX`, and an unbounded menu would run off the panel
+                     * on the very cohorts the change exists to serve.
+                     */
+                    className={`${ALLOY_MENU_SURFACE} absolute left-0 right-0 top-[calc(100%+4px)] max-h-60 overflow-y-auto`}
                     data-waitlist-adjust-position-menu
                     onKeyDown={(e) => {
                         if (e.key === "Escape") {
