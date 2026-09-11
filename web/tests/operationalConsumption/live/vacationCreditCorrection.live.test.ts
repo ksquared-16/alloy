@@ -61,6 +61,8 @@ const DATES = {
     replay: dayOffset(11),
     chain: dayOffset(12),
     posted: dayOffset(13),
+    reverse: dayOffset(14),
+    chainGap: dayOffset(15),
 } as const;
 
 type Obligation = { id: string; obligation_kind: string; status: string; amount_cents: number | null; superseded_by_event_id: string | null };
@@ -149,6 +151,16 @@ describeLive("Slice 4A — a credit meets a correction", () => {
             orgId: ORG, correctsEventId: targetId, entryType: "correction",
             eventKind: "check_in", roomLocationId: ROOM,
             eventAt: `${serviceDate}T08:10:00.000Z`, serviceDate, idempotencyKey: key,
+            actor: { actorType: "staff", actorLabel: "Cert operator", sourceType: "operator_action", sourceKey: "cert" },
+        } as Parameters<typeof correctAttendanceEvent>[1]);
+    }
+
+    /** The second correction: the attendance was itself wrong; the child was away after all. */
+    async function correctToAbsent(targetId: string, key: string, serviceDate: string) {
+        return correctAttendanceEvent(supabase, {
+            orgId: ORG, correctsEventId: targetId, entryType: "correction",
+            eventKind: "absence",
+            eventAt: `${serviceDate}T09:00:00.000Z`, serviceDate, idempotencyKey: key,
             actor: { actorType: "staff", actorLabel: "Cert operator", sourceType: "operator_action", sourceKey: "cert" },
         } as Parameters<typeof correctAttendanceEvent>[1]);
     }
@@ -366,5 +378,165 @@ describeLive("Slice 4A — a credit meets a correction", () => {
         const stillPosted = await chargeRow(reduction.charge_id);
         expect(stillPosted!.amount_cents).toBe(postedBefore!.amount_cents);
         expect(stillPosted!.posted_at).toBe(postedBefore!.posted_at);
+    });
+
+    // ── A → B → C — the correction of a correction ──────────────────────────
+
+    it("chain — A absent, B attended, C absent again: the latest truth decides, and nothing resurrects", async () => {
+        await creditPolicy();
+        const a = await absence(`t7-4d-a-${run}`, DATES.chain);
+        await react(a.id);
+        const creditA = (await obligationsOn(DATES.chain)).find((o) => o.obligation_kind === "vacation_credit")!;
+        const reductionA = (await reductionsFor([creditA.id]))[0]!;
+        const contraA = reductionA.charge_id;
+        expect(await chargeStatus(contraA)).toBe("draft");
+
+        // B — the child attended after all. The credit must go.
+        const b = await correctToAttended(a.id, `t7-4d-b-${run}`, DATES.chain);
+        await react(b.id);
+        expect(await chargeStatus(contraA), "B withdraws A's money").toBe("void");
+
+        // C — B was itself wrong. The child WAS away, and the credit is owed again.
+        const c = await correctToAbsent(b.id, `t7-4d-c-${run}`, DATES.chain);
+        await react(c.id);
+
+        const afterC = await obligationsOn(DATES.chain);
+        const liveCredits = afterC.filter((o) => o.obligation_kind === "vacation_credit" && o.status !== "superseded");
+        const allReductions = await reductionsFor(afterC.map((o) => o.id));
+        const live = [] as Array<{ reduction: string; charge: string; amount: number }>;
+        for (const r of allReductions) {
+            if ((await chargeStatus(r.charge_id)) === "draft") live.push({ reduction: r.id, charge: r.charge_id, amount: r.amount_cents });
+        }
+
+        // eslint-disable-next-line no-console
+        console.log("SLICE4-CHAIN", JSON.stringify({
+            factA: a.id, factB: b.id, factC: c.id,
+            obligationA: creditA.id, reductionA: reductionA.id, contraA,
+            contraAStatus: await chargeStatus(contraA),
+            obligationsAfterC: afterC.map((o) => ({ id: o.id, kind: o.obligation_kind, status: o.status })),
+            liveMoney: live,
+        }, null, 1));
+
+        /*
+         * THE LATEST TRUTH DECIDES. C says away, the policy says credit, so a credit is owed again —
+         * and it must be a NEW consequence, not the voided one brought back. `reductionCore` treats
+         * withdrawn money as settled precisely so a replay cannot resurrect it; the chain has to
+         * reach the same answer by producing current money rather than reviving historical money.
+         */
+        expect(liveCredits.length, "C leaves exactly one live vacation obligation").toBe(1);
+        // The obligation is REINSTATED by resolution key rather than re-created: same id, back to
+        // `previewed` under C's event. Lineage is coherent and the reparenting works.
+        expect(liveCredits[0]!.id).toBe(creditA.id);
+
+        /*
+         * AND THE WITHDRAWN ARTIFACT IS NOT RESURRECTED — which is the law working, and is also
+         * exactly why C currently ends with no money at all. See the KNOWN GAP below.
+         */
+        expect(live.some((m) => m.charge === contraA), "the voided artifact stays voided").toBe(false);
+
+        /*
+         * HISTORY SURVIVES — as reinstatement, not as a second row. The obligation A produced is the
+         * one C brings back, so the lineage is a single thread through three facts rather than a
+         * pile of look-alikes. Its application row and its withdrawn artifact both remain readable.
+         */
+        expect(afterC.some((o) => o.id === creditA.id), "A's obligation is the one C reinstates").toBe(true);
+        expect(allReductions.some((r) => r.id === reductionA.id), "A's application row remains as provenance").toBe(true);
+        expect(await chargeStatus(contraA), "A's money stays withdrawn").toBe("void");
+    });
+
+    /*
+     * KNOWN GAP, LOCKED AS A FAILING LAW RATHER THAN HIDDEN.
+     *
+     * When C restores a truth that again warrants a credit, the family should be credited again.
+     * Measured: the obligation is correctly reinstated to `previewed` (same id, reparented under
+     * C's event) and NO money answers it. Two things combine.
+     *
+     * First, the correction path never runs the reduction writer at all — it reconciles
+     * obligations and returns, so a corrected truth that newly warrants money cannot get any.
+     * Second, even if it did, the writer's idempotency is anchored on the obligation id alone, and
+     * that obligation already has an application whose contra charge is void — which `reductionCore`
+     * correctly refuses to revive.
+     *
+     * The fix is a pair, not a patch: run the writer on the correction path, and let the
+     * idempotency key carry the incarnation (the obligation AND the consumption event that
+     * reinstated it) so a reinstated consequence is a new consequence rather than a resurrection.
+     * That is a design change, and it is reported rather than rushed in.
+     */
+    it.fails("chain — C should restore the credit, and today it does not (KNOWN GAP)", async () => {
+        await creditPolicy();
+        const a = await absence(`t7-4f-a-${run}`, DATES.chainGap);
+        await react(a.id);
+        const creditA = (await obligationsOn(DATES.chainGap)).find((o) => o.obligation_kind === "vacation_credit")!;
+        const b = await correctToAttended(a.id, `t7-4f-b-${run}`, DATES.chainGap);
+        await react(b.id);
+        const c = await correctToAbsent(b.id, `t7-4f-c-${run}`, DATES.chainGap);
+        await react(c.id);
+
+        const afterC = await obligationsOn(DATES.chainGap);
+        const reductions = await reductionsFor(afterC.map((o) => o.id));
+        const liveAmounts: number[] = [];
+        for (const r of reductions) {
+            if ((await chargeStatus(r.charge_id)) === "draft") liveAmounts.push(r.amount_cents);
+        }
+        expect(creditA.id).toBeTruthy();
+        expect(liveAmounts, "the restored truth should carry exactly one live credit").toHaveLength(1);
+    });
+
+    // ── Reverse traceability — walked through persisted rows only ───────────
+
+    it("reverse — from a correction fact alone, every affected artifact is reachable", async () => {
+        await creditPolicy();
+        const original = await absence(`t7-4e-${run}`, DATES.reverse);
+        await react(original.id);
+        const credit = (await obligationsOn(DATES.reverse)).find((o) => o.obligation_kind === "vacation_credit")!;
+        const reduction = (await reductionsFor([credit.id]))[0]!;
+        await postChildcareCharge(supabase, { orgId: ORG, chargeId: reduction.charge_id, actorUserId: null });
+        const correction = await correctToAttended(original.id, `t7-4e-corr-${run}`, DATES.reverse);
+        await react(correction.id);
+
+        /*
+         * THE WALK. Nothing below is carried from the setup above except the one id an auditor
+         * would actually start from — the correction fact. Every other id is resolved from
+         * persisted rows, because an audit that needs the test's memory is not an audit.
+         */
+        const startingPoint = correction.id;
+
+        const { data: correctionFact } = await supabase
+            .from("child_attendance_events").select("id, corrects_event_id, entry_type, service_date")
+            .eq("org_id", ORG).eq("id", startingPoint).single();
+        const correctedSourceId = (correctionFact as { corrects_event_id: string }).corrects_event_id;
+        expect(correctedSourceId, "1. the correction names what it corrected").toBe(original.id);
+
+        const { data: priorEvents } = await supabase
+            .from("consumption_events").select("id")
+            .eq("org_id", ORG).eq("source_entity_type", "child_attendance_events").eq("source_entity_id", correctedSourceId);
+        const priorEventId = ((priorEvents ?? []) as Array<{ id: string }>)[0]?.id;
+        expect(priorEventId, "2. the corrected source reaches its consumption event").toBeTruthy();
+
+        const { data: obligations } = await supabase
+            .from("resolved_obligations").select("id, status, obligation_kind")
+            .eq("consumption_event_id", priorEventId!);
+        const superseded = ((obligations ?? []) as Array<{ id: string; status: string; obligation_kind: string }>)
+            .find((o) => o.obligation_kind === "vacation_credit");
+        expect(superseded?.status, "3. the obligation it produced is superseded").toBe("superseded");
+
+        const { data: applications } = await supabase
+            .from("financial_reduction_applications")
+            .select("id, charge_id, financial_policy_id, policy_snapshot")
+            .eq("org_id", ORG).eq("resolved_obligation_id", superseded!.id);
+        const application = ((applications ?? []) as Array<{ id: string; charge_id: string; financial_policy_id: string | null; policy_snapshot: Record<string, unknown> }>)[0];
+        expect(application, "4. the obligation reaches the reduction it authorised").toBeTruthy();
+        expect(application!.financial_policy_id, "and the policy that decided it").toBeTruthy();
+        expect(application!.policy_snapshot.accepted_term_id, "and the accepted term it was valued against").toBeTruthy();
+
+        const originalCharge = await chargeRow(application!.charge_id);
+        expect(originalCharge!.status, "5. the original artifact, still posted").toBe("posted");
+
+        const { data: comp } = await supabase
+            .from("charges").select("id, amount_cents, source_charge_id")
+            .eq("org_id", ORG).eq("source_charge_id", application!.charge_id);
+        const compensating = ((comp ?? []) as Array<{ id: string; amount_cents: number }>);
+        expect(compensating, "6. and the compensating consequence that answers it").toHaveLength(1);
+        expect(compensating[0]!.amount_cents).toBe(-originalCharge!.amount_cents);
     });
 });
