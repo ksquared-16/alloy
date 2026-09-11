@@ -170,7 +170,8 @@ export async function resolveFidelitySourceBytes(
     if (cached) {
         return {
             ok: true,
-            bytes: cached,
+            // A COPY, never the cached master. See the note on the cache below.
+            bytes: new Uint8Array(cached),
             sourceRef: mapping.template_key
                 ? `template:${mapping.template_key}`
                 : `document:${mapping.source_document_id}`,
@@ -214,8 +215,21 @@ export async function resolveFidelitySourceBytes(
         const oldest = SOURCE_BYTES_BY_SHA.keys().next().value;
         if (oldest) SOURCE_BYTES_BY_SHA.delete(oldest);
     }
-    SOURCE_BYTES_BY_SHA.set(mapping.source_sha256, bytes);
-    return { ok: true, bytes, sourceRef };
+    /*
+     * THE CACHE KEEPS A PRIVATE COPY, AND CALLERS NEVER GET IT.
+     *
+     * pdf.js takes ownership of the buffer it parses and DETACHES it. Handing out the cached
+     * `Uint8Array` therefore worked exactly once: the first reader parsed the document, and every
+     * reader afterwards was handed a detached, zero-length view and concluded the PDF had no pages
+     * and no form fields at all.
+     *
+     * That produced a genuinely baffling symptom — the same document reporting 19 AcroForm widgets
+     * one minute and none the next, with no input changed — and it is the kind of fault that looks
+     * like flakiness rather than a bug. Both sides are copies now: the cache stores its own, and
+     * each caller receives its own.
+     */
+    SOURCE_BYTES_BY_SHA.set(mapping.source_sha256, new Uint8Array(bytes));
+    return { ok: true, bytes: new Uint8Array(bytes), sourceRef };
 }
 
 /**

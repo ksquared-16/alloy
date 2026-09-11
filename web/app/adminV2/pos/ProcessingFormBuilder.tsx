@@ -79,18 +79,27 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 /**
- * WHAT THE BUILDER CAN SHOW YOU, HONESTLY.
+ * ONE OBJECT, ONE EDITOR.
  *
- * There used to be "Preview" and "Runtime". They rendered the SAME component from the SAME schema
- * and differed only in a header, so the second tab promised a runtime it never showed — and neither
- * of them showed the paperwork, which is the thing an administrator actually has to check before a
- * packet reaches families. Kelly's verdict on the pair was exact: the preview was the wrong product.
+ * This bar has been wrong twice. It offered "Preview" and "Runtime", which rendered the same
+ * component from the same schema and differed only in a header. Replacing them with "Structure" and
+ * "Paperwork" fixed the lie but kept the deeper problem: both were REPRESENTATIONS of one Form, and
+ * putting them side by side made the administrator translate between Alloy's internal boundaries to
+ * do a single job. Kelly said it exactly — "Structure and Paperwork are the same thing to me. If I
+ * am doing something on the form, I should be editing the one that looks like the actual form."
  *
- * `structure` is the old preview under a name that says what it is: the fields and their order.
- * `paperwork` is the document itself, rendered through the same fidelity engine the participant
- * review and the signed artifact use, so the three cannot disagree.
+ * So there is one editing surface. What it draws depends on what the Form actually IS:
+ *
+ *   a Form with a source document → the school's own paperwork, with its destinations selectable
+ *   a Form with none             → its native visual layout
+ *
+ * Both answer a click the same way: the field is selected and the right inspector edits it. The
+ * administrator never has to know which kind they have.
+ *
+ * Preview stays, as the other question an editor is asked — "what will this produce?" — and shows
+ * whichever artifact is real for this Form.
  */
-type BuilderMode = "edit" | "structure" | "paperwork";
+type BuilderMode = "edit" | "preview";
 
 export default function ProcessingFormBuilder({
     formId,
@@ -118,6 +127,44 @@ export default function ProcessingFormBuilder({
     const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
     const [mode, setMode] = useState<BuilderMode>("edit");
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+    /**
+     * Where this Form's questions live on its paperwork, when it has any.
+     *
+     * Decides which canvas the editor draws. `null` while unknown, so a source-backed Form does not
+     * flash its native layout before the document arrives.
+     */
+    const [paperwork, setPaperwork] = useState<{
+        source: boolean;
+        regions: PaperworkRegionVM[];
+        versionId: string | null;
+    } | null>(null);
+
+    useEffect(() => {
+        let live = true;
+        setPaperwork(null);
+        void (async () => {
+            try {
+                const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/paperwork-regions`, {
+                    credentials: "include",
+                });
+                const j = (await res.json().catch(() => ({}))) as {
+                    data?: { source?: boolean; regions?: PaperworkRegionVM[]; usedVersionId?: string };
+                };
+                if (!live) return;
+                setPaperwork({
+                    source: j.data?.source === true,
+                    regions: j.data?.regions ?? [],
+                    versionId: j.data?.usedVersionId ?? null,
+                });
+            } catch {
+                // A Form whose regions cannot be read is still edited — natively.
+                if (live) setPaperwork({ source: false, regions: [], versionId: null });
+            }
+        })();
+        return () => {
+            live = false;
+        };
+    }, [formId]);
     const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
     const [librarySectionId, setLibrarySectionId] = useState<string | null>(null);
     const [libraryOpen, setLibraryOpen] = useState(false);
@@ -485,7 +532,7 @@ export default function ProcessingFormBuilder({
                 </span>
                 <span className="flex-1" />
                 <div className="flex rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.08] p-0.5">
-                    {(["edit", "structure", "paperwork"] as const).map((m) => (
+                    {(["edit", "preview"] as const).map((m) => (
                         <button
                             key={m}
                             type="button"
@@ -495,7 +542,7 @@ export default function ProcessingFormBuilder({
                                 mode === m ? "bg-white text-alloy-midnight shadow-sm" : "text-alloy-midnight/50"
                             }`}
                         >
-                            {m === "edit" ? "✎ Edit" : m === "structure" ? "▦ Structure" : "▤ Paperwork"}
+                            {m === "edit" ? "✎ Edit" : "▷ Preview"}
                         </button>
                     ))}
                 </div>
@@ -539,13 +586,15 @@ export default function ProcessingFormBuilder({
                 />
             ) : null}
 
-            {mode === "structure" ? (
-                <div className="flex shrink-0 items-center gap-2 border-b border-alloy-midnight/[0.06] bg-alloy-midnight/[0.03] px-4 py-1.5 text-[11px] font-semibold text-alloy-midnight/55">
-                    Structure — the questions, and the order they are asked in
-                </div>
-            ) : mode === "paperwork" ? (
+            {mode === "preview" ? (
                 <div className="flex shrink-0 items-center gap-2 border-b border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.05] px-4 py-1.5 text-[11px] font-semibold text-alloy-bend-pine">
-                    Paperwork — the document this produces, with each mapped box named
+                    {paperwork?.source
+                        ? "Preview — the document this produces, with each mapped box named"
+                        : "Preview — what families complete"}
+                </div>
+            ) : paperwork?.source ? (
+                <div className="flex shrink-0 items-center gap-2 border-b border-alloy-midnight/[0.06] bg-alloy-midnight/[0.03] px-4 py-1.5 text-[11px] font-semibold text-alloy-midnight/55">
+                    Click a highlighted box on the document to edit that question
                 </div>
             ) : null}
 
@@ -555,10 +604,23 @@ export default function ProcessingFormBuilder({
 
             <div className="flex min-h-0 flex-1">
                 <div className={`min-w-0 flex-[8] overflow-y-auto p-4 md:p-8 ${mode !== "edit" ? "bg-alloy-stone/[0.04]" : "bg-alloy-stone"}`}>
-                    {mode === "paperwork" ? (
-                        <FormPaperworkPreview formId={formId} />
-                    ) : mode === "structure" ? (
-                        <FormPreview schema={schema} branding={branding} runtime={false} />
+                    {mode === "preview" ? (
+                        paperwork?.source ? (
+                            <FormPaperworkPreview formId={formId} />
+                        ) : (
+                            <FormPreview schema={schema} branding={branding} runtime={false} />
+                        )
+                    ) : paperwork?.source ? (
+                        <SourcePaperworkEditorCanvas
+                            formId={formId}
+                            regions={paperwork.regions}
+                            versionId={paperwork.versionId}
+                            selectedFieldId={selectedFieldId}
+                            onSelectField={(id) => {
+                                setSelectedFieldId(id);
+                                setSelectedSectionId(null);
+                            }}
+                        />
                     ) : (
                         <div className="mx-auto max-w-[960px] rounded-2xl bg-white px-8 py-8 shadow-[0_8px_40px_rgba(24,39,58,0.08)]">
                             <ProcessingFormCanvas
@@ -905,6 +967,74 @@ export default function ProcessingFormBuilder({
                     setDirty(true);
                     setSectionDialogOpen(false);
                 }}
+            />
+        </div>
+    );
+}
+
+type PaperworkRegionVM = {
+    field_id: string;
+    pdf_field: string;
+    page: number;
+    bbox: [number, number, number, number];
+};
+
+/**
+ * The school's own paperwork, as the editing surface.
+ *
+ * The document is drawn clean — `?raw=1`, nothing written into it — and each MAPPED destination is
+ * a selectable region on top of it. Clicking one selects the schema field that prints there, which
+ * is the same selection the native canvas makes, so the right inspector needs no idea which canvas
+ * the operator is looking at.
+ *
+ * What this deliberately does NOT do is offer unmapped boxes. A rectangle is not a destination, and
+ * letting one be clicked into becoming a binding would make geometry the semantic authority. The
+ * mapping decides what is selectable; the document only says where.
+ */
+function SourcePaperworkEditorCanvas({
+    formId,
+    regions,
+    versionId,
+    selectedFieldId,
+    onSelectField,
+}: {
+    formId: string;
+    regions: PaperworkRegionVM[];
+    /** Draw the version the geometry came from, so overlays and page agree. */
+    versionId: string | null;
+    selectedFieldId: string | null;
+    onSelectField: (id: string | null) => void;
+}) {
+    /*
+     * One region per PDF widget, keyed by widget name.
+     *
+     * A fact can print in several boxes — the same child's name on three pages — and all of them
+     * select the same field. The canvas needs unique ids, so the widget name is the id and the
+     * selection resolves back through `field_id`.
+     */
+    const canvasRegions = useMemo(
+        () => regions.map((r) => ({ id: r.pdf_field, page: r.page, bbox: r.bbox, tone: "operator" as const })),
+        [regions],
+    );
+    const fieldByPdfField = useMemo(() => new Map(regions.map((r) => [r.pdf_field, r.field_id])), [regions]);
+    // Every box that prints the selected fact highlights, not only the one that was clicked.
+    const selectedRegionId = useMemo(
+        () => regions.find((r) => r.field_id === selectedFieldId)?.pdf_field ?? null,
+        [regions, selectedFieldId],
+    );
+
+    return (
+        <div
+            className="mx-auto w-full max-w-[900px]"
+            data-testid="form-source-editor-canvas"
+            data-region-count={regions.length}
+        >
+            <ProcessingPdfCanvas
+                url={`/api/admin/forms/${encodeURIComponent(formId)}/paperwork-preview?raw=1${versionId ? `&version_id=${encodeURIComponent(versionId)}` : ""}`}
+                regions={canvasRegions}
+                selectedId={selectedRegionId}
+                onSelectRegion={(id: string | null) => onSelectField(id ? (fieldByPdfField.get(id) ?? null) : null)}
+                className="h-[calc(100vh-240px)] rounded-xl border border-alloy-stone/20 bg-white"
             />
         </div>
     );
