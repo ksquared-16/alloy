@@ -25,7 +25,7 @@
  * Personas come from `fixtures/access-personas.mjs`; run
  * `node ../certification/playwright/fixtures/access-personas.mjs setup` from `web/` first.
  */
-import { test, expect, type Page, type BrowserContext, type Browser } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page, type BrowserContext, type Browser } from "@playwright/test";
 import path from "node:path";
 
 /** The session `auth.setup.ts` captured — resolved from this file, not from the invoking cwd. */
@@ -42,6 +42,16 @@ const PASSWORD = "alloy-local-cert";
 const ROLE_KEY = "mcert_portal_only";
 /** The principal who holds it, and who must gain and lose Financials without signing in again. */
 const TARGET_EMAIL = "cert.portalonly@northwind.invalid";
+
+/**
+ * The person whose MEMBERSHIP is changed, to prove the user placement carries their own events.
+ *
+ * `cert.ops` from `fixtures/access-personas.mjs`, deliberately not the Financials target: replacing
+ * the target's role mid-file would move the ground under the propagation proofs either side of it.
+ */
+const SUBJECT_USER_ID = "c0000000-0000-4000-8000-00000000d003";
+const SUBJECT_ORIGINAL_ROLE = "ops";
+const SUBJECT_REPLACEMENT_ROLE = "mcert_front_desk";
 
 const FIN_NAV = '[data-adminv2-sidebar-modal-nav="financials"]';
 
@@ -61,8 +71,31 @@ function withoutIdentities(text: string): string {
     return text.replace(/\S+@\S+/g, "«actor»");
 }
 
+/**
+ * Navigate to an Access chapter and wait until exactly ONE copy of it is mounted.
+ *
+ * ── THE RACE THIS CLOSES ──
+ *
+ * A cold production server briefly serves two copies of a chapter — the server-rendered one and the
+ * hydrating client one — so `access-security-page`, `access-roles-page` and friends each resolve to
+ * two elements for a few hundred milliseconds after the navigation. Playwright's strict mode
+ * correctly refuses to guess which one an assertion meant, and the run fails on a locator that was
+ * about to be fine. On a warm server the window is too short to see; after a server restart it
+ * reproduced on almost every run, which is the shape of a race rather than of a defect.
+ *
+ * The honest fix is a readiness condition, not forty scoped locators and not a sleep: `toHaveCount(1)`
+ * retries until the duplicate has resolved, and every locator downstream is then unambiguous.
+ */
+async function gotoSurface(page: Page, url: string, pageTestId: string) {
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+    await expect(
+        page.getByTestId(pageTestId),
+        "the chapter must settle to a single mounted copy before it is asserted on"
+    ).toHaveCount(1);
+}
+
 async function openRole(page: Page, roleKey: string) {
-    await page.goto(`${ROLES}&roleKey=${roleKey}`, { waitUntil: "domcontentloaded" });
+    await gotoSurface(page, `${ROLES}&roleKey=${roleKey}`, "access-roles-page");
     await expect(page.getByTestId("access-roles-page")).toBeVisible();
     await expect(page.getByTestId("access-role-selected-workspace")).toBeVisible();
 }
@@ -83,6 +116,116 @@ async function setFinancials(page: Page, level: "none" | "read" | "write"): Prom
         page.getByTestId("access-role-save").click(),
     ]);
     return response.status();
+}
+
+/**
+ * Replace the selected person's role set through the mounted editor, and wait for the server.
+ *
+ * The W-17 acknowledgement only appears when the save would DISCARD another role, so it is ticked
+ * when present rather than assumed — the certification must not depend on how many roles the persona
+ * happens to hold today.
+ */
+async function replaceUserRole(page: Page, roleKey: string) {
+    /*
+     * TAB-AGNOSTIC ON PURPOSE. "Change role & access" lives in the OVERVIEW tab, so a helper that
+     * always clicks it works the first time and then hangs for four minutes the second, because by
+     * then the workspace is already on the access tab and that control no longer exists. The editor
+     * is the destination; how we get there depends on where we already are.
+     */
+    const select = page.getByTestId("access-user-role-select");
+    if (!(await select.count())) {
+        // "Edit User" sits in the workspace header, above the tabs, so it is reachable from any of them.
+        await page.getByTestId("access-user-edit").click();
+    }
+    await expect(select, "the mounted role editor must offer a replacement").toBeVisible();
+    await select.selectOption(roleKey);
+
+    const confirm = page.getByTestId("access-user-role-replace-confirm");
+    if (await confirm.count()) await confirm.check();
+
+    const [response] = await Promise.all([
+        page.waitForResponse((r) => /\/api\/admin\/users\/.+\/role/.test(r.url()) && r.request().method() !== "GET"),
+        page.getByTestId("access-user-role-save").click(),
+    ]);
+    expect(response.status(), await response.text()).toBeLessThan(400);
+}
+
+/**
+ * THE SUBJECT'S BASELINE, ESTABLISHED RATHER THAN ASSUMED.
+ *
+ * ── THE DEFECT THIS EXISTS FOR ──
+ *
+ * The user-history scenario replaces `cert.ops`'s role and puts it back at the end. A run that
+ * ABORTS between those two points leaves the persona holding the replacement role — and the next
+ * run's replacement is then a no-op. The editor correctly disables a no-op save, so nothing is sent,
+ * and the scenario fails four minutes later on a response that was never going to arrive. The
+ * failure names the wrong thing: it reads as "the product did not save" when the truth is "the
+ * previous run did not finish". That is exactly how this was first seen, and a certification that
+ * depends on how the last run happened to end is not a certification.
+ *
+ * So setup does not assume, and does not blindly write either:
+ *   1. READ the canonical state through the members read model the surface itself uses.
+ *   2. RESTORE through the canonical PATCH — the same route the editor calls — only if it is owed.
+ *   3. VERIFY by reading again, and FAIL SETUP if the baseline is not what it must be.
+ *
+ * No raw table writes: the RPC behind that route is the audited producer, and reaching around it to
+ * tidy fixture state would be a second, unaudited way to change access — the exact hole D2 closed.
+ */
+async function readSubjectRoles(request: APIRequestContext): Promise<string[]> {
+    const res = await request.get("/api/admin/settings/users-roles/members");
+    expect(res.status(), "setup must be able to read the members model").toBeLessThan(400);
+    const json = (await res.json()) as { members?: { user_id: string; role_keys?: string[] }[] };
+    const member = (json.members ?? []).find((m) => m.user_id === SUBJECT_USER_ID);
+    expect(member, `setup requires the persona ${SUBJECT_USER_ID}; run the access-personas fixture`).toBeTruthy();
+    return [...(member?.role_keys ?? [])].sort();
+}
+
+async function restoreSubjectBaseline(request: APIRequestContext) {
+    const before = await readSubjectRoles(request);
+
+    if (before.join(",") !== SUBJECT_ORIGINAL_ROLE) {
+        const res = await request.patch(`/api/admin/users/${SUBJECT_USER_ID}/role`, {
+            data: { role: SUBJECT_ORIGINAL_ROLE, expected_role_keys: before },
+        });
+        expect(
+            res.status(),
+            `setup could not restore ${SUBJECT_USER_ID} to "${SUBJECT_ORIGINAL_ROLE}" from [${before.join(", ")}]: ${await res.text()}`
+        ).toBeLessThan(400);
+    }
+
+    const after = await readSubjectRoles(request);
+    expect(
+        after,
+        "setup must establish the exact baseline before the scenario runs — a run that cannot is a failed setup, not a product failure"
+    ).toEqual([SUBJECT_ORIGINAL_ROLE]);
+}
+
+/**
+ * Close the floating operator assistant the way an operator closes it.
+ *
+ * ── WHAT WAS INTERCEPTING THE CLICK, AND WHY IT IS NOT A WORKAROUND ──
+ *
+ * The BOS rail mounts in `floating` mode with operator-controlled geometry, `pointer-events: auto`
+ * and `z-index: 95`. At this viewport it occupies x 856–1256, y 80–696 — and "Change role & access"
+ * sits at x 877–1036, y 391–421, entirely underneath it. `document.elementFromPoint` at the button's
+ * centre returns the rail's conversation region, not the button. So the interception is REAL: an
+ * operator with the assistant floating there cannot click that control either, and Playwright
+ * retrying for four minutes was reporting the truth rather than being fussy.
+ *
+ * The first attempt at this clicked a page-wide "Close" and then overrode `pointer-events` when that
+ * appeared not to work. Both were wrong. The page-wide locator matched a different Close control in
+ * the shell, and the override would have hidden a genuine pointer conflict behind a green test —
+ * which is precisely how a certification starts lying. Scoped to the rail, its own Close button
+ * removes it from the DOM entirely and the click then lands on the button.
+ *
+ * So this is the canonical operator interaction, and the readiness condition is the rail's ABSENCE
+ * rather than a sleep.
+ */
+async function closeOperatorAssistant(page: Page) {
+    const rail = page.locator("[data-adminv2-bos-rail-overlay]");
+    if (!(await rail.count())) return;
+    await rail.getByRole("button", { name: "Close" }).first().click();
+    await expect(rail, "the assistant must actually be gone before the surface beneath it is used").toHaveCount(0);
 }
 
 /** Sign a persona in and report where the shell put them. Admission is observed, never asserted. */
@@ -127,11 +270,47 @@ test.describe("D2 — access change audit, mounted", () => {
             data: { permission_keys: ["portal.access"] },
         });
         expect(res.status(), await res.text()).toBeLessThan(400);
+
+        // AND THE SUBJECT'S MEMBERSHIP — read, restore, then VERIFY. See `restoreSubjectBaseline`.
+        await restoreSubjectBaseline(context.request);
+
         await context.close();
     });
 
     test.afterAll(async () => {
         await target?.context.close();
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PHASE 0 — the certification can survive its own abort.
+    // ─────────────────────────────────────────────────────────────────────────
+    test("setup restores the subject's baseline after a run that aborted mid-scenario", async ({ browser }) => {
+        /*
+         * The regression for the failure that cost this matrix two runs: an aborted run left
+         * `cert.ops` on the replacement role, and the next run's save was a silently-disabled no-op.
+         * This reproduces that leftover state deliberately — through the canonical route, so the
+         * abort is simulated honestly — and then requires setup to put it back.
+         *
+         * If this ever fails, the suite has gone back to depending on how the previous run ended.
+         */
+        const context = await browser.newContext({ storageState: OPERATOR_STATE });
+
+        // Leave the mess an aborted run leaves.
+        const dirtied = await context.request.patch(`/api/admin/users/${SUBJECT_USER_ID}/role`, {
+            data: { role: SUBJECT_REPLACEMENT_ROLE },
+        });
+        expect(dirtied.status(), await dirtied.text()).toBeLessThan(400);
+        expect(await readSubjectRoles(context.request)).toEqual([SUBJECT_REPLACEMENT_ROLE]);
+
+        // Setup must clean it up, and say so.
+        await restoreSubjectBaseline(context.request);
+        expect(await readSubjectRoles(context.request)).toEqual([SUBJECT_ORIGINAL_ROLE]);
+
+        // And it must be idempotent: a second run over an ALREADY-clean baseline is also fine.
+        await restoreSubjectBaseline(context.request);
+        expect(await readSubjectRoles(context.request)).toEqual([SUBJECT_ORIGINAL_ROLE]);
+
+        await context.close();
     });
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -192,7 +371,7 @@ test.describe("D2 — access change audit, mounted", () => {
     });
 
     test("the organization Security audit log carries the same event", async ({ page }) => {
-        await page.goto(SECURITY, { waitUntil: "domcontentloaded" });
+        await gotoSurface(page, SECURITY, "access-security-page");
         await expect(page.getByTestId("access-security-page")).toBeVisible();
 
         const card = page.getByTestId("access-security-audit-log");
@@ -272,7 +451,7 @@ test.describe("D2 — access change audit, mounted", () => {
         // Current state, not history: the revoke is the standing truth.
         await expect(page.getByTestId("access-role-area-financials")).toHaveAttribute("data-authority", "none");
 
-        await page.goto(SECURITY, { waitUntil: "domcontentloaded" });
+        await gotoSurface(page, SECURITY, "access-security-page");
         await expect(entries(page, "access-security-audit-log-list").first()).toBeVisible();
 
         await fresh.close();
@@ -282,29 +461,68 @@ test.describe("D2 — access change audit, mounted", () => {
     // PHASE 3 — the user placement carries only that person's events.
     // ─────────────────────────────────────────────────────────────────────────
     test("a person's history card shows their own access changes and not their role's", async ({ page }) => {
-        await page.goto(USERS, { waitUntil: "domcontentloaded" });
+        /*
+         * THE NEGATIVE HALF USED TO BE THE WHOLE TEST, AND IT PASSED ON AN EMPTY CARD.
+         *
+         * This selected whichever member sorted first and then asserted only that no
+         * `access.role.grants_changed` row appeared. A person nobody had ever changed satisfies that
+         * perfectly — the card rendered "No access changes have been recorded for this person yet."
+         * and the assertion looped zero times. The evidence run is what exposed it: the screenshot
+         * named `05-user-access-history` was a picture of the empty state.
+         *
+         * So the mutation is made HERE, on a named persona, through the mounted editor, and the
+         * positive half is asserted before the negative one. `cert.ops` is used rather than the
+         * Financials target because a role replacement on the target would disturb the propagation
+         * proofs either side of this test.
+         */
+        await gotoSurface(page, USERS, "access-users-page");
         await expect(page.getByTestId("access-users-page")).toBeVisible();
 
-        const members = page.locator('[role="option"][data-testid^="access-user-"]');
-        await expect(members.first()).toBeVisible();
-        await members.first().click();
+        await closeOperatorAssistant(page);
+        await page.getByTestId(`access-user-${SUBJECT_USER_ID}`).click();
         await expect(page.getByTestId("access-user-selected-workspace")).toBeVisible();
+
+        // A role replacement THROUGH THE EXISTING editor — the user-affecting mutation Phase 3 asks
+        // for, and the one that produces `access.user.roles_changed` rather than a role's own event.
+        await replaceUserRole(page, SUBJECT_REPLACEMENT_ROLE);
 
         const card = page.getByTestId("access-user-history");
         await expect(card, "history is a CARD in the selected-user workspace").toBeVisible();
+        await card.scrollIntoViewIfNeeded();
 
-        // Whatever it holds, it holds nothing about a ROLE's capability package — that belongs to the
-        // role's own history, and showing it here would imply this person was individually changed.
-        const kinds = await entries(page, "access-user-history-list").evaluateAll((els) =>
-            els.map((e) => e.getAttribute("data-command-key") ?? "")
+        const rows = entries(page, "access-user-history-list");
+        await expect(rows.first(), "the change just made must be in this person's history").toBeVisible();
+
+        const kinds = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-command-key") ?? ""));
+
+        // THE POSITIVE HALF: their own change is here, and the card is not empty.
+        expect(kinds, "this person's own membership change belongs in their history").toContain(
+            "access.user.roles_changed"
         );
+
+        // THE NEGATIVE HALF: it holds nothing about a ROLE's capability package — that belongs to the
+        // role's own history, and showing it here would imply this person was individually changed.
         for (const kind of kinds) {
             expect(kind, "a role's capability change is not a change to this person").not.toBe("access.role.grants_changed");
         }
+
+        /*
+         * The history the certification just wrote is permanent; the membership it describes is not.
+         *
+         * Put back through the CANONICAL ROUTE rather than by driving the editor a second time. The
+         * scenario's claim is about the mounted mutation above and the card that reports it, and one
+         * mounted mutation proves that. A second consecutive save on the same screen races the
+         * `router.refresh()` the first one triggers: the re-render clears the W-17 acknowledgement,
+         * the handler's guard then returns without sending anything, and the cleanup hangs on a
+         * response that was never going to come. That race is not user-visible — the operator sees
+         * the box untick and the button disable — so it is housekeeping, not a defect to certify
+         * here, and the restore uses the same audited producer either way.
+         */
+        await restoreSubjectBaseline(page.request);
     });
 
     test("history is a card, never a tab — the chapter bar is still the only tab bar", async ({ page }) => {
-        await page.goto(USERS, { waitUntil: "domcontentloaded" });
+        await gotoSurface(page, USERS, "access-users-page");
         const members = page.locator('[role="option"][data-testid^="access-user-"]');
         await expect(members.first()).toBeVisible();
         await members.first().click();
@@ -328,7 +546,7 @@ test.describe("D2 — access change audit, mounted", () => {
             await route.continue();
         });
 
-        await page.goto(SECURITY, { waitUntil: "domcontentloaded" });
+        await gotoSurface(page, SECURITY, "access-security-page");
         await expect(page.getByTestId("access-security-audit-log-list-loading")).toBeVisible();
         // The lie W-57 removed, in a new place: an answer asserted before the product has one.
         await expect(page.getByTestId("access-security-audit-log-list-empty")).toHaveCount(0);
@@ -343,7 +561,7 @@ test.describe("D2 — access change audit, mounted", () => {
             route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "boom" }) })
         );
 
-        await page.goto(SECURITY, { waitUntil: "domcontentloaded" });
+        await gotoSurface(page, SECURITY, "access-security-page");
         const error = page.getByTestId("access-security-audit-log-list-error");
         await expect(error).toBeVisible();
         // "Nothing happened" and "we could not find out" are different answers.
@@ -358,7 +576,7 @@ test.describe("D2 — access change audit, mounted", () => {
             route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ entries: [], next_cursor: null, limit: 25 }) })
         );
 
-        await page.goto(SECURITY, { waitUntil: "domcontentloaded" });
+        await gotoSurface(page, SECURITY, "access-security-page");
         const empty = page.getByTestId("access-security-audit-log-list-empty");
         await expect(empty).toBeVisible();
         await expect(empty).not.toContainText(/planned/i);
@@ -369,7 +587,7 @@ test.describe("D2 — access change audit, mounted", () => {
     // PHASE 17 (mounted half) — Load more appends without repeating.
     // ─────────────────────────────────────────────────────────────────────────
     test("Load more appends the next page without repeating a row", async ({ page }) => {
-        await page.goto(SECURITY, { waitUntil: "domcontentloaded" });
+        await gotoSurface(page, SECURITY, "access-security-page");
         await expect(entries(page, "access-security-audit-log-list").first()).toBeVisible();
 
         const more = page.getByTestId("access-security-audit-log-list-load-more");
