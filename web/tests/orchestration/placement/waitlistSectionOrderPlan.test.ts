@@ -14,7 +14,16 @@ import {
     resolveOrderFromOrdinals,
 } from "@/lib/orchestration/placement/waitlistSectionOrderPlan";
 
-/** The deployed Infant section, natural rank order. */
+/**
+ * A synthetic twelve-row section, used as the natural order for the behavioural tests below.
+ *
+ * It is NOT the deployed Firefly natural order, despite being the same names — it is what Firefly
+ * RENDERS. The real natural rank of TP8, TP6 and TP3 is not knowable from any observation, because
+ * all three have carried pins since before anyone looked; see the repair suite at the bottom, which
+ * handles that by enumerating every natural order consistent with the evidence instead of picking
+ * one. For tests that only need "a section with a defined order", this is fine and the distinction
+ * does not bite.
+ */
 const NATURAL = ["PassA", "TP8", "TP6", "TP3", "Wrigley", "TP11", "PassB", "TP10", "TP7", "TP5", "TP4", "TP9"];
 
 /** Plan a move and return the order it actually reproduces. */
@@ -131,5 +140,114 @@ describe("membership changes keep the list dense and the manual intent intact", 
         const resolved = resolveOrderFromOrdinals(bigger, plan.ordinals);
         expect(resolved.indexOf("Wrigley") + 1).toBe(2);
         expect(resolved).toHaveLength(13);
+    });
+});
+
+/**
+ * THE FIREFLY REPAIR, AND WHY IT DOES NOT REST ON A GUESS.
+ *
+ * A faulty writer renumbered live overrides at 16:24:18 on 2026-09-11. Repairing that means
+ * reproducing what the operators asked for — which requires knowing the natural order, and the
+ * natural order CANNOT be observed: TP8, TP6 and TP3 have carried pins since 14:55, so their
+ * natural rank has never been displayed. Two renders are known (one captured while a QA pin was
+ * live, one damaged), and between them they pin down the natural order only to within 660
+ * possibilities.
+ *
+ * Picking one of the 660 and hoping would be exactly the class of mistake that caused the damage.
+ * So these tests enumerate all of them, and assert the two things that make the unknown harmless:
+ * the captured baseline is clean in every case, and the derived plan is identical in every case.
+ *
+ * See `qa/repair/waitlist-ordering-repair-plan.md` for the ledger and the timeline.
+ */
+describe("the Firefly repair is invariant under everything that is not known", () => {
+    /** Captured while Wrigley still held QA pin `7e83e653` at ordinal 4. */
+    const CAPTURED = ["PassA", "TP8", "TP6", "TP3", "Wrigley", "TP11", "PassB", "TP10", "TP7", "TP5", "TP4", "TP9"];
+    /** After the faulty writer renumbered, with Wrigley's QA override cleared. */
+    const DAMAGED = ["PassA", "Wrigley", "TP6", "TP8", "TP11", "TP10", "TP3", "PassB", "TP7", "TP5", "TP4", "TP9"];
+    /** Stored ordinals at census 15:49 — before the damage. `94984f6c` is omitted: it renders nowhere. */
+    const LEGITIMATE = new Map([["TP8", 2], ["TP6", 2], ["TP3", 3]]);
+    /** Stored ordinals at census 16:52 — after it. */
+    const CORRUPTED = new Map([["TP6", 3], ["TP8", 4], ["TP3", 7], ["PassB", 8]]);
+
+    /** Rows unpinned in BOTH renders keep natural relative order in both, so their interleaving is readable. */
+    const BACKBONE = ["PassA", "Wrigley", "TP11", "PassB", "TP10", "TP7", "TP5", "TP4", "TP9"];
+
+    /** Every natural order that could have produced both observed renders. */
+    const consistent: string[][] = (() => {
+        const insertions = (base: string[], id: string) =>
+            base.map((_, i) => [...base.slice(0, i), id, ...base.slice(i)]).concat([[...base, id]]);
+        const all: string[][] = [];
+        for (const a of insertions(BACKBONE, "TP8"))
+            for (const b of insertions(a, "TP6"))
+                for (const c of insertions(b, "TP3")) all.push(c);
+        return all.filter(
+            (nat) =>
+                JSON.stringify(resolveOrderFromOrdinals(nat, new Map([...LEGITIMATE, ["Wrigley", 4]]))) ===
+                    JSON.stringify(CAPTURED) &&
+                JSON.stringify(resolveOrderFromOrdinals(nat, CORRUPTED)) === JSON.stringify(DAMAGED),
+        );
+    })();
+
+    it("the evidence narrows the natural order, but does not determine it", () => {
+        expect(consistent.length).toBe(660);
+    });
+
+    it("the QA pin on Wrigley was order-preserving, so the captured baseline is clean", () => {
+        // Ordinal 4 seated Wrigley exactly where his natural rank already put him once the three
+        // legitimate pins were placed ahead of him. This is why the capture can be used at all.
+        for (const natural of consistent) {
+            expect(resolveOrderFromOrdinals(natural, LEGITIMATE)).toEqual(CAPTURED);
+        }
+    });
+
+    it("PassB's recorded ordinal means position 8 whichever list it was read against", () => {
+        // `created_at == updated_at` on that override proves no later pass rewrote it, so 8 is the
+        // operator's own number. It resolves to seat 8 over the legitimate state and over the
+        // damaged one alike, so the requested position is unambiguous either way.
+        for (const natural of consistent) {
+            const withPassB = new Map([...LEGITIMATE, ["PassB", 8]]);
+            expect(resolveOrderFromOrdinals(natural, withPassB).indexOf("PassB") + 1).toBe(8);
+        }
+        expect(DAMAGED.indexOf("PassB") + 1).toBe(8);
+    });
+
+    it("one ordinal plan reproduces the target for every possible natural order", () => {
+        const target = planListMove(CAPTURED, "PassB", 8);
+        expect(target).toEqual(
+            ["PassA", "TP8", "TP6", "TP3", "Wrigley", "TP11", "TP10", "PassB", "TP7", "TP5", "TP4", "TP9"],
+        );
+
+        const plans = consistent.map((naturalOrder) =>
+            deriveCanonicalManualOrdinals({
+                naturalOrder,
+                desiredOrder: target,
+                pinnedIds: ["TP8", "TP6", "TP3", "PassB"],
+            }),
+        );
+
+        for (const plan of plans) {
+            expect(plan.reproduces).toBe(true);
+            expect(plan.resolved).toEqual(target);
+        }
+
+        const distinct = new Set(plans.map((p) => JSON.stringify([...p.ordinals].sort())));
+        expect(distinct.size).toBe(1);
+        expect(Object.fromEntries(plans[0]!.ordinals)).toEqual({ TP8: 2, TP6: 3, TP3: 4, PassB: 8 });
+    });
+
+    it("the repair moves only the adjusted row and the one it displaces", () => {
+        const target = planListMove(CAPTURED, "PassB", 8);
+        const moved = CAPTURED.filter((id) => CAPTURED.indexOf(id) !== target.indexOf(id));
+        expect(moved).toEqual(["PassB", "TP10"]);
+    });
+
+    it("TP6 and TP3 change ordinal value without changing position", () => {
+        // This is the whole point of canonicalisation: 2,2,3 becomes 2,3,4 so the writer and the
+        // renderer can never disagree again — while the operator sees nothing move.
+        const target = planListMove(CAPTURED, "PassB", 8);
+        for (const id of ["TP6", "TP3"]) {
+            expect(target.indexOf(id)).toBe(CAPTURED.indexOf(id));
+            expect(LEGITIMATE.get(id)).not.toBe(target.indexOf(id) + 1);
+        }
     });
 });
