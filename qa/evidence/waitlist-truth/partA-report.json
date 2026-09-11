@@ -1,0 +1,43 @@
+{
+  "capturedAt": "2026-09-11T19:32:18.508Z",
+  "rows": [
+    {
+      "tourLabel": "Tour ▾",
+      "stage": "waitlist",
+      "recordOutcome": false,
+      "subject": "Wrigley KurzmanWaitlist "
+    },
+    {
+      "tourLabel": "Tour ▾",
+      "stage": "waitlist",
+      "recordOutcome": false,
+      "subject": "PKPassA KidWaitlist · To"
+    },
+    {
+      "tourLabel": "Tour ▾",
+      "stage": "waitlist",
+      "recordOutcome": false,
+      "subject": "TPTest Process7Waitlist "
+    },
+    {
+      "tourLabel": "Tour ▾",
+      "stage": "waitlist",
+      "recordOutcome": false,
+      "subject": "TPTest Process5Waitlist "
+    },
+    {
+      "tourLabel": "Tour ▾",
+      "stage": "waitlist",
+      "recordOutcome": false,
+      "subject": "TPTest Process4Waitlist "
+    },
+    {
+      "tourLabel": "Tour ▾",
+      "stage": "waitlist",
+      "recordOutcome": false,
+      "subject": "TPTest Process6Waitlist "
+    }
+  ],
+  "anyAwaitingOutcome": false,
+  "anyRecordOutcome": false
+}
