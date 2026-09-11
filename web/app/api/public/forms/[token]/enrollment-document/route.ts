@@ -17,6 +17,8 @@ import { publicErr } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
 import { renderParticipantEnrollmentDocument } from "@/lib/enrollment/participantRuntime/renderParticipantEnrollmentDocument";
+import { resolveAcknowledgmentStepDocument } from "@/lib/enrollment/participantRuntime/resolveAcknowledgmentStepDocument";
+import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
 
 function plaintextToken(raw: string): string {
     try {
@@ -39,6 +41,38 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (!access.ok) {
         return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : 409, {
             code: access.error.code,
+        });
+    }
+
+    /*
+     * A READ & ACKNOWLEDGE STEP REVIEWS THE SCHOOL'S DOCUMENT, NOT THE ADAPTER'S PAGE.
+     *
+     * Found by walking the step as a parent. The review surface rendered the generated adapter
+     * form — a single line reading "I have read and agree to the Family Handbook" — and asked for a
+     * signature on it. The parent would have signed an agreement to a 23-page Handbook they were
+     * never shown, which is not evidence of agreement to anything.
+     *
+     * So on an acknowledgment step the artifact under review IS the acknowledged document, served
+     * as published. The adapter still carries the affirmation and the signature, and the whole
+     * existing review surface — page navigation, "View larger", the signature capture — works
+     * unchanged above it. This is a seam, not a second viewer.
+     */
+    const ack = await resolveAcknowledgmentStepDocument(supabase, {
+        orgId: access.value.orgId,
+        sessionId: access.value.sessionId,
+    });
+    if (ack) {
+        const file = await downloadDocumentBytesSafe(supabase, { orgId: access.value.orgId, documentId: ack.documentId });
+        if (!file) return publicErr("Document unavailable.", 409, { code: "DOCUMENT_UNAVAILABLE" });
+        return new NextResponse(Buffer.from(file.bytes), {
+            status: 200,
+            headers: {
+                "content-type": file.mimeType ?? "application/pdf",
+                "content-disposition": "inline",
+                // The family must see what the school publishes NOW, not a cached earlier edition.
+                "cache-control": "no-store",
+                "server-timing": timing.header(),
+            },
         });
     }
 
