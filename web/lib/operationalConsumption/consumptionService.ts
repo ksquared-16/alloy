@@ -30,6 +30,7 @@ import {
 import { resolveConsumption, type ConsumptionResolution } from "@/lib/operationalConsumption/resolveConsumption";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
+import type { VacationTreatment } from "@/lib/financials/policies/financialPolicyTypes";
 import type { ChildcareRatePlanRow, ChildcareRateRuleRow } from "@/lib/financials/rates/rateTypes";
 // Phase 9 — Billing prices tuition from Commercial Execution (frozen V1), not Substrate A.
 import { composeCommercialExport } from "@/lib/commercial/execution/export";
@@ -263,7 +264,6 @@ function buildCandidate(fact: OperationalFactDto, today: string): ConsumptionCan
             check_out_time: fact.checkOutTime ?? null,
             late_threshold_time: fact.lateThresholdTime ?? null,
             hours: fact.hours ?? null,
-            vacation_eligible: fact.vacationEligible ?? null,
             schedule_basis: fact.scheduleBasis ?? null,
         },
     };
@@ -590,7 +590,6 @@ async function previewAttendanceConsumption(
     const candidate = buildCandidate(fact, today);
     const agreementId = agreementIdFromFact(fact);
     const scope = await resolveAgreementScope(supabase, orgId, fact, agreementId);
-    const interpretation = interpretAttendance(fact);
 
     const plans = await listRows<ChildcareRatePlanRow>(supabase, RATE_PLANS_TABLE, orgId);
     const rules = await listRows<ChildcareRateRuleRow>(supabase, RATE_RULES_TABLE, orgId);
@@ -599,6 +598,20 @@ async function previewAttendanceConsumption(
     const anchorDate = fact.occursOn ?? fact.eventDate ?? today;
     const periodStart = fact.periodStart ?? firstOfMonth(anchorDate);
     const policyCtx = { locationId: scope.siteLocationId ?? undefined, serviceId: undefined, ratePlanId: undefined };
+
+    /*
+     * POLICY IS RESOLVED BEFORE INTERPRETATION, because interpretation now needs
+     * it. `vacation_credit` goes through the ordinary scope hierarchy — org,
+     * location, service, rate plan, most-specific-wins, effective-dated — with no
+     * attendance-specific precedence of its own. The interpreter stays pure; the
+     * commercial answer is handed to it.
+     */
+    const vacationPolicy = resolveFinancialPolicy(policies, "vacation_credit", policyCtx, anchorDate);
+    const vacationTreatment = vacationPolicy.resolved
+        ? ((vacationPolicy.policy.value as { treatment?: VacationTreatment }).treatment ?? null)
+        : null;
+    const interpretation = interpretAttendance(fact, { vacationTreatment });
+
     const proration = resolveFinancialPolicy(policies, "proration", policyCtx, anchorDate);
     const reviewPolicy = resolveFinancialPolicy(policies, "posting_review", policyCtx, anchorDate);
     const reviewByPolicy = reviewPolicy.resolved ? reviewPolicy.policy.value.required === true : false;
@@ -606,7 +619,22 @@ async function previewAttendanceConsumption(
     const hasVacationCredit = interpretation.directives.some((d) => d.obligationKind === "vacation_credit");
     const policiesApplied: PolicyApplication[] = [
         { policyType: "posting_review", scope: reviewPolicy.resolved ? reviewPolicy.sourceScope : null, value: reviewPolicy.resolved ? reviewPolicy.policy.value : null, applied: reviewByPolicy, effect: reviewByPolicy ? "obligations flagged review_required" : "no review required" },
-        { policyType: "vacation_credit_eligibility", scope: null, value: { eligible: fact.vacationEligible === true }, applied: hasVacationCredit, effect: hasVacationCredit ? "absence → vacation credit (preview)" : "no vacation credit (not eligible / not an absence)" },
+        /*
+         * The REAL resolved policy, with its scope, replacing a synthetic entry
+         * that reported `scope: null` and a value read off the fact. The lineage
+         * an auditor reads must name the policy that actually decided.
+         */
+        {
+            policyType: "vacation_credit",
+            scope: vacationPolicy.resolved ? vacationPolicy.sourceScope : null,
+            value: vacationPolicy.resolved ? vacationPolicy.policy.value : null,
+            applied: hasVacationCredit,
+            effect: vacationTreatment === "credit"
+                ? "vacation policy = credit → absence earns a vacation credit"
+                : vacationTreatment === "no_credit"
+                  ? "vacation policy = no_credit → no credit"
+                  : "no vacation_credit policy configured → no automatic credit",
+        },
         { policyType: "proration", scope: proration.resolved ? proration.sourceScope : null, value: proration.resolved ? proration.policy.value : null, applied: hasVacationCredit, effect: proration.resolved ? `method=${(proration.policy.value as { method?: string }).method ?? "?"}` : "no proration policy (default none)" },
     ];
 

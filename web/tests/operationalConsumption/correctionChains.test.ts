@@ -61,7 +61,7 @@ describe("D12a chains", () => {
         expect(store.charges.find((c) => c.id === chargeId)!.status).toBe("draft");
 
         // Second correction eliminates the fee (absence, not vacation-eligible → no directive).
-        await draftConsumption(supabase, ORG_ID, att({ sourceEntityId: "att-2", attendanceFactType: "absence", vacationEligible: false, entryType: "correction", correctsFactId: "att-1" }), TODAY, "user-1");
+        await draftConsumption(supabase, ORG_ID, att({ sourceEntityId: "att-2", attendanceFactType: "absence", entryType: "correction", correctsFactId: "att-1" }), TODAY, "user-1");
         expect(store.resolved_obligations.find((o) => o.id === oblId)!.status).toBe("superseded");
         expect(store.charges.find((c) => c.id === chargeId)!.status).toBe("void");
     });

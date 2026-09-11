@@ -142,9 +142,17 @@ describe("attendance consumption — other scenarios through the same pipeline",
         expect(store.charges[0]).toMatchObject({ amount_cents: 4500 });
     });
 
-    it("absence + vacation eligibility → a preview-only vacation credit (no draft charge)", async () => {
-        const { store, supabase } = setup();
-        const r = await draftConsumption(supabase, ORG_ID, attFact({ attendanceFactType: "absence", vacationEligible: true }), TODAY, "user-1");
+    it("absence under a vacation_credit policy → a preview-only vacation credit (no draft charge)", async () => {
+        // The credit now comes from configuration, so the store must carry it.
+        const { store, supabase } = setup({
+            financial_policies: [{
+                id: "pol-vac", org_id: ORG_ID, policy_type: "vacation_credit", scope_type: "org",
+                location_id: null, service_id: null, rate_plan_id: null,
+                value: { treatment: "credit" }, effective_start: "2026-01-01", effective_end: null,
+                label: null, description: null, metadata: {},
+            }],
+        });
+        const r = await draftConsumption(supabase, ORG_ID, attFact({ attendanceFactType: "absence" }), TODAY, "user-1");
         expect(r.resolution.obligations[0]).toMatchObject({ obligationKind: "vacation_credit", draftable: false });
         expect(store.charges).toHaveLength(0);
     });
