@@ -28,7 +28,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
-import { readPacketStepConfig } from "@/lib/forms/packets/packetStepKind";
+import { resolveAcknowledgmentStepDocument } from "@/lib/enrollment/participantRuntime/resolveAcknowledgmentStepDocument";
 
 function plaintextToken(raw: string): string {
     try {
@@ -53,31 +53,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const { orgId, sessionId } = access.value;
 
-    const { data: item } = await supabase
-        .from("form_packet_session_items")
-        .select("packet_item_id")
-        .eq("org_id", orgId)
-        .eq("packet_session_id", sessionId)
-        .eq("status", "active")
-        .maybeSingle();
-    const packetItemId = (item as { packet_item_id?: string } | null)?.packet_item_id;
-    if (!packetItemId) return publicErr("No active step.", 404, { code: "NO_ACTIVE_STEP" });
-
-    const { data: packetItem } = await supabase
-        .from("form_packet_items")
-        .select("metadata")
-        .eq("org_id", orgId)
-        .eq("id", packetItemId)
-        .maybeSingle();
-
-    const config = readPacketStepConfig((packetItem as { metadata?: unknown } | null)?.metadata);
-    if (config.kind !== "document_acknowledgment" || !config.acknowledgmentDocumentId) {
-        return publicErr("This step has no document to read.", 404, { code: "NO_STEP_DOCUMENT" });
-    }
+    const step = await resolveAcknowledgmentStepDocument(supabase, { orgId, sessionId });
+    if (!step) return publicErr("This step has no document to read.", 404, { code: "NO_STEP_DOCUMENT" });
 
     const file = await downloadDocumentBytesSafe(supabase, {
         orgId,
-        documentId: config.acknowledgmentDocumentId,
+        documentId: step.documentId,
     });
     if (!file) return publicErr("Document unavailable.", 409, { code: "DOCUMENT_UNAVAILABLE" });
 
