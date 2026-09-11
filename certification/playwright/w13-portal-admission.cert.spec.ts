@@ -56,14 +56,22 @@ async function signIn(browser: Browser, email: string): Promise<SignIn> {
     const pw = page.locator('input[type="password"]').first();
     await pw.fill(PASSWORD);
     await pw.press("Enter");
-    let admitted = true;
+
+    /*
+     * AUTHENTICATION SUCCEEDS FOR EVERY PERSONA HERE. Admission is the variable, and the two are
+     * genuinely different events: a refused principal signs in, is sent to the workspace by the
+     * login page, and is bounced back to /login by the shell. So the URL is read AFTER that bounce
+     * settles — a `waitForURL("**\/workspace**")` alone can catch the transit and report a refusal
+     * as an admission.
+     */
     try {
-        await page.waitForURL("**/workspace**", { timeout: 60_000 });
+        await page.waitForURL("**/workspace**", { timeout: 45_000 });
     } catch {
-        admitted = false;
+        // Refused, or slow. Either way the settled URL below is the answer.
     }
-    await page.waitForLoadState("domcontentloaded");
-    return { page, context, admitted, url: page.url() };
+    await page.waitForLoadState("networkidle").catch(() => undefined);
+    const url = page.url();
+    return { page, context, admitted: url.includes("/workspace"), url };
 }
 
 /** The role-editor endpoint the Access page itself submits to — not a direct table write. */
