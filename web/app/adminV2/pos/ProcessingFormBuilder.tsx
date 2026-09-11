@@ -33,6 +33,7 @@ import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import ProcessingFormBuilderLibraryPanel from "./ProcessingFormBuilderLibraryPanel";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
 import ProcessingFormCanvas, { type CanvasDropTarget } from "./ProcessingFormCanvas";
+import ProcessingPdfCanvas from "./ProcessingPdfCanvas";
 import ProcessingFormDistributionPanel from "./ProcessingFormDistributionPanel";
 import ProcessingFormPublishedBar from "./ProcessingFormPublishedBar";
 import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
@@ -910,47 +911,45 @@ export default function ProcessingFormBuilder({
 }
 
 /**
- * The document this form produces, fetched as a PDF and shown in place.
+ * The document this form produces, rendered in place.
  *
- * Deliberately a plain object embed rather than a page-by-page viewer: this is a configuration
- * check, and the browser's own PDF reader already scrolls, zooms and prints. Building a second
- * viewer here would be a new surface to maintain for no answer it could give that this one cannot.
+ * Uses `ProcessingPdfCanvas` — the same pdf.js canvas the Processing importer already paints
+ * documents with — rather than handing the bytes to the browser's PDF plugin. A first attempt did
+ * the latter and fell straight through to "Your browser cannot display PDFs inline", which is the
+ * kind of thing that only shows up when you actually look at the screen. Reusing the canvas also
+ * keeps the promise made everywhere else in this work: no second viewer.
  *
- * A form with no source document is not an error. It is simply a form that families complete on
- * screen, and the panel says so in those words rather than showing a broken frame.
+ * A form with no source document is not an error. It is a form families complete on screen, and the
+ * panel says so in those words instead of showing a dead frame.
  */
 function FormPaperworkPreview({ formId }: { formId: string }) {
+    const url = `/api/admin/forms/${encodeURIComponent(formId)}/paperwork-preview`;
     const [state, setState] = useState<
-        { kind: "loading" } | { kind: "ready"; url: string } | { kind: "none"; message: string }
+        { kind: "loading" } | { kind: "ready" } | { kind: "none"; message: string }
     >({ kind: "loading" });
 
+    // Ask first, so a form with no paperwork explains itself rather than failing inside the canvas.
     useEffect(() => {
         let live = true;
-        let objectUrl: string | null = null;
         setState({ kind: "loading" });
         void (async () => {
             try {
-                const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/paperwork-preview`, {
-                    credentials: "include",
-                });
-                if (!res.ok) {
-                    const j = (await res.json().catch(() => ({}))) as { error?: string };
-                    if (live) setState({ kind: "none", message: j.error ?? "The paperwork could not be shown." });
+                const res = await fetch(url, { credentials: "include" });
+                if (!live) return;
+                if (res.ok) {
+                    setState({ kind: "ready" });
                     return;
                 }
-                const blob = await res.blob();
-                objectUrl = URL.createObjectURL(blob);
-                if (live) setState({ kind: "ready", url: objectUrl });
-                else URL.revokeObjectURL(objectUrl);
+                const j = (await res.json().catch(() => ({}))) as { error?: string };
+                setState({ kind: "none", message: j.error ?? "The paperwork could not be shown." });
             } catch {
                 if (live) setState({ kind: "none", message: "The paperwork could not be shown." });
             }
         })();
         return () => {
             live = false;
-            if (objectUrl) URL.revokeObjectURL(objectUrl);
         };
-    }, [formId]);
+    }, [url]);
 
     if (state.kind === "loading") {
         return (
@@ -970,19 +969,16 @@ function FormPaperworkPreview({ formId }: { formId: string }) {
         );
     }
     return (
-        <object
-            data={state.url}
-            type="application/pdf"
-            className="mx-auto block h-[calc(100vh-220px)] w-full max-w-[900px] rounded-xl border border-alloy-stone/20 bg-white"
-            data-testid="form-paperwork-document"
-        >
-            <p className="p-4 text-[13px] text-alloy-midnight/70">
-                Your browser cannot display PDFs inline.{" "}
-                <a href={state.url} className="font-semibold text-alloy-blue underline">
-                    Open the paperwork
-                </a>
-            </p>
-        </object>
+        <div className="mx-auto w-full max-w-[900px]" data-testid="form-paperwork-document">
+            <ProcessingPdfCanvas
+                url={url}
+                regions={[]}
+                selectedId={null}
+                onSelectRegion={() => {}}
+                onError={(message) => setState({ kind: "none", message })}
+                className="h-[calc(100vh-240px)] rounded-xl border border-alloy-stone/20 bg-white"
+            />
+        </div>
     );
 }
 
