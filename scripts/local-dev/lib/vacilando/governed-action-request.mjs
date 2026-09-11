@@ -922,6 +922,9 @@ export function publicGovernedAction(req) {
     director_approval: req.director_approval || null,
     director_decision: req.director_decision || null,
     escalation_reason: req.escalation_reason || null,
+    // The answer to "why did you not ask me about this one?", on the record
+    // itself rather than only in the audit stream.
+    authorization_basis: req.authorization_basis || null,
     created_at: req.created_at,
     updated_at: req.updated_at,
   };
@@ -1094,6 +1097,11 @@ function appendAudit(rec, event, extra = {}, root = runtimeRoot()) {
     target: rec.target || null,
     artifact_refs: rec.artifact_refs || [],
     policy_decision: rec.policy_decision || null,
+    // The two halves of accountability, carried on every audit line rather than
+    // reconstructed later from a store that retains only the last 200 requests:
+    // why this ran unattended, and why it had to ask.
+    authorization_basis: rec.authorization_basis || null,
+    escalation_reason: rec.escalation_reason || null,
     // Inspectable authority: what the mission delegated, and the Director's own
     // sentence that delegated it. Present only when delegation supplied the
     // approval; `delegation_declined` says why it did not when it could have.
@@ -1556,6 +1564,66 @@ function defaultModeForAction(actionKey, requested) {
   return "read_only";
 }
 
+/**
+ * THE DEFAULT TARGET OF AN ACTION IS THE THING THE ACTION ACTUALLY TOUCHES.
+ *
+ * THE DEFECT. `target` was defaulted to DEFAULT_TARGET — the deployed DATABASE
+ * identifier — for every action key except the four promotion ones. But `target`
+ * is not only a database name: `environmentOf` in director-authority reads it as
+ * the POLICY ENVIRONMENT, and `alloy_deployed_primary` is a member of
+ * OPERATOR_ONLY_ENVIRONMENTS. That check runs at step 3 of the evaluation, BEFORE
+ * a policy can be matched at step 5. So every action that did not name a target
+ * declared itself to be operating on the production database, and escalated with
+ * "This targets alloy_deployed_primary, which is always an operator decision" —
+ * whatever its tier, and however complete its delegated policy.
+ *
+ * MEASURED, not reasoned about. In the 23 days to 2026-09-11, host.install_toolkit
+ * — tier A, enabled policy, and a policy that already names a "host" environment
+ * precisely because someone hit the tail of this — was requested 83 times and sent
+ * to the operator on 67 of them, 61 in the last 7 days, every one carrying that
+ * reason and every one approved. Not one was ever denied. The same silence covered
+ * the enabled policies for close_pull_request, delete_remote_branch,
+ * retire_worktree, apply_reconciliation_plan, set_provider_ceiling and
+ * dispatch_measurement_instruction.
+ *
+ * WHAT THIS IS NOT. It is not a widening of what may run unattended. Every gate,
+ * every policy and every operator-owned action key is untouched; an action still
+ * has to match an enabled policy and pass every gate, measured. All this does is
+ * stop an action lying about where it runs. The direction of the lie mattered:
+ * a host-local toolkit install claiming to be a production database operation
+ * escalated, so the failure was expensive rather than unsafe — but a value nobody
+ * set, standing in for a fact nobody checked, is the wrong thing to have governing.
+ *
+ * FAIL-CLOSED BY CONSTRUCTION. Anything absent from this table keeps
+ * DEFAULT_TARGET, so a newly registered action escalates until someone states
+ * where it runs. The database and QA-identity actions are absent deliberately:
+ * read_census, apply_promoted_migration and repair_migration_ledger really do
+ * address the deployed database, and the environment.* actions are operator-owned
+ * in V1 by explicit action key, so their target is left exactly as it was.
+ */
+const DEFAULT_TARGET_BY_ACTION = Object.freeze({
+  // Promotion surface — unchanged from the four-way condition this replaces.
+  [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST]: "staging",
+  [ACTION_TYPES.DATABASE_APPLY_MIGRATION]: "staging",
+  [ACTION_TYPES.REPOSITORY_PUSH]: "staging",
+  [ACTION_TYPES.PROMOTION_OPEN_PR]: "staging",
+  // Repository housekeeping acts on the canonical branch, exactly as its policy says.
+  [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST]: "staging",
+  [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH]: "staging",
+  // Local engineering surface. These never reach a deployed environment at all.
+  [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN]: "development_certification",
+  [ACTION_TYPES.VACILANDO_RETIRE_WORKTREE]: "development_certification",
+  [ACTION_TYPES.CAPACITY_SET_PROVIDER_CEILING]: "development_certification",
+  [ACTION_TYPES.LANE_DISPATCH_MEASUREMENT_INSTRUCTION]: "development_certification",
+  // "host" is the name routine_toolkit_convergence_v1 already uses, and it is the
+  // honest one: this changes what THIS machine runs, and nothing deployed.
+  [ACTION_TYPES.HOST_INSTALL_TOOLKIT]: "host",
+});
+
+export function defaultTargetForAction(actionKey) {
+  return DEFAULT_TARGET_BY_ACTION[actionKey] || DEFAULT_TARGET;
+}
+
 function validateRequestShape(input, { root } = {}) {
   const actionKey = String(input.action_key || input.actionKey || "").trim();
   const laneId = String(input.lane_id || input.laneId || "").trim();
@@ -1610,12 +1678,7 @@ function validateRequestShape(input, { root } = {}) {
   const reason = bound(input.reason_worker_cannot_execute || input.reasonWorkerCannotExecute, 1000);
   if (!reason) return { ok: false, error: "missing_reason_worker_cannot_execute" };
   const purpose = bound(input.purpose, 1000) || "Governed capability required";
-  const defaultTarget = actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
-    || actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION
-    || actionKey === ACTION_TYPES.REPOSITORY_PUSH
-    || actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
-    ? "staging"
-    : DEFAULT_TARGET;
+  const defaultTarget = defaultTargetForAction(actionKey);
   const target = String(input.target || defaultTarget).trim() || defaultTarget;
   const artifactRefs = Array.isArray(input.artifact_refs || input.artifactRefs)
     ? (input.artifact_refs || input.artifactRefs).map(String).filter(Boolean)
@@ -1772,6 +1835,22 @@ function withMissionDelegation(rec, decision, { nowMs, evidence = null } = {}) {
     delegation_target_branch: out.delegation.target_branch,
   };
 }
+
+/**
+ * The operator-readable sentence behind each escalation `reason`, for the paths
+ * that never reach the director evaluator and therefore never carry one of its
+ * own. Keyed by the exact `reason` policyDecision returns, so a reason added
+ * without a sentence falls through to the generic line rather than to silence.
+ */
+const ESCALATION_REASON_TEXT = Object.freeze({
+  privileged_read_requires_operator:
+    "A read against the deployed primary database is the operator's decision in V1, "
+    + "even though the query itself is allowlisted and hash-pinned.",
+  policy_default_requires_operator:
+    "No delegated policy authorised this action, so it escalates. Unknown is never allow.",
+  policy_denied_requires_operator:
+    "A delegated policy covers this action but at least one required gate did not pass.",
+});
 
 function policyDecision(rec, { nowMs } = {}) {
   // Same identity the mint and the execution boundary use — including the
@@ -3269,6 +3348,35 @@ export function processGovernedAction(requestId, {
       rec.escalation_reason = policy.director_decision.escalation_reason || null;
     }
   }
+  // EVERY DECISION STATES ITS BASIS, IN BOTH DIRECTIONS.
+  //
+  // Two questions have to be answerable from the record alone: "why did
+  // Vacilando do this without asking me" and "why is it asking me". Only the
+  // first half was written down, and only on the paths that happened to run the
+  // director evaluator. MEASURED on the retained window of 2026-09-11: 53 of the
+  // 103 operator-facing requests carried no escalation reason at all — every
+  // census, and every request that escalated before the evaluator ran or after
+  // it threw. A prompt that cannot say why it exists is exactly the prompt
+  // nobody can remove, because there is nothing to argue with.
+  //
+  // These are derived from the decision already taken, never a second opinion:
+  // if the two disagreed, the text would be the lie and the decision the truth.
+  if (!rec.escalation_reason && policy.operator_approval_required) {
+    rec.escalation_reason = ESCALATION_REASON_TEXT[policy.reason]
+      || `${rec.action_key} requires an operator decision (${policy.reason || "unstated"}).`;
+  }
+  if (!policy.operator_approval_required) {
+    rec.authorization_basis = {
+      reason: policy.reason || null,
+      authorized_by: policy.authorized_by || policy.reason || null,
+      authorization_id: policy.authorization_id || null,
+      delegation_id: policy.delegation_id || null,
+      policy_id: policy.director_decision?.matched_policy || null,
+      policy_version: policy.director_decision?.policy_version || null,
+      environment: rec.target || null,
+      at: iso(nowMs),
+    };
+  }
   saveRequest(rec, root);
 
   if (policy.operator_approval_required) {
@@ -3558,6 +3666,42 @@ export async function approveGovernedAction(requestId, {
   if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
   const guard = refuseTerminalDecision(rec, "approval", root);
   if (!guard.ok) return guard.refusal;
+  // ONE CLICK IS ONE APPROVAL, HOWEVER MANY TIMES THE BUTTON IS PRESSED.
+  //
+  // `refuseTerminalDecision` only catches a request that has already REACHED a
+  // terminal state. The gap it leaves is the one the operator actually falls
+  // into: a request that is approved and still EXECUTING. A second press walked
+  // straight past both guards, minted a second single-use grant — which is what
+  // defeated single-use, since the replay was not reusing the old grant but
+  // buying a new one — recorded a second `operator_approved`, and re-entered
+  // executeGovernedAction, which has no re-entry guard of its own.
+  //
+  // MEASURED over the 23 days to 2026-09-11: 111 duplicate approval events
+  // across 20 requests, and 141 executions beyond the first across 48. The worst
+  // single request, gar_9084b7b5fbbc7c (vacilando.retire_worktree), was approved
+  // 30 times over roughly 45 minutes. That operator was not changing their mind
+  // thirty times; they were pressing a button that never said it had heard them.
+  //
+  // Returning `already` rather than an error is the point: the second press must
+  // converge the caller onto the authoritative current state, not hand them a
+  // failure for a decision that did in fact take effect.
+  //
+  // `awaiting_operator` is deliberately NOT short-circuited. An approved record
+  // does not return there any more, so finding one that has is a genuine
+  // re-ask from a stranded shape, and it must stay answerable.
+  const settled = guard.rec || rec;
+  if (settled.operator_approval?.decision === "approved" && settled.status !== "awaiting_operator") {
+    appendAudit(settled, "duplicate_approval_ignored", {
+      nowMs,
+      detail: { first_approved_at: settled.operator_approval.at || null, status: settled.status },
+    }, root);
+    return {
+      ok: true,
+      request: publicGovernedAction(settled),
+      already: true,
+      duplicate: true,
+    };
+  }
   if (rec.status === "failed") {
     // Only reachable for a request that never executed — the guard above holds
     // everything that did.
