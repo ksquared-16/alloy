@@ -23,7 +23,9 @@
  * guessing a plausible family — and it is never shown as "Household", which would be a claim about
  * the charge rather than an admission about the record.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 
 type Application = {
     paymentId: string;
@@ -128,6 +130,13 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
         };
     }, [chargeId]);
 
+    const reload = useCallback(async () => {
+        /* Committed truth, re-read. The panel never hands back a figure for this to display. */
+        const res = await fetch(`/api/admin/financials/charge/${encodeURIComponent(chargeId)}`, { cache: "no-store" });
+        const body = (await res.json()) as { ok?: boolean; detail?: ChargeDetail };
+        if (res.ok && body.ok && body.detail) setDetail(body.detail);
+    }, [chargeId]);
+
     if (loading) {
         return (
             <p className="text-xs text-alloy-midnight/50" data-financials-charge-detail-loading="true">
@@ -221,6 +230,23 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     This charge does not owe anything yet.
                 </p>
             )}
+
+            {/*
+             * THE INTENT SITS WITH THE STATE IT CHANGES, at the grain the capability actually has.
+             *
+             * `billing.configure_responsibility` records an ARRANGEMENT for a household or child
+             * from a date — it is not a decision about this one charge. The parties shown here are
+             * the account's arrangement as it applies to this obligation, which is why the control
+             * is offered beside them and why it says "account" rather than implying the charge.
+             */}
+            {detail.customerId || detail.customerMemberId ? (
+                <FinancialsResponsibilityPanel
+                    customerId={detail.customerId}
+                    customerMemberId={detail.customerMemberId}
+                    parties={detail.responsibility.parties}
+                    onCommitted={reload}
+                />
+            ) : null}
 
             {detail.responsibility.parties.length > 0 || detail.responsibility.unassignedCents !== 0 ? (
                 <>
