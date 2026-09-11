@@ -145,6 +145,42 @@ Enrollment lifecycle references placement decisions; placement table owns histor
 
 ---
 
+## Operator waitlist rank — one ranking grain
+
+**A waitlist SECTION is the operator-visible ranking grain.** A section is a program category
+(Infant, Toddler, Preschool, Pre-K); it is the list an operator reads, and the numerator and
+denominator on a row both describe it.
+
+Manual position adjustments resolve against that same section. When an operator moves a candidate
+shown at `2/12`, the command means "put this candidate second among these twelve", and the result
+is `2/12`. The pin is placed by `applySectionManualPositions`, whose run is the section.
+
+**Internal cohort keys may inform natural ranking or carry lineage; they do not define a second
+operator-facing position domain.** `program_room_cohort_key` remains the provenance recorded on
+`placement_overrides` and continues to group the natural sort, but it no longer decides which
+positions exist.
+
+This was not always true, and the failure is worth remembering. A pin used to be scoped to the
+candidate's own cohort while the queue counted positions across the section, so an operator read one
+number and edited another — `2/12` on the row, `1/11` in the control. Because
+`program_room_cohort_key` is a slugified program/room LABEL rather than a controlled vocabulary, one
+program drifts into several spellings: the deployed Firefly INFANT section held twelve candidates,
+eleven under `infant_0_18_months` and one under a degraded `infant`. The natural sort groups cohorts
+into contiguous blocks, so that one row held section position 1 and **nothing the operator did to
+the other eleven could reach it**. A ranked list of twelve with unreachable positions is not a
+ranked list.
+
+The ranking model is deliberately robust to that drift rather than dependent on repairing it.
+Normalizing degraded cohort keys is separate hygiene; this contract holds either way.
+
+**Contended ordinals.** Several candidates may hold a pin on the same ordinal. Seats are filled in
+ascending ordinal and never move backwards, so rivals on one number occupy consecutive seats and a
+later ordinal is pushed down behind them. This is what makes two operators pinning the same number
+produce a stable answer rather than an arbitrary one. An **uncontended** ordinal is always honoured
+exactly.
+
+---
+
 ## Configuration surfaces
 
 - **Fields:** `field_definitions.label` is canonical for operator labels (School / Location, Program, Room).
