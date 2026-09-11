@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
-# Trusted Host Action child — loads DATABASE_URL privately and runs read-only SQL.
-# Never prints credentials. Args: <sql_file> <out_file> <stderr_file>
+# Trusted Host Action child — loads the credential for ONE environment privately
+# and runs read-only SQL against it.
+# Never prints credentials. Args: <sql_file> <out_file> <stderr_file> <environment>
+#
+# ── THE ENVIRONMENT IS NOT OPTIONAL ──
+#
+# This child used to take three arguments and always load the deployed
+# credential. A governed migration request for `certification` therefore read its
+# ledger and its postconditions from DEPLOYED while writing to alloy-cert. A
+# version present on deployed and absent on certification was classified
+# "already applied" and skipped, and the action reported success having changed
+# nothing. Reads now route exactly as writes do, and a missing environment
+# refuses instead of defaulting to deployed.
 set -euo pipefail
 
 SQL_FILE="${1:?sql file required}"
 OUT_FILE="${2:?out file required}"
 ERR_FILE="${3:?err file required}"
+SQL_ENVIRONMENT="${4:-}"
 
 CANONICAL="${ALLOY_CANONICAL_ROOT:-${ALLOY_REPO:-/Users/Kelly/Alloy}}"
 export ALLOY_REPO="$CANONICAL"
@@ -23,19 +35,18 @@ fi
 source "$TOOLKIT/lib/common.sh"
 # shellcheck disable=SC1091
 source "$TOOLKIT/lib/verify.sh"
+# The routing rules are NOT written here. This helper asks
+# trusted-host-database-target.mjs which credential the environment names and
+# proves the connection matches before the first statement.
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/trusted-host-database-target.sh"
 
-# Host trusted actions intentionally talk to the approved deployed DB.
+# A trusted host action may legitimately talk to deployed -- when, and only when,
+# that is the environment it asked for.
 unset ALLOY_BLOCK_REMOTE_SUPABASE || true
 
-if ! alloy_load_trusted_server_env_exports; then
-  echo "trusted_credential_unavailable" >"$ERR_FILE"
-  exit 42
-fi
-
-if [[ -z "${DATABASE_URL:-}" ]]; then
-  echo "trusted_credential_unavailable" >"$ERR_FILE"
-  exit 42
-fi
+alloy_resolve_trusted_database_target "$SQL_ENVIRONMENT" "$ERR_FILE" || exit $?
+DATABASE_URL="$ALLOY_RESOLVED_DATABASE_URL"
 
 # ── THE POSTGRES CLIENT IS RESOLVED, NOT ASSUMED ──
 #
