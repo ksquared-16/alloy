@@ -27,11 +27,11 @@ function seed(): Tables {
     return {
         locations: [
             { id: SITE_A1, org_id: ORG_A, location_type: "site", unit_role: null, label: "Downtown",
-              parent_location_id: null, is_active: true, timezone: null, updated_at: t(1) },
+              parent_location_id: null, is_active: true, updated_at: t(1) },
             { id: UNIT_A1_1, org_id: ORG_A, location_type: "unit", unit_role: "operational_group", label: "Toddler 1",
-              parent_location_id: SITE_A1, is_active: true, timezone: null, updated_at: t(2) },
+              parent_location_id: SITE_A1, is_active: true, updated_at: t(2) },
             { id: SITE_A2, org_id: ORG_A, location_type: "site", unit_role: null, label: "Riverside",
-              parent_location_id: null, is_active: true, timezone: null, updated_at: t(3) },
+              parent_location_id: null, is_active: true, updated_at: t(3) },
         ],
         integration_resource_refs: [
             { id: "ref-1", installation_id: "inst-1", org_id: ORG_A, resource_type: "child",

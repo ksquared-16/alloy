@@ -558,12 +558,6 @@
           "active": {
             "type": "boolean"
           },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "updated_at": {
             "type": "string",
             "format": "date-time",

@@ -54,16 +54,16 @@ function seed(): Tables {
         app_credentials: [], app_access_tokens: [], app_security_audit: [], app_api_activity: [],
         locations: [
             { id: SITE_A1, org_id: ORG_A, location_type: "site", unit_role: null, label: "Downtown",
-              parent_location_id: null, is_active: true, timezone: "America/Los_Angeles", updated_at: t(1) },
+              parent_location_id: null, is_active: true, updated_at: t(1) },
             { id: UNIT_A1_1, org_id: ORG_A, location_type: "unit", unit_role: "operational_group", label: "Toddler 1",
-              parent_location_id: SITE_A1, is_active: true, timezone: null, updated_at: t(2) },
+              parent_location_id: SITE_A1, is_active: true, updated_at: t(2) },
             { id: SITE_A2, org_id: ORG_A, location_type: "site", unit_role: null, label: "Riverside",
-              parent_location_id: null, is_active: true, timezone: null, updated_at: t(3) },
+              parent_location_id: null, is_active: true, updated_at: t(3) },
             { id: SITE_B1, org_id: ORG_B, location_type: "site", unit_role: null, label: "Other Tenant",
-              parent_location_id: null, is_active: true, timezone: null, updated_at: t(4) },
+              parent_location_id: null, is_active: true, updated_at: t(4) },
             // A family's home. Same table, and never a public resource.
             { id: FAMILY_ADDRESS, org_id: ORG_A, location_type: "address", unit_role: null, label: "14 Elm St",
-              parent_location_id: null, is_active: true, timezone: null, updated_at: t(5),
+              parent_location_id: null, is_active: true, updated_at: t(5),
               address1: "14 Elm St", city: "Bend", postal_code: "97701", access_code: "4821",
               access_notes: "side gate", lat: 44.05, lng: -121.31, customer_id: "cust-1" },
         ],
@@ -253,7 +253,7 @@ describe("public representation", () => {
         const row = body.data![0] as unknown as Record<string, unknown>;
 
         expect(Object.keys(row).sort()).toEqual(
-            ["active", "id", "name", "parent_id", "site_id", "timezone", "type", "unit_role", "updated_at"].sort(),
+            ["active", "id", "name", "parent_id", "site_id", "type", "unit_role", "updated_at"].sort(),
         );
         expect(row.type).toBe("unit");
         expect(row.unit_role).toBe("operational_group");

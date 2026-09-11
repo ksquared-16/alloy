@@ -42,7 +42,6 @@ RETURNS TABLE (
     parent_location_id uuid,
     site_id uuid,
     is_active boolean,
-    timezone text,
     sort_key timestamptz
 )
 LANGUAGE sql
@@ -58,7 +57,6 @@ AS $$
         l.parent_location_id,
         public.location_site_id(l.id) AS site_id,
         l.is_active,
-        l.timezone,
         COALESCE(l.updated_at, l.created_at) AS sort_key
     FROM public.locations l
     WHERE

@@ -25,8 +25,16 @@
  *   parent_id    locations.parent_location_id structural parent
  *   site_id      public.location_site_id()   the declared site-resolution authority
  *   active       locations.is_active
- *   timezone     locations.timezone
  *   updated_at   COALESCE(updated_at, created_at) — the resync watermark (Thread 4 §04 L)
+ *
+ * `timezone` is deliberately absent. The public contract exposed it and the
+ * canonical schema has no such column: `locations` carries no timezone, and no
+ * migration in the repository creates one. The assumption survived review
+ * because the resource had never run against a real database -- the governed
+ * apply failed on `column l.timezone does not exist`. A field is published only
+ * when canonical Alloy authority backs it, so it is removed rather than sourced
+ * from somewhere plausible. If Alloy later gains a canonical location timezone,
+ * adding it back is an additive API change.
  *
  * `org_id` is deliberately absent: an installation reads exactly one
  * organization and `GET /api/v1/context` already names it, so repeating it on
@@ -42,7 +50,6 @@ export type CanonicalLocationRow = {
     parent_location_id: string | null;
     site_id: string | null;
     is_active: boolean;
-    timezone: string | null;
     sort_key: string;
 };
 
@@ -54,7 +61,6 @@ export type PublicLocation = {
     parent_id: string | null;
     site_id: string | null;
     active: boolean;
-    timezone: string | null;
     updated_at: string;
 };
 
@@ -72,7 +78,6 @@ export function toPublicLocation(row: CanonicalLocationRow): PublicLocation {
         parent_id: row.parent_location_id,
         site_id: row.site_id,
         active: row.is_active,
-        timezone: row.timezone,
         updated_at: row.sort_key,
     };
 }

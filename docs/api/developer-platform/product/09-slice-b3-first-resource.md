@@ -36,13 +36,26 @@ from `20260909210000_location_topology_v1.sql`.
 | Parent | `parent_location_id` | Yes, as `parent_id` | Structure |
 | Site ancestor | `location_site_id()` | Yes, as `site_id` | Saves every client walking the tree |
 | Active | `is_active` | Yes | |
-| Timezone | `timezone` | Yes | Needed to interpret any future time-bearing resource |
+| Timezone | — | **No** | `locations` has no `timezone` column and no migration creates one. See the note below. |
 | Watermark | `COALESCE(updated_at, created_at)` | Yes, as `updated_at` | The resync primitive (Thread 4 §04 L) |
 | `org_id` | | **No** | One installation reads one organization and `/context` names it |
 | Street, city, postal, country | | **NEVER** | Private address data |
 | `lat` / `lng` | | **NEVER** | Precise location of a private home |
 | `access_code` | | **NEVER** | *"Door/gate code when customer selects code-based access"* |
 | `access_notes`, `has_pets` | | **NEVER** | Premises detail about a household |
+
+> **Timezone was published before it existed.** The first version of this table
+> promised `timezone`, sourced from `locations.timezone`. There is no such
+> column, and no migration in the repository creates one. The claim survived
+> review because the resource had never run against a real database; the
+> governed certification apply failed on `column l.timezone does not exist`.
+>
+> Alloy is not without a location timezone — it is carried in
+> `locations.metadata.timezone` and read through `lib/location/timezoneResolution`,
+> which returns a `source`, a `status` and `warnings` rather than a bare string.
+> Publishing that is an API design decision, not a repair: a public field that is
+> sometimes unresolved needs a contract for saying so. So the field is removed
+> here rather than re-sourced, and adding it later is an additive change.
 | `metadata`, `status_key`, `external_source`, `external_id`, `customer_id`, `vendor_id`, `is_primary`, `location_type_id`, `access_method_id` | | No | Internal, compatibility, or another domain's concern |
 
 **The exclusion is structural, not cosmetic.** The SQL never selects those

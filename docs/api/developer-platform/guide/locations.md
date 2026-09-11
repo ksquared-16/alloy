@@ -77,7 +77,6 @@ curl "https://<alloy-host>/api/v1/locations?limit=100" \
       "parent_id": null,
       "site_id": "11111111-1111-4111-8111-111111111111",
       "active": true,
-      "timezone": "America/Los_Angeles",
       "updated_at": "2026-01-01T00:00:00.000Z"
     }
   ],

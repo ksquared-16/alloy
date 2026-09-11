@@ -142,7 +142,6 @@ export function createFakeSupabase(tables: Tables) {
             parent_location_id: (r.parent_location_id as string | null) ?? null,
             site_id: siteIdOf(String(r.id)),
             is_active: r.is_active !== false,
-            timezone: (r.timezone as string | null) ?? null,
             sort_key: String(r.updated_at ?? r.created_at),
         }));
 
