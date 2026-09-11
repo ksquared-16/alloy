@@ -205,3 +205,171 @@ function pickCredential(rows: Array<Record<string, unknown>>): CredentialSummary
     const pool = live.length > 0 ? live : shaped;
     return pool.sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))[0] ?? null;
 }
+
+/** One installation, in full. Same derivation as the row, so the two agree. */
+export async function getInstallation(
+    supabase: SupabaseClient,
+    orgId: string,
+    installationId: string,
+    now: Date = new Date(),
+): Promise<{ ok: true; installation: InstallationSummary } | { ok: false; status: 404 | 500; message: string }> {
+    // Tenancy is part of the lookup, not a check afterwards: an installation in
+    // another organization must be indistinguishable from one that does not exist.
+    const listed = await listInstallations(supabase, orgId, now);
+    if (!listed.ok) return { ok: false, status: 500, message: listed.message };
+    const found = listed.installations.find((i) => i.id === installationId);
+    return found
+        ? { ok: true, installation: found }
+        : { ok: false, status: 404, message: "That integration does not exist." };
+}
+
+export type ActivityEntry = {
+    occurredAt: string;
+    operation: string | null;
+    method: string | null;
+    route: string | null;
+    statusCode: number | null;
+    outcome: string | null;
+    errorCode: string | null;
+    latencyMs: number | null;
+    requestId: string | null;
+};
+
+export type ActivityFilter = "all" | "success" | "failure";
+
+/**
+ * Recent API activity for one installation.
+ *
+ * The column list IS the safety boundary. `app_api_activity` was built in B.2 to
+ * hold no header, no token, no body and no child identity, and this selects a
+ * narrow set from it rather than `*` — so a column added later cannot silently
+ * become an operator-visible field.
+ */
+export async function listActivity(
+    supabase: SupabaseClient,
+    orgId: string,
+    installationId: string,
+    opts: { filter?: ActivityFilter; limit?: number } = {},
+): Promise<{ ok: true; entries: ActivityEntry[] } | { ok: false; message: string }> {
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+    let q = supabase
+        .from("app_api_activity")
+        .select("occurred_at, operation_id, method, route, status_code, outcome, error_code, latency_ms, request_id")
+        .eq("org_id", orgId)
+        .eq("installation_id", installationId)
+        .order("occurred_at", { ascending: false })
+        .limit(limit);
+
+    if (opts.filter === "success") q = q.lt("status_code", 400);
+    if (opts.filter === "failure") q = q.gte("status_code", 400);
+
+    const { data, error } = await q;
+    if (error) return { ok: false, message: error.message };
+
+    return {
+        ok: true,
+        entries: (data ?? []).map((r) => {
+            const row = r as Record<string, unknown>;
+            return {
+                occurredAt: String(row.occurred_at),
+                operation: (row.operation_id as string | null) ?? null,
+                method: (row.method as string | null) ?? null,
+                route: (row.route as string | null) ?? null,
+                statusCode: row.status_code == null ? null : Number(row.status_code),
+                outcome: (row.outcome as string | null) ?? null,
+                errorCode: (row.error_code as string | null) ?? null,
+                latencyMs: row.latency_ms == null ? null : Number(row.latency_ms),
+                requestId: (row.request_id as string | null) ?? null,
+            } satisfies ActivityEntry;
+        }),
+    };
+}
+
+export type ApprovedApplication = {
+    id: string;
+    name: string;
+    slug: string;
+    publisher: string | null;
+    status: string;
+    alreadyInstalled: boolean;
+};
+
+/**
+ * The applications an operator may connect.
+ *
+ * Applications are platform identities, not tenant configuration objects, so this
+ * is a read for a chooser and nothing more — there is deliberately no tenant CRUD
+ * behind it. `alreadyInstalled` exists because the schema allows one installation
+ * per application per organization, and an operator should learn that from the
+ * chooser rather than from a constraint violation.
+ */
+export async function listApprovedApplications(
+    supabase: SupabaseClient,
+    orgId: string,
+): Promise<{ ok: true; applications: ApprovedApplication[] } | { ok: false; message: string }> {
+    const [apps, installed] = await Promise.all([
+        supabase.from("developer_applications")
+            .select("id, name, slug, publisher, status")
+            .eq("status", "active")
+            .order("name", { ascending: true }),
+        supabase.from("app_installations").select("application_id").eq("org_id", orgId),
+    ]);
+    if (apps.error) return { ok: false, message: apps.error.message };
+
+    const have = new Set((installed.data ?? []).map((r) => String((r as { application_id: string }).application_id)));
+    return {
+        ok: true,
+        applications: (apps.data ?? []).map((a) => {
+            const row = a as Record<string, unknown>;
+            return {
+                id: String(row.id),
+                name: String(row.name ?? row.slug),
+                slug: String(row.slug ?? ""),
+                publisher: (row.publisher as string | null) ?? null,
+                status: String(row.status ?? "active"),
+                alreadyInstalled: have.has(String(row.id)),
+            } satisfies ApprovedApplication;
+        }),
+    };
+}
+
+/**
+ * The sites an operator may grant, and nothing else.
+ *
+ * Deliberately reuses `list_external_locations` — the same function the public
+ * API and the attendance authority adapter use — so the chooser cannot offer
+ * something the boundary would not honour. It also means `location_type =
+ * address` and customer or vendor premises are excluded in SQL rather than by the
+ * client remembering to filter them, which is the only way that guarantee holds.
+ */
+export async function listGrantableLocations(
+    supabase: SupabaseClient,
+    orgId: string,
+): Promise<{ ok: true; locations: Array<{ id: string; name: string | null; type: string; siteId: string | null; parentId: string | null }> } | { ok: false; message: string }> {
+    const { data, error } = await supabase.rpc("list_external_locations", {
+        p_org_id: orgId,
+        p_boundary_mode: "org_wide",
+        p_boundary: [],
+        p_limit: 500,
+        p_cursor_sort: null,
+        p_cursor_id: null,
+        p_types: null,
+        p_parent_id: null,
+        p_location_ids: null,
+        p_updated_since: null,
+    });
+    if (error) return { ok: false, message: error.message };
+    return {
+        ok: true,
+        locations: ((data ?? []) as unknown[]).map((r) => {
+            const row = r as Record<string, unknown>;
+            return {
+                id: String(row.id),
+                name: (row.label as string | null) ?? null,
+                type: String(row.location_type),
+                siteId: (row.site_id as string | null) ?? null,
+                parentId: (row.parent_location_id as string | null) ?? null,
+            };
+        }),
+    };
+}
