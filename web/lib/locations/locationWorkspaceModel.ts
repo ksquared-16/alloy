@@ -1,4 +1,5 @@
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 
@@ -379,7 +380,10 @@ export function buildLocationWorkspaceModel(params: {
     ownedConcernSetup?: Partial<Record<"tours" | "placement" | "access", boolean>>;
 }): LocationWorkspaceModel {
     const { site } = params;
-    const rooms = params.rooms.filter((room) => room.parent_location_id === site.id && room.is_active !== false);
+    // By ancestry. The workspace summarises a SITE, and a classroom nested inside
+    // one of its physical spaces is part of that site — the direct-parent filter
+    // dropped it from every room count, capacity total and list on this screen.
+    const rooms = rowsBelongingToSite(params.rooms, site.id).filter((room) => room.is_active !== false);
     const programs = params.programs.filter(
         (program) => program.location_id === site.id && program.is_active !== false,
     );
