@@ -59,17 +59,22 @@ async function signIn(browser: Browser, email: string): Promise<SignIn> {
 
     /*
      * AUTHENTICATION SUCCEEDS FOR EVERY PERSONA HERE. Admission is the variable, and the two are
-     * genuinely different events: a refused principal signs in, is sent to the workspace by the
-     * login page, and is bounced back to /login by the shell. So the URL is read AFTER that bounce
-     * settles — a `waitForURL("**\/workspace**")` alone can catch the transit and report a refusal
-     * as an admission.
+     * different events — so admission is established by a FULL DOCUMENT REQUEST to the shell, not by
+     * watching the URL after the login form's client-side push.
+     *
+     * Reading the URL was tried and is not sound. A refused principal signs in, the login page
+     * pushes to /workspace, and the shell answers that navigation with a redirect back to /login,
+     * whereupon the login page — holding a valid session — pushes again. Sampling that loop returns
+     * whichever side the sample lands on: in one run `cert.frontdesk` sampled /login and
+     * `cert.finviewer`, whose grants are just as portal-less, sampled /workspace. Same refusal, two
+     * answers, and the wrong one reads as W-13 letting a principal in that it must not.
+     *
+     * `page.goto` is not part of that loop. The server either renders the shell or answers 307 to
+     * /login, and where the browser lands is the server's answer rather than a race between two
+     * clients.
      */
-    try {
-        await page.waitForURL("**/workspace**", { timeout: 45_000 });
-    } catch {
-        // Refused, or slow. Either way the settled URL below is the answer.
-    }
-    await page.waitForLoadState("networkidle").catch(() => undefined);
+    await page.waitForTimeout(2_000); // let the login form commit the session cookies
+    await page.goto("/workspace", { waitUntil: "domcontentloaded" });
     const url = page.url();
     return { page, context, admitted: url.includes("/workspace"), url };
 }
@@ -226,20 +231,21 @@ test.describe("W-13 — admission is configurable from the product", () => {
         const { page, context, admitted } = await signIn(browser, PERSONA.admin);
         expect(admitted).toBe(true);
         await page.goto("/organization/access?section=roles", { waitUntil: "domcontentloaded" });
-        await expect(page.getByTestId("access-roles-page")).toBeVisible({ timeout: 60_000 });
+        // `.first()`: the page renders the testid on both the shell and the content region.
+        await expect(page.getByTestId("access-roles-page").first()).toBeVisible({ timeout: 60_000 });
 
         const options = page.locator('[role="option"][data-testid^="access-role-"]');
         await expect(options.first()).toBeVisible({ timeout: 60_000 });
         await options.first().click();
-        await expect(page.getByTestId("access-role-selected-workspace")).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByTestId("access-role-selected-workspace").first()).toBeVisible({ timeout: 60_000 });
 
-        const area = page.getByTestId("access-role-area-portal");
+        const area = page.getByTestId("access-role-area-portal").first();
         await expect(area, "the Portal capability area is not in the role editor").toBeVisible({ timeout: 60_000 });
         // Operator language, not a key. `W-57` is the rule: a role reads as responsibilities.
         await expect(area).toContainText("Portal");
         await expect(area).not.toContainText("portal.access");
 
-        await page.getByTestId("access-role-area-portal-disclose").click();
+        await page.getByTestId("access-role-area-portal-disclose").first().click();
         await expect(page.getByText("Access operator portal", { exact: false }).first()).toBeVisible({
             timeout: 60_000,
         });
