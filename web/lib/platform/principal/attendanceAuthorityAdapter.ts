@@ -31,6 +31,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { NonHumanProducerAuthority } from "@/lib/childcareOperational/attendance/attendancePermissions";
+import type { AttendanceIngestAuthor } from "@/lib/childcareOperational/attendance/integration/attendanceIngestAuthor";
 import type { ApplicationPrincipal } from "@/lib/platform/principal/platformPrincipalTypes";
 import { internalPermissionsForScopes } from "@/lib/platform/external/scopeCatalog";
 
@@ -105,6 +106,45 @@ export async function attendanceAuthorityForPrincipal(
             // directly. External scopes and internal permissions stay separate
             // vocabularies with one declared mapping between them.
             grantedPermissionKeys: Object.freeze(internalPermissionsForScopes(principal.grantedScopes)),
+        },
+    };
+}
+
+/**
+ * The installation, expressed as an ingestion author.
+ *
+ * This is the last link in the chain the convergence exists to make real:
+ *
+ *     ApplicationPrincipal
+ *       → attendanceAuthorityForPrincipal   (this module: boundary → sites)
+ *       → AttendanceIngestAuthor            (here)
+ *       → ingestExternalAttendanceEvent     (Attendance owns everything after)
+ *
+ * No `attendance_integration_producers` row is consulted, created, or implied.
+ * The installation IS the authority, and `producer_key` carries provenance to
+ * the canonical fact exactly as a legacy producer's would -- which is why a
+ * converted producer keeps the history it already wrote.
+ */
+export async function attendanceAuthorForPrincipal(
+    supabase: SupabaseClient,
+    principal: ApplicationPrincipal,
+): Promise<
+    | { ok: true; author: AttendanceIngestAuthor }
+    | { ok: false; code: "no_sites_in_boundary" | "lookup_failed" }
+> {
+    const resolved = await attendanceAuthorityForPrincipal(supabase, principal);
+    if (!resolved.ok) return { ok: false, code: resolved.code };
+
+    return {
+        ok: true,
+        author: {
+            kind: "installation",
+            installationId: principal.installationId,
+            orgId: principal.orgId,
+            producerKey: principal.producerKey,
+            // The application is what an operator recognises in an audit row.
+            label: principal.applicationSlug,
+            authority: resolved.authority,
         },
     };
 }

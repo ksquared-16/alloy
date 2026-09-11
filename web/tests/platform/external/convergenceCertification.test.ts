@@ -10,7 +10,12 @@ import { describe, expect, it, beforeEach } from "vitest";
 
 import { createFakeSupabase, type Tables } from "../principal/fakeSupabase";
 import { resolveIntegrationResourceRef } from "@/lib/platform/external/integrationResourceRefs";
-import { attendanceAuthorityForPrincipal } from "@/lib/platform/principal/attendanceAuthorityAdapter";
+import { attendanceAuthorityForPrincipal, attendanceAuthorForPrincipal } from "@/lib/platform/principal/attendanceAuthorityAdapter";
+import {
+    authorFromLegacyProducer,
+    correlateExternalId,
+    evidenceIdentityOf,
+} from "@/lib/childcareOperational/attendance/integration/attendanceIngestAuthor";
 import { internalPermissionsForScopes, PUBLIC_SCOPES } from "@/lib/platform/external/scopeCatalog";
 import type { ApplicationPrincipal } from "@/lib/platform/principal/platformPrincipalTypes";
 
@@ -211,5 +216,97 @@ describe("principal → attendance authority", () => {
             fake.client, principal({ orgId: ORG_B, boundary: { mode: "org_wide" } }),
         );
         expect(r).toEqual({ ok: false, code: "no_sites_in_boundary" });
+    });
+});
+
+/**
+ * Gate 1 — the author that reaches Attendance.
+ *
+ * The adapter above proves a principal becomes an AUTHORITY. These prove it
+ * becomes an AUTHOR: the thing ingestion actually consumes, carrying the
+ * identity column evidence is keyed by and the correlation table it may read.
+ */
+describe("principal → attendance ingest author", () => {
+    it("becomes an installation author, never a legacy producer", async () => {
+        const r = await attendanceAuthorForPrincipal(fake.client, principal());
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.author.kind).toBe("installation");
+        if (r.author.kind !== "installation") return;
+        expect(r.author.installationId).toBe("inst-1");
+        expect(r.author.orgId).toBe(ORG_A);
+        // Provenance survives credential rotation because it is the producer key.
+        expect(r.author.producerKey).toBe("partner:org-a");
+        expect(r.author.authority.allowedSiteLocationIds).toContain(SITE_A1);
+    });
+
+    it("carries no authority when the boundary grants no site", async () => {
+        const r = await attendanceAuthorForPrincipal(
+            fake.client,
+            principal({ boundary: { mode: "locations", locationIds: [] } }),
+        );
+        expect(r.ok).toBe(false);
+    });
+
+    it("writes the installation identity column, and never producer_id", async () => {
+        const r = await attendanceAuthorForPrincipal(fake.client, principal());
+        if (!r.ok) return;
+        expect(evidenceIdentityOf(r.author)).toEqual({ producer_id: null, installation_id: "inst-1" });
+    });
+
+    it("a legacy producer still writes producer_id, and never installation_id", () => {
+        const author = authorFromLegacyProducer({
+            producerId: "prod-1", orgId: ORG_A, providerKey: "classroom_coach",
+            producerKey: "legacy:org-a", label: "Door reader",
+            authority: { producerKey: "legacy:org-a", allowedSiteLocationIds: [SITE_A1], grantedPermissionKeys: [] },
+        });
+        expect(evidenceIdentityOf(author)).toEqual({ producer_id: "prod-1", installation_id: null });
+    });
+});
+
+describe("correlation follows the author, and never crosses over", () => {
+    it("an installation resolves through integration_resource_refs", async () => {
+        const r = await attendanceAuthorForPrincipal(fake.client, principal());
+        if (!r.ok) return;
+        const c = await correlateExternalId({
+            supabase: fake.client, author: r.author, entityType: "child", externalId: "cc-child-9",
+        });
+        expect(c).toEqual({ ok: true, entityType: "child", alloyId: "cm-9" });
+    });
+
+    it("the same external id resolves differently for a different installation", async () => {
+        const r = await attendanceAuthorForPrincipal(fake.client, principal({ installationId: "inst-2" }));
+        if (!r.ok) return;
+        const c = await correlateExternalId({
+            supabase: fake.client, author: r.author, entityType: "child", externalId: "cc-child-9",
+        });
+        expect(c).toEqual({ ok: true, entityType: "child", alloyId: "cm-77" });
+    });
+
+    it("an unmapped id fails closed rather than inventing a subject", async () => {
+        const r = await attendanceAuthorForPrincipal(fake.client, principal());
+        if (!r.ok) return;
+        const c = await correlateExternalId({
+            supabase: fake.client, author: r.author, entityType: "child", externalId: "cc-child-nope",
+        });
+        expect(c.ok).toBe(false);
+    });
+
+    it("does not read a child mapping as a room", async () => {
+        const r = await attendanceAuthorForPrincipal(fake.client, principal());
+        if (!r.ok) return;
+        const c = await correlateExternalId({
+            supabase: fake.client, author: r.author, entityType: "location", externalId: "cc-child-9",
+        });
+        expect(c.ok).toBe(false);
+    });
+
+    it("a disabled mapping does not resolve", async () => {
+        const r = await attendanceAuthorForPrincipal(fake.client, principal());
+        if (!r.ok) return;
+        const c = await correlateExternalId({
+            supabase: fake.client, author: r.author, entityType: "child", externalId: "cc-child-disabled",
+        });
+        expect(c.ok).toBe(false);
     });
 });
