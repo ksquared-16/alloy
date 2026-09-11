@@ -15,6 +15,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { createFinancialPolicy } from "@/lib/financials/policies/financialPolicyService";
+import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
 import { correctAttendanceEvent, recordAttendanceEvent } from "@/lib/childcareOperational/attendance/attendanceService";
 import { reactToAttendanceFact } from "@/lib/operationalConsumption/attendanceConsumptionReactor";
 
@@ -55,7 +56,12 @@ const dayOffset = (n: number) => {
     return d.toISOString().slice(0, 10);
 };
 /** Distinct dates: the consumption event's identity includes the date, so scenarios must not share one. */
-const DATES = { draftCorrection: dayOffset(10), replay: dayOffset(11), chain: dayOffset(12) } as const;
+const DATES = {
+    draftCorrection: dayOffset(10),
+    replay: dayOffset(11),
+    chain: dayOffset(12),
+    posted: dayOffset(13),
+} as const;
 
 type Obligation = { id: string; obligation_kind: string; status: string; amount_cents: number | null; superseded_by_event_id: string | null };
 type Reduction = { id: string; charge_id: string; amount_cents: number; resolved_obligation_id: string | null };
@@ -77,8 +83,10 @@ describeLive("Slice 4A — a credit meets a correction", () => {
             .eq("org_id", ORG).in("financial_policy_id", policyIds);
         const rows = (reds ?? []) as Array<{ id: string; charge_id: string }>;
         if (rows.length) {
+            const contraIds = rows.map((r) => r.charge_id);
+            await supabase.from("charges").delete().eq("org_id", ORG).in("source_charge_id", contraIds);
             await supabase.from("financial_reduction_applications").delete().in("id", rows.map((r) => r.id));
-            await supabase.from("charges").delete().in("id", rows.map((r) => r.charge_id));
+            await supabase.from("charges").delete().in("id", contraIds);
         }
         await supabase.from("financial_policies").delete().in("id", policyIds);
     }
@@ -96,8 +104,11 @@ describeLive("Slice 4A — a credit meets a correction", () => {
                     .from("financial_reduction_applications").select("id, charge_id").in("resolved_obligation_id", obligationIds);
                 const rows = (reds ?? []) as Array<{ id: string; charge_id: string }>;
                 if (rows.length) {
+                    const contraIds = rows.map((r) => r.charge_id);
+                    // Compensating charges point at the contra ones, so they go first.
+                    await supabase.from("charges").delete().eq("org_id", ORG).in("source_charge_id", contraIds);
                     await supabase.from("financial_reduction_applications").delete().in("id", rows.map((r) => r.id));
-                    await supabase.from("charges").delete().in("id", rows.map((r) => r.charge_id));
+                    await supabase.from("charges").delete().in("id", contraIds);
                 }
                 await supabase.from("resolved_obligations").delete().in("id", obligationIds);
             }
@@ -168,6 +179,12 @@ describeLive("Slice 4A — a credit meets a correction", () => {
             .select("id, charge_id, amount_cents, resolved_obligation_id")
             .in("resolved_obligation_id", obligationIds);
         return (data ?? []) as Reduction[];
+    }
+
+    async function chargeRow(chargeId: string) {
+        const { data } = await supabase
+            .from("charges").select("id, status, amount_cents, posted_at, source_charge_id").eq("id", chargeId).maybeSingle();
+        return data as { id: string; status: string; amount_cents: number; posted_at: string | null; source_charge_id: string | null } | null;
     }
 
     async function chargeStatus(chargeId: string): Promise<string | null> {
@@ -266,5 +283,88 @@ describeLive("Slice 4A — a credit meets a correction", () => {
         const chargeIds = new Set(reductionsThrice.map((r) => r.charge_id));
         expect(chargeIds.size, "one contra artifact per reduction, however many times it is delivered")
             .toBe(reductionsThrice.length);
+    });
+
+    // ── H — the same correction, after the money has been POSTED ────────────
+
+    it("H — a posted vacation credit survives the correction, and the compensation is measured not assumed", async () => {
+        await creditPolicy();
+        const original = await absence(`t7-4b-h-${run}`, DATES.posted);
+        await react(original.id);
+
+        const credit = (await obligationsOn(DATES.posted)).find((o) => o.obligation_kind === "vacation_credit");
+        expect(credit, "the vacation must first produce a credit").toBeTruthy();
+        const reduction = (await reductionsFor([credit!.id]))[0]!;
+
+        /*
+         * POSTED FOR REAL, through the canonical owner — not a fixture setting a status column.
+         * `postChildcareCharge` is what production uses, and it records the journal consequence
+         * that makes the money history rather than an intention.
+         */
+        const posting = await postChildcareCharge(supabase, { orgId: ORG, chargeId: reduction.charge_id, actorUserId: null });
+        expect(posting.charge.status).toBe("posted");
+        expect(posting.journal, "posting must record its journal consequence").toBeTruthy();
+        const postedBefore = await chargeRow(reduction.charge_id);
+        expect(postedBefore!.status).toBe("posted");
+
+        // THE CORRECTION: the child attended after all.
+        const correction = await correctToAttended(original.id, `t7-4b-h-corr-${run}`, DATES.posted);
+        await react(correction.id);
+
+        const postedAfter = await chargeRow(reduction.charge_id);
+        const obligationsAfter = await obligationsOn(DATES.posted);
+        const reductionsAfter = await reductionsFor(obligationsAfter.map((o) => o.id));
+        // Anything the platform appended against the posted contra charge.
+        const { data: compRows } = await supabase
+            .from("charges").select("id, amount_cents, status, source_charge_id")
+            .eq("org_id", ORG).eq("source_charge_id", reduction.charge_id);
+        const compensating = (compRows ?? []) as Array<{ id: string; amount_cents: number; status: string }>;
+
+        // eslint-disable-next-line no-console
+        console.log("SLICE4-H", JSON.stringify({
+            attendanceFact: original.id,
+            correctionFact: correction.id,
+            obligation: credit!.id,
+            reduction: reduction.id,
+            contra: reduction.charge_id,
+            postedAmount: postedBefore!.amount_cents,
+            statusAfterCorrection: postedAfter!.status,
+            amountAfterCorrection: postedAfter!.amount_cents,
+            postedAtUnchanged: postedBefore!.posted_at === postedAfter!.posted_at,
+            obligationsAfter: obligationsAfter.map((o) => ({ id: o.id, kind: o.obligation_kind, status: o.status })),
+            reductionsAfter: reductionsAfter.map((r) => ({ id: r.id, amount: r.amount_cents })),
+            compensatingCharges: compensating,
+        }, null, 1));
+
+        /*
+         * HISTORY IS IMMUTABLE — the half of the law that must hold whatever else does. The posted
+         * contra charge keeps its status, its amount and its posting timestamp, and the application
+         * row keeps the provenance that explains it.
+         */
+        expect(postedAfter!.status).toBe("posted");
+        expect(postedAfter!.amount_cents).toBe(postedBefore!.amount_cents);
+        expect(postedAfter!.posted_at).toBe(postedBefore!.posted_at);
+        expect(reductionsAfter.some((r) => r.id === reduction.id), "the original application remains").toBe(true);
+
+        /*
+         * AND THE MONEY IS ANSWERED. Exactly one compensating artifact, equal and opposite, pointing
+         * back at what it answers. Posted money is not deleted and not edited — it is replied to.
+         */
+        expect(compensating, "posted money must be answered, not merely protected").toHaveLength(1);
+        expect(compensating[0]!.amount_cents).toBe(-postedBefore!.amount_cents);
+        expect(compensating[0]!.status).toBe("posted");
+
+        // Net position restored: the credit and its reversal cancel.
+        expect(postedAfter!.amount_cents + compensating[0]!.amount_cents).toBe(0);
+
+        // ── POSTED REPLAY — the answer is given once, however often the correction arrives ──
+        await react(correction.id);
+        await react(correction.id);
+        const { data: afterReplay } = await supabase
+            .from("charges").select("id, amount_cents").eq("org_id", ORG).eq("source_charge_id", reduction.charge_id);
+        expect((afterReplay ?? []), "three deliveries, one compensating consequence").toHaveLength(1);
+        const stillPosted = await chargeRow(reduction.charge_id);
+        expect(stillPosted!.amount_cents).toBe(postedBefore!.amount_cents);
+        expect(stillPosted!.posted_at).toBe(postedBefore!.posted_at);
     });
 });

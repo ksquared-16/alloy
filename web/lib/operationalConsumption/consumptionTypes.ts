@@ -414,6 +414,14 @@ export type ReconcileCorrectionEventPlan = {
 
 /** The complete, pre-resolved reconciliation plan handed to the atomic RPC (DP-1). */
 export type ReconcileConsumptionPlan = {
+    /**
+     * Posted contra charges whose obligation this correction supersedes.
+     *
+     * Kept apart from the draft ids the RPC retires, because posted money is answered rather than
+     * retired: the service appends its canonical reversal after the reconciliation commits. The RPC
+     * never sees these, which is how its draft-only rule stays true.
+     */
+    compensateChargeIds?: string[];
     correctionEvent: ReconcileCorrectionEventPlan;
     /** The prior FACT id (= prior consumption event's source_entity_id). */
     priorFactId: string;

@@ -54,7 +54,7 @@ import { factAnchorSuffix, correctionLineageContext } from "@/lib/operationalCon
 import {
     reconcileConsumptionCorrection,
 } from "@/lib/operationalConsumption/reconcileConsumptionCorrectionAtomicCommit";
-import { buildDraftChargeRetirementIntent, buildChildcareDraftChargeFields } from "@/lib/financials/childcareChargeService";
+import { buildDraftChargeRetirementIntent, buildChildcareDraftChargeFields, createChildcareCorrection } from "@/lib/financials/childcareChargeService";
 import type {
     ConsumptionCandidate,
     ConsumptionEventIntent,
@@ -1274,6 +1274,61 @@ async function buildChargePlanForObligation(
 }
 
 /** Build the full reconciliation plan (correction event + reparent/supersede/retire). No write. */
+/**
+ * POSTED MONEY IS NOT RETIRED. IT IS ANSWERED.
+ *
+ * The reconciliation RPC retires a superseded obligation's draft consequences in place, and
+ * reports zero rows for anything settled — which is exactly right, and exactly not enough. Measured
+ * on the certification stack: a vacation credit posted at minus thirty-eight seventy-one, an
+ * Attendance correction saying the child attended, and afterwards the posted charge correctly
+ * untouched and NOTHING compensating it. The family kept a credit for a day their child was in
+ * care, and no artifact anywhere said otherwise.
+ *
+ * Posted protection existed. The compensating primitive existed — `createChildcareCorrection`,
+ * which Financials already uses to answer posted money by appending its reversal. What did not
+ * exist was the seam between them: nothing turned "this obligation is superseded" into "so its
+ * posted money needs answering".
+ *
+ * This is that seam and nothing more. Attendance supplies the reason the money is wrong;
+ * Financials supplies the mechanism and owns the shape of the answer. No second correction engine,
+ * no vacation-specific reversal, no rewriting of what was posted.
+ *
+ * IDEMPOTENT BY THE OWNER'S OWN RULE. `createChildcareCorrection` refuses a second reversal of a
+ * charge already reversed, because a second one would credit the family twice. A replayed
+ * correction therefore meets that refusal rather than compounding, and the refusal is read here as
+ * "already answered" instead of being raised at a caller who did nothing wrong.
+ */
+async function compensateSupersededPostedReductions(
+    supabase: SupabaseClient,
+    orgId: string,
+    plan: ReconcileConsumptionPlan,
+    actorUserId: string | null,
+): Promise<void> {
+    const chargeIds = plan.compensateChargeIds ?? [];
+    for (const chargeId of chargeIds) {
+        try {
+            await createChildcareCorrection(supabase, {
+                orgId,
+                sourceChargeId: chargeId,
+                kind: "reversal",
+                actorUserId,
+                description: "vacation credit reversed — the day was corrected to attended",
+                metadata: {
+                    source: "operational_correction",
+                    // Why this exists NOW, without re-stating why the original existed then.
+                    reason: "the operational truth this reduction rested on was corrected",
+                },
+            });
+        } catch (error) {
+            const code = (error as { code?: string }).code;
+            const message = String((error as { message?: string }).message ?? "");
+            // Already answered, or not answerable by a reversal — both are states, not failures.
+            if (code === "invalid_state" && /already been reversed|itself a correction|only posted/i.test(message)) continue;
+            throw error;
+        }
+    }
+}
+
 async function buildReconcilePlan(
     supabase: SupabaseClient,
     orgId: string,
@@ -1338,21 +1393,40 @@ async function buildReconcilePlan(
      * anything settled. The application row itself is deliberately left standing: it is the record
      * that a credit was once decided, and a correction does not un-decide history.
      */
+    const compensateChargeIds: string[] = [];
     if (absentObligationIds.length) {
         const { data: obsolete } = await supabase
             .from("financial_reduction_applications")
             .select("charge_id")
             .eq("org_id", orgId)
             .in("resolved_obligation_id", absentObligationIds);
-        for (const row of (obsolete ?? []) as Array<{ charge_id: string | null }>) {
-            if (!row.charge_id) continue;
-            const intent = buildDraftChargeRetirementIntent(row.charge_id).draftChargeId;
-            if (!retireChargeIds.includes(intent)) retireChargeIds.push(intent);
+        const obsoleteChargeIds = ((obsolete ?? []) as Array<{ charge_id: string | null }>)
+            .map((r) => r.charge_id).filter((id): id is string => Boolean(id));
+        if (obsoleteChargeIds.length) {
+            /*
+             * DRAFT AND POSTED ARE ANSWERED DIFFERENTLY, so they are separated here rather than in
+             * the RPC. A draft consequence is retired in place; posted money is history and is
+             * answered by appending its reversal. Sorting them by status at plan time keeps the
+             * RPC's draft-only rule intact and gives the posted ones somewhere to go.
+             */
+            const { data: chargeRows } = await supabase
+                .from("charges").select("id, status").eq("org_id", orgId).in("id", obsoleteChargeIds);
+            const statusById = new Map(((chargeRows ?? []) as Array<{ id: string; status: string }>).map((c) => [c.id, c.status]));
+            for (const chargeId of obsoleteChargeIds) {
+                const status = statusById.get(chargeId);
+                if (status === "posted") {
+                    if (!compensateChargeIds.includes(chargeId)) compensateChargeIds.push(chargeId);
+                    continue;
+                }
+                const intent = buildDraftChargeRetirementIntent(chargeId).draftChargeId;
+                if (!retireChargeIds.includes(intent)) retireChargeIds.push(intent);
+            }
         }
     }
 
     const ev = preview.resolution.event;
     return {
+        compensateChargeIds,
         correctionEvent: {
             idempotencyKey: ev.idempotencyKey,
             eventTypeId: ev.eventTypeId,
@@ -1396,6 +1470,8 @@ async function draftCorrectionConsumption(
     const plan = await buildReconcilePlan(supabase, orgId, fact, preview, prior, agreementId, today);
     const result = await reconcileConsumptionCorrection(supabase, { orgId, actorUserId, plan });
     if (!result.ok) fail("db_error", `reconcile_consumption failed: ${result.error}`);
+
+    await compensateSupersededPostedReductions(supabase, orgId, plan, actorUserId);
 
     // Load the final obligations owned by the new correction event for the breakdown.
     const { data, error } = await supabase
