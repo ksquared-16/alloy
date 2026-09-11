@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import LifecycleStageOutcomeBehaviorEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeBehaviorEditor";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import {
     ensureOutgoingTransitionToStage,
     newOutcomeDraft,
@@ -16,6 +17,7 @@ import {
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
 import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import { resolveOutcomeStatusOptions } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
+import { ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import {
     entityGrainFromJourneySegment,
     filterGrainCompatibleStageDestinations,
@@ -80,6 +82,22 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
         .map((ref) => draft.outcomes.find((outcome) => outcome.outcome_key === ref))
         .filter((outcome): outcome is NonNullable<typeof outcome> => Boolean(outcome));
 
+    /**
+     * Stage Result Definitions this Work Template does not yet reference.
+     *
+     * The stage OWNS its result definitions; a work template REFERENCES the ones that can happen
+     * while doing that work. The editor could already remove a reference ("Remove from work") but
+     * had no way to add one, so the only route to a result on a second template was "+ Add outcome"
+     * — which mints a NEW definition. A stage wanting one result on two work items therefore had to
+     * duplicate it, and duplicated definitions drift: two keys, two behaviours, one operator word.
+     *
+     * Waitlist is exactly that shape. "Candidate paused" can legitimately follow from reviewing a
+     * candidate OR from the conversation around an offer, and it is one result either way.
+     */
+    const attachableOutcomes = work
+        ? draft.outcomes.filter((outcome) => !scopedRefs.includes(outcome.outcome_key))
+        : [];
+
     /** This stage's own grain, from the draft that owns these outcomes. */
     const entityGrain = entityGrainFromJourneySegment(draft.journey_segment);
 
@@ -105,6 +123,44 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
         purpose: "close_record",
         entityType: entityType ?? "opportunities",
     }).options;
+
+    /**
+     * The CHILD ENROLLMENT statuses a child-grain outcome may write.
+     *
+     * Resolved from the same configured catalog as the case statuses above, but against the child's
+     * own domain (`opportunity_customer_members`) and with `status_effect` rather than
+     * `close_record` — moving a child to `enrolling` is a durable state change, not a closure, so
+     * filtering to terminal statuses would hide the very option Waitlist needs.
+     *
+     * Asked for unconditionally and handed down only for child-grain stages: the resolver is pure
+     * and this keeps the hook order stable.
+     */
+    const childEnrollmentStatusOptions = (() => {
+        const fromCatalog = resolveOutcomeStatusOptions({
+            configuredStatuses: configuredStatuses ?? [],
+            purpose: "status_effect",
+            entityType: "opportunity_customer_members",
+        }).options;
+        if (fromCatalog.length) return fromCatalog;
+        /*
+         * THE CHILD TRACK IS PLATFORM-OWNED, SO ITS VOCABULARY IS TOO.
+         *
+         * `record_status_vocabulary` — the catalog this builder is handed — carries only
+         * `opportunities` rows on the deployed tenant (open/closed/inactive/archived). There is no
+         * configured child-enrollment registry to read, so resolving the child domain from it
+         * correctly finds nothing, and the picker would sit empty over a stage whose stored
+         * configuration already uses child statuses.
+         *
+         * `ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY` is the canonical owner of that track's
+         * dispositions — the same rows the runtime writes and reads, entity-typed
+         * `opportunity_customer_members`. Falling back to it offers the real vocabulary rather than
+         * inventing one, and it defers to the configured catalog whenever a tenant has one.
+         */
+        return ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY.map((row) => ({
+            status_key: row.status_key,
+            status_label: row.status_label,
+        }));
+    })();
 
     /**
      * Author an exit path from inside the outcome that needs one, and point that outcome at it.
@@ -195,6 +251,45 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                     + Add outcome
                 </button>
             </div>
+            {/*
+              * Attach a result the stage already defines. Present only when there is something to
+              * attach, so an empty control never implies a missing definition.
+              */}
+            {attachableOutcomes.length ? (
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[0.6875rem] text-alloy-midnight/70">
+                        Or use a result this stage already defines
+                    </span>
+                    <AlloySelect
+                        value=""
+                        aria-label="Attach an existing result"
+                        placeholder="Select a result…"
+                        density="compact"
+                        className="w-auto"
+                        testId={
+                            workTemplateKey
+                                ? `work-template-outcome-attach-${workTemplateKey}`
+                                : "stage-outcome-attach"
+                        }
+                        options={attachableOutcomes.map((outcome) => ({
+                            value: outcome.outcome_key,
+                            label: outcome.label || outcome.outcome_key,
+                        }))}
+                        onChange={(next) => {
+                            const ref = next.trim();
+                            if (!ref || !work) return;
+                            const work_templates = [...draft.work_templates];
+                            work_templates[workIndex] = setWorkTemplateOutcomeRefs(work, [
+                                ...scopedRefs,
+                                ref,
+                            ]);
+                            // Reference only. The definition and its behaviour stay where the stage
+                            // owns them, so editing it once changes it everywhere it is used.
+                            onChange({ ...draft, work_templates });
+                        }}
+                    />
+                </div>
+            ) : null}
             <div className="space-y-2">
                 {scopedOutcomes.map((outcome) => {
                     const index = draft.outcomes.findIndex((row) => row.outcome_key === outcome.outcome_key);
@@ -367,6 +462,12 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                     canAuthorTransition ? transitionDestinations : undefined
                                 }
                                 closedStatusOptions={closedStatusOptions}
+                                stageGrain={
+                                    draft.journey_segment === "child" ? "child"
+                                    : draft.journey_segment === "family" ? "family"
+                                    : undefined
+                                }
+                                childEnrollmentStatusOptions={childEnrollmentStatusOptions}
                                 onCreateTransition={
                                     canAuthorTransition ?
                                         (targetStageKey: string) =>
