@@ -30,7 +30,14 @@ const DESCRIPTIONS: Readonly<Record<PacketStepKind, string>> = Object.freeze({
     document_acknowledgment: "Give the family something to read, and record that they agreed to it.",
 });
 
-type OrgDocument = { id: string; title: string | null; original_filename: string | null };
+/**
+ * A row of `/api/admin/documents`, as that route actually returns it.
+ *
+ * Its envelope is `{ documents }` and its rows are normalized to `name` — NOT `{ data }` and
+ * `title`, which is what a first pass assumed and which silently produced an empty picker: the
+ * fetch succeeded, the list was empty, and the step could not be configured at all.
+ */
+type OrgDocument = { id: string; name: string | null; original_filename: string | null };
 
 export type NewDocumentStep = {
     kind: Exclude<PacketStepKind, "form">;
@@ -45,7 +52,7 @@ const inputClass = "w-full rounded-lg border border-alloy-midnight/10 bg-white p
 
 /** What a document is called when it has no title of its own. */
 function documentLabel(d: OrgDocument): string {
-    return (d.title ?? "").trim() || (d.original_filename ?? "").trim() || "Untitled document";
+    return (d.name ?? "").trim() || (d.original_filename ?? "").trim() || "Untitled document";
 }
 
 export function PacketAddStepChooser({
@@ -75,7 +82,7 @@ export function PacketAddStepChooser({
                 const res = await fetch("/api/admin/documents?limit=200", { credentials: "include" });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not load documents");
-                const rows = ((json as { data?: OrgDocument[] }).data ?? []) as OrgDocument[];
+                const rows = ((json as { documents?: OrgDocument[] }).documents ?? []) as OrgDocument[];
                 if (!cancelled) setDocuments(rows);
             } catch (e) {
                 if (!cancelled) setDocsError((e as Error).message);

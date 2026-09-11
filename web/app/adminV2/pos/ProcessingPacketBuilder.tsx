@@ -96,7 +96,21 @@ export default function ProcessingPacketBuilder({
             setItems(it);
 
             const rawForms = fRes.ok ? ((fj as { data?: PacketStepFormOption[] }).data ?? []) : [];
-            setForms(mergeFormListWithPacketItems(rawForms, it));
+            /*
+             * Merge back only the FORM steps.
+             *
+             * The merge exists so a step's currently selected form is always offered by its picker,
+             * even when the list would not otherwise carry it. A document step has no picker and no
+             * selection to preserve — merging it back re-introduced the generated adapter into the
+             * Form dropdown that the admin list had just been taught to hide, so "Family Handbook"
+             * was offered as a form an administrator could add as a step.
+             */
+            setForms(
+                mergeFormListWithPacketItems(
+                    rawForms,
+                    it.filter((row) => readPacketStepConfig(row.metadata).kind === "form"),
+                ),
+            );
 
             if (!fRes.ok) {
                 setErr((fj as { error?: string }).error ?? "Could not load the form list for step pickers.");
@@ -120,12 +134,13 @@ export default function ProcessingPacketBuilder({
                 try {
                     const dRes = await fetch("/api/admin/documents?limit=200", { credentials: "include" });
                     if (dRes.ok) {
+                        // `{ documents }` with rows normalized to `name` — see PacketAddStepChooser.
                         const dj = (await dRes.json()) as {
-                            data?: Array<{ id: string; title?: string | null; original_filename?: string | null }>;
+                            documents?: Array<{ id: string; name?: string | null; original_filename?: string | null }>;
                         };
-                        for (const d of dj.data ?? []) {
+                        for (const d of dj.documents ?? []) {
                             if (!ackIds.has(d.id)) continue;
-                            const t = (d.title ?? "").trim() || (d.original_filename ?? "").trim();
+                            const t = (d.name ?? "").trim() || (d.original_filename ?? "").trim();
                             if (t) ackTitles.set(d.id, t);
                         }
                     }
