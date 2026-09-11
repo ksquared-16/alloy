@@ -533,7 +533,15 @@ function PositionMenu({
                     role="listbox"
                     tabIndex={-1}
                     aria-activedescendant={`wl-pos-${activeIndex}`}
-                    className={`${ALLOY_MENU_SURFACE} absolute left-0 right-0 top-[calc(100%+4px)]`}
+                    /*
+                     * Scrolls, because the list is now as long as the cohort.
+                     *
+                     * It listed at most ten positions when this was written, so it could not outgrow
+                     * the popover. It now lists every legal position for cohorts up to
+                     * `WAITLIST_ADJUST_FULL_LIST_MAX`, and an unbounded menu would run off the panel
+                     * on the very cohorts the change exists to serve.
+                     */
+                    className={`${ALLOY_MENU_SURFACE} absolute left-0 right-0 top-[calc(100%+4px)] max-h-60 overflow-y-auto`}
                     data-waitlist-adjust-position-menu
                     onKeyDown={(e) => {
                         if (e.key === "Escape") {
