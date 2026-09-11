@@ -307,6 +307,14 @@
         "status": "pending"
       }
     },
+    "app/api/admin/access/history/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth",
+        "reason": "D2 Access Change Audit. Reading who changed access requires the authority to change it: this is the same gate every Access mutation route and every Access chapter already uses, so no separate audit-read capability was invented. Org is taken from the authenticated context and never from the query, so a forged subject id narrows the result rather than reaching another tenant."
+      }
+    },
     "app/api/admin/ai/config-layout-assist/capabilities/route.ts": {
       "GET": {
         "status": "none",

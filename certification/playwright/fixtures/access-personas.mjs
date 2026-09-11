@@ -34,6 +34,22 @@ if (!url || !key) throw new Error("cert env incomplete");
 const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
 export const ORG = "00000000-0000-4000-8000-000000000001";
+
+/**
+ * WHO THIS FIXTURE IS, WHEN IT CHANGES ACCESS.
+ *
+ * D2 made every access producer refuse a change that does not name its actor. This fixture provisions
+ * roles through the SAME canonical RPC the role editor calls — deliberately, because the alternative
+ * is a second, unaudited way to grant capabilities, which is the exact hole `20260911220000` closed by
+ * dropping the narrow signatures rather than keeping them as shims.
+ *
+ * So the fixture names itself. It is not a person and does not borrow one: attributing provisioning to
+ * the seeded operator would put a change in an operator's history that the operator did not make, which
+ * is the attribution lie D2 exists to prevent. `origin: "system"` is what makes the presenter render it
+ * as a system actor rather than as a departed colleague.
+ */
+export const FIXTURE_ACTOR = "fixture:access-personas";
+export const FIXTURE_ORIGIN = "system";
 export const OTHER_ORG = "aaaa1111-0000-4000-8000-000000000001";
 export const PASSWORD = "alloy-local-cert";
 
@@ -63,6 +79,7 @@ async function principal(p) {
 }
 
 export async function setup() {
+    const runCorrelationId = crypto.randomUUID();
     const ids = Object.values(P).map((p) => p.id);
     await sb.from("user_site_access").delete().in("user_id", ids);
     await sb.from("user_access_profiles").delete().in("user_id", ids);
@@ -93,7 +110,15 @@ export async function setup() {
         [CUSTOM.portalFinance, ["portal.access", "fin.read"]],
         [CUSTOM.portalOnly, ["portal.access"]],
     ]) {
-        const { error } = await sb.rpc("replace_role_permission_grants", { p_org_id: ORG, p_role_key: rk, p_permission_keys: keys });
+        const { error } = await sb.rpc("replace_role_permission_grants", {
+            p_org_id: ORG,
+            p_role_key: rk,
+            p_permission_keys: keys,
+            p_actor_user_id: FIXTURE_ACTOR,
+            p_origin: FIXTURE_ORIGIN,
+            // One provisioning run is one correlated action, the same way one operator save is.
+            p_correlation_id: runCorrelationId,
+        });
         if (error) throw new Error(`${rk}: ${error.message}`);
     }
 
