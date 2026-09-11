@@ -144,6 +144,12 @@ async function listActions() {
     risk: d.riskClass,
     capability: d.requiredCapability,
     required_inputs: d.requiredInputs || [],
+    // CAUGHT ON THE PROMOTED RUNTIME, NOT IN A TEST. The registry publishes
+    // accepted values, `--contract` printed them, and this projection quietly
+    // dropped them again — leaving the PRIMARY discovery surface still hiding
+    // the one enum the Thread 5 worker went looking for. A projection that
+    // re-lists fields is a place where a contract silently loses one.
+    ...(d.acceptedValues ? { accepted_values: d.acceptedValues } : {}),
   }));
   process.stdout.write(`${JSON.stringify({ ok: true, actions: rows }, null, 2)}\n`);
   process.exit(0);
