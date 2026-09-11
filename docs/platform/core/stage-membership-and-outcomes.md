@@ -78,6 +78,42 @@ Two consequences worth stating, because getting either wrong looks like success:
   Process Position (below). A queue definition filters on stage; it is generated output, never
   independently-authored status filters.
 
+### Queue membership follows stage grain
+
+> **A child-grain lane selects child subjects from child lifecycle truth.**
+> The family opportunity is enrichment and context for those rows — never the authority on whether
+> the child belongs in the lane.
+
+A case lane's subject is the opportunity, so `opportunities.status_key` / `stage_key` is its
+membership rule. A child or candidate lane's subject is one child, and bounding it by a family
+attribute makes a child's membership a property of their siblings: a household at Lead for a child
+who has not moved hides a sibling who is genuinely in Waitlist, and nothing errors while it does.
+
+So child membership is read from `process_instances` through the effective-stage rule and **unioned**
+with whatever the family-scoped population contributes — it replaces nothing, because the family lens
+still carries rows the child lens has no candidate for. Boundedness is preserved rather than traded
+away: membership is scoped org + process + stage, and its output is an explicit opportunity-id list
+that bounds the candidate read, which is the same shape `assertLifecycleStageOpportunityQueryHasStatusFilters`
+demands of the case-grain path it guards. That guard is untouched and still refuses an unfiltered
+lifecycle-stage opportunity query.
+
+One consequence worth stating, because it is easy to undo by accident: once a row can be identified
+as a candidate, the CANDIDATE decides membership, not its opportunity. Several children share one
+opportunity, so judging an expanded row by its family lets one matched child pull their siblings in
+behind them.
+
+### Starting stage work is an operator act
+
+Stage entry opens the effective primary template and nothing else. A stage may configure further
+templates — Waitlist configures `offer_spot` beside `review_waitlist_position` — and those are
+started deliberately, through the `stage_work.start` capability, with the template as an INPUT.
+
+Starting the work and recording its outcome are separate acts. `stage_work.start` opens the work and
+moves no stage, writes no disposition and sets no placement status; the lifecycle consequences belong
+to the outcome the operator records afterwards. Eligibility comes from configuration — the template
+must be declared on the child's CURRENT stage and that stage must be child-grain — so no surface
+needs a branch naming a particular template.
+
 ## Effective Process Position (derived)
 
 **Effective Process Position** is a **read/projection** concept. It is **not** another persisted
