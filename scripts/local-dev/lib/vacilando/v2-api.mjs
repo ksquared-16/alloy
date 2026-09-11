@@ -552,9 +552,12 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
   }
 
   if (path === "/api/v2/lane/governed-action" || path === "/api/v2/lanes/governed-action" || path === "/api/v2/governed-actions") {
-    const { requestGovernedAction } = await import("./governed-action-request.mjs");
+    // Through the preflight: a managed QA action needs its lane to hold a
+    // Development Slot before it can execute, and taking one safely is
+    // infrastructure scheduling, not a second governed decision.
+    const { fileGovernedActionWithQaSlotPreflight } = await import("./qa-slot-preflight.mjs");
     const laneId = v.lane_id || v.laneId || v.id;
-    const out = requestGovernedAction({
+    const out = await fileGovernedActionWithQaSlotPreflight({
       ...v,
       lane_id: laneId,
       mission_id: v.mission_id || v.missionId,
@@ -1265,7 +1268,10 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       const { controlMissionLocalServer } = await import("./mission-local-server.mjs");
       const mid = v.mission_id || v.missionId;
       const action = v.action || v.command || null;
-      const out = controlMissionLocalServer(mid, action);
+      // AWAITED. Starting a server can now acquire a Development Slot first,
+      // which is asynchronous; without this the body would be a Promise and
+      // every start would answer 409 with an empty result.
+      const out = await controlMissionLocalServer(mid, action);
       return { status: out.ok ? 200 : 409, body: out };
     } catch (e) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };

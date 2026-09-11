@@ -31,6 +31,7 @@ import { resolveConsumption, type ConsumptionResolution } from "@/lib/operationa
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import { valueVacationCredit, type VacationCreditValuation } from "@/lib/operationalConsumption/vacationCreditValuation";
+import { applyVacationCreditReduction } from "@/lib/financials/reductions/policyReductionService";
 import type { VacationTreatment } from "@/lib/financials/policies/financialPolicyTypes";
 import type { ChildcareRatePlanRow, ChildcareRateRuleRow } from "@/lib/financials/rates/rateTypes";
 // Phase 9 — Billing prices tuition from Commercial Execution (frozen V1), not Substrate A.
@@ -53,7 +54,7 @@ import { factAnchorSuffix, correctionLineageContext } from "@/lib/operationalCon
 import {
     reconcileConsumptionCorrection,
 } from "@/lib/operationalConsumption/reconcileConsumptionCorrectionAtomicCommit";
-import { buildDraftChargeRetirementIntent, buildChildcareDraftChargeFields } from "@/lib/financials/childcareChargeService";
+import { buildDraftChargeRetirementIntent, buildChildcareDraftChargeFields, createChildcareCorrection } from "@/lib/financials/childcareChargeService";
 import type {
     ConsumptionCandidate,
     ConsumptionEventIntent,
@@ -656,6 +657,11 @@ async function previewAttendanceConsumption(
         commercialExport: pricing.commercialExport,
         programKey: pricing.programKey,
         cadenceKey: pricing.cadenceKey,
+        // The policy that decided, carried down so the obligation can name its authority.
+        vacationPolicyId: vacationPolicy.resolved ? vacationPolicy.policy.id : null,
+        vacationPolicySnapshot: vacationPolicy.resolved
+            ? { value: vacationPolicy.policy.value, scope: vacationPolicy.sourceScope }
+            : null,
     };
 
     const obligations: ResolvedObligationIntent[] = [];
@@ -749,6 +755,9 @@ type DirectiveCtx = {
     programKey: string | null;
     /** Recurring billing cadence for tuition rate selection (mapped from policy; default monthly). */
     cadenceKey: string;
+    /** The resolved `vacation_credit` financial policy, when the attendance path resolved one. */
+    vacationPolicyId?: string | null;
+    vacationPolicySnapshot?: Record<string, unknown> | null;
 };
 
 type DirectiveResolution = {
@@ -952,6 +961,8 @@ async function resolveDirective(
             draftable: false,
             status: amount != null ? "previewed" : "no_charge",
             resolutionKey: `cons:${directive.obligationKind}:${ctx.anchorDate}:${ctx.agreementId ?? fact.sourceEntityId}`,
+            // Which policy decided, carried forward so the reduction can name its authority.
+            decidedByFinancialPolicyId: directive.obligationKind === "vacation_credit" ? ctx.vacationPolicyId ?? null : null,
             explanation: {
                 directive_reason: directive.reason,
                 proration_method: ctx.prorationMethod,
@@ -1263,6 +1274,123 @@ async function buildChargePlanForObligation(
 }
 
 /** Build the full reconciliation plan (correction event + reparent/supersede/retire). No write. */
+/**
+ * POSTED MONEY IS NOT RETIRED. IT IS ANSWERED.
+ *
+ * The reconciliation RPC retires a superseded obligation's draft consequences in place, and
+ * reports zero rows for anything settled — which is exactly right, and exactly not enough. Measured
+ * on the certification stack: a vacation credit posted at minus thirty-eight seventy-one, an
+ * Attendance correction saying the child attended, and afterwards the posted charge correctly
+ * untouched and NOTHING compensating it. The family kept a credit for a day their child was in
+ * care, and no artifact anywhere said otherwise.
+ *
+ * Posted protection existed. The compensating primitive existed — `createChildcareCorrection`,
+ * which Financials already uses to answer posted money by appending its reversal. What did not
+ * exist was the seam between them: nothing turned "this obligation is superseded" into "so its
+ * posted money needs answering".
+ *
+ * This is that seam and nothing more. Attendance supplies the reason the money is wrong;
+ * Financials supplies the mechanism and owns the shape of the answer. No second correction engine,
+ * no vacation-specific reversal, no rewriting of what was posted.
+ *
+ * IDEMPOTENT BY THE OWNER'S OWN RULE. `createChildcareCorrection` refuses a second reversal of a
+ * charge already reversed, because a second one would credit the family twice. A replayed
+ * correction therefore meets that refusal rather than compounding, and the refusal is read here as
+ * "already answered" instead of being raised at a caller who did nothing wrong.
+ */
+/**
+ * WHICH OBLIGATIONS CURRENTLY OWE MONEY, AND THE ONE WRITER THAT ANSWERS THEM.
+ *
+ * Deliberately not `restoreVacationCredit`. Restoration is not a different act from the original —
+ * it is the same question asked again after the truth moved, and giving it its own function would
+ * be the start of the second engine this thread has spent its length avoiding. Both the original
+ * path and the correction path arrive here with the same inputs and get the same answer.
+ *
+ * ELIGIBILITY IS READ, NEVER DECIDED. The commercial decision already happened: interpretation
+ * resolved the policy, the obligation carries its amount and the policy that authorised it, and an
+ * unresolvable valuation has already been routed to review as `no_charge` with a named reason.
+ * This only asks whether that decision currently stands. Adding any judgement here would move
+ * commerce into the correction orchestrator, where nobody would think to look for it.
+ */
+async function materializeCurrentFinancialConsequences(
+    supabase: SupabaseClient,
+    orgId: string,
+    args: {
+        obligations: Array<{ persistedId: string; intent: ResolvedObligationIntent }>;
+        consumptionEventId: string;
+        agreementId: string | null;
+        today: string;
+        actorUserId: string | null;
+    },
+): Promise<void> {
+    if (!args.agreementId) return;
+    for (const { persistedId, intent } of args.obligations) {
+        if (intent.obligationKind !== "vacation_credit") continue;
+        if (intent.status !== "previewed") continue;
+        if (intent.amountCents == null || intent.amountCents <= 0) continue;
+        if (!intent.decidedByFinancialPolicyId) continue;
+        if ("unresolved_valuation" in (intent.explanation ?? {})) continue;
+
+        const audit = intent.explanation as Record<string, unknown>;
+        await applyVacationCreditReduction(supabase, {
+            orgId,
+            actorUserId: args.actorUserId,
+            resolvedObligationId: persistedId,
+            // The event under which this obligation is financially current. A correction that
+            // reinstates it reparents it to a new one, and that is what makes the restored
+            // consequence a new consequence rather than a revival of a settled one.
+            materializingEventId: args.consumptionEventId,
+            financialPolicyId: intent.decidedByFinancialPolicyId,
+            enrollmentAgreementId: args.agreementId,
+            amountCents: intent.amountCents,
+            currencyCode: intent.currencyCode,
+            effectiveDate: intent.occursOn ?? args.today,
+            periodKey: typeof audit.period_key === "string"
+                ? audit.period_key
+                : (intent.periodStart ?? intent.occursOn ?? args.today).slice(0, 7),
+            periodStart: intent.periodStart,
+            periodEnd: intent.periodEnd,
+            valuation: {
+                acceptedTermId: typeof audit.accepted_term_id === "string" ? audit.accepted_term_id : null,
+                acceptedPeriodAmountCents: typeof audit.accepted_period_amount_cents === "number" ? audit.accepted_period_amount_cents : null,
+                periodDays: typeof audit.period_days_used === "number" ? audit.period_days_used : null,
+                creditedDays: typeof audit.credited_days === "number" ? audit.credited_days : 1,
+            },
+        });
+    }
+}
+
+async function compensateSupersededPostedReductions(
+    supabase: SupabaseClient,
+    orgId: string,
+    plan: ReconcileConsumptionPlan,
+    actorUserId: string | null,
+): Promise<void> {
+    const chargeIds = plan.compensateChargeIds ?? [];
+    for (const chargeId of chargeIds) {
+        try {
+            await createChildcareCorrection(supabase, {
+                orgId,
+                sourceChargeId: chargeId,
+                kind: "reversal",
+                actorUserId,
+                description: "vacation credit reversed — the day was corrected to attended",
+                metadata: {
+                    source: "operational_correction",
+                    // Why this exists NOW, without re-stating why the original existed then.
+                    reason: "the operational truth this reduction rested on was corrected",
+                },
+            });
+        } catch (error) {
+            const code = (error as { code?: string }).code;
+            const message = String((error as { message?: string }).message ?? "");
+            // Already answered, or not answerable by a reversal — both are states, not failures.
+            if (code === "invalid_state" && /already been reversed|itself a correction|only posted/i.test(message)) continue;
+            throw error;
+        }
+    }
+}
+
 async function buildReconcilePlan(
     supabase: SupabaseClient,
     orgId: string,
@@ -1301,15 +1429,66 @@ async function buildReconcilePlan(
     }
 
     const retireChargeIds: string[] = [];
+    const absentObligationIds: string[] = [];
     for (const po of prior.priorObligations) {
         const absent = !po.resolution_key || !newKeys.has(po.resolution_key);
-        if (absent && po.draft_charge_id) {
+        if (!absent) continue;
+        absentObligationIds.push(po.id);
+        if (po.draft_charge_id) {
             retireChargeIds.push(buildDraftChargeRetirementIntent(po.draft_charge_id).draftChargeId);
+        }
+    }
+
+    /*
+     * A SUPERSEDED OBLIGATION TAKES ITS MONEY WITH IT.
+     *
+     * An obligation that drafts its own charge is retired by the loop above, through
+     * `draft_charge_id`. A vacation credit does not: it is non-draftable, and its money lives on the
+     * contra charge of a Financial Reduction that points back at the obligation. Nothing joined
+     * those two facts, so a correction superseded the obligation correctly and left the reduction's
+     * draft contra charge live — an attended child keeping a vacation credit, which is the one
+     * outcome Slice 4 exists to prevent. Measured on the certification stack before this existed:
+     * obligation `superseded`, contra charge still `draft`, minus forty dollars still owed back.
+     *
+     * The charge ids are handed to the same retirement path, so posted money is untouched by the
+     * same rule that already protects it — the RPC retires drafts only and reports zero rows for
+     * anything settled. The application row itself is deliberately left standing: it is the record
+     * that a credit was once decided, and a correction does not un-decide history.
+     */
+    const compensateChargeIds: string[] = [];
+    if (absentObligationIds.length) {
+        const { data: obsolete } = await supabase
+            .from("financial_reduction_applications")
+            .select("charge_id")
+            .eq("org_id", orgId)
+            .in("resolved_obligation_id", absentObligationIds);
+        const obsoleteChargeIds = ((obsolete ?? []) as Array<{ charge_id: string | null }>)
+            .map((r) => r.charge_id).filter((id): id is string => Boolean(id));
+        if (obsoleteChargeIds.length) {
+            /*
+             * DRAFT AND POSTED ARE ANSWERED DIFFERENTLY, so they are separated here rather than in
+             * the RPC. A draft consequence is retired in place; posted money is history and is
+             * answered by appending its reversal. Sorting them by status at plan time keeps the
+             * RPC's draft-only rule intact and gives the posted ones somewhere to go.
+             */
+            const { data: chargeRows } = await supabase
+                .from("charges").select("id, status").eq("org_id", orgId).in("id", obsoleteChargeIds);
+            const statusById = new Map(((chargeRows ?? []) as Array<{ id: string; status: string }>).map((c) => [c.id, c.status]));
+            for (const chargeId of obsoleteChargeIds) {
+                const status = statusById.get(chargeId);
+                if (status === "posted") {
+                    if (!compensateChargeIds.includes(chargeId)) compensateChargeIds.push(chargeId);
+                    continue;
+                }
+                const intent = buildDraftChargeRetirementIntent(chargeId).draftChargeId;
+                if (!retireChargeIds.includes(intent)) retireChargeIds.push(intent);
+            }
         }
     }
 
     const ev = preview.resolution.event;
     return {
+        compensateChargeIds,
         correctionEvent: {
             idempotencyKey: ev.idempotencyKey,
             eventTypeId: ev.eventTypeId,
@@ -1354,14 +1533,45 @@ async function draftCorrectionConsumption(
     const result = await reconcileConsumptionCorrection(supabase, { orgId, actorUserId, plan });
     if (!result.ok) fail("db_error", `reconcile_consumption failed: ${result.error}`);
 
+    await compensateSupersededPostedReductions(supabase, orgId, plan, actorUserId);
+
     // Load the final obligations owned by the new correction event for the breakdown.
     const { data, error } = await supabase
         .from(OBLIGATIONS_TABLE)
-        .select("id, obligation_kind, draft_charge_id, status")
+        .select("id, obligation_kind, draft_charge_id, status, resolution_key")
         .eq("org_id", orgId)
         .eq("consumption_event_id", result.consumptionEventId);
     if (error) fail("db_error", error.message);
-    const e1Obls = (data ?? []) as { id: string; obligation_kind: ObligationKind | null; draft_charge_id: string | null; status: string }[];
+    const e1Obls = (data ?? []) as { id: string; obligation_kind: ObligationKind | null; draft_charge_id: string | null; status: string; resolution_key: string | null }[];
+
+    /*
+     * A RESTORED CONSEQUENCE IS STILL A CONSEQUENCE.
+     *
+     * The correction path reconciled obligations and returned, so a corrected truth that newly
+     * warrants money could never get any: A corrected to attended and corrected back again left the
+     * obligation reinstated and the family uncredited. Measured, on the certification stack.
+     *
+     * It runs the SAME writer the original path runs, with the same eligibility reading. What makes
+     * the restored credit a new credit rather than a revival is the identity: the obligation is the
+     * same row, but it is now current under a new consumption event, and the reduction is keyed on
+     * both. The withdrawn artifact stays withdrawn beside it.
+     *
+     * Matched by resolution key, because that is what reconciliation itself uses to decide an
+     * obligation is the same logical thing across corrections.
+     */
+    const byKey = new Map(e1Obls.filter((o) => o.resolution_key).map((o) => [o.resolution_key!, o.id]));
+    const restorable: Array<{ persistedId: string; intent: ResolvedObligationIntent }> = [];
+    for (const intent of preview.resolution.obligations) {
+        const persistedId = intent.resolutionKey ? byKey.get(intent.resolutionKey) : undefined;
+        if (persistedId) restorable.push({ persistedId, intent });
+    }
+    await materializeCurrentFinancialConsequences(supabase, orgId, {
+        obligations: restorable,
+        consumptionEventId: result.consumptionEventId,
+        agreementId,
+        today,
+        actorUserId,
+    });
     const drafted = e1Obls.map((o) => ({
         obligationKind: (o.obligation_kind ?? "registration") as ObligationKind,
         draftChargeId: o.draft_charge_id,
@@ -1417,6 +1627,7 @@ export async function draftConsumption(
 
     const agreementId = agreementIdFromFact(fact);
     const resolvedObligationIds: string[] = [];
+    const materializable: Array<{ persistedId: string; intent: ResolvedObligationIntent }> = [];
     const drafted: { obligationKind: ObligationKind; draftChargeId: string | null; draftChargeStatus: string | null }[] = [];
     let firstDraftChargeId: string | null = null;
     let firstDraftChargeStatus: string | null = null;
@@ -1447,12 +1658,22 @@ export async function draftConsumption(
         const status: ResolvedObligationIntent["status"] = draftChargeId ? "drafted" : obligation.status;
         const id = await upsertObligation(supabase, orgId, consumptionEventId, obligation, draftChargeId, status, actorUserId);
         resolvedObligationIds.push(id);
+        materializable.push({ persistedId: id, intent: obligation });
         drafted.push({ obligationKind: obligation.obligationKind, draftChargeId, draftChargeStatus });
         if (firstDraftChargeId == null && draftChargeId != null) {
             firstDraftChargeId = draftChargeId;
             firstDraftChargeStatus = draftChargeStatus;
         }
     }
+
+    /*
+     * MONEY AFTER THE OBLIGATIONS EXIST, AND ONLY THEN. The reduction is anchored on the obligation
+     * and the event that made it current, so it cannot be written before both are persisted; that
+     * ordering is the idempotency, not an implementation detail.
+     */
+    await materializeCurrentFinancialConsequences(supabase, orgId, {
+        obligations: materializable, consumptionEventId, agreementId, today, actorUserId,
+    });
 
     return {
         ...preview,

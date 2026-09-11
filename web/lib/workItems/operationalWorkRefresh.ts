@@ -5,7 +5,7 @@
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import { prefetchCommandCenterConversations } from "@/lib/communications/v2/commandCenterPrefetchCache";
-import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import { warmAllProcessingQueueScopes } from "@/lib/pos/processingQueueWarmCache";
 
 export const ADMIN_V2_PROCESSING_QUEUE_REFRESH = "adminv2:processing-queue-refresh" as const;
 
@@ -48,7 +48,12 @@ export function dispatchOperationalWorkRefresh(detail: OperationalWorkRefreshDet
     }
 
     if (detail.processing_case_id?.trim() || detail.kind === "processing_review") {
-        void warmProcessingQueueCache({ force: true });
+        /*
+         * BOTH scopes. The Work rail reads the browse page and the Work Items projection reads the
+         * actionable cohort; refreshing only one of them is how a case that was just archived stays
+         * on the other surface. Convergence after a decision is the whole point of this event.
+         */
+        void warmAllProcessingQueueScopes({ force: true });
         window.dispatchEvent(
             new CustomEvent(ADMIN_V2_PROCESSING_QUEUE_REFRESH, {
                 detail: { processing_case_id: detail.processing_case_id ?? null },

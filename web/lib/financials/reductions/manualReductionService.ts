@@ -6,6 +6,14 @@
  * manual application without one, and this service refuses it earlier, with a message an operator
  * can act on.
  *
+ * ── ONE ENGINE, TWO PROVENANCES ──
+ *
+ * The persistence itself — idempotency, the contra charge, posted protection, the unique-key race —
+ * is not manual-specific and lives in `reductionCore`. What stays here is what makes a reduction
+ * MANUAL: a reason somebody has to give, a category, and the rule that no policy may be named on a
+ * decision no policy made. A repeat of a manual credit returns what was already recorded rather
+ * than re-pricing it: submitting a form twice is one credit, not an instruction to recalculate.
+ *
  * ── UNDOING ONE APPENDS ──
  *
  * There is no UPDATE and no DELETE here. Reversing a manual reduction writes a NEW charge in the
@@ -17,7 +25,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { createChildcareDraftCharge } from "@/lib/financials/childcareChargeService";
+import { applyReductionCore, ReductionCoreError } from "@/lib/financials/reductions/reductionCore";
 
 /** The categories a manual reduction may post through — all code-owned taxonomy. */
 export const MANUAL_REDUCTION_CATEGORIES = ["credit", "adjustment", "discount"] as const;
@@ -83,80 +91,52 @@ export async function applyManualReduction(
         throw new ManualReductionError("invalid_effective_date", "Name the date this reduction takes effect.");
     }
 
-    // ── ALREADY DONE IS NOT AN ERROR ────────────────────────────────────────────────────────
-    const { data: existing, error: existingError } = await supabase
-        .from("financial_reduction_applications")
-        .select("id, charge_id, amount_cents")
-        .eq("org_id", input.orgId)
-        .eq("idempotency_key", input.idempotencyKey)
-        .maybeSingle();
-    if (existingError) throw new ManualReductionError("db_error", existingError.message);
-    if (existing) {
-        const row = existing as { id: string; charge_id: string; amount_cents: number };
-        return { applicationId: row.id, chargeId: row.charge_id, amountCents: row.amount_cents, idempotent: true };
-    }
-
-    const charge = await createChildcareDraftCharge(supabase, {
-        orgId: input.orgId,
-        enrollmentAgreementId: input.enrollmentAgreementId,
-        chargeCategory: input.chargeCategory,
-        chargeType: "adjustment",
-        amountCents: input.amountCents,
-        currencyCode: input.currencyCode ?? "USD",
-        serviceDate: input.effectiveDate,
-        description: input.chargeCategory,
-        actorUserId: input.actorUserId,
-        metadata: {
-            source: "manual_reduction",
-            reason,
-            note: input.note ?? null,
-            reduces_charge_id: input.sourceChargeId ?? null,
-        },
-    } as never);
-
-    const { data: inserted, error: insertError } = await supabase
-        .from("financial_reduction_applications")
-        .insert({
-            org_id: input.orgId,
-            reduction_kind: "manual",
-            charge_id: (charge as { id: string }).id,
-            source_charge_id: input.sourceChargeId ?? null,
-            customer_id: input.customerId ?? null,
-            customer_member_id: input.customerMemberId ?? null,
-            enrollment_agreement_id: input.enrollmentAgreementId,
-            period_key: input.periodKey ?? input.effectiveDate.slice(0, 7),
-            amount_cents: input.amountCents,
-            currency_code: input.currencyCode ?? "USD",
-            explanation: input.note ?? null,
-            reason,
-            idempotency_key: input.idempotencyKey,
-            created_by: input.actorUserId,
-            updated_by: input.actorUserId,
-        })
-        .select("id")
-        .single();
-    if (insertError) {
-        // The same race the policy path has, with the same answer: the other writer already did it.
-        if ((insertError as { code?: string }).code === "23505") {
-            await supabase.from("charges").delete().eq("org_id", input.orgId).eq("id", (charge as { id: string }).id).eq("status", "draft");
-            const { data: winner } = await supabase
-                .from("financial_reduction_applications")
-                .select("id, charge_id, amount_cents")
-                .eq("org_id", input.orgId)
-                .eq("idempotency_key", input.idempotencyKey)
-                .maybeSingle();
-            const row = winner as { id: string; charge_id: string; amount_cents: number } | null;
-            if (row) return { applicationId: row.id, chargeId: row.charge_id, amountCents: row.amount_cents, idempotent: true };
+    try {
+        const result = await applyReductionCore(supabase, {
+            orgId: input.orgId,
+            actorUserId: input.actorUserId,
+            subject: {
+                enrollmentAgreementId: input.enrollmentAgreementId,
+                customerId: input.customerId ?? null,
+                customerMemberId: input.customerMemberId ?? null,
+                sourceChargeId: input.sourceChargeId ?? null,
+                periodKey: input.periodKey ?? input.effectiveDate.slice(0, 7),
+            },
+            charge: {
+                chargeCategory: input.chargeCategory,
+                description: input.chargeCategory,
+                serviceDate: input.effectiveDate,
+                currencyCode: input.currencyCode ?? "USD",
+                metadata: {
+                    source: "manual_reduction",
+                    reason,
+                    note: input.note ?? null,
+                    reduces_charge_id: input.sourceChargeId ?? null,
+                },
+            },
+            applications: [{
+                reductionKind: "manual",
+                reason,
+                explanation: input.note ?? null,
+                amountCents: input.amountCents,
+                idempotencyKey: input.idempotencyKey,
+            }],
+            // A manual credit submitted twice is one credit. The second submission is not an
+            // instruction to re-price the first.
+            onExisting: "return",
+        });
+        return {
+            applicationId: result.applicationIds[0]!,
+            chargeId: result.chargeId,
+            amountCents: result.amountCents,
+            idempotent: result.kind !== "applied",
+        };
+    } catch (error) {
+        if (error instanceof ReductionCoreError) {
+            throw new ManualReductionError(error.code, error.message);
         }
-        throw new ManualReductionError("db_error", insertError.message);
+        throw error;
     }
-
-    return {
-        applicationId: (inserted as { id: string }).id,
-        chargeId: (charge as { id: string }).id,
-        amountCents: input.amountCents,
-        idempotent: false,
-    };
 }
 
 /**

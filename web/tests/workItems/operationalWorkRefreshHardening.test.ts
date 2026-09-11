@@ -12,6 +12,7 @@ import { ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH } from "@/lib/adminV2/op
 
 vi.mock("@/lib/pos/processingQueueWarmCache", () => ({
     warmProcessingQueueCache: vi.fn().mockResolvedValue(undefined),
+    warmAllProcessingQueueScopes: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("operationalWorkRefresh hardening", () => {
