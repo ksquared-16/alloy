@@ -24,6 +24,7 @@ import {
     candidateStatusOperatorLabel,
     OUTCOME_CANDIDATE_STATUS_VALUES,
 } from "@/lib/lifecycle/stageOutcomeAutomation";
+import { ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 
 const root = resolve(__dirname, "../..");
 const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
@@ -140,5 +141,72 @@ describe("consequence controls follow the stage's grain", () => {
         // split, so the fix belongs in the composable editor rather than by relaxing this gate.
         const stageEditor = read("components/adminV2/settings/lifecycle/StageEditorV2.tsx");
         expect(stageEditor).toMatch(/stageRecord\?\.grain === "family"[\s\S]{0,400}StagePerChildPathsEditor/);
+    });
+});
+
+describe("a Result Definition can be shared by more than one Work Template", () => {
+    /*
+     * The stage OWNS result definitions; a work template REFERENCES the ones that can happen while
+     * doing that work. The editor could already remove a reference ("Remove from work") but had no
+     * way to add one, so the only route to a result on a second template was "+ Add outcome" —
+     * which mints a NEW definition. A stage wanting one result on two work items had to duplicate
+     * it, and duplicated definitions drift: two keys, two behaviours, one operator word.
+     *
+     * Waitlist is exactly that shape: "Candidate paused" follows from reviewing a candidate OR from
+     * the conversation around an offer, and it is one result either way.
+     */
+    it("offers the stage's unreferenced results for attachment", () => {
+        const src = read(DEFINITIONS_EDITOR);
+        expect(src).toContain("attachableOutcomes");
+        expect(src).toContain("work-template-outcome-attach-");
+    });
+
+    it("attaches by reference, never by copying the definition", () => {
+        const src = read(DEFINITIONS_EDITOR);
+        const attachBlock = src.slice(src.indexOf("attachableOutcomes.length ?"));
+        const handler = attachBlock.slice(0, attachBlock.indexOf("</div>"));
+        expect(handler).toContain("setWorkTemplateOutcomeRefs");
+        expect(handler).not.toContain("newOutcomeDraft");
+        expect(handler).not.toMatch(/outcomes:\s*\[/);
+    });
+
+    it("only offers results not already referenced by this work template", () => {
+        const src = read(DEFINITIONS_EDITOR);
+        expect(src).toMatch(/attachableOutcomes\s*=\s*work[\s\S]{0,200}!scopedRefs\.includes/);
+    });
+});
+
+describe("the child picker falls back to the platform's own child vocabulary", () => {
+    /*
+     * `record_status_vocabulary` — the catalog the builder is handed — carries only `opportunities`
+     * rows on the deployed tenant (open/closed/inactive/archived). Resolving the child domain from
+     * it correctly finds nothing, so the picker sat empty over a stage whose stored configuration
+     * already used child statuses, showing a raw key with no way to change it.
+     *
+     * The child track is platform-owned, and so is its vocabulary.
+     */
+    it("the canonical child vocabulary carries the dispositions Waitlist needs", () => {
+        const keys = ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY.map((row) => row.status_key);
+        expect(keys).toContain("enrolling");
+        expect(keys).toContain("waitlisted");
+        for (const row of ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY) {
+            expect(row.entity_type).toBe("opportunity_customer_members");
+            // Operator-facing label, never the raw key.
+            expect(row.status_label).not.toBe(row.status_key);
+        }
+    });
+
+    it("prefers a configured catalog and falls back only when it is empty", () => {
+        const src = read(DEFINITIONS_EDITOR);
+        expect(src).toContain("ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY");
+        // The fallback must be conditional: a tenant that configures its own child statuses wins.
+        expect(src).toMatch(/if\s*\(fromCatalog\.length\)\s*return fromCatalog;/);
+    });
+
+    it("never falls back to family statuses", () => {
+        const keys = ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY.map((row) => row.status_key);
+        expect(keys).not.toContain("open");
+        expect(keys).not.toContain("closed");
+        expect(keys).not.toContain("archived");
     });
 });
