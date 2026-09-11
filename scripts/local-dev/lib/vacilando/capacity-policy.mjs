@@ -355,7 +355,26 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
     host: cap,
 
     axes: {
+      /*
+       * ADVISORY. This is what the HARDWARE would comfortably carry; it is not
+       * the number of agents allowed to work.
+       *
+       * The enforced execution ceiling is ALLOY_MAX_ACTIVE_PROVIDERS, resolved
+       * through capacity-precedence (override > host config > this > default).
+       * The two are not the same concept and had drifted far apart in practice —
+       * this estimate read 4 on a 12-core host while the enforced ceiling was 8
+       * and eight providers were demonstrably live. Operator-facing output that
+       * printed this as "providers 0/4" was answering "how many agents may work
+       * at once?" with a number nothing enforced.
+       *
+       * `advisory: true` is here so no consumer can treat it as a gate by
+       * accident, and so a reader who finds only this object still learns that
+       * the authority lies elsewhere.
+       */
       provider_capacity: {
+        advisory: true,
+        advisory_basis: "hardware",
+        enforced_by: "ALLOY_MAX_ACTIVE_PROVIDERS",
         ceiling: providerCeiling, current: cap?.provider_seats ?? 0,
         remaining: Math.max(0, providerCeiling - (cap?.provider_seats ?? 0)),
         bounded_by: providerByMemory < providerByCores ? "memory" : "cores",

@@ -10,6 +10,7 @@ import os from "node:os";
 import { join } from "node:path";
 
 import { listCommands } from "./commands/registry.mjs";
+import { managedSlotCount } from "./managed-slots.mjs";
 
 const CONFIG = join(os.homedir(), ".config", "alloy-dev", "config");
 
@@ -52,8 +53,13 @@ export async function collectPolicies() {
         P("Budget policy", "none enforced in V1 (usage surfaced, not capped)", "V1 scope", "advisory", "V1.1", "—"),
       ]},
       { title: "Slots & roles", rows: [
-        P("Permanent slots", "6 (1–6)", "read-core ALLOY_MAX_AGENTS", "alloy-sprint-start (fail-closed)", "config", "alloy-sprint-start"),
-        P("Slot roles", "1 Product · 2 Architecture · 3 Performance · 4 UI/UX · 5 Refactor · 6 Experimental", "README permanent slot identities", "labels only", "config (ALLOY_SLOT_N_ROLE)", "alloy-worker-status"),
+        // Derived, never a literal. This row said "6 (1–6)" against a host that
+        // had run twelve slots for weeks. Writing 12 here would be the same
+        // mistake with a fresher number: the value is topology-driven, so it
+        // comes from the topology owner.
+        P("Managed slots", `${managedSlotCount()} (1–${managedSlotCount()})`, "managed-slots.mjs (ALLOY_MAX_AGENTS)", "alloy-sprint-start (fail-closed)", "config", "alloy-sprint-start"),
+        P("Slot ≠ lane", "a slot is a temporary local dev/QA resource (worktree + port + QA context); lanes are persistent and may outnumber slots, and a slotless lane still executes", "capacity model", "hard rule", "no", "alloy-worker-status"),
+        P("Slot roles", "one label per slot from ALLOY_SLOT_N_ROLE; unset for slots the config does not name", "host config", "labels only", "config (ALLOY_SLOT_N_ROLE)", "alloy-worker-status"),
       ]},
       { title: "Providers", rows: [
         P("Providers", "Claude (claude), Cursor (cursor-agent)", "installed CLIs", "provider adapter", "no", "director.ask"),

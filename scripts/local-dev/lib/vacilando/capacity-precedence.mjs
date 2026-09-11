@@ -60,15 +60,46 @@ import { join } from "node:path";
  * The enforced ceilings, their built-in defaults, their hard bounds, and the
  * derived axis each one corresponds to.
  *
- * An override may move a ceiling, never remove it. Servers and providers are
- * bounded by the six managed slots; there is no seventh place to put one.
+ * An override may move a ceiling, never remove it.
+ *
+ * A SERVER NEEDS A SLOT. A PROVIDER DOES NOT.
+ *
+ * This table used to say "servers and providers are bounded by the six managed
+ * slots; there is no seventh place to put one", and slot-bounded both. Half of
+ * that was right and half of it was measurably false.
+ *
+ * A dev server needs a managed PORT, so it genuinely cannot exist without a
+ * slot, and `ALLOY_MAX_RUNNING_SERVERS` stays slot-bounded for that reason.
+ *
+ * A provider is an agent session. It needs a worktree and a process, neither of
+ * which is a slot. Measured on this host while the old comment still stood:
+ * thirteen lanes, twelve slots, EIGHT live providers — one of them on a lane
+ * with no slot at all. There was a seventh place to put one, and an eighth, and
+ * the system was already using them.
+ *
+ * The three layers are independent by contract:
+ *   lane             persistent identity; many may exist
+ *   active execution independently bounded provider concurrency
+ *   slot             a temporary local dev/QA resource: worktree + port + QA
+ *
+ * So changing the managed-slot count must not move provider concurrency, and a
+ * slotless lane may still execute. The enforcement path already behaved this
+ * way; this declaration is what disagreed with it.
  */
 export const CAPACITY_LIMITS = Object.freeze({
-  // `max` is the FALLBACK bound. The live bound for the two slot-shaped
-  // ceilings comes from managed-slots, so an override can never ask for a
-  // server or a provider that has no slot to live in — at any topology.
+  // `max` is the FALLBACK bound. The live bound for the ONE slot-shaped ceiling
+  // comes from managed-slots, so an override can never ask for a dev server that
+  // has no port to live on — at any topology. Provider concurrency is not in
+  // that sentence, and must not be.
   ALLOY_MAX_RUNNING_SERVERS: { default: 3, max: 6, axis: "dev_server_capacity", bounded_by_slots: true },
-  ALLOY_MAX_ACTIVE_PROVIDERS: { default: 3, max: 6, axis: "provider_capacity", bounded_by_slots: true },
+  // `max` is 8 because 8 is the execution ceiling this host actually supports
+  // and runs: the operator configured ALLOY_MAX_ACTIVE_PROVIDERS=8 and eight
+  // providers are live. The old 6 was below the enforced value, so the override
+  // parser could not even express the ceiling already in force — an override of
+  // 8 was refused while 8 was running. This raises no limit on its own; the
+  // enforced value still comes from config, and raising the ceiling further is a
+  // capacity-policy decision, not something an env override should reach.
+  ALLOY_MAX_ACTIVE_PROVIDERS: { default: 3, max: 8, axis: "provider_capacity" },
   ALLOY_MAX_CONCURRENT_INSTALLS: { default: 1, max: 4, axis: null },
   ALLOY_MAX_CONCURRENT_HEAVY_JOBS: { default: 1, max: 4, axis: null },
 });
