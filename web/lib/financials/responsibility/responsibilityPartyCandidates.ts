@@ -33,6 +33,26 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/*
+ * WHEN IS SOMEBODY STILL ON THE HOUSEHOLD?
+ *
+ * `customer_persons.status` is NULLABLE and has no default: 1,800 rows carry 'active' and two carry
+ * nothing at all. A filter of `status = 'active'` therefore silently drops the rows nobody set —
+ * which is the same shape as the defect being repaired here: a picker that offers nobody because
+ * the read asked the wrong question, and an operator who is told the household is empty.
+ *
+ * So the rule is stated the other way round. A relationship is CURRENT unless it says it has ended:
+ * a status that is set and is not active, or an end date that has passed. Absence of a statement is
+ * not evidence of an ending.
+ */
+function relationshipHasEnded(row: { status?: unknown; end_date?: unknown }): boolean {
+    const status = t(row.status).toLowerCase();
+    if (status && status !== "active") return true;
+    const end = t(row.end_date);
+    if (end && end.slice(0, 10) < new Date().toISOString().slice(0, 10)) return true;
+    return false;
+}
+
 /** Roles that describe someone who cannot bear the obligation. Named, never inferred. */
 const NON_RESPONSIBLE_ROLE_TYPES = new Set(["child"]);
 
@@ -108,15 +128,20 @@ export async function resolveResponsibilityPartyCandidates(
     if (args.customerId) {
         const { data, error } = await supabase
             .from("customer_persons")
-            .select("person_id, role_type, is_primary, status")
+            .select("person_id, role_type, is_primary, status, end_date")
             .eq("org_id", args.orgId)
-            .eq("customer_id", args.customerId)
-            .eq("status", "active");
+            .eq("customer_id", args.customerId);
         if (error) throw new Error(`responsibility candidates: the household could not be read (${error.message.trim()})`);
-        for (const row of ((data ?? []) as Array<{ person_id: string | null; role_type: string | null }>)) {
+        type HouseholdRow = {
+            person_id: string | null;
+            role_type: string | null;
+            status: string | null;
+            end_date: string | null;
+        };
+        for (const row of ((data ?? []) as HouseholdRow[])) {
             const id = t(row.person_id);
             const role = t(row.role_type);
-            if (!id || NON_RESPONSIBLE_ROLE_TYPES.has(role)) continue;
+            if (!id || NON_RESPONSIBLE_ROLE_TYPES.has(role) || relationshipHasEnded(row)) continue;
             const existing = byPerson.get(id);
             /* ONE ROW PER PERSON. Holding two roles on an account is common and is not two people. */
             if (existing) {

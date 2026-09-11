@@ -74,13 +74,18 @@ const person = (id: string, first: string, last: string, org = ORG) => ({
     first_name: first,
     last_name: last,
 });
-const edge = (personId: string, role: string, opts: { customer?: string; org?: string; status?: string } = {}) => ({
+const edge = (
+    personId: string,
+    role: string,
+    opts: { customer?: string; org?: string; status?: string | null; endDate?: string } = {},
+) => ({
     org_id: opts.org ?? ORG,
     customer_id: opts.customer ?? ACCOUNT,
     person_id: personId,
     role_type: role,
     is_primary: false,
-    status: opts.status ?? "active",
+    status: opts.status === undefined ? "active" : opts.status,
+    end_date: opts.endDate ?? null,
 });
 
 describe("the responsibility party candidates", () => {
@@ -192,13 +197,32 @@ describe("the responsibility party candidates", () => {
         expect(out.map((c) => c.personId)).toEqual(["p1"]);
     });
 
-    it("ignores an ended household relationship", async () => {
+    it("ignores a household relationship that has ended, by status or by date", async () => {
         const { client } = db({
-            customer_persons: [edge("p1", "parent"), edge("gone", "parent", { status: "inactive" })],
-            persons: [person("p1", "Mei", "Chen"), person("gone", "Past", "Guardian")],
+            customer_persons: [
+                edge("p1", "parent"),
+                edge("gone", "parent", { status: "inactive" }),
+                edge("expired", "guardian", { endDate: "2020-01-01" }),
+            ],
+            persons: [person("p1", "Mei", "Chen"), person("gone", "Past", "Guardian"), person("expired", "Old", "Carer")],
         });
         const out = await resolveResponsibilityPartyCandidates(client, { orgId: ORG, customerId: ACCOUNT });
         expect(out.map((c) => c.personId)).toEqual(["p1"]);
+    });
+
+    /*
+     * THE SAME DEFECT, ONE TABLE OVER. `customer_persons.status` is nullable with no default: 1,800
+     * rows in the certification tenant say 'active' and two say nothing. A `status = 'active'`
+     * filter drops those two, and the operator is told their household is empty — which is exactly
+     * how the picker came to offer nobody in the first place. Silence is not an ending.
+     */
+    it("keeps a relationship whose status was never set", async () => {
+        const { client } = db({
+            customer_persons: [edge("p1", "parent", { status: null })],
+            persons: [person("p1", "Mei", "Chen")],
+        });
+        const out = await resolveResponsibilityPartyCandidates(client, { orgId: ORG, customerId: ACCOUNT });
+        expect(out.map((c) => c.personId), "an unstated status is not a departure").toEqual(["p1"]);
     });
 
     it("asks nobody, and answers nobody, for an account that does not exist", async () => {
