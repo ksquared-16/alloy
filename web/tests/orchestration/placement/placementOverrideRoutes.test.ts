@@ -11,6 +11,7 @@ const createOverrideMock = vi.hoisted(() => vi.fn());
 const releaseOverrideMock = vi.hoisted(() => vi.fn());
 const applyCanonicalMock = vi.hoisted(() => vi.fn());
 const loadSectionOrderMock = vi.hoisted(() => vi.fn());
+const routeIdentityMock = vi.hoisted(() => vi.fn());
 const releaseManualMock = vi.hoisted(() => vi.fn());
 const createAdminClientMock = vi.hoisted(() => vi.fn());
 
@@ -68,6 +69,12 @@ vi.mock("@/lib/orchestration/placement/loadWaitlistSectionOrder", () => ({
     loadWaitlistSectionOrder: loadSectionOrderMock,
 }));
 
+// The route resolves a slug with the SAME resolver the work-unit page uses, so the test has to
+// stand that resolver up rather than reach around it.
+vi.mock("@/lib/admin/resolveWorkUnitRouteIdentity", () => ({
+    resolveWorkUnitRouteIdentity: routeIdentityMock,
+}));
+
 vi.mock("@/lib/orchestration/placement/placementPresetRegistry", () => ({
     getPlacementProfileFromRegistry: vi.fn(() => ({
         profile_id: "childcare_enrollment_waitlist_v2",
@@ -78,6 +85,12 @@ vi.mock("@/lib/orchestration/placement/placementPresetRegistry", () => ({
 describe("placement override admin routes", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        routeIdentityMock.mockResolvedValue({
+            gate: { ok: true },
+            platformKey: "waitlist",
+            resolution: { status: "resolved", match: { workUnitId: "44444444-4444-4444-8444-444444444444" } },
+            departments: [],
+        });
         createAdminClientMock.mockReturnValue({
             from: vi.fn(() => ({
                 select: vi.fn(() => ({
@@ -136,13 +149,13 @@ describe("placement override admin routes", () => {
         expect(releaseOverrideMock).toHaveBeenCalled();
     });
 
-    const WORK_UNIT = "44444444-4444-4444-8444-444444444444";
+    const WORK_UNIT_SLUG = "waitlist";
     const SECTION = ["s1", "s2", CANDIDATE, "s4", "s5"];
 
     function sectionOrder(over: Partial<{ finalOrder: string[]; pinnedIds: string[] }> = {}) {
         return {
             sectionKey: "infant",
-            queueKey: "waitlist",
+            workUnitSlug: WORK_UNIT_SLUG,
             finalOrder: over.finalOrder ?? SECTION,
             pinnedIds: over.pinnedIds ?? [],
         };
@@ -164,7 +177,7 @@ describe("placement override admin routes", () => {
             action: "move",
             reason: "Sibling starting soon",
             pin_ordinal: 1,
-            work_unit_id: WORK_UNIT,
+            work_unit_key: WORK_UNIT_SLUG,
         });
         expect(res.status).toBe(200);
         expect(applyCanonicalMock).toHaveBeenCalled();
@@ -177,7 +190,7 @@ describe("placement override admin routes", () => {
             vi.clearAllMocks();
             loadSectionOrderMock.mockResolvedValue(sectionOrder());
             applyCanonicalMock.mockResolvedValue({ ok: true, written: 1, released: 0 });
-            const res = await post({ action: "move", pin_ordinal: target, work_unit_id: WORK_UNIT, reason: "r" });
+            const res = await post({ action: "move", pin_ordinal: target, work_unit_key: WORK_UNIT_SLUG, reason: "r" });
             expect(res.status, `target ${target}`).toBe(200);
             await expect(res.json()).resolves.toMatchObject({ position: target });
         }
@@ -186,7 +199,7 @@ describe("placement override admin routes", () => {
     it("the ordinals handed to the writer are unique, so no two rows contend for a seat", async () => {
         loadSectionOrderMock.mockResolvedValue(sectionOrder({ pinnedIds: ["s1", "s4"] }));
         applyCanonicalMock.mockResolvedValue({ ok: true, written: 2, released: 0 });
-        await post({ action: "move", pin_ordinal: 2, work_unit_id: WORK_UNIT, reason: "r" });
+        await post({ action: "move", pin_ordinal: 2, work_unit_key: WORK_UNIT_SLUG, reason: "r" });
         const ordinals = applyCanonicalMock.mock.calls[0]![1].ordinals as Map<string, number>;
         const values = [...ordinals.values()];
         expect(new Set(values).size).toBe(values.length);
@@ -194,6 +207,7 @@ describe("placement override admin routes", () => {
     });
 
     it("refuses a move that does not name a work unit rather than writing a bare ordinal", async () => {
+        routeIdentityMock.mockResolvedValue({ gate: { ok: true }, platformKey: null, resolution: null, departments: [] });
         const res = await post({ action: "move", reason: "no queue named", pin_ordinal: 1 });
         expect(res.status).toBe(400);
         expect(applyCanonicalMock).not.toHaveBeenCalled();
@@ -201,14 +215,14 @@ describe("placement override admin routes", () => {
 
     it("refuses when the candidate is not ranked in that work unit", async () => {
         loadSectionOrderMock.mockResolvedValue(null);
-        const res = await post({ action: "move", pin_ordinal: 1, work_unit_id: WORK_UNIT, reason: "r" });
+        const res = await post({ action: "move", pin_ordinal: 1, work_unit_key: WORK_UNIT_SLUG, reason: "r" });
         expect(res.status).toBe(409);
         expect(applyCanonicalMock).not.toHaveBeenCalled();
     });
 
     it("refuses a position outside the section instead of clamping it", async () => {
         loadSectionOrderMock.mockResolvedValue(sectionOrder());
-        const res = await post({ action: "move", pin_ordinal: 99, work_unit_id: WORK_UNIT, reason: "r" });
+        const res = await post({ action: "move", pin_ordinal: 99, work_unit_key: WORK_UNIT_SLUG, reason: "r" });
         expect(res.status).toBe(400);
         expect(applyCanonicalMock).not.toHaveBeenCalled();
     });

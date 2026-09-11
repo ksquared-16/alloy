@@ -252,6 +252,15 @@ function WaitlistPlacementAdjustPopover({
                            * whole model exists to prevent.
                            */
                           work_unit_id: kernel.attention.get()?.destination?.workUnitId ?? null,
+                          /*
+                           * The slug, because the uuid is often not there yet. The kernel publishes
+                           * a canonical destination only once a surface has resolved one, and a row
+                           * can be adjusted before that — observed live: `destination` was null and
+                           * every move was refused. The slug is in the address bar from the first
+                           * paint, so it is the reliable half. The server resolves it against the
+                           * org, so this stays a NAME for a list and never a claim about its order.
+                           */
+                          work_unit_key: kernel.attention.get()?.target ?? null,
                       };
             if (action === "move") {
                 const n = Number.parseInt(pinOrdinal, 10);

@@ -11,26 +11,23 @@
  * writer holding its own copy of the ordering rules will eventually disagree with the renderer, and
  * no amount of care prevents it.
  *
- * So this asks the QUEUE for the rows, through `getWorkUnitQueueItems` — the same entry point the
+ * So this asks for the rows through `composeProvisioningAnswerForRoute` — the composer the
  * work-unit surface calls — and reads the positions the projection already stamped on them. There
  * is no ordering logic in this file. If the renderer changes how it ranks, this follows for free,
  * because it is not ranking anything.
  */
-import { getWorkUnitQueueItems, loadWorkUnitQueueDefinitionWithMeta } from "@/lib/queues/QueueService";
+import { composeProvisioningAnswerForRoute } from "@/lib/runtime/provisioning/composeProvisioningAnswerForRoute";
 
 export type WaitlistSectionOrder = {
     /** The org category section the candidate is ranked within. */
     sectionKey: string;
-    /** The queue whose projection produced this order. */
-    queueKey: string;
+    /** The route slug whose provisioning answer produced this order. */
+    workUnitSlug: string;
     /** Candidate ids, in the order the operator reads them. Position N is `finalOrder[N - 1]`. */
     finalOrder: string[];
     /** Candidate ids in this section that currently carry an active manual position. */
     pinnedIds: string[];
 };
-
-/** How many rows to ask for. A section is a room's waitlist, not a phone book. */
-const SECTION_SCAN_LIMIT = 500;
 
 type WaitlistRow = {
     placement_candidate_id?: unknown;
@@ -65,62 +62,42 @@ function hasActivePin(row: WaitlistRow): boolean {
  * opinions again.
  */
 export async function loadWaitlistSectionOrder(params: {
-    orgId: string;
-    workUnitId: string;
+    /** The route slug the operator is on — the name of the list, from the address bar. */
+    workUnitSlug: string;
     placementCandidateId: string;
-    /** When known, the queue the operator was reading. Otherwise every waitlist queue is tried. */
-    queueKey?: string | null;
 }): Promise<WaitlistSectionOrder | null> {
-    const { normalized } = await loadWorkUnitQueueDefinitionWithMeta({
-        orgId: params.orgId,
-        workUnitId: params.workUnitId,
+    const composed = await composeProvisioningAnswerForRoute({
+        rawSlug: params.workUnitSlug,
+        requestedWorkViewId: null,
+        requestedSubjectId: null,
     });
+    if (!composed.ok) return null;
+    const answer = composed.answer as { rows?: unknown[] };
 
-    // The candidate-grain waitlist queues, most-likely first. A work unit usually has exactly one;
-    // trying the named queue first keeps the common path to a single projection.
-    const named = str(params.queueKey);
-    const waitlistKeys = (normalized?.queues ?? [])
-        .filter((q) => q.domain === "waitlist" && q.grain === "candidate")
-        .map((q) => q.key);
-    const keysToTry = [...new Set([...(named ? [named] : []), ...waitlistKeys])];
-
-    for (const queueKey of keysToTry) {
-        const page = (await getWorkUnitQueueItems({
-            orgId: params.orgId,
-            workUnitId: params.workUnitId,
-            queueKey,
-            limit: SECTION_SCAN_LIMIT,
-            offset: 0,
-            omitTotalCount: true,
-        })) as { items?: unknown[] } | null;
-
-        const rows: Array<{ candidateId: string; position: number; sectionKey: string; pinned: boolean }> = [];
-        for (const item of page?.items ?? []) {
-            const wr = readWaitlistRow(item);
-            if (!wr) continue;
-            const candidateId = str(wr.placement_candidate_id);
-            const sectionKey = str(wr.runtime_position_section_key);
-            const position = typeof wr.runtime_position === "number" ? wr.runtime_position : null;
-            if (!candidateId || !sectionKey || position == null) continue;
-            rows.push({ candidateId, position, sectionKey, pinned: hasActivePin(wr) });
-        }
-
-        const target = rows.find((r) => r.candidateId === params.placementCandidateId);
-        if (!target) continue;
-
-        // `runtime_position` is the number the operator is looking at, so sorting by it reproduces
-        // the read order exactly rather than approximating it.
-        const section = rows
-            .filter((r) => r.sectionKey === target.sectionKey)
-            .sort((a, b) => a.position - b.position);
-
-        return {
-            sectionKey: target.sectionKey,
-            queueKey,
-            finalOrder: section.map((r) => r.candidateId),
-            pinnedIds: section.filter((r) => r.pinned).map((r) => r.candidateId),
-        };
+    const rows: Array<{ candidateId: string; position: number; sectionKey: string; pinned: boolean }> = [];
+    for (const item of answer.rows ?? []) {
+        const wr = readWaitlistRow(item);
+        if (!wr) continue;
+        const candidateId = str(wr.placement_candidate_id);
+        const sectionKey = str(wr.runtime_position_section_key);
+        const position = typeof wr.runtime_position === "number" ? wr.runtime_position : null;
+        if (!candidateId || !sectionKey || position == null) continue;
+        rows.push({ candidateId, position, sectionKey, pinned: hasActivePin(wr) });
     }
 
-    return null;
+    const target = rows.find((r) => r.candidateId === params.placementCandidateId);
+    if (!target) return null;
+
+    // `runtime_position` is the number the operator is looking at, so sorting by it reproduces the
+    // read order exactly rather than approximating it.
+    const section = rows
+        .filter((r) => r.sectionKey === target.sectionKey)
+        .sort((a, b) => a.position - b.position);
+
+    return {
+        sectionKey: target.sectionKey,
+        workUnitSlug: params.workUnitSlug,
+        finalOrder: section.map((r) => r.candidateId),
+        pinnedIds: section.filter((r) => r.pinned).map((r) => r.candidateId),
+    };
 }
