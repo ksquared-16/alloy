@@ -41,6 +41,14 @@ case "$MIG_ENVIRONMENT" in
     # The local certification stack has its own credential, supplied explicitly.
     # It is NOT read from the server env, because that file is the deployed
     # credential and reading it here is the whole defect.
+    # Sourcing common.sh DEFINES alloy_load_config; it does not RUN it. Without
+    # this call the host config is written and inert — the value sits in
+    # ~/.config/alloy-dev/config and never reaches the shell, so a correctly
+    # configured host still refuses. Measured: the config was published and the
+    # child still exited 42.
+    if [[ -z "${ALLOY_CERT_DATABASE_URL:-}" ]] && declare -F alloy_load_config >/dev/null 2>&1; then
+      alloy_load_config >/dev/null 2>&1 || true
+    fi
     if [[ -z "${ALLOY_CERT_DATABASE_URL:-}" ]]; then
       echo "trusted_credential_unavailable: ALLOY_CERT_DATABASE_URL is not set; certification migrations require an explicit local certification connection" >"$ERR_FILE"
       exit 42
