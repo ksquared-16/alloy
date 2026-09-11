@@ -1,5 +1,5 @@
 /**
- * A manual waitlist position is a POSITION within the candidate's own cohort.
+ * A manual waitlist position is a POSITION within the ranked list the operator is reading.
  *
  * Positive control: every ordering case here fails on the pre-fix engine, which spliced
  * `pin_ordinal` into `sort_tuple` and therefore compared an ordinal against `bucket.priority_order`
@@ -8,9 +8,9 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-    applyCohortLocalManualPositions,
+    applySectionManualPositions,
     readRowManualPinOrdinal,
-} from "@/lib/orchestration/placement/applyCohortLocalManualPositions";
+} from "@/lib/orchestration/placement/applySectionManualPositions";
 import { applyPlacementCandidateOverrides } from "@/lib/orchestration/placement/applyPlacementCandidateOverrides";
 import { CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V2 as PROFILE } from "@/lib/orchestration/placement/presets/childcareEnrollmentPlacementProfileV2";
 import type { PlacementEvaluateOk } from "@/lib/orchestration/placement/placementPriorityTypes";
@@ -40,31 +40,42 @@ const names = (rows: Array<Record<string, unknown>>) =>
 const INFANT = "infant_0_18_months";
 const natural = () => [row("A", INFANT), row("B", INFANT), row("C", INFANT), row("D", INFANT), row("E", INFANT)];
 
-describe("manual position is a cohort-local placement", () => {
+/*
+ * The run key. These fixtures use the cohort slug as a stand-in for the section so the mechanics
+ * below (seating, determinism, clamping, isolation) are exercised directly; the queue supplies the
+ * real section resolver. What matters here is that the pass places a row within ONE run and never
+ * crosses into another.
+ */
+const runOf = (r: Record<string, unknown>) => {
+    const wr = r._placement_waitlist_row as { program_room_cohort_key?: string } | undefined;
+    return wr?.program_room_cohort_key ?? null;
+};
+
+describe("manual position is a placement within one ranked run", () => {
     it("no override leaves the natural order untouched", () => {
-        expect(names(applyCohortLocalManualPositions(natural()))).toEqual(["A", "B", "C", "D", "E"]);
+        expect(names(applySectionManualPositions(natural(), runOf))).toEqual(["A", "B", "C", "D", "E"]);
     });
 
     it("ordinal 1 puts the row first within its group", () => {
         const rows = [row("A", INFANT), row("B", INFANT), row("Target", INFANT, 1), row("C", INFANT)];
-        expect(names(applyCohortLocalManualPositions(rows))).toEqual(["Target", "A", "B", "C"]);
+        expect(names(applySectionManualPositions(rows, runOf))).toEqual(["Target", "A", "B", "C"]);
     });
 
     it("a middle ordinal lands in the middle — the case the old engine could not express", () => {
         const rows = [row("A", INFANT), row("B", INFANT), row("Target", INFANT, 3), row("C", INFANT), row("D", INFANT)];
-        expect(names(applyCohortLocalManualPositions(rows))).toEqual(["A", "B", "Target", "C", "D"]);
+        expect(names(applySectionManualPositions(rows, runOf))).toEqual(["A", "B", "Target", "C", "D"]);
     });
 
     it("the final ordinal lands last within the group", () => {
         const rows = [row("A", INFANT), row("Target", INFANT, 4), row("B", INFANT), row("C", INFANT)];
-        expect(names(applyCohortLocalManualPositions(rows))).toEqual(["A", "B", "C", "Target"]);
+        expect(names(applySectionManualPositions(rows, runOf))).toEqual(["A", "B", "C", "Target"]);
     });
 
     it("DISTINCT ordinals produce DISTINCT positions (the deployed regression)", () => {
         const seen = new Map<number, string[]>();
         for (const ord of [1, 2, 3, 4, 5]) {
             const rows = [row("A", INFANT), row("B", INFANT), row("C", INFANT), row("D", INFANT), row("Target", INFANT, ord)];
-            seen.set(ord, names(applyCohortLocalManualPositions(rows)));
+            seen.set(ord, names(applySectionManualPositions(rows, runOf)));
         }
         expect(seen.get(1)).toEqual(["Target", "A", "B", "C", "D"]);
         expect(seen.get(3)).toEqual(["A", "B", "Target", "C", "D"]);
@@ -75,36 +86,36 @@ describe("manual position is a cohort-local placement", () => {
 
     it("clearing the adjustment restores the natural order", () => {
         const pinned = [row("A", INFANT), row("B", INFANT), row("Target", INFANT, 1)];
-        expect(names(applyCohortLocalManualPositions(pinned))).toEqual(["Target", "A", "B"]);
+        expect(names(applySectionManualPositions(pinned, runOf))).toEqual(["Target", "A", "B"]);
         const cleared = [row("A", INFANT), row("B", INFANT), row("Target", INFANT)];
-        expect(names(applyCohortLocalManualPositions(cleared))).toEqual(["A", "B", "Target"]);
+        expect(names(applySectionManualPositions(cleared, runOf))).toEqual(["A", "B", "Target"]);
     });
 
     it("a released/inactive override never reaches the projection, so it is ignored", () => {
         // The loader filters `is_active`; a released override yields no `manual_pin_ordinal`.
         const r = row("Target", INFANT);
         expect(readRowManualPinOrdinal(r)).toBeNull();
-        expect(names(applyCohortLocalManualPositions([row("A", INFANT), r]))).toEqual(["A", "Target"]);
+        expect(names(applySectionManualPositions([row("A", INFANT), r], runOf))).toEqual(["A", "Target"]);
     });
 
     it("two pinned candidates are deterministic and both honoured", () => {
         const rows = [row("A", INFANT), row("B", INFANT), row("P2", INFANT, 2), row("P1", INFANT, 1), row("C", INFANT)];
-        expect(names(applyCohortLocalManualPositions(rows))).toEqual(["P1", "P2", "A", "B", "C"]);
+        expect(names(applySectionManualPositions(rows, runOf))).toEqual(["P1", "P2", "A", "B", "C"]);
     });
 
     it("equal ordinals fall back to canonical order rather than an arbitrary one", () => {
         const rows = [row("A", INFANT), row("X", INFANT, 1), row("Y", INFANT, 1)];
-        expect(names(applyCohortLocalManualPositions(rows))).toEqual(["X", "Y", "A"]);
+        expect(names(applySectionManualPositions(rows, runOf))).toEqual(["X", "Y", "A"]);
     });
 
     it("unpinned candidates stay comparable to pinned ones and keep their relative order", () => {
         const rows = [row("A", INFANT), row("B", INFANT), row("C", INFANT), row("Target", INFANT, 2)];
-        const out = names(applyCohortLocalManualPositions(rows));
+        const out = names(applySectionManualPositions(rows, runOf));
         expect(out).toEqual(["A", "Target", "B", "C"]);
         expect(out.filter((n) => n !== "Target")).toEqual(["A", "B", "C"]);
     });
 
-    it("different cohorts are ordered independently and never cross", () => {
+    it("different runs are ordered independently and never cross", () => {
         const rows = [
             row("i1", INFANT),
             row("i2", INFANT),
@@ -113,12 +124,12 @@ describe("manual position is a cohort-local placement", () => {
             row("t2", "toddler_2_3_years"),
             row("tPin", "toddler_2_3_years", 1),
         ];
-        expect(names(applyCohortLocalManualPositions(rows))).toEqual(["iPin", "i1", "i2", "tPin", "t1", "t2"]);
+        expect(names(applySectionManualPositions(rows, runOf))).toEqual(["iPin", "i1", "i2", "tPin", "t1", "t2"]);
     });
 
-    it("a cohort occupies exactly the slots it occupied before (section ordering intact)", () => {
+    it("a run occupies exactly the slots it occupied before (outer ordering intact)", () => {
         const rows = [row("i1", INFANT), row("iPin", INFANT, 2), row("t1", "toddler_2_3_years")];
-        const out = applyCohortLocalManualPositions(rows);
+        const out = applySectionManualPositions(rows, runOf);
         expect(out).toHaveLength(rows.length);
         expect(names(out.slice(0, 2)).sort()).toEqual(["i1", "iPin"]);
         expect(names(out.slice(2))).toEqual(["t1"]);
@@ -126,12 +137,12 @@ describe("manual position is a cohort-local placement", () => {
 
     it("an out-of-range ordinal clamps instead of dropping the row", () => {
         const rows = [row("A", INFANT), row("Target", INFANT, 999)];
-        expect(names(applyCohortLocalManualPositions(rows))).toEqual(["A", "Target"]);
+        expect(names(applySectionManualPositions(rows, runOf))).toEqual(["A", "Target"]);
     });
 
-    it("rows with no cohort pass through untouched", () => {
+    it("rows outside every ranked run pass through untouched", () => {
         const rows = [{ id: "plain-1" }, { id: "plain-2" }] as Array<Record<string, unknown>>;
-        expect(applyCohortLocalManualPositions(rows).map((r) => r.id)).toEqual(["plain-1", "plain-2"]);
+        expect(applySectionManualPositions(rows, runOf).map((r) => r.id)).toEqual(["plain-1", "plain-2"]);
     });
 });
 

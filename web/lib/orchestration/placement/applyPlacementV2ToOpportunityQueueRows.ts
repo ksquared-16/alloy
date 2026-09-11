@@ -46,7 +46,7 @@ export type PlacementPriorityV2CandidatePreview = {
     /**
      * The operator's requested position within this candidate's own cohort, when a pin is in force.
      * Absent when the candidate has no manual position. Consumed by
-     * `applyCohortLocalManualPositions` — the ordinal is deliberately NOT part of `sort_tuple`,
+     * `applySectionManualPositions` — the ordinal is deliberately NOT part of `sort_tuple`,
      * because it is a position in the natural order rather than a component of it.
      */
     manual_pin_ordinal?: number;
