@@ -2,7 +2,9 @@
 
 **Status:** available and certified through Communications, 2026-09-11.
 **Certified on:** the local certification tenant (`northwind-early-learning`), 8/8.
-**Evidence:** `certification/evidence/communications-work-items-h2-8of8.log`
+**Evidence:** `certification/evidence/communications-work-items-h2-8of8.log` — produced by the
+run, not committed (`certification/evidence/` is ignored). Reproduce it with the Run command
+below; the per-test screenshots, video and trace land beside it.
 
 Work Items H2 was blocked because there was no Communications certification scenario it
 was allowed to use. There is one now.
