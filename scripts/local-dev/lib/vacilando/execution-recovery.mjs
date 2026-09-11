@@ -33,6 +33,8 @@ import {
 } from "./execution-exclusive.mjs";
 import {
   acquireControlPlaneOwnership,
+  currentRuntimeGeneration,
+  ownershipIsCurrent,
   pidAlive,
   readControlPlaneOwner,
 } from "./control-plane-health.mjs";
@@ -823,17 +825,38 @@ export function registerOwnedProcess(rec, root = runtimeRoot()) {
   if (!rec?.id) return { ok: false, error: "missing_id" };
   const store = readOwned(root);
   store.processes = (store.processes || []).filter((p) => p.id !== rec.id);
-  store.processes.push({
+  const stamped = {
     ...rec,
     created_by: "vacilando-governor",
     created_at: rec.created_at || iso(),
-  });
+    // WHICH CONTROL PLANE CREATED THIS. Without it, ownership is decided by PID
+    // number alone and a restart plus a reused number lets a stranger inherit
+    // the claim.
+    runtime_generation: rec.runtime_generation || currentRuntimeGeneration(),
+  };
+  store.processes.push(stamped);
   writeOwned(store, root);
-  return { ok: true, process: rec };
+  return { ok: true, process: stamped };
 }
 
 export function listOwnedProcesses(root = runtimeRoot()) {
   return readOwned(root).processes || [];
+}
+
+/**
+ * The owned processes THIS control plane may still speak for.
+ *
+ * Everything else is previous-generation: recorded by a Gateway that has since
+ * restarted, and therefore never current truth however alive its recorded PID
+ * happens to look.
+ */
+export function listCurrentOwnedProcesses(root = runtimeRoot()) {
+  return listOwnedProcesses(root).filter((p) => ownershipIsCurrent(p));
+}
+
+export function listStaleGenerationOwnedProcesses(root = runtimeRoot()) {
+  const gen = currentRuntimeGeneration();
+  return listOwnedProcesses(root).filter((p) => p.runtime_generation !== gen);
 }
 
 export function executeRecovery(policyKey, ctx = {}) {
