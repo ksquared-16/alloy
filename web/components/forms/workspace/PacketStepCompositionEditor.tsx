@@ -1,12 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import Link from "next/link";
 import PrimaryButton from "@/components/PrimaryButton";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import type { PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
 import { applyRecentFormToSteps } from "@/lib/admin/forms/packetStepRecentFormPlacement";
-import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
 import { packetStepReadinessLabel } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { PACKET_STEP_KIND_LABELS, type PacketStepKind } from "@/lib/forms/packets/packetStepKind";
 import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
@@ -172,13 +171,31 @@ export function PacketStepCompositionEditor({
                             </div>
                             }
                             {selected && !isDocumentStep ?
-                                <p className={clsx("mt-2", opMutedMeta)}>
-                                    <Link
-                                        href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(selected.id)}`}
-                                        className="font-medium text-alloy-blue hover:underline"
+                                <p className="mt-2">
+                                    {/*
+                                     * Open the FORM EDITOR, not a queue.
+                                     *
+                                     * This used to link to `${ADMIN_FORMS_UI_BASE}/<id>`, which is
+                                     * the Work-queue base — an operator clicking "open" on a step
+                                     * landed somewhere they could not edit the form. A step is a
+                                     * thing you configure, so clicking it goes to where it is
+                                     * configured.
+                                     */}
+                                    <button
+                                        type="button"
+                                        className="text-xs font-semibold text-alloy-blue hover:underline"
+                                        data-testid={`packet-step-open-form-${idx}`}
+                                        onClick={() =>
+                                            dispatchAdminV2OpenProcessingModal({
+                                                mode: "studio",
+                                                studioTab: "forms",
+                                                formId: selected.id,
+                                                formName: selected.name,
+                                            })
+                                        }
                                     >
-                                        Open form workspace
-                                    </Link>
+                                        Edit this form →
+                                    </button>
                                 </p>
                             :   null}
                             <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">

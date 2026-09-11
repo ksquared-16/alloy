@@ -11,6 +11,8 @@ type PacketDef = {
     name: string;
     description: string | null;
     is_active: boolean;
+    step_count?: number;
+    step_labels?: string[];
     updated_at: string | null;
 };
 
@@ -184,7 +186,12 @@ function PacketCard({ packet, onSelect }: { packet: PacketDef; onSelect: () => v
                     {packet.description ? (
                         <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/45">{packet.description}</p>
                     ) : null}
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        {typeof packet.step_count === "number" ? (
+                            <span className="text-[11px] font-medium text-alloy-midnight/60">
+                                {packet.step_count} {packet.step_count === 1 ? "step" : "steps"}
+                            </span>
+                        ) : null}
                         <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                 packet.is_active ? "bg-alloy-bend-pine/10 text-alloy-bend-pine" : "bg-alloy-stone/12 text-alloy-midnight/50"
@@ -193,6 +200,15 @@ function PacketCard({ packet, onSelect }: { packet: PacketDef; onSelect: () => v
                             {packet.is_active ? "Active" : "Inactive"}
                         </span>
                     </div>
+                    {/* What the family is actually asked for — the line that makes a card recognizable. */}
+                    {packet.step_labels && packet.step_labels.length > 0 ? (
+                        <p
+                            className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/55"
+                            data-testid={`packet-card-steps-${packet.id}`}
+                        >
+                            {packet.step_labels.join(" · ")}
+                        </p>
+                    ) : null}
                     <div className="mt-3 text-[10px] text-alloy-midnight/40">Updated {formatEdited(packet.updated_at)}</div>
                 </div>
             </div>

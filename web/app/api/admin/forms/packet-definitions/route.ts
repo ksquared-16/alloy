@@ -37,7 +37,45 @@ export async function GET(request: NextRequest) {
     const rows = (data ?? []).filter(
         (r) => includeInactive || (r as { is_active?: boolean }).is_active !== false,
     );
-    return jsonData(rows);
+    if (rows.length === 0) return jsonData([]);
+
+    /*
+     * What each packet ASKS FOR, on its card.
+     *
+     * "Enrollment Paperwork 2026–2027" alone does not tell an operator whether they are looking at
+     * the right thing; "3 steps · Admissions Information · Family Handbook · Immunization record"
+     * does. One grouped read for the whole list rather than a fetch per card.
+     */
+    const ids = rows.map((r) => (r as { id: string }).id);
+    const { data: items } = await supabase
+        .from("form_packet_items")
+        .select("packet_definition_id, sequence_index, metadata")
+        .eq("org_id", ctx.orgId)
+        .in("packet_definition_id", ids)
+        .order("sequence_index", { ascending: true });
+
+    const stepsByPacket = new Map<string, string[]>();
+    for (const raw of (items ?? []) as Array<{
+        packet_definition_id: string;
+        metadata?: Record<string, unknown> | null;
+    }>) {
+        const label = typeof raw.metadata?.step_label === "string" ? raw.metadata.step_label.trim() : "";
+        const list = stepsByPacket.get(raw.packet_definition_id) ?? [];
+        // An unlabelled step still counts — it is a step the family will meet.
+        list.push(label);
+        stepsByPacket.set(raw.packet_definition_id, list);
+    }
+
+    return jsonData(
+        rows.map((r) => {
+            const labels = stepsByPacket.get((r as { id: string }).id) ?? [];
+            return {
+                ...(r as Record<string, unknown>),
+                step_count: labels.length,
+                step_labels: labels.filter(Boolean),
+            };
+        }),
+    );
 }
 
 /** POST /api/admin/forms/packet-definitions — create packet definition (admin only). */
