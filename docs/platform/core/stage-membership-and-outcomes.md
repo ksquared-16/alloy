@@ -44,6 +44,32 @@ not status ownership.
 - `stage_key` is written by exactly two things: **intake** (initial stage) and **outcome
   execution** (`move_to_stage` targets). Nothing else writes it — not PATCH routes, not queue
   code, not surfaces.
+
+### When the participant track begins
+
+The two tracks coexist in one process, and a participant does not have one from the start.
+Enrollment's `lead`, `tour` and `decision` are **family-grain**: a child standing in them has no
+position of their own, and therefore no `process_instances` row. `waitlist`, `enrolling`, `enrolled`
+and the closed stages are **child-grain**.
+
+> **The child track begins at the first transition into a child-grain stage.**
+> Family-grain intake does not create it. From that transition onward, the child's process instance
+> owns their stage, and nothing else may answer for it.
+
+`ensureChildEnrollmentTrack` implements that boundary, and it is called from exactly one place — the
+`move_to_stage` child branch of the outcome target executor, which every stage-move caller resolves
+to. It is placed *after* the configured-stage and grain guards, so a destination that is not
+configured, or is family-grain, refuses without a track being created. The track is created with
+`stage_key: null` and the move writes the operator's real destination, so no intermediate child stage
+is invented to satisfy a constructor.
+
+Two consequences worth stating, because getting either wrong looks like success:
+
+- **Do not create tracks at intake.** Create Lead and Add Child deliberately create none. Doing so
+  would mint a live child journey for every enquiry a school ever receives.
+- **A child with no track has no child stage.** Their effective stage is their context's, per the
+  inherit-context rule below — not the work unit they were opened from, and not their family's
+  status.
 - `membership_criteria_v1` on a stage declares subject grain (case / child / candidate),
   count unit, and location scope. It contains **no status lists** — the old
   `included_status_keys` / `included_disposition_keys` pattern re-derived membership from
@@ -51,6 +77,42 @@ not status ownership.
 - Queue lanes and Work View scoping are *derived* from stage membership **and** Effective
   Process Position (below). A queue definition filters on stage; it is generated output, never
   independently-authored status filters.
+
+### Queue membership follows stage grain
+
+> **A child-grain lane selects child subjects from child lifecycle truth.**
+> The family opportunity is enrichment and context for those rows — never the authority on whether
+> the child belongs in the lane.
+
+A case lane's subject is the opportunity, so `opportunities.status_key` / `stage_key` is its
+membership rule. A child or candidate lane's subject is one child, and bounding it by a family
+attribute makes a child's membership a property of their siblings: a household at Lead for a child
+who has not moved hides a sibling who is genuinely in Waitlist, and nothing errors while it does.
+
+So child membership is read from `process_instances` through the effective-stage rule and **unioned**
+with whatever the family-scoped population contributes — it replaces nothing, because the family lens
+still carries rows the child lens has no candidate for. Boundedness is preserved rather than traded
+away: membership is scoped org + process + stage, and its output is an explicit opportunity-id list
+that bounds the candidate read, which is the same shape `assertLifecycleStageOpportunityQueryHasStatusFilters`
+demands of the case-grain path it guards. That guard is untouched and still refuses an unfiltered
+lifecycle-stage opportunity query.
+
+One consequence worth stating, because it is easy to undo by accident: once a row can be identified
+as a candidate, the CANDIDATE decides membership, not its opportunity. Several children share one
+opportunity, so judging an expanded row by its family lets one matched child pull their siblings in
+behind them.
+
+### Starting stage work is an operator act
+
+Stage entry opens the effective primary template and nothing else. A stage may configure further
+templates — Waitlist configures `offer_spot` beside `review_waitlist_position` — and those are
+started deliberately, through the `stage_work.start` capability, with the template as an INPUT.
+
+Starting the work and recording its outcome are separate acts. `stage_work.start` opens the work and
+moves no stage, writes no disposition and sets no placement status; the lifecycle consequences belong
+to the outcome the operator records afterwards. Eligibility comes from configuration — the template
+must be declared on the child's CURRENT stage and that stage must be child-grain — so no surface
+needs a branch naming a particular template.
 
 ## Effective Process Position (derived)
 

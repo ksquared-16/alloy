@@ -422,5 +422,25 @@ export function childSubjectIdentityTruthBindings(
     if (composition.identity.participationId) {
         bindings["child.process_instance_id"] = composition.identity.participationId;
     }
+    /*
+     * THE CHILD'S OWN STAGE, CARRIED WITH THE CHILD'S OWN IDENTITY.
+     *
+     * `composition.stage` is the effective stage the PROVIDER resolved — `piEffectiveStageKey`
+     * over `process_instances.stage_key ?? opportunities.stage_key`, the same rule the queue lanes
+     * coalesce on. Nothing here decides it; this only stops it from being dropped on the way to the
+     * surface.
+     *
+     * It was dropped, and that was the whole defect. `participantScopeFromChildSubjectTruth` has
+     * always read `child.stage_key`, no producer ever wrote it, so a child subject reached the
+     * Process card carrying no stage of its own — leaving the card to answer from the FAMILY's rail,
+     * which is a different record's position, or from the lens, which is not a position at all.
+     * A child opened from the Waitlist work unit therefore read "Waitlist" whatever its own process
+     * instance said.
+     *
+     * Emitted only when genuinely resolved, like every binding above it: an absent stage stays
+     * absent so the reader can tell "this child has no stage" from "nobody asked".
+     */
+    const stageKey = composition.stage?.key?.trim() || null;
+    if (stageKey) bindings["child.stage_key"] = stageKey;
     return Object.keys(bindings).length ? bindings : null;
 }
