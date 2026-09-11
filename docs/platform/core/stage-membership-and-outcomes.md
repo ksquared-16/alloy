@@ -44,6 +44,32 @@ not status ownership.
 - `stage_key` is written by exactly two things: **intake** (initial stage) and **outcome
   execution** (`move_to_stage` targets). Nothing else writes it — not PATCH routes, not queue
   code, not surfaces.
+
+### When the participant track begins
+
+The two tracks coexist in one process, and a participant does not have one from the start.
+Enrollment's `lead`, `tour` and `decision` are **family-grain**: a child standing in them has no
+position of their own, and therefore no `process_instances` row. `waitlist`, `enrolling`, `enrolled`
+and the closed stages are **child-grain**.
+
+> **The child track begins at the first transition into a child-grain stage.**
+> Family-grain intake does not create it. From that transition onward, the child's process instance
+> owns their stage, and nothing else may answer for it.
+
+`ensureChildEnrollmentTrack` implements that boundary, and it is called from exactly one place — the
+`move_to_stage` child branch of the outcome target executor, which every stage-move caller resolves
+to. It is placed *after* the configured-stage and grain guards, so a destination that is not
+configured, or is family-grain, refuses without a track being created. The track is created with
+`stage_key: null` and the move writes the operator's real destination, so no intermediate child stage
+is invented to satisfy a constructor.
+
+Two consequences worth stating, because getting either wrong looks like success:
+
+- **Do not create tracks at intake.** Create Lead and Add Child deliberately create none. Doing so
+  would mint a live child journey for every enquiry a school ever receives.
+- **A child with no track has no child stage.** Their effective stage is their context's, per the
+  inherit-context rule below — not the work unit they were opened from, and not their family's
+  status.
 - `membership_criteria_v1` on a stage declares subject grain (case / child / candidate),
   count unit, and location scope. It contains **no status lists** — the old
   `included_status_keys` / `included_disposition_keys` pattern re-derived membership from

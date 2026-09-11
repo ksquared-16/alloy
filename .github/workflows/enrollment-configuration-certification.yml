@@ -150,4 +150,7 @@ jobs:
             tests/adminV2/runtime/childStageAuthorityIsTheProcessInstance.test.ts \
             tests/adminV2/runtime/processStageAuthority.test.ts \
             tests/adminV2/viewModel/lifecycleRailStageIsNotTheLens.test.ts \
-            tests/runtime/childGrainSurfaceComposition.test.ts
+            tests/runtime/childGrainSurfaceComposition.test.ts \
+            tests/lifecycle/childTrackBeginsAtGrainCrossing.test.ts \
+            tests/lifecycle/stageOutcomeChildProcessInstanceWrite.test.ts \
+            tests/lifecycle/startEnrollmentIdempotentReuse.test.ts
