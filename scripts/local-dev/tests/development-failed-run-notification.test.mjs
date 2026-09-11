@@ -175,6 +175,34 @@ test("N8. a record with no run id says nothing about runs at all", () => {
   assert.equal(CLOSE_COMMAND.test(G.continuationTextForGovernedAction(noRun, { id: "t", result: {} }, { root: ROOT })), false);
 });
 
+test("N8b. an ABANDONED run is still reportable — the recovery hop exists for it", () => {
+  /*
+   * MEASURED, on this lane. erun_05f2787e4a3cb02c was abandoned by the governor
+   * as `needs_input_without_operator_input` while its worker was mid-turn, and a
+   * `vac run-status … complete` against it SUCCEEDED: reportExecutionRunState
+   * treats a worker report on an abandoned run as proof the abandonment was
+   * wrong and hops it through RECOVERING "rather than answering
+   * illegal_transition and stranding a live sprint with no way to reach
+   * COMPLETE".
+   *
+   * ABANDONED is in TERMINAL_RUN_STATES but not in IRREVERSIBLE_RUN_STATES.
+   * Keying this guidance to the scheduling flag would tell a worker to walk away
+   * from a turn it could still legitimately close — the same defect as an
+   * impossible close command, pointing the other way.
+   */
+  store({
+    state: "ABANDONED", currentRunId: null,
+    transitions: [{ from_state: "NEEDS_INPUT", to_state: "ABANDONED", reason: "needs_input_without_operator_input", origin: "governor" }],
+  });
+  const g = G.runClosureGuidance(REC, { root: ROOT });
+  assert.equal(g.state, "ABANDONED");
+  assert.equal(g.may_report_complete, true, "an abandoned run is recovered by the report, not refused");
+  const text = g.lines.join("\n");
+  assert.match(text, CLOSE_COMMAND, "so the close command is the right instruction");
+  assert.match(text, /recovers the run/i, "and the worker is told why it will not be refused");
+  assert.match(text, /needs_input_without_operator_input/, "with the cause the governor recorded");
+});
+
 // ── the state machine is preserved, not bent to fit the copy ─────────────────
 test("N9. FAILED -> COMPLETE stays illegal", () => {
   assert.equal(isLegalRunTransition("FAILED", "COMPLETE"), false,
@@ -191,10 +219,15 @@ test("N10. no builder emits a close command without consulting the run", () => {
   // function that reads the run state first.
   const guidance = src.slice(src.indexOf("export function runClosureGuidance"));
   const guidanceBody = guidance.slice(0, guidance.indexOf("\nexport function continuationTextForGovernedAction"));
-  const occurrences = src.match(/run-status \$\{[A-Za-z.]*runId\} complete|run-status \$\{rec\.run_id\} complete/g) || [];
-  assert.equal(occurrences.length, 1, `exactly one builder may produce the close command; found ${occurrences.length}`);
+  const CLOSE_TEMPLATE = /run-status \$\{[A-Za-z_.]+\} complete/g;
+  const outside = src.replace(guidanceBody, "");
+  const strays = outside.match(CLOSE_TEMPLATE) || [];
+  assert.equal(strays.length, 0,
+    `only the state-derived builder may produce the close command; found ${strays.length} elsewhere: ${strays.join(", ")}`);
+  assert.ok((guidanceBody.match(CLOSE_TEMPLATE) || []).length > 0, "and it does produce it");
   assert.match(guidanceBody, /run-status \$\{runId\} complete/, "and it is the state-derived one");
-  assert.match(guidanceBody, /isTerminalRunState\(state\)/, "which refuses terminal runs");
+  assert.match(guidanceBody, /isIrreversibleRunState\(state\)/,
+    "which refuses IRREVERSIBLE runs — not merely scheduling-terminal ones, or ABANDONED loses its recovery");
   assert.match(guidanceBody, /laneOwnsRun/, "and requires the lane to still own the run");
   // The unconditional assertion that started this.
   assert.equal(/The current Execution Run is still open/.test(src), false,
