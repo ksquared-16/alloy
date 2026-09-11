@@ -118,6 +118,11 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: "Tablets that record attendance at a site.",
             },
             {
+                href: settings("attendance-integrations"),
+                label: "Connected systems",
+                description: "Other systems allowed to record attendance, and where.",
+            },
+            {
                 href: settings("departments"),
                 label: "Departments",
                 description: "Teams and organizational structure.",
