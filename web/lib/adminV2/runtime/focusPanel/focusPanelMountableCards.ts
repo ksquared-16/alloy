@@ -24,6 +24,10 @@
 import { buildSelfFetchingCardShell } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { focusPanelCardCatalogLabel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import {
+    HOUSEHOLD_IDENTITY_TRUTH_KEYS,
+    hasFinancialSubject,
+} from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type MountableCardSpec = {
@@ -50,19 +54,15 @@ function hasParticipantIdentity(context: OperationalContext): boolean {
 /**
  * The answer named the ACCOUNT this surface bills against.
  *
- * Read through the same key preference an account-scoped card already uses, so the identity this
- * registry admits on is the identity the card will address its request with. Admitting on one key
- * and reading another is how a card mounts and then sits still.
+ * Re-exported from the shared rule rather than re-listed here. Mounting, settlement and the card
+ * itself must not be able to compute different answers to "does this subject have an account" —
+ * that disagreement is what let Financials be refused at commit, placed at settlement, and then
+ * render terminally beside siblings that had resolved the same family.
  */
-export const HOUSEHOLD_IDENTITY_TRUTH_KEYS = [
-    "customer.id",
-    "household.id",
-    "child.family_customer_id",
-    "customer_id",
-] as const;
+export { HOUSEHOLD_IDENTITY_TRUTH_KEYS };
 
 function hasHouseholdIdentity(context: OperationalContext): boolean {
-    return hasAnyTruthKey(context, HOUSEHOLD_IDENTITY_TRUTH_KEYS);
+    return hasFinancialSubject(context);
 }
 
 /** Present means a non-blank value. A key carrying `""` is an absent identity, not an empty one. */

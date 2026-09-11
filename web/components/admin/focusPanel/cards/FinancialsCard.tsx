@@ -36,7 +36,7 @@ import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financia
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
-import { HOUSEHOLD_IDENTITY_TRUTH_KEYS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
+import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -2079,25 +2079,20 @@ export default function FinancialsCard({ model, context, receded = false, coordi
  * panel with no household simply has no account.
  */
 /**
- * THE ACCOUNT THIS CARD IS ABOUT — read through the registry's own key list, not a copy of it.
+ * THE ACCOUNT THIS CARD IS ABOUT — the shared rule, not this card's opinion of it.
  *
- * These four keys were written out twice: once in `HOUSEHOLD_IDENTITY_TRUTH_KEYS`, which decides
- * whether Financials may MOUNT at all, and once here, which decides what it then ASKS ABOUT. The
- * registry's own comment names the hazard exactly — "admitting on one key and reading another is how
- * a card mounts and then sits still" — and then two literal lists were left to drift into it.
- *
- * They agree today. That is not a property anyone maintains; it is a coincidence that survives until
- * somebody teaches one surface about a new identity shape. Importing the constant makes mounting and
- * reading the same decision, which is what the comment was asking for.
+ * These keys were written out twice: once where mounting is decided, once here where the read is
+ * addressed. They agreed only by coincidence, and the registry's own comment had already named the
+ * hazard — "admitting on one key and reading another is how a card mounts and then sits still".
+ * Both now call `resolveFinancialSubjectId`, so the two decisions cannot diverge.
  */
 function householdIdFrom(context: OperationalContext): string | null {
-    const truth = context.truth as Record<string, unknown>;
-    for (const key of HOUSEHOLD_IDENTITY_TRUTH_KEYS) {
-        const value = truth[key];
-        const s = value != null ? String(value).trim() : "";
-        if (s) return s;
-    }
-    return null;
+    /*
+     * THE SHARED RULE, NOT A COPY OF IT. The registry decides whether this card may mount from the
+     * same function — so a card can no longer be admitted because an account "is available" and then
+     * fail to find one in the very context that admitted it.
+     */
+    return resolveFinancialSubjectId(context);
 }
 
 function money(cents: number, currency: string): string {

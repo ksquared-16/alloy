@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
-import { HOUSEHOLD_IDENTITY_TRUTH_KEYS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
+import { HOUSEHOLD_IDENTITY_TRUTH_KEYS } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 
 const card = fs.readFileSync(
     path.join(__dirname, "../../../components/admin/focusPanel/cards/FinancialsCard.tsx"),
@@ -97,13 +97,18 @@ describe("the Financials card's subject states", () => {
      * MOUNTING AND READING ARE ONE DECISION. The registry admits Financials on these keys; the card
      * used to re-list them privately, which is the drift the registry's own comment warns about.
      */
-    it("reads the account through the registry's key list rather than a copy of it", () => {
-        expect(card).toContain("HOUSEHOLD_IDENTITY_TRUTH_KEYS");
+    it("resolves the account through the shared rule, not a copy of it", () => {
+        /*
+         * The card must ASK the same function that decided it could mount. Containing the key list
+         * was the weaker contract: two surfaces can share a list and still disagree about how to
+         * read it. Sharing the resolver removes the second interpretation entirely.
+         */
+        expect(card).toContain("resolveFinancialSubjectId");
         expect(
             card.includes('"customer.id", "household.id"'),
             "a second literal list is how mounting and reading drift apart",
         ).toBe(false);
-        // And the list itself still names the account identities a household can arrive under.
+        // And the rule itself still names the account identities a household can arrive under.
         expect([...HOUSEHOLD_IDENTITY_TRUTH_KEYS]).toContain("customer.id");
         expect([...HOUSEHOLD_IDENTITY_TRUTH_KEYS]).toContain("child.family_customer_id");
     });
