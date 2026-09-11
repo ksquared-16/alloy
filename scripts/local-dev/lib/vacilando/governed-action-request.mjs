@@ -68,6 +68,7 @@ import {
   previewTrustedHostAuthorization,
 } from "./trusted-host-actions.mjs";
 import { resolveDeployedTarget } from "./deployed-target-registry.mjs";
+import { qaActionNeedsDevelopmentSlot } from "./qa-slot-preflight.mjs";
 import { resolveActionAuthorizationIdentity } from "./action-authorization-identity.mjs";
 import { ACCESS_IDENTITY_STAGING_MIGRATIONS } from "./trusted-host-migrate.mjs";
 import { createDecision, listDecisions, answerDecision } from "./decisions.mjs";
@@ -1064,6 +1065,10 @@ export function publicGovernedAction(req) {
     continuation_intent: req.continuation_intent || null,
     successor_of: req.successor_of || null,
     revived_from_stale_registry: Boolean(req.revived_from_stale_registry),
+    // Infrastructure scheduling that happened on this request's behalf. Not an
+    // approval and never gated on one — but a slot that moved silently is a
+    // capacity change nobody can audit, so it is projected where it can be read.
+    slot_preflight: req.slot_preflight || null,
     approve_label: presentation.approve_label,
     deny_label: presentation.deny_label,
     wait_label: presentation.wait_label,
@@ -3953,6 +3958,43 @@ export async function approveGovernedAction(requestId, {
     rec.status = "awaiting_director";
     rec.failure_code = null;
     rec.failure_reason = null;
+  }
+
+  /*
+   * INFRASTRUCTURE PREFLIGHT, BEFORE ANYTHING IS MINTED OR SPENT.
+   *
+   * The managed QA actions resolve slot, port, worktree and identity from the
+   * registries at execution time, so the lane must hold a Development Slot
+   * before the governed mutation begins. Acquiring one is infrastructure
+   * scheduling — the same judgement the promoted dev-server path already makes
+   * without asking — and `ensureLaneSlot` remains the sole allocator, with
+   * every safety rule it enforces left exactly where it is.
+   *
+   * Placed HERE, ahead of the grant mint and the approval record, for one
+   * reason: if no safe slot exists, nothing may have been spent. The request
+   * stays `awaiting_operator` with no grant, no consumed delegation and no
+   * recorded decision, so the operator can approve it again once capacity
+   * frees up. A refusal that burned the approval would make waiting — the
+   * correct outcome — indistinguishable from failing.
+   */
+  if (qaActionNeedsDevelopmentSlot(rec.action_key)) {
+    const { ensureQaDevelopmentSlot } = await import("./qa-slot-preflight.mjs");
+    const pre = await ensureQaDevelopmentSlot(rec.lane_id, { actionKey: rec.action_key, root });
+    if (!pre.ok) {
+      appendAudit(rec, "development_slot_unavailable", { nowMs, error: pre.error, detail: pre.detail }, root);
+      return {
+        ok: false,
+        error: pre.error,
+        detail: pre.detail,
+        slot_preflight: pre,
+        request: publicGovernedAction(rec),
+      };
+    }
+    if (pre.moved) {
+      rec.slot_preflight = { acquired: pre.acquired, ...pre.movement };
+      saveRequest(rec, root);
+      appendAudit(rec, "development_slot_acquired", { nowMs, ...rec.slot_preflight }, root);
+    }
   }
 
   // WHICH AUTHORIZATION THIS APPROVAL CREATES.
