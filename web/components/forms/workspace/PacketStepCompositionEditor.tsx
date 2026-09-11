@@ -8,9 +8,27 @@ import type { PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionSte
 import { applyRecentFormToSteps } from "@/lib/admin/forms/packetStepRecentFormPlacement";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { packetStepReadinessLabel } from "@/lib/forms/packets/packetOrchestrationPresentation";
+import { PACKET_STEP_KIND_LABELS, type PacketStepKind } from "@/lib/forms/packets/packetStepKind";
+import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
+import { PacketAddStepChooser, type NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
 import { opGroupedRowInner, opGroupedSurface, opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
 
-export type StepDraft = { packet_item_id?: string; form_definition_id: string; step_label: string };
+export type StepDraft = {
+    packet_item_id?: string;
+    form_definition_id: string;
+    step_label: string;
+    /**
+     * What this step ASKS OF A FAMILY. Absent means "form" — every step authored before the
+     * vocabulary existed was one, so the default is what those rows actually are.
+     */
+    kind?: PacketStepKind;
+    /** `document_upload` — the classification the file is filed under. */
+    document_type_key?: string | null;
+    /** `document_acknowledgment` — the document the family reads. */
+    acknowledgment_document_id?: string | null;
+    acknowledgment_document_title?: string | null;
+    requires_signature?: boolean;
+};
 
 const inputClass = "w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm";
 
@@ -22,6 +40,8 @@ type Props = {
     savedStepCount: number;
     onStepsChange: (updater: (rows: StepDraft[]) => StepDraft[]) => void;
     onAddStep: () => void;
+    /** Document steps persist on add — their executor is generated server-side. */
+    onAddDocumentStep: (step: NewDocumentStep) => Promise<void>;
     onSaveSteps: () => void;
     onMoveStep: (index: number, dir: -1 | 1) => void;
     onRemoveStep: (index: number) => void;
@@ -36,6 +56,7 @@ export function PacketStepCompositionEditor({
     savedStepCount,
     onStepsChange,
     onAddStep,
+    onAddDocumentStep,
     onSaveSteps,
     onMoveStep,
     onRemoveStep,
@@ -43,7 +64,8 @@ export function PacketStepCompositionEditor({
     return (
         <div data-testid="packet-step-composition">
             <p className={opMetadata}>
-                Each step is a published form families complete in order. Save when the pipeline looks right.
+                Each step is one thing the family does, in order — answer questions, send in a document, or read
+                and agree to one. Save when the packet looks right.
             </p>
 
             {recentPublishedForms.length > 0 ?
@@ -70,20 +92,46 @@ export function PacketStepCompositionEditor({
                 {steps.map((s, idx) => {
                     const selected = forms.find((f) => f.id === s.form_definition_id);
                     const published = selected?.has_published_version !== false && Boolean(s.form_definition_id);
+                    const kind: PacketStepKind = s.kind ?? "form";
+                    const isDocumentStep = kind !== "form";
                     return (
                         <li key={s.packet_item_id ?? `draft-${idx}-${s.form_definition_id || "empty"}`} className={opGroupedRowInner}>
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                     Step {idx + 1}
                                 </span>
-                                {s.form_definition_id ?
+                                <span className="text-xs font-medium text-alloy-midnight/60">
+                                    {PACKET_STEP_KIND_LABELS[kind]}
+                                </span>
+                                {!isDocumentStep && s.form_definition_id ?
                                     <FormsReviewBadge
                                         label={packetStepReadinessLabel(published)}
                                         tone={published ? "success" : "warning"}
                                     />
                                 :   null}
                             </div>
-                            <div className="mt-2 grid gap-3 lg:grid-cols-2">
+                            {isDocumentStep ?
+                                /*
+                                 * A document step shows WHAT IT ASKS FOR, and never the form that
+                                 * executes it. Offering a Form dropdown here would put the adapter
+                                 * back into the administrator's model, which is the one thing this
+                                 * vocabulary exists to prevent.
+                                 */
+                                <div className="mt-2">
+                                    <p className="text-sm font-medium text-alloy-midnight">
+                                        {s.step_label?.trim() || selected?.name || "Untitled step"}
+                                    </p>
+                                    <p className={clsx("mt-0.5", opMutedMeta)}>
+                                        {kind === "document_upload" ?
+                                            `Filed as ${CLASSIFICATION_KEY_LABELS[
+                                                (s.document_type_key ?? "") as keyof typeof CLASSIFICATION_KEY_LABELS
+                                            ] ?? "an enrollment document"}`
+                                        : s.acknowledgment_document_title ?
+                                            `Reads ${s.acknowledgment_document_title}${s.requires_signature ? ", and signs" : ""}`
+                                        :   `Reads a document${s.requires_signature ? ", and signs" : ""}`}
+                                    </p>
+                                </div>
+                            :   <div className="mt-2 grid gap-3 lg:grid-cols-2">
                                 <label className="space-y-1 text-sm">
                                     <span className={opMutedMeta}>Form</span>
                                     <select
@@ -122,7 +170,8 @@ export function PacketStepCompositionEditor({
                                     />
                                 </label>
                             </div>
-                            {selected ?
+                            }
+                            {selected && !isDocumentStep ?
                                 <p className={clsx("mt-2", opMutedMeta)}>
                                     <Link
                                         href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(selected.id)}`}
@@ -153,10 +202,8 @@ export function PacketStepCompositionEditor({
                 })}
             </ol>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-                <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={onAddStep}>
-                    Add step
-                </PrimaryButton>
+            <div className="mt-4 flex flex-wrap items-start gap-2">
+                <PacketAddStepChooser busy={busy} onAddFormStep={onAddStep} onAddDocumentStep={onAddDocumentStep} />
                 <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={onSaveSteps}>
                     Save steps
                 </PrimaryButton>

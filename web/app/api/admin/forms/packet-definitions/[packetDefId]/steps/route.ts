@@ -100,7 +100,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             label: label || (kind === "document_upload" ? "Upload a document" : "Read & acknowledge"),
             instructions,
             documentTypeKey,
-            acknowledgmentDocumentId,
             requiresSignature,
         });
         if (!generated.ok) return jsonError(generated.error, 500);
@@ -156,7 +155,6 @@ async function generateAdapterForm(
         label: string;
         instructions: string;
         documentTypeKey: string;
-        acknowledgmentDocumentId: string;
         requiresSignature: boolean;
     },
 ): Promise<{ ok: true; formDefinitionId: string } | { ok: false; error: string }> {
@@ -187,7 +185,9 @@ async function generateAdapterForm(
                       label: input.label,
                       required: true,
                       ...(input.instructions ? { description: input.instructions } : {}),
-                      document_type: input.documentTypeKey,
+                      // `document_type` is `min(1).optional()` in the strict field schema — an empty
+                      // string is a validation failure, not a harmless blank.
+                      ...(input.documentTypeKey ? { document_type: input.documentTypeKey } : {}),
                   },
               ]
             : [
@@ -203,14 +203,19 @@ async function generateAdapterForm(
                       : []),
               ];
 
+    /*
+     * `formSchemaV1Schema` is `.strict()`. An earlier draft hung
+     * `acknowledgment_document_id` off the top level here and it would have been REFUSED at
+     * validation — but the deeper point is that it did not belong here either. WHICH DOCUMENT a
+     * family is being asked to read is a property of the STEP, and it lives in the packet item's
+     * metadata where the operator authored it. The adapter form carries only the affirmation, so
+     * the document can be re-pointed without republishing a Form version.
+     */
     const schema_json = {
         title: input.label,
         schema_version: 1,
         sections: [],
         fields,
-        ...(input.kind === "document_acknowledgment" && input.acknowledgmentDocumentId
-            ? { acknowledgment_document_id: input.acknowledgmentDocumentId }
-            : {}),
     };
 
     const nowIso = new Date().toISOString();

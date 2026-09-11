@@ -20,6 +20,7 @@ import {
     PacketStepCompositionEditor,
     type StepDraft,
 } from "@/components/forms/workspace/PacketStepCompositionEditor";
+import type { NewDocumentStep } from "@/components/forms/workspace/PacketAddStepChooser";
 import {
     intakeWorkspaceBtnPrimary,
     intakeWorkspaceBtnSecondary,
@@ -77,6 +78,7 @@ type Props = {
     onSaveMeta: () => void;
     onStepsChange: (updater: (rows: StepDraft[]) => StepDraft[]) => void;
     onAddStep: () => void;
+    onAddDocumentStep: (step: NewDocumentStep) => Promise<void>;
     onSaveSteps: () => void;
     onMoveStep: (index: number, dir: -1 | 1) => void;
     onRemoveStep: (index: number) => void;
@@ -116,6 +118,7 @@ export function PacketBuilderWorkspaceLayout({
     onSaveMeta,
     onStepsChange,
     onAddStep,
+    onAddDocumentStep,
     onSaveSteps,
     onMoveStep,
     onRemoveStep,
@@ -277,6 +280,7 @@ export function PacketBuilderWorkspaceLayout({
                             savedStepCount={savedItems.length}
                             onStepsChange={onStepsChange}
                             onAddStep={onAddStep}
+                            onAddDocumentStep={onAddDocumentStep}
                             onSaveSteps={onSaveSteps}
                             onMoveStep={onMoveStep}
                             onRemoveStep={onRemoveStep}

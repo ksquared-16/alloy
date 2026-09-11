@@ -3,11 +3,14 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { FORMS_AUTHOR, requireFormsCapability } from "@/lib/access/formsAuthority";
+import { indexPriorPacketSteps, packetStepMetadataForRewrite } from "@/lib/forms/packets/carryForwardPacketStepConfig";
 
 type StepBody = {
     form_definition_id: string;
     pinned_form_definition_version_id?: string | null;
     step_label?: string;
+    /** Which stored step this row IS, so its kind survives a reorder. See `priorConfigFor`. */
+    packet_item_id?: string;
 };
 
 /** PUT /api/admin/forms/packet-definitions/[packetDefId]/items — replace ordered steps (linear only). */
@@ -56,10 +59,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             }
         }
         const step_label = typeof r.step_label === "string" ? r.step_label.trim() : "";
+        const packet_item_id = typeof r.packet_item_id === "string" && r.packet_item_id.trim() ? r.packet_item_id.trim() : undefined;
         steps.push({
             form_definition_id,
             pinned_form_definition_version_id: pinned,
             ...(step_label ? { step_label } : {}),
+            ...(packet_item_id ? { packet_item_id } : {}),
         });
     }
 
@@ -86,6 +91,29 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         .maybeSingle();
     if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
     if (!pkt) return jsonError("Not found", 404);
+
+    /*
+     * WHAT THIS ROUTE USED TO DESTROY.
+     *
+     * This is a delete-and-reinsert, and it rebuilt `metadata` from `step_label` alone. Once a step
+     * could be an upload or an acknowledgment, that meant pressing "Save steps" merely to REORDER a
+     * packet silently demoted every document step back to a bare form — the family would have been
+     * shown a one-control adapter with no document behind it, and nothing would have reported an
+     * error. Order is not the only thing stored here any more.
+     *
+     * So the step configuration is carried forward across the rewrite: by `packet_item_id` when the
+     * client names which stored row a draft is, and otherwise by the form that executes it, which
+     * is 1:1 with its step for every generated adapter.
+     */
+    const { data: priorItems } = await supabase
+        .from("form_packet_items")
+        .select("id, form_definition_id, metadata")
+        .eq("org_id", ctx.orgId)
+        .eq("packet_definition_id", packetDefId);
+
+    const priorIndex = indexPriorPacketSteps(
+        (priorItems ?? []) as Array<{ id: string; form_definition_id: string; metadata: unknown }>,
+    );
 
     const { error: delErr } = await supabase
         .from("form_packet_items")
@@ -140,8 +168,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             pinnedId = null;
         }
 
-        const meta: Record<string, unknown> = {};
-        if (s.step_label) meta.step_label = s.step_label;
+        const meta = packetStepMetadataForRewrite(s, priorIndex);
 
         insertRows.push({
             org_id: ctx.orgId,
