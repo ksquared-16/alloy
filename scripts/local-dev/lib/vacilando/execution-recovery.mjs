@@ -9,7 +9,7 @@
  * No broad process killing, Git mutation, or Claude session restart.
  */
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -204,11 +204,12 @@ export function readBudgetEpisode(policy, target, root = runtimeRoot()) {
   return rec;
 }
 
-function bumpBudget(policy, target, root, nowMs, { success = false } = {}) {
+function bumpBudget(policy, target, root, nowMs, { success = false, evidence } = {}) {
   const store = readBudgets(root);
   store.episodes = store.episodes || {};
   const key = budgetKey(policy, target);
   const cur = store.episodes[key] || { attempts: 0, successes: 0, first_at: iso(nowMs), last_at: null };
+  if (evidence !== undefined) cur.evidence = evidence;
   cur.attempts = (cur.attempts || 0) + 1;
   if (success) cur.successes = (cur.successes || 0) + 1;
   cur.last_at = iso(nowMs);
@@ -224,6 +225,91 @@ function budgetExhausted(policy, target, root) {
   if (max == null) return true;
   const cur = readBudgetEpisode(policy, target, root);
   return Boolean(cur && cur.attempts >= max);
+}
+
+/**
+ * WHAT MADE THIS OBSERVATION, so a repeat of it can be told from a new one.
+ *
+ * THE DEFECT THIS IDENTITY CLOSES. The budget episode was keyed by policy and
+ * TARGET alone. For `stale_slot_pid` the target is a path — so the first stale
+ * pid file at that path spent the budget (which is 1), and every LATER stale
+ * claim at the same path, belonging to a different dead process, found the
+ * budget already exhausted and was never repaired. Recovery worked exactly once
+ * per path, for the life of the budget store, and the claim stayed on disk
+ * forever while every reconciliation pass rediscovered it.
+ *
+ * MEASURED, on this host: gateway/pids/wt5-vacilando.pid emitted 2487 recovery
+ * events between 14:06 and 21:15 — detected, classified, exhausted, repeating —
+ * with almost no attempts among them.
+ *
+ * So identity is policy + target + the EVIDENCE that justified the observation.
+ * A different dead pid at the same path is a different fault, and gets its own
+ * budget. The same dead pid at the same path is the same fault, and must be
+ * quiet.
+ *
+ * Deliberately cheap: a stat and a read the caller has already done. This runs
+ * on the reconciliation hot path.
+ */
+function evidenceFingerprint(policy, ctx) {
+  if (ctx?.evidence != null) return String(ctx.evidence).slice(0, 200);
+  if (policy === "stale_slot_pid") {
+    const parts = [`pid=${String(ctx?.pid ?? "").trim() || "none"}`];
+    try { parts.push(`mtime=${statSync(ctx.path).mtimeMs}`); } catch { parts.push("mtime=absent"); }
+    return parts.join(" ");
+  }
+  // No caller-supplied evidence: identity degrades to policy + target, which is
+  // what it has always been. Never WORSE than today.
+  return null;
+}
+
+/**
+ * A resource whose recovery has finished for good, under unchanged evidence.
+ *
+ * Terminal is not "give up quietly on a live problem" — it is reached only where
+ * the code ALREADY stopped acting: budget exhausted, or thrash tripped. Before
+ * this, those paths still emitted detect → classify → exhausted on every pass
+ * forever while doing nothing at all. The state that was implicit in the budget
+ * store is now written down, so the next pass can recognise it and say nothing.
+ *
+ * Ambiguity is never terminalized: `consume_budget: false` results — a live pid,
+ * a pid file outside the runtime root, unknown provenance — do not reach here,
+ * so a fault whose ownership is unclear keeps being observed. Failing closed is
+ * still the rule.
+ */
+function markEpisodeTerminal(policy, target, root, { nowMs, evidence, reason, classification }) {
+  const store = readBudgets(root);
+  store.episodes = store.episodes || {};
+  const key = budgetKey(policy, target);
+  const cur = store.episodes[key] || { attempts: 0, successes: 0, first_at: iso(nowMs) };
+  cur.policy = policy;
+  cur.target = target;
+  cur.evidence = evidence;
+  cur.terminal = true;
+  cur.terminal_at = iso(nowMs);
+  cur.terminal_reason = reason;
+  cur.terminal_classification = classification;
+  store.episodes[key] = cur;
+  writeBudgets(store, root);
+  return cur;
+}
+
+/** New evidence re-arms a resource: fresh budget, no terminal state, recovery runs again. */
+function rearmEpisode(policy, target, root, { nowMs, evidence }) {
+  const store = readBudgets(root);
+  store.episodes = store.episodes || {};
+  const key = budgetKey(policy, target);
+  store.episodes[key] = {
+    attempts: 0,
+    successes: 0,
+    first_at: iso(nowMs),
+    last_at: null,
+    policy,
+    target,
+    evidence,
+    rearmed_at: iso(nowMs),
+  };
+  writeBudgets(store, root);
+  return store.episodes[key];
 }
 
 function thrashKey(policy, ctx) {
@@ -767,6 +853,40 @@ export function executeRecovery(policyKey, ctx = {}) {
   const root = ctx.root || runtimeRoot();
   const nowMs = ctx.nowMs || Date.now();
   const target = ctx.target || ctx.rec?.request_id || ctx.holder || ctx.path || ctx.rec?.id || policyKey;
+
+  /*
+   * CONVERGENCE, AHEAD OF EVERY APPEND.
+   *
+   * This block used to sit BELOW the two emits, which is the whole of the
+   * September 11 event storm: `recovery_detected` and `recovery_classified`
+   * were written unconditionally on entry, so a resource the code had already
+   * decided not to act on still cost three lines per pass, forever. Four stale
+   * claims x two targeted passes per minute x three events = the 24 events/min
+   * that was measured.
+   *
+   * Nothing is emitted until we know this observation is NEW. An unchanged
+   * terminal resource is silent and performs no write of any kind — which is
+   * also what makes "healthy reconcile does zero persistent writes" true.
+   */
+  const evidence = evidenceFingerprint(policyKey, ctx);
+  const prior = readBudgetEpisode(policyKey, target, root);
+  if (prior && prior.evidence !== undefined && prior.evidence !== evidence) {
+    // The fault changed underneath us — a different dead pid at the same path,
+    // a file rewritten. That is a NEW fault and it gets a fresh budget.
+    rearmEpisode(policyKey, target, root, { nowMs, evidence });
+  } else if (prior?.terminal) {
+    // Same resource, same state, no new evidence. Say nothing, write nothing.
+    return {
+      ok: false,
+      skipped: true,
+      quiet: true,
+      terminal: true,
+      policy: policyKey,
+      error: prior.terminal_reason || "terminal",
+      classification: prior.terminal_classification || "UNRECOVERABLE",
+    };
+  }
+
   emitRecoveryEvent("recovery_detected", { policy: policyKey, lane_id: ctx.rec?.lane_id, run_id: ctx.rec?.run_id }, root, {
     classification: def.classification,
     target,
@@ -782,6 +902,9 @@ export function executeRecovery(policyKey, ctx = {}) {
       target,
       summary: "Recovery thrash threshold reached",
     });
+    markEpisodeTerminal(policyKey, target, root, {
+      nowMs, evidence, reason: "thrash", classification: "REQUIRES_JUDGMENT",
+    });
     if (ctx.rec?.run_id) escalateRun(ctx.rec.run_id, "recovery is thrashing", { root, nowMs });
     return { ok: false, error: "thrash", classification: "REQUIRES_JUDGMENT", exhausted: true };
   }
@@ -790,6 +913,20 @@ export function executeRecovery(policyKey, ctx = {}) {
       classification: "UNRECOVERABLE",
       target,
       summary: "Recovery budget exhausted",
+    });
+    /*
+     * TERMINALIZED HERE, and this is the line that ends the loop.
+     *
+     * Bounded recovery is exhausted for THIS evidence. The exhaustion is
+     * emitted once, the resource is marked terminal, and the next pass returns
+     * above without touching the ledger. The diagnostic history already written
+     * is untouched — terminal is a current-state fact, not a deletion.
+     *
+     * `resource_queue_drift` is excluded from budget exhaustion upstream and so
+     * never reaches this line, exactly as before.
+     */
+    markEpisodeTerminal(policyKey, target, root, {
+      nowMs, evidence, reason: "budget_exhausted", classification: "UNRECOVERABLE",
     });
     if (ctx.rec?.run_id) escalateRun(ctx.rec.run_id, `recovery budget exhausted for ${policyKey}`, { root, nowMs });
     return { ok: false, error: "budget_exhausted", classification: "UNRECOVERABLE", exhausted: true };
@@ -808,7 +945,7 @@ export function executeRecovery(policyKey, ctx = {}) {
   const success = Boolean(result?.ok && result?.verified && consume);
   let episode = readBudgetEpisode(policyKey, target, root) || { attempts: 0 };
   if (consume) {
-    episode = bumpBudget(policyKey, target, root, nowMs, { success });
+    episode = bumpBudget(policyKey, target, root, nowMs, { success, evidence });
     if (success) bumpThrash(policyKey, ctx, root, nowMs);
   }
   result.attempt = episode.attempts;
