@@ -1,9 +1,9 @@
 {
   "trusted_host_action_id": "tha_e08f579b686d40",
-  "query_hash": "9212ca01c3251a756c5e3c9dd4f01ae3c34bbd9a9192577a816e8b3784fe8cea",
+  "query_hash": "40a64d2e8e91ee2a83bf22e5b1bba8886e1bc4351154bbd4985b92ff132fa3ec",
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-11T18:49:38.803Z",
+    "census_run_at": "2026-09-11T18:54:17.979Z",
     "question_ids": [
       "m170000",
       "column_detail",
@@ -11,6 +11,7 @@
       "kind_chk_definition",
       "ledger_version",
       "ledger_version_count",
+      "ledger_integrity",
       "ledger_head",
       "ledger_total",
       "rows"
@@ -54,28 +55,35 @@
         "question_id": "ledger_version",
         "row_count": null,
         "rows": [
-          "20260911170000 ~ registered ~ absent ~ false"
+          "20260911170000 ~ registered ~ present ~ true"
         ]
       },
       "ledger_version_count": {
         "question_id": "ledger_version_count",
         "row_count": null,
         "rows": [
-          "20260911170000 ~ occurrences ~ 0"
+          "20260911170000 ~ occurrences ~ 1"
+        ]
+      },
+      "ledger_integrity": {
+        "question_id": "ledger_integrity",
+        "row_count": null,
+        "rows": [
+          "supabase_migrations.schema_migrations ~ 20260911170000 ~ registered_exactly_once ~ true"
         ]
       },
       "ledger_head": {
         "question_id": "ledger_head",
         "row_count": null,
         "rows": [
-          20260911140000
+          20260911170000
         ]
       },
       "ledger_total": {
         "question_id": "ledger_total",
         "row_count": null,
         "rows": [
-          404
+          405
         ]
       },
       "rows": {
@@ -86,16 +94,16 @@
         ]
       }
     },
-    "row_count": 15
+    "row_count": 16
   },
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-11T18:49:35.849Z",
+    "executed_at": "2026-09-11T18:54:16.361Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_a60d80b1837356",
-    "authorization_id": "grnt_a10615fd9688464a",
-    "query_hash": "9212ca01c3251a756c5e3c9dd4f01ae3c34bbd9a9192577a816e8b3784fe8cea",
+    "trusted_host_action_id": "tha_dc0bf775c0f38e",
+    "authorization_id": "grnt_5843ab1141654449",
+    "query_hash": "40a64d2e8e91ee2a83bf22e5b1bba8886e1bc4351154bbd4985b92ff132fa3ec",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
