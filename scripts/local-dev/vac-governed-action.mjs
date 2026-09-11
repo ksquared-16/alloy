@@ -8,7 +8,7 @@
  * Does not create a parallel request system.
  */
 import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
-import { requestGovernedAction } from "./lib/vacilando/governed-action-request.mjs";
+import { fileGovernedActionWithQaSlotPreflight } from "./lib/vacilando/qa-slot-preflight.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac governed-action --run <run_id> --lane <lane_id> --json '{...}'
@@ -206,7 +206,15 @@ const authority = await resolveGovernedAuthority(
   payload.lane_id || payload.laneId || lane,
 );
 
-const out = requestGovernedAction({
+/*
+ * Filed through the infrastructure preflight, not through `requestGovernedAction`
+ * directly. For the managed QA actions the lane must hold a Development Slot
+ * before the request can ever execute, and acquiring one safely is scheduling
+ * rather than a decision — so it happens here, in front of the filing, instead
+ * of becoming an operator card asking approval for something impossible. Every
+ * other action passes straight through: the preflight is a no-op by action key.
+ */
+const out = await fileGovernedActionWithQaSlotPreflight({
   ...payload,
   run_id: payload.run_id || payload.runId || runId,
   lane_id: payload.lane_id || payload.laneId || lane,

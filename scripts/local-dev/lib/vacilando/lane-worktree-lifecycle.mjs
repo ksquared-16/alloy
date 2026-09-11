@@ -1362,7 +1362,16 @@ export async function ensureLaneSlot({
   return {
     ok: true, slot: moved.slot, port: moved.port ?? null,
     acquired: "reclaimed", worktree: name,
-    donor: { worktree: candidate.worktree, lane_name: candidate.lane_name || null, group: candidate.group },
+    // The donor is named with the CLASSIFICATION the ranking used and the
+    // REASON it judged the donor safe, because an automatic capacity movement
+    // that cannot be audited afterwards is not one anybody should trust.
+    donor: {
+      worktree: candidate.worktree,
+      lane_id: candidate.lane_id ?? null,
+      lane_name: candidate.lane_name || null,
+      group: candidate.group,
+      reason: candidate.reason || null,
+    },
   };
 }
 
