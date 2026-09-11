@@ -76,16 +76,25 @@ async function callAction(
             },
         }),
     });
+    /*
+     * THE PREVIEW IS THE ACTION'S, AND IT LIVES WHERE THE ACTION PUT IT.
+     *
+     * A registry-owned command answers `data.execution_result`, and its preview is a field on that
+     * — not `data.preview`, which is where this component first looked. The read failed silently:
+     * the fetch succeeded, `preview` was undefined, nothing rendered, and Confirm therefore never
+     * unlocked. An operator could open the panel, fill it in, press Preview and watch nothing
+     * happen, with no error to report. Both shapes are accepted so the older owner keeps working.
+     */
     const json = (await res.json()) as {
         ok?: boolean;
-        data?: { preview?: PreviewPayload };
+        data?: { preview?: PreviewPayload; execution_result?: { preview?: PreviewPayload } };
         error?: { message?: string } | string;
     };
     if (!res.ok || json.ok === false) {
         const error = typeof json.error === "string" ? json.error : json.error?.message;
         return { ok: false, error: error ?? "The arrangement was refused." };
     }
-    return { ok: true, preview: json.data?.preview ?? null };
+    return { ok: true, preview: json.data?.execution_result?.preview ?? json.data?.preview ?? null };
 }
 
 /**
@@ -286,13 +295,20 @@ export default function FinancialsResponsibilityPanel({
                 </label>
             ))}
 
-            {/* THE ACTION'S OWN PREVIEW, not a guess assembled here. */}
+            {/*
+              * THE ACTION'S OWN PREVIEW, not a guess assembled here. The only change made to it is
+              * that a party id is shown as the person's name — the panel supplied those ids, so it
+              * can say who they were; an id it does not recognise is left exactly as written.
+              */}
             {preview ? (
                 <div className="mt-2 rounded border border-alloy-stone/15 bg-alloy-stone/5 p-2" data-financials-responsibility-preview="true">
                     <p className="text-[11px] font-medium text-alloy-midnight">{preview.summary}</p>
                     {(preview.changes ?? []).map((c) => (
                         <p key={c} className="text-[11px] text-alloy-midnight/65">
-                            {c}
+                            {shares.reduce(
+                                (line, share) => line.split(share.responsiblePartyId).join(share.name),
+                                c,
+                            )}
                         </p>
                     ))}
                 </div>
