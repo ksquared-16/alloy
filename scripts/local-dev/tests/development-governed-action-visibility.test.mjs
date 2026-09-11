@@ -167,6 +167,19 @@ test("G10. state is read from the store, never inferred from elapsed time", () =
     "no timestamp heuristic may decide a lifecycle state");
 });
 
+test("G11. --list carries accepted values too, not only --contract", () => {
+  // The registry published them and the --list projection dropped them again.
+  // Found by probing the promoted runtime after the first promotion, which is
+  // the only place a re-projection like this shows itself.
+  const out = execFileSync(process.execPath, [CLI, "--list"],
+    { env: { ...process.env, ALLOY_RUNTIME_ROOT: ROOT }, encoding: "utf8" });
+  const j = JSON.parse(out.match(/\{[\s\S]*\}/)[0]);
+  const a = j.actions.find((x) => x.action_key === "database.apply_migration");
+  assert.ok(a, "the action is listed");
+  assert.deepEqual(a.accepted_values?.environment, ["staging", "certification", "cert"],
+    "discovery must not be the one surface that still hides the enum");
+});
+
 try { rmSync(ROOT, { recursive: true, force: true }); } catch { /* */ }
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

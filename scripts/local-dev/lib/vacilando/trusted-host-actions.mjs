@@ -1217,6 +1217,11 @@ function classifySqlChildFailure(errText, fallback) {
   // Defence in depth: the child resolves psql itself now, but an older child or a different missing
   // binary must still surface as a dependency problem rather than as a failed query.
   if (/command not found|No such file or directory/.test(errText)) return "trusted_host_dependency_missing";
+  // Target selection and the pre-execution guard. These happen BEFORE any
+  // statement reaches a database, so they must never be reported as a failed
+  // query — a caller told "the apply failed" reasonably wonders what ran.
+  if (/target_environment_mismatch/.test(errText)) return "target_environment_mismatch";
+  if (/target_resolution_failed/.test(errText)) return "target_resolution_failed";
   return fallback;
 }
 
@@ -1318,7 +1323,7 @@ function runLedgerProbe(sql, label) {
   return { ok: true, satisfied: answer === "t" };
 }
 
-function defaultApplyMigrationFile({ entry, text }) {
+function defaultApplyMigrationFile({ entry, text, environment }) {
   const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
   const file = join(tmpDir, `${entry.version}.sql`);
@@ -1326,7 +1331,10 @@ function defaultApplyMigrationFile({ entry, text }) {
   const errFile = join(tmpDir, `${entry.version}.err`);
   writeFileSync(file, text);
   try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
-  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile], {
+  // The environment is an ARGUMENT, not an ambient default. The child selects
+  // its database from it; omitting it is a hard refusal there rather than a
+  // fallback to whichever credential the host happens to hold.
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile, String(environment ?? "")], {
     env: {
       ...process.env,
       ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
@@ -1369,18 +1377,36 @@ export function executeMigrationTrustedHostAction(action, { actor = "director", 
   if (!out?.ok) {
     const failed = out?.results?.find((r) => !r.ok);
     const publicResult = publicMigrationResult(out);
-    const failedAction = failTrustedAction(
-      action,
-      failed?.code || "apply_failed",
-      failed?.detail || "Migration batch stopped on failure.",
-      { nowMs },
-    );
+    /*
+     * A batch can fail WITHOUT reaching any migration — target resolution, an
+     * empty or unusable plan, a composition error. Those carry their code on the
+     * batch itself, and reading only `results` discarded it: the caller received
+     * a bare `apply_failed` for a path where nothing was ever attempted, and
+     * then reasonably spent runs looking for a SQL error that did not exist.
+     *
+     * So the batch's own code is preferred when no migration produced one, and a
+     * failure that reached no migration says so rather than borrowing the
+     * vocabulary of one that did.
+     */
+    const reachedAMigration = Array.isArray(out?.results) && out.results.length > 0;
+    const code = failed?.code || out?.code || (reachedAMigration ? "apply_failed" : "dispatch_failed");
+    const detail = failed?.detail
+      || out?.detail
+      || (reachedAMigration
+        ? "Migration batch stopped on failure."
+        : "Migration batch failed before any migration was attempted.");
+    const failedAction = failTrustedAction(action, code, detail, { nowMs });
     if (failedAction.action) {
       failedAction.action.result = {
         ...publicResult,
         ok: false,
-        code: failed?.code || "apply_failed",
-        detail: failed?.detail || "Migration batch stopped on failure.",
+        code,
+        detail,
+        // Execution-stage evidence, so a result artifact exists and says how far
+        // the attempt got even when no child was ever spawned.
+        child_spawned: reachedAMigration,
+        stage_reached: reachedAMigration ? "migration_apply" : "dispatch",
+        requested_environment: action?.inputs?.environment ?? null,
       };
       writeAction(failedAction.action);
     }
