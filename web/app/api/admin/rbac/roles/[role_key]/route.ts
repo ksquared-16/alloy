@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { accessMutationAudit } from "@/lib/access/accessMutationAudit";
 import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 
 /** PATCH: update role (role_label, is_active). Requires org admin or `settings.users_roles` permission. */
@@ -63,9 +64,13 @@ export async function PATCH(
             .filter((k) => typeof k === "string" && k.trim())
             .map((k) => (k as string).trim());
 
+        const audit = accessMutationAudit(auth.access);
         const { data: granted, error: saveErr } = await supabase.rpc("save_role_definition_and_grants", {
             p_org_id: orgId,
             p_role_key: role_key,
+            p_actor_user_id: audit.actorUserId,
+            p_origin: audit.origin,
+            p_correlation_id: audit.correlationId,
             // NULL means "not edited", so a submit that changes only the grid does not rewrite the
             // label with whatever the page happened to be holding.
             p_role_label: typeof body.role_label === "string" ? body.role_label.trim() : null,

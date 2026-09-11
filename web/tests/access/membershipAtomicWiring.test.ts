@@ -145,7 +145,7 @@ describe("W-5 — helper maps RPC outcomes", () => {
 
     it("classifies the replace RPC's no-membership signal as not_found", async () => {
         const { client } = fakeClient({ error: { code: "P0002", message: "no membership" } });
-        const res = await replaceMembershipWithAccessProfile(client, { userId: "u1", orgId: "o1", role: "ops" });
+        const res = await replaceMembershipWithAccessProfile(client, { userId: "u1", orgId: "o1", role: "ops" , audit: { actorUserId: "test-actor", origin: "operator" as const, correlationId: "test-corr" }});
         expect(res).toMatchObject({ ok: false, kind: "not_found" });
     });
 

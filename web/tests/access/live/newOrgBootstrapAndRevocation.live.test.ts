@@ -49,6 +49,18 @@ function certEnv(): { url: string; serviceKey: string } | null {
 const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
+/**
+ * D2 — the canonical revocation path now refuses a change that names no actor, so this fixture names
+ * one. That refusal is the contract, not an obstacle: an access change with no author is exactly what
+ * the audit exists to make impossible, and a test allowed to bypass it would be proving the wrong
+ * thing about the production path it stands in for.
+ */
+const AUDIT = {
+    p_actor_user_id: "live-cert-actor",
+    p_origin: "operator",
+    p_correlation_id: "live-cert-revocation",
+} as const;
+
 /** The tenant this file creates, and removes again. */
 const NEW_ORG = "b0075100-0000-4000-8000-00000000b007";
 const NEW_ORG_ADMIN = "b0075100-0000-4000-8000-00000000a001";
@@ -243,6 +255,7 @@ describeLive("a deliberate revocation survives the repair — live", () => {
                 p_org_id: EXISTING_ORG,
                 p_role_key: "admin",
                 p_permission_keys: restore,
+                ...AUDIT,
             });
         }
         await supabase.from("orgs").delete().eq("id", "b0075100-0000-4000-8000-00000000b008");
@@ -276,6 +289,7 @@ describeLive("a deliberate revocation survives the repair — live", () => {
             p_org_id: EXISTING_ORG,
             p_role_key: "admin",
             p_permission_keys: held.filter((k) => k !== REVOKED),
+            ...AUDIT,
         });
         expect(revokeErr, revokeErr?.message).toBeNull();
 

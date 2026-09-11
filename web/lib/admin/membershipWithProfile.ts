@@ -13,6 +13,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AccessMutationAudit } from "@/lib/access/accessMutationAudit";
 
 export type MembershipRow = {
     user_id: string;
@@ -61,12 +62,24 @@ export async function createMembershipWithAccessProfile(
  */
 export async function replaceMembershipWithAccessProfile(
     supabase: SupabaseClient,
-    params: { userId: string; orgId: string; role: string }
+    params: {
+        userId: string;
+        orgId: string;
+        role: string;
+        /**
+         * D2 — who is changing this membership. The RPC refuses a change that names no actor, so
+         * this is not optional metadata: without it the replacement does not happen.
+         */
+        audit: AccessMutationAudit;
+    }
 ): Promise<MembershipWriteResult> {
     const { data, error } = await supabase.rpc("replace_membership_with_access_profile", {
         p_user_id: params.userId,
         p_org_id: params.orgId,
         p_role: params.role,
+        p_actor_user_id: params.audit.actorUserId,
+        p_origin: params.audit.origin,
+        p_correlation_id: params.audit.correlationId,
     });
 
     if (error) return classify(error.code, error.message);
