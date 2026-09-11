@@ -154,10 +154,27 @@ test.describe("mounted personas on the promoted tree", () => {
         console.log(`[add-charge] post status=${posted.status}`);
         expect(posted.status).toBeLessThan(400);
 
-        // Put the tenant back through the product's own correction path.
-        const reversed = await run("charge.reverse", { charge_id: chargeId });
-        console.log(`[add-charge] reverse status=${reversed.status}`);
-        expect(reversed.status, "the administrator may also correct posted money").toBeLessThan(400);
+        /*
+         * `charge.add` is IDEMPOTENT on `(template, service date, subject)`, and on a second run in
+         * the same calendar day it answers `write_status: "skipped_posted"` with the id of the
+         * charge the FIRST run already posted and reversed. Reversing that one is correctly refused
+         * with 409 — an already-corrected charge is not correctable twice.
+         *
+         * So the reversal claim is asserted only when this run actually wrote the row. It was not,
+         * and the spec read the product's correct refusal as a failure: a test that cannot run twice
+         * in a day reports the calendar as a regression. The AUTHORITY claim — that nothing in the
+         * capability stack stops the administrator — is asserted above on every path, because that
+         * is what this file is about.
+         */
+        const writeStatus = added.json?.data?.execution_result?.write_status ?? null;
+        if (writeStatus === "skipped_posted") {
+            console.log("[add-charge] reversal skipped: this charge was written and corrected by an earlier run today");
+        } else {
+            // Put the tenant back through the product's own correction path.
+            const reversed = await run("charge.reverse", { charge_id: chargeId });
+            console.log(`[add-charge] reverse status=${reversed.status}`);
+            expect(reversed.status, "the administrator may also correct posted money").toBeLessThan(400);
+        }
 
         await page.screenshot({ path: "certification/evidence/access-admin-add-charge.png" });
         await context.close();
