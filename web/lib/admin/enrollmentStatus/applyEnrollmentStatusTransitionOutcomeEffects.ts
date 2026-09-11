@@ -17,6 +17,7 @@ import {
     STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS,
     type StageOutcomeExecutionResult,
 } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import type { StageOutcomeRuleTargetKind } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
 import { onChildDispositionEntrySpawnWorkIntent } from "@/lib/lifecycle/onChildDispositionEntrySpawnWorkIntent";
 import type { OnStageEntrySpawnWorkIntentResult } from "@/lib/lifecycle/onStageEntrySpawnWorkIntent";
@@ -101,6 +102,38 @@ function resolvePlanForOutcomeExecution(
         }
     }
     return null;
+}
+
+/**
+ * WHAT THE MANUAL TRANSITION HAS ALREADY DONE — AND WHAT IT HAS NOT.
+ *
+ * The skip set exists because `executeEnrollmentStatusTransition` writes the status itself, so
+ * re-running the configured status targets would double-write it. That premise holds for the three
+ * status kinds. It does NOT hold for `move_to_stage`: the manual path touches no stage at all.
+ *
+ * For a FAMILY case that is harmless, because a case's rail position is derived from its status —
+ * writing the status IS moving the case, and skipping the target avoids a second, redundant answer.
+ *
+ * For a CHILD it is the whole divergence. A child's position lives in its process instance and
+ * nowhere else, so skipping the move left the manual path writing disposition `waitlisted` and
+ * minting a placement candidate while the child's process instance stayed where it was. That is how
+ * the tenant came to hold seventeen placement-waitlisted children and one Waitlist membership: two
+ * halves of one decision, only one of them recorded.
+ *
+ * So a child transition stops skipping the movement. Nothing new writes: the configured
+ * `to_waitlist` rule already declares `move_to_stage → waitlist`, and the target executor routes it
+ * through `moveEnrollmentInstanceStageByScope` — the authoritative writer — behind its grain guard,
+ * which refuses a child outcome aimed at a family stage. The status kinds stay skipped exactly as
+ * before, and the family path is untouched.
+ *
+ * Idempotent by construction: the executor reads the prior stage and writes the destination, so a
+ * child already at the destination is written the value it already holds.
+ */
+function manualTransitionSkipKinds(
+    journeySegment: "child" | "family",
+): readonly StageOutcomeRuleTargetKind[] {
+    if (journeySegment !== "child") return STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS;
+    return STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS.filter((k) => k !== "move_to_stage");
 }
 
 export async function applyEnrollmentStatusTransitionOutcomeEffects(
@@ -207,7 +240,7 @@ export async function applyEnrollmentStatusTransitionOutcomeEffects(
                     opportunity_customer_member_id: ocmId,
                     placement_candidate_id: input.scope.placementCandidateId ?? null,
                 },
-                skipTargetKinds: STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS,
+                skipTargetKinds: manualTransitionSkipKinds(journey_segment),
             });
             if (outcome_execution.errors.length) {
                 errors.push(...outcome_execution.errors);
