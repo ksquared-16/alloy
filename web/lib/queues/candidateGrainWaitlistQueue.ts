@@ -153,6 +153,20 @@ type CandidateQueryRow = {
     id: string;
     org_id: string;
     opportunity_id: string;
+    /*
+     * THE HOUSEHOLD AND THE CHILD, AS THE CANDIDATE ROW ITSELF RECORDS THEM.
+     *
+     * `placement_candidates` carries both columns and they are populated: 37 of 37 rows in the
+     * deployed tenant, 35 of 35 on the Kurzman waitlist case. They were simply not selected, so the
+     * only household identity reaching the Focus Panel was the one NESTED under `opportunities` —
+     * and a nested `opportunities.customer_id` matches none of the flat household keys the
+     * financial subject rule reads. The account existed at every grain in persistence and was
+     * unreachable on the surface.
+     *
+     * Selecting a column the row already has adds no read: same table, same query, same round trip.
+     */
+    customer_id: string | null;
+    customer_member_id: string | null;
     status: string;
     site_id: string | null;
     wait_since: string | null;
@@ -272,6 +286,13 @@ function syntheticWaitlistCandidateRow(
         program_room_cohort_key: null,
         program_room_group_label: null,
         opportunity_customer_member_id: null,
+        /*
+         * A synthetic row stands in for a waitlist case with no candidate of its own, so its
+         * household is the CASE's — the same account, reached from the only grain there is. There is
+         * no child, and none is invented.
+         */
+        customer_id: opp.customer_id ?? null,
+        customer_member_id: null,
         opportunities: opp,
         opportunity_customer_members: null,
     };
@@ -396,7 +417,7 @@ async function queryWaitlistCandidates(params: {
             let q = params.supabase
                 .from("placement_candidates")
                 .select(
-                    `id, org_id, opportunity_id, status, site_id, wait_since, program_room_cohort_key, program_room_group_label, opportunity_customer_member_id,
+                    `id, org_id, opportunity_id, status, site_id, wait_since, program_room_cohort_key, program_room_group_label, opportunity_customer_member_id, customer_id, customer_member_id,
             opportunities!inner (
                 id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at
             ),
@@ -427,7 +448,7 @@ async function queryWaitlistCandidates(params: {
         let q = params.supabase
             .from("placement_candidates")
             .select(
-                `id, org_id, opportunity_id, status, site_id, wait_since, program_room_cohort_key, program_room_group_label, opportunity_customer_member_id,
+                `id, org_id, opportunity_id, status, site_id, wait_since, program_room_cohort_key, program_room_group_label, opportunity_customer_member_id, customer_id, customer_member_id,
             opportunities!inner (
                 id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at
             ),
