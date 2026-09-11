@@ -217,3 +217,33 @@ Verified inputs:
               "expectedSha": "<branch HEAD>",
               "migrations": ["20260910190000", "...", "20260911150000"] } }
 ```
+
+### Why three migration requests failed — the authoritative answer
+
+All three `database.apply_migration` requests **failed**; none was ever pending.
+The gateway's own record is at
+`~/.local/state/alloy-dev/gateway/vacilando/governed-actions/requests.json`, and
+only one of the three failures was ever surfaced to the lane as a notification.
+
+| Request | `failure_code` |
+|---|---|
+| `gar_5a2bf7ecb186fe` | `source_sha_not_reachable` |
+| `gar_45807eabb8fa95` | `environment_not_allowed` |
+| `gar_21028bc35a23f3` | `source_sha_not_reachable` |
+
+> *expected_sha is not origin/staging and is not an ancestor of origin/staging;
+> and it is not reachable from any sanctioned certification ref
+> (`refs/remotes/origin/staging`, `refs/remotes/origin/agent/**`,
+> `refs/remotes/origin/promotion/**`)*
+
+**The branch had never been pushed.** The trusted host could not see the six
+migrations at all. Resolved by governed push `gar_4e3c317bf317bc`:
+`agent/api-thread5-slice-b6` is now on origin at
+`5c10b70bec113e15b6fb719a9407ae38e78a6474`, which is reachable from the
+sanctioned `agent/**` pattern, and all six migration files are present on that
+ref.
+
+**The lesson, recorded because it cost three runs:** a governed request that does
+not execute within a few minutes has usually *failed*, and elapsed time proves
+nothing. Read `requests.json`. And before any governed action naming an
+`expectedSha`, push the branch so the SHA is reachable.
