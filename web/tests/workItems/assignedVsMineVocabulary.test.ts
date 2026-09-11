@@ -56,7 +56,6 @@ describe("R14 — visible vocabulary", () => {
     it("the sibling view labels are untouched", () => {
         expect(WORK_ITEM_VIEW_DEFS.filter((d) => d.key !== "mine").map((d) => d.label)).toEqual([
             "Unassigned",
-            "Waiting",
             "Due Today",
             "Due Soon",
             "Overdue",
@@ -65,10 +64,12 @@ describe("R14 — visible vocabulary", () => {
     });
 
     it("13: internal keys are the stable contract and did not move with the copy", () => {
+        // `waiting` left this list when the guaranteed-empty lens was removed from the rail. The
+        // KEY still exists on WorkItemViewKey and still resolves through the filter branches; it is
+        // simply no longer offered as navigation.
         expect(WORK_ITEM_VIEW_DEFS.map((d) => d.key)).toEqual([
             "mine",
             "unassigned",
-            "waiting",
             "due_today",
             "due_soon",
             "overdue",

@@ -33,7 +33,13 @@ describe("Alloy Operational Health Doctrine V3 — Work Items", () => {
     it("Work Items overview has no nav-band or in-content metric tiles", () => {
         const shell = read("app/adminV2/tasks/WorkItemsShell.tsx");
         expect(shell).toContain("hideHeaderMetrics");
-        expect(shell).toContain('workView === "overview"');
+        /*
+         * The health strip belongs to the QUEUE, so the gate is expressed as "not the queue" rather
+         * than by naming Overview. Once Studio existed, naming Overview would have left Studio --
+         * an authoring surface -- showing queue metrics. This is strictly stronger than the
+         * original assertion, which grepped for `workView === "overview"`.
+         */
+        expect(shell).toContain('workView !== "queue"');
         expect(shell).toContain("hideHeaderMetrics ? undefined");
         const overview = read("app/adminV2/tasks/WorkItemsOverviewLanding.tsx");
         expect(overview).not.toContain("WorkspaceOperationalHealth");

@@ -54,7 +54,13 @@ describe("workItemsNavigation", () => {
 
         dispatchOpenProcessingCase("case-42");
 
-        expect(dispatchAdminV2OpenProcessingModal).toHaveBeenCalled();
+        /*
+         * The case must ride the OPEN INTENT, not only the follow-up event. ProcessingModal
+         * registers its case listener behind `if (!open) return`, so a closed modal has no
+         * listener when this fires and the operator lands on the Mailroom overview instead of the
+         * case they clicked. Asserting only that the modal opened is what let that ship.
+         */
+        expect(dispatchAdminV2OpenProcessingModal).toHaveBeenCalledWith({ mode: "work", caseId: "case-42" });
         expect(events[0]?.detail).toEqual({ case_id: "case-42" });
 
         window.removeEventListener(ADMIN_V2_OPEN_PROCESSING_CASE, handler);
