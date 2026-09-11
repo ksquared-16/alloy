@@ -58,97 +58,125 @@ At the bottom: **This lifecycle is ready for staff on the workspace.**
 
 **A5. DO** — Click the **Requirements** section to expand it, and scroll to the card headed
 **Enrollment paperwork**.
-**EXPECT** — ONE paperwork requirement, not three separate forms:
+**EXPECT** — ONE paperwork requirement, not a list of forms:
 
-- **Enrollment Packet — Firefly V1**
+- **Enrollment Paperwork 2026–2027**
 - **3 steps · Required · Blocking**
 - buttons **Manage** and **Change paperwork**
 
-> **STOP** if you see three separate Form requirements here. The stage should require the packet,
-> and the packet owns its steps.
+> **STOP** if you see separate Form requirements here. The stage requires the packet; the packet
+> owns its steps. That is the whole point of the change you asked for.
 
 **A6. DO** — Click **Manage**.
-**EXPECT** — A focused pop-out titled **Enrollment Packet — Firefly V1**, saying that editing here
+**EXPECT** — A focused pop-out titled **Enrollment Paperwork 2026–2027**, saying that editing here
 changes the packet and not the process, and listing **Steps, in order**:
 
-1. Northwind Enrollment Application v4 — *Published*
-2. Health and Medical Authorization — *Published*
-3. Immunization Record — *Published*
+1. **Admissions Information** — *Published*
+2. **Family Handbook** — *Read & acknowledge*
+3. **Immunization record** — *Upload a document*
 
-> **STOP** if any step says **Not published** — a family cannot complete it.
+> This is the sentence to check hardest. Step 1 is a form and says **Published**, because
+> publication is a real question about a form. Steps 2 and 3 are **not forms** — they are the other
+> two things your packet actually asks of a family — and they say what they ask instead.
+>
+> **STOP** if steps 2 or 3 name a *form*, or say **Published**/**Not published**. That would mean
+> the machinery that runs them has leaked into your view of them.
 
 **A7. DO** — Click **Close**.
 **EXPECT** — You are back on the Enrolling Requirements, unchanged.
 
 ---
 
-# PART B — The three Forms
+# PART B — The real package, step by step
+
+This is your actual 2026–2027 package, built in the product. It contains three different **kinds** of
+thing, which is the point: Alloy no longer pretends every obligation is a form.
 
 **B1. DO** — In the left icon rail, click **Processing** (tooltip: *intake, documents, and forms*).
 **EXPECT** — A panel titled **Digital Mailroom** with tabs **Work** and **Studio**.
 
-**B2. DO** — Click **Studio**, then click **Forms**.
-**EXPECT** — A list of forms and a **Search forms** box.
+**B2. DO** — Click **Studio**, then click **Packets**.
+**EXPECT** — A grid of packets and a **Search packets** box.
 
-### Northwind
+**B3. DO** — Type `Enrollment Paperwork` in **Search packets**, then click
+**Enrollment Paperwork 2026–2027**.
+**EXPECT** — The packet builder opens. Under the steps list you should see three steps:
 
-**B3. DO** — Type `Northwind` in **Search forms**, then click **Northwind Enrollment Application**.
-**EXPECT** — The form opens, badged **Published**, with buttons **✎ Edit**, **▷ Preview**, **◎ Runtime**.
+| # | Heading | What it says |
+|---|---------|--------------|
+| 1 | **Collect information** | a **Form** dropdown set to *Admissions Information* |
+| 2 | **Read & acknowledge** | *Family Handbook* — “Reads 26 27 Family Handbook …, and signs” |
+| 3 | **Upload a document** | *Immunization record* — “Filed as Immunization record” |
 
-**B4. DO** — Click **▷ Preview**.
-**EXPECT** — The actual enrolment paperwork — a recognisable document with the school's own wording,
-not a list of field names.
+> **STOP** if steps 2 or 3 show a **Form** dropdown. They are not forms, and offering to swap one in
+> would be the product lying about what it is doing.
 
-> **STOP** if you see a bare list of field names instead of a document.
+**B4. DO** — Open the **Form** dropdown on step 1 and read the list. Do **not** choose anything.
+**EXPECT** — Your real forms. **Family Handbook** and **Immunization record** must **NOT** appear as
+options you can choose.
 
-### Health and Medical
+> **STOP** if you can see *Family Handbook* in that dropdown. Alloy builds a hidden one-question form
+> behind each document step so uploads, filing and evidence all work the way they already do — but
+> that is plumbing, and it must never be offered to you as something to pick.
 
-**B5. DO** — Click **← Forms**. Type `Health and Medical` in **Search forms**, click
-**Health and Medical Authorization**.
-**EXPECT** — Opens, badged **Published**.
+**B5. DO** — Press **Escape** to close the dropdown, then click **Add step**.
+**EXPECT** — A small menu headed **What do you need from the family?** with exactly three choices,
+each written as something a *family* does:
 
-**B6. DO** — Click **✎ Edit**. In the middle column, click the question **Child Allergies**.
-**EXPECT** — A right-hand panel with a section **Store answer in** showing
-**Record: Child** and a **Field** naming **Allergies**.
-*(Expanding “Technical reference” underneath shows `customer_member.allergies` — that is expected.)*
+- **Collect information** — Ask questions and store the answers…
+- **Upload a document** — Ask the family to send in a document…
+- **Read & acknowledge** — Give the family something to read, and record that they agreed to it.
 
-**B7. DO** — Click the question **Child Medications**.
-**EXPECT** — **Store answer in → Record: Form field only**, and **no** Field selector.
+> **STOP** if this menu shows technical words like *form_definition*, *adapter*, *document_upload*,
+> or asks you to pick a form before it asks you what you need.
 
-**B8. DO** — Repeat for **Child Medical Conditions**, then **Medical Authorization Ack**.
-**EXPECT** — Both also show **Record: Form field only**.
-
-> **STOP** if any of those three shows a Field such as *Medical notes*. They must not share a
-> destination — that is the defect this release fixed.
-
-**B9. DO** — Click **▷ Preview**.
-**EXPECT** — Recognisable Health paperwork, including a signature area.
-
-### Immunization
-
-**B10. DO** — Click **← Forms**. Type `Immunization`, click **Immunization Record**.
-**EXPECT** — Opens, badged **Published**.
-
-**B11. DO** — Click **✎ Edit**, then click the question **Child Last Name**.
-**EXPECT** — **Store answer in → Record: Child**, **Field: Child last name**.
-
-> **STOP** if it says *Child first name*. That was a real defect; it must stay fixed.
-
-**B12. DO** — Click the upload question **Immunization or vaccination record**.
-**EXPECT** — The panel identifies the document as an **Immunization record**.
+**B6. DO** — Click **Cancel**. Nothing should be added.
+**EXPECT** — Three steps still, unchanged.
 
 ---
 
-# PART C — Preview (one Form at a time)
+# PART C — Structure and Paperwork
 
-**C1. DO** — With any Form open, click **▷ Preview**, then **◎ Runtime**.
-**EXPECT** — The published Form shown the way a parent meets it.
+The old **Preview** and **Runtime** buttons are gone. They showed the same thing twice and neither
+showed the document, which is what you told us. Two honest views replace them.
 
-**C2. DO** — Click **← Forms** to exit.
+**C1. DO** — Go to **Studio › Forms**, search `Northwind`, and open
+**Northwind Enrollment Application v4**.
+**EXPECT** — The form opens, badged **Published**, with **✎ Edit**, **▦ Structure**, **▤ Paperwork**.
+
+> **STOP** if you still see a **◎ Runtime** button.
+
+**C2. DO** — Click **▦ Structure**.
+**EXPECT** — A banner *Structure — the questions, and the order they are asked in*, then the field
+list. This is a checklist of what is asked, not a picture of the paperwork.
+
+**C3. DO** — Click **▤ Paperwork**.
+**EXPECT** — A banner *Paperwork — the document this produces, with each mapped box named*, then the
+**real Northwind PDF**, scrollable, with its own headings (*Child Information*, *Home Address*,
+*Parent / Guardian*).
+
+Each box Alloy fills is printed with the name of the fact that fills it, in braces —
+`{Child First Name}`, `{Guardian Mobile Phone}`, `{Requested Start Date}`.
+
+> This is the view that answers “will the right answer land in the right box?”. The braces are
+> deliberate: no real child’s details are shown on a configuration screen.
+>
+> **STOP** if a box you expect Alloy to fill is empty, or if a name appears in a box it does not
+> belong in — that is a mapping defect and exactly what this view is for.
+
+**C4. DO** — Go back to the forms list, search `Admissions`, open **Admissions Information**, and
+click **▤ Paperwork**.
+**EXPECT** — A plain message: *This form has no source document, so there is no paperwork to show.
+Forms built from scratch are completed on screen.*
+
+> This is correct, not a bug. Your Admissions Packet came from a web form, not a PDF, so there is no
+> paper original to fill. **STOP** only if you see a broken or empty frame instead of that sentence.
+
+**C5. DO** — Click **← Forms** to exit.
 **EXPECT** — Back at the forms list. Nothing was created.
 
-> **There is no whole-Enrollment-conversation preview in V1. Do not look for one.**
-> You will test the real parent experience in Part D.
+> **There is still no whole-Enrollment-conversation preview. Do not look for one.**
+> You test the real parent experience in Part D.
 
 ---
 
