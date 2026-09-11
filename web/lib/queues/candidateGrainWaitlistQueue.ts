@@ -412,21 +412,34 @@ function queueDefinitionStatusKeysForTrace(queueDefinition: unknown | null): str
     }
 }
 
+/**
+ * Does an expanded row belong to the membership that was actually matched?
+ *
+ * ── WHY CANDIDATE IDENTITY DECIDES, AND THE OPPORTUNITY ONLY ANSWERS FOR ROWS WITHOUT ONE ──
+ *
+ * The rows reaching this filter come from `bulkLoadPlacementCandidatesByOpportunity(activeOnly:
+ * false)` — every candidate on each opportunity the page touched, not only the ones the lane
+ * matched. The opportunity used to be checked FIRST, so any candidate on a matched family passed.
+ *
+ * While the lane was family-scoped that was merely inconsistent: `total` counted matched candidates
+ * and the page rendered all of them, which nobody could see because the lane was empty. Now that
+ * membership is per-child it is wrong in a way that matters — one waitlisted child would pull their
+ * siblings' candidate rows in behind them, undoing at the expansion exactly what the membership
+ * query is careful to prevent. Measured: 34 matched candidates rendering 36 rows.
+ *
+ * So a row that CAN be identified as a candidate is judged as that candidate. The opportunity is
+ * consulted only for rows carrying no candidate identity at all — the synthetic rows standing in for
+ * a family at a waitlist status with no candidate yet, which have nothing else to be judged by.
+ */
 function waitlistRowMatchesMatchedSet(
     row: Record<string, unknown>,
     candidateIdSet: Set<string>,
     opportunityIdSet: Set<string>
 ): boolean {
-    const oppId =
-        typeof row.opportunity_id === "string"
-            ? row.opportunity_id.trim()
-            : typeof row.id === "string" && row.id.startsWith(SYNTHETIC_WAITLIST_CANDIDATE_ID_PREFIX)
-              ? row.id.slice(SYNTHETIC_WAITLIST_CANDIDATE_ID_PREFIX.length)
-              : "";
-    if (oppId && opportunityIdSet.has(oppId)) return true;
     const proj = row._placement_waitlist_row as { placement_candidate_id?: string } | undefined;
     const cid = proj?.placement_candidate_id?.trim();
-    if (cid && candidateIdSet.has(cid)) return true;
+    if (cid) return candidateIdSet.has(cid);
+
     const id = typeof row.id === "string" ? row.id : "";
     if (id.startsWith("pcrow:")) {
         const parts = id.split(":");
@@ -436,7 +449,10 @@ function waitlistRowMatchesMatchedSet(
         const synOpp = id.slice(SYNTHETIC_WAITLIST_CANDIDATE_ID_PREFIX.length);
         return opportunityIdSet.has(synOpp);
     }
-    return false;
+
+    // No candidate identity and not synthetic: an opportunity-shaped row, judged by its opportunity.
+    const oppId = typeof row.opportunity_id === "string" ? row.opportunity_id.trim() : "";
+    return Boolean(oppId) && opportunityIdSet.has(oppId);
 }
 
 async function queryWaitlistCandidates(params: {
