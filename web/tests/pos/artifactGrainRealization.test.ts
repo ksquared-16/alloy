@@ -206,11 +206,30 @@ describe("the unsigned collection artifact is executable", () => {
 describe("ask-once survives the split", () => {
     it("keeps one semantic identity for a fact that appears in several artifacts", async () => {
         const { canonicalKeyFor } = await import("@/lib/pos/packet/packetFieldPlan");
+        const { suggestFieldBinding } = await import("@/lib/forms/canonicalBindingSuggestions");
+        /*
+         * THE OPERATOR ACCEPTS THE SUGGESTIONS HERE, EXPLICITLY.
+         *
+         * This used to rely on the materializer binding every recognizable label by itself, which is
+         * the defect that stored fifteen bindings on a form saved with four. Materialization no
+         * longer guesses, so an artifact with no decisions now correctly produces no bindings — and
+         * this test would have been asserting ask-once over an empty set.
+         *
+         * What it actually proves is unchanged and still worth proving: once a fact IS bound,
+         * splitting one source into several Forms must not multiply the question. So the acceptance
+         * is modelled where it really happens — as a decision on the draft, before materialization —
+         * rather than being smuggled in by the producer.
+         */
         const forms = allProjections().map(({ input, structure }) => {
             const draft = buildFormDraftFromStructure({
                 structure, sourceDocumentId: input.artifact.document_id, extractedText: null,
                 extractedTextAvailable: false, fileName: null, classificationKey: null,
             });
+            for (const f of draft.fields) {
+                if (f.field_source) continue;
+                const accepted = suggestFieldBinding(f.label, f.type)?.field_source;
+                if (accepted) f.field_source = accepted;
+            }
             return draftFormToFormSchemaV1(draft);
         });
         const bound = forms.flatMap((s) => s.fields.filter((f) => f.field_source));

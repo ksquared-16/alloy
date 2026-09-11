@@ -32,19 +32,33 @@ describe("Document → Draft → Generated FormSchemaV1: field_source survives",
         expect(map[schema.fields[1].id]).toBe("customer_member.dob");
     });
 
-    it("auto-suggests a binding when the operator left it unbound but the label is recognizable", () => {
+    it("does NOT bind a recognizable label the operator never decided about", () => {
+        /*
+         * THIS ASSERTION IS INVERTED ON PURPOSE, AND THE OLD ONE WAS THE DEFECT.
+         *
+         * It used to require the materializer to fill a binding from the label whenever the operator
+         * had left one unset — "recognizable" being the whole justification. That is how the real
+         * Admissions import was saved with four approved bindings and stored fifteen: every
+         * undecided question quietly acquired the label matcher's best guess, and the guess was then
+         * indistinguishable from a decision anyone had actually taken.
+         *
+         * "Date of Birth" and "Parent Email" are exactly the easy cases that made the old rule look
+         * safe. They are still not decisions. The matcher keeps its real job — it is offered to the
+         * operator in review — but it no longer writes anything.
+         *
+         * The rule is asymmetric by design: a missing binding costs one operator decision, a false
+         * one silently writes a stranger's fact onto a family's record and looks right doing it.
+         */
         const draft = buildManualFormDraft({
             title: "Health",
             sourceDocumentId: null,
             fields: [{ label: "Date of Birth", type: "date" }, { label: "Parent Email", type: "text" }],
         });
-        // draft has no binding (operator didn't set one)
         expect(draft.fields[0].field_source).toBeUndefined();
 
         const schema = draftFormToFormSchemaV1(draft);
-        // schema builder fills the canonical binding from the label
-        expect(fsOf(schema.fields[0])).toEqual({ entity_type: "customer_member", field_key: "dob" });
-        expect(fsOf(schema.fields[1])).toEqual({ entity_type: "person", field_key: "email" });
+        expect(fsOf(schema.fields[0])).toBeNull();
+        expect(fsOf(schema.fields[1])).toBeNull();
     });
 
     it("packet-only / unrecognized fields stay unbound (no silent wrong binding)", () => {
