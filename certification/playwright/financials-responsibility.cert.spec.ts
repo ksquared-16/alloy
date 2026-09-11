@@ -217,6 +217,23 @@ test.describe("responsibility can be configured from an account that has none", 
         const shell = await openFinancials(page);
         const detail = await openHouseholdCharge(page, shell);
 
+        /*
+         * WHAT HAS ALREADY BEEN PAID, BEFORE ANYTHING IS CHANGED.
+         *
+         * Responsibility says who owes from a date. It is not a statement about money that has
+         * already moved, and rewriting an arrangement must not disturb a single application — the
+         * payer of record stays the payer of record. Captured here so the claim is a comparison
+         * rather than an assurance.
+         */
+        const appliedBefore = await page
+            .locator('[data-financials-charge-line="application"]')
+            .allInnerTexts();
+        const outstandingBefore = await page
+            .locator('[data-financials-charge-line="outstanding"]')
+            .allInnerTexts();
+        // eslint-disable-next-line no-console
+        console.log("[responsibility:payments-before] " + JSON.stringify({ appliedBefore, outstandingBefore }));
+
         await page.locator('[data-financials-manage-responsibility="open"]').click();
         await page.waitForTimeout(8_000);
         const opened = await logPanel(page, "reconfigure-opened");
@@ -249,6 +266,19 @@ test.describe("responsibility can be configured from an account that has none", 
             await page.locator('[data-financials-charge-line="responsibility-party"]').count(),
             "two people were made responsible and the surface shows two",
         ).toBeGreaterThanOrEqual(2);
+        /*
+         * AND THE MONEY THAT HAD ALREADY MOVED DID NOT MOVE. This is the sentence the panel shows
+         * the operator — "changing it does not change who has already paid" — held to account.
+         */
+        const appliedAfter = await page.locator('[data-financials-charge-line="application"]').allInnerTexts();
+        const outstandingAfter = await page.locator('[data-financials-charge-line="outstanding"]').allInnerTexts();
+        // eslint-disable-next-line no-console
+        console.log("[responsibility:payments-after] " + JSON.stringify({ appliedAfter, outstandingAfter }));
+        expect(appliedAfter, "reconfiguring responsibility rewrote payment history").toEqual(appliedBefore);
+        expect(outstandingAfter, "reconfiguring responsibility changed what the family owes").toEqual(
+            outstandingBefore,
+        );
+
         await page.screenshot({ path: `${OUT}/responsibility-05-divided.png`, fullPage: false });
     });
 

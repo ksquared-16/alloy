@@ -155,22 +155,31 @@ export async function resolveFinancialPositionCohort(
      * its own, but fetching drafts here would inflate every batch read for rows guaranteed to
      * contribute zero.
      */
-    let chargeQuery = supabase
-        .from("charges")
-        .select("id, billable_source_type, billable_source_id, amount_cents, currency_code, status, service_date, posted_at")
-        .eq("org_id", args.orgId)
-        .eq("status", "posted")
-        .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-        .order("service_date", { ascending: false, nullsFirst: false })
-        .limit(scanCap);
-    if (args.serviceDateFrom) chargeQuery = chargeQuery.gte("service_date", args.serviceDateFrom);
-    if (args.serviceDateTo) chargeQuery = chargeQuery.lte("service_date", args.serviceDateTo);
-    if (args.postedFromIso) chargeQuery = chargeQuery.gte("posted_at", args.postedFromIso);
-    if (args.postedToIso) chargeQuery = chargeQuery.lte("posted_at", args.postedToIso);
-
-    const { data: chargeRows, error } = await chargeQuery;
-    if (error) throw new Error(`financial position read failed: ${error.message}`);
-    const charges = ((chargeRows ?? []) as unknown) as Array<{
+    /*
+     * ── THE CAP THAT IS NOT OURS ────────────────────────────────────────────────────────────────
+     *
+     * `.limit(scanCap)` asks for up to 2,000 charges. PostgREST answers at most `db-max-rows`, and
+     * on this deployment that is 1,000 — silently. No error, no header anyone read: the query says
+     * 2,000, the server returns 1,000, and the code below treats the truncated page as the whole
+     * cohort. `truncated` then says false, because 1,000 is not >= 2,000.
+     *
+     * Measured, not theorised: 1,228 posted charges in the certification tenant, 1,000 rows read,
+     * 806 rows in the cohort after visibility — and the four demo households, whose service dates
+     * are older than the flood another lane had just generated, were ABSENT from Accounts and
+     * Charges altogether. A family who owes money had simply stopped existing on the surface an
+     * operator looks them up on. This is the Thread 4B defect wearing different clothes: a read
+     * that loses rows quietly is worse than one that fails, because nothing on screen says so.
+     *
+     * So the page size is stated here rather than assumed away, and pages are requested by
+     * `.range()` until the cohort is complete or the scan cap is genuinely reached. `truncated` now
+     * means what it says: there is more posted money than this cohort was allowed to carry.
+     *
+     * The order is (service_date desc, id) — the id is not decoration. Paging by range over a
+     * non-unique sort key can repeat or skip rows across page boundaries when many charges share a
+     * service date, which is exactly what a month of generated tuition looks like.
+     */
+    const PAGE = 1000;
+    const charges: Array<{
         id: string;
         billable_source_type: string;
         billable_source_id: string;
@@ -179,8 +188,38 @@ export async function resolveFinancialPositionCohort(
         status: string;
         service_date: string | null;
         posted_at: string | null;
-    }>;
-    const truncated = charges.length >= scanCap;
+    }> = [];
+    let reachedEnd = false;
+    while (charges.length < scanCap) {
+        const want = Math.min(PAGE, scanCap - charges.length);
+        let chargeQuery = supabase
+            .from("charges")
+            .select("id, billable_source_type, billable_source_id, amount_cents, currency_code, status, service_date, posted_at")
+            .eq("org_id", args.orgId)
+            .eq("status", "posted")
+            .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+            .order("service_date", { ascending: false, nullsFirst: false })
+            .order("id", { ascending: true });
+        if (args.serviceDateFrom) chargeQuery = chargeQuery.gte("service_date", args.serviceDateFrom);
+        if (args.serviceDateTo) chargeQuery = chargeQuery.lte("service_date", args.serviceDateTo);
+        if (args.postedFromIso) chargeQuery = chargeQuery.gte("posted_at", args.postedFromIso);
+        if (args.postedToIso) chargeQuery = chargeQuery.lte("posted_at", args.postedToIso);
+
+        const { data: pageRows, error } = await chargeQuery.range(charges.length, charges.length + want - 1);
+        if (error) throw new Error(`financial position read failed: ${error.message}`);
+        const batch = (pageRows ?? []) as typeof charges;
+        for (const row of batch) charges.push(row);
+        /* A short page is the end of the cohort. A full one may not be. */
+        if (batch.length < want) {
+            reachedEnd = true;
+            break;
+        }
+    }
+    /*
+     * HONEST TRUNCATION. True only when the cap was actually reached AND the read did not run out
+     * of rows first — so a tenant with exactly `scanCap` charges is not reported as incomplete.
+     */
+    const truncated = !reachedEnd && charges.length >= scanCap;
 
     if (charges.length === 0) {
         return {
