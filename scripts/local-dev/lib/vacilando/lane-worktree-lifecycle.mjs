@@ -1270,6 +1270,102 @@ function laneLastActivityMs(laneId, root) {
  * The donor is demoted FIRST, because adopting the recipient onto a slot the
  * registry still shows as taken is exactly what `alloy-worktree-adopt` refuses.
  */
+/**
+ * GET THIS LANE A DEVELOPMENT SLOT, IF ONE CAN BE HAD SAFELY.
+ *
+ * THE GAP THIS CLOSES. Yield made slots movable and the ranking made it safe to
+ * choose one, but the trigger stayed manual: a slotless lane asked to start a
+ * dev server hit `metadata missing ALLOY_WORKTREE_SLOT` and an operator had to
+ * go and find it capacity by hand.
+ *
+ * This adds ONLY the trigger. Every judgement is delegated to the promoted
+ * owners: `freeSlots` says what is unused, `slotReclaimCandidates` ranks who may
+ * give one up, `reassignSlot` performs the move and RE-RANKS at mutation time.
+ * Nothing here decides safety for itself.
+ *
+ * THE ONE THING THIS MUST NEVER DO is take a slot from a working lane, so
+ * `acknowledgeActive` is deliberately NOT passed. `reassignSlot` refuses a donor
+ * that became active between ranking and mutation, and that refusal is allowed
+ * to stand: an automatic acquirer that could override it would be a lane-killer
+ * with a convenience name. If nothing is safely available the caller is told so
+ * and the work stays durable — waiting is a correct outcome here, not a failure.
+ */
+export async function ensureLaneSlot({
+  worktreeName,
+  provider = "claude",
+  root = runtimeRoot(),
+  cfg = null,
+  metadata = null,
+  toolkitDir = null,
+  nowMs = Date.now(),
+  // The same seams the ranking and the move take, so this is testable without
+  // depending on the machine it runs on.
+  activeRun = null,
+  sessionAlive = null,
+  leaseHeld = null,
+  environmentInUse = null,
+} = {}) {
+  const name = norm(worktreeName);
+  if (!name) return { ok: false, error: "missing_worktree_name" };
+  const conf = cfg || resolveRuntimeConfig();
+  const meta = metadata || readAllMetadata(conf);
+
+  const reg = registrationForWorktree(name, { cfg: conf, metadata: meta });
+  if (!reg) {
+    return { ok: false, error: "not_registered", detail: `${name} has no managed registration.` };
+  }
+  const held = asSlot(reg.slot);
+  if (held != null) {
+    return { ok: true, slot: held, port: reg.port ?? null, acquired: "already_held", worktree: name };
+  }
+
+  // 1. An unused slot is always preferable to taking one from somebody.
+  const free = freeSlots({ cfg: conf, metadata: meta });
+  if (free.length) {
+    const slot = free[0];
+    const taken = await registerCreatedWorktree({
+      worktreeName: name, provider: reg.provider || provider, slot,
+      force: true, toolkitDir, root, cfg: conf, metadata: meta,
+    });
+    if (!taken.ok || taken.slot !== slot) {
+      return { ok: false, error: "free_slot_adopt_failed", detail: taken.detail || `did not take free slot ${slot}`, slot };
+    }
+    return { ok: true, slot, port: taken.port ?? null, acquired: "free", worktree: name };
+  }
+
+  // 2. Otherwise the highest-ranked SAFE candidate — the ranking already orders
+  //    these least-costly first, so "the first reclaimable one" is the answer.
+  const ranked = await slotReclaimCandidates({
+    root, cfg: conf, metadata: meta, nowMs,
+    activeRun, sessionAlive, leaseHeld, environmentInUse,
+    excludeWorktree: name,
+  });
+  const candidate = ranked.candidates.find((c) => c.reclaimable);
+  if (!candidate) {
+    return {
+      ok: false,
+      error: "no_safe_slot",
+      detail: "Every Development Slot is in use by a lane that is working. The instruction is preserved; nothing was taken.",
+      candidates: ranked.candidates,
+    };
+  }
+
+  const moved = await reassignSlot({
+    fromWorktree: candidate.worktree, toWorktree: name, provider,
+    root, cfg: conf, metadata: meta, toolkitDir, nowMs,
+    activeRun, sessionAlive, leaseHeld, environmentInUse,
+    // NOT acknowledged. A donor that turned active since ranking keeps its slot.
+  });
+  if (!moved.ok) {
+    return { ok: false, error: "reclaim_failed", detail: moved.detail || moved.error, donor: candidate.worktree, reclaim_result: moved };
+  }
+  return {
+    ok: true, slot: moved.slot, port: moved.port ?? null,
+    acquired: "reclaimed", worktree: name,
+    donor: { worktree: candidate.worktree, lane_name: candidate.lane_name || null, group: candidate.group },
+  };
+}
+
 export async function reassignSlot({
   fromWorktree,
   toWorktree,
