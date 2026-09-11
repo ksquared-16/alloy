@@ -41,6 +41,7 @@
  * and the advanced disclosure below every area shows the catalog keys the level stands for.
  */
 
+import AccessHistoryList from "@/components/adminV2/settings/access/AccessHistoryList";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -849,6 +850,22 @@ export default function AccessRolesConfigurationPage() {
                                             </ul>
                                         }
                                     </ConfigWorkspaceCard>
+                                    {/*
+                                      * D2 — role history beside the editor that writes it. The same
+                                      * read model and presenter the organization feed uses, filtered
+                                      * to this role by `role_key` rather than by its uuid, because
+                                      * the uuid is gone once a role is deleted and the history has to
+                                      * outlive its subject.
+                                      */}
+                                    <ConfigWorkspaceCard testId="access-role-history" title="Change history">
+                                        <AccessHistoryList
+                                            testId="access-role-history-list"
+                                            roleKey={selectedRoleKey}
+                                            pageSize={5}
+                                            emptyMessage="No changes have been recorded for this role yet."
+                                        />
+                                    </ConfigWorkspaceCard>
+
                                 </div>
                             }
                         </main>

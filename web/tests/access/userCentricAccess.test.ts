@@ -80,11 +80,27 @@ describe("Access Scopes is gone as a destination, and old links still land somew
 describe("the user detail is three tabs, and the merge did not weaken the role write", () => {
     const src = code(USERS_PAGE);
 
-    it("offers Overview, Role & Access, and Security — and no empty History", () => {
+    it("offers Overview, Role & Access, and Security — and history is a card, never a fourth tab", () => {
+        /*
+         * W-57 removed a History TAB that cost a click to discover a single sentence saying history
+         * was planned. The finding was about a navigable destination with nothing in it, not about
+         * history — and D2 gave this surface real events.
+         *
+         * So the tab list is still exactly three, and `tab === "history"` must never come back; what
+         * changed is that history now lives as a CARD in the workspace, beside the access it
+         * explains, fed by the canonical read model rather than by a promise.
+         */
         expect(src).toContain('type AccessUserTab = "overview" | "access" | "security"');
         expect(src).toContain('label: "Role & Access"');
         expect(src).not.toContain('tab === "history"');
-        expect(src).not.toContain('access-user-history');
+
+        if (src.includes("access-user-history")) {
+            expect(src).toContain("AccessHistoryList");
+            // A card, not a destination: it is not reached by selecting a tab.
+            expect(src).not.toMatch(/tab === "history"/);
+            // And it is filtered to the selected person rather than showing the organization feed.
+            expect(src).toMatch(/subjectUserId=\{selectedUserId\}/);
+        }
     });
 
     it("puts the role picker inside the Access tab rather than deleting it", () => {

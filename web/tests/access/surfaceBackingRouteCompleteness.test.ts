@@ -33,13 +33,20 @@ const CHAPTER_DIR = path.join(WEB_ROOT, "components/adminV2/settings/access");
 
 /**
  * The component that renders each chapter. This mapping is an anchor, not the subject — the routes
- * are read out of whatever these files actually contain. `security` renders no request at all,
- * which its `noBackingRoutesReason` records.
+ * are read out of whatever these files actually contain.
+ *
+ * D2 added `AccessHistoryList` to all three. It is a SHARED child rather than a chapter component,
+ * and it owns the request, so a chapter listed only by its own file would appear to issue nothing
+ * while its card fetched history. Naming the child beside each chapter that renders it keeps the
+ * discovery honest without teaching this file to resolve imports — the same anchor-plus-read
+ * discipline it already used.
  */
+const HISTORY_LIST = "AccessHistoryList.tsx";
+
 const CHAPTER_COMPONENTS: Record<AccessWorkspaceChapter, string[]> = {
-    users: ["AccessUsersConfigurationPage.tsx"],
-    roles: ["AccessRolesConfigurationPage.tsx"],
-    security: [],
+    users: ["AccessUsersConfigurationPage.tsx", HISTORY_LIST],
+    roles: ["AccessRolesConfigurationPage.tsx", HISTORY_LIST],
+    security: ["AccessSecurityPage.tsx", HISTORY_LIST],
 };
 
 /** `/api/admin/users/${id}/role?x=1` → `/api/admin/users/*\/role` */
@@ -118,9 +125,21 @@ describe("the Access surface's backing-route record is complete, not merely corr
         }
     );
 
-    it("the security chapter genuinely issues no request, as its reason claims", () => {
-        expect(CHAPTER_COMPONENTS.security).toHaveLength(0);
-        expect(ACCESS_SURFACE_DECLARATIONS.security.noBackingRoutesReason).toBeTruthy();
+    it("the security chapter declares the request it now issues", () => {
+        /*
+         * This asserted the opposite until D2, and truthfully: every row in the chapter was `Planned`
+         * and the chapter fetched nothing, so `noBackingRoutesReason` was the honest declaration.
+         *
+         * D2 wired the Audit Log card to the canonical history route, so the chapter issues its first
+         * request — and the rule this file exists for takes over: a surface must NAME the routes it
+         * calls, so its gate can be joined to theirs. The reason string must go, because a chapter
+         * that both claims to issue no request and issues one is the drift this suite catches.
+         */
+        expect(CHAPTER_COMPONENTS.security.length).toBeGreaterThan(0);
+        expect(ACCESS_SURFACE_DECLARATIONS.security.noBackingRoutesReason).toBeFalsy();
+        expect(ACCESS_SURFACE_DECLARATIONS.security.backingRoutes).toContain(
+            "app/api/admin/access/history/route.ts"
+        );
     });
 
     it("is not vacuous — an unnamed route is detected", () => {

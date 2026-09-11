@@ -6,6 +6,7 @@
  * UI-only.
  */
 
+import AccessHistoryList from "@/components/adminV2/settings/access/AccessHistoryList";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search, UserRound } from "lucide-react";
@@ -1448,6 +1449,25 @@ export default function AccessUsersConfigurationPage({
                                             </ConfigWorkspaceCard>
                                         </div>
                                     }
+                                    {/*
+                                      * D2 — user access history, as a CARD rather than the tab W-57
+                                      * removed. That tab cost a click to discover only "history
+                                      * planned"; the finding was that a history surface must earn its
+                                      * click, not that people never want history. Here it is beside
+                                      * the access it explains, filtered to this person.
+                                      */}
+                                    <ConfigWorkspaceCard
+                                        testId="access-user-history"
+                                        title="Access history"
+                                    >
+                                        <AccessHistoryList
+                                            testId="access-user-history-list"
+                                            subjectUserId={selectedUserId}
+                                            pageSize={5}
+                                            emptyMessage="No access changes have been recorded for this person yet."
+                                        />
+                                    </ConfigWorkspaceCard>
+
                                 </div>
                             }
                         </main>
