@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import { replaceMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
+import { invalidateAdminShellContextCache } from "@/lib/adminV2/adminShellContextCache";
 import {
     replacementRemovalRefusal,
     replacementRemovalRefusalMessage,
@@ -93,6 +94,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         }
         return NextResponse.json({ error: membership.error }, { status: 500 });
     }
+
+    /*
+     * W-13 — this member's roles just changed, so the bundle cached against their user id is stale,
+     * and since W-13 that bundle carries ADMISSION. Per-user here, unlike the role-grant routes: a
+     * membership change has exactly one subject and the cache is keyed by exactly that.
+     */
+    invalidateAdminShellContextCache(userId);
 
     return NextResponse.json({
         ...membership.row,

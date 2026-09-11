@@ -24,6 +24,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
+import { PORTAL_ADMISSION_CAPABILITY } from "@/lib/admin/portalAdmission";
 import { assertFinancialsReadAllowed, FINANCIALS_READ_PERMISSION_KEY } from "@/lib/financials/financialsPermissions";
 import { discoverCatalog } from "../permissionCatalogDiscovery";
 
@@ -187,6 +188,27 @@ describeLive("a new organization is born able to administer itself — live", ()
         expect(grants.permissionKeys, "the sentence the operator saw was about this key").toContain(
             FINANCIALS_READ_PERMISSION_KEY,
         );
+
+        /*
+         * W-13 — AND THE FRONT DOOR OPENS FOR THEM, which is now a grant rather than a role name.
+         *
+         * This is the bootstrap invariant, asserted rather than assumed. W-13's instruction asks
+         * whether any emergency or bootstrap case requires keeping `admin`/`ops` as an admission
+         * fallback beside the capability; the honest way to answer is to create an organization the
+         * way the product creates one and check that its administrator can get in. `seed_default_rbac`
+         * enumerates `portal.access` and `orgs_seed_default_rbac` fires on INSERT, so it arrives with
+         * the organization — there is no window in which a tenant exists and nobody can administer
+         * it, and therefore no invariant that would justify a role-literal fallback.
+         *
+         * The assertion above ("every catalogued capability") already covers this key as a member of
+         * the set. It is named separately because its absence is a different KIND of failure: every
+         * other missing key is a surface the administrator cannot use, and this one is a tenant
+         * nobody can enter.
+         */
+        expect(
+            grants.permissionKeys,
+            "a new organization's administrator cannot open the portal — there is no fallback to save them",
+        ).toContain(PORTAL_ADMISSION_CAPABILITY);
 
         const verdict = await assertFinancialsReadAllowed({ supabase, orgId: NEW_ORG, userId: NEW_ORG_ADMIN });
         expect(verdict.ok, JSON.stringify(verdict)).toBe(true);

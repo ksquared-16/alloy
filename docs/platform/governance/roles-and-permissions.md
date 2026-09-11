@@ -75,10 +75,26 @@ directions. The four layers are **Membership → Role → Capability → Scope**
 Per-record contextual checks (for example document access decisions) exist on some routes.
 AD-25 deliberately does **not** treat them as a fifth authority layer.
 
-`W-13` shipped and resolved the admission question the opposite way from the open item this
-document used to record: there is **no** `portal.access` key. The fifth-layer portal-eligible
-grants were collapsed (`supabase/migrations/20260818170000_w13_collapse_portal_eligible_fifth_layer_grants.sql`)
-and the gates converted to `settings.users_roles`.
+`W-13` shipped in two parts, and this document recorded only the first. **Part one** (2026-08-18)
+collapsed the fifth-layer grants: the two gates where `portalEligible` CONFERRED authority were
+converted to `settings.users_roles` / `settings.users_roles.read`
+(`supabase/migrations/20260818170000_w13_collapse_portal_eligible_fifth_layer_grants.sql`), and no
+`portal.access` key was introduced — which is what the sentence here used to say, correctly, about
+that half.
+
+**Part two** (2026-09-11) took the last thing the role literal decided, which was ADMISSION itself.
+`PORTAL_ROLES = {admin, ops}` is gone; portal admission now resolves the capability
+**`portal.access`** (`supabase/migrations/20260911140000_w13_portal_access_capability_admission.sql`,
+`web/lib/admin/portalAdmission.ts`). The migration is a preservation migration — `admin` and `ops`
+receive the key, which is exactly the set the literal admitted — and it is ordered before the code
+that stops honouring the literal.
+
+`school_director` and `regional_lead` do **not** hold it. W-13 changed how admission is decided, not
+which roles deserve it; that is decision `D2`
+(`docs/platform/planning/access-identity-v2/d2-i10-role-composition-decision.md`), and it is open.
+
+Admission is not authorization: `portal.access` confers nothing inside the portal, and `I-35`ᴮ
+forbids any capability gate from accepting an admission predicate in place of its own key.
 
 **Rule:** Role ≠ visibility. Check `permissionKeys` for capabilities; check the access profile for
 data scope.

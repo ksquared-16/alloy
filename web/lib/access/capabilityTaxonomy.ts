@@ -36,6 +36,19 @@ export type CapabilityArea = {
 };
 
 export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
+    /*
+     * Portal is FIRST, and it is one row, because it is the question that comes before every other
+     * row on the page: can this person get in at all?
+     *
+     * W-13 — admission used to be a role literal (`PORTAL_ROLES = {admin, ops}`) that no
+     * administrator could see or change. It is a capability now, so it has to appear where every
+     * other capability appears. Presenting it anywhere but first would bury the switch that decides
+     * whether the rest of the matrix means anything for this role.
+     *
+     * It confers nothing inside the portal. `fin.read` and the rest stay independently enforced —
+     * the area below it is the proof, not the exception.
+     */
+    { key: "portal", label: "Portal", description: "Whether this role can enter the operator portal at all. Admission only — every surface inside still needs its own capability.", order: 5 },
     { key: "families", label: "Families", description: "Customer and family records.", order: 10 },
     { key: "inquiries", label: "Inquiries", description: "Opportunities and enrollment inquiries.", order: 20 },
     { key: "scheduling", label: "Scheduling", description: "Schedules and calendars.", order: 30 },
@@ -100,6 +113,7 @@ export const UNMAPPED = "__unmapped__" as const;
  *   merged. This is the repetition the tranche was called to remove.
  */
 const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
+    portal: "portal",
     billing: "billing",
     enrollment: "enrollment",
     financials: "financials",

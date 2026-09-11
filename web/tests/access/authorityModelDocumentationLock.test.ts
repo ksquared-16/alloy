@@ -33,16 +33,26 @@ const governanceSource = readFileSync(GOVERNANCE, "utf8");
 // ---------------------------------------------------------------------------
 
 /**
- * A "resolution path" is a function that **binds `portalEligible`** from a `PORTAL_ROLES` test.
+ * A "resolution path" is a function that **binds `portalEligible`** from the portal-admission
+ * decision.
  * That is the property the document makes a cardinality claim about, so it is the property the
  * check derives — rather than a name list, which the document could satisfy by agreeing with itself.
  *
- * **Why not every `PORTAL_ROLES` reader.** `chooseOrgAndRoleKeysFromMembershipRows` consults the
- * same set to PREFER an org where the principal holds `admin`/`ops` among several memberships. It
- * decides *which org*, never *whether admission is granted* — listing it as a resolution path would
- * make the document state something false. This narrowing is not the "shrinking the alarm set" move
- * session 5 declined: this check produces a **cardinality claim about admission deciders**, not a
- * risk bucket, and widening it here would corrupt the claim rather than make it conservative.
+ * **W-13 moved what this matches, and deliberately did not move what it counts.** The binding used
+ * to be `portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r))` — a role literal. It is now
+ * `portalEligible = isPortalAdmitted(…)`, resolved from the `portal.access` capability through the
+ * single module that owns the question. The cardinality claim the document makes is about HOW MANY
+ * functions decide admission, not about how they decide it, so the same three are expected and the
+ * document's table is unchanged. A check keyed to the old predicate would have gone quietly vacuous
+ * at the moment the predicate changed, which is the failure this file exists to prevent; the
+ * "not vacuous" floor below is what caught it.
+ *
+ * **Why not every reader of the decision.** `chooseOrgAndRoleKeysFromMembershipRows` still consults
+ * role keys to PREFER an org among several memberships. It decides *which org*, never *whether
+ * admission is granted* — listing it as a resolution path would make the document state something
+ * false. This narrowing is not the "shrinking the alarm set" move session 5 declined: this check
+ * produces a **cardinality claim about admission deciders**, not a risk bucket, and widening it here
+ * would corrupt the claim rather than make it conservative.
  *
  * Attribution is to the nearest PRECEDING exported function, at method grain: two of the three live
  * in one module, so a file-grained answer would report two paths where there are three. Matching is
@@ -55,7 +65,7 @@ function portalEligibilityResolvers(source: string): string[] {
     }
 
     const found = new Set<string>();
-    for (const hit of source.matchAll(/portalEligible\s*=\s*[^;]*PORTAL_ROLES\.has\(/g)) {
+    for (const hit of source.matchAll(/portalEligible\s*[=:]\s*[^;]*isPortalAdmitted\(/g)) {
         const at = hit.index ?? 0;
         let owner: string | null = null;
         for (const e of exportsAt) {
