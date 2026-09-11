@@ -9,6 +9,21 @@ export type PlatformWorkDefinitionKey =
     | "record_tour_outcome"
     | "resolve_outstanding_balance"
     /**
+     * Reviewing where a waitlisted child stands.
+     *
+     * Its own definition for the same reason `offer_spot` is, and found the same way — by running
+     * it. It bound to `contact_family`, which a family's Lead-stage Contact Family work also binds
+     * to, so when the child entered Waitlist the stage-move reconciler matched the two on one
+     * semantic key and CARRIED THE FAMILY'S WORK FORWARD instead of opening the review. Measured on
+     * the running app: a child at `waitlist` whose only open work was `contact_family`, stamped
+     * `lifecycle_stage_key: waitlist` — the Waitlist stage presenting a Lead task under a Lead name,
+     * with `review_waitlist_position` never instantiated and the transition reporting `deduped`.
+     *
+     * Reviewing a waitlist position is not contacting a family, and the work a family carried out of
+     * Lead is not the work a child acquires on entering Waitlist.
+     */
+    | "review_waitlist_position"
+    /**
      * Offering a waitlisted child a place.
      *
      * Its own definition because work identity is `(definition, subject)` — `dedupe_policy:

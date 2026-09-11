@@ -115,6 +115,37 @@ describe("Waitlist entry resolves an entry work template", () => {
      * plan's template order were ever reversed — and that reversal would make entering Waitlist open
      * `offer_spot` automatically, which is the one thing the offer flow must not do.
      */
+    /**
+     * THREE INTENTS, THREE IDENTITIES.
+     *
+     * Work identity is `(work definition, subject)`. `review_waitlist_position` bound to
+     * `contact_family`, which the FAMILY's Lead-stage Contact Family work also binds to — so on
+     * entering Waitlist the stage-move reconciler matched them on one semantic key and carried the
+     * family's work forward as though it already satisfied Waitlist entry.
+     *
+     * Measured on the running app before this: a child genuinely at `waitlist` whose only open work
+     * was `contact_family` stamped `lifecycle_stage_key: waitlist` — a Lead task wearing the
+     * Waitlist stage, with the review never created and the transition reporting `deduped`.
+     */
+    it("review, offer and contact are three separate work identities", () => {
+        const keys = ["review_waitlist_position", "offer_spot", "contact_family"].map((t) => {
+            const r = resolveWorkDefinitionKeyFromTemplate({ template_key: t } as never);
+            expect(r.ok).toBe(true);
+            return r.ok ? r.work_definition_key : null;
+        });
+        expect(new Set(keys).size).toBe(3);
+        expect(keys[0]).toBe("review_waitlist_position");
+    });
+
+    it("the Waitlist stage admits the review work it actually creates", () => {
+        const binding = PLATFORM_DEFAULT_WORK_DEFINITION_STAGE_BINDINGS.waitlist;
+        expect(binding?.available_definition_keys).toContain("review_waitlist_position");
+        const definition = getPlatformWorkDefinition("review_waitlist_position");
+        expect(definition?.display_name).toBe("Review waitlist position");
+        // Identity is (definition, subject) — the policy that makes a distinct definition matter.
+        expect(definition?.dedupe_policy).toBe("definition_subject");
+    });
+
     it("resolves review_waitlist_position from the SHIPPED Waitlist plan, and never offer_spot", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("waitlist");
         expect(plan).toBeTruthy();
