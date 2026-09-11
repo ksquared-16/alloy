@@ -1,3 +1,16 @@
+-- ── WHY THIS VERSION, AND NOT 20260911200000 ──
+--
+-- It was authored as 20260911200000, which was free in staging and in this branch
+-- but NOT in the alloy-cert ledger: another lane had already recorded that version
+-- from a branch that has not merged. The governed apply therefore reported
+-- `idempotent: true` and skipped this migration entirely, while the ledger claimed
+-- it was applied and neither permission definition nor grant existed.
+--
+-- The same false skip as 20260911140000, from the same cause. Checking staging and
+-- the working tree is not enough: the TARGET LEDGER is a third namespace, and on a
+-- shared certification stack it contains versions from every lane. Moved clear of
+-- the contested range.
+
 -- Organization → Integrations needs permissions an operator can actually hold.
 --
 -- ── WHY THIS EXISTS ──
