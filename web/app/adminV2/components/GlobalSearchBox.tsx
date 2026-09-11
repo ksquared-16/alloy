@@ -83,7 +83,24 @@ function SearchResultRow({
     const [showAll, setShowAll] = useState(false);
     const recognition = recognitionLine(result);
     const relations = relationLine(result);
-    const secondary = result.destinations.filter((d) => !d.primary);
+    /*
+     * ONLY OFFER A CHIP THAT CAN ACTUALLY OPEN.
+     *
+     * An operational destination is applied by moving attention to the Work Unit holding the record.
+     * The resolver states the destination truthfully even when no unit holds it — it must not guess
+     * one, and a test pins that — and the opener then correctly refuses to invent a queue.
+     *
+     * The gap was here: the chip was rendered anyway. Searching a child who sits in the Lead unit
+     * showed an "Enrollment" chip that dismissed the overlay and did nothing, which an operator
+     * cannot tell apart from a broken button. Live QA hit exactly this on Pathb Certopp, whose
+     * Enrollment destination carries a null unit while Household carries one and opens.
+     *
+     * Describing a destination and OFFERING it are different jobs. This is the offer, so the
+     * unopenable ones are not shown; the subject button above still opens the record itself.
+     */
+    const secondary = result.destinations.filter(
+        (d) => !d.primary && (d.target !== "focus_panel" || Boolean((d.host_work_unit_key ?? "").trim())),
+    );
     const { inline, overflow } = splitInlineDestinations(secondary);
     const visible = showAll ? secondary : inline;
 
