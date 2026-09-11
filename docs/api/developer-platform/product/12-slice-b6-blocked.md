@@ -198,3 +198,22 @@ needs the certification database and credentials, not a slot**, and vitest has
 been routed successfully through the governed broker from this unslotted lane all
 session. So Gate 1 becomes executable the moment the six migrations land, even
 before a slot exists.
+
+### Governed migration — the exact input contract (learned the hard way)
+
+`database.apply_migration` accepts `environment` of **`staging | certification |
+cert`**. `certification` is correct for `alloy-cert`.
+
+Do **not** use `development_certification`. That value appears in
+`DIRECTOR_ELIGIBLE_ENVIRONMENTS` (`lib/vacilando/director-authority.mjs`), which
+is Director *authority* eligibility and a different layer from the action's input
+validation. Filing it returns `environment_not_allowed`.
+
+Verified inputs:
+
+```json
+{ "action_key": "database.apply_migration",
+  "inputs": { "environment": "certification",
+              "expectedSha": "<branch HEAD>",
+              "migrations": ["20260910190000", "...", "20260911150000"] } }
+```
