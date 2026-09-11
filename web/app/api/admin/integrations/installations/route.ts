@@ -138,5 +138,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: outcome.message, code: outcome.code }, { status });
     }
 
+    /*
+     * LINK THE AUDIT TO WHAT IT CREATED.
+     *
+     * The intent is written BEFORE the installation exists, so its
+     * `installation_id` is necessarily null at that moment. Leaving it null makes
+     * the one audit row that explains where an installation came from the only
+     * one you cannot find by installation id. Backfilled after the fact, and a
+     * failure here is not allowed to undo a creation that already succeeded —
+     * the row is still durable and still attributable by application and actor.
+     */
+    await supabase
+        .from("app_security_audit")
+        .update({ installation_id: outcome.result })
+        .eq("id", outcome.auditId);
+
     return NextResponse.json({ installationId: outcome.result, auditId: outcome.auditId }, { status: 201 });
 }
