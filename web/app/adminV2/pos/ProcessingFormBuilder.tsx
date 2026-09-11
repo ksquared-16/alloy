@@ -77,7 +77,19 @@ const CATEGORY_LABELS: Record<string, string> = {
     capture: "Capture",
 };
 
-type BuilderMode = "edit" | "preview" | "runtime";
+/**
+ * WHAT THE BUILDER CAN SHOW YOU, HONESTLY.
+ *
+ * There used to be "Preview" and "Runtime". They rendered the SAME component from the SAME schema
+ * and differed only in a header, so the second tab promised a runtime it never showed — and neither
+ * of them showed the paperwork, which is the thing an administrator actually has to check before a
+ * packet reaches families. Kelly's verdict on the pair was exact: the preview was the wrong product.
+ *
+ * `structure` is the old preview under a name that says what it is: the fields and their order.
+ * `paperwork` is the document itself, rendered through the same fidelity engine the participant
+ * review and the signed artifact use, so the three cannot disagree.
+ */
+type BuilderMode = "edit" | "structure" | "paperwork";
 
 export default function ProcessingFormBuilder({
     formId,
@@ -472,7 +484,7 @@ export default function ProcessingFormBuilder({
                 </span>
                 <span className="flex-1" />
                 <div className="flex rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.08] p-0.5">
-                    {(["edit", "preview", "runtime"] as const).map((m) => (
+                    {(["edit", "structure", "paperwork"] as const).map((m) => (
                         <button
                             key={m}
                             type="button"
@@ -482,7 +494,7 @@ export default function ProcessingFormBuilder({
                                 mode === m ? "bg-white text-alloy-midnight shadow-sm" : "text-alloy-midnight/50"
                             }`}
                         >
-                            {m === "edit" ? "✎ Edit" : m === "preview" ? "▷ Preview" : "◎ Runtime"}
+                            {m === "edit" ? "✎ Edit" : m === "structure" ? "▦ Structure" : "▤ Paperwork"}
                         </button>
                     ))}
                 </div>
@@ -526,13 +538,13 @@ export default function ProcessingFormBuilder({
                 />
             ) : null}
 
-            {mode === "preview" ? (
+            {mode === "structure" ? (
                 <div className="flex shrink-0 items-center gap-2 border-b border-alloy-midnight/[0.06] bg-alloy-midnight/[0.03] px-4 py-1.5 text-[11px] font-semibold text-alloy-midnight/55">
-                    Preview — what families complete
+                    Structure — the questions, and the order they are asked in
                 </div>
-            ) : mode === "runtime" ? (
+            ) : mode === "paperwork" ? (
                 <div className="flex shrink-0 items-center gap-2 border-b border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.05] px-4 py-1.5 text-[11px] font-semibold text-alloy-bend-pine">
-                    Runtime — published structure
+                    Paperwork — the document this produces, with each mapped box named
                 </div>
             ) : null}
 
@@ -542,8 +554,10 @@ export default function ProcessingFormBuilder({
 
             <div className="flex min-h-0 flex-1">
                 <div className={`min-w-0 flex-[8] overflow-y-auto p-4 md:p-8 ${mode !== "edit" ? "bg-alloy-stone/[0.04]" : "bg-alloy-stone"}`}>
-                    {mode === "preview" || mode === "runtime" ? (
-                        <FormPreview schema={schema} branding={branding} runtime={mode === "runtime"} />
+                    {mode === "paperwork" ? (
+                        <FormPaperworkPreview formId={formId} />
+                    ) : mode === "structure" ? (
+                        <FormPreview schema={schema} branding={branding} runtime={false} />
                     ) : (
                         <div className="mx-auto max-w-[960px] rounded-2xl bg-white px-8 py-8 shadow-[0_8px_40px_rgba(24,39,58,0.08)]">
                             <ProcessingFormCanvas
@@ -892,6 +906,83 @@ export default function ProcessingFormBuilder({
                 }}
             />
         </div>
+    );
+}
+
+/**
+ * The document this form produces, fetched as a PDF and shown in place.
+ *
+ * Deliberately a plain object embed rather than a page-by-page viewer: this is a configuration
+ * check, and the browser's own PDF reader already scrolls, zooms and prints. Building a second
+ * viewer here would be a new surface to maintain for no answer it could give that this one cannot.
+ *
+ * A form with no source document is not an error. It is simply a form that families complete on
+ * screen, and the panel says so in those words rather than showing a broken frame.
+ */
+function FormPaperworkPreview({ formId }: { formId: string }) {
+    const [state, setState] = useState<
+        { kind: "loading" } | { kind: "ready"; url: string } | { kind: "none"; message: string }
+    >({ kind: "loading" });
+
+    useEffect(() => {
+        let live = true;
+        let objectUrl: string | null = null;
+        setState({ kind: "loading" });
+        void (async () => {
+            try {
+                const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/paperwork-preview`, {
+                    credentials: "include",
+                });
+                if (!res.ok) {
+                    const j = (await res.json().catch(() => ({}))) as { error?: string };
+                    if (live) setState({ kind: "none", message: j.error ?? "The paperwork could not be shown." });
+                    return;
+                }
+                const blob = await res.blob();
+                objectUrl = URL.createObjectURL(blob);
+                if (live) setState({ kind: "ready", url: objectUrl });
+                else URL.revokeObjectURL(objectUrl);
+            } catch {
+                if (live) setState({ kind: "none", message: "The paperwork could not be shown." });
+            }
+        })();
+        return () => {
+            live = false;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [formId]);
+
+    if (state.kind === "loading") {
+        return (
+            <p className="mx-auto max-w-[560px] text-[13px] text-alloy-midnight/55" data-testid="form-paperwork-loading">
+                Preparing the paperwork…
+            </p>
+        );
+    }
+    if (state.kind === "none") {
+        return (
+            <div
+                className="mx-auto max-w-[560px] rounded-2xl border border-alloy-stone/20 bg-white px-6 py-6 text-[13px] text-alloy-midnight/70"
+                data-testid="form-paperwork-none"
+            >
+                {state.message}
+            </div>
+        );
+    }
+    return (
+        <object
+            data={state.url}
+            type="application/pdf"
+            className="mx-auto block h-[calc(100vh-220px)] w-full max-w-[900px] rounded-xl border border-alloy-stone/20 bg-white"
+            data-testid="form-paperwork-document"
+        >
+            <p className="p-4 text-[13px] text-alloy-midnight/70">
+                Your browser cannot display PDFs inline.{" "}
+                <a href={state.url} className="font-semibold text-alloy-blue underline">
+                    Open the paperwork
+                </a>
+            </p>
+        </object>
     );
 }
 
