@@ -38,14 +38,64 @@ export async function gatherParticipantPaperworkFacts(
     // Form obligations across every stage of the active process: a family meets them all in turn,
     // and one unpublished form breaks the journey wherever it sits.
     const requirements: StageFormRequirementFacts[] = [];
+    const packetRequirements: { requirement_id: string; packet_definition_id: string; level: StageFormRequirementFacts["level"] }[] = [];
     for (const stage of process.stages ?? []) {
         for (const requirement of stage.requirements_v1?.requirements ?? []) {
-            if (requirement.ref.kind !== "form") continue;
-            requirements.push({
-                requirement_id: requirement.requirement_id,
-                form_definition_id: requirement.ref.form_definition_id,
-                level: requirement.level,
-            });
+            if (requirement.ref.kind === "form") {
+                requirements.push({
+                    requirement_id: requirement.requirement_id,
+                    form_definition_id: requirement.ref.form_definition_id,
+                    level: requirement.level,
+                });
+                continue;
+            }
+            if (requirement.ref.kind === "packet") {
+                packetRequirements.push({
+                    requirement_id: requirement.requirement_id,
+                    packet_definition_id: requirement.ref.packet_definition_id,
+                    level: requirement.level,
+                });
+            }
+        }
+    }
+
+    /*
+     * A PACKET REQUIREMENT IS TRAVERSED, NOT TAKEN ON TRUST.
+     *
+     * "The packet exists" is not an answer to "can this family complete it?". Expanding the packet
+     * into the Form steps it actually contains means every check below — the form resolves, it has a
+     * published version, its uploads name the document they want, its signatures have somewhere to
+     * land — runs over the packet's contents unchanged. No second validation engine, and a packet
+     * whose third step lost its published version fails for the same reason a bare Form requirement
+     * would.
+     *
+     * A packet with no steps yields nothing here, and `participantPaperworkReadiness` then reports
+     * the stage as having no paperwork a family can complete — which is the truthful answer.
+     */
+    if (packetRequirements.length > 0) {
+        const packetIds = [...new Set(packetRequirements.map((p) => p.packet_definition_id))];
+        const { data: items } = await supabase
+            .from("form_packet_items")
+            .select("packet_definition_id, sequence_index, form_definition_id")
+            .eq("org_id", orgId)
+            .in("packet_definition_id", packetIds)
+            .order("sequence_index", { ascending: true });
+        const stepsByPacket = new Map<string, { sequence_index: number; form_definition_id: string }[]>();
+        for (const row of (items ?? []) as { packet_definition_id: string; sequence_index: number; form_definition_id: string }[]) {
+            const list = stepsByPacket.get(row.packet_definition_id) ?? [];
+            list.push({ sequence_index: row.sequence_index, form_definition_id: row.form_definition_id });
+            stepsByPacket.set(row.packet_definition_id, list);
+        }
+        for (const packet of packetRequirements) {
+            for (const step of stepsByPacket.get(packet.packet_definition_id) ?? []) {
+                requirements.push({
+                    // Keyed by packet requirement AND step, so two packets requiring the same Form
+                    // stay distinguishable in the readiness report.
+                    requirement_id: `${packet.requirement_id}:${step.sequence_index}`,
+                    form_definition_id: step.form_definition_id,
+                    level: packet.level,
+                });
+            }
         }
     }
     if (requirements.length === 0) return { requirements, forms: [], noProcess: false };

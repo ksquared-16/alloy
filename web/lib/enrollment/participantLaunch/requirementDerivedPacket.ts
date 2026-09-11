@@ -85,6 +85,33 @@ export type RequirementDerivedPacketResult =
  * artifacts in the order the operator wrote them, and no sort is applied on top, because any sort
  * here would be this module deciding sequence the configuration already decided.
  */
+/**
+ * The packet a stage requires directly, when it requires one.
+ *
+ * A `packet` requirement is not projected into a derived packet — it already IS the packet, and
+ * deriving a mirror of it would give a family two packets for one obligation and leave the copy
+ * drifting from the definition an administrator edits in Studio.
+ *
+ * So this is asked FIRST at launch, and derivation stays the path for stages that still list
+ * individual Form requirements. Both remain supported; the stage's own configuration decides which
+ * applies.
+ *
+ * @returns the referenced packet definition id, or null when the stage requires no packet
+ */
+export function referencedPacketDefinitionId(input: {
+    readonly builder: LifecycleBuilderV1 | null;
+    readonly processKey: string;
+    readonly stageKey: string;
+}): string | null {
+    const section = canonicalStageRequirements(input.builder, input.stageKey, input.processKey);
+    for (const requirement of section?.requirements ?? []) {
+        if (requirement.ref.kind !== "packet") continue;
+        const id = requirement.ref.packet_definition_id.trim();
+        if (id) return id;
+    }
+    return null;
+}
+
 export function planRequirementDerivedPacket(input: {
     readonly builder: LifecycleBuilderV1 | null;
     readonly processKey: string;

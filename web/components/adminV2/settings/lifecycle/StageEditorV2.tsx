@@ -29,6 +29,7 @@ import StageFormRequirementsEditor from "@/components/adminV2/settings/lifecycle
 import StageWorkRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageWorkRequirementsEditor";
 import StageStartableWorkEditor from "@/components/adminV2/settings/lifecycle/StageStartableWorkEditor";
 import StagePaperworkCard from "@/components/adminV2/settings/lifecycle/StagePaperworkCard";
+import StagePacketManageModal from "@/components/adminV2/settings/lifecycle/StagePacketManageModal";
 import StagePerChildPathsEditor from "@/components/adminV2/settings/lifecycle/StagePerChildPathsEditor";
 import LifecycleStageFieldRequirementsEditor, {
     type LifecycleStageFieldRequirementsEditorHandle,
@@ -642,6 +643,8 @@ export default function StageEditorV2({
 
     // ── Sub-editor dirty states ──
     const [fieldDirty, setFieldDirty] = useState(false);
+    /** Which packet the operator asked to manage. The stage requirement is never edited here. */
+    const [managePacket, setManagePacket] = useState<{ id: string; name: string | null } | null>(null);
     const [operatingPlanDirty, setOperatingPlanDirty] = useState(false);
 
     // ── V2 field state ──
@@ -1042,6 +1045,13 @@ export default function StageEditorV2({
                                 stageRecord={stageRecord ?? null}
                                 process={process ?? null}
                                 onSaved={onReloadConfiguration}
+                                onManagePacket={(id, pname) => setManagePacket({ id, name: pname })}
+                            />
+                            <StagePacketManageModal
+                                open={managePacket !== null}
+                                packetDefinitionId={managePacket?.id ?? null}
+                                packetName={managePacket?.name ?? null}
+                                onClose={() => setManagePacket(null)}
                             />
                             <StageFormRequirementsEditor
                                 departmentId={departmentId}

@@ -86,13 +86,31 @@ describe("the packet must not become an authority", () => {
         }
     });
 
-    it("compiles once at authoring time and never subscribes", () => {
-        // The card reads the packet inside the choose handler only, and saves through the canonical
-        // action. No effect re-reads it, and nothing persists which packet was used.
-        expect(CARD).toContain("compilePacketToStageRequirements");
+    it("SUPERSEDED — the stage now stores the packet reference, deliberately", () => {
+        /*
+         * This assertion used to forbid `packet_definition_id` in the card, because storing a packet
+         * id on the stage is a live link: a later Studio edit can change what a published revision
+         * asks a family for. That risk is real and the rule was right for its time.
+         *
+         * Live QA rejected the consequence. A director reading the Enrolling stage saw three
+         * separately managed Forms and asked why the process knows about paperwork composition at
+         * all — the packet IS the requirement, and adding a step meant editing the lifecycle. So the
+         * ownership split changed: the stage owns whether paperwork is required and how strictly;
+         * the packet owns what completing it consists of.
+         *
+         * The original risk is answered rather than dropped. Configuration Health traverses the
+         * packet's steps instead of trusting that it exists, and an in-flight family keeps the Form
+         * versions their session pinned, so a Studio edit cannot rewrite paperwork someone is part
+         * way through. Pinning an explicit published packet VERSION on the requirement is built and
+         * waiting on a blocked migration.
+         */
         expect(CARD).toContain('action: "set_stage_requirements"');
-        expect(CARD).not.toContain("packet_definition_id:");
-        expect(CARD).not.toContain("packet_id");
+        expect(CARD).toContain("packet_definition_id");
+        expect(CARD).toContain('kind: "packet"');
+        // And it no longer flattens a packet into per-step form requirements. The module name still
+        // appears in an import (`requirementIdForForm` lives there, and the single-form path uses
+        // it), so the assertion is that the compiler is never CALLED.
+        expect(CARD).not.toContain("compilePacketToStageRequirements(");
     });
 
     it("says out loud that a later packet edit changes nothing here", () => {
