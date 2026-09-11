@@ -215,6 +215,24 @@ red by three negative fixtures, all removed before commit. **W-2's exit criterio
 rather than statically read. Six `tests/access` failures are **W-11/W-12's, not Wave 1's**, and are reported
 unrepaired. **A third consecutive fixture-titled mission has issued this access workstream** — DX7, then DX-5,
 now DX-6 — and no run has answered whether it should (§5)
+· **W-1…W-3 ninth issuance 2026-09-06 — RECORD RECONSTRUCTED 2026-09-11** (commit `5c5ea716b`) — the run
+**landed code and left no trace in this plan**, the §5 counterpart of W-0 run 4's propagation debt.
+`selfAuthorityRouteDiscovery` was **red on arrival with no product code changed**: a doc-comment sentence in
+another session's uncommitted edit made the resolver an authority writer and import closure carried it into
+**180 of 603** routes — mention-vs-call, the **seventh** instance of this workstream's escape class. Stripping
+comments alone would have **hidden a real membership writer** (`admin/dev/create-org`, targetable via
+`admin_user_id`); the subject is now asserted **exactly at 6** rather than by a 25×-slack bound (§5)
+· **W-1…W-3 issued a tenth time — 2026-09-11** (mission `msn_83dbd2706970c833d6`, assignment
+`asg_61c645b68894b3`) — the first Wave 1 run across a **moved corpus** since the sixth: 215 web commits, routes
+**603 → 613**, migrations **373 → 403**, and **every ratchet still exactly its floor** (family 27, class-wide
+**103 of 613**, aliases 3). The finding is that the eighth issuance's *"irreducible residue"* — a module
+exporting a primitive no list names — **arrived**: `lib/financials/financialsPermissions.ts` houses two
+capability gates called by **19 routes**, and no lock in the file had ever read it. **Not an exposure** (all
+three of its routes in the class-wide subject already call a sufficient gate) but the eighth instance of the
+escape class, closed by classifying the gates and letting the eighth issuance's derivation drag the module in
+unchanged. Proved red by three fixtures, including a **new export added beside the gates in product code**.
+Suites **102 passed / 0 failed**, `vac run typecheck:tests` **rc=0**. The honest limit is sharper than before:
+**the lock did not find this module — a reader did, and the lock then confirmed it** (§5)
 · **W-4 sixth issuance 2026-09-06** (mission `msn_b7040b5174ddeafb79`, assignment `asg_81ca7096360e56`) — the
 run that **discharges the fifth issuance's blocked measurement and the demonstration debt carried since
 2026-08-06**. The check executes: **603 routes, 570 direct holders, 548 resolving, 22 unresolved, 12 advisory,
@@ -2066,6 +2084,163 @@ otherwise conclude this run happened outside a sanctioned root.
 
 **Not verified this run.** No live database query — W-0's run-4 counts are two days old and are the W-0 owner's
 to refresh. Wave 1 needs no live query.
+
+#### Wave 1, ninth issuance — **2026-09-06**, commit `5c5ea716b`: RECORD RECONSTRUCTED — a comment reddened the lock, and the lock was holding a real writer by a sentence
+
+**This record was missing, and is written here by the tenth issuance rather than by the run that earned it.**
+The ninth issuance shipped its change — `5c5ea716b`, `selfAuthorityRouteDiscovery.test.ts`, +124/−15 — and its
+findings never reached this document, which still ended at the eighth. That is the same propagation debt §4
+recorded against W-0 run 4, now demonstrated in §5: **a Wave 1 run can land code and leave no trace in the plan,
+so the plan under-reports its own workstream.** Stated plainly because the next reader would otherwise date this
+lock's last change to 2026-09-06's *eighth* entry and miss a subject repair entirely.
+
+Reconstructed from the commit message and **verified against the delivered tree** by the tenth issuance — every
+claim below was re-read in the shipped file, not taken on the commit's word:
+
+| Field | Value |
+|---|---|
+| Finding | `selfAuthorityRouteDiscovery` was **RED on arrival with no product code changed**. An uncommitted doc-comment edit in another session added a sentence to `lib/admin/resolveAdminAccessCore.ts` saying `create_membership_with_access_profile` *"is convention that a direct INSERT bypasses"*. The predicates read raw source, so the resolver became an authority writer and import closure carried that into **180 of 603** routes |
+| Class | **Mention vs. call — the seventh instance** of this workstream's recurring escape class, and the *same* defect RL-1 fixed on 2026-08-06: a repair never carried across to the discovery lock written after it. `codeOnly` is now copied from `analyticsRouteGates.test.ts` verbatim, URL rule included |
+| The worse half | `appliesSelfGuard` credited any file merely **containing** `isSelfAuthorityMutation`, so a route carrying only a TODO comment would have been recorded as guarded and dropped out silently. The guard must now be *called*. This half had never tripped |
+| Near-miss | Comment-stripping alone was **not sufficient and would have hidden a real membership writer**: with `codeOnly` and nothing else the subject fell to 5 and `admin/dev/create-org` dropped out. It reaches `createMembershipWithAccessProfile` and takes its target from body field `admin_user_id`, which a caller may set to itself; it was in the subject only via a doc comment. The old regex could not match `admin_user_id` — `_` is a word character, so `\b` never matched before `user`. Leading boundary removed; over-matching is safe because the predicate is conjunctive with `reachesAuthorityWrite`. Subject restored to **6** |
+| Vacuity | The bound was `< routes.length / 4` — **150 against a true subject of 6**, i.e. 25× slack, which is why 180 tripped it only by being enormous. The subject is now **asserted exactly**, naming all six routes (`selfAuthorityRouteDiscovery.test.ts:328-335`, re-read 2026-09-11) |
+| Register | One **stale exemption removed**: `settings/users-roles/members` is a read-only projection and was therefore never in the subject, so it excused nothing. The stale-entry half of the exemption register is now enforced |
+| Suites | 102 passed / 0 failed · `vac run typecheck:tests` **rc=0** · no route handler, library, schema or migration changed |
+
+#### Wave 1, tenth issuance — **2026-09-11**, assignment `asg_61c645b68894b3`: the residue arrived — a new capability module, 19 routes, and no lock had read it
+
+The tenth issuance of W-1…W-3. §4's rule holds a tenth time: **re-execute rather than re-assert.** Two things
+make this run unlike the eighth, which measured a byte-identical corpus: the base moved **215 web commits**, and
+the thing the eighth issuance filed as an *irreducible residue* turned up in the tree with live callers.
+
+| Field | Value |
+|---|---|
+| Base | `8525437e8` @ `runtime/migration-target-resolution` — **215 web commits** since the eighth-issuance base `77ddbc622`, a 5-day interval. API routes **603 → 613**, migrations **373 → 403**. Root `managed-worktree`, **SANCTIONED**, 1 ahead / 0 behind `origin/staging` |
+| Suites | **Passed — 102 passed / 0 failed**, 4 files. `analyticsRouteGates` **58** · `permissionGrid` 20 · `selfAuthorityMutation` 14 · `selfAuthorityRouteDiscovery` **10** (was 6 — the ninth issuance's repair, above) |
+| Subjects | Executed, not derived: analytics family **27** (floor 27) · class-wide G2 **103 of 613** (floor 103) · aliases **3** (floor 3) · **classified exports 27 across 7 modules** (floor 27, was 21 across 6) · lib modules **4293** (was 4212) |
+| Typecheck | `vac run typecheck:tests` **rc=0 class=ok** (brokered, 18:05:39Z → 18:06:56Z). Fourth consecutive Wave 1 run to reproduce one |
+| Regression | Full `tests/access`: **853 passed / 3 failed / 7 skipped** across 53 files. The three are **not Wave 1's** — see below |
+| Changed | `web/tests/access/analyticsRouteGates.test.ts` only. **No route handler, library, schema or migration**, so nothing here is a behaviour change |
+
+**Every W-1 ratchet still reads exactly its floor, and one of them survived a real test.** Family **27**,
+class-wide **103**, aliases **3** — each re-read from the predicates themselves via temporary impossible floors,
+then reverted. The class-wide figure is the interesting one: **the denominator moved +10 and the subject did not
+move at all.** That is a result rather than a stalled selector, and it was checked route by route — all ten new
+route files were read, and none holds a raw resolution. Six are `admin/financials/*`, which gate through
+`loadAdminRouteGate` or `requireAdminOrOps` and *then* a capability; two are `public/kiosk/*`, which authenticate
+a **device** by header credential and so never resolve an org member for G2 to be about; one is
+`stripe/webhook`, authenticated by HMAC signature over the raw body. A flat subject against a growing corpus is
+what closing G2 is supposed to look like.
+
+**The finding: the eighth issuance's "irreducible residue" is no longer hypothetical, and it arrived at scale.**
+
+That run closed by naming exactly what its derivation could not reach: *"a module exporting a wholly new
+primitive that no list names remains outside every lock here."* On this base that module exists.
+`lib/financials/financialsPermissions.ts` exports **two capability gates** — `assertFinancialsReadAllowed` and
+`assertFinancialsWriteAllowed` — which admit on `(grants.permissionKeys ?? []).includes("fin.read" | "fin.write")`
+and nothing else (`financialsPermissions.ts:90`). That is the *same shape* as `canReadAnalytics`, which this file
+already classifies. They are called by **19 route files**. No symbol list named them, so the module was outside
+`ACCESS_PRIMITIVE_MODULES`, and **every export sitting beside those two gates was unread by every lock in this
+file** — the precise channel `getAdminAuthCached` escaped through for months, reopened one module over.
+
+This is the **eighth instance** of this workstream's recurring escape class, and the first to arrive from a
+*new* module rather than from one that was already present when a lock was written.
+
+**What it is not: an exposure.** Stated first so the finding is not read as worse than it is. All 19 callers
+were checked; only **three** are in the class-wide subject at all — `financials/schedule/[id]`,
+`financials/journal-entries/[id]` and `financials/job/[id]` — and **each already calls a sufficient gate**, so
+no route was relying on an unclassified primitive to pass. The defect was in what the lock could *see*, not in
+what the product *enforces*.
+
+**The repair, and why it needed no new mechanism.** The eighth issuance's derivation already states that adding
+a gate to a symbol list drags its defining module into the classification lock. So the whole change is to
+classify the two gates honestly — they authorize on a capability, not on portal eligibility, so they belong in
+`CAPABILITY_GATES` rather than `SUFFICIENT_GATES` — and let the derivation do the rest. It did: the module was
+named by path, by the lock, before it was added. The four sibling constants it dragged in
+(`FINANCIALS_{READ,WRITE}_PERMISSION_KEY`, `FINANCIALS_{READ,WRITE}_DENIED_MESSAGE`) are registered as reviewed
+non-gates with reasons — two permission-key strings and two operator-facing refusal sentences, none callable.
+**That the eighth issuance's mechanism absorbed a genuinely new module with no change to the mechanism itself is
+the strongest evidence yet that the derivation was the right repair.**
+
+**The permissive step, made safe by measurement rather than by assumption** — the standard this file set when it
+listed `canReadAnalytics`. Widening `CAPABILITY_GATES` widens what satisfies the class-wide lock, so the
+inertness claim is checked rather than argued: the three subject routes above already call a sufficient gate, so
+**no route's verdict changes in either direction**. Unlike `canReadAnalytics` — inert because *nothing* calls it —
+these two have 19 live callers, so the claim here is narrower and is stated as such: inert on *verdicts*, not
+unused.
+
+**Proved red by three negative fixtures**, each mutated, observed, reverted, and absent from the delivered tree:
+
+1. The shipped six-module list against the newly-classified gates → **rejected as designed**, naming
+   `lib/financials/financialsPermissions.ts` by path. This is the finding itself, produced by the lock rather
+   than argued into it.
+2. The module admitted but its siblings unregistered → **rejected as designed**, naming all four constants as
+   unclassified (`…:FINANCIALS_READ_DENIED_MESSAGE` and the other three).
+3. **A new export added beside the gates in product code** — `export const FINANCIALS_PROBE_NEGATIVE_FIXTURE` —
+   → **rejected as designed**, naming the symbol. This is the escape channel itself, and it is the fixture that
+   matters: it is the one the *previous* six instances of this class would all have passed. Reverted immediately;
+   `financialsPermissions.ts` is byte-identical to HEAD.
+
+**W-2 / RL-11 — MET, re-verified at source and by execution.**
+`lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts` still contains **zero** `insert`/`upsert`/`update`
+calls; the self guard is called by all three routes (`role:33`, `remove:46`, `access-scope:81` — a one-line
+drift from the eighth issuance, no semantic change); `selfAuthorityRouteDiscovery` **10 passed** and
+`selfAuthorityMutation` **14 passed**. The stronger result is the ninth issuance's exact subject assertion
+holding across **+10 route files**: the six authority writers are still exactly those six, so **no new authority
+writer arrived in 215 commits**, and that is now asserted by name rather than inferred from a slack bound.
+
+**W-3 / RL-2 → RL-3 — green, executed, unchanged.** `permissionGrid.test.ts` **20 passed**. `permissionGrid.ts`
+mentions `PERMISSION_GRID_ROWS` **only in a header comment recording that W-10 removed it**, so the grid remains
+a projection of `permission_definitions` and a row naming an absent key stays unrepresentable. **All 30 new
+migrations were scanned** (non-vacuity: the file list was counted, not assumed) and **none mentions `workflows`
+or `permission_definitions`**, so the catalog is untouched and C13 → W-11 still owns the `workflows.*` restore
+question.
+
+**Three failures in `tests/access` that are not Wave 1's — reported, not repaired, and proved pre-existing.**
+`catalogConsolidationLock` (2, RL-7/W-9 — migrations writing the catalog through a deprecated name) and
+`live/newOrgBootstrapAndRevocation.live` (1 — a live-database grant set now including `portal.access`). **Proved
+not mine by execution rather than by argument**: the working-tree change was set aside, the two files re-run
+against the pristine base, and the same 3 failures reproduced. Note the composition has *changed* since the
+eighth issuance — its six (`catalogVocabularyReconciliation`, `capabilityTaxonomy`, `grantSeedEnumeration`) are
+**gone**, fixed by another track, and these three are new. **Outside this assignment's scope**, not claimed
+fixed.
+
+**Mission identity divergence — not raised this run, because it did not recur.** The eighth issuance escalated a
+fourth consecutive fixture-titled mission (`DX-1 Executive Overview Fixture`) issuing this workstream. This
+assignment arrives under mission `msn_83dbd2706970c833d6`, whose brief body *is* Wave 1 and whose title matches
+its content. Recorded so the streak's end is visible: **the divergence is intermittent, not permanent**, which
+is itself information for whoever eventually rules on it. The standing finding is unchanged — only the brief
+body identifies the work.
+
+**Concurrency, a sixth time.** Seven `scripts/local-dev/**` files were uncommitted at session start — another
+session's in-progress `alloy_deployed_primary` resolver fix, which is precisely the work §4's W-0 ninth re-issue
+names as M1's first precondition — plus an untracked `08-reuse-corpus-confirmation.md`. **None was touched,
+reverted, or built upon**, and this commit takes only `analyticsRouteGates.test.ts` plus this section.
+
+**The tooling discrepancy the eighth issuance recorded has recurred, with a different label.** `alloy-root`
+classifies this root `managed-worktree — SANCTIONED`; the validation broker logged the same root as
+`worktree=unmanaged-attendance` (the eighth saw `unmanaged-wt5-vacilando`). Two runs, two different
+`unmanaged-*` labels, same sanctioned root — so this is the broker's own slot naming and **not** a second
+governance opinion. Recorded again because it is now a pattern rather than a one-off, and a future reader
+grepping broker logs for `unmanaged` would draw the wrong conclusion twice.
+
+**A capacity note for the next runner.** `vac run typecheck:tests` first returned **exit 144** with stdout
+suppressed — broker capacity refusal, not a type error — while `alloy-worker-status` showed all 12 slots free,
+i.e. this lane holds no slot. It succeeded on a later retry as its own invocation. **Do not read 144 as a
+failed typecheck**, and do not chase it by piping the command anywhere.
+
+**What this run did not close**, stated so it is not mistaken for completeness: the derivation still discovers
+only modules housing an **already-classified** symbol. It caught `financialsPermissions.ts` because this run
+classified its gates *by hand* after finding them *by reading the diff* — **the lock did not find the module;
+a human reading 215 commits did, and the lock then confirmed it.** That is the honest shape of this repair and
+it is weaker than the eighth issuance's, which was self-discovering within its subject. A wholly new capability
+module whose gates nobody notices is still invisible, and **W-14's declared `(route → capability)` table remains
+the only mechanism that would surface one without a reader.** Each repair has raised the cost of the next
+escape; none has eliminated it, and eight instances in, the class is better described as *permanent* than as
+*closing*.
+
+**Not verified this run.** No live database query — Wave 1 needs none. The one live suite in `tests/access` is a
+pre-existing failure and is W-9/W-11 territory.
 
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 

@@ -538,11 +538,26 @@ const API_ROOT = "app/api";
  * means. Listing it is the *permissive* direction and is **inert on today's corpus**: no route file
  * calls `canReadAnalytics(` — every caller reaches it through `requireAnalyticsReadAccess`, which
  * is already a sufficient gate. It is registered because it is reachable, not because it is used.
+ *
+ * `assertFinancialsReadAllowed` / `assertFinancialsWriteAllowed` joined them 2026-09-11 (tenth
+ * issuance), and unlike every previous addition they were **not** surfaced by a lock in this file —
+ * they arrived with a new module the derivation could not reach. They are the same shape as the
+ * three above: `(grants.permissionKeys ?? []).includes("fin.read" | "fin.write")` and nothing else
+ * (`financialsPermissions.ts:90`). They admit on a granted capability, not on portal eligibility,
+ * so they belong here rather than in `SUFFICIENT_GATES`.
+ *
+ * **Inert on today's corpus, measured rather than asserted.** 19 route files call them. Only three
+ * are in the class-wide subject at all — `financials/schedule/[id]`, `financials/journal-entries/[id]`
+ * and `financials/job/[id]` — and each already calls a sufficient gate, so listing these two changes
+ * no route's verdict in either direction. The widening is registered because the symbols are
+ * reachable and their module must be read, not because any route needs them to pass.
  */
 const CAPABILITY_GATES = [
     "canReadProgramPublication",
     "canManageProgramPublication",
     "canReadAnalytics",
+    "assertFinancialsReadAllowed",
+    "assertFinancialsWriteAllowed",
 ] as const;
 
 /** Reviewed exceptions. Empty by design — an entry here is a security decision (W-4's ratchet). */
@@ -582,6 +597,16 @@ describe("W-1 — no route in web/app/api gates on a raw access resolution alone
         // that it should be. The figure was read from this predicate itself (a temporary
         // impossible floor makes `toBeGreaterThanOrEqual` report the live value), not from a
         // second replication that could diverge the same way the first might have.
+        //
+        // **2026-09-11 (tenth issuance): still exactly 103, now of 613.** The denominator moved
+        // +10 across a 215-commit interval and the subject did not move at all. That is a real
+        // result rather than a stalled selector: all ten new routes were read, and none holds a raw
+        // resolution — the six `admin/financials/*` arrivals gate through `loadAdminRouteGate` or
+        // `requireAdminOrOps` and then a capability; the two `public/kiosk/*` routes authenticate a
+        // DEVICE by a header credential rather than resolving an org member, so there is no access
+        // context for G2 to be about; and `stripe/webhook` authenticates by HMAC signature over the
+        // raw body. A subject that stays flat while the corpus grows is what closing G2 is supposed
+        // to look like.
         //
         // W-8 removed the one route that left: `app/api/admin/departments/route.ts` called
         // `getAdminAccessContextCached` *only* to read `roleKeys` for
@@ -691,6 +716,12 @@ const ACCESS_PRIMITIVE_MODULES = [
     "lib/admin/adminRouteGate.ts",
     "lib/admin/canReadAnalytics.ts",
     "lib/metrics/platform/adminApiHelpers.ts",
+    // Added 2026-09-11 (tenth issuance). This one **was** new — `lib/financials/financialsPermissions.ts`
+    // did not exist when the derivation was written, and no symbol list named anything it exports, so
+    // it is the residue the eighth issuance described arriving in practice rather than in principle.
+    // It is here because `CAPABILITY_GATES` now names the two gates it defines; the derivation put it
+    // here, it was not hand-added ahead of the lock.
+    "lib/financials/financialsPermissions.ts",
 ] as const;
 
 /** `export const A = B;` — a re-export of an existing symbol under a second name. */
@@ -840,6 +871,36 @@ const REVIEWED_NON_GATES: { symbol: string; reason: string }[] = [
             "Standard-envelope 400 validation-error renderer (`adminApiHelpers.ts:40-44`). Same " +
             "classification as `zodErrorResponse`: it reports bad input, never who the caller is.",
     },
+    // Registered 2026-09-11 (tenth issuance), when `CAPABILITY_GATES` first named the two financials
+    // gates and the derivation pulled their module in. All four are string constants: the same
+    // classification, and for the same reason, as `ANALYTICS_READ_PERMISSION` above.
+    {
+        symbol: "FINANCIALS_READ_PERMISSION_KEY",
+        reason:
+            "A permission-key string constant, `\"fin.read\"` (`financialsPermissions.ts:24`). It is the " +
+            "capability `assertFinancialsReadAllowed` compares against, not a callable that decides " +
+            "anything.",
+    },
+    {
+        symbol: "FINANCIALS_WRITE_PERMISSION_KEY",
+        reason:
+            "A permission-key string constant, `\"fin.write\"` (`financialsPermissions.ts:67`). Same " +
+            "classification as the read key; it is also the key the registered financial actions " +
+            "enforce, which is a fact about vocabulary rather than about this caller.",
+    },
+    {
+        symbol: "FINANCIALS_READ_DENIED_MESSAGE",
+        reason:
+            "The operator-facing refusal sentence for `fin.read` (`financialsPermissions.ts:38-40`). It " +
+            "is what a denial is rendered as after the gate has already decided; it carries no " +
+            "predicate and is not callable.",
+    },
+    {
+        symbol: "FINANCIALS_WRITE_DENIED_MESSAGE",
+        reason:
+            "The operator-facing refusal sentence for `fin.write` (`financialsPermissions.ts:69-71`). " +
+            "Same classification as the read message for the same reason.",
+    },
 ];
 
 /** Runtime (value) exports only — `export type` and `export interface` are erased at compile time. */
@@ -880,11 +941,13 @@ describe("W-1 — every export of an access-primitive module is classified (RL-1
         const all = exportsByModule.flatMap((m) => m.symbols);
         // 9 when this lock was written over three modules (2026-09-06, seventh issuance); **21 over
         // six** once the derived module list brought `adminRouteGate`, `canReadAnalytics` and
-        // `adminApiHelpers` into the subject (eighth issuance). Ratcheted to the live count and read
-        // from this predicate itself via a temporary impossible floor, not from a second
-        // replication — the seventh issuance's method, because a replication is a second chance to
-        // make the first one's mistake.
-        expect(all.length).toBeGreaterThanOrEqual(21);
+        // `adminApiHelpers` into the subject (eighth issuance); **27 over seven** once
+        // `financialsPermissions` arrived (2026-09-11, tenth issuance) — its two gates plus four
+        // sibling constants, none of which any lock in this file had read. Ratcheted to the live
+        // count and read from this predicate itself via a temporary impossible floor, not from a
+        // second replication — the seventh issuance's method, because a replication is a second
+        // chance to make the first one's mistake.
+        expect(all.length).toBeGreaterThanOrEqual(27);
         expect(all).toContain("requireAdminOrOps"); // gate
         expect(all).toContain("loadAdminAccessBundleCached"); // raw resolution
         expect(all).toContain("adminContextFailureResponse"); // reviewed non-gate
@@ -1034,8 +1097,8 @@ describe("W-1 — the access-primitive module list is derived, not declared (RL-
 
     it("scans the library and finds where the primitives live, so the assertions below are not vacuous", () => {
         const modules = libModuleFiles(webRoot);
-        // **Deliberately loose, and the only loose floor in this file.** 4212 live; the floor is
-        // 3000. Every other ratchet here is set to its live count because it measures this lock's
+        // **Deliberately loose, and the only loose floor in this file.** 4212 live on 2026-09-06;
+        // **4293 on 2026-09-11** across a 215-commit interval; the floor is 3000. Every other ratchet here is set to its live count because it measures this lock's
         // *subject*, where slack is free escape. This one measures the whole library — it exists
         // only to fail if the walk collapses, and a tight floor would break on refactors with no
         // access-control content, which teaches the next contributor to retune a lock rather than
