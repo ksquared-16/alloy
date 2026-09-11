@@ -167,3 +167,34 @@ session** on it. It does not slot an existing worktree. Running it from this lan
 would spawn a second agent session and produce a worktree without the ten
 unpromoted B.1–B.6 commits, which is the opposite of preserving the certified
 lineage. Slotting this worktree is an operator action, not a worker one.
+
+### Slot availability — measured 2026-09-11, and it is not a permissions problem
+
+`alloy-worktree-adopt <slot> <name>` is the correct tool: it "registers an
+existing worktree into the slot registry", reads the branch from Git, and
+"creates no Git objects, no branch, no worktree, no tmux session, no server".
+It is exactly what this lane needs and it does not create a second worktree.
+
+**But the slot pool is full.** `ALLOY_MAX_AGENTS=12`, and `alloy-worker-status`
+shows all twelve assigned to other sprints — work-unit-grade-a, financials,
+communications-inbound, enrollment-phase2, vacilando, surfaces, payments,
+troubleshooting, ui-vac, access-identity, attendance, work-items. Several are
+`active` with running servers. Adopting slot 13 is refused:
+`invalid slot '13' (expected 1-12)`.
+
+Taking a slot would require `--force` over a live registration, evicting another
+session's lane. That is not a call a worker lane makes.
+
+**So the unblock is not "grant this lane a slot" — it is either raise
+`ALLOY_MAX_AGENTS` above 12, or free one with `alloy-sprint-finish <slot>`.**
+Then `alloy-worktree-adopt <slot> documentation-api --provider claude` binds
+this worktree, with its lineage, in one command.
+
+### What actually needs a slot
+
+Only **Gate 2**. The dev server and browser automation are the slot-dependent
+parts. **Gate 1 — the ingestion rewire and the five live Attendance suites —
+needs the certification database and credentials, not a slot**, and vitest has
+been routed successfully through the governed broker from this unslotted lane all
+session. So Gate 1 becomes executable the moment the six migrations land, even
+before a slot exists.
