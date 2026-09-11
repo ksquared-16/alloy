@@ -31,6 +31,7 @@ import { resolveConsumption, type ConsumptionResolution } from "@/lib/operationa
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import { valueVacationCredit, type VacationCreditValuation } from "@/lib/operationalConsumption/vacationCreditValuation";
+import { applyVacationCreditReduction } from "@/lib/financials/reductions/policyReductionService";
 import type { VacationTreatment } from "@/lib/financials/policies/financialPolicyTypes";
 import type { ChildcareRatePlanRow, ChildcareRateRuleRow } from "@/lib/financials/rates/rateTypes";
 // Phase 9 — Billing prices tuition from Commercial Execution (frozen V1), not Substrate A.
@@ -656,6 +657,11 @@ async function previewAttendanceConsumption(
         commercialExport: pricing.commercialExport,
         programKey: pricing.programKey,
         cadenceKey: pricing.cadenceKey,
+        // The policy that decided, carried down so the obligation can name its authority.
+        vacationPolicyId: vacationPolicy.resolved ? vacationPolicy.policy.id : null,
+        vacationPolicySnapshot: vacationPolicy.resolved
+            ? { value: vacationPolicy.policy.value, scope: vacationPolicy.sourceScope }
+            : null,
     };
 
     const obligations: ResolvedObligationIntent[] = [];
@@ -749,6 +755,9 @@ type DirectiveCtx = {
     programKey: string | null;
     /** Recurring billing cadence for tuition rate selection (mapped from policy; default monthly). */
     cadenceKey: string;
+    /** The resolved `vacation_credit` financial policy, when the attendance path resolved one. */
+    vacationPolicyId?: string | null;
+    vacationPolicySnapshot?: Record<string, unknown> | null;
 };
 
 type DirectiveResolution = {
@@ -952,6 +961,8 @@ async function resolveDirective(
             draftable: false,
             status: amount != null ? "previewed" : "no_charge",
             resolutionKey: `cons:${directive.obligationKind}:${ctx.anchorDate}:${ctx.agreementId ?? fact.sourceEntityId}`,
+            // Which policy decided, carried forward so the reduction can name its authority.
+            decidedByFinancialPolicyId: directive.obligationKind === "vacation_credit" ? ctx.vacationPolicyId ?? null : null,
             explanation: {
                 directive_reason: directive.reason,
                 proration_method: ctx.prorationMethod,
@@ -1447,6 +1458,51 @@ export async function draftConsumption(
         const status: ResolvedObligationIntent["status"] = draftChargeId ? "drafted" : obligation.status;
         const id = await upsertObligation(supabase, orgId, consumptionEventId, obligation, draftChargeId, status, actorUserId);
         resolvedObligationIds.push(id);
+
+        /*
+         * THE OBLIGATION BECOMES MONEY — AFTER IT EXISTS, AND ONLY THEN.
+         *
+         * The reduction is anchored on the obligation id, so it cannot be written before the
+         * obligation is persisted; that ordering is the idempotency, not an implementation detail.
+         * Attendance still owns no money here — Consumption resolved the obligation, Commerce
+         * decided the treatment, and Financials writes the consequence through its own engine.
+         *
+         * Four states reach this line and only one of them spends money. A credited vacation with
+         * a resolved valuation writes one reduction. `no_credit` and no-policy produce no
+         * vacation-credit obligation at all, so there is nothing here to write. An unresolved
+         * valuation arrives as `no_charge` with a named reason and goes to review instead — a
+         * granted consequence nobody could value must not become a silent zero.
+         */
+        if (
+            obligation.obligationKind === "vacation_credit"
+            && obligation.status === "previewed"
+            && obligation.amountCents != null
+            && obligation.amountCents > 0
+            && obligation.decidedByFinancialPolicyId
+            && agreementId
+            && !("unresolved_valuation" in (obligation.explanation ?? {}))
+        ) {
+            const audit = obligation.explanation as Record<string, unknown>;
+            await applyVacationCreditReduction(supabase, {
+                orgId,
+                actorUserId,
+                resolvedObligationId: id,
+                financialPolicyId: obligation.decidedByFinancialPolicyId,
+                enrollmentAgreementId: agreementId,
+                amountCents: obligation.amountCents,
+                currencyCode: obligation.currencyCode,
+                effectiveDate: obligation.occursOn ?? today,
+                periodKey: typeof audit.period_key === "string" ? audit.period_key : (obligation.periodStart ?? obligation.occursOn ?? today).slice(0, 7),
+                periodStart: obligation.periodStart,
+                periodEnd: obligation.periodEnd,
+                valuation: {
+                    acceptedTermId: typeof audit.accepted_term_id === "string" ? audit.accepted_term_id : null,
+                    acceptedPeriodAmountCents: typeof audit.accepted_period_amount_cents === "number" ? audit.accepted_period_amount_cents : null,
+                    periodDays: typeof audit.period_days_used === "number" ? audit.period_days_used : null,
+                    creditedDays: typeof audit.credited_days === "number" ? audit.credited_days : 1,
+                },
+            });
+        }
         drafted.push({ obligationKind: obligation.obligationKind, draftChargeId, draftChargeStatus });
         if (firstDraftChargeId == null && draftChargeId != null) {
             firstDraftChargeId = draftChargeId;

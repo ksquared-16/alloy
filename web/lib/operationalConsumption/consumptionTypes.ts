@@ -268,6 +268,14 @@ export type ResolvedObligationIntent = {
     draftable: boolean;
     status: ResolvedObligationStatus;
     resolutionKey: string | null;
+    /**
+     * The `financial_policies` row that decided this obligation, when one did.
+     *
+     * Carried as a field rather than dug back out of `explanation`, because the downstream writer
+     * needs it programmatically and a reduction that cannot name its authority has no business
+     * being written. Only the vacation-credit path sets it today.
+     */
+    decidedByFinancialPolicyId?: string | null;
     explanation: Record<string, unknown>;
 };
 
