@@ -282,3 +282,63 @@ reliable way to know.
 The lane can see that it failed but not the SQL error, and diagnosing further
 would mean applying the migrations by hand against a shared stack — which is the
 thing the governed action exists to prevent.
+
+## Investigation of `gar_12a5c207cdcf6e` — and a safety finding
+
+### The headline: `environment: "certification"` does not retarget the database
+
+`CERTIFICATION_ENVIRONMENTS` is referenced in exactly two places, both in
+`trusted-host-migrate.mjs`: line 315 relaxes SHA reachability so an `agent/**`
+ref counts, and line 452 exempts a migration absent from staging. **Neither
+selects a database.**
+
+`resolveTrustedServerEnvSource()` takes no environment argument. It returns
+`ALLOY_SERVER_ENV_SOURCE` or `<canonical>/web/.env.local`, and
+`trusted-host-apply-migration.sh` then runs
+`psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f <migration>` against whatever that
+file holds. The script never mentions certification.
+
+On this host that `DATABASE_URL` resolves to
+**`aws-0-us-west-2.pooler.supabase.com:6543`** — a remote hosted Supabase pooler,
+not the local `alloy-cert` stack on `127.0.0.1:54422`. Every audit event for the
+request also records `target: staging`, and the spawn env clears
+`ALLOY_BLOCK_REMOTE_SUPABASE`.
+
+> **Had this apply succeeded, it would have written six unpromoted Developer
+> Platform migrations to the deployed database rather than to the certification
+> stack.** The failure prevented that. Retrying this action for a certification
+> goal would repeat the attempt.
+
+### Why it failed: the psql child was never spawned
+
+Every event — `operator_approved`, `executing`, `grant_consumed`, `failed`,
+`failed_notified` — carries the identical timestamp `2026-09-11T16:00:42.301Z`,
+and `execution_ended_at` was never set. Six migrations creating ten tables cannot
+succeed or fail in zero milliseconds.
+
+Confirmed independently: the apply child writes an `.out` and `.err` file per
+migration into the store's `tmp` directory. That directory holds files for other
+lanes' migrations and **none for any of the six**, with nothing newer than 15:55.
+The child never ran, so no SQL reached any database.
+
+### Answers
+
+1. **Which migration failed** — none. No per-migration result was recorded.
+2. **SQL error code** — none captured.
+3. **Database error message** — none. `failure_reason` is the literal string `apply_failed`; `result_ref` is null.
+4. **Statement/object being applied** — none reached.
+5. **When** — before the first migration, at dispatch.
+6. **Transaction model** — migration-by-migration. The runner loops per entry and returns `{ok:false, stopped:true}` on the first failure; each file is its own `psql -f` invocation, so each migration is its own transaction. There is no single transaction across the set.
+7. **Migration-history contribution** — none evidenced. A ledger path exists (`defaultInspectLedger`, and an `already applied` skip) but nothing executed.
+8. **Already-applied / conflicting / out-of-order** — nothing was classified; no results array was produced. The set was ordered ascending with the collision removed.
+9. **Trusted-host artifact** — none. `result_ref: null`, and no `tha_*` record references the request.
+10. **`provider_prompt_not_ready`** — a *notification delivery* state, not an apply cause. The delivery record reads `state: PENDING_PROMPT_READINESS`, `attempts: 1`, `last_readiness_state: busy`, `reason: busy`, `delivered_at: null`. The worker session was mid-turn, so delivery deferred. **Yes — this is why failure detail did not reach the lane, and it explains the earlier apparently-silent failures.**
+
+### Diagnosis
+
+Two independent problems. The apply never dispatched, so the immediate failure is
+in the runner composition/dispatch layer above psql — and `apply_failed` came back
+unclassified precisely because `classifySqlChildFailure` had no child stderr to
+classify. Separately and more importantly, this action is wired to the deployed
+database and cannot target `alloy-cert`, so fixing the dispatch alone would make
+it succeed against the wrong database.
