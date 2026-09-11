@@ -107,6 +107,23 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
     }).options;
 
     /**
+     * The CHILD ENROLLMENT statuses a child-grain outcome may write.
+     *
+     * Resolved from the same configured catalog as the case statuses above, but against the child's
+     * own domain (`opportunity_customer_members`) and with `status_effect` rather than
+     * `close_record` — moving a child to `enrolling` is a durable state change, not a closure, so
+     * filtering to terminal statuses would hide the very option Waitlist needs.
+     *
+     * Asked for unconditionally and handed down only for child-grain stages: the resolver is pure
+     * and this keeps the hook order stable.
+     */
+    const childEnrollmentStatusOptions = resolveOutcomeStatusOptions({
+        configuredStatuses: configuredStatuses ?? [],
+        purpose: "status_effect",
+        entityType: "opportunity_customer_members",
+    }).options;
+
+    /**
      * Author an exit path from inside the outcome that needs one, and point that outcome at it.
      *
      * Choosing "Move through transition" with no configured path used to be a dead end: the
@@ -367,6 +384,12 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                     canAuthorTransition ? transitionDestinations : undefined
                                 }
                                 closedStatusOptions={closedStatusOptions}
+                                stageGrain={
+                                    draft.journey_segment === "child" ? "child"
+                                    : draft.journey_segment === "family" ? "family"
+                                    : undefined
+                                }
+                                childEnrollmentStatusOptions={childEnrollmentStatusOptions}
                                 onCreateTransition={
                                     canAuthorTransition ?
                                         (targetStageKey: string) =>

@@ -223,3 +223,152 @@ describe("the close semantics the editor now owns", () => {
         ).toBe(false);
     });
 });
+
+/**
+ * CHILD-GRAIN CONSEQUENCES THE RUNTIME ALWAYS SUPPORTED AND SETTINGS COULD NOT AUTHOR.
+ *
+ * `update_child_enrollment_status` and `update_candidate_status` are executed by
+ * `stageOutcomeRuleTargetExecutor` and authored by the platform's own default Waitlist plan, but the
+ * composable writer modelled neither — they rode in `preserved_targets`, so configuration could
+ * carry them and no operator could ever create one. A child-grain stage therefore had no way to say
+ * "this child is now enrolling" or "pause this candidate", which left Waitlist with outcomes it
+ * could not express and, in the live tenant, no ways out at all.
+ *
+ * Promoting them from preserved to modelled is the whole change, and these tests hold the two
+ * things that promotion can break: the new consequences must survive a round trip, and everything
+ * that was already preserved must still be.
+ */
+describe("child-grain outcome consequences round-trip", () => {
+    const WAITLIST_SPOT_OFFERED: StageOutcomeRuleV1[] = [
+        {
+            rule_key: "offer_to_enrolling",
+            when_outcome_key: "spot_offered",
+            targets: [
+                // The platform default authors the child status with `disposition_key`, not
+                // `status_key`. Reading only the latter would show an empty control over a
+                // configuration that is in fact set — so the fixture uses the shape that ships.
+                { kind: "update_child_enrollment_status", disposition_key: "enrolling" },
+                { kind: "move_to_stage", stage_key: "enrolling", transition_ref: "move_to_stage:enrolling" },
+                { kind: "mark_stage_work_complete" },
+            ],
+        },
+    ];
+
+    it("reads a child enrollment status authored as disposition_key", () => {
+        const draft = readComposableOutcomeBehaviorDraft("spot_offered", WAITLIST_SPOT_OFFERED);
+        expect(draft.child_enrollment_status?.status_key).toBe("enrolling");
+    });
+
+    it("composes child status + movement + complete work on ONE outcome", () => {
+        // The runtime applies all three; the editor must not force a choice between them.
+        const draft = readComposableOutcomeBehaviorDraft("spot_offered", WAITLIST_SPOT_OFFERED);
+        expect(draft.movement).toBe("move_through_transition");
+        expect(draft.completes_stage_work).toBe(true);
+
+        const rules = upsertComposableOutcomeBehavior([], "spot_offered", draft);
+        const kinds = rules.flatMap((rule) => rule.targets).map((target) => target.kind).sort();
+        expect(kinds).toEqual(
+            ["mark_stage_work_complete", "move_to_stage", "update_child_enrollment_status"].sort(),
+        );
+    });
+
+    it("keeps the child status through an unrelated edit", () => {
+        const draft = readComposableOutcomeBehaviorDraft("spot_offered", WAITLIST_SPOT_OFFERED);
+        // Operator toggles something else entirely.
+        const edited = upsertComposableOutcomeBehavior(WAITLIST_SPOT_OFFERED, "spot_offered", {
+            ...draft,
+            completes_stage_work: false,
+        });
+        const child = edited
+            .flatMap((rule) => rule.targets)
+            .find((target) => target.kind === "update_child_enrollment_status");
+        expect(child?.status_key).toBe("enrolling");
+    });
+
+    it("round-trips candidate status, the consequence that has no substitute", () => {
+        const paused: StageOutcomeRuleV1[] = [
+            {
+                rule_key: "pause_candidate",
+                when_outcome_key: "candidate_paused",
+                targets: [{ kind: "update_candidate_status", candidate_status: "paused" }],
+            },
+        ];
+        const draft = readComposableOutcomeBehaviorDraft("candidate_paused", paused);
+        expect(draft.candidate_status?.candidate_status).toBe("paused");
+
+        const rules = upsertComposableOutcomeBehavior(paused, "candidate_paused", draft);
+        const target = rules
+            .flatMap((rule) => rule.targets)
+            .find((t) => t.kind === "update_candidate_status");
+        expect(target?.candidate_status).toBe("paused");
+    });
+
+    it("a candidate-status-only outcome does not invent a stage move", () => {
+        // Pausing a candidate changes neither the child's disposition nor the stage. If this ever
+        // emits `move_to_stage`, an operator pausing someone would move them instead.
+        const draft = readComposableOutcomeBehaviorDraft("candidate_paused", [
+            {
+                rule_key: "pause",
+                when_outcome_key: "candidate_paused",
+                targets: [{ kind: "update_candidate_status", candidate_status: "paused" }],
+            },
+        ]);
+        const rules = upsertComposableOutcomeBehavior([], "candidate_paused", draft);
+        const kinds = rules.flatMap((rule) => rule.targets).map((t) => t.kind);
+        expect(kinds).toContain("update_candidate_status");
+        expect(kinds).not.toContain("move_to_stage");
+        expect(kinds).not.toContain("update_child_enrollment_status");
+    });
+
+    it("an outcome carrying ONLY a child status still emits a behaviour rule", () => {
+        // `hasContent` decides whether a rule exists at all. Before these consequences were
+        // modelled, a draft holding nothing but a child status looked empty and was dropped.
+        const rules = upsertComposableOutcomeBehavior([], "spot_offered", {
+            movement: "stay_in_stage",
+            follow_up_work: [],
+            attention_items: [],
+            child_enrollment_status: { status_key: "enrolling" },
+            completes_stage_work: false,
+            preserved_targets: [],
+            preserved_rules: [],
+            had_behavior_rule: false,
+        });
+        expect(rules.length).toBeGreaterThan(0);
+        expect(rules.flatMap((r) => r.targets).map((t) => t.kind)).toContain(
+            "update_child_enrollment_status",
+        );
+    });
+
+    it("still preserves target kinds the draft does not model", () => {
+        // The original guarantee of this file, re-checked now that the modelled set has grown.
+        const withExotic: StageOutcomeRuleV1[] = [
+            {
+                rule_key: "exotic",
+                when_outcome_key: "spot_offered",
+                targets: [
+                    { kind: "update_candidate_status", candidate_status: "placed" },
+                    { kind: "stamp_enrollment_date" },
+                ],
+            },
+        ];
+        const draft = readComposableOutcomeBehaviorDraft("spot_offered", withExotic);
+        const rules = upsertComposableOutcomeBehavior(withExotic, "spot_offered", draft);
+        const kinds = rules.flatMap((rule) => rule.targets).map((target) => target.kind);
+        expect(kinds).toContain("stamp_enrollment_date");
+        expect(kinds).toContain("update_candidate_status");
+    });
+
+    it("family case status authoring is unchanged", () => {
+        const family: StageOutcomeRuleV1[] = [
+            {
+                rule_key: "closed_lost",
+                when_outcome_key: "closed_lost",
+                targets: [{ kind: "update_family_case_status", status_key: "closed" }],
+            },
+        ];
+        const draft = readComposableOutcomeBehaviorDraft("closed_lost", family);
+        expect(draft.case_status?.status_key).toBe("closed");
+        expect(draft.child_enrollment_status).toBeUndefined();
+        expect(draft.candidate_status).toBeUndefined();
+    });
+});
