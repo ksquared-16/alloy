@@ -243,6 +243,7 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 <FinancialsResponsibilityPanel
                     customerId={detail.customerId}
                     customerMemberId={detail.customerMemberId}
+                    chargeId={detail.chargeId}
                     parties={detail.responsibility.parties}
                     onCommitted={reload}
                 />

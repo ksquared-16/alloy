@@ -21,13 +21,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
         .from("contacts")
-/*
-         * `person_id` travels with the contact because a contact is a ROLE a person holds on
-         * an account, and the canonical identity other domains key on is the person. Financial
-         * responsibility is recorded against `persons`, so a picker built from contacts alone
-         * could name the right human and still be unable to say who they are.
-         */
-        .select("id, person_id, first_name, last_name, email, phone, company_name")
+        .select("id, first_name, last_name, email, phone, company_name")
         .eq("org_id", ctx.orgId)
         .eq("customer_id", customerId)
         .order("last_name", { ascending: true, nullsFirst: false })

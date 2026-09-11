@@ -34,6 +34,8 @@ export const CONFIGURE_RESPONSIBILITY_ACTION_KEY = "billing.configure_responsibi
 type ShareDraft = {
     responsiblePartyId: string;
     name: string;
+    /** Their relationship to the account, shown so the operator knows which person this is. */
+    roleLabel: string | null;
     /** Cents the operator is assigning. Empty means they have not said yet. */
     amount: string;
 };
@@ -87,58 +89,72 @@ async function callAction(
 }
 
 /**
- * WHO MAY BE MADE RESPONSIBLE.
+ * WHO MAY BE MADE RESPONSIBLE — asked of the server, not assembled here.
  *
- * `financial_responsibility_allocations.responsible_party_id` references `persons`, and the
- * arrangement service checks server-side that every party is a person IN THIS ORG — a party id from
- * another tenant is refused there, not here. So the authority's rule is org membership, and this
- * list is an operator convenience over it rather than a second policy: the people already holding a
- * share, plus the account's own contacts who carry a person identity. A contact is a role a person
- * holds on an account, which is why the person id is what travels.
+ * The eligibility rule is the arrangement service's: every party must be a `persons` row in this
+ * org, and it re-checks that whatever this list said. So the client never decides who is eligible;
+ * it asks one canonical read — `resolveResponsibilityPartyCandidates`, behind
+ * `/api/admin/financials/responsibility-candidates` — which unions the people attached to the
+ * household with anyone already holding a share, and excludes the `child` role by name.
  *
- * Children are not offered. `customer_members` are the household's children and a child does not
- * bear their own tuition.
+ * A FAILED READ IS NOT AN EMPTY HOUSEHOLD. If the call fails, the parties already on record stand
+ * and the panel says the list could not be loaded, rather than showing a blank list an operator
+ * would read as "nobody here can be made responsible".
  */
 async function loadCandidates(
     customerId: string | null,
+    chargeId: string | null,
     existing: { personId: string | null; name: string }[],
-): Promise<{ personId: string; name: string }[]> {
-    const byId = new Map<string, string>();
-    for (const p of existing) if (p.personId) byId.set(p.personId, p.name);
-    if (customerId) {
-        try {
-            const res = await fetch(`/api/admin/contact-options?customer_id=${encodeURIComponent(customerId)}`, {
-                credentials: "include",
-                cache: "no-store",
-            });
-            const body = (await res.json()) as { contacts?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
-            const rows = Array.isArray(body) ? body : (body.contacts ?? []);
-            for (const row of rows) {
-                const personId = row.person_id != null ? String(row.person_id).trim() : "";
-                if (!personId || byId.has(personId)) continue;
-                const name =
-                    [row.first_name, row.last_name]
-                        .map((v) => (v != null ? String(v).trim() : ""))
-                        .filter(Boolean)
-                        .join(" ") || "Contact";
-                byId.set(personId, name);
-            }
-        } catch {
-            /* A contact read that fails leaves the parties already on record — never an empty list
-               presented as "nobody is eligible". */
+): Promise<{ candidates: ShareDraft[]; error: string | null }> {
+    const fallback = existing
+        .filter((p) => p.personId)
+        .map((p) => ({ responsiblePartyId: p.personId as string, name: p.name, roleLabel: null, amount: "" }));
+    if (!customerId && !chargeId) return { candidates: fallback, error: null };
+
+    const params = new URLSearchParams();
+    if (customerId) params.set("customer_id", customerId);
+    if (chargeId) params.set("charge_id", chargeId);
+    try {
+        const res = await fetch(`/api/admin/financials/responsibility-candidates?${params.toString()}`, {
+            credentials: "include",
+            cache: "no-store",
+        });
+        const body = (await res.json()) as {
+            ok?: boolean;
+            candidates?: Array<{ personId?: unknown; name?: unknown; roleLabel?: unknown }>;
+            error?: unknown;
+        };
+        if (!res.ok || body.ok === false) {
+            return {
+                candidates: fallback,
+                error: typeof body.error === "string" ? body.error : "The people on this account could not be loaded.",
+            };
         }
+        const candidates = (body.candidates ?? [])
+            .map((c) => ({
+                responsiblePartyId: c.personId != null ? String(c.personId) : "",
+                name: c.name != null ? String(c.name) : "Responsible party",
+                roleLabel: c.roleLabel != null ? String(c.roleLabel) : null,
+                amount: "",
+            }))
+            .filter((c) => c.responsiblePartyId !== "");
+        return { candidates: candidates.length > 0 ? candidates : fallback, error: null };
+    } catch {
+        return { candidates: fallback, error: "The people on this account could not be loaded." };
     }
-    return [...byId.entries()].map(([personId, name]) => ({ personId, name }));
 }
 
 export default function FinancialsResponsibilityPanel({
     customerId,
     customerMemberId,
+    chargeId,
     parties,
     onCommitted,
 }: {
     customerId: string | null;
     customerMemberId: string | null;
+    /** The obligation being looked at — carried so an arrangement in force can still be edited. */
+    chargeId?: string | null;
     /** The parties already on record, so the operator edits what exists rather than inventing it. */
     parties: { personId: string | null; name: string }[];
     onCommitted: () => Promise<void> | void;
@@ -161,9 +177,10 @@ export default function FinancialsResponsibilityPanel({
          * with none is the case that needs it most — the panel opens on the people who could bear
          * it, not only on the people who already do.
          */
-        const candidates = await loadCandidates(customerId, parties);
-        setShares(candidates.map((c) => ({ responsiblePartyId: c.personId, name: c.name, amount: "" })));
-    }, [customerId, parties]);
+        const loaded = await loadCandidates(customerId, chargeId ?? null, parties);
+        setShares(loaded.candidates);
+        if (loaded.error) setError(loaded.error);
+    }, [chargeId, customerId, parties]);
 
     const run = useCallback(
         async (mode: "preview" | "execute") => {
@@ -243,12 +260,16 @@ export default function FinancialsResponsibilityPanel({
 
             {shares.length === 0 ? (
                 <p className="mt-2 text-[11px] text-alloy-midnight/55" data-financials-responsibility-no-parties="true">
-                    Nobody on this account can be made responsible yet. Add a contact with a person record first.
+                    Nobody on this account can be made responsible yet. Add a parent or guardian to the
+                    household first.
                 </p>
             ) : null}
             {shares.map((share, i) => (
                 <label key={share.responsiblePartyId} className="mt-2 block text-[11px] text-alloy-midnight/60">
                     {share.name}
+                    {share.roleLabel ? (
+                        <span className="ml-1 text-alloy-midnight/40">{share.roleLabel}</span>
+                    ) : null}
                     <input
                         type="number"
                         inputMode="decimal"
