@@ -107,3 +107,63 @@ approved first mutation contract.** No public mutation added.
 
 **Classroom Coach:** untouched. No adapter, no seeded Application, no claimed
 capability. **D-1 remains unanswered.**
+
+## Verified provisioning recipe (B.7 follow-up, 2026-09-11)
+
+A later run was asked to provision the lane itself. Two of three prerequisites
+are now precisely known, and a **third was discovered** that no prior slice had
+identified.
+
+### Corrected endpoint facts
+
+| Fact | Value |
+|---|---|
+| Certification Postgres | `127.0.0.1:54422` |
+| Certification **API** (kong) | **`127.0.0.1:54421`** |
+| `CERT_SUPABASE_URL` should be | `http://127.0.0.1:54421` — the **API** URL, not the database port |
+| `CERT_SERVICE_ROLE_KEY` | `SERVICE_KEY` on the `supabase_storage_alloy-cert` container |
+| JWT secret | the standard local-dev default |
+
+Verified working: `GET /rest/v1/` returns **200** with those credentials.
+
+### The third prerequisite — the real Gate 1 blocker
+
+**None of the Developer Platform schema exists on the certification database.**
+All eight tables return 404, and all six migrations from B.1–B.5 are unapplied
+there:
+
+```
+20260910190000_developer_platform_trust_foundation.sql
+20260910200000_external_request_boundary.sql
+20260910210000_external_locations_read.sql
+20260911130000_external_locations_updated_since.sql
+20260911140000_administrative_audit_attempted.sql
+20260911150000_integration_resource_refs.sql
+```
+
+`attendance_integration_producers` **does** exist there, so the attendance lane's
+migration is applied and the stack is otherwise healthy.
+
+**Consequence:** the live Attendance suites cannot certify the converged ingestion
+no matter what environment this lane is given, because the rewired path depends on
+`app_installations` and `integration_resource_refs`, and neither exists on the
+certification database. A slot and credentials are necessary and **not
+sufficient**.
+
+Applying them is a privileged write to infrastructure other sessions are actively
+using, and is a Director-owned governed action — not something a worker lane
+should fire on its own initiative against shared state.
+
+### Unblock recipe, complete
+
+1. Slot and managed port from `alloy-sprint-start` — see the caveat below.
+2. `CERT_SUPABASE_URL=http://127.0.0.1:54421` and `CERT_SERVICE_ROLE_KEY=<storage SERVICE_KEY>`.
+3. **Apply the six migrations above to `alloy-cert`** via the governed migration action.
+
+### Caveat on `alloy-sprint-start`
+
+It **creates** a branch and worktree from `origin/staging` and **opens a provider
+session** on it. It does not slot an existing worktree. Running it from this lane
+would spawn a second agent session and produce a worktree without the ten
+unpromoted B.1–B.6 commits, which is the opposite of preserving the certified
+lineage. Slotting this worktree is an operator action, not a worker one.
