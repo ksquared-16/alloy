@@ -66,3 +66,33 @@ Financials in the packet; whole-experience ephemeral preview; vaccine extraction
 > If we cannot write a simple click-by-click customer QA script for a feature, the product flow is probably not coherent enough yet.
 
 QA is a product-coherence test, not only validation. Major end-to-end flows should ship with a customer-operable walkthrough as part of the acceptance artifact. This does not mean every engineering slice produces a 59-step manual test.
+
+---
+
+## Deliberately not built in V0.5 — recorded, not implemented
+
+Both of these were found while decomposing Kelly's real Admissions Packet. Neither is a defect, and
+neither is started.
+
+### 1. Financial Setup as a packet step
+
+The real Admissions Packet's **Direct Payment Authorization** section (10 fields: account holder,
+financial institution, routing number, account number, account type, and a signature) was
+**deferred** and is not part of `Enrollment Paperwork 2026–2027`. The **Parent Handbook
+Acknowledgement** section (4 fields) was **removed** from the form entirely, because the packet's
+own *Read & acknowledge* step now owns that obligation properly — the family reads the real 23-page
+Handbook and signs against it, rather than ticking a line inside an unrelated form.
+
+When financial setup is built, it is a **fourth step kind**, not a form: it collects bank
+credentials, which must never land in `form_submissions` beside a child's nap habits. The step-kind
+vocabulary in `lib/forms/packets/packetStepKind.ts` is a closed set precisely so adding one is a
+deliberate act with its own storage decision.
+
+### 2. Structured immunization extraction
+
+The *Upload a document* step files the family's immunization record under the governed
+`immunization_record` classification. It does **not** read doses out of it, and must not be made to:
+per **D-H5**, structured dose truth is Health & Safety's to own, and an upload is evidence rather
+than a value. The vaccine grid on the Oregon CIS stays truthfully blank until Health supplies it.
+
+Extraction, when it comes, writes to Health's destination — not to a competing one inside Enrollment.
