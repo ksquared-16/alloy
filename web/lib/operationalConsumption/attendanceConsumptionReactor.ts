@@ -49,6 +49,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { billingPeriodDays, billingPeriodForDate } from "@/lib/financials/billingPeriod";
 import { deriveAttendanceFactType } from "@/lib/operationalConsumption/attendanceFactTranslation";
 import { draftConsumption, type ConsumptionDraftResult } from "@/lib/operationalConsumption/consumptionService";
 import type { OperationalFactDto } from "@/lib/operationalConsumption/consumptionTypes";
@@ -154,6 +155,23 @@ export async function reactToAttendanceFact(
         };
     }
 
+    /*
+     * THE BILLING PERIOD THE CONSEQUENCE BELONGS TO.
+     *
+     * Resolved through the canonical owner, never computed here. `billingPeriod*`
+     * is the module tuition generation already asks — `resolveTuitionRecurrence`
+     * takes exactly this route to its `periodDays` — and `reductionPeriod` states
+     * why it is shared: the resolver, the applier and the certification must agree
+     * about what September is. A prorated amount's denominator is the same kind of
+     * fact, so the reactor CARRIES the answer and owns none of the arithmetic.
+     *
+     * Without these inputs `prorateAmountCents` returns null and a creditable
+     * vacation lands as `no_charge` — indistinguishable from a commercial refusal.
+     * That is the gap this closes.
+     */
+    const period = billingPeriodForDate(fact.service_date);
+    const periodDays = billingPeriodDays(period);
+
     const dto: OperationalFactDto = {
         sourceFamily: "attendance",
         eventKey: `attendance.${attendanceFactType}`,
@@ -176,6 +194,10 @@ export async function reactToAttendanceFact(
         // recognises this as a restatement rather than a second event.
         entryType: (fact.entry_type as OperationalFactDto["entryType"]) ?? "original",
         correctsFactId: fact.corrects_event_id,
+        // Carried, not calculated — see above.
+        periodStart: period.start,
+        periodEnd: period.end,
+        periodDays: periodDays > 0 ? periodDays : null,
     };
 
     const result = await draftConsumption(supabase, args.orgId, dto, args.today, args.actorUserId ?? null);

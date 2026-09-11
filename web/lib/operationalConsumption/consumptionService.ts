@@ -894,6 +894,19 @@ async function resolveDirective(
     // Non-draftable (proration / proration_credit / vacation_credit) — preview only.
     const proratedDays = fact.proratedDays ?? (directive.obligationKind === "vacation_credit" ? 1 : null);
     const amount = prorateAmountCents(rateAmount, proratedDays, fact.periodDays);
+
+    /*
+     * A CREDIT THE POLICY GRANTED BUT NOBODY CAN VALUE IS NOT A REFUSAL.
+     *
+     * Commerce has already said this vacation earns a credit. If the amount will
+     * not resolve — no rate for the child's plan, no period length — then the
+     * honest state is "owed, and unresolved", not `no_charge`. Reporting it as
+     * no_charge would make it indistinguishable from a `no_credit` policy, and the
+     * family would quietly not receive money an organisation decided they were
+     * due. It fails closed on the money and opens the existing review lifecycle
+     * instead, which is where an operator already looks.
+     */
+    const unresolvedValuation = amount == null;
     return {
         obligation: {
             obligationKind: directive.obligationKind,
@@ -906,11 +919,25 @@ async function resolveDirective(
             billableOn: ctx.anchorDate,
             periodStart,
             periodEnd: fact.periodEnd ?? null,
-            reviewRequired: ctx.reviewByPolicy,
+            reviewRequired: ctx.reviewByPolicy || unresolvedValuation,
             draftable: false,
             status: amount != null ? "previewed" : "no_charge",
             resolutionKey: `cons:${directive.obligationKind}:${ctx.anchorDate}:${ctx.agreementId ?? fact.sourceEntityId}`,
-            explanation: { directive_reason: directive.reason, proration_method: ctx.prorationMethod, prorated_days: proratedDays, period_days: fact.periodDays ?? null, full_period_amount_cents: rateAmount, note: "preview only; the adjustment/credit posts downstream" },
+            explanation: {
+                directive_reason: directive.reason,
+                proration_method: ctx.prorationMethod,
+                prorated_days: proratedDays,
+                period_days: fact.periodDays ?? null,
+                full_period_amount_cents: rateAmount,
+                note: "preview only; the adjustment/credit posts downstream",
+                ...(unresolvedValuation
+                    ? {
+                          // Named so review reads as a valuation gap, never as a commercial refusal.
+                          unresolved_valuation: rateAmount == null ? "no_rate_resolved" : "no_period_length",
+                          review_reason: "a granted consequence whose amount could not be resolved",
+                      }
+                    : {}),
+            },
         },
         chargePreview: null,
         template: null,
