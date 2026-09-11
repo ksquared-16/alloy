@@ -95,9 +95,33 @@ async function resolveDisplayNames(
 ): Promise<AccessHistoryDisplayNames> {
     const [roles, locations, members] = await Promise.all([
         supabase.from("role_definitions").select("role_key, role_label").eq("org_id", orgId),
-        supabase.from("locations").select("id, name").eq("org_id", orgId),
+        // `label`, and no active filter. The column name was `name` here and that is not a column on
+        // `locations` — PostgREST answered with an error, the map came back empty, and every scope
+        // event rendered "Deleted location (uuid)" for a location that was sitting right there in the
+        // editor. Deactivated sites are included deliberately: history outlives deactivation, and a
+        // real label is more truthful than the gone-label fallback.
+        supabase.from("locations").select("id, label").eq("org_id", orgId),
         supabase.from("user_roles").select("user_id").eq("org_id", orgId),
     ]);
+
+    /*
+     * A LOOKUP FAILURE IS NOT "EVERYTHING WAS DELETED".
+     *
+     * These three reads used to swallow their errors into `?? []`, which made a broken query
+     * indistinguishable from an organization whose roles, people and locations had all been removed —
+     * and the fallback ladder then stated that deletion as fact on every row. Failing loudly is what
+     * lets the surface say "we could not find out" instead, which is a different answer from "nothing
+     * happened" and the one the four-state contract exists to keep separate.
+     */
+    for (const [what, result] of [
+        ["roles", roles],
+        ["locations", locations],
+        ["members", members],
+    ] as const) {
+        if (result.error) {
+            throw new Error(`access_history_names_failed(${what}): ${result.error.message}`);
+        }
+    }
 
     const roleMap = new Map<string, string>();
     for (const r of (roles.data ?? []) as { role_key: string; role_label: string | null }[]) {
@@ -105,8 +129,8 @@ async function resolveDisplayNames(
     }
 
     const locationMap = new Map<string, string>();
-    for (const l of (locations.data ?? []) as { id: string; name: string | null }[]) {
-        if (l.name) locationMap.set(l.id, l.name);
+    for (const l of (locations.data ?? []) as { id: string; label: string | null }[]) {
+        if (l.label) locationMap.set(l.id, l.label);
     }
 
     const peopleMap = new Map<string, string>();

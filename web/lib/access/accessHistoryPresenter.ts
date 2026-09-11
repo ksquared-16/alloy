@@ -91,6 +91,36 @@ function resolveLabel(
     return `${goneLabel} (${id})`;
 }
 
+/**
+ * The label for whoever made the change.
+ *
+ * A person who has since left the organization is "Removed user (id)" — the ladder above, and
+ * correct. A SYSTEM actor is not that, and calling it that would be a fabrication of exactly the kind
+ * this module refuses elsewhere: provisioning, automation and service principals never had a row in
+ * the member list to be removed from. So an unresolved actor on a non-operator origin is presented as
+ * what it is, and an actor that DOES resolve to a person is still shown as that person — a human
+ * acting through the API is a human.
+ */
+const ORIGIN_ACTOR_WORD: Record<string, string> = {
+    system: "System",
+    automation: "Automation",
+    api: "API client",
+};
+
+function resolveActor(
+    operatorId: string | null,
+    origin: string,
+    people: ReadonlyMap<string, string>
+): string {
+    if (operatorId) {
+        const person = people.get(operatorId);
+        if (person) return person;
+        const word = ORIGIN_ACTOR_WORD[origin];
+        if (word) return `${word} (${operatorId})`;
+    }
+    return resolveLabel(operatorId, people, "Removed user");
+}
+
 function splitKeys(state: string | null): string[] {
     if (!state) return [];
     return state.split(",").map((k) => k.trim()).filter(Boolean);
@@ -160,7 +190,7 @@ export function presentAccessEvent(
     const correlationId = typeof ctx.correlation_id === "string" ? ctx.correlation_id : null;
     const roleKey = typeof ctx.role_key === "string" ? ctx.role_key : null;
 
-    const actorDisplay = resolveLabel(row.operator_id, names.people, "Removed user");
+    const actorDisplay = resolveActor(row.operator_id, row.origin, names.people);
     const roleDisplay = roleKey ? (names.roles.get(roleKey) ?? `Deleted role (${roleKey})`) : null;
     const personDisplay =
         row.subject_type === "role"
