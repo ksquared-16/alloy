@@ -86,6 +86,20 @@ main() {
   # `${var^}` is bash 4; macOS ships bash 3.2, so the label is set explicitly rather than expanded.
   local mode_label="Dev"
   local server_command="$ALLOY_DEV_COMMAND"
+  # THE MODE IS CHOSEN BEFORE THE ADDRESS IS APPLIED, not after.
+  #
+  # The loopback bind below used to be appended to the dev command and the production branch then
+  # REPLACED that command wholesale, dropping the flag with it. So `--production` always asked for
+  # the wildcard, and on any Serve-published lane port the wildcard is exactly what it cannot have:
+  # MEASURED on 3014, where :: and 0.0.0.0 both returned EADDRINUSE while 127.0.0.1 bound cleanly,
+  # and every production start died with "process did not stay alive".
+  #
+  # That made the stable QA serving mode unusable on precisely the ports QA runs on.
+  if [[ "$mode" == "production" ]]; then
+    mode_label="Production"
+    server_command="${ALLOY_PROD_COMMAND:-npm run start}"
+    [[ -d "${web_dir}/.next" ]] || alloy_die "production build missing: ${web_dir}/.next — build first (production start never builds implicitly)"
+  fi
   # ONE OWNER PER ADDRESS.
   #
   # Next bound every interface, and Tailscale Serve publishes the same lane port
@@ -106,13 +120,8 @@ main() {
   if [[ -n "$bind_host" && "$server_command" != *" -H "* && "$server_command" != *"--hostname"* ]]; then
     case "$server_command" in
       npm\ run\ *) server_command="${server_command} -- -H ${bind_host}" ;;
-      *next\ dev*)  server_command="${server_command} -H ${bind_host}" ;;
+      *next\ dev*|*next\ start*) server_command="${server_command} -H ${bind_host}" ;;
     esac
-  fi
-  if [[ "$mode" == "production" ]]; then
-    mode_label="Production"
-    server_command="${ALLOY_PROD_COMMAND:-npm run start}"
-    [[ -d "${web_dir}/.next" ]] || alloy_die "production build missing: ${web_dir}/.next — build first (production start never builds implicitly)"
   fi
 
   if [[ -f "$pid_path" ]]; then
