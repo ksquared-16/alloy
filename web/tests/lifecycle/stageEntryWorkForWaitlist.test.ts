@@ -19,6 +19,12 @@ import { describe, expect, it } from "vitest";
 
 import { resolveEffectivePrimaryWorkTemplate } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 import type { StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { resolveWorkDefinitionKeyFromTemplate } from "@/lib/lifecycle/resolveWorkDefinitionKeyFromTemplate";
+import { resolveBusinessProcessSemanticWorkKey } from "@/lib/lifecycle/buildBusinessProcessWorkRuntimeFingerprint";
+import {
+    getPlatformWorkDefinition,
+    PLATFORM_DEFAULT_WORK_DEFINITION_STAGE_BINDINGS,
+} from "@/lib/admin/operationalWork/platformWorkDefinitionCatalog";
 
 /** The Waitlist shape: two optional templates, the first marked primary. */
 const WAITLIST_TEMPLATES: StageWorkTemplateV1[] = [
@@ -74,5 +80,65 @@ describe("Waitlist entry resolves an entry work template", () => {
 
     it("a genuinely workless stage resolves nothing rather than inventing work", () => {
         expect(resolveEffectivePrimaryWorkTemplate({ work_templates: [] })).toBeNull();
+    });
+});
+
+/**
+ * TWO OPERATOR INTENTS CANNOT SHARE ONE WORK IDENTITY.
+ *
+ * Business Process work identity is `(work definition, subject)` — the catalog says so outright:
+ * `dedupe_policy: "definition_subject"`, and `findOpenBusinessProcessWorkBySemanticIdentity`
+ * resolves a row's semantic key as `workDefinitionKey ?? templateKey`.
+ *
+ * `offer_spot` used to bind to `contact_family`, which `review_waitlist_position` also binds to. So
+ * with the review work open — which stage entry always creates — starting an offer would resolve to
+ * the SAME semantic key on the SAME opportunity and return `deduped`, handing the operator the
+ * review item back. The Process Card would still read "Review waitlist position" and the offer
+ * outcomes would never be reachable. Silent, and indistinguishable from "nothing happened".
+ */
+describe("offer_spot is its own work identity", () => {
+    it("does not share a work definition with the review work beside it", () => {
+        const review = resolveWorkDefinitionKeyFromTemplate({
+            template_key: "review_waitlist_position",
+            work_definition_key: null,
+        });
+        const offer = resolveWorkDefinitionKeyFromTemplate({
+            template_key: "offer_spot",
+            work_definition_key: null,
+        });
+        expect(review.ok).toBe(true);
+        expect(offer.ok).toBe(true);
+        if (!review.ok || !offer.ok) return;
+        expect(offer.work_definition_key).not.toBe(review.work_definition_key);
+    });
+
+    it("resolves distinct semantic work keys, which is what dedupe compares", () => {
+        const keyFor = (templateKey: string) => {
+            const resolved = resolveWorkDefinitionKeyFromTemplate({
+                template_key: templateKey,
+                work_definition_key: null,
+            });
+            return resolveBusinessProcessSemanticWorkKey({
+                workDefinitionKey: resolved.ok ? resolved.work_definition_key : null,
+                templateKey,
+            });
+        };
+        expect(keyFor("offer_spot")).not.toBe(keyFor("review_waitlist_position"));
+    });
+
+    it("offer_spot is a real catalog definition, not an invented key", () => {
+        // An unresolved template fails validation at save and rejects at runtime spawn, so a
+        // dangling binding would surface as "cannot start offer" rather than anything explanatory.
+        const definition = getPlatformWorkDefinition("offer_spot");
+        expect(definition).toBeTruthy();
+        expect(definition?.display_name).toBe("Offer spot");
+        expect(definition?.dedupe_policy).toBe("definition_subject");
+    });
+
+    it("the Waitlist stage admits it", () => {
+        const binding = PLATFORM_DEFAULT_WORK_DEFINITION_STAGE_BINDINGS.waitlist;
+        expect(binding?.available_definition_keys).toContain("offer_spot");
+        // The review work still resolves there too.
+        expect(binding?.available_definition_keys).toContain("contact_family");
     });
 });

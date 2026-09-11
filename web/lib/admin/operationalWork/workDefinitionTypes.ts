@@ -7,7 +7,17 @@ export type PlatformWorkDefinitionKey =
     | "follow_up_after_tour"
     | "collect_missing_information"
     | "record_tour_outcome"
-    | "resolve_outstanding_balance";
+    | "resolve_outstanding_balance"
+    /**
+     * Offering a waitlisted child a place.
+     *
+     * Its own definition because work identity is `(definition, subject)` — `dedupe_policy:
+     * "definition_subject"`. `offer_spot` used to bind to `contact_family`, which
+     * `review_waitlist_position` also binds to, so starting an offer while the review was open
+     * resolved to the SAME semantic key and deduped: the operator would have got the review work
+     * back instead of an offer. Two distinct operator intents cannot share one work identity.
+     */
+    | "offer_spot";
 
 export type WorkDefinitionDuePolicy =
     | { kind: "offset_from_create"; days?: number; hours?: number }
