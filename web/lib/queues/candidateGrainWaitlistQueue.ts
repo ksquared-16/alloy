@@ -11,6 +11,7 @@ import {
 import { resolveLifecycleStageQueuePresentationMode } from "@/lib/lifecycle/lifecycleStageQueuePresentation";
 import { resolveLifecycleVisibilityStatusKeys } from "@/lib/lifecycle/lifecycleVisibilityEvaluator";
 import { countLifecycleOpportunityRecordsForWorkUnit } from "@/lib/lifecycle/lifecycleOpportunityQueueScope";
+import { queryEnrollmentProcessInstanceTrackRows } from "@/lib/queues/childGrainProcessInstanceQueue";
 import { queueStatusKeysFromQueueConfig } from "@/lib/lifecycle/lifecycleQueueTrace";
 import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
 import { applyRecordScopeConstraintsToQuery } from "@/lib/admin/accessScope";
@@ -237,6 +238,81 @@ function opportunityPreviewFromCandidateRow(row: CandidateQueryRow) {
         created_at: o.created_at ?? "",
         updated_at: o.updated_at ?? "",
     };
+}
+
+/**
+ * The placement candidates of children whose OWN effective stage is this lane's stage.
+ *
+ * Membership comes from `queryEnrollmentProcessInstanceTrackRows` — the canonical child-lane query,
+ * bounded by org + Enrollment + stage — so this module states no membership rule of its own. It only
+ * turns "which children are in this stage" into "their candidate rows", using the same select,
+ * status filter and location scope as the family-sourced branches, so a row reached this way is
+ * indistinguishable from one reached the other way.
+ *
+ * A stage-member child with no placement candidate yields no row. That is deliberate: this lane's
+ * row IS a candidate, and inventing one would put a fabricated entry into a ranked surface.
+ */
+async function queryChildStageMemberCandidateRows(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    workUnitId: string;
+    stageKey: string;
+    candidateStatuses: readonly string[];
+    recordScopeConstraints: RecordScopeConstraints | null;
+    locationScopeSource: QueueMembershipLocationScopeSource;
+}): Promise<CandidateQueryRow[]> {
+    let trackRows: Awaited<ReturnType<typeof queryEnrollmentProcessInstanceTrackRows>>;
+    try {
+        trackRows = await queryEnrollmentProcessInstanceTrackRows({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            workUnitId: params.workUnitId,
+            stageKey: params.stageKey,
+        });
+    } catch {
+        // Membership from the family lens still stands; this lens failing must not empty the lane.
+        return [];
+    }
+
+    const oppIds = [
+        ...new Set(
+            trackRows
+                .map((r) => (typeof r.opportunity_id === "string" ? r.opportunity_id.trim() : ""))
+                .filter(Boolean),
+        ),
+    ];
+    if (!oppIds.length) return [];
+
+    let q = params.supabase
+        .from("placement_candidates")
+        .select(
+            `id, org_id, opportunity_id, status, site_id, wait_since, program_room_cohort_key, program_room_group_label, opportunity_customer_member_id, customer_id, customer_member_id,
+            opportunities!inner (
+                id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at
+            ),
+            opportunity_customer_members ( outcome_status_key )`
+        )
+        .eq("org_id", params.orgId)
+        .in("opportunity_id", oppIds)
+        .in("status", [...params.candidateStatuses]);
+    q = applyWaitlistCandidateLocationScopeToQuery(q, params.recordScopeConstraints, params.locationScopeSource);
+    const { data, error } = await q;
+    if (error) throw new Error(`waitlist child-stage membership query failed: ${error.message}`);
+
+    /*
+     * The candidate must be THIS child's. A family's other children have their own candidate rows on
+     * the same opportunity, and returning them here would make one waitlisted child pull their
+     * siblings into the lane behind them.
+     */
+    const memberIds = new Set(
+        trackRows
+            .map((r) => (typeof r.customer_member_id === "string" ? r.customer_member_id.trim() : ""))
+            .filter(Boolean),
+    );
+    return ((data ?? []) as unknown as CandidateQueryRow[]).filter((row) => {
+        const cm = typeof row.customer_member_id === "string" ? row.customer_member_id.trim() : "";
+        return cm ? memberIds.has(cm) : true;
+    });
 }
 
 export const SYNTHETIC_WAITLIST_CANDIDATE_ID_PREFIX = "synthetic-waitlist:";
@@ -467,6 +543,52 @@ async function queryWaitlistCandidates(params: {
             throw new Error(`waitlist candidate-grain query failed: ${error.message}`);
         }
         candidateRows = (data ?? []) as unknown as CandidateQueryRow[];
+    }
+
+    /*
+     * ── CHILD-GRAIN MEMBERSHIP, FROM CHILD TRUTH ──
+     *
+     * Both branches above bound the population by something that belongs to the FAMILY: the
+     * lifecycle branch by `opportunities.status_key`, the other by `opportunities.work_unit_id`.
+     * Either is the right rule for a case lane. On this lane the subject is a CHILD, and a child's
+     * position lives in their process instance — so a family still sitting at Lead for a sibling who
+     * has not moved was hiding a child who is genuinely in Waitlist.
+     *
+     * Measured on the running app: a child with process-instance stage `waitlist`, disposition
+     * `waitlisted` and an active placement candidate did not appear in the Waitlist lane, because
+     * their household was Lead. Every lifecycle check passed while the queue stayed empty.
+     *
+     * So child membership is UNIONED in rather than replacing anything. The family-sourced
+     * population still contributes (it carries the synthetic rows for families at a waitlist status
+     * with no candidate yet); this adds the children the family lens cannot see.
+     *
+     * BOUNDED, and by the same shape as what it joins. `queryEnrollmentProcessInstanceTrackRows` is
+     * the canonical child-lane membership query the child-track lane already uses: org + Enrollment
+     * + this stage (or null stage, resolved in code through the effective-stage rule), never an
+     * org-wide child scan. Its output is an explicit opportunity-id list, and the candidate query
+     * below is bounded by that list exactly as the lifecycle branch is bounded by its own.
+     *
+     * Rows are merged by candidate id, so a child both lenses can see appears once.
+     */
+    const childStageKey = lifecycleCtx.lifecycle_stage_key?.trim() || null;
+    if (childStageKey) {
+        const childMemberRows = await queryChildStageMemberCandidateRows({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            workUnitId: params.workUnitId,
+            stageKey: childStageKey,
+            candidateStatuses: params.filters.candidate_statuses,
+            recordScopeConstraints: params.recordScopeConstraints,
+            locationScopeSource: params.locationScopeSource,
+        });
+        if (childMemberRows.length) {
+            const seen = new Set(candidateRows.map((r) => r.id));
+            for (const row of childMemberRows) {
+                if (seen.has(row.id)) continue;
+                seen.add(row.id);
+                candidateRows.push(row);
+            }
+        }
     }
 
     const locationFiltered = filterWaitlistCandidateRowsByLocationScope(
@@ -805,6 +927,8 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
 
 /** @internal test export */
 export const __testing = {
+    queryChildStageMemberCandidateRows,
+    queryWaitlistCandidates,
     parseWaitlistCandidateGrainFilters,
     resolveWaitlistCandidateGrainContext,
     resolveLifecycleWaitlistQueryContext,
