@@ -73,8 +73,18 @@ describeLive("responsibility and funding, live", () => {
      * so the consequences go first. A silent failure here would leave a previous case's arrangement
      * in force and the next case would divide money for the wrong people while looking green.
      */
+    /*
+     * A SUBSIDY CLAIM LINE POINTS AT A RESPONSIBILITY ALLOCATION, and that reference is not
+     * cascading. So a claim built by the subsidy suite against this shared tenant pins the
+     * allocation, the delete below answers 23503, and every case in this file fails inside its own
+     * teardown — for a reason that has nothing to do with responsibility.
+     *
+     * The line goes first, innermost outward, exactly as the fixtures do. Nothing is deleted that
+     * this suite would not already have deleted by deleting the allocation underneath it.
+     */
     async function clearAll() {
         for (const table of [
+            "financial_subsidy_claim_lines",
             "payment_responsibility_attributions",
             "financial_expected_funding",
             "financial_responsibility_allocations",
@@ -698,5 +708,102 @@ describeLive("responsibility and funding, live", () => {
         expect(sumAssigned(rows)).toBe(0);
         expect(rows).toHaveLength(2);
         await supabase.from("commercial_policies").delete().eq("org_id", ORG).eq("id", `${R}00000000d002`);
+    }, 300_000);
+    /*
+     * ── 13 · A CORRECTED EXPECTATION REPLACES THE OLD ONE ───────────────────────────────────────
+     *
+     * `configureExpectedFunding` only ever INSERTed. `state` has always allowed `active |
+     * superseded`, every reader filters on `active`, and nothing in the codebase ever wrote
+     * `superseded`. Configuring funding twice for the same share therefore left TWO active rows,
+     * and the agency was expected to cover the same money twice: `buildSubsidyClaim` sums them into
+     * one claim, and the account card lists both.
+     *
+     * That survived only because expected funding had no operator surface and was written once by a
+     * seed. Slice 5B gives it a "Manage expected funding" control, where correcting $750 to $650 is
+     * the most likely second thing anyone ever does with it.
+     */
+    it("supersedes the previous expectation for the same source rather than doubling it", async () => {
+        await clearAll();
+        const arrangement = await arrange([
+            { responsiblePartyId: alexId, method: "percentage", percentBasisPoints: 10_000, priority: 1 },
+        ]);
+        const { data: shareRows } = await supabase
+            .from("financial_responsibility_shares").select("id").eq("arrangement_id", arrangement.arrangementId);
+        const shareId = ((shareRows ?? [])[0] as { id: string }).id;
+
+        const agency = "agency-ref-0001";
+        await configureExpectedFunding(supabase, {
+            orgId: ORG, shareId, arrangementId: arrangement.arrangementId,
+            fundingSourceType: "government_subsidy", fundingSourceLabel: "State subsidy",
+            fundingSourceReference: agency,
+            basis: "fixed_amount", expectedAmountCents: 75_000,
+            idempotencyKey: "fef:supersede-a", actorUserId: ACTOR,
+        });
+        const corrected = await configureExpectedFunding(supabase, {
+            orgId: ORG, shareId, arrangementId: arrangement.arrangementId,
+            fundingSourceType: "government_subsidy", fundingSourceLabel: "State subsidy",
+            fundingSourceReference: agency,
+            basis: "fixed_amount", expectedAmountCents: 65_000,
+            idempotencyKey: "fef:supersede-b", actorUserId: ACTOR,
+        });
+
+        const { data: rows } = await supabase
+            .from("financial_expected_funding")
+            .select("id, state, expected_amount_cents")
+            .eq("org_id", ORG).eq("share_id", shareId);
+        const all = (rows ?? []) as Array<{ id: string; state: string; expected_amount_cents: number }>;
+        const active = all.filter((r) => r.state === "active");
+
+        expect(active, "one source, one live expectation").toHaveLength(1);
+        expect(active[0]!.id).toBe(corrected.fundingId);
+        expect(active[0]!.expected_amount_cents, "the correction is what stands").toBe(65_000);
+
+        /*
+         * THE PREDECESSOR IS KEPT, NOT DELETED. What a funder was expected to cover last month is
+         * how a variance gets explained, and `financial_subsidy_variances` is downstream of exactly
+         * this figure.
+         */
+        const superseded = all.filter((r) => r.state === "superseded");
+        expect(superseded, "the earlier expectation is retired, not erased").toHaveLength(1);
+        expect(superseded[0]!.expected_amount_cents).toBe(75_000);
+    }, 300_000);
+
+    /*
+     * TWO FUNDERS ARE NOT A CORRECTION OF EACH OTHER. A state agency and an employer each covering
+     * part of one parent's share is the case the whole feature exists for; superseding by anchor
+     * alone would have silently dropped one of them.
+     */
+    it("keeps two different sources on one share both active", async () => {
+        await clearAll();
+        const arrangement = await arrange([
+            { responsiblePartyId: alexId, method: "percentage", percentBasisPoints: 10_000, priority: 1 },
+        ]);
+        const { data: shareRows } = await supabase
+            .from("financial_responsibility_shares").select("id").eq("arrangement_id", arrangement.arrangementId);
+        const shareId = ((shareRows ?? [])[0] as { id: string }).id;
+
+        await configureExpectedFunding(supabase, {
+            orgId: ORG, shareId, arrangementId: arrangement.arrangementId,
+            fundingSourceType: "government_subsidy", fundingSourceLabel: "State subsidy",
+            fundingSourceReference: "agency-ref-0001",
+            basis: "fixed_amount", expectedAmountCents: 40_000,
+            idempotencyKey: "fef:two-sources-a", actorUserId: ACTOR,
+        });
+        await configureExpectedFunding(supabase, {
+            orgId: ORG, shareId, arrangementId: arrangement.arrangementId,
+            fundingSourceType: "employer_sponsorship", fundingSourceLabel: "Northwind Industries",
+            basis: "fixed_amount", expectedAmountCents: 25_000,
+            idempotencyKey: "fef:two-sources-b", actorUserId: ACTOR,
+        });
+
+        const { data: rows } = await supabase
+            .from("financial_expected_funding")
+            .select("funding_source_type, state")
+            .eq("org_id", ORG).eq("share_id", shareId).eq("state", "active");
+        const active = (rows ?? []) as Array<{ funding_source_type: string }>;
+        expect(active, "an employer and an agency are two expectations").toHaveLength(2);
+        expect(new Set(active.map((r) => r.funding_source_type))).toEqual(
+            new Set(["government_subsidy", "employer_sponsorship"]),
+        );
     }, 300_000);
 });

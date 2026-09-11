@@ -191,6 +191,47 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             reductions,
             funding,
             familyResponsibility: money(reconciliation.responsibilityCents, currency),
+            /*
+             * THE SPLIT, FORMATTED AND NOTHING ELSE.
+             *
+             * Every figure here is already decided by Thread 6 and carried on the view model:
+             * `allocatedCents` is what named parties have been made responsible for and
+             * `unassignedCents` is what nobody has. This adapter turns cents into money and stops —
+             * it does not add the two up, does not check them against the obligation, and does not
+             * derive a party's share from a percentage. A presentation layer that reconciles is a
+             * second financial authority wearing a formatter's clothes.
+             *
+             * Null when there is no allocation at all, so the card renders no empty section rather
+             * than a heading over nothing.
+             */
+            responsibility:
+                vm.responsibility.parties.length > 0 || vm.responsibility.unassignedCents !== 0 ?
+                    {
+                        allocated: money(vm.responsibility.allocatedCents, currency),
+                        parties: vm.responsibility.parties.map((party) => ({
+                            name: party.name,
+                            amount: money(party.assignedCents, currency),
+                        })),
+                        unassigned:
+                            vm.responsibility.unassignedCents !== 0 ?
+                                money(vm.responsibility.unassignedCents, currency)
+                            :   null,
+                    }
+                :   null,
+            /*
+             * EXPECTED, and never counted. `expectedCents` may legitimately be absent — an
+             * authorization can name a funder before anyone knows the amount — and null here means
+             * exactly that rather than zero dollars.
+             */
+            expectedFunding: vm.expectedFunding.map((f) => ({
+                label: f.label,
+                amount: f.expectedCents != null ? money(f.expectedCents, currency) : null,
+            })),
+            /* The same conditional the compact zone already applies, for the same reason. */
+            collectibleNow:
+                vm.collectible.submittedClaimSuppressionCents > 0 ?
+                    money(vm.collectible.currentlyCollectibleCents, currency)
+                :   null,
             paymentsReceived: money(reconciliation.paymentsCents, currency),
             currentBalance: money(reconciliation.balanceCents, currency),
             dueLabel,
